@@ -2208,7 +2208,9 @@ def index():
 
 @app.route('/party')
 @gm_required
-def party_view(): return render_template('party_view.html', party=list(PARTY_LIBRARY.values()))
+def party_view(): 
+    _sync_party_from_disk()
+    return render_template('party_view.html', party=list(PARTY_LIBRARY.values()))
 
 @app.route('/gm/login', methods=['GET', 'POST'])
 def gm_login():
@@ -3225,7 +3227,35 @@ def vault_export_encounter():
 
 @app.route('/player')
 def player_view(): 
+    # Sync from disk to catch any characters added outside this process
+    _sync_party_from_disk()
     return render_template('player_view.html', party=list(PARTY_LIBRARY.values()))
+
+def _sync_party_from_disk():
+    """Ensure PARTY_LIBRARY matches what's on disk. Adds missing characters, removes deleted ones."""
+    if not os.path.exists(PARTY_DIR): return
+    disk_files = {f for f in os.listdir(PARTY_DIR) if f.endswith('.json')}
+    disk_names = set()
+    for f in disk_files:
+        try:
+            data = json.load(open(os.path.join(PARTY_DIR, f), 'r', encoding='utf-8'))
+            if isinstance(data, list):
+                for item in data:
+                    name = (item.get('build') or item).get('name')
+                    if name: disk_names.add(name)
+                    if name and name not in PARTY_LIBRARY:
+                        PARTY_LIBRARY[name] = Character(item, f)
+            else:
+                name = (data.get('build') or data).get('name')
+                if name: disk_names.add(name)
+                if name and name not in PARTY_LIBRARY:
+                    PARTY_LIBRARY[name] = Character(data, f)
+        except: pass
+    # Remove characters from memory that were deleted from disk
+    for name in list(PARTY_LIBRARY.keys()):
+        if name not in disk_names:
+            del PARTY_LIBRARY[name]
+    _build_pc_file_cache()
 
 @app.route('/player/sheet/<pc_name>')
 def player_sheet(pc_name):

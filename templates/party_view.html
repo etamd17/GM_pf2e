@@ -1,183 +1,221 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Hub - PF2E Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+            parch: { 950:'#1C1917', 900:'#28241F', 800:'#33302A', 700:'#3F3A33', 600:'#524C42', 500:'#7A7062', 400:'#A89C8B', 300:'#CFC5B4', 200:'#E8E0D2', 100:'#EDE4D3' },
+            ember: { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878', 700:'#2C5C5C' },
+            blood: { 300:'#FDA4AF', 400:'#FB7185', 500:'#F43F5E', 800:'#6B1525' },
+            verdant: { 400:'#4ADE80', 500:'#22C55E' },
+            frost: { 300:'#93C5FD', 400:'#60A5FA' }
+        }}}}
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        body { font-family:'Crimson Text',Georgia,serif; background:#1C1917; color:#E8E0D2; }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,120,120,0.08) 0%,transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(94,120,120,0.05) 0%,transparent 50%),#1C1917; }
+        .fn { font-family:'Cinzel',serif; }
+        .card { background:linear-gradient(135deg,#33302A,#28241F); border:1px solid rgba(156,139,118,0.18); transition:all .35s cubic-bezier(.4,0,.2,1); position:relative; overflow:hidden; }
+        .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(94,173,173,0.5),transparent); opacity:0; transition:opacity .35s; }
+        .card:hover { border-color:rgba(94,173,173,0.3); transform:translateY(-3px); box-shadow:0 16px 32px rgba(0,0,0,0.5),0 0 24px rgba(94,173,173,0.04); }
+        .card:hover::before { opacity:1; }
+        .hp-ring { width:48px; height:48px; position:relative; display:flex; align-items:center; justify-content:center; }
+        .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
+        .erow { transition:all .3s; border-left:3px solid transparent; }
+        .erow.on { border-left-color:#5EADAD; background:linear-gradient(90deg,rgba(94,173,173,0.06),transparent 60%); }
+        .sdiv { display:flex; align-items:center; gap:16px; margin:2.5rem 0 1.5rem; }
+        .sdiv::before,.sdiv::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,rgba(156,139,118,0.3),transparent); }
+        @keyframes glow { 0%,100%{opacity:.5} 50%{opacity:1} }
+        .glow { animation:glow 2.5s ease-in-out infinite; }
+        .cb { font-family:'Cinzel',serif; font-size:9px; letter-spacing:.08em; padding:2px 7px; border-radius:3px; text-transform:uppercase; }
+        .bp { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:linear-gradient(135deg,#3A7878,#2C5C5C); border:1px solid rgba(94,173,173,0.3); color:#A8DEDE; padding:8px 20px; border-radius:6px; font-size:12px; transition:all .2s; text-transform:uppercase; }
+        .bp:hover { background:linear-gradient(135deg,#4A9696,#3A7878); transform:translateY(-1px); box-shadow:0 4px 12px rgba(94,173,173,0.2); }
+        .bg { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:transparent; border:1px solid rgba(156,139,118,0.3); color:#A89C8B; padding:8px 16px; border-radius:6px; font-size:11px; transition:all .2s; text-transform:uppercase; }
+        .bg:hover { border-color:rgba(156,139,118,0.6); color:#CFC5B4; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+<div class="max-w-5xl mx-auto w-full">
 
-{% block title %}Party View - Pathfinder Dashboard{% endblock %}
-
-{% block content %}
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-    .pv-card { background: linear-gradient(135deg, #33302A, #28241F); border: 1px solid rgba(168,156,139,0.18); border-radius: 0.75rem; overflow: hidden; transition: all 0.3s; }
-    .pv-card:hover { border-color: rgba(94,173,173,0.25); box-shadow: 0 12px 28px rgba(0,0,0,0.3); }
-    .pv-head { background: linear-gradient(135deg, #3F3A33, #33302A); padding: 1.25rem; border-bottom: 1px solid rgba(168,156,139,0.12); }
-    .pv-stat { background: #1C1917; border: 1px solid rgba(168,156,139,0.15); border-radius: 0.5rem; padding: 0.5rem; text-align: center; }
-    .fn { font-family: 'Cinzel', serif; }
-    .fb { font-family: 'Crimson Text', Georgia, serif; }
-    .pv-feat { font-family: 'Crimson Text', serif; font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #3F3A33; border: 1px solid rgba(168,156,139,0.15); color: #D6CBBA; cursor: pointer; transition: all 0.2s; display: inline-block; }
-    .pv-feat:hover { border-color: rgba(94,173,173,0.3); color: #7DC4C4; }
-    .portrait-sm { width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(94,173,173,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center; background: #28241F; flex-shrink: 0; }
-    .portrait-sm img { width: 100%; height: 100%; object-fit: cover; }
-</style>
-
-<div class="max-w-7xl mx-auto">
-    <div class="flex justify-between items-center mb-6 pb-3" style="border-bottom: 1px solid rgba(168,156,139,0.15);">
-        <h1 class="fn text-2xl tracking-wide" style="color: #7DC4C4;">Current Party</h1>
-        <a href="/tracker" class="fn text-xs tracking-wider uppercase px-4 py-2 rounded transition-colors" style="background: #33302A; border: 1px solid rgba(168,156,139,0.2); color: #B5A998;">
-            Encounter Tracker →
-        </a>
+    <!-- HEADER -->
+    <div class="text-center mb-8">
+        <h1 class="fn text-3xl md:text-4xl text-ember-300 tracking-wide mb-1" style="text-shadow:0 2px 20px rgba(94,173,173,0.15)">Adventurer's Guild</h1>
+        <p class="text-parch-400 text-xs tracking-[0.25em] uppercase fn">Character Roster</p>
     </div>
 
-    {% if not party %}
-    <div class="pv-card p-8 text-center">
-        <h2 class="fn text-lg mb-3" style="color: #B5A998;">No Characters Found</h2>
-        <p class="fb" style="color: #8A7D6E;">Export from Pathbuilder 2e and place JSON files in <code style="background:#1C1917; padding:2px 6px; border-radius:3px; color:#7DC4C4;">party_data/</code></p>
+    <!-- My Character Quick Access -->
+    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:linear-gradient(135deg,rgba(94,173,173,0.08),rgba(94,173,173,0.03)); border:1px solid rgba(94,173,173,0.2);">
+        <span class="fn text-ember-300 text-sm tracking-wider">Welcome back, <strong id="my-char-name"></strong></span>
+        <a id="my-char-link" href="#" class="ml-3 fn text-xs tracking-wider uppercase px-4 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Go to My Sheet →</a>
+        <button onclick="clearMyChar()" class="ml-2 text-parch-600 text-xs hover:text-parch-400 transition-colors" title="Forget my character">✕</button>
     </div>
-    {% endif %}
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div class="flex justify-center gap-3 mb-8">
+        <button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="bg">📥 Import Pathbuilder</button>
+        <a href="/player/builder" class="bp">+ Forge New Hero</a>
+    </div>
+
+    <!-- CHARACTERS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
         {% for pc in party %}
-        <div class="pv-card">
-            <div class="pv-head flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="portrait-sm">
-                        {% if pc.portrait %}
-                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
-                        {% else %}
-                        <span class="fn text-lg" style="color: #7DC4C4;">{{ pc.name[0] }}</span>
-                        {% endif %}
-                    </div>
-                    <div>
-                        <h2 class="fn text-xl leading-none" style="color: #EDE5D8;">{{ pc.name }}</h2>
-                        <p class="fb text-sm mt-1" style="color: #7DC4C4;">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} · {{ pc.subclass }}{% endif %}</p>
-                    </div>
+        <div class="card rounded-xl p-5 block relative">
+            <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0"></a>
+            <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="color:#5EADAD; opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson }}?1:0.3">⭐</button>
+            <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(107,21,37,0.3); color:#FDA4AF; border:1px solid rgba(251,113,133,0.2); opacity:0.4;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">✕</button>
+            <div class="flex items-start gap-4 relative z-1 pointer-events-none">
+                <div class="hp-ring shrink-0">
+                    <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(156,139,118,0.15)" stroke-width="2.5"/>
+                    {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+                    <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#5EADAD{% else %}#F43F5E{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
+                    <span class="fn text-ember-300 text-lg font-bold relative z-10">{{ pc.name[0] }}</span>
                 </div>
-                <div class="text-center px-3 py-1.5 rounded" style="background: #1C1917; border: 1px solid rgba(168,156,139,0.15);">
-                    <span class="fn text-[9px] uppercase tracking-widest block" style="color: #8A7D6E;">Level</span>
-                    <span class="fn text-xl font-bold leading-none" style="color: #EDE5D8;">{{ pc.level }}</span>
+                <div class="flex-1 min-w-0">
+                    <div class="fn text-parch-100 text-lg tracking-wide leading-tight truncate">{{ pc.name }}</div>
+                    <div class="text-parch-500 text-xs tracking-wider mt-0.5">{{ pc.ancestry }} {{ pc.class_name }}</div>
+                    {% if pc.subclass %}<div class="text-parch-600 text-[11px] italic">{{ pc.subclass }}</div>{% endif %}
+                </div>
+                <div class="shrink-0 text-center">
+                    <div class="w-9 h-9 border border-parch-600/40 rounded flex items-center justify-center" style="background:rgba(30,25,20,0.6); clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)">
+                        <span class="fn text-ember-400 text-sm font-bold">{{ pc.level }}</span>
+                    </div>
+                    <div class="text-[7px] text-parch-600 uppercase tracking-[0.15em] mt-1 fn">Level</div>
                 </div>
             </div>
-
-            <div class="p-5 fb">
-                <!-- HP + Core Stats -->
-                <div class="flex flex-wrap gap-3 mb-5">
-                    <div class="pv-stat flex-1 min-w-[120px]">
-                        <div class="fn text-[9px] uppercase tracking-widest mb-1" style="color: #8A7D6E;">Hit Points</div>
-                        <div class="fn text-xl font-bold {% if pc.current_hp == 0 %}text-red-400{% elif pc.current_hp < pc.hp * 0.5 %}text-amber-400{% else %}text-green-400{% endif %}">
-                            {{ pc.current_hp }} <span style="color: #44392E; font-size: 14px;">/ {{ pc.hp }}</span>
-                        </div>
-                        <form action="/api/adjust_party_hp/{{ pc.name }}" method="POST" class="flex items-center justify-center gap-1 mt-2">
-                            <input type="number" name="amount" value="1" min="1" class="fb text-xs w-10 text-center rounded py-1 focus:outline-none" style="background: #28241F; border: 1px solid rgba(168,156,139,0.15); color: #EDE5D8;">
-                            <button type="submit" name="action" value="damage" class="px-2 py-1 rounded text-xs font-bold transition-colors" style="background: rgba(107,21,37,0.25); border: 1px solid rgba(251,113,133,0.15); color: #FDA4AF;">−</button>
-                            <button type="submit" name="action" value="heal" class="px-2 py-1 rounded text-xs font-bold transition-colors" style="background: rgba(20,83,45,0.25); border: 1px solid rgba(74,222,128,0.15); color: #86EFAC;">+</button>
-                        </form>
-                    </div>
-                    <div class="pv-stat flex-1">
-                        <div class="fn text-[9px] uppercase tracking-widest mb-1" style="color: #8A7D6E;">AC</div>
-                        <div class="fn text-xl font-bold" style="color: #93C5FD;">{{ pc.ac }}</div>
-                    </div>
-                    <div class="pv-stat flex-1">
-                        <div class="fn text-[9px] uppercase tracking-widest mb-1" style="color: #8A7D6E;">Perc</div>
-                        <div class="fn text-xl font-bold" style="color: #EDE5D8;">+{{ pc.perception }}</div>
-                    </div>
+            <div class="flex items-center justify-between mt-4 pt-3 relative z-1 pointer-events-none" style="border-top:1px solid rgba(156,139,118,0.1)">
+                <div class="flex gap-3 text-[10px] text-parch-500 fn tracking-wider">
+                    <span>AC <span class="text-frost-400 font-bold">{{ pc.ac }}</span></span>
+                    <span>Fort <span class="text-verdant-400 font-bold">+{{ pc.fort }}</span></span>
+                    <span>Ref <span class="text-frost-300 font-bold">+{{ pc.ref }}</span></span>
+                    <span>Will <span class="text-purple-300 font-bold">+{{ pc.will }}</span></span>
                 </div>
-
-                <!-- Saves -->
-                <div class="flex gap-3 mb-5">
-                    <div class="flex-1 rounded p-2 text-center" style="background: rgba(20,83,45,0.15); border: 1px solid rgba(74,222,128,0.12);">
-                        <span class="fn text-[9px] uppercase tracking-widest block" style="color: rgba(134,239,172,0.6);">Fort</span>
-                        <span class="fn text-lg font-bold" style="color: #86EFAC;">+{{ pc.fort }}</span>
-                    </div>
-                    <div class="flex-1 rounded p-2 text-center" style="background: rgba(30,42,74,0.2); border: 1px solid rgba(147,197,253,0.12);">
-                        <span class="fn text-[9px] uppercase tracking-widest block" style="color: rgba(147,197,253,0.6);">Ref</span>
-                        <span class="fn text-lg font-bold" style="color: #93C5FD;">+{{ pc.ref }}</span>
-                    </div>
-                    <div class="flex-1 rounded p-2 text-center" style="background: rgba(76,29,149,0.12); border: 1px solid rgba(196,181,253,0.12);">
-                        <span class="fn text-[9px] uppercase tracking-widest block" style="color: rgba(196,181,253,0.6);">Will</span>
-                        <span class="fn text-lg font-bold" style="color: #C4B5FD;">+{{ pc.will }}</span>
-                    </div>
-                </div>
-
-                <!-- Ability Scores -->
-                <div class="grid grid-cols-6 gap-2 mb-5">
-                    {% for stat in pc.ability_display %}
-                    <div class="rounded p-1.5 text-center" style="background: #28241F; border: 1px solid rgba(168,156,139,0.12);">
-                        <span class="fn text-[8px] uppercase tracking-widest" style="color: #8A7D6E;">{{ stat.label }}</span>
-                        <div class="fn text-lg font-bold leading-none my-0.5" style="color: #EDE5D8;">{{ stat.mod }}</div>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <!-- Attacks & Feats -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="rounded p-3" style="background: #252320; border: 1px solid rgba(168,156,139,0.1);">
-                        <h3 class="fn text-[10px] uppercase tracking-widest mb-2 pb-1" style="color: #8A7D6E; border-bottom: 1px solid rgba(168,156,139,0.1);">Attacks</h3>
-                        <ul class="space-y-1.5">
-                            {% for attack in pc.attacks %}
-                            <li class="flex justify-between items-center text-sm fb">
-                                <span style="color: #D6CBBA;" class="truncate mr-2">{{ attack.name }}</span>
-                                <span class="fn text-xs shrink-0" style="color: #7DC4C4;">{{ attack.strikes[0].label }} <span style="color:#8A7D6E">({{ attack.damage }})</span></span>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-
-                    <div class="rounded p-3" style="background: #252320; border: 1px solid rgba(168,156,139,0.1);">
-                        <h3 class="fn text-[10px] uppercase tracking-widest mb-2 pb-1" style="color: #8A7D6E; border-bottom: 1px solid rgba(168,156,139,0.1);">Feats</h3>
-                        <div class="flex flex-wrap gap-1">
-                            {% for feat in pc.feats %}
-                            <div class="pv-feat" onclick="toggleTooltip(event, this)">
-                                {{ feat.name }}
-                                <div class="tooltip-popup absolute hidden text-xs p-4 rounded mb-2 w-80 max-h-72 overflow-y-auto z-[9999] shadow-2xl text-left cursor-auto fb" style="background: #1C1917; border: 2px solid rgba(94,173,173,0.4); color: #D6CBBA; bottom: 100%; left: 50%; transform: translateX(-50%);" onclick="event.stopPropagation()">
-                                    <strong class="fn block mb-2 pb-1" style="color: #7DC4C4; border-bottom: 1px solid rgba(168,156,139,0.15); font-size: 13px;">{{ feat.name }}</strong>
-                                    {{ feat.desc | safe }}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                
-                {% if pc.spell_casters %}
-                <div class="mt-4 pt-3" style="border-top: 1px solid rgba(168,156,139,0.1);">
-                    <h3 class="fn text-[10px] uppercase tracking-widest mb-2" style="color: #8A7D6E;">Spellcasting</h3>
-                    {% for caster in pc.spell_casters %}
-                    <div class="rounded p-2 mb-2" style="background: #252320; border: 1px solid rgba(168,156,139,0.1);">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="fn text-xs font-bold" style="color: #A78BFA;">{{ caster.name }} ({{ caster.tradition }})</span>
-                            {% if pc.focus_points > 0 and loop.first %}
-                            <span class="fn text-[9px] px-1.5 py-0.5 rounded" style="background: rgba(30,42,74,0.2); border: 1px solid rgba(96,165,250,0.15); color: #93C5FD;">Focus: {{ pc.focus_points }}/{{ pc.focus_max }}</span>
-                            {% endif %}
-                        </div>
-                        {% for level in caster.levels %}
-                        <div class="text-[11px] fb mb-1 flex flex-wrap items-baseline gap-1" style="color: #B5A998;">
-                            <span class="fn text-[10px] font-bold w-full" style="color: #D6CBBA;">{{ level.label }} <span style="color: rgba(167,139,250,0.4);">({{ level.slots }} Slots)</span>:</span>
-                            {% for spell in level.spells %}
-                            <div class="relative cursor-pointer inline-block mx-1" onclick="toggleTooltip(event, this)">
-                                <span class="underline transition-colors" style="color: #C4B5FD; text-decoration-color: rgba(167,139,250,0.3);">{{ spell.name }}</span>
-                                <div class="tooltip-popup absolute hidden text-xs p-4 rounded mb-2 w-72 max-h-72 overflow-y-auto z-[9999] shadow-2xl text-left cursor-auto fb" style="background: #1C1917; border: 2px solid rgba(94,173,173,0.4); color: #D6CBBA; bottom: 100%; left: 0;" onclick="event.stopPropagation()">
-                                    <strong class="fn block mb-2 pb-1" style="color: #7DC4C4; border-bottom: 1px solid rgba(168,156,139,0.15); font-size: 13px;">{{ spell.name }}</strong>
-                                    {{ spell.desc | safe }}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
+                <div class="fn"><span class="text-sm font-bold {% if pc.current_hp == 0 %}text-blood-500{% elif pc.current_hp < pc.hp * 0.5 %}text-ember-400{% else %}text-verdant-400{% endif %}">{{ pc.current_hp }}</span><span class="text-parch-600 text-xs">/{{ pc.hp }}</span></div>
             </div>
         </div>
+        {% else %}
+        <div class="col-span-full text-center py-16">
+            <div class="fn text-parch-600 text-lg tracking-wider mb-2">No Heroes Yet</div>
+            <p class="text-parch-500 text-sm">Create a character or import from Pathbuilder to begin.</p>
+        </div>
         {% endfor %}
+    </div>
+
+    <!-- ENCOUNTER -->
+    <div class="sdiv"><span class="fn text-parch-500 text-xs tracking-[0.2em] uppercase">Active Encounter</span></div>
+    
+    <div class="flex justify-between items-center mb-4">
+        <div class="flex items-center gap-3"><span class="w-2 h-2 bg-verdant-400 rounded-full animate-pulse"></span><span class="text-parch-500 text-xs tracking-wider uppercase fn">Live</span></div>
+        <div id="round-badge" class="hidden fn text-xs text-parch-400 tracking-wider">Round <span id="round-number" class="text-ember-300 text-lg font-bold ml-1">1</span></div>
+    </div>
+
+    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center" style="background:linear-gradient(90deg,transparent,rgba(94,173,173,0.08),transparent); border:1px solid rgba(94,173,173,0.15)">
+        <span class="fn text-ember-300 text-lg tracking-wide glow" id="turn-banner-name">---</span>
+        <span class="text-parch-500 text-xs tracking-wider ml-2">is acting</span>
+    </div>
+
+    <div class="rounded-xl overflow-hidden" style="background:linear-gradient(180deg,#28241F,#1C1917); border:1px solid rgba(156,139,118,0.12)">
+        <table class="w-full text-left border-collapse">
+            <thead><tr style="border-bottom:1px solid rgba(156,139,118,0.12)">
+                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-14 text-center">Init</th>
+                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase">Combatant</th>
+                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-40">Status</th>
+                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-1/4">Conditions</th>
+            </tr></thead>
+            <tbody id="tracker-body">
+                <tr><td colspan="4" class="p-10 text-center text-parch-600 italic text-sm">The battlefield is still. Awaiting the GM...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div id="import-modal" class="fixed inset-0 bg-black/85 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:linear-gradient(135deg,#33302A,#28241F); border:1px solid rgba(156,139,118,0.25)">
+        <div class="flex justify-between items-center mb-5">
+            <h3 class="fn text-ember-300 text-lg tracking-wide">Import from Pathbuilder</h3>
+            <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-parch-600 hover:text-parch-300 text-xl">&times;</button>
+        </div>
+        <p class="text-parch-400 text-sm mb-5 leading-relaxed">Export your character as JSON, then upload or paste below.</p>
+        <div class="space-y-4">
+            <div class="rounded-lg p-6 text-center cursor-pointer" style="border:2px dashed rgba(156,139,118,0.25); background:rgba(12,10,8,0.5)" onclick="document.getElementById('pb-file-input').click()">
+                <input type="file" id="pb-file-input" accept=".json" class="hidden" onchange="handleFileImport(this)">
+                <div class="text-2xl mb-2 opacity-40">📁</div>
+                <div class="text-parch-400 text-sm">Click to upload JSON file</div>
+            </div>
+            <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(156,139,118,0.2)"></div><span class="text-[10px] text-parch-600 uppercase tracking-widest fn">or paste</span><div class="flex-1 h-px" style="background:rgba(156,139,118,0.2)"></div></div>
+            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-parch-200 focus:outline-none resize-none" style="background:#1C1917; border:1px solid rgba(156,139,118,0.2)"></textarea>
+            <div id="import-status" class="hidden text-sm font-bold p-3 rounded-lg"></div>
+            <div class="flex gap-2 justify-end">
+                <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="bg">Cancel</button>
+                <button onclick="submitPastedImport()" class="bp">Import</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-    function toggleTooltip(event, element) {
-        event.stopPropagation();
-        const tooltip = element.querySelector('.tooltip-popup');
-        const isOpen = !tooltip.classList.contains('hidden');
-        document.querySelectorAll('.tooltip-popup').forEach(el => el.classList.add('hidden'));
-        if (!isOpen) tooltip.classList.remove('hidden');
+    async function deleteChar(name) {
+        if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+        try {
+            const res = await fetch(`/api/delete_character/${encodeURIComponent(name)}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) window.location.reload();
+        } catch(e) { alert('Error deleting character.'); }
     }
-    document.addEventListener('click', () => { document.querySelectorAll('.tooltip-popup').forEach(el => el.classList.add('hidden')); });
+
+    function setMyChar(name) {
+        localStorage.setItem('pf2e_my_char', name);
+        loadMyChar();
+    }
+    function clearMyChar() {
+        localStorage.removeItem('pf2e_my_char');
+        document.getElementById('my-char-bar').classList.add('hidden');
+    }
+    function loadMyChar() {
+        const name = localStorage.getItem('pf2e_my_char');
+        if (name) {
+            document.getElementById('my-char-bar').classList.remove('hidden');
+            document.getElementById('my-char-name').textContent = name;
+            document.getElementById('my-char-link').href = '/player/sheet/' + encodeURIComponent(name);
+        }
+    }
+    loadMyChar();
+
+    async function fetchPlayerState() {
+        try {
+            const r = await fetch('/api/player_state'); const d = await r.json();
+            renderTracker(d.encounter, d.round, d.active_name);
+        } catch(e) {}
+    }
+    function renderTracker(enc, round, activeName) {
+        const tb = document.getElementById('tracker-body');
+        if (!enc||!enc.length) { tb.innerHTML='<tr><td colspan="4" class="p-10 text-center text-parch-600 italic text-sm">The battlefield is still. Awaiting the GM...</td></tr>'; document.getElementById('round-badge').classList.add('hidden'); document.getElementById('turn-banner').classList.add('hidden'); return; }
+        if (round) { document.getElementById('round-number').innerText=round; document.getElementById('round-badge').classList.remove('hidden'); }
+        if (activeName) { document.getElementById('turn-banner-name').innerText=activeName; document.getElementById('turn-banner').classList.remove('hidden'); }
+        let h='';
+        enc.forEach(c => {
+            let rc=c.is_active?'erow on':'erow';
+            let nc=c.is_pc?(c.is_active?'text-parch-100':'text-parch-300'):(c.is_active?'text-blood-400':'text-blood-400/60');
+            let nm=`<span class="fn tracking-wide ${nc}">${esc(c.name)}</span>`;
+            if(!c.is_pc) nm+=' <span class="text-[8px] text-blood-500 uppercase tracking-widest fn ml-1">Enemy</span>';
+            let st='';
+            if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#5EADAD':'#F43F5E';st=`<span class="fn text-sm ${c.hp_color}">${c.current_hp}<span class="text-parch-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(156,139,118,0.1)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
+            else if(c.hp_status) st=`<span class="fn text-xs uppercase tracking-wider ${c.hp_color||'text-parch-600'}">${esc(c.hp_status)}</span>`;
+            let cd='<div class="flex flex-wrap gap-1">';
+            if(c.conditions) for(const[k,v] of Object.entries(c.conditions)){if(v===true)cd+=`<span class="cb bg-blood-800/30 text-blood-300 border border-blood-800/30">${esc(k.replace('_','-'))}</span>`;else if(typeof v==='number'&&v>0)cd+=`<span class="cb bg-blood-800/30 text-blood-300 border border-blood-800/30">${esc(k)} ${v}</span>`;}
+            cd+='</div>';
+            h+=`<tr class="${rc}" style="border-bottom:1px solid rgba(156,139,118,0.08)"><td class="px-4 py-3 text-center fn text-parch-500 text-sm">${c.initiative}</td><td class="px-4 py-3">${nm}</td><td class="px-4 py-3">${st}</td><td class="px-4 py-3">${cd}</td></tr>`;
+        });
+        tb.innerHTML=h;
+    }
+    function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    setInterval(fetchPlayerState,2000); fetchPlayerState();
+    function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(244,63,94,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#FDA4AF':'#86EFAC';el.style.border=e?'1px solid rgba(244,63,94,0.2)':'1px solid rgba(34,197,94,0.2)';el.innerText=m;}
+    async function handleFileImport(i){if(!i.files||!i.files[0])return;const f=new FormData();f.append('file',i.files[0]);try{const r=await fetch('/api/import_pathbuilder',{method:'POST',body:f});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
+    async function submitPastedImport(){const raw=document.getElementById('pb-json-paste').value.trim();if(!raw){showImportStatus('Paste JSON first.',true);return;}let p;try{p=JSON.parse(raw);}catch(e){showImportStatus('Invalid JSON.',true);return;}try{const r=await fetch('/api/import_pathbuilder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
 </script>
-{% endblock %}
+</body>
+</html>
