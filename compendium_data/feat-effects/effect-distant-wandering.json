@@ -1,0 +1,84 @@
+{
+    "_id": "ngwcN8u7f7CnqGXp",
+    "img": "icons/magic/death/undead-ghost-scream-teal.webp",
+    "name": "Effect: Distant Wandering",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Distant Wandering]</p>\n<p>You are invisible and inaudible.</p>\n<p><strong>Awakening</strong> You gain a fly Speed and a +20-foot status bonus to your Speed</p>\n<p><strong>Awakening</strong> You are Quickened while in spirit form and can use the extra action only to Recall Knowledge or Seek.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Dark Archive"
+        },
+        "rules": [
+            {
+                "allowDuplicate": false,
+                "key": "GrantItem",
+                "onDeleteActions": {
+                    "grantee": "restrict"
+                },
+                "uuid": "Compendium.pf2e.conditionitems.Item.Invisible"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.emitsSound",
+                "phase": "beforeDerived",
+                "value": false
+            },
+            {
+                "key": "BaseSpeed",
+                "predicate": [
+                    "awakening:distant-wandering:fly"
+                ],
+                "selector": "fly",
+                "value": "@actor.system.movement.speeds.land.value"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "awakening:distant-wandering:fly"
+                ],
+                "selector": [
+                    "land-speed",
+                    "fly-speed"
+                ],
+                "type": "status",
+                "value": 20
+            },
+            {
+                "allowDuplicate": false,
+                "key": "GrantItem",
+                "onDeleteActions": {
+                    "grantee": "restrict"
+                },
+                "predicate": [
+                    "awakening:distant-wandering:quick"
+                ],
+                "uuid": "Compendium.pf2e.conditionitems.Item.Quickened"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

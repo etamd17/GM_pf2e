@@ -1,0 +1,42 @@
+{
+    "_id": "IXS15IQXYCZ8vsmX",
+    "img": "systems/pf2e/icons/spells/darkvision.webp",
+    "name": "Spell Effect: Darkvision",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Darkvision]</p>\n<p>You gain darkvision.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Core Rulebook"
+        },
+        "rules": [
+            {
+                "key": "Sense",
+                "selector": "darkvision"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

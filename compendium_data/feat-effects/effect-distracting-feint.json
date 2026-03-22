@@ -1,0 +1,50 @@
+{
+    "_id": "7hRgBo0fRQBxMK7g",
+    "img": "systems/pf2e/icons/spells/paralyze.webp",
+    "name": "Effect: Distracting Feint",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Distracting Feint]</p>\n<p>While you are off-guard by the origin's Feint, you also takes a -2 circumstance penalty to Perception checks and Reflex saves.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "self:condition:off-guard"
+                ],
+                "selector": [
+                    "perception",
+                    "reflex"
+                ],
+                "type": "circumstance",
+                "value": -2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,48 @@
+{
+    "_id": "PNEGSVYhMKf6kQZ6",
+    "img": "icons/sundries/flags/banner-flag-red-white.webp",
+    "name": "Spell Effect: Call to Arms",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Call to Arms]</p>\n<p>You gain a status bonus to your initiative and you gain temporary Hit Points.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Advanced Player's Guide"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "initiative",
+                "type": "status",
+                "value": "ternary(gte(@item.level,9),4,ternary(gte(@item.level,6),3,2))"
+            },
+            {
+                "key": "TempHP",
+                "value": "@item.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

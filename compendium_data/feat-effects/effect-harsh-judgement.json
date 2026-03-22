@@ -1,0 +1,89 @@
+{
+    "_id": "raoz523QRsj5WjcF",
+    "img": "systems/pf2e/icons/features/feats/harsh-judgement.webp",
+    "name": "Effect: Harsh Judgement",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Harsh Judgement]</p>\n<p>You gain a +2 circumstance bonus to Perception checks to Seek your condemned foe and on Intimidation checks to Demoralize them. You have a -1 circumstance penalty to Perception checks to Seek creatures other than your condemned foe and on Intimidation checks to Demoralize anyone other than your condemned foe.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Adventure: Night of the Gray Death"
+        },
+        "rules": [
+            {
+                "domain": "perception",
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.GreyGardener.HarshJudgement.SeekCondemnedFoeLabel",
+                "option": "harsh-judgement:seek-condemned-foe",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:seek"
+                ],
+                "selector": "perception",
+                "slug": "harsh-judgement-seek",
+                "type": "circumstance",
+                "value": -1
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "override",
+                "predicate": [
+                    "harsh-judgement:seek-condemned-foe"
+                ],
+                "selector": "perception",
+                "slug": "harsh-judgement-seek",
+                "value": 2
+            },
+            {
+                "key": "TokenMark",
+                "slug": "harsh-judgement"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:demoralize"
+                ],
+                "selector": "intimidation",
+                "slug": "harsh-judgement-demoralize",
+                "type": "circumstance",
+                "value": -1
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "override",
+                "predicate": [
+                    "target:mark:harsh-judgement"
+                ],
+                "selector": "intimidation",
+                "slug": "harsh-judgement-demoralize",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": false
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

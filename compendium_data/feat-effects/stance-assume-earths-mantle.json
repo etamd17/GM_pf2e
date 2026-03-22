@@ -1,0 +1,136 @@
+{
+    "_id": "QrJ06Sc2GiloQ6hB",
+    "img": "icons/magic/earth/construct-stone.webp",
+    "name": "Stance: Assume Earth's Mantle",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Assume Earth's Mantle]</p><ul><li>You become Large if you were smaller. This increases your reach by 5 feet (or by 10 feet if you started out Tiny).</li><li>You gain a climb Speed equal to your land Speed, but you can use it only to climb surfaces of earthen matter.</li><li>You gain a +1 circumstance bonus to your Fortitude saves and a +2 circumstance bonus to your Fortitude or Reflex DCs against attempts to Shove you, Trip you, or knock you Prone.</li><li>If your Strength is below +4, this armor raises your Strength to +4. If your Strength is +4 or higher, this armor grants you a +1 item bonus to your Strength.</li></ul>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "encounter",
+            "value": -1
+        },
+        "level": {
+            "value": 14
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.ActorSizeTiny",
+                        "predicate": [
+                            "self:size:tiny"
+                        ],
+                        "value": "tiny"
+                    },
+                    {
+                        "label": "PF2E.ActorSizeSmall",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "self:size:medium",
+                                    "self:size:small"
+                                ]
+                            }
+                        ],
+                        "value": "medium-or-small"
+                    },
+                    {
+                        "label": "PF2E.ActorSizeLarge",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "self:size",
+                                    3
+                                ]
+                            }
+                        ],
+                        "value": "large-or-larger"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "rollOption": "assume-earths-mantle-initial-size"
+            },
+            {
+                "key": "CreatureSize",
+                "predicate": [
+                    "assume-earths-mantle-initial-size:tiny"
+                ],
+                "reach": {
+                    "add": 10
+                },
+                "value": "large"
+            },
+            {
+                "key": "CreatureSize",
+                "predicate": [
+                    "assume-earths-mantle-initial-size:medium-or-small"
+                ],
+                "reach": {
+                    "add": 5
+                },
+                "value": "large"
+            },
+            {
+                "key": "BaseSpeed",
+                "selector": "climb",
+                "value": "@actor.system.movement.speeds.land.value"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "fortitude",
+                "type": "circumstance",
+                "value": 1
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "action:shove",
+                            "action:trip",
+                            "inflicts:prone"
+                        ]
+                    }
+                ],
+                "selector": [
+                    "fortitude-dc",
+                    "reflex-dc"
+                ],
+                "type": "circumstance",
+                "value": 2
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "add",
+                "path": "system.abilities.str.mod",
+                "value": 1
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.abilities.str.mod",
+                "value": 4
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

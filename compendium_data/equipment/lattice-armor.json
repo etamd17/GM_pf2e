@@ -1,0 +1,58 @@
+{
+    "_id": "IyBL38UtL4MDN6b5",
+    "img": "systems/pf2e/icons/equipment/armor/lattice-armor.webp",
+    "name": "Lattice Armor",
+    "system": {
+        "acBonus": 4,
+        "baseItem": "lattice-armor",
+        "bulk": {
+            "value": 2
+        },
+        "category": "medium",
+        "checkPenalty": -2,
+        "containerId": null,
+        "description": {
+            "value": "<p>Also known as \"varman\" in some parts of the Impossible Lands, this armor is made from fine metal cables woven into latticework patterns with plated segments to protect the head, neck, and shoulders. This armor disperses blows much like rings of chain mail but is much tighter in construction, making it quieter.</p>"
+        },
+        "dexCap": 1,
+        "grade": null,
+        "group": "chain",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 6
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder War of Immortals"
+        },
+        "quantity": 1,
+        "rules": [],
+        "runes": {
+            "potency": 0,
+            "property": [],
+            "resilient": 0
+        },
+        "size": "med",
+        "speedPenalty": -5,
+        "strength": 3,
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "armor"
+}

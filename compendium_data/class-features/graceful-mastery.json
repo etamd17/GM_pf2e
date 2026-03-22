@@ -1,0 +1,43 @@
+{
+    "_id": "95LI24ZSx0d4qfKX",
+    "img": "icons/magic/defensive/illusion-evasion-echo-purple.webp",
+    "name": "Graceful Mastery",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You move with perpetual grace, turning aside blows. Your proficiency rank for unarmored defense increases to master.</p>"
+        },
+        "level": {
+            "value": 13
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "subfeatures": {
+            "proficiencies": {
+                "unarmored": {
+                    "rank": 3
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "monk"
+            ]
+        }
+    },
+    "type": "feat"
+}

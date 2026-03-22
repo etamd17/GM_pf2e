@@ -1,0 +1,48 @@
+{
+    "_id": "svVczVV174KfJRDf",
+    "img": "icons/equipment/feet/boots-leather-laced-brown.webp",
+    "name": "Effect: Shared Avoidance",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Shared Avoidance]</p>\n<p>You gain a +2 circumstance bonus to your saving throws against the hazard.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 10
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "origin:type:hazard"
+                ],
+                "removeAfterRoll": true,
+                "selector": "saving-throw",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

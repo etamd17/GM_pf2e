@@ -1,0 +1,51 @@
+{
+    "_id": "8SkeqnhhYm4QGuJQ",
+    "img": "icons/skills/movement/ball-spinning-blue.webp",
+    "name": "Basic Companion Chair",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This harness fits around the torso of an animal companion and connects via struts to a number of wheels to assist the companion's movement. Companion chairs can be fitted for animal companions of any shape or size and have two- and four-wheel configurations. Like the basic chair, a companion chair is ideal for everyday use but not more strenuous activity, making it more common among non-adventurers.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "sp": 4
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "barding",
+                "companion"
+            ]
+        },
+        "usage": {
+            "value": "other"
+        }
+    },
+    "type": "equipment"
+}

@@ -1,0 +1,53 @@
+{
+    "_id": "mAofA4oy3cRdT71K",
+    "img": "icons/creatures/slimes/slime-movement-dripping-purple.webp",
+    "name": "Spell Effect: Penumbral Disguise",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Penumbral Disguise]</p>\n<p>You gain a status bonus to Stealth checks to Hide while in dim light or darkness.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:hide",
+                    {
+                        "or": [
+                            "lighting:darkness",
+                            "lighting:dim-light"
+                        ]
+                    }
+                ],
+                "selector": "stealth",
+                "type": "status",
+                "value": "ternary(gte(@item.level,8),4,ternary(gte(@item.level,6),3,ternary(gte(@item.level,4),2,1)))"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

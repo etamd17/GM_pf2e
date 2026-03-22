@@ -1,0 +1,54 @@
+{
+    "_id": "lbAZmrRnV7OZvuol",
+    "img": "icons/equipment/shield/kite-decorative-steel-claws.webp",
+    "name": "Swordstealer Shield",
+    "system": {
+        "acBonus": 2,
+        "baseItem": "swordstealer-shield",
+        "bulk": {
+            "value": 1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This specialized steel shield features several wide metal hooks along its surface. These hooks help catch swords and other blades, reducing the impact of their incoming attacks.</p>"
+        },
+        "grade": null,
+        "hardness": 4,
+        "hp": {
+            "max": 20,
+            "value": 20
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 6
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "runes": {
+            "reinforcing": 0
+        },
+        "size": "med",
+        "speedPenalty": 0,
+        "traits": {
+            "integrated": null,
+            "rarity": "common",
+            "value": [
+                "deflecting-slashing"
+            ]
+        }
+    },
+    "type": "shield"
+}

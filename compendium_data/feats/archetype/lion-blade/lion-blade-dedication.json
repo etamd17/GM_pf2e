@@ -1,0 +1,50 @@
+{
+    "_id": "zNxbsYgQgPVxdTLV",
+    "folder": "bviEMqBLpX2bzyPl",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "Lion Blade Dedication",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "class",
+        "description": {
+            "value": "<p><strong>Access</strong> You're from Taldor.</p><hr /><p>Your Lion Blade spy training helps you conceal yourself and your identity. You become trained in your choice of Deception or Stealth; if you were already trained in that skill, you become an expert instead. You also gain the @UUID[Compendium.pf2e.feats-srd.Item.Additional Lore] skill feat for Espionage Lore. If you were already trained in Espionage Lore, you also become trained in a Lore skill of your choice.</p>\n<p>You never take circumstance penalties for attempting to take a disguise of a different ancestry, age, and so on, as long as the disguised form is appropriate for your size.</p>\n<p>@UUID[Compendium.pf2e.journals.JournalEntry.vx5FGEG34AxI2dow.JournalEntryPage.COTDddn4psjIoWry]{Lion Blade}</p>"
+        },
+        "level": {
+            "value": 2
+        },
+        "prerequisites": {
+            "value": [
+                {
+                    "value": "member of the Lion Blades"
+                },
+                {
+                    "value": "trained in Performance"
+                }
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Shining Kingdoms"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.feats-srd.Item.Additional Lore"
+            }
+        ],
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "archetype",
+                "dedication"
+            ]
+        }
+    },
+    "type": "feat"
+}

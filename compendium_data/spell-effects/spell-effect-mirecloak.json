@@ -1,0 +1,74 @@
+{
+    "_id": "mzDgsuuo5wCgqyxR",
+    "img": "icons/magic/water/ice-snowman.webp",
+    "name": "Spell Effect: Mirecloak",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Mirecloak]</p>\n<p>You gain a +1 status bonus to AC and a +2 status bonus to Stealth checks, both only while the target is in dim light or darkness.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #171: Hurricane's Howl"
+        },
+        "rules": [
+            {
+                "key": "RollOption",
+                "label": "PF2E.SkillVariant.DimLightOrDarkness",
+                "option": "mireclock-darkness",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "mirecloak-darkness",
+                            "lighting:dim-light",
+                            "lighting:darkness"
+                        ]
+                    }
+                ],
+                "selector": "ac",
+                "type": "status",
+                "value": 1
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "mirecloak-darkness",
+                            "lighting:dim-light",
+                            "lighting:darkness"
+                        ]
+                    }
+                ],
+                "selector": "stealth",
+                "type": "status",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

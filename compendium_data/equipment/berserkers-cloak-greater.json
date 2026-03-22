@@ -1,0 +1,139 @@
+{
+    "_id": "OGKI8NS8Er3qumJS",
+    "img": "icons/equipment/back/cloak-brown-accent-brown-layered-collared-fur.webp",
+    "name": "Berserker's Cloak (Greater)",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This bearskin includes the head and bared teeth of the mighty creature from which it was taken. When worn, the cloak drapes over your head and around your shoulders, imbuing you with a bear's ferocity.</p>\n<p>If you have the @UUID[Compendium.pf2e.actionspf2e.Item.Rage] action, while raging you grow jaws that deal 1d10 piercing damage and claws that deal 1d6 slashing damage and have the agile trait. This transformation is a morph effect, and both the jaws and claws are unarmed attacks in the brawling weapon group. You gain the benefits of a <em>+2 weapon potency</em> rune and a greater <em>striking</em> rune with these attacks (gaining a +2 item bonus to attack rolls and increasing the weapon damage dice by two).</p>\n<p>If you have an animal instinct and the bestial rage instinct ability, instead of gaining these unarmed attacks, your unarmed attacks from the bestial rage instinct ability gain the benefits of a <em>+3 weapon potency</em> rune and a <em>major striking</em> rune (granting a +3 item bonus to attack rolls and increasing the weapon damage dice by three).</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 19
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 40000
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "baseType": "jaws",
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "piercing",
+                        "dice": 1,
+                        "die": "d10"
+                    }
+                },
+                "group": "brawling",
+                "img": "icons/creatures/abilities/mouth-teeth-long-red.webp",
+                "key": "Strike",
+                "label": "PF2E.BattleForm.Attack.Jaws",
+                "predicate": [
+                    "self:effect:rage",
+                    {
+                        "not": "feature:animal-instinct"
+                    }
+                ],
+                "slug": "jaws",
+                "traits": [
+                    "unarmed"
+                ]
+            },
+            {
+                "baseType": "claw",
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "slashing",
+                        "dice": 1,
+                        "die": "d6"
+                    }
+                },
+                "group": "brawling",
+                "img": "icons/commodities/claws/claw-bear-brown-grey.webp",
+                "key": "Strike",
+                "label": "PF2E.BattleForm.Attack.Claw",
+                "predicate": [
+                    "self:effect:rage",
+                    {
+                        "not": "feature:animal-instinct"
+                    }
+                ],
+                "slug": "claw",
+                "traits": [
+                    "unarmed",
+                    "agile"
+                ]
+            },
+            {
+                "itemId": "{item|id}",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "property": "runes-potency",
+                "value": 2
+            },
+            {
+                "itemId": "{item|id}",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "property": "runes-striking",
+                "value": 2
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:category:unarmed",
+                    "item:tag:instinct-unarmed-strike"
+                ],
+                "property": "runes-potency",
+                "value": 3
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:category:unarmed",
+                    "item:tag:instinct-unarmed-strike"
+                ],
+                "property": "runes-striking",
+                "value": 3
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "invested",
+                "primal"
+            ]
+        },
+        "usage": {
+            "value": "worncloak"
+        }
+    },
+    "type": "equipment"
+}

@@ -1,0 +1,145 @@
+{
+    "_id": "li52UFA2ErqRLeer",
+    "img": "systems/pf2e/icons/equipment/alchemical-items/alchemical-bombs/acid-flask.webp",
+    "name": "Effect: Inflammation Flask",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Lesser)], @UUID[Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Moderate)], @UUID[Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Major)]</p>\n<p>You gain weakness to acid, fire, and slashing damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 3
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder #203: Shepherd of Decay"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:inflammation-flask-lesser",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Lesser)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:inflammation-flask-moderate",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Moderate)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:inflammation-flask-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:inflammation-flask-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Inflammation Flask (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "inflammation-flask"
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "inflammation-flask:inflammation-flask-lesser"
+                ],
+                "type": [
+                    "acid",
+                    "fire",
+                    "slashing"
+                ],
+                "value": 1
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "inflammation-flask:inflammation-flask-moderate"
+                ],
+                "type": [
+                    "acid",
+                    "fire",
+                    "slashing"
+                ],
+                "value": 2
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "inflammation-flask:inflammation-flask-greater"
+                ],
+                "type": [
+                    "acid",
+                    "fire",
+                    "slashing"
+                ],
+                "value": 3
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "inflammation-flask:inflammation-flask-major"
+                ],
+                "type": [
+                    "acid",
+                    "fire",
+                    "slashing"
+                ],
+                "value": 4
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

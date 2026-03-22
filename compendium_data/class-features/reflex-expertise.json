@@ -1,0 +1,51 @@
+{
+    "_id": "TUOeATt52P43r5W0",
+    "img": "icons/magic/symbols/symbol-lightning-bolt.webp",
+    "name": "Reflex Expertise",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You've developed a knack for dodging danger. Your proficiency rank for Reflex saves increases to expert.</p>\n<p><strong>Guardian</strong> Even in the heaviest of armors, you can brace yourself against widespread effects. Your proficiency rank for Reflex saves increases to expert.</p>"
+        },
+        "level": {
+            "value": 3
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "subfeatures": {
+            "proficiencies": {
+                "reflex": {
+                    "rank": 2
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "barbarian",
+                "bard",
+                "champion",
+                "cleric",
+                "druid",
+                "guardian",
+                "sorcerer",
+                "witch",
+                "wizard"
+            ]
+        }
+    },
+    "type": "feat"
+}

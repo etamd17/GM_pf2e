@@ -1,0 +1,48 @@
+{
+    "_id": "WWtSEJGwKY4bQpUn",
+    "img": "systems/pf2e/icons/spells/vital-beacon.webp",
+    "name": "Spell Effect: Vital Beacon",
+    "system": {
+        "badge": {
+            "labels": [
+                "d4",
+                "d6",
+                "d8",
+                "d10"
+            ],
+            "loop": false,
+            "type": "counter",
+            "value": 4
+        },
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Vital Beacon]</p>\n<p>Either you or an ally can use an Interact action to supplicate and lay hands upon you to regain @Damage[(@item.level)d((2+2*@item.badge.value))[healing,vitality]|shortLabel] Hit Points. This healing decreases each time the beacon heals someone.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

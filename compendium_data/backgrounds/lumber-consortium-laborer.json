@@ -1,0 +1,56 @@
+{
+    "_id": "uJcFanGjVranEarv",
+    "img": "systems/pf2e/icons/default-icons/background.svg",
+    "name": "Lumber Consortium Laborer",
+    "system": {
+        "boosts": {
+            "0": {
+                "value": [
+                    "dex",
+                    "str"
+                ]
+            },
+            "1": {
+                "value": [
+                    "cha",
+                    "con",
+                    "dex",
+                    "int",
+                    "str",
+                    "wis"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p><strong>Prerequisite</strong> Region - Shining Kingdoms</p>\n<hr />\n<p>You have suffered as a worker for the unscrupulous Lumber Consortium, laboring under harsh conditions in dangerous wooded regions of Andoran.</p>\n<p>Choose two attribute boosts. One must be to <strong>Strength</strong> or <strong>Dexterity</strong>, and one is a free attribute boost.</p>\n<p>You're trained in the Athletics skill and the Forest Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat with Athletics.</p>"
+        },
+        "items": {},
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens World Guide"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "preselectChoices": {
+                    "assurance": "athletics"
+                },
+                "uuid": "Compendium.pf2e.feats-srd.Item.Assurance"
+            }
+        ],
+        "trainedSkills": {
+            "lore": [
+                "Forest Lore"
+            ],
+            "value": [
+                "athletics"
+            ]
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "background"
+}

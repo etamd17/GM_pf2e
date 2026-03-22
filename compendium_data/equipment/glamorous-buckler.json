@@ -1,0 +1,75 @@
+{
+    "_id": "IxuDS3POB6EH8TVN",
+    "img": "systems/pf2e/icons/equipment/shields/specific-shields/glamorous-buckler.webp",
+    "name": "Glamorous Buckler",
+    "system": {
+        "acBonus": 1,
+        "baseItem": "buckler",
+        "bulk": {
+            "value": 0.1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>A glamorous buckler (Hardness 3, HP 6, BT 3) is lavishly decorated with gilding and inset gemstones that glitter in the light. While you have it raised, the glamorous buckler grants you a +1 item bonus to Deception checks to Feint.</p><hr /><p><strong>Activate—Dazzling Feint</strong> <span class=\"action-glyph\">f</span> (concentrate)</p>\n<p><strong>Frequency</strong> once per day</p>\n<p><strong>Trigger</strong> You Feint</p>\n<p><strong>Requirements</strong> You have the glamorous buckler raised</p><hr /><p><strong>Effect</strong> As you Feint, the glamorous buckler sparkles mightily. On a successful Feint, the target is @UUID[Compendium.pf2e.conditionitems.Item.Dazzled] for 1 round.</p><hr /><table class=\"pf2e remaster\"><thead><tr><th>Hardness</th><th>HP</th><th>BT</th></tr></thead><tbody><tr><td>3</td><td>6</td><td>3</td></tr></tbody></table>"
+        },
+        "grade": null,
+        "hardness": 3,
+        "hp": {
+            "max": 6,
+            "value": 6
+        },
+        "level": {
+            "value": 2
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 35
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:feint",
+                    "self:shield:raised"
+                ],
+                "selector": "deception",
+                "type": "item",
+                "value": 1
+            }
+        ],
+        "runes": {
+            "reinforcing": null
+        },
+        "size": "med",
+        "specific": {
+            "integrated": null,
+            "material": {
+                "grade": null,
+                "type": null
+            },
+            "runes": {
+                "reinforcing": 0
+            }
+        },
+        "speedPenalty": 0,
+        "traits": {
+            "integrated": null,
+            "rarity": "common",
+            "value": [
+                "magical"
+            ]
+        }
+    },
+    "type": "shield"
+}

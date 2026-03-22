@@ -1,0 +1,66 @@
+{
+    "_id": "qkwb5DD3zmKwvbk0",
+    "img": "systems/pf2e/icons/spells/mage-armor.webp",
+    "name": "Spell Effect: Mystic Armor",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Mystic Armor]</p>\n<p>You gain an item bonus to AC and a maximum Dexterity modifier of +5. At 4th rank or higher, you gain an item bonus to saving throws.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "fromEquipment": false,
+                "key": "FlatModifier",
+                "selector": "ac",
+                "slug": "mage-armor",
+                "type": "item",
+                "value": "ternary(gte(@item.level,10),3,ternary(gte(@item.level,6),2,1))"
+            },
+            {
+                "fromEquipment": false,
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "gte": [
+                            "parent:level",
+                            4
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "slug": "mage-armor",
+                "type": "item",
+                "value": "ternary(gte(@item.level,10),3,ternary(gte(@item.level,8),2,1))"
+            },
+            {
+                "key": "DexterityModifierCap",
+                "value": 5
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

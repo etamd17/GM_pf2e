@@ -1,0 +1,58 @@
+{
+    "_id": "5IGz4iheaiUWm5KR",
+    "img": "icons/magic/perception/orb-eye-scrying.webp",
+    "name": "Effect: Eye of the Arclords",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Eye of the Arclords]</p>\n<p>You gain darkvision and a +2 status bonus to Perception checks to Seek undetected and hidden creatures and to your Perception DC against Hide and Sneak.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens World Guide"
+        },
+        "rules": [
+            {
+                "key": "Sense",
+                "selector": "darkvision"
+            },
+            {
+                "key": "FlatModifier",
+                "label": "Eye of the Arclords (Seek undetected & hidden creatures)",
+                "predicate": [
+                    "action:seek",
+                    {
+                        "or": [
+                            "target:hidden",
+                            "target:undetected"
+                        ]
+                    }
+                ],
+                "selector": "perception",
+                "type": "status",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

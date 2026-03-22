@@ -1,0 +1,47 @@
+{
+    "_id": "kMoOWWBqDYmPcYyS",
+    "img": "icons/skills/wounds/blood-cells-vessel-red-orange.webp",
+    "name": "Spell Effect: Bathe in Blood",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Bathe in Blood]</p>\n<p>You gain a +1 circumstance bonus to Make an Impression.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 8
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:make-an-impression"
+                ],
+                "selector": "diplomacy",
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

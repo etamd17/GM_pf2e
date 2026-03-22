@@ -1,0 +1,46 @@
+{
+    "_id": "KmFz27FVNXYWwgIc",
+    "img": "icons/magic/symbols/cross-circle-blue.webp",
+    "name": "Enhanced Damage",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You've made your innovation more powerful than other weapons of its kind. Increase your innovation's weapon damage die by one step (d4 to d6, d6 to d8, d8 to d10, d10 to d12). As normal, you can't increase your die by more than one size, so this modification isn't cumulative with complex simplicity.</p>"
+        },
+        "level": {
+            "value": 15
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "property": "damage-dice-faces"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

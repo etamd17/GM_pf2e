@@ -1,0 +1,302 @@
+{
+    "_id": "anyIh7T5RKBjYTc3",
+    "img": "systems/pf2e/icons/default-icons/npc.svg",
+    "items": [
+        {
+            "_id": "cuy3IgZ93Vnm8vNh",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Feel No Pain",
+            "sort": 100000,
+            "system": {
+                "actionType": {
+                    "value": "reaction"
+                },
+                "actions": {
+                    "value": null
+                },
+                "category": "defensive",
+                "description": {
+                    "value": "<p><strong>Trigger</strong> The vibrant pup swarm is critically hit by a Strike</p><hr /><p><strong>Effect</strong> The worker pups become insensitive to pain and leap to the front. The swarm gains 10 temporary Hit Points that last for 1 round.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "selfEffect": {
+                    "name": "Effect: Feel No Pain",
+                    "uuid": "Compendium.pf2e.bestiary-effects.Item.Effect: Feel No Pain"
+                },
+                "slug": null,
+                "traits": {
+                    "value": []
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "lezQSO0htwcgHmIZ",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Reflective Skin",
+            "sort": 200000,
+            "system": {
+                "actionType": {
+                    "value": "passive"
+                },
+                "actions": {
+                    "value": null
+                },
+                "category": "defensive",
+                "description": {
+                    "value": "<p>10 feet. Other creatures in the aura are @UUID[Compendium.pf2e.conditionitems.Item.Dazzled]. The aura automatically activates when the swarm is in bright light and deactivates in dim light or darkness.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [
+                    {
+                        "key": "RollOption",
+                        "option": "reflective-skin",
+                        "toggleable": true,
+                        "value": true
+                    },
+                    {
+                        "key": "Aura",
+                        "predicate": [
+                            "reflective-skin"
+                        ],
+                        "radius": 10,
+                        "traits": [
+                            "light",
+                            "visual"
+                        ]
+                    }
+                ],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "aura",
+                        "light",
+                        "visual"
+                    ]
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "q3FDvNCaWX2X7VEI",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Focused Reflection",
+            "sort": 300000,
+            "system": {
+                "actionType": {
+                    "value": "action"
+                },
+                "actions": {
+                    "value": 2
+                },
+                "category": "offensive",
+                "description": {
+                    "value": "<p><strong>Requirements</strong> The vibrant pup swarm is in bright light</p><hr /><p><strong>Effect</strong> The swarm simultaneously turns to focus the light in an arcing beam, dealing @Damage[(6d12)[fire]|options:area-damage] damage to all creatures in a @Template[cone|distance:30] (@Check[reflex|dc:30|basic|options:area-effect] save). A creature that fails its save is also @UUID[Compendium.pf2e.conditionitems.Item.Blinded] for 1 round (or 1 minute on a critical failure). The swarm can't use Focused Reflection again for [[/gmr 1d4 #Recharge Focused Reflection]]{1d4 rounds}.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "fire",
+                        "light"
+                    ]
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "T2BEVw72KQFJGSNY",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Swarming Bites",
+            "sort": 400000,
+            "system": {
+                "actionType": {
+                    "value": "action"
+                },
+                "actions": {
+                    "value": 1
+                },
+                "category": "offensive",
+                "description": {
+                    "value": "<p>Each enemy in the swarm's space takes @Damage[(2d6)[piercing]|options:area-damage] damage (@Check[reflex|dc:30|basic|options:area-effect] save).</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": []
+                }
+            },
+            "type": "action"
+        }
+    ],
+    "name": "Vibrant Pup Swarm",
+    "system": {
+        "abilities": {
+            "cha": {
+                "mod": -4
+            },
+            "con": {
+                "mod": 5
+            },
+            "dex": {
+                "mod": 7
+            },
+            "int": {
+                "mod": -5
+            },
+            "str": {
+                "mod": -2
+            },
+            "wis": {
+                "mod": 5
+            }
+        },
+        "attributes": {
+            "ac": {
+                "details": "",
+                "value": 29
+            },
+            "allSaves": {
+                "value": ""
+            },
+            "hp": {
+                "details": "",
+                "max": 140,
+                "temp": 0,
+                "value": 140
+            },
+            "immunities": [
+                {
+                    "exceptions": [],
+                    "type": "precision"
+                },
+                {
+                    "exceptions": [],
+                    "type": "swarm-mind"
+                }
+            ],
+            "resistances": [
+                {
+                    "doubleVs": [],
+                    "exceptions": [],
+                    "type": "bludgeoning",
+                    "value": 5
+                },
+                {
+                    "doubleVs": [],
+                    "exceptions": [],
+                    "type": "piercing",
+                    "value": 10
+                },
+                {
+                    "doubleVs": [],
+                    "exceptions": [],
+                    "type": "slashing",
+                    "value": 10
+                }
+            ],
+            "speed": {
+                "otherSpeeds": [
+                    {
+                        "type": "burrow",
+                        "value": 30
+                    }
+                ],
+                "value": 30
+            },
+            "weaknesses": [
+                {
+                    "exceptions": [],
+                    "type": "area-damage",
+                    "value": 5
+                },
+                {
+                    "exceptions": [],
+                    "type": "splash-damage",
+                    "value": 5
+                }
+            ]
+        },
+        "details": {
+            "blurb": "",
+            "languages": {
+                "details": "",
+                "value": []
+            },
+            "level": {
+                "value": 11
+            },
+            "privateNotes": "",
+            "publicNotes": "<p>These tenacious little rodents travel in massive swarms across the desert, using the sun both as shield and sword during their long marches. Unlike other rodents, vibrant pups are eusocial, causing them to behave more like insects than other rodents. Only the queen can reproduce, and is fiercely protected for that reason. This social structure enables them to viciously attack and act as a single unit. Each of the pups also have specific roles within the family and the swarm. The worker pups gather and dig while in a den, but will act as a shield to protect the more valuable fighter pups while swarming.</p>\n<p>Vibrant pups spend most of their lives underground, digging out elaborate tunnels in search for food. However, in the harsh deserts of Thuvia, food can be scarce. A family of vibrant pups will abandon their dens and set out on harsh multiday journeys in search of land that can sustain the queen long enough to have another litter of pups. These journeys can happen up to three times a year, following seasonal changes in resources. Outside of these local migrations, swarms will leave their dens only to repel a massive threat to the queen.</p>\n<p>Vibrant pups have unusual and beautiful anatomical features. Their skin, while soft, is extremely reflective, which serves a dual purpose for the rodents since it can both reflect the harsh sun away to better thermoregulate as well as focus those rays toward threats, especially when multiple pups work in unison. The glinting of a pup swarm in migration can be seen from afar—rather than inviting challenges, this obvious display signals would-be predators to steer clear.</p>\n<p>As of late, their reflective, soft skin has become quite fashionable in wealthy circles. While hunting such small creatures for their pelts is extremely impractical and dangerous, the high price tag has led to more frequent hunts. While these rodents do serve a unique ecological niche, many farmers are more than happy to rid their fields of these voracious eaters and will often point out nearby hives to local hunters.</p>",
+            "publication": {
+                "license": "ORC",
+                "remaster": true,
+                "title": "Pathfinder Howl of the Wild"
+            }
+        },
+        "initiative": {
+            "statistic": "perception"
+        },
+        "perception": {
+            "details": "",
+            "mod": 22,
+            "senses": [
+                {
+                    "acuity": "precise",
+                    "range": 60,
+                    "type": "tremorsense"
+                }
+            ]
+        },
+        "resources": {},
+        "saves": {
+            "fortitude": {
+                "saveDetail": "",
+                "value": 24
+            },
+            "reflex": {
+                "saveDetail": "",
+                "value": 21
+            },
+            "will": {
+                "saveDetail": "",
+                "value": 18
+            }
+        },
+        "skills": {
+            "athletics": {
+                "base": 16
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "size": {
+                "value": "huge"
+            },
+            "value": [
+                "animal",
+                "swarm"
+            ]
+        }
+    },
+    "type": "npc"
+}

@@ -1,0 +1,55 @@
+{
+    "_id": "an4yZ6dyIDOFa1wa",
+    "img": "systems/pf2e/icons/spells/soothing-words.webp",
+    "name": "Spell Effect: Soothing Words",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Soothing Words]</p>\n<p>You gain a status bonus to Will saving throws. This bonus increases against emotion effects.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "will",
+                "slug": "soothing-words",
+                "type": "status",
+                "value": "ternary(gte(@item.level,5),2,1)"
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:trait:emotion"
+                ],
+                "selector": "will",
+                "slug": "soothing-words",
+                "value": "ternary(gte(@item.level,5),3,2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

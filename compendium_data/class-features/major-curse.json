@@ -1,0 +1,36 @@
+{
+    "_id": "rrzItB68Er0DzKx7",
+    "img": "systems/pf2e/icons/features/classes/major-curse.webp",
+    "name": "Major Curse",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You've learned to better tolerate the conflicting powers wreaking havoc on your body. The maximum @UUID[Compendium.pf2e.conditionitems.Item.Cursebound] value you can have increases from cursebound 2 to cursebound 3.</p>"
+        },
+        "level": {
+            "value": 11
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "oracle"
+            ]
+        }
+    },
+    "type": "feat"
+}

@@ -1,0 +1,63 @@
+{
+    "_id": "vzP0pLxes9bn0zV8",
+    "img": "icons/consumables/drinks/wine-amphora-clay-gray.webp",
+    "name": "Insight Coffee (Moderate)",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "category": "elixir",
+        "containerId": null,
+        "damage": null,
+        "description": {
+            "value": "<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (manipulate)</p><hr /><p>A popular choice for investigators studying alchemy, insight coffee is infused with alchemical flavoring during percolation. For 1 hour after you drink an insight coffee, you use d8s instead of d6s for your extra damage from the strategic strike class feature, if you have it. You also gain a +3 item bonus to checks to Recall Knowledge with a skill determined by the blend chosen when the item is crafted.</p><ul><li><strong>Double Coffee</strong> Religion</li><li><strong>Hazelnut</strong> Nature</li><li><strong>Mocha</strong> Arcana</li><li><strong>Vanilla</strong> Society</li><li><strong>Pumpkin Spice</strong> Occultism</li><li><strong>Toffee</strong> Medicine</li></ul><p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Insight Coffee]</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 12
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "per": 1,
+            "value": {
+                "gp": 375
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "otherTags": [
+                "alchemical-food"
+            ],
+            "rarity": "common",
+            "value": [
+                "alchemical",
+                "consumable",
+                "elixir"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

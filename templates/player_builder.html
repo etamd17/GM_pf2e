@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Character Forge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' }, green: { 200: '#A7F3D0', 400: '#4ADE80' }, red: { 300: '#FDA4AF', 400: '#FB7185' }, blue: { 300: '#93C5FD', 400: '#60A5FA', 900: '#1E2A4A' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(92,75,60,0.06) 0%,transparent 55%),#1C1917; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3228; border-radius: 10px; }
+        .foundry-content p { margin-bottom: 0.75rem; }
+        .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+        
+        .nav-item { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.06em; }
+        .nav-item.active { background: linear-gradient(90deg, rgba(58,120,120,0.15), transparent); border-left: 3px solid #5EADAD; color: #7DC4C4; }
+        .step-panel { display: none; animation: fadeIn 0.25s ease-out; }
+        .step-panel.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .choice-card { background: linear-gradient(135deg, #33302A, #252320); border: 1px solid rgba(139,115,85,0.18); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
+        .choice-card:hover { border-color: rgba(94,173,173,0.35); background: linear-gradient(135deg, #3F3A33, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4), 0 0 20px rgba(94,173,173,0.03); }
+        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #7DC4C4; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
+        .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+        
+        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #1C1917; border: 1px solid rgba(139,115,85,0.2); color: #D4C4A8; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
+        .stat-pill:hover:not(.locked):not(.flaw) { border-color: rgba(139,115,85,0.5); }
+        .stat-pill.selected { background: rgba(4,120,87,0.3); border-color: #4ADE80; color: #A7F3D0; }
+        .stat-pill.flaw { background: rgba(127,29,29,0.3); border-color: #FB7185; color: #FECDD3; cursor: not-allowed; }
+        .stat-pill.locked { background: rgba(6,95,70,0.25); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
+
+        .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; }
+        .mod-tab-btn.active { color: #7DC4C4; background: rgba(58,120,120,0.15); border-color: rgba(94,173,173,0.3); }
+        
+        h2, h3, h4, label { font-family: 'Cinzel', serif; }
+        input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-body flex h-screen">
+
+    <div class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
+        <div class="p-6 border-b border-gray-800">
+            <a href="/player" class="text-xs text-gray-500 hover:text-white transition-colors mb-2 block uppercase tracking-wider font-bold">← Back to Roster</a>
+            <h1 class="text-2xl font-header text-amber-500 leading-none">Character Forge</h1>
+        </div>
+        <div class="flex-1 overflow-y-auto py-4 space-y-1">
+            <button onclick="navTo('start')" id="nav-start" class="nav-item active w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>1. Identity</span> <span id="chk-start" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('ancestry')" id="nav-ancestry" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>2. Ancestry</span> <span id="chk-ancestry" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('background')" id="nav-background" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>3. Background</span> <span id="chk-background" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('class')" id="nav-class" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>4. Class</span> <span id="chk-class" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('abilities')" id="nav-abilities" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>5. Abilities</span> <span id="chk-abilities" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('skills')" id="nav-skills" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>6. Skills & Extras</span> <span id="chk-skills" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('review')" id="nav-review" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>7. Review</span> <span id="chk-review" class="text-xs"></span>
+            </button>
+        </div>
+        <div class="p-6 border-t border-gray-800 bg-gray-900">
+            <button id="btn-finish" onclick="finalizeCharacter()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
+                Incomplete Setup
+            </button>
+        </div>
+    </div>
+
+    <div class="flex-1 bg-gray-900 overflow-y-auto custom-scrollbar relative flex flex-col">
+        
+        <div id="step-start" class="step-panel active w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Character Identity</h2>
+            <p class="text-gray-400 mb-8">Establish the core concept of your hero.</p>
+            
+            <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl space-y-6">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Character Name *</label>
+                    <input type="text" id="inp-name" placeholder="e.g. Valeros" class="w-full bg-gray-950 border border-gray-700 rounded p-4 text-white focus:border-amber-500 outline-none text-lg" oninput="runValidation()">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Deity (Optional)</label>
+                        <input type="text" id="inp-deity" placeholder="e.g. Iomedae" class="w-full bg-gray-950 border border-gray-700 rounded p-3 text-white focus:border-amber-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Sanctification</label>
+                        <div class="flex bg-gray-950 rounded border border-gray-700 p-1">
+                            <button class="flex-1 py-2 text-sm font-bold rounded text-amber-500 bg-gray-800 shadow" id="btn-sanc-neutral" onclick="setSanct('Neutral')">Neutral</button>
+                            <button class="flex-1 py-2 text-sm font-bold rounded text-gray-400 hover:text-white" id="btn-sanc-holy" onclick="setSanct('Holy')">Holy</button>
+                            <button class="flex-1 py-2 text-sm font-bold rounded text-gray-400 hover:text-white" id="btn-sanc-unholy" onclick="setSanct('Unholy')">Unholy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-ancestry" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Ancestry & Heritage</h2>
+            <p class="text-gray-400 mb-8">Choose your species and lineage.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="choice-card" onclick="openModal('ancestry')">
+                    <div class="subtitle">Ancestry *</div>
+                    <div class="title" id="card-ancestry">Select Ancestry...</div>
+                </div>
+                <div class="choice-card opacity-50 pointer-events-none" id="wrap-heritage" onclick="if(state.ancestry) openModal('heritage')">
+                    <div class="subtitle">Heritage *</div>
+                    <div class="title" id="card-heritage">Requires Ancestry</div>
+                </div>
+            </div>
+
+            <div id="ancestry-details" class="hidden space-y-6">
+                <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Ancestry Boosts</h3>
+                        <select id="sel-anc-method" onchange="renderAncBoosts()" class="bg-gray-950 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 outline-none">
+                            <option value="standard">Standard Rules</option>
+                            <option value="alternate">Remaster (Two Free)</option>
+                        </select>
+                    </div>
+                    <div id="ui-anc-boosts" class="flex flex-wrap gap-3"></div>
+                </div>
+
+                <div class="choice-card" onclick="openModal('ancestry_feat')">
+                    <div class="subtitle">Level 1 Ancestry Feat *</div>
+                    <div class="title" id="card-anc-feat">Select Feat...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-background" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Background</h2>
+            <p class="text-gray-400 mb-8">What did you do before you became an adventurer?</p>
+            
+            <div class="choice-card mb-6" onclick="openModal('background')">
+                <div class="subtitle">Background *</div>
+                <div class="title" id="card-background">Select Background...</div>
+            </div>
+
+            <div id="background-details" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Background Boosts</h3>
+                    <div id="ui-bg-boosts" class="space-y-4"></div>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl flex flex-col justify-center items-center text-center">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Granted Skills</h3>
+                    <div id="ui-bg-skills" class="text-amber-500 font-bold text-xl"></div>
+                    <p class="text-xs text-gray-400 mt-3">If your Class grants these same skills, you get free choices in Step 6.</p>
+                </div>
+                
+                <div id="ui-bg-feat-container" class="hidden bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl flex flex-col justify-center items-center text-center md:col-span-2">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Granted Free Feat</h3>
+                    <div id="ui-bg-feat" class="text-green-400 font-bold text-xl"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-class" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Class & Subclass</h2>
+            <p class="text-gray-400 mb-8">Define your martial or magical combat training.</p>
+            
+            <div class="choice-card mb-6" onclick="openModal('class')">
+                <div class="subtitle">Class *</div>
+                <div class="title" id="card-class">Select Class...</div>
+            </div>
+
+            <div id="class-details" class="hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Key Ability</h3>
+                        <div id="ui-cls-key" class="flex gap-2"></div>
+                    </div>
+                    
+                    <div class="choice-card opacity-50 pointer-events-none" id="wrap-subclass" onclick="openModal('subclass')">
+                        <div class="subtitle" id="lbl-subclass">Subclass *</div>
+                        <div class="title" id="card-subclass">Requires Class</div>
+                    </div>
+                </div>
+
+                <div class="choice-card hidden" id="wrap-cls-feat" onclick="openModal('class_feat')">
+                    <div class="subtitle">Level 1 Class Feat *</div>
+                    <div class="title" id="card-cls-feat">Select Feat...</div>
+                </div>
+                
+                <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl hidden" id="wrap-cls-feat-container">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Level 1 Class Feats</h3>
+                    </div>
+                    <div id="ui-class-feats" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-abilities" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Final Attributes</h2>
+            <p class="text-gray-400 mb-6">Review your calculated math and select your 4 Free Boosts.</p>
+
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">The 4 Free Boosts</h3>
+                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-free-boosts-done">✓ All Allocated</span>
+                </div>
+                <div id="ui-free-boosts" class="flex flex-wrap gap-4"></div>
+            </div>
+
+            <div class="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-inner">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 text-center">Final Calculated Modifiers</h3>
+                <div class="grid grid-cols-3 md:grid-cols-6 gap-4" id="ui-final-math"></div>
+            </div>
+        </div>
+
+        <div id="step-skills" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Skills & Extras</h2>
+            <p class="text-gray-400 mb-6">Finalize your training and guided background choices.</p>
+
+            <div id="wrap-spells" class="hidden mb-6">
+                <div class="bg-gray-800 p-6 rounded-lg border border-blue-900/50 shadow-xl relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-blue-400 mb-1">Spellbook / Repertoire</h3>
+                            <p class="text-sm text-gray-400" id="lbl-spell-reqs">Calculating required spells...</p>
+                        </div>
+                        
+                        <div id="ui-tradition-select" class="hidden bg-gray-950 p-2 rounded border border-gray-700 shadow-inner">
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1 text-right">Choose Tradition</label>
+                            <select id="sel-tradition" onchange="changeTradition(this.value)" class="bg-transparent text-sm font-bold text-blue-400 outline-none uppercase tracking-wider text-right cursor-pointer"></select>
+                        </div>
+                        <div id="lbl-spell-tradition" class="bg-blue-900/40 text-blue-400 px-3 py-1 rounded text-xs font-bold uppercase tracking-widest border border-blue-900/50 hidden"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-gray-950 rounded-lg border border-gray-800 p-4 shadow-inner">
+                            <div class="flex justify-between items-center mb-3 border-b border-gray-800 pb-2">
+                                <div>
+                                    <h4 class="text-sm text-gray-300 font-bold uppercase tracking-wider">Cantrips (Lvl 0)</h4>
+                                    <span class="text-[10px] text-gray-500" id="lbl-count-cantrip">0 selected</span>
+                                </div>
+                                <button onclick="openModal('cantrip')" class="bg-blue-900/40 hover:bg-blue-800 border border-blue-800 text-blue-200 px-3 py-1.5 rounded text-xs font-bold transition-colors shadow">
+                                    Browse Cantrips
+                                </button>
+                            </div>
+                            <div id="ui-spell-list-0" class="flex flex-col gap-1 min-h-[40px]"></div>
+                        </div>
+
+                        <div class="bg-gray-950 rounded-lg border border-gray-800 p-4 shadow-inner">
+                            <div class="flex justify-between items-center mb-3 border-b border-gray-800 pb-2">
+                                <div>
+                                    <h4 class="text-sm text-gray-300 font-bold uppercase tracking-wider">Level 1 Spells</h4>
+                                    <span class="text-[10px] text-gray-500" id="lbl-count-lvl1">0 selected</span>
+                                </div>
+                                <button onclick="openModal('lvl1_spell')" class="bg-blue-900/40 hover:bg-blue-800 border border-blue-800 text-blue-200 px-3 py-1.5 rounded text-xs font-bold transition-colors shadow">
+                                    Browse Level 1
+                                </button>
+                            </div>
+                            <div id="ui-spell-list-1" class="flex flex-col gap-1 min-h-[40px]"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
+                <div class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-500">Trained Skills</h3>
+                        <p class="text-xs text-gray-400" id="lbl-skill-math">Calculating...</p>
+                    </div>
+                    <div class="text-2xl font-bold text-white" id="lbl-skill-remaining">0 left</div>
+                </div>
+                <div id="ui-skills" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                
+                <div class="mt-6 pt-4 border-t border-gray-700">
+                    <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Lore Skills</h4>
+                    <div id="ui-bg-lore" class="mb-3"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inp-custom-lore" placeholder="e.g. Warfare, Sailing, Cooking..." class="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-amber-500 outline-none" onkeydown="if(event.key==='Enter'){addCustomLore(); event.preventDefault();}">
+                        <button onclick="addCustomLore()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded text-sm font-bold transition-colors">+ Add Lore</button>
+                    </div>
+                    <div id="ui-custom-lores" class="flex flex-wrap gap-2 mt-3"></div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl" id="wrap-guided-extras">
+                <h3 class="text-lg font-bold text-amber-500 mb-4 border-b border-gray-700 pb-2">Guided Class & Background Choices</h3>
+                <div id="ui-guided-extras"></div>
+            </div>
+
+        </div>
+
+        <div id="step-review" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Review Your Character</h2>
+            <p class="text-gray-400 mb-8">Verify everything before finalizing. You can go back to any step to make changes.</p>
+            <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl" id="ui-builder-review"></div>
+        </div>
+    </div>
+
+    <div id="uni-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 md:p-8 opacity-0 transition-opacity duration-200">
+        <div class="bg-gray-900 w-full max-w-6xl h-full max-h-[85vh] rounded-xl shadow-2xl border border-gray-700 flex flex-col md:flex-row overflow-hidden transform scale-95 transition-transform duration-200" id="uni-window">
+            
+            <div class="w-full md:w-1/3 bg-gray-950 border-r border-gray-800 flex flex-col h-1/2 md:h-full shrink-0">
+                <div class="p-6 border-b border-gray-800 bg-gray-900 flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 id="mod-title" class="font-bold text-amber-500 uppercase tracking-wider text-sm">Select...</h3>
+                        <label class="text-xs text-gray-400 flex items-center cursor-pointer">
+                            <input type="checkbox" id="chk-ignore-reqs" class="mr-1 accent-amber-500" onchange="filterModal()"> Ignore Pre-Reqs
+                        </label>
+                    </div>
+                    <input type="text" id="mod-search" placeholder="Search to filter..." class="w-full bg-gray-950 border border-gray-700 rounded p-3 text-sm text-white focus:border-amber-500 outline-none" onkeyup="filterModal()">
+                    
+                    <div id="mod-tabs" class="flex gap-2 mt-3 overflow-x-auto custom-scrollbar hidden"></div>
+                </div>
+                <div id="mod-list" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1"></div>
+            </div>
+
+            <div class="w-full md:w-2/3 bg-gray-900 flex flex-col relative h-1/2 md:h-full">
+                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">✖</button>
+                <div class="p-8 md:p-12 flex-1 overflow-y-auto custom-scrollbar relative" id="mod-preview"></div>
+                <div class="p-6 border-t border-gray-800 bg-gray-950 flex justify-end shrink-0">
+                    <button id="btn-lock" class="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg hidden transition-transform transform hover:scale-105" onclick="lockModal()">Lock In Choice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dbClasses = {{ classes | tojson | safe }};
+        const dbAncestries = {{ ancestries | tojson | safe }};
+        const dbBackgrounds = {{ backgrounds | tojson | safe }};
+        const dbSpells = {{ spells | tojson | safe }};
+        const dbFeats = {{ feats | tojson | safe }};
+        const bData = {{ builder_data | tojson | safe }};
+        const subclassDescs = {{ subclass_descriptions | tojson | safe }};
+
+        let state = {
+            name: "", deity: "", sanctification: "Neutral",
+            ancestry: null, heritage: null, ancFeat: null, ancBoosts: [],
+            background: null, bgBoosts: [], bgSkills: [], bgLores: [], bgNeedsLore: false,
+            cls: null, subclass: null, keyStat: null, clsFeat: null, clsFeats: {}, 
+            tradition: null, spells: [],
+            freeBoosts: [], freeSkills: [], customLores: [],
+            guided: {} 
+        };
+        let mCtx = { type: null, data: [], active: null, meta: {}, tab: 'all', activeTabs: false };
+
+        function getTempFinalStats() {
+            let fin = {str:10, dex:10, con:10, int:10, wis:10, cha:10};
+            [...state.ancBoosts, ...state.bgBoosts, state.keyStat, ...state.freeBoosts].forEach(b => {if(b) fin[b]+=2});
+            let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+            if(state.ancestry && document.getElementById('sel-anc-method').value === 'standard') {
+                safeFlaws.forEach(f => fin[f]-=2);
+            }
+            let mods = {};
+            for(let s in fin) { mods[s] = Math.floor((fin[s]-10)/2); }
+            return mods;
+        }
+
+        function getTempFinalSkills() {
+            let profs = {};
+            let searchCls = Object.keys(dbClasses).find(k => k.toLowerCase() === state.cls) || "";
+            let dbC = dbClasses[searchCls];
+            let cData = bData.classes[state.cls] || { base_skills: [] };
+            
+            let granted = [...(cData.base_skills || [])].map(s => s.toLowerCase());
+            
+            if (state.subclass && bData.subclass_matrix && bData.subclass_matrix[state.subclass] && bData.subclass_matrix[state.subclass].skills) {
+                bData.subclass_matrix[state.subclass].skills.forEach(sk => granted.push(sk.toLowerCase()));
+            }
+            state.bgSkills.forEach(bs => granted.push(bs.toLowerCase()));
+            state.freeSkills.forEach(fs => granted.push(fs.toLowerCase()));
+            
+            granted.forEach(g => { profs[g] = (profs[g] || 0) + 2; });
+            return profs;
+        }
+
+        function meetsPrereqs(feat) {
+            if (!feat.prereqs_parsed) return true; 
+            let p = feat.prereqs_parsed;
+            let cStats = getTempFinalStats();
+            let cSkills = getTempFinalSkills();
+            
+            if (p.stats) {
+                for (let stat in p.stats) {
+                    if ((cStats[stat] || 0) < p.stats[stat]) return false;
+                }
+            }
+            if (p.skills) {
+                for (let skill in p.skills) {
+                    if ((cSkills[skill] || 0) < p.skills[skill]) return false;
+                }
+            }
+            return true;
+        }
+
+        function parseDeepBoosts(raw) {
+            let fixed = []; let free = 0;
+            if(!raw) return {fixed, free: 2}; 
+            let rawStr = JSON.stringify(raw).toLowerCase();
+            let freeMatch = rawStr.match(/"free"/g);
+            if (freeMatch) free = freeMatch.length;
+            ['str','dex','con','int','wis','cha'].forEach(stat => {
+                if (rawStr.includes(`"${stat}"`) && !rawStr.includes(`"-${stat}"`)) fixed.push(stat);
+            });
+            if (fixed.length === 0 && free === 0) free = 2; 
+            return {fixed: [...new Set(fixed)], free};
+        }
+
+        function parseDeepFlaws(raw) {
+            let flaws = [];
+            if(!raw) return flaws;
+            let rawStr = JSON.stringify(raw).toLowerCase();
+            ['str','dex','con','int','wis','cha'].forEach(stat => {
+                if (rawStr.includes(`"${stat}"`) || rawStr.includes(`"-${stat}"`)) flaws.push(stat);
+            });
+            return [...new Set(flaws)];
+        }
+
+        function navTo(stepId) {
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(`step-${stepId}`).classList.add('active');
+            document.getElementById(`nav-${stepId}`).classList.add('active');
+            
+            if(stepId === 'abilities') buildAbilitiesUI();
+            if(stepId === 'skills') { buildSkillsUI(); renderGuidedExtras(); }
+            if(stepId === 'review') renderBuilderReview();
+            runValidation();
+        }
+
+        function setSanct(val) {
+            state.sanctification = val;
+            ['neutral', 'holy', 'unholy'].forEach(s => {
+                const btn = document.getElementById(`btn-sanc-${s}`);
+                if(s.toLowerCase() === val.toLowerCase()) { btn.classList.add('text-amber-500', 'bg-gray-800', 'shadow'); btn.classList.remove('text-gray-400'); }
+                else { btn.classList.remove('text-amber-500', 'bg-gray-800', 'shadow'); btn.classList.add('text-gray-400'); }
+            });
+            runValidation();
+        }
+
+        function setModalTab(tabName) {
+            mCtx.tab = tabName;
+            document.querySelectorAll('.mod-tab-btn').forEach(b => {
+                if(b.dataset.tab === tabName) {
+                    b.classList.add('text-amber-500', 'bg-gray-700', 'border-amber-500/50');
+                    b.classList.remove('text-gray-300', 'bg-gray-800', 'border-transparent');
+                } else {
+                    b.classList.remove('text-amber-500', 'bg-gray-700', 'border-amber-500/50');
+                    b.classList.add('text-gray-300', 'bg-gray-800', 'border-transparent');
+                }
+            });
+            renderModalList();
+        }
+
+        function openModal(type, metaKey="") {
+            try {
+                mCtx.type = type; mCtx.active = null; mCtx.meta = {key: metaKey};
+                document.getElementById('mod-search').value = "";
+                document.getElementById('mod-preview').innerHTML = `<div class="flex h-full items-center justify-center text-gray-600 italic">Select an option to preview.</div>`;
+                document.getElementById('btn-lock').classList.add('hidden');
+                
+                let title = "Select"; mCtx.data = [];
+                
+                const tabsContainer = document.getElementById('mod-tabs');
+                tabsContainer.innerHTML = '';
+                tabsContainer.classList.add('hidden');
+                mCtx.activeTabs = false;
+                mCtx.tab = 'all';
+                
+                if (type === 'ancestry') { 
+                    title = "Ancestry"; 
+                    mCtx.data = Object.keys(dbAncestries).map(k => ({name: k, desc: dbAncestries[k].description, rarity: dbAncestries[k].rarity || 'common'})); 
+                    
+                    mCtx.activeTabs = true; mCtx.tab = 'common';
+                    tabsContainer.innerHTML = `
+                        <button onclick="setModalTab('common')" class="mod-tab-btn active px-3 py-1 text-[10px] font-bold rounded bg-gray-700 text-amber-500 border border-amber-500/50" data-tab="common">Common</button>
+                        <button onclick="setModalTab('uncommon')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="uncommon">Uncommon</button>
+                        <button onclick="setModalTab('rare')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="rare">Rare</button>
+                        <button onclick="setModalTab('all')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="all">All</button>
+                    `;
+                    tabsContainer.classList.remove('hidden');
+                }
+                else if (type === 'heritage') { 
+                    title = "Heritage"; 
+                    let key = (state.ancestry || "").toLowerCase().replace(/-/g, ' ').replace(/_/g, ' ');
+                    
+                    let hList = [];
+                    for(let k in bData.heritages) {
+                        if(k.replace(/-/g, ' ').replace(/_/g, ' ') === key) { hList = bData.heritages[k]; break; }
+                    }
+                    
+                    let vList = bData.heritages['universal'] || [];
+                    let combined = [...hList, ...vList];
+
+                    if (combined.length === 0) combined = [{name: "Generic Heritage", desc: "A standard lineage for this ancestry.", rarity: 'common'}];
+                    mCtx.data = combined.map(h => {
+                        let isVersatile = vList.some(v => v.name === h.name);
+                        let badgeHtml = isVersatile ? `<span class="bg-blue-900/40 text-blue-400 border border-blue-900 ml-2 px-2 py-0.5 rounded text-[8px] uppercase tracking-widest font-bold" title="Available to all Ancestries">Versatile</span>` : "";
+                        if (typeof h === 'string') return {name: h, desc: `<p>A lineage for ${state.ancestry}.</p>`, rarity: 'common', isVersatile: false};
+                        return {name: h.name, desc: `<p>${h.desc}</p>`, rarity: h.rarity || 'common', ui_badge: badgeHtml, isVersatile: isVersatile};
+                    }); 
+                    
+                    mCtx.activeTabs = true; mCtx.tab = 'base';
+                    tabsContainer.innerHTML = `
+                        <button onclick="setModalTab('base')" class="mod-tab-btn active px-3 py-1 text-[10px] font-bold rounded bg-gray-700 text-amber-500 border border-amber-500/50" data-tab="base">Base</button>
+                        <button onclick="setModalTab('versatile')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="versatile">Versatile</button>
+                        <button onclick="setModalTab('all')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="all">All</button>
+                    `;
+                    tabsContainer.classList.remove('hidden');
+                }
+                else if (type === 'ancestry_feat') { 
+                    title = "Ancestry Feat"; 
+                    let raw = dbFeats['ancestry'] || [];
+                    let aKey = (state.ancestry || "").toLowerCase().replace(/-/g, ' ').replace(/_/g, ' ');
+                    mCtx.data = raw.filter(f => f.level <= 1 && f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase().replace(/-/g, ' ').includes(aKey)));
+                    if(mCtx.data.length === 0) mCtx.data = raw.filter(f=>f.level<=1); 
+                }
+                else if (type === 'background') { 
+                    title = "Background"; 
+                    mCtx.data = Object.keys(dbBackgrounds).map(k => ({name: k, desc: dbBackgrounds[k].description, category: dbBackgrounds[k].category || 'general'})); 
+                    
+                    mCtx.activeTabs = true; mCtx.tab = 'general';
+                    tabsContainer.innerHTML = `
+                        <button onclick="setModalTab('general')" class="mod-tab-btn active px-3 py-1 text-[10px] font-bold rounded bg-gray-700 text-amber-500 border border-amber-500/50" data-tab="general">General</button>
+                        <button onclick="setModalTab('regional')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="regional">Regional</button>
+                        <button onclick="setModalTab('campaign')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="campaign">Campaign</button>
+                        <button onclick="setModalTab('all')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="all">All</button>
+                    `;
+                    tabsContainer.classList.remove('hidden');
+                }
+                else if (type === 'class') { 
+                    title = "Class"; 
+                    mCtx.data = Object.keys(dbClasses).map(k => ({name: k.charAt(0).toUpperCase()+k.slice(1), desc: dbClasses[k].description, category: dbClasses[k].category || 'expanded'})); 
+                    
+                    mCtx.activeTabs = true; mCtx.tab = 'core';
+                    tabsContainer.innerHTML = `
+                        <button onclick="setModalTab('core')" class="mod-tab-btn active px-3 py-1 text-[10px] font-bold rounded bg-gray-700 text-amber-500 border border-amber-500/50" data-tab="core">Core</button>
+                        <button onclick="setModalTab('expanded')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="expanded">Expanded</button>
+                        <button onclick="setModalTab('class_archetype')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="class_archetype">Archetypes</button>
+                        <button onclick="setModalTab('all')" class="mod-tab-btn px-3 py-1 text-[10px] font-bold rounded bg-gray-800 text-gray-300 hover:text-amber-400" data-tab="all">All</button>
+                    `;
+                    tabsContainer.classList.remove('hidden');
+                }
+                else if (type === 'subclass') { 
+                    title = "Subclass"; 
+                    let cKey = (state.cls || "").toLowerCase();
+                    const cData = bData.classes[cKey] || {};
+                    const sd = cData.subclasses || [];
+                    mCtx.data = sd.map(s => {
+                        let sName = (typeof s === 'string') ? s : s.name;
+                        let sDesc = subclassDescs[state.cls + ':' + sName] || subclassDescs[sName] || (typeof s === 'object' && s.desc ? s.desc : `A ${(cData.subclass_label || 'subclass').toLowerCase()} option for ${state.cls}.`);
+                        return {name: sName, desc: `<p>${sDesc}</p>`};
+                    }); 
+                }
+                else if (type === 'class_feat') {
+                    title = "Class Feat";
+                    let raw = dbFeats['class'] || [];
+                    let cKey = (state.cls || "").toLowerCase().replace(/-/g, ' ');
+                    mCtx.data = raw.filter(f => f.level <= 1 && f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase().replace(/-/g, ' ') === cKey) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                }
+                else if (type === 'cantrip') {
+                    title = "Cantrips (Lvl 0)";
+                    let tKey = (state.tradition || "").toLowerCase();
+                    mCtx.data = (dbSpells || []).filter(s => s.level === 0 && s.traditions && s.traditions.some(t => t.toLowerCase() === tKey));
+                }
+                else if (type === 'lvl1_spell') {
+                    title = "Level 1 Spells";
+                    let tKey = (state.tradition || "").toLowerCase();
+                    mCtx.data = (dbSpells || []).filter(s => s.level === 1 && s.traditions && s.traditions.some(t => t.toLowerCase() === tKey));
+                }
+                else if (type === 'guided_general') {
+                    title = "General / Skill Feat";
+                    let raw = [...(dbFeats['general']||[]), ...(dbFeats['skill']||[])];
+                    mCtx.data = raw.filter(f => f.level <= 1);
+                }
+                else if (type === 'guided_class') {
+                    title = "Class / Impulse Feat";
+                    let raw = dbFeats['class'] || [];
+                    let cKey = (state.cls || "").toLowerCase().replace(/-/g, ' ');
+                    mCtx.data = raw.filter(f => f.level <= 1 && f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase().replace(/-/g, ' ') === cKey) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                }
+
+                document.getElementById('mod-title').innerText = title;
+                renderModalList();
+
+                const m = document.getElementById('uni-modal'); m.classList.remove('hidden');
+                setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('uni-window').classList.remove('scale-95'); document.getElementById('mod-search').focus(); }, 10);
+            } catch (error) {
+                console.error("Modal Error:", error);
+            }
+        }
+
+        function renderModalList() {
+            const term = document.getElementById('mod-search').value.toLowerCase();
+            const ignoreReqs = document.getElementById('chk-ignore-reqs').checked;
+            const list = document.getElementById('mod-list'); list.innerHTML = "";
+            
+            let filtered = mCtx.data.filter(d => {
+                let n = typeof d.name === 'string' ? d.name : String(d.name);
+                let matchesSearch = n.toLowerCase().includes(term);
+                let matchesTab = true;
+                
+                if (mCtx.activeTabs && mCtx.tab !== 'all') {
+                    if (mCtx.type === 'ancestry') matchesTab = (d.rarity || 'common').toLowerCase() === mCtx.tab;
+                    else if (mCtx.type === 'heritage') {
+                        if (mCtx.tab === 'base') matchesTab = !d.isVersatile;
+                        else if (mCtx.tab === 'versatile') matchesTab = d.isVersatile;
+                    }
+                    else if (mCtx.type === 'background') matchesTab = (d.category || 'general').toLowerCase() === mCtx.tab;
+                    else if (mCtx.type === 'class') matchesTab = (d.category || 'expanded').toLowerCase() === mCtx.tab;
+                }
+                
+                return matchesSearch && matchesTab;
+            }).sort((a,b) => {
+                let aName = typeof a.name === 'string' ? a.name : String(a.name);
+                let bName = typeof b.name === 'string' ? b.name : String(b.name);
+                return aName.localeCompare(bName);
+            });
+            
+            if(filtered.length === 0) { list.innerHTML = "<div class='text-gray-500 p-4 text-sm italic text-center'>No options found for this category.</div>"; return; }
+
+            filtered.forEach(d => {
+                let n = typeof d.name === 'string' ? d.name : String(d.name);
+                
+                let locked = false; let reqHtml = "";
+                if(d.prerequisites_raw) {
+                    let meets = meetsPrereqs(d);
+                    if (!meets && !ignoreReqs) {
+                        locked = true; 
+                        reqHtml = `<div class="bg-red-900/30 border border-red-900 text-red-400 p-2 rounded text-xs mb-4 font-bold">Unmet Requirement: ${d.prerequisites_raw}</div>`;
+                    } else if (!meets && ignoreReqs) {
+                        reqHtml = `<div class="bg-amber-900/30 border border-amber-900 text-amber-500 p-2 rounded text-xs mb-4 font-bold">Ignored Req: ${d.prerequisites_raw}</div>`;
+                    } else if (meets) {
+                        reqHtml = `<div class="bg-green-900/30 border border-green-900 text-green-400 p-2 rounded text-xs mb-4 font-bold">Requirement Met: ${d.prerequisites_raw}</div>`;
+                    }
+                }
+
+                let btn = document.createElement('button');
+                btn.className = `w-full text-left p-4 border-b border-gray-800/50 flex justify-between items-center transition-colors outline-none ${locked ? 'opacity-40 cursor-not-allowed bg-gray-950' : 'hover:bg-gray-800 focus:bg-gray-800'}`;
+                let badge = d.level !== undefined ? `<span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-1 rounded shrink-0 ml-2">Lv ${d.level}</span>` : "";
+                let ui_badge = d.ui_badge ? d.ui_badge : "";
+                
+                btn.innerHTML = `<div class="flex items-center"><span class="text-sm font-bold text-gray-200">${n}</span>${ui_badge}</div> ${badge}`;
+                
+                btn.onclick = () => {
+                    mCtx.active = locked ? null : d;
+                    let pHtml = `<h2 class="text-4xl font-header text-white mb-4">${n}</h2>`;
+                    if(d.traits && d.traits.length > 0) pHtml += `<div class="flex flex-wrap gap-2 mb-6">` + d.traits.map(t=>`<span class="bg-gray-800 border border-gray-700 text-gray-300 text-xs px-2 py-1 uppercase font-bold tracking-wider rounded">${t}</span>`).join('') + `</div>`;
+                    pHtml += reqHtml;
+                    pHtml += `<div class="text-base text-gray-300 foundry-content leading-relaxed">${d.desc || d.description || 'No description available.'}</div>`;
+                    document.getElementById('mod-preview').innerHTML = pHtml;
+                    
+                    if(!locked) document.getElementById('btn-lock').classList.remove('hidden');
+                    else document.getElementById('btn-lock').classList.add('hidden');
+                };
+                list.appendChild(btn);
+            });
+        }
+        function filterModal() { renderModalList(); }
+        function closeModal() {
+            const m = document.getElementById('uni-modal'); m.classList.add('opacity-0'); document.getElementById('uni-window').classList.add('scale-95');
+            setTimeout(() => { m.classList.add('hidden'); }, 200);
+        }
+
+        function lockModal() {
+            try {
+                if(!mCtx.active) return;
+                const a = mCtx.active;
+                const aName = typeof a.name === 'string' ? a.name : String(a.name);
+                
+                if(mCtx.type === 'ancestry') { 
+                    state.ancestry = aName; state.heritage = null; state.ancFeat = null; state.ancBoosts = [];
+                    document.getElementById('card-ancestry').innerText = aName;
+                    document.getElementById('wrap-heritage').classList.remove('opacity-50', 'pointer-events-none');
+                    document.getElementById('card-heritage').innerText = "Select Heritage...";
+                    document.getElementById('ancestry-details').classList.remove('hidden');
+                    document.getElementById('card-anc-feat').innerText = "Select Feat...";
+                    renderAncBoosts();
+                }
+                else if(mCtx.type === 'heritage') { state.heritage = aName; document.getElementById('card-heritage').innerText = aName; }
+                else if(mCtx.type === 'ancestry_feat') { state.ancFeat = a; document.getElementById('card-anc-feat').innerText = aName; }
+                else if(mCtx.type === 'background') { 
+                    state.background = aName; state.bgBoosts = []; 
+                    state.bgSkills = (dbBackgrounds[aName].skills || []).map(s => s.toLowerCase());
+                    
+                    // Separate lore skills from standard skills
+                    state.bgLores = state.bgSkills.filter(s => s.startsWith('lore'));
+                    state.bgSkills = state.bgSkills.filter(s => !s.startsWith('lore'));
+                    
+                    // Detect if background description says "choose a lore" or similar
+                    let bgDesc = (dbBackgrounds[aName].description || '').toLowerCase();
+                    state.bgNeedsLore = /lore.*(?:your choice|you choose|choose a|of your|related to)/i.test(bgDesc) || 
+                                        /(?:your choice|you choose|choose a).*lore/i.test(bgDesc);
+                    // If background grants no specific lore but mentions lore, they need to choose
+                    if (state.bgLores.length === 0 && bgDesc.includes('lore')) state.bgNeedsLore = true;
+                    
+                    state.customLores = [];
+                    
+                    document.getElementById('card-background').innerText = aName;
+                    document.getElementById('background-details').classList.remove('hidden');
+                    document.getElementById('ui-bg-skills').innerText = state.bgSkills.length ? state.bgSkills.map(s=>s.charAt(0).toUpperCase()+s.slice(1)).join(', ') : "None";
+                    
+                    // Show lore info
+                    if (state.bgLores.length > 0) {
+                        let loreNames = state.bgLores.map(l => l.replace('lore: ', '').replace('lore:', '').trim());
+                        let existing = document.getElementById('ui-bg-skills').innerText;
+                        document.getElementById('ui-bg-skills').innerText = (existing !== 'None' ? existing + ', ' : '') + loreNames.map(l => l.charAt(0).toUpperCase() + l.slice(1) + ' Lore').join(', ');
+                    }
+                    
+                    let bgFeat = dbBackgrounds[aName].feat;
+                    if(bgFeat) {
+                        document.getElementById('ui-bg-feat').innerText = bgFeat;
+                        document.getElementById('ui-bg-feat-container').classList.remove('hidden');
+                    } else {
+                        document.getElementById('ui-bg-feat-container').classList.add('hidden');
+                    }
+                    renderBgBoosts();
+                }
+                else if(mCtx.type === 'class') {
+                    const cname = aName.toLowerCase();
+                    state.cls = cname; state.subclass = null; state.keyStat = null; state.clsFeats = {}; state.spells = []; state.tradition = null;
+                    document.getElementById('card-class').innerText = aName;
+                    document.getElementById('class-details').classList.remove('hidden');
+                    
+                    let dbKey = Object.keys(dbClasses).find(k => k.toLowerCase() === cname);
+                    let dbC = dbKey ? dbClasses[dbKey] : null;
+                    let cData = bData.classes[cname];
+                    if (!cData) {
+                        cData = {
+                            key_options: (dbC && dbC.keyAbility && dbC.keyAbility.length > 0) ? dbC.keyAbility : ["str"],
+                            base_skills: [],
+                            free_skills: 3,
+                            spellcasting: null,
+                            subclasses: null
+                        };
+                    }
+                    
+                    let rawOpts = cData.key_options || (dbC && dbC.keyAbility ? dbC.keyAbility : ["str"]);
+                    if (rawOpts && !Array.isArray(rawOpts) && rawOpts.value) rawOpts = rawOpts.value;
+                    if (!Array.isArray(rawOpts) || rawOpts.length === 0) rawOpts = ["str"];
+                    
+                    if (rawOpts.length > 1) {
+                        let h = rawOpts.map(o => `<button onclick="setKeyStat('${o}')" id="key-${o}" class="stat-pill uppercase">${o}</button>`).join('');
+                        document.getElementById('ui-cls-key').innerHTML = h;
+                    } else {
+                        state.keyStat = rawOpts[0];
+                        document.getElementById('ui-cls-key').innerHTML = `<div class="stat-pill selected uppercase cursor-default">${state.keyStat}</div>`;
+                    }
+
+                    const wrSub = document.getElementById('wrap-subclass');
+                    if (cData.subclasses && cData.subclasses.length > 0) {
+                        wrSub.classList.remove('hidden', 'opacity-50', 'pointer-events-none');
+                        document.getElementById('lbl-subclass').innerText = (cData.subclass_label || "Subclass") + " *";
+                        document.getElementById('card-subclass').innerText = "Select...";
+                    } else wrSub.classList.add('hidden');
+
+                    let featWrap = document.getElementById('wrap-cls-feat-container');
+                    if (featWrap) {
+                        if (dbFeats['class'].some(f => f.level <= 1 && f.traits && f.traits.some(t=>typeof t==='string' && t.toLowerCase()===cname) && !f.traits.some(t=>typeof t==='string' && (t.toLowerCase()==='archetype' || t.toLowerCase()==='dedication')))) {
+                            featWrap.classList.remove('hidden');
+                            generateClassFeatUI();
+                        } else {
+                            featWrap.classList.add('hidden');
+                        }
+                    } else {
+                        let wrapClsFeat = document.getElementById('wrap-cls-feat');
+                        if (wrapClsFeat) {
+                            if (dbFeats['class'].some(f => f.level <= 1 && f.traits && f.traits.some(t=>typeof t==='string' && t.toLowerCase()===cname) && !f.traits.some(t=>typeof t==='string' && (t.toLowerCase()==='archetype' || t.toLowerCase()==='dedication')))) {
+                                wrapClsFeat.classList.remove('hidden');
+                                document.getElementById('card-cls-feat').innerText = "Select Feat...";
+                            } else wrapClsFeat.classList.add('hidden');
+                        }
+                    }
+
+                    const wSp = document.getElementById('wrap-spells');
+                    if (wSp) {
+                        if (cData.spellcasting) {
+                            wSp.classList.remove('hidden');
+                            let scants = cData.starting_spells ? cData.starting_spells.cantrips : 0;
+                            let slv1 = cData.starting_spells ? cData.starting_spells.lvl1 : 0;
+                            let elReqs = document.getElementById('lbl-spell-reqs');
+                            if(elReqs) elReqs.innerText = `Requires ${scants} Cantrips & ${slv1} Level 1 Spells.`;
+                            
+                            let trads = cData.traditions || [];
+                            if (trads.length > 1) {
+                                state.tradition = trads[0];
+                                document.getElementById('ui-tradition-select').classList.remove('hidden');
+                                document.getElementById('lbl-spell-tradition').classList.add('hidden');
+                                let sel = document.getElementById('sel-tradition');
+                                sel.innerHTML = trads.map(t => `<option value="${t}">${t.toUpperCase()}</option>`).join('');
+                            } else if (trads.length === 1) {
+                                state.tradition = trads[0];
+                                document.getElementById('ui-tradition-select').classList.add('hidden');
+                                document.getElementById('lbl-spell-tradition').classList.remove('hidden');
+                                document.getElementById('lbl-spell-tradition').innerText = state.tradition.toUpperCase();
+                            }
+                            renderSpellList();
+                        } else wSp.classList.add('hidden');
+                    }
+                }
+                else if(mCtx.type === 'subclass') { 
+                    state.subclass = aName; 
+                    document.getElementById('card-subclass').innerText = aName; 
+                    
+                    if (bData.subclass_matrix && bData.subclass_matrix[aName] && bData.subclass_matrix[aName].tradition) {
+                        state.tradition = bData.subclass_matrix[aName].tradition;
+                        document.getElementById('ui-tradition-select').classList.add('hidden');
+                        document.getElementById('lbl-spell-tradition').classList.remove('hidden');
+                        document.getElementById('lbl-spell-tradition').innerText = state.tradition.toUpperCase();
+                        state.spells = []; 
+                        renderSpellList();
+                    }
+                    buildSkillsUI();
+                }
+                else if(mCtx.type === 'class_feat') { 
+                    state.clsFeats[mCtx.meta.key] = a; 
+                    generateClassFeatUI();
+                }
+                else if(mCtx.type === 'cantrip' || mCtx.type === 'lvl1_spell') {
+                    const cData = bData.classes[state.cls] || { starting_spells: { cantrips: 0, lvl1: 0 } };
+                    const isC = a.level === 0;
+                    let cCount = state.spells.filter(s=>s.level===0).length;
+                    let l1Count = state.spells.filter(s=>s.level===1).length;
+                    
+                    if (isC && cCount >= cData.starting_spells.cantrips) { alert(`Maximum cantrips reached (${cData.starting_spells.cantrips}).`); return; }
+                    if (!isC && l1Count >= cData.starting_spells.lvl1) { alert(`Maximum level 1 spells reached (${cData.starting_spells.lvl1}).`); return; }
+                    
+                    if(!state.spells.find(s=>s.name === aName)) state.spells.push({name: aName, level: a.level});
+                    renderSpellList();
+                }
+                else if(mCtx.type === 'guided_general') {
+                    state.guided[mCtx.meta.key] = a;
+                    renderGuidedExtras();
+                }
+                else if(mCtx.type === 'guided_class') {
+                    state.guided[mCtx.meta.key] = a;
+                    renderGuidedExtras();
+                }
+                
+                closeModal();
+                runValidation();
+            } catch (err) {
+                console.error("Lock Modal Error:", err);
+                alert("An error occurred selecting this item. See console for details.");
+            }
+        }
+
+        function generateClassFeatUI() {
+            const ui = document.getElementById('ui-class-feats');
+            let featCount = state.cls === 'kineticist' ? 2 : 1; 
+            
+            let html = "";
+            for(let i=0; i<featCount; i++) {
+                let key = `class_feat_${i}`;
+                let val = state.clsFeats[key] ? state.clsFeats[key].name : "Select Feat...";
+                let label = state.cls === 'kineticist' ? `Class / Impulse Feat ${i+1}` : `Class Feat ${i+1}`;
+                let subtitle = state.clsFeats[key] ? "Locked In" : `${label} *`;
+                
+                html += `
+                <div class="choice-card bg-gray-900 hover:bg-gray-800" onclick="openModal('class_feat', '${key}')">
+                    <div class="subtitle ${state.clsFeats[key] ? 'text-green-400' : ''}">${subtitle}</div>
+                    <div class="title">${val}</div>
+                </div>`;
+            }
+            ui.innerHTML = html;
+        }
+
+        function renderGuidedExtras() {
+            const container = document.getElementById('ui-guided-extras');
+            if (!container) return;
+
+            let html = '';
+            let hasExtras = false;
+
+            if (state.heritage === "Versatile Heritage" || state.heritage === "Versatile Human") {
+                hasExtras = true;
+                let f = state.guided.versatile_feat;
+                html += `<div class="choice-card mb-3" onclick="openModal('guided_general', 'versatile_feat')">
+                    <div class="subtitle ${f ? 'text-green-400' : 'text-amber-500'}">Versatile Heritage (General Feat) *</div>
+                    <div class="title">${f ? f.name : 'Select Feat...'}</div>
+                </div>`;
+            }
+
+            if (state.ancFeat && state.ancFeat.name === "Natural Ambition") {
+                hasExtras = true;
+                let f = state.guided.ambition_feat;
+                html += `<div class="choice-card mb-3" onclick="openModal('guided_class', 'ambition_feat')">
+                    <div class="subtitle ${f ? 'text-green-400' : 'text-amber-500'}">Natural Ambition (Class Feat) *</div>
+                    <div class="title">${f ? f.name : 'Select Feat...'}</div>
+                </div>`;
+            }
+
+            if (state.cls === 'kineticist') {
+                hasExtras = true;
+                let gate = state.guided.kin_gate || "Single Gate";
+                html += `<div class="bg-gray-950 border border-gray-700 rounded p-3 mb-3 shadow-inner">
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Kinetic Gate *</label>
+                    <select class="w-full bg-gray-900 border border-gray-600 text-white rounded p-2 text-sm outline-none focus:border-amber-500" onchange="state.guided.kin_gate = this.value; renderGuidedExtras(); runValidation();">
+                        <option value="Single Gate" ${gate==='Single Gate'?'selected':''}>Single Gate (1 Element, +1 Feat)</option>
+                        <option value="Dual Gate" ${gate==='Dual Gate'?'selected':''}>Dual Gate (2 Elements)</option>
+                    </select>
+                </div>`;
+
+                html += `<div class="bg-gray-950 border border-gray-700 rounded p-3 mb-3 shadow-inner">
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Element(s) *</label>
+                    <input type="text" placeholder="e.g. Fire, Water..." value="${state.guided.kin_elements || ''}" class="w-full bg-transparent text-white outline-none text-sm" oninput="state.guided.kin_elements = this.value; runValidation();">
+                </div>`;
+
+                if (gate === 'Single Gate') {
+                    let f = state.guided.kin_feat;
+                    html += `<div class="choice-card mb-3" onclick="openModal('guided_class', 'kin_feat')">
+                        <div class="subtitle ${f ? 'text-green-400' : 'text-amber-500'}">Single Gate (Bonus Impulse Feat) *</div>
+                        <div class="title">${f ? f.name : 'Select Feat...'}</div>
+                    </div>`;
+                }
+            }
+
+            let bgDesc = state.background ? (dbBackgrounds[state.background]?.description || "").toLowerCase() : "";
+            if (bgDesc.includes("choose") || bgDesc.includes("select") || bgDesc.includes("scarred") || bgDesc.includes("choice")) {
+                hasExtras = true;
+                let promptText = bgDesc.includes("resistance") ? "Select Resistance (e.g. Fire)" : "Background Choice";
+                html += `<div class="bg-gray-950 border border-gray-700 rounded p-3 mb-3 shadow-inner">
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">${promptText} *</label>
+                    <input type="text" placeholder="Type choice here..." value="${state.guided.bg_choice || ''}" class="w-full bg-transparent text-white outline-none text-sm" oninput="state.guided.bg_choice = this.value; runValidation();">
+                </div>`;
+            }
+
+            if(!hasExtras) {
+                html = `<div class="text-gray-500 italic text-sm text-center p-4 bg-gray-950 rounded border border-gray-800">No special choices required for this build.</div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function renderAncBoosts() {
+            const method = document.getElementById('sel-anc-method').value;
+            const ui = document.getElementById('ui-anc-boosts');
+            state.ancBoosts = []; ui.innerHTML = "";
+            const stats = ['str','dex','con','int','wis','cha'];
+
+            if (method === 'alternate') {
+                ui.innerHTML = stats.map(s => `<div onclick="toggleAncFree('${s}', 2)" id="anc-fb-${s}" class="stat-pill uppercase font-bold">${s}</div>`).join('');
+            } else {
+                let safeBoosts = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].boosts : {};
+                let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+                
+                const p = parseDeepBoosts(safeBoosts);
+                const flaws = parseDeepFlaws(safeFlaws);
+                p.fixed.forEach(f => state.ancBoosts.push(f));
+                
+                let html = stats.map(s => {
+                    if(flaws.includes(s)) return `<div class="stat-pill flaw uppercase" title="Ancestry Flaw">${s}</div>`;
+                    if(p.fixed.includes(s)) return `<div class="stat-pill locked uppercase" title="Fixed Boost">${s}</div>`;
+                    if(p.free > 0) return `<div onclick="toggleAncFree('${s}', ${p.free})" id="anc-fb-${s}" class="stat-pill uppercase">${s}</div>`;
+                    return `<div class="stat-pill uppercase opacity-20 cursor-not-allowed">${s}</div>`;
+                }).join('');
+                ui.innerHTML = html;
+            }
+            runValidation();
+        }
+        function toggleAncFree(stat, max) {
+            const btn = document.getElementById(`anc-fb-${stat}`);
+            if(btn.classList.contains('selected')) {
+                btn.classList.remove('selected');
+                let safeBoosts = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].boosts : {};
+                state.ancBoosts = state.ancBoosts.filter(s=>s!==stat || (document.getElementById('sel-anc-method').value === 'standard' && parseDeepBoosts(safeBoosts).fixed.includes(s)));
+            } else {
+                let safeBoosts = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].boosts : {};
+                let currentFree = state.ancBoosts.length - (document.getElementById('sel-anc-method').value === 'standard' ? parseDeepBoosts(safeBoosts).fixed.length : 0);
+                if(currentFree < max) { btn.classList.add('selected'); state.ancBoosts.push(stat); }
+            }
+            runValidation();
+        }
+
+        function renderBgBoosts() {
+            const data = dbBackgrounds[state.background];
+            let choices = [];
+            let rawStr = JSON.stringify(data.boosts).toLowerCase();
+            ['str','dex','con','int','wis','cha'].forEach(stat => { if (rawStr.includes(`"${stat}"`)) choices.push(stat); });
+            choices = [...new Set(choices)];
+
+            const ui = document.getElementById('ui-bg-boosts');
+            let html = `<div class="mb-4"><span class="text-[10px] font-bold text-gray-500 uppercase block mb-2">Specific Choice</span><div class="flex gap-2">`;
+            html += choices.map(o => `<div onclick="setBgSpecific('${o}')" id="bg-spec-${o}" class="stat-pill uppercase">${o}</div>`).join('');
+            html += `</div></div><div><span class="text-[10px] font-bold text-gray-500 uppercase block mb-2">Free Boost</span><div class="flex gap-2 flex-wrap">`;
+            html += ['str','dex','con','int','wis','cha'].map(o => `<div onclick="setBgFree('${o}')" id="bg-free-${o}" class="stat-pill uppercase">${o}</div>`).join('');
+            html += `</div></div>`;
+            ui.innerHTML = html;
+            state.bgBoosts = [];
+        }
+        function setBgSpecific(stat) {
+            if(state.bgBoosts[1] === stat) return alert("Cannot pick same stat for both background boosts.");
+            document.querySelectorAll('[id^="bg-spec-"]').forEach(b=>b.classList.remove('selected'));
+            document.getElementById(`bg-spec-${stat}`).classList.add('selected');
+            state.bgBoosts[0] = stat; runValidation();
+        }
+        function setBgFree(stat) {
+            if(state.bgBoosts[0] === stat) return alert("Cannot pick same stat for both background boosts.");
+            document.querySelectorAll('[id^="bg-free-"]').forEach(b=>b.classList.remove('selected'));
+            document.getElementById(`bg-free-${stat}`).classList.add('selected');
+            state.bgBoosts[1] = stat; runValidation();
+        }
+
+        function setKeyStat(stat) {
+            state.keyStat = stat;
+            document.querySelectorAll('#ui-cls-key .stat-pill').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById(`key-${stat}`).classList.add('selected');
+            runValidation();
+        }
+
+        function changeTradition(val) {
+            state.tradition = val;
+            state.spells = []; 
+            renderSpellList();
+        }
+
+        function renderSpellList() {
+            const ui0 = document.getElementById('ui-spell-list-0');
+            const ui1 = document.getElementById('ui-spell-list-1');
+            
+            let html0 = state.spells.filter(s=>s.level===0).map(s => `<div class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-bold text-gray-300 flex justify-between items-center group w-full">${s.name}<button onclick="removeSpell('${s.name.replace("'","\\'")}')" class="ml-2 text-gray-600 hover:text-red-500">✖</button></div>`).join('');
+            let html1 = state.spells.filter(s=>s.level===1).map(s => `<div class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-bold text-gray-300 flex justify-between items-center group w-full">${s.name}<button onclick="removeSpell('${s.name.replace("'","\\'")}')" class="ml-2 text-gray-600 hover:text-red-500">✖</button></div>`).join('');
+            
+            const cData = bData.classes[state.cls] || { starting_spells: { cantrips: 0, lvl1: 0 } };
+            let cCount = state.spells.filter(s=>s.level===0).length;
+            let l1Count = state.spells.filter(s=>s.level===1).length;
+            
+            document.getElementById('lbl-count-cantrip').innerText = `${cCount}/${cData.starting_spells.cantrips} selected`;
+            document.getElementById('lbl-count-cantrip').className = cCount === cData.starting_spells.cantrips ? "text-[10px] text-green-400 font-bold" : "text-[10px] text-amber-500 font-bold";
+            
+            document.getElementById('lbl-count-lvl1').innerText = `${l1Count}/${cData.starting_spells.lvl1} selected`;
+            document.getElementById('lbl-count-lvl1').className = l1Count === cData.starting_spells.lvl1 ? "text-[10px] text-green-400 font-bold" : "text-[10px] text-amber-500 font-bold";
+
+            ui0.innerHTML = html0 || "<span class='text-gray-600 italic text-xs mt-1 px-1'>None</span>";
+            ui1.innerHTML = html1 || "<span class='text-gray-600 italic text-xs mt-1 px-1'>None</span>";
+            runValidation();
+        }
+        function removeSpell(name) { state.spells = state.spells.filter(s=>s.name !== name); renderSpellList(); }
+
+        function buildAbilitiesUI() {
+            const ui = document.getElementById('ui-free-boosts');
+            let baseStats = {str:0, dex:0, con:0, int:0, wis:0, cha:0};
+            [...state.ancBoosts, ...state.bgBoosts, state.keyStat].forEach(b => {if(b) baseStats[b]++});
+            
+            let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+            if(state.ancestry && document.getElementById('sel-anc-method').value === 'standard') {
+                parseDeepFlaws(safeFlaws).forEach(f => baseStats[f]--);
+            }
+
+            ui.innerHTML = ['str','dex','con','int','wis','cha'].map(s => `
+                <div onclick="toggleFinalFree('${s}')" id="fin-btn-${s}" class="flex-1 min-w-[80px] bg-gray-950 border border-gray-700 rounded p-4 flex flex-col items-center cursor-pointer hover:border-amber-500 transition-colors">
+                    <span class="text-xs text-gray-500 font-bold uppercase mb-1">${s}</span>
+                    <span class="text-2xl text-white font-bold mb-3">+${baseStats[s]}</span>
+                    <div class="w-5 h-5 rounded border-2 border-gray-600 flex items-center justify-center" id="fin-chk-${s}"></div>
+                </div>
+            `).join('');
+            
+            let old = [...state.freeBoosts]; state.freeBoosts = [];
+            old.forEach(s => toggleFinalFree(s));
+            renderFinalMath();
+        }
+        function toggleFinalFree(stat) {
+            const idx = state.freeBoosts.indexOf(stat);
+            if (idx > -1) {
+                state.freeBoosts.splice(idx, 1);
+                document.getElementById(`fin-btn-${stat}`).classList.remove('bg-amber-900/20', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('bg-amber-500', 'border-gray-600');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-amber-500', 'border-gray-600');
+                document.getElementById(`fin-chk-${stat}`).innerHTML = "";
+            } else {
+                if(state.freeBoosts.length >= 4) return;
+                state.freeBoosts.push(stat);
+                document.getElementById(`fin-btn-${stat}`).classList.add('bg-amber-900/20', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'bg-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).innerHTML = `<span class="text-black text-xs font-bold">✓</span>`;
+            }
+            if(state.freeBoosts.length === 4) document.getElementById('msg-free-boosts-done').classList.remove('hidden');
+            else document.getElementById('msg-free-boosts-done').classList.add('hidden');
+            renderFinalMath(); runValidation();
+        }
+
+        function renderFinalMath() {
+            let fin = {str:0, dex:0, con:0, int:0, wis:0, cha:0};
+            [...state.ancBoosts, ...state.bgBoosts, state.keyStat, ...state.freeBoosts].forEach(b => {if(b) fin[b]++});
+            let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+            if(state.ancestry && document.getElementById('sel-anc-method').value === 'standard') {
+                parseDeepFlaws(safeFlaws).forEach(f => fin[f]--);
+            }
+            document.getElementById('ui-final-math').innerHTML = Object.keys(fin).map(k => {
+                let disp = fin[k] >= 0 ? `+${fin[k]}` : fin[k];
+                
+                let aVal = state.ancBoosts.includes(k) ? "+1" : "0";
+                if(state.ancestry && document.getElementById('sel-anc-method').value === 'standard' && parseDeepFlaws(safeFlaws).includes(k)) aVal = "-1";
+                let bVal = state.bgBoosts.includes(k) ? "+1" : "0";
+                let cVal = state.keyStat === k ? "+1" : "0";
+                let fVal = state.freeBoosts.includes(k) ? "+1" : "0";
+                let tooltip = `Base: 10\nAncestry: ${aVal}\nBackground: ${bVal}\nClass: ${cVal}\nFree: ${fVal}`;
+                
+                return `
+                <div class="bg-gray-950 p-3 rounded border border-gray-800 text-center shadow-inner relative group cursor-help">
+                    <span class="text-[10px] text-gray-500 uppercase block font-bold tracking-widest">${k}</span>
+                    <span class="text-3xl font-bold text-white leading-none inline-block mt-2">${disp}</span>
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-32 bg-gray-900 border border-gray-700 rounded p-2 text-[10px] text-left text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl whitespace-pre-line leading-relaxed">${tooltip}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function buildSkillsUI() {
+            if(!state.cls) return;
+            const cData = bData.classes[state.cls] || { base_skills: [], free_skills: 3 };
+            let baseFree = parseInt(cData.free_skills);
+            if (isNaN(baseFree)) baseFree = 3;
+            
+            let granted = [...(cData.base_skills || [])].map(s => s.toLowerCase());
+            let extraFree = 0;
+            
+            if (state.subclass && bData.subclass_matrix && bData.subclass_matrix[state.subclass] && bData.subclass_matrix[state.subclass].skills) {
+                bData.subclass_matrix[state.subclass].skills.forEach(sk => granted.push(sk.toLowerCase()));
+            }
+            
+            state.bgSkills.forEach(bs => { if(granted.includes(bs)) extraFree++; else granted.push(bs); });
+
+            let finalInt = 0;
+            [...state.ancBoosts, ...state.bgBoosts, state.keyStat, ...state.freeBoosts].forEach(b => {if(b==='int') finalInt++});
+            let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+            
+            if(state.ancestry && document.getElementById('sel-anc-method').value === 'standard' && parseDeepFlaws(safeFlaws).includes('int')) finalInt--;
+
+            let totalPick = baseFree + finalInt + extraFree;
+            document.getElementById('lbl-skill-math').innerText = `Class Base (${baseFree}) + INT (${finalInt}) + Duplicates (${extraFree})`;
+            
+            const allSk = ['acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery'];
+            let avail = allSk.filter(s => !granted.includes(s));
+            
+            document.getElementById('ui-skills').innerHTML = avail.map(s => `
+                <label class="flex items-center p-3 bg-gray-950 rounded border border-gray-700 cursor-pointer hover:bg-gray-800 transition-colors">
+                    <input type="checkbox" value="${s}" class="sk-chk w-5 h-5 accent-amber-500 mr-3" onchange="toggleSkill(this, ${totalPick})">
+                    <span class="text-sm font-bold capitalize text-gray-200">${s}</span>
+                </label>
+            `).join('');
+            
+            let old = [...state.freeSkills]; state.freeSkills = [];
+            old.forEach(s => { let cb = document.querySelector(`.sk-chk[value="${s}"]`); if(cb){ cb.checked=true; toggleSkill(cb, totalPick); } });
+            toggleSkill(null, totalPick);
+            renderLoreUI();
+        }
+        function toggleSkill(cb, max) {
+            const cbs = document.querySelectorAll('.sk-chk:checked');
+            if(cb && cbs.length > max) { cb.checked = false; return; }
+            state.freeSkills = Array.from(cbs).map(b=>b.value);
+            document.getElementById('lbl-skill-remaining').innerText = `${max - state.freeSkills.length} left`;
+            if(state.freeSkills.length === max) document.getElementById('lbl-skill-remaining').classList.replace('text-white', 'text-green-400');
+            else document.getElementById('lbl-skill-remaining').classList.replace('text-green-400', 'text-white');
+            runValidation();
+        }
+        
+        function renderLoreUI() {
+            // Show background-granted lores
+            const bgLoreEl = document.getElementById('ui-bg-lore');
+            let bgHtml = '';
+            if (state.bgLores.length > 0) {
+                bgHtml += state.bgLores.map(l => {
+                    let loreName = l.replace('lore: ', '').replace('lore:', '').trim();
+                    return `<span class="inline-flex items-center bg-green-900/30 border border-green-800/50 text-green-400 px-3 py-1.5 rounded text-xs font-bold mr-2 mb-1">✓ ${loreName.charAt(0).toUpperCase() + loreName.slice(1)} Lore <span class="text-green-600 ml-1">(Background)</span></span>`;
+                }).join('');
+            }
+            if (state.bgNeedsLore && state.customLores.length === 0) {
+                bgHtml += `<span class="inline-flex items-center bg-amber-900/30 border border-amber-700/50 text-amber-400 px-3 py-1.5 rounded text-xs font-bold mr-2 mb-1">⚠ Your background grants a Lore of your choice — add one below</span>`;
+            }
+            bgLoreEl.innerHTML = bgHtml;
+            
+            // Show custom lores
+            const customEl = document.getElementById('ui-custom-lores');
+            customEl.innerHTML = state.customLores.map((l, i) => `
+                <span class="inline-flex items-center bg-gray-900 border border-gray-700 text-gray-300 px-3 py-1.5 rounded text-xs font-bold">
+                    ${l} Lore
+                    <button onclick="removeCustomLore(${i})" class="ml-2 text-gray-600 hover:text-red-400 transition-colors">✕</button>
+                </span>
+            `).join('');
+        }
+        
+        function addCustomLore() {
+            const inp = document.getElementById('inp-custom-lore');
+            let val = inp.value.trim();
+            if (!val) return;
+            // Capitalize first letter of each word
+            val = val.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+            // Remove "Lore" suffix if they typed it
+            val = val.replace(/\s*lore\s*$/i, '').trim();
+            if (!val) return;
+            if (!state.customLores.includes(val)) {
+                state.customLores.push(val);
+            }
+            inp.value = '';
+            renderLoreUI();
+            runValidation();
+        }
+        
+        function removeCustomLore(idx) {
+            state.customLores.splice(idx, 1);
+            renderLoreUI();
+            runValidation();
+        }
+
+        function runValidation() {
+            state.name = document.getElementById('inp-name').value;
+            
+            if(state.name) { document.getElementById('chk-start').innerText = "✓"; document.getElementById('chk-start').className = "text-green-400 text-xl font-bold leading-none"; }
+            else { document.getElementById('chk-start').innerText = "!"; document.getElementById('chk-start').className = "text-red-500 font-bold"; }
+
+            let safeBoosts = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].boosts : {};
+            let aReq = document.getElementById('sel-anc-method').value === 'alternate' ? 2 : parseDeepBoosts(safeBoosts).free + parseDeepBoosts(safeBoosts).fixed.length;
+            if(state.ancestry && state.heritage && state.ancFeat && (!aReq || state.ancBoosts.length >= aReq)) { 
+                document.getElementById('chk-ancestry').innerText = "✓"; document.getElementById('chk-ancestry').className = "text-green-400 text-xl font-bold leading-none"; 
+            } else { document.getElementById('chk-ancestry').innerText = "!"; document.getElementById('chk-ancestry').className = "text-red-500 font-bold"; }
+
+            if(state.background && state.bgBoosts.length === 2 && state.bgBoosts[0] && state.bgBoosts[1]) {
+                document.getElementById('chk-background').innerText = "✓"; document.getElementById('chk-background').className = "text-green-400 text-xl font-bold leading-none"; 
+            } else { document.getElementById('chk-background').innerText = "!"; document.getElementById('chk-background').className = "text-red-500 font-bold"; }
+
+            let cValid = false;
+            if(state.cls && state.keyStat) {
+                let cData = bData.classes[state.cls] || {};
+                let subValid = cData.subclasses ? !!state.subclass : true;
+                
+                let featCount = state.cls === 'kineticist' ? 2 : 1;
+                let featValid = Object.keys(state.clsFeats).length >= featCount;
+                
+                let featWrap = document.getElementById('wrap-cls-feat-container');
+                if (featWrap && featWrap.classList.contains('hidden')) featValid = true;
+                
+                cValid = subValid && featValid;
+            }
+            if(cValid) { document.getElementById('chk-class').innerText = "✓"; document.getElementById('chk-class').className = "text-green-400 text-xl font-bold leading-none"; }
+            else { document.getElementById('chk-class').innerText = "!"; document.getElementById('chk-class').className = "text-red-500 font-bold"; }
+
+            if(state.freeBoosts.length === 4) { document.getElementById('chk-abilities').innerText = "✓"; document.getElementById('chk-abilities').className = "text-green-400 text-xl font-bold leading-none"; }
+            else { document.getElementById('chk-abilities').innerText = "!"; document.getElementById('chk-abilities').className = "text-red-500 font-bold"; }
+
+            let skValid = false; let spValid = true; let extrasValid = true;
+            if(state.cls) {
+                let finalInt = 0; [...state.ancBoosts, ...state.bgBoosts, state.keyStat, ...state.freeBoosts].forEach(b => {if(b==='int') finalInt++});
+                let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+                
+                if(state.ancestry && document.getElementById('sel-anc-method').value === 'standard' && parseDeepFlaws(safeFlaws).includes('int')) finalInt--;
+                
+                let granted = [...((bData.classes[state.cls] || {}).base_skills || [])]; let ex = 0;
+                
+                if (state.subclass && bData.subclass_matrix && bData.subclass_matrix[state.subclass] && bData.subclass_matrix[state.subclass].skills) {
+                    bData.subclass_matrix[state.subclass].skills.forEach(sk => granted.push(sk.toLowerCase()));
+                }
+                
+                state.bgSkills.forEach(bs => { if(granted.includes(bs)) ex++; else granted.push(bs); });
+                
+                let cData = bData.classes[state.cls] || {free_skills: 3};
+                let baseFree = parseInt(cData.free_skills);
+                if(isNaN(baseFree)) baseFree = 3;
+                let reqSk = baseFree + finalInt + ex;
+                
+                if(state.freeSkills.length === reqSk) skValid = true;
+                
+                let castData = bData.classes[state.cls] || {};
+                if (castData.spellcasting) {
+                    let cCount = state.spells.filter(s=>s.level===0).length;
+                    let l1Count = state.spells.filter(s=>s.level===1).length;
+                    let scants = castData.starting_spells ? castData.starting_spells.cantrips : 0;
+                    let slv1s = castData.starting_spells ? castData.starting_spells.lvl1 : 0;
+                    if(cCount < scants || l1Count < slv1s) spValid = false;
+                }
+
+                if ((state.heritage === "Versatile Heritage" || state.heritage === "Versatile Human") && !state.guided.versatile_feat) extrasValid = false;
+                if (state.ancFeat && state.ancFeat.name === "Natural Ambition" && !state.guided.ambition_feat) extrasValid = false;
+                if (state.cls === 'kineticist' && !state.guided.kin_elements) extrasValid = false;
+                if (state.cls === 'kineticist' && (!state.guided.kin_gate || state.guided.kin_gate === "Single Gate") && !state.guided.kin_feat) extrasValid = false;
+                
+                let bgDesc = state.background ? (dbBackgrounds[state.background]?.description || "").toLowerCase() : "";
+                if ((bgDesc.includes("choose") || bgDesc.includes("select") || bgDesc.includes("scarred") || bgDesc.includes("choice")) && !state.guided.bg_choice) extrasValid = false;
+            }
+            
+            if(skValid && spValid && extrasValid && state.cls) { document.getElementById('chk-skills').innerText = "✓"; document.getElementById('chk-skills').className = "text-green-400 text-xl font-bold leading-none"; }
+            else { document.getElementById('chk-skills').innerText = "!"; document.getElementById('chk-skills').className = "text-red-500 font-bold"; }
+
+            const btnF = document.getElementById('btn-finish');
+            if(state.name && document.getElementById('chk-ancestry').innerText==="✓" && document.getElementById('chk-background').innerText==="✓" && document.getElementById('chk-class').innerText==="✓" && state.freeBoosts.length===4 && skValid && spValid && extrasValid) {
+                btnF.disabled = false; btnF.innerText = "Forge Character";
+                btnF.classList.remove('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
+                btnF.classList.add('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
+            } else {
+                btnF.disabled = true; btnF.innerText = "Incomplete Setup";
+                btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
+                btnF.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
+            }
+        }
+
+        function renderBuilderReview() {
+            const ui = document.getElementById('ui-builder-review');
+            let html = '';
+            
+            // Identity
+            let name = document.getElementById('inp-name').value || 'Unnamed';
+            let deity = document.getElementById('inp-deity').value || 'None';
+            html += `<div class="mb-6">
+                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Identity</h4>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-gray-900 rounded p-3 border border-gray-700"><span class="text-[10px] text-gray-500 uppercase block">Name</span><span class="text-white font-bold text-lg">${esc(name)}</span></div>
+                    <div class="bg-gray-900 rounded p-3 border border-gray-700"><span class="text-[10px] text-gray-500 uppercase block">Deity / Sanctification</span><span class="text-white font-bold">${esc(deity)}</span> <span class="text-amber-500 text-xs">${state.sanctification || 'Neutral'}</span></div>
+                </div>
+            </div>`;
+            
+            // Ancestry & Heritage
+            html += `<div class="mb-6">
+                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Ancestry & Heritage</h4>
+                <div class="flex gap-3">
+                    <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-amber-400 font-bold">${state.ancestry || '—'}</span>
+                    <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-300 font-bold">${state.heritage || '—'}</span>
+                    ${state.ancFeat ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 text-sm">Feat: ${esc(state.ancFeat)}</span>` : ''}
+                </div>
+            </div>`;
+            
+            // Background
+            html += `<div class="mb-6">
+                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Background</h4>
+                <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-amber-400 font-bold">${state.background || '—'}</span>
+            </div>`;
+            
+            // Class & Subclass
+            html += `<div class="mb-6">
+                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Class</h4>
+                <div class="flex gap-3">
+                    <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-amber-400 font-bold">${state.className || '—'}</span>
+                    ${state.subclass ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-300">${esc(state.subclass)}</span>` : ''}
+                    ${state.keyStat ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-400">Key: <span class="text-white font-bold uppercase">${state.keyStat}</span></span>` : ''}
+                </div>
+                ${state.classFeat ? `<div class="mt-2"><span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 text-sm">Class Feat: ${esc(state.classFeat)}</span></div>` : ''}
+            </div>`;
+            
+            // Ability Scores
+            let finalStats = {str:10, dex:10, con:10, int:10, wis:10, cha:10};
+            [...(state.ancBoosts||[]), ...(state.bgBoosts||[]), state.keyStat, ...(state.freeBoosts||[])].forEach(b => {if(b) finalStats[b]=(finalStats[b]||10)+2});
+            html += `<div class="mb-6">
+                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Ability Scores</h4>
+                <div class="grid grid-cols-6 gap-2">`;
+            for (const [stat, val] of Object.entries(finalStats)) {
+                let mod = Math.floor((val - 10) / 2);
+                let modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+                html += `<div class="bg-gray-900 border border-gray-700 rounded p-2 text-center">
+                    <span class="text-[10px] text-gray-500 uppercase block">${stat}</span>
+                    <span class="text-white font-bold text-lg">${val}</span>
+                    <span class="text-amber-400 text-xs block">${modStr}</span>
+                </div>`;
+            }
+            html += `</div></div>`;
+            
+            // Skills
+            let trainedSkills = (state.trainedSkills || state.freeSkills || []).filter(s => s);
+            let allLores = [...(state.bgLores || []).map(l => l.replace('lore: ', '').replace('lore:', '').trim()), ...(state.customLores || [])];
+            if (trainedSkills.length > 0 || allLores.length > 0) {
+                html += `<div class="mb-6">
+                    <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Trained Skills</h4>
+                    <div class="flex flex-wrap gap-2">` +
+                    trainedSkills.map(s => `<span class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-green-400 text-xs font-bold capitalize">${s}</span>`).join('') +
+                    allLores.map(l => `<span class="bg-amber-900/30 border border-amber-800/50 rounded px-2 py-1 text-amber-400 text-xs font-bold">${l.charAt(0).toUpperCase() + l.slice(1)} Lore</span>`).join('') +
+                `</div></div>`;
+            }
+            
+            // Spells (if spellcaster)
+            let selectedSpells = state.selectedSpells || [];
+            if (selectedSpells.length > 0) {
+                html += `<div class="mb-6">
+                    <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Starting Spells</h4>
+                    <div class="flex flex-wrap gap-2">` +
+                    selectedSpells.map(s => `<span class="bg-blue-900/30 border border-blue-800/50 rounded px-2 py-1 text-blue-300 text-xs font-bold">${esc(s.name || s)}</span>`).join('') +
+                `</div></div>`;
+            }
+            
+            ui.innerHTML = html || '<div class="text-gray-500 italic text-center py-8">Complete the previous steps to see your review.</div>';
+        }
+        
+        function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        async function finalizeCharacter() {
+            const btn = document.getElementById('btn-finish'); btn.innerText = "Forging Data..."; btn.disabled = true;
+            
+            let finalStats = {str:10, dex:10, con:10, int:10, wis:10, cha:10};
+            [...state.ancBoosts, ...state.bgBoosts, state.keyStat, ...state.freeBoosts].forEach(b => {if(b) finalStats[b]+=2});
+            let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
+            if(document.getElementById('sel-anc-method').value === 'standard') { parseDeepFlaws(safeFlaws).forEach(f => finalStats[f]-=2); }
+
+            let allSkills = [...((bData.classes[state.cls] || {}).base_skills || []).map(s=>s.toLowerCase()), ...state.bgSkills.map(s=>s.toLowerCase()), ...state.freeSkills.map(s=>s.toLowerCase())];
+            
+            // Add background-granted lore skills
+            state.bgLores.forEach(l => allSkills.push(l));
+            // Add custom lore skills
+            state.customLores.forEach(l => allSkills.push('lore: ' + l.toLowerCase()));
+            
+            if (state.subclass && bData.subclass_matrix && bData.subclass_matrix[state.subclass] && bData.subclass_matrix[state.subclass].skills) {
+                bData.subclass_matrix[state.subclass].skills.forEach(sk => allSkills.push(sk.toLowerCase()));
+            }
+            
+            let spellData = [];
+            const cData = bData.classes[state.cls] || {};
+            if (cData && cData.spellcasting) {
+                let lvl0 = state.spells.filter(s=>s.level===0).map(s=>s.name);
+                let lvl1 = state.spells.filter(s=>s.level===1).map(s=>s.name);
+                spellData.push({
+                    "name": `${state.cls.charAt(0).toUpperCase()+state.cls.slice(1)} Spells`, 
+                    "magicTradition": state.tradition, 
+                    "castingType": cData.spellcasting,
+                    "spells": [{"spellLevel": 0, "list": lvl0}, {"spellLevel": 1, "list": lvl1}]
+                });
+            }
+
+            let finalFeats = [state.ancFeat, state.clsFeat].filter(Boolean);
+            Object.values(state.clsFeats).forEach(f => finalFeats.push(f));
+            
+            if (state.guided.versatile_feat) finalFeats.push(state.guided.versatile_feat);
+            if (state.guided.ambition_feat) finalFeats.push(state.guided.ambition_feat);
+            if (state.cls === 'kineticist') {
+                if (state.guided.kin_gate) finalFeats.push({name: `Kinetic Gate: ${state.guided.kin_gate}`, desc: "Selected Gate Type", type: "Class Feature"});
+                if (state.guided.kin_elements) finalFeats.push({name: `Elements: ${state.guided.kin_elements}`, desc: "Chosen Elemental Affinities", type: "Class Feature"});
+                if (state.guided.kin_feat && (!state.guided.kin_gate || state.guided.kin_gate === 'Single Gate')) finalFeats.push(state.guided.kin_feat);
+            }
+            if (state.guided.bg_choice) {
+                finalFeats.push({name: "Background Feature", desc: state.guided.bg_choice, type: "Background Choice"});
+            }
+
+            let finalMods = {str:0, dex:0, con:0, int:0, wis:0, cha:0};
+            for(let s in finalStats) { finalMods[s] = Math.floor((finalStats[s]-10)/2); }
+
+            const payload = {
+                name: state.name, deity: document.getElementById('inp-deity').value, sanctification: state.sanctification,
+                ancestry: state.ancestry, heritage: state.heritage, background: state.background, class_name: state.cls.charAt(0).toUpperCase()+state.cls.slice(1), subclass: state.subclass,
+                abilities: finalStats, skills: [...new Set(allSkills)], feats: finalFeats, spellCasters: spellData
+            };
+
+            try {
+                const res = await fetch('/api/save_new_character', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                const data = await res.json();
+                if(data.success) window.location.href = '/player';
+            } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
+        }
+    </script>
+</body>
+</html>

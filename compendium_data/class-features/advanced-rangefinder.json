@@ -1,0 +1,55 @@
+{
+    "_id": "P1GbGEePC8zDi8K4",
+    "img": "icons/skills/targeting/crosshair-scope-sniper-green.webp",
+    "name": "Advanced Rangefinder",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p><strong>Ranged Only</strong></p><hr /><p>A carefully tuned scope or targeting device makes your weapon especially good at hitting weak points. Your innovation gains the backstabber trait and increases its range increment by 20 feet.</p>"
+        },
+        "level": {
+            "value": 7
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "backstabber"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "range-increment",
+                "value": 20
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "ranged",
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

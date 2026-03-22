@@ -1,0 +1,76 @@
+{
+    "_id": "b1588nhgRoYMef44",
+    "folder": "Bj8OBjxrxeUx8h9u",
+    "img": "systems/pf2e/icons/default-icons/background.svg",
+    "name": "Wanderlust",
+    "system": {
+        "boosts": {
+            "0": {
+                "value": [
+                    "dex",
+                    "int"
+                ]
+            },
+            "1": {
+                "value": [
+                    "cha",
+                    "con",
+                    "dex",
+                    "int",
+                    "str",
+                    "wis"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p>You've traveled the world for years in search of excitement and adventure. On the night of the Missing Moment, all the many exciting occasions you've experienced paled in comparison to the vision of fantastic lands and incredible people you saw on the other side of the glowing gate. You stepped through in the hopes of finally reaching the thrilling highs you so desperately seek, but as soon as you'd gone there you were again, standing in front of a lightless gateway with a months-long gap in your memories. Since then, your body has developed unusual abilities, which to this day you still struggle to control. These strange new abilities weren't what you asked for—but they might help you pursue the excitement you crave.</p>\n<p>Your deviant abilities are of either the flicker or the troll classification. If you choose flicker, you gain the @UUID[Compendium.pf2e.feats-srd.Item.Overclock Senses] deviant feat. If you choose troll, you gain the @UUID[Compendium.pf2e.feats-srd.Item.Titan Swing] deviant feat. As a quirk, whenever you use a deviant ability, your affected body part transforms to become more animalistic. Your eyes might change shape and color, for example, or your feet might elongate and your leg bones crack as your lower limbs transform into those of a rabbit, wolf, or other spry, long-heeled animal.</p>\n<p>Choose two attribute boosts. One must be to <strong>Dexterity</strong> or <strong>Intelligence</strong>, and one is a free ability boost.</p>\n<p>You're trained in the Nature skill and the Stabling Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Express Rider] skill feat.</p>"
+        },
+        "items": {
+            "Q8Ygg": {
+                "img": "icons/sundries/books/book-red-exclamation.webp",
+                "level": 1,
+                "name": "Express Rider",
+                "uuid": "Compendium.pf2e.feats-srd.Item.Express Rider"
+            }
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Gatewalkers Player's Guide"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "value": "Compendium.pf2e.feats-srd.Item.Overclock Senses"
+                    },
+                    {
+                        "value": "Compendium.pf2e.feats-srd.Item.Titan Swing"
+                    }
+                ],
+                "flag": "feat",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.DeviantAbilities.Prompt"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "{item|flags.pf2e.rulesSelections.feat}"
+            }
+        ],
+        "trainedSkills": {
+            "custom": "",
+            "lore": [
+                "Stabling Lore"
+            ],
+            "value": [
+                "nature"
+            ]
+        },
+        "traits": {
+            "rarity": "rare",
+            "value": []
+        }
+    },
+    "type": "background"
+}

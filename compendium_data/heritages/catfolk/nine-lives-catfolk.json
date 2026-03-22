@@ -1,0 +1,41 @@
+{
+    "_id": "hOPOyyt7qZXYYCOU",
+    "folder": "rHnluMPovHqQZC1m",
+    "img": "systems/pf2e/icons/features/ancestry/nine-lives-catfolk.webp",
+    "name": "Nine Lives Catfolk",
+    "system": {
+        "ancestry": {
+            "name": "Catfolk",
+            "slug": "catfolk",
+            "uuid": "Compendium.pf2e.ancestries.Item.972EkpJOPv9KkQIW"
+        },
+        "description": {
+            "value": "<p>Your family has always seems to bounce back from disaster, not through physical hardiness or specialized skill, but from sheer luck. Other catfolk whisper that you have nine lives. While you're @UUID[Compendium.pf2e.conditionitems.Item.Dying], you don't add your dying value to the DC of your recovery checks (this means the DC is typically 10). In addition, you gain the @UUID[Compendium.pf2e.feats-srd.Item.Diehard] general feat.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.feats-srd.Item.Diehard"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "subtract",
+                "path": "system.attributes.dying.recoveryDC",
+                "predicate": [
+                    "self:condition:dying"
+                ],
+                "value": "@actor.conditions.dying.badge.value"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

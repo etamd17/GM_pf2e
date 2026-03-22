@@ -1,0 +1,47 @@
+{
+    "_id": "xiG3kmPJBpX2KA7l",
+    "img": "systems/pf2e/icons/equipment/consumables/oils/shielding-salve.webp",
+    "name": "Effect: Oil of Corpse Restoration",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Oil of Corpse Restoration]</p>\n<p>You gain a +2 circumstance bonus on Deception checks to look like a living creature.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 8
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Adventure Path: Gatewalkers"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:disguise",
+                    "disguise-as-living"
+                ],
+                "selector": "deception",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

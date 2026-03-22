@@ -1,0 +1,150 @@
+{
+    "_id": "xxSpHT2vnCFxTr0q",
+    "img": "icons/weapons/guns/rifle-fluted.webp",
+    "name": "Ghosthand's Comet",
+    "system": {
+        "ammo": null,
+        "baseItem": null,
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 2
+        },
+        "category": "advanced",
+        "containerId": null,
+        "damage": {
+            "damageType": "force",
+            "dice": 5,
+            "die": "d8"
+        },
+        "description": {
+            "value": "<p>The barrel of this long rifle is translucent in places, forming a swirled pattern along the metal, and its stock is formed of crimson wood. <em>Ghosthand's Comet</em> is a <em>+4 major striking beast-bane greater impactful advanced firearm</em> with a range increment of 300 feet. It deals 5d8 force damage and has the backstabber, concussive, kickback, and fatal d12 traits. As a star gun, Ghosthand's Comet runs on magic and doesn't use ammunition or black powder. The weapon is silent when fired.</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">F</span> (concentrate)</p>\n<p><strong>Trigger</strong> You attempt a ranged Strike with <em>Ghosthand's Comet</em></p>\n<p><strong>Effect</strong> For the triggering Strike, <em>Ghosthand's Comet</em> changes its damage type to your choice of acid, cold, electricity, fire, or sonic.</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (concentrate)</p>\n<p><strong>Effect</strong> On your next attempt at a ranged Strike with <em>Ghosthand's Comet</em>, the shot phases through any material or magical obstacle, such as a wall of force, in its path, ignoring all cover. You must attempt the Strike by the end of your turn or this effect is lost.</p><hr /><p><strong>Destruction</strong> If the Grim Reaper slays the wielder of <em>Ghosthand's Comet</em>, the Reaper's scythe, as it strikes the killing blow, is destined to slice the star gun in half.</p>"
+        },
+        "expend": null,
+        "grade": null,
+        "group": "firearm",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 23
+        },
+        "material": {
+            "grade": "high",
+            "type": "inubrix"
+        },
+        "price": {
+            "value": {}
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "range": 300,
+        "reload": {
+            "value": null
+        },
+        "rules": [
+            {
+                "diceNumber": 1,
+                "dieSize": "d6",
+                "key": "DamageDice",
+                "label": "PF2E.WeaponPropertyRune.bane.Name",
+                "predicate": [
+                    "target:trait:beast"
+                ],
+                "selector": "{item|id}-damage"
+            },
+            {
+                "domain": "damage",
+                "key": "RollOption",
+                "option": "ghosthands-comet-damage",
+                "suboptions": [
+                    {
+                        "label": "PF2E.TraitAcid",
+                        "value": "acid"
+                    },
+                    {
+                        "label": "PF2E.TraitCold",
+                        "value": "cold"
+                    },
+                    {
+                        "label": "PF2E.TraitElectricity",
+                        "value": "electricity"
+                    },
+                    {
+                        "label": "PF2E.TraitFire",
+                        "value": "fire"
+                    },
+                    {
+                        "label": "PF2E.TraitSonic",
+                        "value": "sonic"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "key": "DamageAlteration",
+                "mode": "override",
+                "predicate": [
+                    "ghosthands-comet-damage"
+                ],
+                "property": "damage-type",
+                "selectors": [
+                    "{item|id}-damage"
+                ],
+                "slug": "base",
+                "value": "{item|flags.pf2e.rulesSelections.ghosthandsCometDamage}"
+            }
+        ],
+        "runes": {
+            "potency": 4,
+            "property": [
+                "bane",
+                "greaterImpactful"
+            ],
+            "striking": 3
+        },
+        "size": "med",
+        "specific": {
+            "material": {
+                "grade": "high",
+                "type": "inubrix"
+            },
+            "runes": {
+                "potency": 4,
+                "property": [
+                    "bane",
+                    "greaterImpactful"
+                ],
+                "striking": 3
+            }
+        },
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "unique",
+            "value": [
+                "artifact",
+                "backstabber",
+                "concussive",
+                "fatal-d12",
+                "kickback",
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "held-in-two-hands"
+        }
+    },
+    "type": "weapon"
+}

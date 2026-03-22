@@ -1,0 +1,51 @@
+{
+    "_id": "62oxvKUCReo7Iah7",
+    "img": "systems/pf2e/icons/unarmed-attacks/tusk.webp",
+    "name": "Polished Demon Horn (Greater)",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This spellheart is fashioned from the tip of a demon's horn that's been polished until smooth and shiny. The spell DC of any spell cast by Activating this item is 24.</p><ul><li><strong>Armor</strong> You gain resistance 5 to unholy.</li><li><strong>Weapon</strong> After you cast an enchantment spell by Activating the <em>horn</em>, your Strikes with the weapon deal an additional 1d6 mental damage until end of your next turn.</li></ul><p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Polished Demon Horn - Armor]</p>\n<p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Polished Demon Horn - Weapon]</p><hr /><p><strong>Activate</strong> Cast a Spell</p>\n<p><strong>Effect</strong> You cast @UUID[Compendium.pf2e.spells-srd.Item.Daze] (@Check[will|dc:24|basic|traits:cantrip,spell,mental,nonlethal]).</p><hr /><p><strong>Activate</strong> Cast a Spell</p>\n<p><strong>Frequency</strong> once per day</p>\n<p><strong>Effect</strong> You cast 3rd-rank @UUID[Compendium.pf2e.spells-srd.Item.Fear] (@Check[will|dc:24|traits:emotion,fear,mental,spell]).</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 8
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 450
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Adventure Path: Gatewalkers"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "divine",
+                "spellheart"
+            ]
+        },
+        "usage": {
+            "value": "affixed-to-armor-or-a-weapon"
+        }
+    },
+    "type": "equipment"
+}

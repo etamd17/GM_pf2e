@@ -1,0 +1,43 @@
+{
+    "_id": "TjNkvawfWCqb1alg",
+    "folder": "KwdFTociFQyekZ6o",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "Night's Glow",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "class",
+        "description": {
+            "value": "<p>The stars and moon lend you their light. You gain your choice of the @UUID[Compendium.pf2e.spells-srd.Item.Moonbeam] or @UUID[Compendium.pf2e.spells-srd.Item.Zenith Star] domain spell. Like your Oatia skysage spells, you cast this focus spell as an occult spell.</p>\n<p><strong>Special</strong> You can take this feat a second time, gaining the focus spell that you didn't gain the first time.</p>"
+        },
+        "level": {
+            "value": 6
+        },
+        "maxTakable": 2,
+        "prerequisites": {
+            "value": [
+                {
+                    "value": "Oatia Skysage Dedication"
+                }
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Adventure Path: Gatewalkers"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "archetype",
+                "occult"
+            ]
+        }
+    },
+    "type": "feat"
+}

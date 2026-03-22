@@ -1,0 +1,54 @@
+{
+    "_id": "nIryhRgeiacQw1Em",
+    "img": "icons/magic/nature/lotus-glow-pink.webp",
+    "name": "Spell Effect: Soothing Blossoms",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Soothing Blossoms]</p>\n<p>When you roll a successful save against a poison or disease effect, you get a critical success instead.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:poison",
+                            "item:trait:disease"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "type": "save"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

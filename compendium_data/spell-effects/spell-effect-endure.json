@@ -1,0 +1,41 @@
+{
+    "_id": "AAypmg9Jz6Ysf02a",
+    "img": "icons/skills/wounds/injury-face-impact-orange.webp",
+    "name": "Spell Effect: Endure",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Endure]</p>\n<p>You gain temporary Hit Points.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "key": "TempHP",
+                "value": "@item.level*5"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

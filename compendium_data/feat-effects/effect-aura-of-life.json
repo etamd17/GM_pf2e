@@ -1,0 +1,52 @@
+{
+    "_id": "FPuICuxBLiDaEbDX",
+    "img": "systems/pf2e/icons/spells/destructive-aura.webp",
+    "name": "Effect: Aura of Life",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Aura of Life]</p>\n<p>You gain resistance 5 to void damage and a +1 status bonus to saves against void effects.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 14
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:void"
+                ],
+                "selector": "saving-throw",
+                "type": "status",
+                "value": 1
+            },
+            {
+                "key": "Resistance",
+                "type": "void",
+                "value": 5
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,63 @@
+{
+    "_id": "fRlvmul3LbLo2xvR",
+    "img": "icons/weapons/polearms/spear-ornate-gold.webp",
+    "name": "Effect: Parry",
+    "system": {
+        "description": {
+            "value": "<p>You gain a circumstance bonus to AC.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.NoLabel",
+                        "value": "no"
+                    },
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.YesLabel",
+                        "value": "yes"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "predicate": [
+                    "weapon-parry"
+                ],
+                "prompt": "PF2E.SpecificRule.Parry.Prompt",
+                "rollOption": "parry-bonus-upgrade"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "ac",
+                "slug": "parry-bonus",
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

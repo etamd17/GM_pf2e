@@ -1,0 +1,72 @@
+{
+    "_id": "4lp8oG9A3zuqhPBS",
+    "img": "icons/skills/melee/hand-grip-sword-red.webp",
+    "name": "Bard Weapon Expertise",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You have become thoroughly adept with bardic weapons. Your proficiency rank for martial weapons, simple weapons, and unarmed attacks increases to expert. When you critically succeed at an attack roll using one of these weapons or an unarmed attack while one of your compositions is active, you apply the critical specialization effect for that weapon or unarmed attack.</p>"
+        },
+        "level": {
+            "value": 11
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "CriticalSpecialization",
+                "predicate": [
+                    {
+                        "gte": [
+                            "item:proficiency:rank",
+                            2
+                        ]
+                    },
+                    {
+                        "or": [
+                            "courageous-anthem:origin:signature:{actor|signature}",
+                            "hymn-of-healing:origin:signature:{actor|signature}",
+                            "silvers-refrain:origin:signature:{actor|signature}",
+                            "song-of-strength:origin:signature:{actor|signature}",
+                            "uplifting-overture:origin:signature:{actor|signature}",
+                            "rallying-anthem:origin:signature:{actor|signature}",
+                            "triple-time:origin:signature:{actor|signature}"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "martial": {
+                    "rank": 2
+                },
+                "simple": {
+                    "rank": 2
+                },
+                "unarmed": {
+                    "rank": 2
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "bard"
+            ]
+        }
+    },
+    "type": "feat"
+}

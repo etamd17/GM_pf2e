@@ -1,0 +1,124 @@
+{
+    "_id": "f1UCVpGYLHa089SE",
+    "img": "systems/pf2e/icons/equipment/weapons/pepperbox.webp",
+    "name": "Spark Dancer",
+    "system": {
+        "ammo": {
+            "baseType": "rounds-pepperbox",
+            "builtIn": false,
+            "capacity": 1
+        },
+        "baseItem": "pepperbox",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 0.1
+        },
+        "category": "martial",
+        "containerId": null,
+        "damage": {
+            "damageType": "fire",
+            "dice": 1,
+            "die": "d4"
+        },
+        "description": {
+            "value": "<p>This <em>+2 greater striking pepperbox</em> cycles through several magical cores, swapping in new ones while the previous ones cool. The gun deals fire or electricity damage, alternating with each attack as it rotates cores. Arcadian gunslingers liken the rotating cores to a group of dancers sharing the spotlight.</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">2</span> (manipulate)</p>\n<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The spark dancer casts either <em>@UUID[Compendium.pf2e.spells-srd.Item.Fireball]</em> or <em>@UUID[Compendium.pf2e.spells-srd.Item.Lightning Bolt]</em>, depending on whether the current core would deal fire or electricity damage, as a 7th-rank arcane spell (@Check[reflex|dc:30|basic]).</p>"
+        },
+        "expend": 1,
+        "grade": null,
+        "group": "firearm",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 13
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 2900
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "range": 60,
+        "reload": {
+            "value": "1"
+        },
+        "rules": [
+            {
+                "alwaysActive": true,
+                "domain": "damage",
+                "key": "RollOption",
+                "option": "spark-dancer",
+                "suboptions": [
+                    {
+                        "label": "PF2E.TraitFire",
+                        "value": "fire"
+                    },
+                    {
+                        "label": "PF2E.TraitElectricity",
+                        "value": "electricity"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "key": "DamageAlteration",
+                "mode": "override",
+                "property": "damage-type",
+                "selectors": [
+                    "{item|id}-damage"
+                ],
+                "value": "{item|flags.pf2e.rulesSelections.sparkDancer}"
+            }
+        ],
+        "runes": {
+            "potency": 2,
+            "property": [],
+            "striking": 2
+        },
+        "size": "med",
+        "specific": {
+            "material": {
+                "grade": null,
+                "type": null
+            },
+            "runes": {
+                "potency": 2,
+                "property": [],
+                "striking": 2
+            }
+        },
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "arcane",
+                "capacity-3",
+                "concussive",
+                "fatal-d8",
+                "fire"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "weapon"
+}

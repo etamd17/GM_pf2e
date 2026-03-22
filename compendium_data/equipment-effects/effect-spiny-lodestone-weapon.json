@@ -1,0 +1,129 @@
+{
+    "_id": "m6z7OrJgF4XQFNpa",
+    "img": "icons/commodities/gems/gem-faceted-round-black.webp",
+    "name": "Effect: Spiny Lodestone - Weapon",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Spiny Lodestone], @UUID[Compendium.pf2e.equipment-srd.Item.Spiny Lodestone (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Spiny Lodestone (Major)]</p>\n<p>Your Strikes with the weapon deal additional piercing damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:spiny-lodestone",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Spiny Lodestone"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:spiny-lodestone-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Spiny Lodestone (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:spiny-lodestone-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Spiny Lodestone (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "spiny-lodestone"
+            },
+            {
+                "choices": {
+                    "includeHandwraps": true,
+                    "ownedItems": true,
+                    "types": [
+                        "weapon"
+                    ]
+                },
+                "flag": "effectSpinyLodestoneWeapon",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Weapon"
+            },
+            {
+                "damageType": "piercing",
+                "diceNumber": 1,
+                "dieSize": "d4",
+                "hideIfDisabled": true,
+                "key": "DamageDice",
+                "predicate": [
+                    "spiny-lodestone:spiny-lodestone"
+                ],
+                "selector": "{item|flags.pf2e.rulesSelections.effectSpinyLodestoneWeapon}-damage"
+            },
+            {
+                "damageType": "piercing",
+                "diceNumber": 1,
+                "dieSize": "d6",
+                "hideIfDisabled": true,
+                "key": "DamageDice",
+                "predicate": [
+                    "spiny-lodestone:spiny-lodestone-greater"
+                ],
+                "selector": "{item|flags.pf2e.rulesSelections.effectSpinyLodestoneWeapon}-damage"
+            },
+            {
+                "damageType": "piercing",
+                "diceNumber": 1,
+                "dieSize": "d8",
+                "hideIfDisabled": true,
+                "key": "DamageDice",
+                "predicate": [
+                    "spiny-lodestone:spiny-lodestone-major"
+                ],
+                "selector": "{item|flags.pf2e.rulesSelections.effectSpinyLodestoneWeapon}-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

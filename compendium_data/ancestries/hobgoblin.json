@@ -1,0 +1,79 @@
+{
+    "_id": "piNLXUrm9iaGqD2i",
+    "img": "systems/pf2e/icons/ancestries/hobgoblin.webp",
+    "name": "Hobgoblin",
+    "system": {
+        "additionalLanguages": {
+            "count": 0,
+            "custom": "",
+            "value": [
+                "draconic",
+                "dwarven",
+                "halfling",
+                "jotun",
+                "kholo",
+                "orcish"
+            ]
+        },
+        "boosts": {
+            "0": {
+                "value": [
+                    "con"
+                ]
+            },
+            "1": {
+                "value": [
+                    "int"
+                ]
+            },
+            "2": {
+                "value": [
+                    "str",
+                    "dex",
+                    "con",
+                    "int",
+                    "wis",
+                    "cha"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p><em>Taller and stronger than their goblin kin, hobgoblins are equals in strength and size to humans, with broad shoulders and long, powerful arms.</em></p>\n<p><em>@UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.DuWzeY4zugKFFthl]{Hobgoblin}</em></p>"
+        },
+        "flaws": {
+            "0": {
+                "value": [
+                    "wis"
+                ]
+            }
+        },
+        "hands": 2,
+        "hp": 8,
+        "items": {},
+        "languages": {
+            "custom": "",
+            "value": [
+                "common",
+                "goblin"
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "reach": 5,
+        "rules": [],
+        "size": "med",
+        "speed": 25,
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "hobgoblin",
+                "humanoid"
+            ]
+        },
+        "vision": "darkvision"
+    },
+    "type": "ancestry"
+}

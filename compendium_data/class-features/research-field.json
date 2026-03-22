@@ -1,0 +1,52 @@
+{
+    "_id": "cU2ofQLj7pg6wTSi",
+    "img": "icons/magic/symbols/question-stone-yellow.webp",
+    "name": "Research Field",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your inquiries into the alchemical nature of the universe have led you to focus on a particular field of research. At 1st level, you choose your research field. This choice gives you more formulas, a special benefit, other abilities for your versatile vials, and other benefits as you level up.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": {
+                    "filter": [
+                        "item:tag:alchemist-research-field"
+                    ]
+                },
+                "flag": "researchField",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Alchemist.ResearchField.Prompt"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "{item|flags.pf2e.rulesSelections.researchField}"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

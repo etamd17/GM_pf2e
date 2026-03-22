@@ -1,0 +1,51 @@
+{
+    "_id": "GkyZl0UeUAS5YaHA",
+    "img": "icons/magic/unholy/hand-marked-pink.webp",
+    "name": "Aether Appendage",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This otherworldly prosthetic arm is the product of psychopomp magic. An <em>aether appendage</em> is incorporeal so long as no item is being held in the hand or worn on the arm.</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (concentrate)</p><hr /><p>You cause the arm to become corporeal until the end of your turn, allowing you to use it to make Strikes or grasp objects. It remains corporeal if you're holding an item or it's wearing an item at the end of your turn. Your unarmed attack Strikes made with the <em>aether appendage</em> are magical. If they're already magical, they instead gain the effect of the ghost touch property rune.</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (concentrate, manipulate)</p><hr /><p><strong>Frequency</strong> once per day</p>\n<p><strong>Requirements</strong> You're holding a non-magical item of light or negligible Bulk</p><hr /><p><strong>Effect</strong> The item becomes incorporeal for 1 minute. Your <em>aether appendage</em> can use the incorporeal item normally.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 5
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 160
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "incorporeal",
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "worn"
+        }
+    },
+    "type": "equipment"
+}

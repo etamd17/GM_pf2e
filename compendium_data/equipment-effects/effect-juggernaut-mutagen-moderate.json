@@ -1,0 +1,58 @@
+{
+    "_id": "fUrZ4xcMJz0CfTyG",
+    "img": "icons/consumables/potions/bottle-metal-yellow-gray.webp",
+    "name": "Effect: Juggernaut Mutagen (Moderate)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Juggernaut Mutagen (Moderate)]</p>\n<p><strong>Benefit</strong> You gain a +2 item bonus to Fortitude saves and 10 temporary Hit Points.</p>\n<p><strong>Drawback</strong> You take a -2 penalty to Will saves, Perception checks and initiative rolls.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Core Rulebook"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "fortitude",
+                "type": "item",
+                "value": 2
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "initiative",
+                    "perception",
+                    "will"
+                ],
+                "type": "untyped",
+                "value": -2
+            },
+            {
+                "key": "TempHP",
+                "value": 10
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

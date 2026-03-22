@@ -1,0 +1,76 @@
+{
+    "_id": "Jgid6Ja6Y879COlN",
+    "img": "icons/weapons/swords/scimitar-guard-brown.webp",
+    "name": "Fencer",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You move carefully, feinting and creating false openings to lead your foes into inopportune attacks. You are trained in Deception. When you @UUID[Compendium.pf2e.actionspf2e.Item.Create a Diversion] or @UUID[Compendium.pf2e.actionspf2e.Item.Feint], the action gains the bravado trait.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.deception.rank",
+                "predicate": [
+                    "class:swashbuckler"
+                ],
+                "value": 1
+            },
+            {
+                "key": "Note",
+                "outcome": [
+                    "success",
+                    "criticalSuccess"
+                ],
+                "predicate": [
+                    "finisher",
+                    "feature:exemplary-finisher"
+                ],
+                "selector": "strike-attack-roll",
+                "text": "PF2E.SpecificRule.ExemplaryFinisher.Fencer",
+                "title": "PF2E.SpecificRule.ExemplaryFinisher.Name"
+            },
+            {
+                "domain": "skill-check",
+                "key": "RollOption",
+                "option": "item:trait:bravado",
+                "predicate": [
+                    {
+                        "or": [
+                            "action:create-a-diversion",
+                            "action:feint"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "swashbuckler-style"
+            ],
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

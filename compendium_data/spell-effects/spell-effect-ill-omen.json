@@ -1,0 +1,76 @@
+{
+    "_id": "AmsVO5Q6078mEvNt",
+    "img": "icons/sundries/lights/candles-lit-red-evil.webp",
+    "name": "Spell Effect: Ill Omen",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Ill Omen]</p>\n<p>When you attempt an attack roll or skill check, you must roll twice and use the worse result the first time on a Failure or throughout the duration if it was a Critical Failure.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.failure",
+                        "value": "failure"
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalFailure",
+                        "value": "critical-failure"
+                    }
+                ],
+                "flag": "illOmen",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess",
+                "rollOption": "ill-omen"
+            },
+            {
+                "keep": "lower",
+                "key": "RollTwice",
+                "predicate": [
+                    "ill-omen:failure"
+                ],
+                "selector": [
+                    "attack-roll",
+                    "skill-check"
+                ]
+            },
+            {
+                "keep": "lower",
+                "key": "RollTwice",
+                "predicate": [
+                    "ill-omen:critical-failure"
+                ],
+                "removeAfterRoll": false,
+                "selector": [
+                    "attack-roll",
+                    "skill-check"
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

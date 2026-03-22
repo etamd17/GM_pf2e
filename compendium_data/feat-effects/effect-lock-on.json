@@ -1,0 +1,70 @@
+{
+    "_id": "xtqOIXCe0Nsd0QCt",
+    "img": "icons/skills/targeting/crosshair-bars-yellow.webp",
+    "name": "Effect: Lock On",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Lock On]</p>\n<p>You gain a circumstance bonus to attack rolls against the designated enemy.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 10
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "key": "TokenMark",
+                "slug": "lock-on"
+            },
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.Actions.OneAction",
+                        "value": 2
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Actions.TwoActions",
+                        "value": 3
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Inventor.LockOn.TwoActionsLegendary",
+                        "value": 4
+                    }
+                ],
+                "flag": "number",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Actions.Prompt"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "target:mark:lock-on"
+                ],
+                "selector": "attack-roll",
+                "type": "circumstance",
+                "value": "@item.flags.pf2e.rulesSelections.number"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

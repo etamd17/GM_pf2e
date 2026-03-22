@@ -1,0 +1,247 @@
+{
+    "_id": "SCYSjUbMmw8JD9P9",
+    "img": "icons/weapons/wands/wand-skull-horned.webp",
+    "name": "Superstition Instinct",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>A deep distrust of magic drives you to forgo and counter the metaphysical nonsense of spellcasters. Whether you're a member of a superstitious family or culture that distrusts magic, a warrior in constant battle against wizards and witches, a survivor of a magical accident that instilled an intense aversion in your mind and body, or a scion of a bloodline known for its magic resistance, your rage is inimical to magic. This makes you an excellent mage hunter but slow to trust practitioners of magical arts.</p>\n<p><strong>Instinct Ability—Superstitious Resilience</strong> Your deep superstition means it's anathema for you to learn or @UUID[Compendium.pf2e.actionspf2e.Item.Cast a Spell], or to wield or use an item that can be activated to Cast a Spell. If you violate this anathema, you lose the instinct's abilities and any feats that list the instinct as a prerequisite until you spend 1 day of downtime re-centering yourself, though you keep all your other barbarian abilities. While raging, you gain a +2 status bonus to all saves against magic. Increase your damage from Rage from 2 to 3, or 4 against creatures you have witnessed Casting a Spell within the last hour. When you Rage, you regain Hit Point equal to the temporary HP you gained from the Rage action; you then can't regain HP in this way again for 10 minutes. While raging, if you willingly accept the effects of a magic spell or effect, you are @UUID[Compendium.pf2e.conditionitems.Item.Frightened]{Frightened 1}. You cannot reduce your frightened condition below 1 as long as you are affected by the spell or effect.</p>\n<p><strong>Specialization Ability (7th)</strong> Increase the damage from Rage from 3 to 7, or 8 against creatures you have witnessed Casting a Spell within the last hour. If you have greater weapon specialization, instead increase the damage from Rage to 13, or 16 against creatures you have witnessed Casting a Spell within the last hour.</p>\n<p><strong>Raging Resistance (9th)</strong> Choose two associated magical traditions: arcane and occult, arcane and primal, divine and occult, or divine and primal. The resistance from your raging resistance class feature applies against all damage you take from spells cast with these two traditions of magic, regardless of the type of damage dealt by the spell.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "magical",
+                    "self:effect:rage",
+                    {
+                        "or": [
+                            "class:barbarian",
+                            "feat:instinct-ability"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "slug": "superstition-saves",
+                "type": "status",
+                "value": 2
+            },
+            {
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Barbarian.Superstition.TargetingCaster",
+                "option": "target:caster",
+                "toggleable": true
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    {
+                        "or": [
+                            "class:barbarian",
+                            "feat:instinct-ability"
+                        ]
+                    }
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "rage",
+                "value": 3
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    "target:caster",
+                    {
+                        "or": [
+                            "class:barbarian",
+                            "feat:instinct-ability"
+                        ]
+                    }
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "rage",
+                "value": 4
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    "class:barbarian",
+                    {
+                        "gte": [
+                            "self:level",
+                            7
+                        ]
+                    }
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "rage",
+                "value": 7
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    "target:caster",
+                    "class:barbarian",
+                    {
+                        "gte": [
+                            "self:level",
+                            7
+                        ]
+                    }
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "rage",
+                "value": 8
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    {
+                        "not": "target:caster"
+                    },
+                    "class:barbarian",
+                    "feature:greater-weapon-specialization"
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "rage",
+                "value": 13
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    "target:caster",
+                    "class:barbarian",
+                    "feature:greater-weapon-specialization"
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "rage",
+                "value": 16
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "self:effect:rage",
+                    {
+                        "not": "target:caster"
+                    },
+                    "class:barbarian",
+                    "feature:greater-weapon-specialization"
+                ],
+                "selectors": [
+                    "strike-damage"
+                ],
+                "slug": "agile-rage",
+                "value": 4
+            },
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.Traditions.ArcaneAndOccult",
+                        "value": {
+                            "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.ResistanceLabels.ArcaneAndOccult",
+                            "resistanceOne": "arcane",
+                            "resistanceTwo": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.Traditions.ArcaneAndPrimal",
+                        "value": {
+                            "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.ResistanceLabels.ArcaneAndPrimal",
+                            "resistanceOne": "arcane",
+                            "resistanceTwo": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.Traditions.DivineAndOccult",
+                        "value": {
+                            "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.ResistanceLabels.DivineAndOccult",
+                            "resistanceOne": "divine",
+                            "resistanceTwo": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.Traditions.DivineAndPrimal",
+                        "value": {
+                            "label": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.ResistanceLabels.DivineAndPrimal",
+                            "resistanceOne": "divine",
+                            "resistanceTwo": "primal"
+                        }
+                    }
+                ],
+                "flag": "ragingResistance",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Barbarian.Superstition.RagingResistance.Prompt"
+            },
+            {
+                "definition": [
+                    "item:type:spell",
+                    {
+                        "or": [
+                            "item:trait:{item|flags.pf2e.rulesSelections.ragingResistance.resistanceOne}",
+                            "item:trait:{item|flags.pf2e.rulesSelections.ragingResistance.resistanceTwo}"
+                        ]
+                    }
+                ],
+                "key": "Resistance",
+                "label": "{item|flags.pf2e.rulesSelections.ragingResistance.label}",
+                "predicate": [
+                    "self:effect:rage",
+                    "feature:raging-resistance"
+                ],
+                "type": "custom",
+                "value": "@actor.flags.pf2e.ragingResistance"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "barbarian-instinct"
+            ],
+            "rarity": "common",
+            "value": [
+                "barbarian"
+            ]
+        }
+    },
+    "type": "feat"
+}

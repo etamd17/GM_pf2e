@@ -1,0 +1,36 @@
+{
+    "_id": "V4Jt7eDnJBLv5bDj",
+    "img": "icons/consumables/potions/potion-jug-corked-skull-poison-brown-green.webp",
+    "name": "Field Discovery (Mutagenist)",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>The mutagens flowing through your blood have altered your body chemistry. When you roll a Fortitude save while affected by a mutagen and dislike the result, you can end the effect of the mutagen to reroll the save. This is a fortune effect.</p>"
+        },
+        "level": {
+            "value": 5
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

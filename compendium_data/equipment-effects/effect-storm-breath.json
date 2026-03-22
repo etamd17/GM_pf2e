@@ -1,0 +1,45 @@
+{
+    "_id": "CDfixYwjfjoXkOVq",
+    "img": "icons/consumables/potions/potion-bottle-fumes-blue.webp",
+    "name": "Effect: Storm Breath",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Storm Breath]</p>\n<p>You gain resistance 5 to both electricity and sonic.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 9
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "key": "Resistance",
+                "type": [
+                    "electricity",
+                    "sonic"
+                ],
+                "value": 5
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

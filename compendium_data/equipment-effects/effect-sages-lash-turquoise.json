@@ -1,0 +1,44 @@
+{
+    "_id": "K21XQMoDVSPqzRla",
+    "img": "icons/equipment/waist/sash-cloth-gold-purple.webp",
+    "name": "Effect: Sage's Lash (Turquoise)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Sage's Lash]</p>\n<p>You gain a +2 status bonus to your next Will save.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "will",
+                "type": "status",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

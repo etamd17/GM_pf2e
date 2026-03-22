@@ -1,0 +1,43 @@
+{
+    "_id": "Nbgf8zvHimdQqIu6",
+    "img": "icons/weapons/swords/greatsword-crossguard-silver.webp",
+    "name": "Effect: Skyrider Sword",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Skyrider Sword], @UUID[Compendium.pf2e.equipment-srd.Item.Skyrider Sword (Greater)]</p>\n<p>You gain a fly Speed of 25 feet or your land Speed, whichever is slower.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens The Grand Bazaar"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": "min(25, @actor.system.movement.speeds.land.value)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

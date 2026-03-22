@@ -1,0 +1,68 @@
+{
+    "_id": "dU7xRpg4kFd01hwZ",
+    "img": "icons/magic/symbols/question-stone-yellow.webp",
+    "name": "Instinct",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your rage wells up from a dominant instinct—one you learned from a tradition or that comes naturally to you. Your instinct gives you an ability, requires you to avoid certain behaviors, grants you increased damage and resistances at higher levels, and allows you to select feats tied to your instinct.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": {
+                    "filter": [
+                        "item:tag:barbarian-instinct"
+                    ]
+                },
+                "flag": "instinct",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Barbarian.Instinct.Prompt"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "{item|flags.pf2e.rulesSelections.instinct}"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.pf2e.ragingResistance",
+                "value": "3 + @actor.abilities.con.mod"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "flags.pf2e.ragingResistance",
+                "predicate": [
+                    "feat:unstoppable-juggernaut"
+                ],
+                "priority": 55,
+                "value": "8 + @actor.abilities.con.mod"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "barbarian"
+            ]
+        }
+    },
+    "type": "feat"
+}

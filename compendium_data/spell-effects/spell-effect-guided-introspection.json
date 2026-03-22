@@ -1,0 +1,52 @@
+{
+    "_id": "Me470HI6inX3Bovh",
+    "img": "systems/pf2e/icons/spells/chromatic-image.webp",
+    "name": "Spell Effect: Guided Introspection",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Guided Introspection]</p>\n<p>You gain a status bonus to saving throws against emotion and fear.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:emotion",
+                            "item:trait:fear"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "type": "status",
+                "value": "ternary(gte(@item.level,4),2,1)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

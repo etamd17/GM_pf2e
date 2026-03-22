@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PF2E Dashboard{% endblock %}</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', },
+                        amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' },
+                        red: { 300: '#FDA4AF', 400: '#FB7185', 500: '#F43F5E', 800: '#6B1525', 900: '#3D0A13', },
+                        green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
+                        blue: { 300: '#93C5FD', 400: '#60A5FA' },
+                        purple: { 300: '#C4B5FD', 400: '#A78BFA' }
+                    },
+                    fontFamily: {
+                        header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'], mono: ['ui-monospace', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        .font-header { font-family: 'Cinzel', serif; font-weight: 700; letter-spacing: 0.03em; }
+        .font-body { font-family: 'Crimson Text', Georgia, serif; }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,173,173,0.03) 0%,transparent 60%),#1C1917; }
+        .border, .border-t, .border-b, .border-l, .border-r, .border-2 { border-color: rgba(168, 156, 139, 0.18) !important; }
+        .shadow-xl { box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important; }
+        .shadow-md { box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3F3A33; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #524C42; }
+
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-animate { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        {% block extra_head %}{% endblock %}
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-body min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <nav class="border-b shadow-md shrink-0" style="background:#28241F;">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center">
+                    <span class="font-header text-amber-400 text-lg tracking-wide">PF2E Dashboard</span>
+                </div>
+                <div class="flex space-x-1">
+                    <a href="/" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Party</a>
+                    <a href="/tracker" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Tracker</a>
+                    <a href="/gmscreen" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">GM Screen</a>
+                    <a href="/vault" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Vault</a>
+                    <a href="/generator" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Generators</a>
+                    <a href="/encounter-builder" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Builder</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex-1 overflow-y-auto p-6 lg:p-10">
+        <div class="max-w-7xl mx-auto">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <div id="gm-toast-container" class="fixed top-20 right-6 z-[200] flex flex-col gap-3 pointer-events-none w-80"></div>
+
+    <div id="dice-widget" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+        <div id="dice-panel" class="hidden bg-gray-800 rounded-lg shadow-2xl mb-4 w-72 overflow-hidden flex flex-col transform transition-all origin-bottom-right border border-gray-700">
+            <div class="bg-gray-900 p-3 border-b flex justify-between items-center">
+                <span class="font-header text-amber-500 text-sm">GM Dice Roller</span>
+                <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            
+            <div class="p-4">
+                <div class="bg-gray-950 rounded border p-3 mb-4 text-center min-h-[85px] flex flex-col justify-center items-center shadow-inner">
+                    <div id="dice-total" class="text-4xl font-header text-amber-400 leading-none">--</div>
+                    <div id="dice-breakdown" class="text-xs text-gray-500 mt-2 font-mono">Roll the bones...</div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-2 mb-4">
+                    <button onclick="quickRoll(4)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border transition-colors">d4</button>
+                    <button onclick="quickRoll(6)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border transition-colors">d6</button>
+                    <button onclick="quickRoll(8)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border transition-colors">d8</button>
+                    <button onclick="quickRoll(10)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border transition-colors">d10</button>
+                    <button onclick="quickRoll(12)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border transition-colors">d12</button>
+                    <button onclick="quickRoll(20)" class="col-span-2 bg-amber-900/40 hover:bg-amber-800/60 text-amber-400 py-1.5 rounded font-bold text-sm border transition-colors">d20</button>
+                    <button onclick="quickRoll(100)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border transition-colors">d100</button>
+                </div>
+
+                <form id="custom-roll-form" class="flex gap-2" onsubmit="event.preventDefault(); customRoll();">
+                    <input type="text" id="custom-roll-input" placeholder="e.g. 2d6+4" class="bg-gray-950 border text-gray-200 rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:border-amber-500 text-center font-mono">
+                    <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-sm font-bold transition-colors shadow-md border-none">Roll</button>
+                </form>
+            </div>
+        </div>
+
+        <button onclick="toggleDicePanel()" class="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 rounded-full shadow-xl border-none flex items-center justify-center text-white transition-transform hover:scale-105 z-[100] ring-4 ring-gray-900">
+            <span class="font-header text-xl tracking-tighter">d20</span>
+        </button>
+    </div>
+
+    <script>
+        const dicePanel = document.getElementById('dice-panel');
+        const diceTotal = document.getElementById('dice-total');
+        const diceBreakdown = document.getElementById('dice-breakdown');
+        const customInput = document.getElementById('custom-roll-input');
+
+        function toggleDicePanel() {
+            dicePanel.classList.toggle('hidden');
+            if (!dicePanel.classList.contains('hidden')) customInput.focus();
+        }
+
+        function executeRoll(qty, sides, modifierStr, modifierVal) {
+            let rolls = [];
+            let sum = 0;
+            for (let i = 0; i < qty; i++) {
+                let roll = Math.floor(Math.random() * sides) + 1;
+                rolls.push(roll); sum += roll;
+            }
+            let breakdownText = `[${rolls.join(', ')}]`;
+            if (modifierStr && modifierVal) {
+                let mod = parseInt(modifierVal, 10);
+                if (modifierStr === '+') { sum += mod; breakdownText += ` + ${mod}`; } 
+                else if (modifierStr === '-') { sum -= mod; breakdownText += ` - ${mod}`; }
+            }
+            diceTotal.style.transform = 'scale(1.2)';
+            diceTotal.style.color = '#fff';
+            setTimeout(() => {
+                diceTotal.innerText = sum;
+                diceBreakdown.innerText = `${qty}d${sides}${modifierStr ? modifierStr + modifierVal : ''}: ${breakdownText}`;
+                diceTotal.style.transform = 'scale(1)';
+                diceTotal.style.color = '#7DD3FC'; 
+            }, 100);
+        }
+
+        function quickRoll(sides) { executeRoll(1, sides, null, null); }
+
+        function customRoll() {
+            const input = customInput.value.trim().toLowerCase();
+            if (!input) return;
+            const regex = /^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/;
+            const match = input.match(regex);
+            if (match) {
+                const qty = match[1] ? parseInt(match[1], 10) : 1;
+                const sides = parseInt(match[2], 10);
+                const modStr = match[3]; const modVal = match[4];
+                if (qty > 0 && sides > 0 && qty <= 100) executeRoll(qty, sides, modStr, modVal);
+                else { diceTotal.innerText = "ERR"; diceBreakdown.innerText = "Invalid dice."; }
+            } else {
+                diceTotal.innerText = "ERR"; diceBreakdown.innerText = "Use format: 1d20+4";
+            }
+            customInput.value = ''; 
+        }
+
+        // --- NEW: GM COMBAT LOG POLLING ---
+        // Only run the poller if we are on a GM screen (not /player)
+        if (!window.location.pathname.startsWith('/player')) {
+            let lastLogId = null;
+
+            function showToast(log) {
+                const container = document.getElementById('gm-toast-container');
+                const toast = document.createElement('div');
+                toast.className = 'bg-gray-800 border border-amber-500/50 rounded-lg shadow-2xl p-4 toast-animate relative overflow-hidden pointer-events-auto';
+                
+                let accentColor = log.result.includes('CRIT') ? 'bg-amber-500' : 'bg-gray-600';
+                
+                toast.innerHTML = `
+                    <div class="absolute left-0 top-0 bottom-0 w-1 ${accentColor}"></div>
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">${log.name}</span>
+                        <span class="text-xs text-gray-500">Just Now</span>
+                    </div>
+                    <div class="text-gray-200 text-sm font-semibold mb-1">Rolled: ${log.action}</div>
+                    <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700">${log.detail}</div>
+                `;
+                
+                container.prepend(toast);
+                
+                // Remove toast after 8 seconds
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    toast.style.transition = 'all 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, 8000);
+            }
+
+            async function pollCombatLogs() {
+                try {
+                    const url = lastLogId ? `/api/get_logs?last_id=${lastLogId}` : '/api/get_logs';
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    if (data.logs && data.logs.length > 0) {
+                        // If it's the very first load, we just sync the ID but don't spam 5 old popups
+                        if (lastLogId !== null) {
+                            data.logs.forEach(log => showToast(log));
+                        }
+                        lastLogId = data.logs[data.logs.length - 1].id;
+                    }
+                } catch (e) {
+                    console.error("Error polling logs:", e);
+                }
+            }
+
+            // Poll every 2 seconds
+            setInterval(pollCombatLogs, 2000);
+            pollCombatLogs(); // Initial sync
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+{
+    "_id": "0Cyf07wboRp4CmcQ",
+    "img": "systems/pf2e/icons/spells/dinosaur-form.webp",
+    "name": "Spell Effect: Dinosaur Form (Ankylosaurus)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Dinosaur Form]</p>\n<p>You transform into a Large animal battle form, specifically that of a powerful and terrifying dinosaur. While in this form, you gain the animal and dinosaur traits. You gain the following statistics and abilities regardless of which battle form you choose:</p><ul><li>AC = 18 + your level. Ignore your armor's check penalty and Speed reduction.</li><li>15 temporary Hit Points.</li><li>Low-light vision and imprecise scent 30 feet.</li><li>One or more unarmed melee attacks specific to the battle form you choose, which are the only attacks you can Strike with. You're trained with them. Your attack modifier is +16, and your damage bonus is +9. These attacks are Strength based (for the purpose of the @UUID[Compendium.pf2e.conditionitems.Item.Enfeebled] condition, for example). If your unarmed attack modifier is higher, you can use it instead.</li><li>Athletics modifier of +18, unless your own modifier is higher.</li></ul><p>You also gain specific abilities based on the form you choose:</p><ul><li><p><strong>Ankylosaurus</strong></p><ul><li>Speed 25 feet;</li><li><strong>Melee</strong> <span class=\"action-glyph\">1</span> tail (backswing, reach 10 feet), Damage 2d6 bludgeoning;</li><li><strong>Melee</strong> <span class=\"action-glyph\">1</span> foot, Damage 2d6 bludgeoning.</li></ul></li></ul><hr /><p><strong>Heightened (5th)</strong> Your battle form is Huge and your attacks have 15-foot reach, or 20-foot reach if they started with 15-foot reach. You instead gain 20 temporary HP, an attack modifier of +18, a damage bonus of +6, double the damage dice, and Athletics +21.</p>\n<p><strong>Heightened (7th)</strong> Your battle form is Gargantuan and your attacks have 20-foot reach, or 25-foot reach if they started with 15-foot reach. You instead gain AC = 21 + your level, 25 temporary HP, an attack modifier of +25, a damage bonus of +15, double the damage dice, and Athletics +25.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "brackets": [
+                    {
+                        "start": 4,
+                        "value": {
+                            "size": "lg",
+                            "skills": {
+                                "athletics": {
+                                    "modifier": 18
+                                }
+                            },
+                            "strikes": {
+                                "foot": {
+                                    "damage": {
+                                        "modifier": 9
+                                    },
+                                    "modifier": 16
+                                },
+                                "tail": {
+                                    "damage": {
+                                        "modifier": 9
+                                    },
+                                    "modifier": 16
+                                }
+                            },
+                            "tempHP": 15
+                        }
+                    },
+                    {
+                        "start": 5,
+                        "value": {
+                            "size": "huge",
+                            "skills": {
+                                "athletics": {
+                                    "modifier": 21
+                                }
+                            },
+                            "strikes": {
+                                "foot": {
+                                    "damage": {
+                                        "dice": 4,
+                                        "modifier": 6
+                                    },
+                                    "modifier": 18,
+                                    "traits": [
+                                        "unarmed",
+                                        "reach-15"
+                                    ]
+                                },
+                                "tail": {
+                                    "damage": {
+                                        "dice": 4,
+                                        "modifier": 6
+                                    },
+                                    "modifier": 18,
+                                    "traits": [
+                                        "unarmed",
+                                        "backswing",
+                                        "reach-15"
+                                    ]
+                                }
+                            },
+                            "tempHP": 20
+                        }
+                    },
+                    {
+                        "start": 7,
+                        "value": {
+                            "armorClass": {
+                                "modifier": "21 + @actor.level"
+                            },
+                            "size": "grg",
+                            "skills": {
+                                "athletics": {
+                                    "modifier": 25
+                                }
+                            },
+                            "strikes": {
+                                "foot": {
+                                    "damage": {
+                                        "dice": 4,
+                                        "modifier": 15
+                                    },
+                                    "modifier": 25,
+                                    "traits": [
+                                        "unarmed",
+                                        "reach-20"
+                                    ]
+                                },
+                                "tail": {
+                                    "damage": {
+                                        "dice": 4,
+                                        "modifier": 15
+                                    },
+                                    "modifier": 25,
+                                    "traits": [
+                                        "unarmed",
+                                        "backswing",
+                                        "reach-20"
+                                    ]
+                                }
+                            },
+                            "tempHP": 25
+                        }
+                    }
+                ],
+                "key": "BattleForm",
+                "overrides": {
+                    "armorClass": {
+                        "modifier": "18 + @actor.level"
+                    },
+                    "senses": {
+                        "low-light-vision": {},
+                        "scent": {
+                            "acuity": "imprecise",
+                            "range": 30
+                        }
+                    },
+                    "speeds": {
+                        "land": 25
+                    },
+                    "strikes": {
+                        "foot": {
+                            "ability": "str",
+                            "category": "unarmed",
+                            "damage": {
+                                "damageType": "bludgeoning",
+                                "dice": 2,
+                                "die": "d6"
+                            },
+                            "img": "icons/commodities/biological/foot-black-grey.webp",
+                            "traits": [
+                                "unarmed"
+                            ]
+                        },
+                        "tail": {
+                            "ability": "str",
+                            "category": "unarmed",
+                            "damage": {
+                                "damageType": "bludgeoning",
+                                "dice": 2,
+                                "die": "d6"
+                            },
+                            "img": "icons/creatures/abilities/tail-swipe-green.webp",
+                            "traits": [
+                                "unarmed",
+                                "backswing",
+                                "reach"
+                            ]
+                        }
+                    },
+                    "traits": [
+                        "animal",
+                        "dinosaur"
+                    ]
+                }
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

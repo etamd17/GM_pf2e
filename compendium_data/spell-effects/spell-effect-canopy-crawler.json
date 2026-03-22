@@ -1,0 +1,42 @@
+{
+    "_id": "mojpoFI7eni1RaRB",
+    "img": "icons/environment/wilderness/tree-ash.webp",
+    "name": "Spell Effect: Canopy Crawler",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Canopy Crawler]</p>\n<p>You gain a climb Speed equal to your highest Speed.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Howl of the Wild"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "climb",
+                "value": "@actor.system.movement.speeds.land.value"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

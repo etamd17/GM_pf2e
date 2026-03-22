@@ -1,0 +1,59 @@
+{
+    "_id": "HTH445aey1x9RoeG",
+    "img": "icons/commodities/tech/electrode-copper.webp",
+    "name": "Shockguard Coil",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "category": "talisman",
+        "containerId": null,
+        "damage": null,
+        "description": {
+            "value": "<p><strong>Usage</strong> affixed to a shield</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">F</span> (concentrate)</p>\n<p><strong>Trigger</strong> You Shield Block a foe's melee attack with the affixed shield.</p><hr /><p>This miniature Stasian coil talisman emits small sparks when jostled. It uses a combination of Stasian technology and battle magic to erupt in electricity when discharged. When you activate the coil, the foe takes @Damage[2d12[electricity]] damage (@Check[reflex|dc:27|basic] save). On a failed save, the foe is @UUID[Compendium.pf2e.conditionitems.Item.Off-Guard] until the start of its next turn.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 10
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 175
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "rare",
+            "value": [
+                "consumable",
+                "magical",
+                "talisman"
+            ]
+        },
+        "usage": {
+            "value": "affixed-to-a-shield"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

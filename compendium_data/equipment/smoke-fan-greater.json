@@ -1,0 +1,58 @@
+{
+    "_id": "k1S8AdYhi5JGRLh1",
+    "img": "systems/pf2e/icons/equipment/held-items/smoke-fan.webp",
+    "name": "Smoke Fan (Greater)",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "category": "gadget",
+        "containerId": null,
+        "damage": null,
+        "description": {
+            "value": "<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (manipulate)</p><hr /><p>When you Activate a smoke fan, it creates a cloud of colored smoke. The smoke fills a 20-foot radius. The creator chooses the smoke's color when creating the smoke fan, or the creator can choose for the smoke to be a mixture of colors. Creatures within the smoke's area are @UUID[Compendium.pf2e.conditionitems.Item.Concealed], and all other creatures are concealed to them. The smoke lasts for 1 minute or until dissipated by a strong wind.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 8
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 75
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "consumable",
+                "gadget"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

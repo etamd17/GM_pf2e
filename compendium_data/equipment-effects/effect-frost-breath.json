@@ -1,0 +1,42 @@
+{
+    "_id": "r4nq5JzY8U1lXsAY",
+    "img": "icons/consumables/potions/potion-jar-corked-glowing-blue.webp",
+    "name": "Effect: Frost Breath",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Frost Breath]</p>\n<p>You gain resistance 5 to cold.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 7
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "key": "Resistance",
+                "type": "cold",
+                "value": 5
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

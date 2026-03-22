@@ -1,0 +1,2687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>{{ pc.name }} - Player Sheet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', },
+                        amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' },
+                        red: { 300: '#FDA4AF', 400: '#FB7185', 500: '#F43F5E', 800: '#6B1525', 900: '#3D0A13', },
+                        green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
+                        blue: { 300: '#93C5FD', 400: '#60A5FA', 900: '#1E2A4A' },
+                        purple: { 300: '#C4B5FD', 400: '#A78BFA' },
+                        copper: { 300: '#D4A574', 400: '#C4875C', 500: '#A86E42' }
+                    },
+                    fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'], mono: ['ui-monospace', 'monospace'], }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        .font-header { font-family: 'Cinzel', serif; font-weight: 700; letter-spacing: 0.03em; }
+        
+        /* HP Gauge */
+        .hp-gauge { position:relative; height:8px; border-radius:4px; background:#1E1C19; overflow:hidden; }
+        .hp-gauge-fill { height:100%; border-radius:4px; transition:width 0.4s ease, background 0.4s ease; }
+        .hp-gauge-fill.high { background:linear-gradient(90deg,#22C55E,#4ADE80); }
+        .hp-gauge-fill.mid { background:linear-gradient(90deg,#D97706,#FBBF24); }
+        .hp-gauge-fill.low { background:linear-gradient(90deg,#DC2626,#F87171); }
+        .hp-gauge-fill.dead { background:#7F1D1D; }
+        
+        /* Trait Pills */
+        .trait-pill { display:inline-block; font-family:'Cinzel',serif; font-size:8px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; padding:2px 6px; border-radius:3px; background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#A89C8B; margin-right:3px; margin-bottom:2px; }
+        .trait-pill.agile { background:rgba(74,222,128,0.08); border-color:rgba(74,222,128,0.2); color:#86EFAC; }
+        .trait-pill.finesse { background:rgba(96,165,250,0.08); border-color:rgba(96,165,250,0.2); color:#93C5FD; }
+        .trait-pill.deadly, .trait-pill.fatal { background:rgba(251,113,133,0.08); border-color:rgba(251,113,133,0.2); color:#FDA4AF; }
+        .trait-pill.magical, .trait-pill.arcane, .trait-pill.divine, .trait-pill.occult, .trait-pill.primal { background:rgba(167,139,250,0.08); border-color:rgba(167,139,250,0.2); color:#C4B5FD; }
+        .trait-pill.ranged, .trait-pill.thrown, .trait-pill.propulsive { background:rgba(251,191,36,0.08); border-color:rgba(251,191,36,0.2); color:#FDE68A; }
+        
+        /* Spell Rank Borders */
+        .spell-rank-0 { border-left:3px solid #6B7280; } /* cantrip - gray */
+        .spell-rank-1 { border-left:3px solid #60A5FA; } /* 1st - blue */
+        .spell-rank-2 { border-left:3px solid #4ADE80; } /* 2nd - green */
+        .spell-rank-3 { border-left:3px solid #FBBF24; } /* 3rd - amber */
+        .spell-rank-4 { border-left:3px solid #F97316; } /* 4th - orange */
+        .spell-rank-5 { border-left:3px solid #F43F5E; } /* 5th - rose */
+        .spell-rank-6 { border-left:3px solid #A855F7; } /* 6th - purple */
+        .spell-rank-7 { border-left:3px solid #6366F1; } /* 7th - indigo */
+        .spell-rank-8 { border-left:3px solid #EC4899; } /* 8th - pink */
+        .spell-rank-9 { border-left:3px solid #EF4444; } /* 9th - red */
+        .spell-rank-10 { border-left:3px solid #FFD700; } /* 10th - gold */
+        
+        /* Proficiency Badges: T=teal, E=blue, M=gold, L=red */
+        .prof-t { background:rgba(94,173,173,0.15); color:#5EADAD; border:1px solid rgba(94,173,173,0.3); }
+        .prof-e { background:rgba(96,165,250,0.15); color:#60A5FA; border:1px solid rgba(96,165,250,0.3); }
+        .prof-m { background:rgba(251,191,36,0.15); color:#FBBF24; border:1px solid rgba(251,191,36,0.3); }
+        .prof-l { background:rgba(239,68,68,0.15); color:#EF4444; border:1px solid rgba(239,68,68,0.3); }
+        
+        /* Focus Pips */
+        .focus-pip { display:inline-block; width:12px; height:12px; border-radius:50%; border:2px solid #5EADAD; margin:0 2px; vertical-align:middle; }
+        .focus-pip.filled { background:#5EADAD; box-shadow:0 0 6px rgba(94,173,173,0.4); }
+        .focus-pip.empty { background:transparent; }
+        
+        /* Condition Strip */
+        .cond-strip { max-height:0; overflow:hidden; transition:max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; opacity:0; padding:0; }
+        .cond-strip.active { max-height:120px; opacity:1; padding:8px 0; }
+        
+        /* Portrait */
+        .portrait-circle { width:56px; height:56px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid rgba(168,156,139,0.25); background:linear-gradient(135deg,#33302A,#252320); transition:border-color 0.3s; }
+        .portrait-circle:hover { border-color:rgba(94,173,173,0.5); }
+        .portrait-circle img { width:100%; height:100%; object-fit:cover; }
+        .portrait-badge { position:absolute; bottom:-2px; right:-2px; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; border:2px solid #1C1917; }
+        .font-body { font-family: 'Crimson Text', Georgia, serif; }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,173,173,0.03) 0%,transparent 60%),#1C1917; }
+        .border, .border-t, .border-b, .border-l, .border-r { border-color: rgba(168, 156, 139, 0.2) !important; }
+        .shadow-xl { box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3228; border-radius: 10px; }
+        select { background-image: none; }
+        .tab-content { display: none; animation: fadeIn 0.25s ease-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .tab-btn { background: transparent; color: #7A7062; border: 1px solid transparent; border-bottom: none; }
+        .tab-btn.active { background: #2E2B25; color: #7DC4C4; border-color: rgba(168,156,139,0.2); border-bottom: 1px solid #2E2B25; position: relative; z-index: 2; }
+        .tab-btn:not(.active):hover { color: #CFC5B4; }
+        
+        .sheet-page { 
+            background: #2E2B25; 
+            border: 1px solid rgba(168,156,139,0.2); 
+            border-radius: 0 0.75rem 0.75rem 0.75rem; 
+            padding: 1.5rem; 
+            margin-top: -1px;
+            position: relative;
+        }
+        /* Inner section panels - visible layering */
+        .sheet-page .bg-gray-800 { background: #38342D !important; border-color: rgba(168,156,139,0.15) !important; }
+        .sheet-page .bg-gray-900 { background: #252320 !important; }
+        .sheet-page .bg-gray-950 { background: #1E1C19 !important; }
+        
+        .prof-U { color: #8A7D6E; } 
+        .prof-T { color: #5CE6A0; font-weight: bold; } 
+        .prof-E { color: #6CB4FF; font-weight: bold; text-shadow: 0 0 4px rgba(108,180,255,0.3); } 
+        .prof-M { color: #B8A0FF; font-weight: bold; text-shadow: 0 0 4px rgba(184,160,255,0.3); } 
+        .prof-L { color: #80D4D4; font-weight: bold; text-shadow: 0 0 4px rgba(128,212,212,0.4); } 
+        
+        .prep-slot { min-height: 40px; border: 1px dashed rgba(168,156,139,0.3); display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; transition: all 0.2s; cursor: pointer; }
+        .prep-slot:hover { border-color: #60A5FA; background: rgba(30,42,74,0.2); }
+        .prep-slot.filled { border: 1px solid rgba(96,165,250,0.35); background: rgba(30,42,74,0.2); color: #93C5FD; font-weight: bold; justify-content: space-between; padding: 0 0.5rem; }
+        .prep-slot.expended { opacity: 0.45; border-style: solid; border-color: rgba(168,156,139,0.1); background: rgba(28,25,23,0.5); }
+        .bulk-bar { height: 8px; background: #1E1914; border-radius: 4px; overflow: hidden; position: relative; }
+        .bulk-fill { height: 100%; transition: width 0.3s ease; }
+        
+        @keyframes rollSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes rollPop { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .roll-toast { animation: rollSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .roll-total-pop { animation: rollPop 0.3s ease; }
+        
+        .foundry-content p { margin-bottom: 0.5rem; }
+        .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; }
+        .tooltip-popup { font-family: 'Crimson Text', serif; }
+        
+        .penalty-tag { font-size: 9px; color: #FB7185; margin-left: 4px; font-family: 'Cinzel', serif; }
+        .pin-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0; }
+        .pin-btn { font-family: 'Cinzel', serif; font-size: 11px; padding: 5px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 1px solid rgba(94,173,173,0.2); background: rgba(94,173,173,0.06); color: #7DC4C4; font-weight: 600; letter-spacing: 0.04em; }
+        .pin-btn:hover { background: rgba(94,173,173,0.15); border-color: rgba(94,173,173,0.4); transform: translateY(-1px); }
+        
+        .portrait-circle { width: 48px; height: 48px; border-radius: 50%; border: 2px solid rgba(94,173,173,0.3); overflow: hidden; cursor: pointer; transition: border-color 0.2s; background: #28241F; display: flex; align-items: center; justify-content: center; }
+        .portrait-circle:hover { border-color: rgba(94,173,173,0.6); }
+        .portrait-circle img { width: 100%; height: 100%; object-fit: cover; }
+        
+        @media print {
+            body { background: white !important; color: #222 !important; font-size: 11pt; }
+            body::before { display: none; }
+            .no-print, #dice-widget, #roll-toast-container, #equip-modal, [onclick] { display: none !important; }
+            .sheet-page { background: white !important; border: 1px solid #ccc !important; padding: 12pt !important; }
+            .sheet-page .bg-gray-800, .sheet-page .bg-gray-900, .sheet-page .bg-gray-950 { background: #f5f5f0 !important; border-color: #ddd !important; }
+            .font-header { color: #333 !important; }
+            .tab-content { display: block !important; page-break-inside: avoid; margin-bottom: 20pt; }
+            .tab-content::before { content: attr(data-print-title); display: block; font-family: 'Cinzel', serif; font-size: 14pt; font-weight: 700; margin-bottom: 8pt; border-bottom: 2px solid #333; padding-bottom: 4pt; }
+            .tab-btn { display: none !important; }
+            * { color: #333 !important; border-color: #ccc !important; text-shadow: none !important; box-shadow: none !important; }
+            a { text-decoration: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-body min-h-screen flex flex-col">
+
+    {% set stat_color = 'text-red-400' if pc.status_penalty > 0 else 'text-white' %}
+    {% set accent_color = 'text-red-400' if pc.status_penalty > 0 else 'text-amber-400' %}
+    {% set blue_accent = 'text-red-400' if pc.status_penalty > 0 else 'text-blue-400' %}
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- CHARACTER HEADER — Always visible, like top of a real sheet   -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="w-full" style="background:linear-gradient(180deg, #28241F 0%, #1C1917 100%); border-bottom:1px solid rgba(168,156,139,0.18);">
+        
+        <!-- Top Bar: Name + Actions -->
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="/player" class="text-gray-500 hover:text-amber-300 transition-colors text-sm">←</a>
+                <!-- Portrait -->
+                <div class="portrait-circle" onclick="document.getElementById('portrait-upload').click()" title="Click to upload portrait">
+                    {% if pc.portrait %}
+                    <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
+                    {% else %}
+                    <span class="font-header text-xl text-amber-300">{{ pc.name[0] }}</span>
+                    {% endif %}
+                    <input type="file" id="portrait-upload" class="hidden" accept="image/*" onchange="uploadPortrait(this)">
+                    <div class="portrait-badge" style="background:#33302A;">
+                        {% if pc.class_name == 'Fighter' %}⚔{% elif pc.class_name == 'Cleric' %}✝{% elif pc.class_name == 'Wizard' %}🔮{% elif pc.class_name == 'Rogue' %}🗡{% elif pc.class_name == 'Druid' %}🌿{% elif pc.class_name == 'Champion' %}🛡{% elif pc.class_name == 'Monk' %}👊{% elif pc.class_name == 'Barbarian' %}🪓{% elif pc.class_name == 'Bard' %}🎵{% elif pc.class_name == 'Ranger' %}🏹{% elif pc.class_name == 'Sorcerer' %}✨{% elif pc.class_name == 'Kineticist' %}🔥{% elif pc.class_name == 'Oracle' %}👁{% elif pc.class_name == 'Witch' %}🌙{% elif pc.class_name == 'Magus' %}⚡{% else %}📜{% endif %}
+                    </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h1 class="font-header text-2xl md:text-3xl text-amber-300 leading-none tracking-wide" style="text-shadow:0 1px 12px rgba(94,173,173,0.12);">{{ pc.name }}</h1>
+                    <p class="text-gray-500 text-xs tracking-wider mt-0.5">Level {{ pc.level }} {{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} · {{ pc.subclass }}{% endif %} · {{ pc.size }}</p>
+                    <p class="text-[10px] mt-0.5" style="color:#524C42;">
+                        {% if pc.deity != 'None' and pc.deity != 'Not set' %}<span style="color:#7A7062;">{{ pc.deity }}</span> · {% endif %}
+                        {% if pc.senses %}<span style="color:#5EADAD;">{{ pc.senses|join(', ') }}</span> · {% endif %}
+                        <span>{{ pc.languages|join(', ') }}</span>
+                    </p>
+                </div>
+                {% if pc.status_penalty > 0 %}<span class="font-header text-[8px] tracking-wider uppercase px-2 py-0.5 rounded bg-red-900/30 border border-red-800/30 text-red-300">Debuffed</span>{% endif %}
+                {% if pc.active_toggles %}<span class="font-header text-[8px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.12); border:1px solid rgba(94,173,173,0.25); color:#7DC4C4;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
+            </div>
+            <div class="flex gap-2">
+                <button onclick="takeLongRest()" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-blue-900/20 border border-blue-800/25 text-blue-300 hover:bg-blue-900/30 transition-colors">⛺ Rest</button>
+                {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-red-900/20 border border-red-800/25 text-red-300 hover:bg-red-900/30 transition-colors">⏬ Undo</button>{% endif %}
+                <a href="/player/levelup/{{ pc.name|urlencode }}" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:linear-gradient(135deg,#2C5C5C,#1E4040); border:1px solid rgba(94,173,173,0.25); color:#A8DEDE;">⭐ Level Up</a>
+                <button onclick="window.print()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors">🖨 Print</button>
+                <button onclick="exportToVault()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors" title="Save character snapshot to Obsidian vault">📓 Vault</button>
+            </div>
+        </div>
+        
+        <!-- Ability Scores Strip -->
+        <div class="max-w-6xl mx-auto px-4 md:px-6 pb-3 flex flex-wrap items-end gap-3 md:gap-0 justify-between">
+            
+            <!-- Ability Circles -->
+            <div class="flex gap-2 md:gap-3">
+                {% for stat in pc.ability_display %}
+                <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')" 
+                     class="flex flex-col items-center cursor-pointer group" title="Click to roll {{ stat.label }} check">
+                    <div class="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold font-header transition-all group-hover:scale-110 group-hover:shadow-lg relative"
+                         style="background:linear-gradient(135deg, #33302A, #252320); border:2px solid rgba(168,156,139,0.25); color:#F5F0E8; text-shadow:0 1px 4px rgba(0,0,0,0.5);">
+                        <span class="group-hover:text-amber-300 transition-colors">{{ stat.mod|safe }}</span>
+                    </div>
+                    <span class="font-header text-[9px] text-gray-500 mt-1 tracking-widest group-hover:text-amber-400 transition-colors">{{ stat.label }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Defenses Quick Strip -->
+            <div class="flex gap-3 items-end">
+                {% set perc_val = pc.proficiencies.get('perception', 2) %}
+                <div onclick="rollSkill('Perception', {{ pc.perception }})" class="flex flex-col items-center cursor-pointer group" title="Roll Perception">
+                    <div class="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header group-hover:scale-110 transition-all" style="background:#33302A; border:1px solid rgba(168,156,139,0.22); color:#F5F0E8;">
+                        +{{ pc.perception }}
+                    </div>
+                    <span class="font-header text-[8px] text-gray-500 mt-1 tracking-widest">PER</span>
+                </div>
+                
+                <div class="flex flex-col items-center" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
+                    <div class="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header" style="background:linear-gradient(135deg,#1E2A4A,#162040); border:1px solid rgba(96,165,250,0.25); color:#93C5FD;">
+                        {{ pc.ac }}
+                    </div>
+                    <span class="font-header text-[8px] text-blue-400/60 mt-1 tracking-widest">AC</span>
+                </div>
+                <button onclick="toggleShield()" class="no-print flex flex-col items-center cursor-pointer group" title="Raise Shield (◆) — +{{ pc.shield_ac_bonus }} circumstance AC">
+                    <div class="w-7 h-7 rounded flex items-center justify-center text-sm transition-all group-hover:scale-110" style="{% if pc.shield_raised %}background:rgba(96,165,250,0.2); border:1px solid rgba(96,165,250,0.4); color:#93C5FD;{% else %}background:#252320; border:1px solid rgba(168,156,139,0.15); color:#524C42;{% endif %}">
+                        🛡
+                    </div>
+                    <span class="font-header text-[6px] mt-0.5 tracking-widest {% if pc.shield_raised %}text-blue-400{% else %}text-gray-600{% endif %}">SHIELD</span>
+                </button>
+                
+                <div onclick="rollSkill('Fortitude Save', {{ pc.fort }})" class="flex flex-col items-center cursor-pointer group" title="Roll Fort Save">
+                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(20,83,45,0.25); border:1px solid rgba(74,222,128,0.2); color:#86EFAC;">
+                        +{{ pc.fort }}
+                    </div>
+                    <span class="font-header text-[7px] text-green-400/50 mt-0.5 tracking-widest">FORT</span>
+                </div>
+                <div onclick="rollSkill('Reflex Save', {{ pc.ref }})" class="flex flex-col items-center cursor-pointer group" title="Roll Ref Save">
+                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(30,42,74,0.25); border:1px solid rgba(147,197,253,0.2); color:#93C5FD;">
+                        +{{ pc.ref }}
+                    </div>
+                    <span class="font-header text-[7px] text-blue-400/50 mt-0.5 tracking-widest">REF</span>
+                </div>
+                <div onclick="rollSkill('Will Save', {{ pc.will }})" class="flex flex-col items-center cursor-pointer group" title="Roll Will Save">
+                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(76,29,149,0.2); border:1px solid rgba(196,181,253,0.2); color:#C4B5FD;">
+                        +{{ pc.will }}
+                    </div>
+                    <span class="font-header text-[7px] text-purple-400/50 mt-0.5 tracking-widest">WILL</span>
+                </div>
+            </div>
+            
+            <!-- HP / Resources -->
+            <div class="flex items-end gap-4">
+                {% if pc.focus_max > 0 %}
+                <div class="flex flex-col items-center">
+                    <span class="font-header text-[8px] text-blue-400/60 tracking-widest mb-1">FOCUS</span>
+                    <div class="flex items-center gap-1">
+                        <button onclick="modifyFocus('decrease')" class="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs font-bold transition-colors">−</button>
+                        <span id="header-focus-pips">
+                            {% for i in range(pc.focus_max) %}
+                            <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
+                            {% endfor %}
+                        </span>
+                        <button onclick="modifyFocus('increase')" class="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs font-bold transition-colors">+</button>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="flex flex-col items-center">
+                    <span class="font-header text-[8px] text-amber-400/60 tracking-widest mb-1">HERO</span>
+                    <div class="flex items-center gap-1">
+                        <button onclick="modifyHero('decrease')" class="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs font-bold transition-colors">−</button>
+                        <span id="current-hero" class="text-lg font-bold text-white font-header w-6 text-center">{{ pc.hero_points }}</span>
+                        <button onclick="modifyHero('increase')" class="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs font-bold transition-colors">+</button>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center">
+                    <span class="font-header text-[8px] text-gray-500 tracking-widest mb-1">HIT POINTS</span>
+                    <div class="flex items-center gap-1" title="{{ pc.hp_breakdown }}">
+                        <button onclick="modifyHP('damage', 5)" class="w-7 h-8 rounded text-xs font-bold transition-colors" style="background:rgba(107,21,37,0.25); border:1px solid rgba(251,113,133,0.15); color:#FDA4AF;">-5</button>
+                        <button onclick="modifyHP('damage', 1)" class="w-6 h-8 rounded text-xs font-bold transition-colors" style="background:rgba(107,21,37,0.2); border:1px solid rgba(251,113,133,0.1); color:#FDA4AF;">-1</button>
+                        <div class="text-center mx-1" style="min-width:80px;">
+                            <span id="current-hp" class="text-2xl font-bold leading-none font-header {% if pc.current_hp == 0 %}text-red-500{% elif pc.current_hp < pc.hp * 0.5 %}text-amber-400{% else %}text-green-400{% endif %}" style="transition:transform 0.2s">{{ pc.current_hp }}</span>
+                            <span class="text-gray-600 text-xs">/ {{ pc.hp }}</span>
+                            {% if pc.temp_hp > 0 %}<span class="text-xs font-header ml-1" style="color:#7DC4C4;">+{{ pc.temp_hp }}</span>{% endif %}
+                            {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+                            <div class="hp-gauge mt-1">
+                                <div class="hp-gauge-fill {% if pc.current_hp == 0 %}dead{% elif hp_pct <= 25 %}low{% elif hp_pct <= 50 %}mid{% else %}high{% endif %}" style="width:{{ hp_pct|int }}%"></div>
+                            </div>
+                        </div>
+                        <button onclick="modifyHP('heal', 1)" class="w-6 h-8 rounded text-xs font-bold transition-colors" style="background:rgba(20,83,45,0.2); border:1px solid rgba(74,222,128,0.1); color:#86EFAC;">+1</button>
+                        <button onclick="modifyHP('heal', 5)" class="w-7 h-8 rounded text-xs font-bold transition-colors" style="background:rgba(20,83,45,0.25); border:1px solid rgba(74,222,128,0.15); color:#86EFAC;">+5</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    {% if pc.status_penalty > 0 %}
+    <div class="w-full no-print" style="background:rgba(251,113,133,0.06); border-bottom:1px solid rgba(251,113,133,0.15);">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-3">
+            <span class="text-red-400 text-sm">⚠</span>
+            <span class="text-red-300 text-xs font-header tracking-wider">
+                Status Penalty −{{ pc.status_penalty }} active
+                ({% if pc.conditions.get('frightened', 0) > 0 %}Frightened {{ pc.conditions.frightened }}{% endif %}{% if pc.conditions.get('sickened', 0) > 0 %}{% if pc.conditions.get('frightened', 0) > 0 %}, {% endif %}Sickened {{ pc.conditions.sickened }}{% endif %})
+                — applies to all checks, DCs, saves, and attacks
+            </span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SHEET BODY — Parchment panels with tabs                       -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 py-5 pb-20">
+        
+        <!-- Pinned Rolls Quick Bar -->
+        <div class="no-print mb-3" id="pinned-bar">
+            <div class="flex items-center gap-2">
+                <span class="font-header text-[9px] text-gray-500 tracking-widest uppercase shrink-0">Quick Rolls</span>
+                <div class="pin-bar flex-1" id="pinned-rolls"></div>
+                <input type="text" id="custom-dice" placeholder="2d6+4" class="w-20 rounded px-2 py-1 text-xs font-mono text-center focus:outline-none" style="background:#252320; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+                <button onclick="rollCustomDice()" class="font-header text-[9px] tracking-wider uppercase px-2 py-1 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">🎲 Roll</button>
+                <button onclick="rollInitiativeFromSheet()" class="font-header text-[9px] tracking-wider uppercase px-2 py-1 rounded transition-colors" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.2); color:#C4B5FD;">⚔ Init</button>
+                <button onclick="togglePinMode()" id="btn-pin-mode" class="text-[9px] text-gray-600 hover:text-amber-300 transition-colors font-header tracking-wider uppercase px-2 py-1 rounded border border-gray-800" title="Click skills/saves to pin them">📌 Edit</button>
+            </div>
+        </div>
+        
+        <!-- Condition Strip — auto-shows when any condition is active -->
+        {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
+        <div class="no-print cond-strip {% if has_any_condition %}active{% endif %}" id="condition-strip" style="border-bottom:1px solid rgba(251,113,133,0.1);">
+            <div class="max-w-6xl mx-auto px-4 md:px-6 flex flex-wrap gap-1 items-center">
+                <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#7A7062;">Active Conditions</span>
+                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'wounded', 'doomed', 'dying'] %}
+                {% set cval = pc.conditions.get(cond, 0) %}
+                {% if cval > 0 %}
+                <div class="flex items-center gap-0.5 rounded px-2 py-1" data-cond-name="{{ cond }}" 
+                     style="background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);">
+                    <button onclick="adjustCondition('{{ cond }}', -1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#FDA4AF;">−</button>
+                    <span class="font-header text-[9px] tracking-wide text-red-300 px-1">{{ cond|upper }} {{ cval }}</span>
+                    <button onclick="adjustCondition('{{ cond }}', 1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#FDA4AF;">+</button>
+                </div>
+                {% endif %}
+                {% endfor %}
+                {% for cond in ['prone', 'off_guard'] %}
+                {% set cval = pc.conditions.get(cond, false) %}
+                {% if cval %}
+                <button onclick="toggleBoolCondition('{{ cond }}')" class="font-header text-[9px] tracking-wide px-2 py-1 rounded" 
+                        style="background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">
+                    {{ cond|replace('_','-')|upper }} ✕
+                </button>
+                {% endif %}
+                {% endfor %}
+                <button onclick="openConditionAdder()" class="font-header text-[8px] tracking-wider uppercase px-2 py-1 rounded ml-auto transition-colors" style="border:1px solid rgba(168,156,139,0.1); color:#524C42;" title="Add/manage conditions">+ Condition</button>
+            </div>
+        </div>
+        
+        <!-- Hidden condition controls (shown via + Condition button) -->
+        <div id="cond-adder" class="hidden no-print" style="background:rgba(30,28,25,0.95); border-bottom:1px solid rgba(168,156,139,0.1);">
+            <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap gap-1 items-center">
+                <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#7A7062;">Manage</span>
+                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'wounded', 'doomed'] %}
+                {% set cval = pc.conditions.get(cond, 0) %}
+                <div class="flex items-center gap-0.5 rounded px-1.5 py-0.5" style="{% if cval > 0 %}background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);{% else %}border:1px solid rgba(168,156,139,0.08);{% endif %}">
+                    <button onclick="adjustCondition('{{ cond }}', -1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#7A7062;">−</button>
+                    <span class="font-header text-[9px] tracking-wide w-14 text-center" style="{% if cval > 0 %}color:#FDA4AF;{% else %}color:#3F3A33;{% endif %}">{{ cond[:4]|upper }} {{ cval }}</span>
+                    <button onclick="adjustCondition('{{ cond }}', 1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#7A7062;">+</button>
+                </div>
+                {% endfor %}
+                {% for cond in ['prone', 'off_guard'] %}
+                {% set cval = pc.conditions.get(cond, false) %}
+                <button onclick="toggleBoolCondition('{{ cond }}')" class="font-header text-[9px] tracking-wide px-2 py-0.5 rounded transition-colors" 
+                        style="{% if cval %}background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;{% else %}color:#3F3A33; border:1px solid rgba(168,156,139,0.08);{% endif %}">
+                    {{ cond|replace('_','-')|upper }}
+                </button>
+                {% endfor %}
+                <button onclick="document.getElementById('cond-adder').classList.add('hidden')" class="ml-auto text-[9px]" style="color:#524C42;">Close</button>
+            </div>
+        </div>
+        
+        <!-- Tab Bar -->
+        <div class="flex gap-1 mb-4">
+            <button onclick="switchTab('core')" class="tab-btn active px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-core">Core & Skills</button>
+            <button onclick="switchTab('combat')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-combat">Combat</button>
+            <button onclick="switchTab('magic')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-magic">Magic</button>
+            <button onclick="switchTab('feats')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-feats">Feats</button>
+            <button onclick="switchTab('inventory')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-inventory">Inventory</button>
+            <button onclick="switchTab('pets')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-pets">Pets</button>
+        </div>
+
+        <div id="tab-core" data-print-title="Core &amp; Skills" class="tab-content sheet-page active space-y-6">
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div class="xl:col-span-1 space-y-6">
+                    <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Character Details</h3>
+                        <div class="space-y-2">
+                            <!-- DCs Row -->
+                            <div class="grid grid-cols-{% if pc.spell_dc > 0 %}3{% else %}1{% endif %} gap-2">
+                                <div class="bg-gray-900 px-2 py-2 rounded border border-gray-700 text-center">
+                                    <span class="text-[8px] font-header tracking-widest uppercase block" style="color:#524C42;">Class DC</span>
+                                    <span class="text-lg font-bold" style="color:#EDE5D8;">{{ pc.class_dc }}</span>
+                                </div>
+                                {% if pc.spell_dc > 0 %}
+                                <div class="bg-gray-900 px-2 py-2 rounded border border-gray-700 text-center" style="border-color:rgba(167,139,250,0.15);">
+                                    <span class="text-[8px] font-header tracking-widest uppercase block" style="color:#7B6BA0;">Spell DC</span>
+                                    <span class="text-lg font-bold" style="color:#C4B5FD;">{{ pc.spell_dc }}</span>
+                                </div>
+                                <div class="bg-gray-900 px-2 py-2 rounded border border-gray-700 text-center" style="border-color:rgba(167,139,250,0.15);">
+                                    <span class="text-[8px] font-header tracking-widest uppercase block" style="color:#7B6BA0;">Spell Atk</span>
+                                    <span class="text-lg font-bold" style="color:#C4B5FD;">+{{ pc.spell_attack }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded border border-gray-700">
+                                <span class="text-[10px] text-gray-500 uppercase font-bold">Speed</span>
+                                <span class="text-sm font-bold {% if pc.active_speed < pc.base_speed %}text-red-400{% else %}text-white{% endif %}" title="Base Speed: {{ pc.base_speed }}ft">{{ pc.active_speed }} ft</span>
+                            </div>
+                            {% if pc.deity != 'None' and pc.deity != 'Not set' %}
+                            <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded border border-gray-700">
+                                <span class="text-[10px] text-gray-500 uppercase font-bold">Deity</span>
+                                <span class="text-sm font-bold text-gray-200">{{ pc.deity }}{% if pc.sanctification != 'Neutral' %} <span class="text-[9px]" style="color:#7A7062;">({{ pc.sanctification }})</span>{% endif %}</span>
+                            </div>
+                            {% endif %}
+                            {% if pc.senses %}
+                            <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded border border-gray-700">
+                                <span class="text-[10px] uppercase font-bold" style="color:#5EADAD;">Senses</span>
+                                <span class="text-sm" style="color:#7DC4C4;">{{ pc.senses | join(', ') }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="bg-gray-900 px-3 py-2 rounded border border-gray-700">
+                                <span class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Languages</span>
+                                <span class="text-sm text-gray-300 leading-tight">{{ pc.languages | join(', ') }}</span>
+                            </div>
+                            
+                            {% set active_mods = [] %}
+                            {% for sel, type_dict in pc.rule_modifiers.items() %}
+                                {% for m_type, val_list in type_dict.items() %}
+                                    {% if val_list %}
+                                        {% set _ = active_mods.append(1) %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            {% if active_mods %}
+                            <div class="bg-green-900/20 border border-green-900/50 px-3 py-2 rounded flex justify-between items-center" title="Feats and Features automatically modifying stats.">
+                                <span class="text-[10px] text-green-500/80 uppercase font-bold tracking-widest">Rule Engine</span>
+                                <span class="text-xs font-bold text-green-400">{{ active_mods|length }} Active</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-2">
+                    <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5 h-full">
+                        <div class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Skills</h3>
+                            
+                            {% set perc_val = pc.proficiencies.get('perception', 2) %}
+                            {% set perc_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_val, 'U') %}
+                            
+                            <div class="flex items-center bg-gray-900 px-3 py-1 rounded border border-gray-700 shadow-inner group transition-colors">
+                                <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold mr-2 leading-none
+                                    {% if perc_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                    {% elif perc_let == 'T' %} prof-t
+                                    {% elif perc_let == 'E' %} prof-e
+                                    {% elif perc_let == 'M' %} prof-m
+                                    {% else %} prof-l {% endif %}">
+                                    {{ perc_let }}
+                                </span>
+                                <span class="text-[10px] text-gray-500 font-bold uppercase mr-2">Perception</span>
+                                <button onclick="rollSkill('Perception', {{ pc.perception }})" class="text-lg font-bold {{ accent_color }} hover:text-amber-300 transition-colors">+{{ pc.perception }}</button>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded border border-gray-700 mb-4 shadow-inner group transition-colors">
+                            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Initiative (Perception + Bonuses)</span>
+                            <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})" class="text-lg font-bold text-white group-hover:text-amber-300 transition-colors">+{{ pc.initiative_mod }}</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                            {% for skill in pc.skills %}
+                            <div class="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700/50 hover:bg-gray-700/80 transition-colors w-full group">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold
+                                        {% if skill.prof_letter == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                        {% elif skill.prof_letter == 'T' %} prof-t
+                                        {% elif skill.prof_letter == 'E' %} prof-e
+                                        {% elif skill.prof_letter == 'M' %} prof-m
+                                        {% else %} prof-l {% endif %}">
+                                        {{ skill.prof_letter }}
+                                    </span>
+                                    <div>
+                                        <span class="text-sm text-gray-200 block leading-tight group-hover:text-amber-400 transition-colors">{{ skill.name }}</span>
+                                        <span class="text-[9px] text-gray-500 uppercase">{{ skill.stat }}</span>
+                                    </div>
+                                </div>
+                                <button onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})" class="text-lg font-bold font-mono {{ stat_color }} group-hover:text-amber-400 transition-colors px-2">
+                                    {{ skill.total }}{% if skill.penalty %}<span class="penalty-tag">−{{ skill.penalty }}</span>{% endif %}
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-combat" data-print-title="Combat" class="tab-content sheet-page space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Defenses & Saves</h3>
+                        
+                        {% set ac_val = pc.proficiencies.get('ac', 2) %}
+                        {% set ac_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ac_val, 'U') %}
+                        
+                        <div class="flex flex-col bg-gray-900 p-3 rounded border border-gray-700 mb-4 shadow-inner relative">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold
+                                        {% if ac_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                        {% elif ac_let == 'T' %} prof-t
+                                        {% elif ac_let == 'E' %} prof-e
+                                        {% elif ac_let == 'M' %} prof-m
+                                        {% else %} prof-l {% endif %}">
+                                        {{ ac_let }}
+                                    </span>
+                                    <span class="text-sm font-bold text-gray-400">Armor Class</span>
+                                </div>
+                                <span class="text-3xl font-bold {{ blue_accent }}">{{ pc.ac }}</span>
+                            </div>
+                            
+                            <div class="mt-3 pt-3 border-t border-gray-800">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Equipped Armor</label>
+                                <button onclick="toggleArmorBrowser()" class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-sm text-amber-500 font-bold text-left hover:border-amber-500/50 transition-colors">
+                                    {{ pc.armor_name or 'Unarmored' }} (AC +{{ pc.ac_item|default(0) }})
+                                    <span class="text-gray-600 text-[10px] float-right mt-1">▼ Browse</span>
+                                </button>
+                                
+                                {% if pc.armor_name %}
+                                <div class="grid grid-cols-3 gap-2 mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                    <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Dex Cap</span><span class="text-white">+{{ pc.ac_dex_cap }}</span></div>
+                                    <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Str Req</span><span class="text-white">{{ pc.armor_str_req }}</span></div>
+                                    {% if pc.mods.get('str', 0) >= pc.armor_str_req %}
+                                        <div class="bg-green-900/20 p-2 rounded text-center border border-green-900/50"><span class="block text-green-500/70 mb-0.5">Penalties</span><span class="text-green-400">Erased</span></div>
+                                    {% else %}
+                                        <div class="bg-red-900/20 p-2 rounded text-center border border-red-900/50" title="Check / Speed Penalty"><span class="block text-red-500/70 mb-0.5">Chk/Spd</span><span class="text-red-400">{{ pc.active_armor_penalty }} / {{ pc.active_speed_penalty }}</span></div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% set f_val = pc.proficiencies.get('fortitude', 2) %}
+                        {% set f_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(f_val, 'U') %}
+                        {% set r_val = pc.proficiencies.get('reflex', 2) %}
+                        {% set r_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(r_val, 'U') %}
+                        {% set w_val = pc.proficiencies.get('will', 2) %}
+                        {% set w_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(w_val, 'U') %}
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
+                                <div class="flex justify-between w-full mb-1">
+                                    <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold leading-none
+                                        {% if f_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                        {% elif f_let == 'T' %} prof-t
+                                        {% elif f_let == 'E' %} prof-e
+                                        {% elif f_let == 'M' %} prof-m
+                                        {% else %} prof-l {% endif %}">
+                                        {{ f_let }}
+                                    </span>
+                                    <span class="text-[10px] text-gray-500 font-bold uppercase">Fort</span>
+                                </div>
+                                <button onclick="rollSkill('Fortitude Save', {{ pc.fort }})" class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full">+{{ pc.fort }}</button>
+                            </div>
+                            
+                            <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
+                                <div class="flex justify-between w-full mb-1">
+                                    <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold leading-none
+                                        {% if r_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                        {% elif r_let == 'T' %} prof-t
+                                        {% elif r_let == 'E' %} prof-e
+                                        {% elif r_let == 'M' %} prof-m
+                                        {% else %} prof-l {% endif %}">
+                                        {{ r_let }}
+                                    </span>
+                                    <span class="text-[10px] text-gray-500 font-bold uppercase">Ref</span>
+                                </div>
+                                <button onclick="rollSkill('Reflex Save', {{ pc.ref }})" class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full">+{{ pc.ref }}</button>
+                            </div>
+
+                            <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
+                                <div class="flex justify-between w-full mb-1">
+                                    <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold leading-none
+                                        {% if w_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                        {% elif w_let == 'T' %} prof-t
+                                        {% elif w_let == 'E' %} prof-e
+                                        {% elif w_let == 'M' %} prof-m
+                                        {% else %} prof-l {% endif %}">
+                                        {{ w_let }}
+                                    </span>
+                                    <span class="text-[10px] text-gray-500 font-bold uppercase">Will</span>
+                                </div>
+                                <button onclick="rollSkill('Will Save', {{ pc.will }})" class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full">+{{ pc.will }}</button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded border border-gray-700 mt-4 shadow-inner">
+                            <span class="text-[10px] text-gray-500 uppercase font-bold">Class DC</span>
+                            <span class="text-sm font-bold text-amber-500">{{ pc.class_dc }}</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 border-b border-gray-700 pb-2">Conditions Matrix</h3>
+                        
+                        {% set condition_tips = {
+                            'frightened': '−X to all checks, DCs, saves, and attack rolls',
+                            'sickened': '−X to all checks, DCs, saves, and attack rolls. Must retch (Fort DC) to reduce.',
+                            'enfeebled': '−X to Str-based attacks, damage, and Athletics checks',
+                            'clumsy': '−X to Dex-based checks, AC, and Reflex saves',
+                            'drained': '−X to Con-based checks and max HP reduced by X × level',
+                            'stupefied': '−X to Int/Wis/Cha-based checks and spell DCs. Flat check X to cast spells.'
+                        } %}
+                        
+                        <div class="grid grid-cols-2 gap-2 mb-4">
+                            {% for cond in ['Frightened', 'Sickened', 'Enfeebled', 'Clumsy', 'Drained', 'Stupefied'] %}
+                            {% set c_lower = cond|lower %}
+                            {% set c_val = pc.conditions.get(c_lower, 0) %}
+                            <div class="bg-gray-900 p-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
+                                    <div class="flex items-center gap-1">
+                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val - 1 }})" class="text-gray-500 hover:text-white px-1 font-bold">-</button>
+                                        <span class="text-xs font-bold {{ 'text-red-400' if c_val > 0 else 'text-gray-600' }}">{{ c_val }}</span>
+                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val + 1 }})" class="text-gray-500 hover:text-white px-1 font-bold">+</button>
+                                    </div>
+                                </div>
+                                {% if c_val > 0 %}
+                                <div class="text-[9px] text-red-300/70 mt-1 leading-tight">{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        {% set toggle_tips = {
+                            'prone': 'Off-Guard (−2 AC). Standing costs an action. −2 to attacks.',
+                            'off_guard': '−2 AC. Vulnerable to Sneak Attack and precision damage.',
+                            'concealed': 'Attackers must succeed at DC 5 flat check to target you.',
+                            'hidden': 'Must Seek to find. Attackers need DC 11 flat check even if they guess your space.'
+                        } %}
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            {% for cond in ['Prone', 'Off_Guard', 'Concealed', 'Hidden'] %}
+                            {% set c_lower = cond|lower %}
+                            {% set c_val = pc.conditions.get(c_lower, False) %}
+                            <div class="flex flex-col">
+                                <button onclick="updateCondition('{{ c_lower }}', {{ 'false' if c_val else 'true' }})" class="p-2 rounded-lg border flex justify-between items-center shadow-inner transition-colors {{ 'border-red-900/50 bg-red-900/20' if c_val else 'bg-gray-900 border-gray-700 hover:border-gray-500' }}" title="{{ toggle_tips.get(c_lower, '') }}">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val else 'text-gray-500' }}">{{ cond|replace('_', ' ') }}</span>
+                                    <span class="text-[10px] font-bold {{ 'text-red-400' if c_val else 'text-gray-700' }}">{% if c_val %}ON{% else %}OFF{% endif %}</span>
+                                </button>
+                                {% if c_val %}
+                                <div class="text-[9px] text-red-300/70 mt-1 px-1 leading-tight">{{ toggle_tips.get(c_lower, '') }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
+                        <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Strikes & Weapons</h3>
+                            <button onclick="openWeaponBrowser()" class="bg-gray-900 hover:bg-gray-700 text-amber-500 border border-gray-600 px-3 py-1 rounded text-xs font-bold transition-colors">
+                                + Equip Weapon
+                            </button>
+                        </div>
+                        
+                        <div id="forge-ui" class="hidden bg-gray-900 border border-amber-500/30 rounded p-4 mb-6">
+                            <h4 class="text-amber-400 font-bold mb-3">Weapon Forge</h4>
+                            <p class="text-xs text-gray-400 mb-3 italic">ABP is enabled. Matrix attack potency applies automatically.</p>
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <div class="col-span-2">
+                                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-1">Base Weapon / Spell</label>
+                                    <select id="forge-base" onchange="calcForge()" class="w-full bg-gray-950 border border-gray-700 text-white rounded p-2 text-sm focus:border-amber-500"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-1">Attack Stat</label>
+                                    <select id="forge-stat" onchange="calcForge()" class="w-full bg-gray-950 border border-gray-700 text-white rounded p-2 text-sm focus:border-amber-500">
+                                        <option value="str">Strength</option>
+                                        <option value="dex">Dexterity</option>
+                                        <option value="con">Constitution</option>
+                                        <option value="int">Intelligence</option>
+                                        <option value="wis">Wisdom</option>
+                                        <option value="cha">Charisma</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-1">Proficiency Rank</label>
+                                    <select id="forge-prof" onchange="calcForge()" class="w-full bg-gray-950 border border-gray-700 text-white rounded p-2 text-sm focus:border-amber-500">
+                                        <option value="0">Untrained</option>
+                                        <option value="2" selected>Trained</option>
+                                        <option value="4">Expert</option>
+                                        <option value="6">Master</option>
+                                        <option value="8">Legendary</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button onclick="saveForgedWeapon()" id="btn-forge-save" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded font-bold shadow-lg transition-colors w-full">Equip Weapon</button>
+                        </div>
+
+                        {% if pc.attacks %}
+                            <div class="space-y-3">
+                            {% for attack in pc.attacks %}
+                                <div class="bg-gray-950 p-4 rounded border border-gray-700 shadow-inner group">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-amber-500 block leading-none text-lg">{{ attack.name }} <span class="text-xs opacity-50">◆</span></span>
+                                        {% if attack.has_two_hand %}
+                                        <button onclick="toggleTwoHand('{{ attack.name|replace("'", "\\'") }}')" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border transition-colors {% if attack.is_two_handed %}bg-amber-600 text-white border-amber-500{% else %}bg-gray-800 text-gray-400 border-gray-600 hover:text-white{% endif %}">
+                                            2H
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    <button onclick="deleteWeapon('{{ attack.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors px-1 opacity-0 group-hover:opacity-100 text-xs font-bold" title="Unequip">
+                                        ✖ DROP
+                                    </button>
+                                </div>
+                                {% if attack.traits %}
+                                <div class="mb-3">
+                                    {% for t in attack.traits %}
+                                    {% set t_lower = t|lower %}
+                                    <span class="trait-pill {% if 'agile' in t_lower %}agile{% elif 'finesse' in t_lower %}finesse{% elif 'deadly' in t_lower or 'fatal' in t_lower %}deadly{% elif 'ranged' in t_lower or 'thrown' in t_lower or 'propulsive' in t_lower %}ranged{% elif 'magical' in t_lower or 'arcane' in t_lower or 'divine' in t_lower or 'occult' in t_lower or 'primal' in t_lower %}magical{% endif %}">{{ t }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                    
+                                    <div class="flex flex-col md:flex-row gap-3 w-full">
+                                        <div class="flex flex-1 gap-1">
+                                            {% for strike in attack.strikes %}
+                                            <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 py-2 rounded shadow text-sm transition-transform transform hover:scale-105 first:bg-blue-900/40 first:border-blue-900/50 first:{{ accent_color }}">
+                                                <span class="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">
+                                                    {% if loop.index0 == 0 %}1st Atk{% elif loop.index0 == 1 %}2nd Atk{% else %}3rd Atk{% endif %}
+                                                </span>
+                                                <span class="block text-lg font-bold leading-none">{{ strike.label }}</span>
+                                            </button>
+                                            {% endfor %}
+                                        </div>
+                                        <button onclick="rollDamage('{{ attack.name|replace("'", "\\'") }}', '{{ attack.damage }}')" class="md:w-40 bg-red-900/40 hover:bg-red-800 border border-red-900 text-red-300 px-3 py-2 rounded transition-colors flex flex-col justify-center items-center relative overflow-hidden">
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-red-400">Damage</span>
+                                            <span class="text-sm font-bold">{{ attack.damage }}</span>
+                                            {% if attack.crit_effects %}
+                                            <div class="absolute bottom-0 w-full bg-red-950 py-0.5 text-center border-t border-red-900/50">
+                                                <span class="text-[8px] text-amber-500 font-bold uppercase tracking-widest">{{ attack.crit_effects }}</span>
+                                            </div>
+                                            {% endif %}
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center text-gray-500 italic p-4 bg-gray-900 rounded border border-gray-700">No weapons equipped.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-magic" data-print-title="Magic &amp; Spells" class="tab-content sheet-page space-y-6">
+            {% if pc.spell_casters %}
+                {% for caster in pc.spell_casters %}
+                {% set caster_idx = loop.index0 %}
+                {% set c_type_lower = caster.type | lower %}
+                <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden mb-6">
+                    
+                    <!-- Caster Header -->
+                    <div class="bg-gray-900 p-4 border-b border-gray-700 flex flex-wrap justify-between items-center gap-3">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 class="text-xl font-header" style="color:#7DC4C4;">{{ caster.name }}</h3>
+                                <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#5EADAD;">{{ caster.tradition }}</span>
+                            </div>
+                            <div class="flex gap-3 items-center text-xs">
+                                <span class="text-gray-500 font-header tracking-wider uppercase">{{ caster.type }} Casting</span>
+                                {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
+                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.15); color:#7DC4C4;">Atk +{{ pc.spell_attack }}</span>
+                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.15); color:#7DC4C4;">DC {{ pc.spell_dc }}</span>
+                                {% endif %}
+                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#A89C8B;">Cantrips = Rank {{ pc.cantrip_rank }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            {% if 'focus' in c_type_lower %}
+                            <div class="flex items-center gap-2 px-3 py-2 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.15);">
+                                <span class="font-header text-[9px] tracking-widest uppercase" style="color:#5EADAD;">Focus</span>
+                                <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm">◀</button>
+                                <span id="focus-pips">
+                                    {% for i in range(pc.focus_max) %}
+                                    <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
+                                    {% endfor %}
+                                </span>
+                                <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm">▶</button>
+                            </div>
+                            <button onclick="addFocusSpellManual()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">+ Add Spell</button>
+                            {% endif %}
+                            {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}
+                            <button onclick="openSpellBrowse({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">+ Learn Spell</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if 'spontaneous' in c_type_lower or 'focus' in c_type_lower or 'impulse' in c_type_lower %}
+                    <!-- === SPONTANEOUS / FOCUS CASTER === -->
+                    <div class="p-5 space-y-5">
+                        {% for lvl in caster.levels %}
+                        <div>
+                            <div class="flex justify-between items-center mb-3 pb-1" style="border-bottom:1px solid rgba(168,156,139,0.1);">
+                                <span class="font-header text-sm tracking-wider" style="color:#CFC5B4;">
+                                    {{ lvl.label }}
+                                    {% if lvl.level == 0 %}<span style="color:#7A7062;" class="text-[10px] ml-1">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                </span>
+                                {% if lvl.level > 0 and lvl.slots > 0 and 'focus' not in c_type_lower %}
+                                <div class="flex gap-1 items-center px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
+                                    <span class="font-header text-[8px] tracking-widest uppercase mr-1" style="color:#7A7062;">Slots</span>
+                                    {% for i in range(lvl.slots) %}
+                                    <input type="checkbox" data-caster-idx="{{ caster_idx }}" data-spell-level="{{ lvl.level }}" data-slot-idx="{{ i }}" class="spell-slot-cb w-3.5 h-3.5 accent-amber-500 cursor-pointer">
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {% for sp in lvl.spells %}
+                                <details class="group rounded overflow-hidden spell-rank-{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
+                                    <summary class="flex justify-between items-center p-3 cursor-pointer list-none outline-none hover:bg-gray-700 transition-colors">
+                                        <div class="flex items-center gap-2 pr-2">
+                                            <span style="color:#7DC4C4;" class="text-[10px] transition-transform group-open:rotate-90">▶</span>
+                                            <span class="text-sm font-bold" style="color:#EDE5D8;">{{ sp.name }}</span>
+                                            {% if sp.actions %}<span class="text-xs ml-1 opacity-60" style="color:#7DC4C4;" title="Action cost">{{ sp.actions }}</span>{% endif %}
+                                            {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell">⭐</span>{% endif %}
+                                        </div>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            {% if 'spontaneous' in c_type_lower and 'bounded' not in c_type_lower and lvl.level > 0 %}
+                                            <button onclick="event.stopPropagation(); toggleSignature('{{ sp.name|replace("'", "\\'") }}')" class="no-print text-[9px] px-1.5 py-0.5 rounded transition-colors {% if sp.name in pc.signature_spells %}text-amber-400{% else %}text-gray-600 hover:text-amber-400{% endif %}" title="Toggle Signature">⭐</button>
+                                            {% endif %}
+                                            <button onclick="event.stopPropagation(); rollSpell('{{ sp.name|replace("'", "\\'") }}')" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">Cast</button>
+                                        </div>
+                                    </summary>
+                                    <div class="p-3 text-sm border-t foundry-content leading-relaxed" style="color:#B5A998; border-color:rgba(168,156,139,0.1);">
+                                        {{ sp.desc | safe }}
+                                    </div>
+                                </details>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% else %}
+                    <!-- === PREPARED CASTER (Wizard/Cleric/Druid/Witch) === -->
+                    <div class="flex flex-col lg:flex-row" style="min-height:450px;">
+                        <!-- Spellbook (left) -->
+                        <div class="w-full lg:w-5/12 p-5 border-b lg:border-b-0 lg:border-r border-gray-700" style="background:#2E2B25;">
+                            <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:#A89C8B;">Spellbook — Known Spells</h4>
+                            <div class="space-y-4 max-h-[550px] overflow-y-auto custom-scrollbar pr-2">
+                                {% for lvl in caster.levels %}
+                                <div>
+                                    <div class="font-header text-[10px] tracking-wider uppercase mb-2 pb-1" style="color:#7A7062; border-bottom:1px solid rgba(168,156,139,0.08);">
+                                        {{ lvl.label }}{% if lvl.level == 0 %} <span style="color:#524C42;">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                    </div>
+                                    <div class="flex flex-col gap-1.5">
+                                        {% for sp in lvl.spells %}
+                                        <details class="group rounded spell-rank-{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
+                                            <summary class="flex justify-between items-center p-2 cursor-pointer list-none outline-none hover:bg-gray-700 transition-colors">
+                                                <div class="flex items-center gap-2 truncate pr-2">
+                                                    <span style="color:#7DC4C4;" class="text-[9px] transition-transform group-open:rotate-90">▶</span>
+                                                    <span class="text-xs font-bold truncate" style="color:#EDE5D8;">{{ sp.name }}</span>
+                                                    {% if sp.actions %}<span class="text-[10px] ml-1 opacity-60" style="color:#7DC4C4;">{{ sp.actions }}</span>{% endif %}
+                                                </div>
+                                                <button onclick="event.stopPropagation(); prepareSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="px-2 py-1 rounded text-[10px] font-bold transition-colors shrink-0" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">
+                                                    + Prep
+                                                </button>
+                                            </summary>
+                                            <div class="p-2 text-xs border-t foundry-content leading-relaxed" style="color:#B5A998; border-color:rgba(168,156,139,0.08);">
+                                                {{ sp.desc | safe }}
+                                            </div>
+                                        </details>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Daily Prep (right) -->
+                        <div class="w-full lg:w-7/12 p-5" style="background:#252320;">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-header text-xs tracking-wider uppercase" style="color:#7DC4C4;">Daily Preparations</h4>
+                                <button onclick="clearPrep({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase transition-colors" style="color:#7A7062;">Clear All</button>
+                            </div>
+                            <p class="text-xs mb-4" style="color:#7A7062;">Drag spells from your spellbook. Heightened spells show their effective rank.</p>
+                            
+                            <div class="space-y-5 max-h-[550px] overflow-y-auto custom-scrollbar pr-2" id="prep-ui-{{ caster_idx }}">
+                                <div class="text-center italic py-8" style="color:#524C42;">Loading preparation slots...</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-10 text-center shadow-xl">
+                    <div class="italic" style="color:#7A7062;">This character does not possess spellcasting abilities.</div>
+                </div>
+            {% endif %}
+            
+            <!-- Browse / Learn Spell Modal -->
+            <div id="spell-browse-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+                <div class="rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col" style="background:#2E2B25; border:1px solid rgba(168,156,139,0.2);">
+                    <div class="p-4 flex justify-between items-center" style="border-bottom:1px solid rgba(168,156,139,0.15);">
+                        <h3 class="font-header text-lg" style="color:#7DC4C4;">Browse Spells</h3>
+                        <button onclick="document.getElementById('spell-browse-modal').classList.add('hidden')" class="text-xl" style="color:#7A7062;">&times;</button>
+                    </div>
+                    <div class="p-4 flex gap-2 flex-wrap" style="border-bottom:1px solid rgba(168,156,139,0.1);">
+                        <input type="text" id="spell-search" oninput="filterBrowseSpells()" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8; min-width:150px;">
+                        <select id="spell-level-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#CFC5B4;">
+                            <option value="">All Levels</option>
+                            {% for i in range(11) %}<option value="{{ i }}">{% if i == 0 %}Cantrips{% else %}Level {{ i }}{% endif %}</option>{% endfor %}
+                        </select>
+                        <select id="spell-trad-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#CFC5B4;">
+                            <option value="">All Traditions</option>
+                            <option value="arcane">Arcane</option>
+                            <option value="divine">Divine</option>
+                            <option value="occult">Occult</option>
+                            <option value="primal">Primal</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 custom-scrollbar" id="spell-browse-list" style="max-height:55vh;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-feats" data-print-title="Feats" class="tab-content sheet-page space-y-4">
+            
+            <!-- ANCESTRY FEATURES -->
+            {% if pc.ancestry_features %}
+            <div class="mb-6">
+                <h3 class="font-header text-sm tracking-wider uppercase mb-3 pb-2" style="color: #D4A574; border-bottom: 1px solid rgba(212,165,116,0.15);">Ancestry — {{ pc.ancestry }}</h3>
+                {% for feat in pc.ancestry_features %}
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-2">
+                    <div class="flex items-center gap-2 mb-1">
+                        {% if feat.get('actions') %}<span class="font-header text-sm" style="color:rgba(212,165,116,0.5);">{{ feat.actions }}</span>{% endif %}
+                        <h4 class="font-header text-sm" style="color:#D4A574;">{{ feat.name }}</h4>
+                        <span class="text-[9px] font-header uppercase tracking-wider" style="color:#7A7062;">{{ feat.type|title }}</span>
+                    </div>
+                    <p class="text-sm" style="color:#B5A998;">{{ feat.desc }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- CLASS FEATURES — Core abilities with toggles -->
+            {% if pc.class_features %}
+            <div class="mb-6">
+                <h3 class="font-header text-sm tracking-wider uppercase mb-3 pb-2" style="color: #7DC4C4; border-bottom: 1px solid rgba(94,173,173,0.15);">Class Features — {{ pc.class_name }}</h3>
+                
+                {% for feat in pc.class_features %}
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-3 relative overflow-hidden" id="feature-{{ feat.name|replace(' ', '-') }}">
+                    <!-- Action cost badge -->
+                    {% if feat.get('actions') %}
+                    <span class="absolute top-3 right-3 font-header text-lg" style="color: rgba(94,173,173,0.4);" title="{{ feat.type|title }}">{{ feat.actions }}</span>
+                    {% endif %}
+                    
+                    <div class="flex items-center gap-3 mb-2">
+                        <!-- Toggle button for toggleable features -->
+                        {% if feat.type == 'toggle' %}
+                        <button onclick="toggleFeature('{{ feat.name }}')" 
+                                id="toggle-btn-{{ feat.name|replace(' ', '-') }}"
+                                class="shrink-0 w-12 h-7 rounded-full transition-all relative no-print"
+                                style="{% if feat.name in pc.active_toggles %}background: linear-gradient(135deg, #3A7878, #2C5C5C); border: 1px solid rgba(94,173,173,0.5);{% else %}background: #252320; border: 1px solid rgba(168,156,139,0.2);{% endif %}">
+                            <span class="absolute top-0.5 w-6 h-6 rounded-full transition-all"
+                                  style="{% if feat.name in pc.active_toggles %}left: 22px; background: #7DC4C4;{% else %}left: 2px; background: #8A7D6E;{% endif %}"></span>
+                        </button>
+                        {% elif feat.type == 'reaction' %}
+                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-sm" style="background: rgba(196,181,253,0.1); border: 1px solid rgba(196,181,253,0.2); color: #C4B5FD;">⟳</span>
+                        {% elif feat.type == 'action' %}
+                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-xs" style="background: rgba(94,173,173,0.1); border: 1px solid rgba(94,173,173,0.2); color: #7DC4C4;">◆</span>
+                        {% endif %}
+                        
+                        <div class="flex-1">
+                            <h4 class="font-header text-base" style="color: {% if feat.type == 'toggle' and feat.name in pc.active_toggles %}#7DC4C4{% else %}#EDE5D8{% endif %};">
+                                {{ feat.name }}
+                                {% if feat.type == 'toggle' and feat.name in pc.active_toggles %}
+                                <span class="text-xs ml-2 px-2 py-0.5 rounded" style="background: rgba(94,173,173,0.15); border: 1px solid rgba(94,173,173,0.25); color: #5EADAD;">ACTIVE</span>
+                                {% endif %}
+                            </h4>
+                            <span class="text-[10px] font-header uppercase tracking-wider" style="color: #8A7D6E;">{{ feat.type|title }} · Level {{ feat.level }}</span>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm leading-relaxed" style="color: #D6CBBA;">{{ feat.desc }}</p>
+                    
+                    {% if feat.get('toggle_effects') and feat.type == 'toggle' %}
+                    <div class="mt-3 pt-2 flex flex-wrap gap-2" style="border-top: 1px solid rgba(168,156,139,0.1);">
+                        {% for effect_key, effect_val in feat.toggle_effects.items() %}
+                        <span class="font-header text-[10px] tracking-wider px-2 py-1 rounded" 
+                              style="{% if feat.name in pc.active_toggles %}background: rgba(94,173,173,0.1); border: 1px solid rgba(94,173,173,0.2); color: #7DC4C4;{% else %}background: rgba(168,156,139,0.05); border: 1px solid rgba(168,156,139,0.1); color: #8A7D6E;{% endif %}">
+                            {{ effect_key|replace('_', ' ')|title }}: {% if effect_val is number %}{% if effect_val > 0 %}+{% endif %}{{ effect_val }}{% else %}{{ effect_val }}{% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- REGULAR FEATS -->
+            <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-6 mb-4">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider border-b border-gray-700 pb-2">Character Feats</h3>
+            </div>
+            {% for feat in pc.feats %}
+            <div class="bg-gray-800 border border-gray-700 rounded p-5 shadow-xl relative overflow-hidden group">
+                <div class="absolute top-0 right-0 bg-gray-900 border-b border-l border-gray-700 text-gray-500 px-3 py-1 rounded-bl text-[10px] uppercase font-bold">Lvl {{ feat.level|default('1') }}</div>
+                <div class="flex justify-between items-start mb-3">
+                    <h4 class="text-lg font-bold text-amber-500">{{ feat.name }}</h4>
+                    <button onclick="rollFeature('{{ feat.name|replace("'", "\\'") }}')" class="bg-purple-900/40 hover:bg-purple-800 text-purple-300 border border-purple-900/50 px-3 py-1 rounded text-xs font-bold transition-transform transform hover:scale-105 opacity-0 group-hover:opacity-100 mt-1">
+                        Send to GM
+                    </button>
+                </div>
+                <div class="text-sm text-gray-400 foundry-content leading-relaxed">{{ feat.desc|safe }}</div>
+            </div>
+            {% else %}
+            <div class="bg-gray-800 border border-gray-700 rounded p-5 text-gray-500 italic text-sm text-center">No feats acquired yet.</div>
+            {% endfor %}
+        </div>
+
+        <div id="tab-inventory" data-print-title="Inventory" class="tab-content sheet-page space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-6">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Wealth & Inventory</h3>
+                        <button onclick="saveWealth()" id="btn-wealth" class="bg-gray-900 hover:bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1 rounded text-xs font-bold transition-colors">
+                            Save Coins
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-3 mb-6">
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-cyan-200 font-bold uppercase mb-1">PP</label>
+                            <input type="number" id="coin-pp" value="{{ pc.pp }}" class="w-full bg-gray-950 text-cyan-100 font-mono text-center rounded border border-cyan-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-yellow-400 font-bold uppercase mb-1">GP</label>
+                            <input type="number" id="coin-gp" value="{{ pc.gp }}" class="w-full bg-gray-950 text-yellow-200 font-mono text-center rounded border border-yellow-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">SP</label>
+                            <input type="number" id="coin-sp" value="{{ pc.sp }}" class="w-full bg-gray-950 text-gray-300 font-mono text-center rounded border border-gray-600 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-orange-400 font-bold uppercase mb-1">CP</label>
+                            <input type="number" id="coin-cp" value="{{ pc.cp }}" class="w-full bg-gray-950 text-orange-300 font-mono text-center rounded border border-orange-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                        {% for item in pc.equipment %}
+                        <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group">
+                            <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
+                            <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2">Bulk: {{ item.bulk }}</span>
+                            <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
+                            <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">✖</button>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-gray-500 italic p-4 text-sm bg-gray-950 rounded border border-gray-800">Backpack is empty.</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="add-item-name" placeholder="Item Name" class="flex-1 bg-gray-950 border border-gray-700 rounded p-2 text-sm text-gray-200 focus:border-amber-500 outline-none">
+                        <input type="number" id="add-item-qty" value="1" class="w-16 bg-gray-950 border border-gray-700 rounded p-2 text-sm text-gray-200 text-center focus:border-amber-500 outline-none" title="Quantity">
+                        <button onclick="addInvItem()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-4 py-2 rounded shadow-lg transition-colors text-sm">Add</button>
+                    </div>
+                    <details class="group">
+                        <summary class="text-[9px] font-header tracking-wider uppercase cursor-pointer" style="color:#7A7062;">▸ Quick Add Common Items</summary>
+                        <div class="flex flex-wrap gap-1 mt-2">
+                            {% for qitem in ['Adventurer\'s Pack', 'Bedroll', 'Rope (50ft)', 'Torch', 'Rations (1 day)', 'Waterskin', 'Healing Potion (Minor)', 'Antidote (Lesser)', 'Thieves\' Tools', 'Disguise Kit', 'Healer\'s Tools', 'Repair Kit', 'Climbing Kit', 'Writing Set', 'Lantern (Hooded)', 'Oil (1 pint)', 'Crowbar', 'Grappling Hook', 'Manacles', 'Signal Whistle', 'Caltrops'] %}
+                            <button onclick="quickAddItem('{{ qitem|replace("'", "\\'") }}')" class="text-[9px] px-2 py-1 rounded transition-colors" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">{{ qitem }}</button>
+                            {% endfor %}
+                        </div>
+                    </details>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-6 flex flex-col">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Campaign Notes</h3>
+                        <div class="flex items-center gap-2">
+                            <span id="notes-autosave-status" class="text-[10px] text-gray-600 italic"></span>
+                            <button onclick="saveNotes()" id="btn-notes" class="bg-gray-900 hover:bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1 rounded text-xs font-bold transition-colors">
+                                Save Notes
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="pc-notes" class="w-full flex-1 min-h-[300px] bg-gray-950 border border-gray-700 rounded p-4 text-gray-300 text-sm focus:outline-none focus:border-amber-500 custom-scrollbar leading-relaxed" placeholder="Jot down important names, loot, or lore here..." oninput="scheduleAutoSave()">{{ pc.notes }}</textarea>
+                    
+                    <div class="mt-4 pt-3 border-t border-gray-700 flex justify-between items-center">
+                        <span class="text-[10px] text-gray-600">Auto-saves after you stop typing</span>
+                        <button onclick="exportCharacter()" class="bg-gray-900 hover:bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1.5">
+                            📥 Export Character JSON
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Session Journal -->
+                <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-6">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Session Journal</h3>
+                        <span class="text-[10px]" style="color:#7A7062;">{{ pc.session_notes | length }} entries</span>
+                    </div>
+                    
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="new-session-note" placeholder="What happened this session..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:#252320; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;" onkeydown="if(event.key==='Enter')addSessionNote()">
+                        <button onclick="addSessionNote()" class="font-header text-[9px] tracking-wider uppercase px-3 py-2 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">+ Add</button>
+                    </div>
+                    
+                    <div class="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                        {% for note in pc.session_notes | reverse %}
+                        {% set note_idx = pc.session_notes | length - loop.index %}
+                        <div class="flex justify-between items-start p-2 rounded group" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
+                            <div class="flex-1">
+                                <span class="font-header text-[9px] tracking-wider" style="color:#7A7062;">{{ note.date }}</span>
+                                <p class="text-sm mt-0.5" style="color:#CFC5B4;">{{ note.text }}</p>
+                            </div>
+                            <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:#7A7062;" title="Delete">✕</button>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 italic text-sm" style="color:#524C42;">No journal entries yet. Add notes after each session.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PETS TAB -->
+        <div id="tab-pets" data-print-title="Pets &amp; Companions" class="tab-content sheet-page space-y-6">
+            <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-6">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                    <h3 class="font-header text-sm tracking-wider uppercase" style="color:#7DC4C4;">Animal Companions & Familiars</h3>
+                    <button onclick="document.getElementById('pet-add-modal').classList.remove('hidden')" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">+ Add Pet</button>
+                </div>
+                
+                {% set pets = pc.pets if pc.pets is defined else [] %}
+                {% if pets %}
+                    {% for pet in pets %}
+                    <div class="rounded-lg p-4 mb-4" style="background:#252320; border:1px solid rgba(168,156,139,0.15);">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 class="font-header text-lg" style="color:#D4A574;">{{ pet.name }}</h4>
+                                <span class="text-xs" style="color:#7A7062;">{{ pet.type }} · {{ pet.size }}{% if pet.senses %} · {{ pet.senses }}{% endif %}</span>
+                            </div>
+                            <button onclick="removePet('{{ pet.name }}')" class="text-xs opacity-50 hover:opacity-100 transition-opacity" style="color:#FDA4AF;">Remove</button>
+                        </div>
+                        
+                        <div class="grid grid-cols-6 gap-2 mb-3">
+                            <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">AC</div>
+                                <div class="text-sm font-bold" style="color:#60A5FA;">{{ pet.ac }}</div>
+                            </div>
+                            <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">HP</div>
+                                <div class="text-sm font-bold" style="color:#4ADE80;">{{ pet.hp }}</div>
+                            </div>
+                            <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Fort</div>
+                                <div class="text-sm font-bold" style="color:#4ADE80;">+{{ pet.fort }}</div>
+                            </div>
+                            <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Ref</div>
+                                <div class="text-sm font-bold" style="color:#60A5FA;">+{{ pet.ref }}</div>
+                            </div>
+                            <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Will</div>
+                                <div class="text-sm font-bold" style="color:#C4B5FD;">+{{ pet.will }}</div>
+                            </div>
+                            <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Spd</div>
+                                <div class="text-sm font-bold" style="color:#CFC5B4;">{{ pet.speed }}</div>
+                            </div>
+                        </div>
+                        
+                        {% if pet.str_mod is defined %}
+                        <div class="grid grid-cols-6 gap-2 mb-3">
+                            {% for ab, val in [('STR', pet.str_mod), ('DEX', pet.dex_mod), ('CON', pet.con_mod), ('INT', pet.int_mod), ('WIS', pet.wis_mod), ('CHA', pet.cha_mod)] %}
+                            <div class="rounded p-1 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.05);">
+                                <div class="text-[7px] font-header uppercase" style="color:#3F3A33;">{{ ab }}</div>
+                                <div class="text-xs font-bold" style="color:#A89C8B;">{% if val >= 0 %}+{% endif %}{{ val }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if pet.attacks %}
+                        <div class="mb-2">
+                            <span class="font-header text-[9px] tracking-wider uppercase" style="color:#7A7062;">Attacks</span>
+                            {% for atk in pet.attacks %}
+                            <div class="flex justify-between items-center p-2 mt-1 rounded" style="background:#1C1917; border:1px solid rgba(168,156,139,0.06);">
+                                <span class="text-sm font-bold" style="color:#EDE5D8;">{{ atk.name }} <span class="text-xs opacity-50" style="color:#7DC4C4;">◆</span></span>
+                                <span class="text-xs" style="color:#FBBF24;">+{{ atk.bonus }} <span style="color:#7A7062;">({{ atk.damage }})</span></span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if pet.abilities %}
+                        <div class="mt-2 p-2 rounded text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.05); color:#B5A998;">
+                            {{ pet.abilities }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-10 italic" style="color:#524C42;">
+                        No companions or familiars. Click "+ Add Pet" to create one.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Pet Add Modal -->
+        <div id="pet-add-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+            <div class="rounded-xl w-full max-w-lg p-6" style="background:#2E2B25; border:1px solid rgba(168,156,139,0.25);">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-header text-lg" style="color:#7DC4C4;">Add Companion / Familiar</h3>
+                    <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="text-xl" style="color:#7A7062;">&times;</button>
+                </div>
+                <div class="space-y-3">
+                    <details class="group">
+                        <summary class="font-header text-[9px] tracking-wider uppercase cursor-pointer mb-2" style="color:#7DC4C4;">▸ Quick Fill — Common Companions</summary>
+                        <div class="flex flex-wrap gap-1 mb-3">
+                            <button onclick="fillPetPreset('Bear','Animal Companion','Medium',35,18,8,7,4,30,[{name:'Jaws',bonus:9,damage:'1d8+3 P'},{name:'Claw',bonus:9,damage:'1d6+3 S'}],3,3,3,-4,1,0,'Support: +1d8 extra damage on Strikes vs grabbed foe')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Bear</button>
+                            <button onclick="fillPetPreset('Wolf','Animal Companion','Small',24,16,6,6,4,35,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,2,2,-4,1,0,'Support: +1d4 damage. Knockdown on crit.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Wolf</button>
+                            <button onclick="fillPetPreset('Horse','Animal Companion','Large',26,16,6,6,4,40,[{name:'Hoof',bonus:7,damage:'1d6+2 B'}],3,1,2,-4,1,0,'Support: +2 damage on mounted Strikes. Mount ability.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Horse</button>
+                            <button onclick="fillPetPreset('Cat','Animal Companion','Small',20,17,5,7,3,35,[{name:'Jaws',bonus:7,damage:'1d6+1 P'},{name:'Claw',bonus:7,damage:'1d4+1 S'}],0,3,1,-4,2,0,'Support: Target is off-guard until start of your next turn.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Cat</button>
+                            <button onclick="fillPetPreset('Snake','Animal Companion','Small',20,17,5,7,3,25,[{name:'Fangs',bonus:7,damage:'1d8+1 P'}],1,3,1,-4,2,0,'Support: +1d4 poison damage on Strikes.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Snake</button>
+                            <button onclick="fillPetPreset('Bird','Animal Companion','Small',18,18,4,7,3,10,[{name:'Talons',bonus:7,damage:'1d4+1 S'}],0,3,0,-4,2,0,'Fly 60 ft. Support: Target is off-guard vs next attack.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Bird</button>
+                            <button onclick="fillPetPreset('Badger','Animal Companion','Small',22,16,6,6,4,25,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,1,2,-4,2,0,'Burrow 10 ft. Support: +1d8 damage vs prone.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Badger</button>
+                        </div>
+                    </details>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Name</label>
+                        <input type="text" id="pet-name" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Type</label>
+                        <select id="pet-type" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+                            <option>Animal Companion</option><option>Familiar</option><option>Eidolon</option><option>Construct</option><option>Other</option>
+                        </select></div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-3">
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Size</label>
+                        <select id="pet-size" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+                            <option>Tiny</option><option selected>Small</option><option>Medium</option><option>Large</option>
+                        </select></div>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">HP</label>
+                        <input type="number" id="pet-hp" value="20" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Speed</label>
+                        <input type="number" id="pet-speed" value="25" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">AC</label>
+                        <input type="number" id="pet-ac" value="16" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Fort</label>
+                        <input type="number" id="pet-fort" value="5" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Ref</label>
+                        <input type="number" id="pet-ref" value="5" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Will</label>
+                        <input type="number" id="pet-will" value="3" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                    </div>
+                    <div class="grid grid-cols-6 gap-2">
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">STR</label>
+                        <input type="number" id="pet-str" value="2" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">DEX</label>
+                        <input type="number" id="pet-dex" value="2" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">CON</label>
+                        <input type="number" id="pet-con" value="2" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">INT</label>
+                        <input type="number" id="pet-int" value="-4" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">WIS</label>
+                        <input type="number" id="pet-wis" value="1" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">CHA</label>
+                        <input type="number" id="pet-cha" value="0" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
+                    </div>
+                    <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Attack (name, bonus, damage — e.g. "Jaws, 9, 1d8+2 P")</label>
+                    <input type="text" id="pet-attack" placeholder="Jaws, 9, 1d8+2 P" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
+                    <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Abilities / Notes</label>
+                    <textarea id="pet-abilities" rows="2" placeholder="Support Benefit, special senses, etc." class="w-full rounded px-3 py-2 text-sm resize-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></textarea></div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="border:1px solid rgba(168,156,139,0.2); color:#A89C8B;">Cancel</button>
+                        <button onclick="savePet()" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Add Companion</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Roll Result Toast Container -->
+    <div id="roll-toast-container" class="fixed top-6 right-6 z-[200] flex flex-col gap-3 pointer-events-none w-80"></div>
+
+    <!-- Equipment Browser Modal -->
+    <div id="equip-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="bg-gray-900 px-5 py-3 border-b border-gray-700 flex justify-between items-center shrink-0">
+                <h2 id="equip-modal-title" class="text-lg font-header text-amber-500">Equipment Browser</h2>
+                <button onclick="document.getElementById('equip-modal').classList.add('hidden')" class="text-gray-500 hover:text-white text-xl">&times;</button>
+            </div>
+            <div class="px-5 py-3 border-b border-gray-700/50 bg-gray-900/50 flex gap-3 items-center shrink-0">
+                <input type="text" id="equip-search" placeholder="Search..." class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50">
+                <div id="equip-cat-btns" class="flex gap-1"></div>
+            </div>
+            <div class="flex-1 flex overflow-hidden">
+                <div id="equip-list" class="w-1/2 overflow-y-auto custom-scrollbar border-r border-gray-700 p-3 space-y-2"></div>
+                <div id="equip-detail" class="w-1/2 overflow-y-auto custom-scrollbar p-5">
+                    <div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select an item to view details.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Dice Roller Panel -->
+    <div id="dice-widget" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+        <div id="dice-panel" class="hidden bg-gray-800 rounded-lg shadow-2xl mb-4 w-80 overflow-hidden flex flex-col transform transition-all origin-bottom-right border border-gray-700">
+            <div class="bg-gray-900 p-3 border-b border-gray-700 flex justify-between items-center">
+                <span class="font-header text-amber-500 text-sm">Dice Roller</span>
+                <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-4">
+                <div class="bg-gray-950 rounded border border-gray-700 p-3 mb-4 text-center min-h-[85px] flex flex-col justify-center items-center shadow-inner">
+                    <div id="dice-total" class="text-4xl font-header text-amber-400 leading-none">--</div>
+                    <div id="dice-breakdown" class="text-xs text-gray-500 mt-2 font-mono">Roll the bones...</div>
+                </div>
+                <div class="grid grid-cols-4 gap-2 mb-4">
+                    <button onclick="quickDie(4)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d4</button>
+                    <button onclick="quickDie(6)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d6</button>
+                    <button onclick="quickDie(8)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d8</button>
+                    <button onclick="quickDie(10)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d10</button>
+                    <button onclick="quickDie(12)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d12</button>
+                    <button onclick="quickDie(20)" class="col-span-2 bg-amber-900/40 hover:bg-amber-800/60 text-amber-400 py-1.5 rounded font-bold text-sm border border-amber-900/50 transition-colors">d20</button>
+                    <button onclick="quickDie(100)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d100</button>
+                </div>
+                <div class="mb-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-2">Quick Rolls</div>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button onclick="rollSkill('Perception', {{ pc.perception }})" class="bg-gray-900 hover:bg-gray-700 text-gray-300 py-1 rounded text-[10px] font-bold border border-gray-700 transition-colors truncate px-1">Perc +{{ pc.perception }}</button>
+                        <button onclick="rollSkill('Fort Save', {{ pc.fort }})" class="bg-red-900/20 hover:bg-red-900/40 text-red-300 py-1 rounded text-[10px] font-bold border border-red-900/30 transition-colors truncate px-1">Fort +{{ pc.fort }}</button>
+                        <button onclick="rollSkill('Ref Save', {{ pc.ref }})" class="bg-blue-900/20 hover:bg-blue-900/40 text-blue-300 py-1 rounded text-[10px] font-bold border border-blue-900/30 transition-colors truncate px-1">Ref +{{ pc.ref }}</button>
+                        <button onclick="rollSkill('Will Save', {{ pc.will }})" class="bg-purple-900/20 hover:bg-purple-900/40 text-purple-300 py-1 rounded text-[10px] font-bold border border-purple-900/30 transition-colors truncate px-1">Will +{{ pc.will }}</button>
+                        <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})" class="bg-gray-900 hover:bg-gray-700 text-gray-300 py-1 rounded text-[10px] font-bold border border-gray-700 transition-colors truncate px-1">Init +{{ pc.initiative_mod }}</button>
+                        <button onclick="rollFlat()" class="bg-gray-900 hover:bg-gray-700 text-gray-300 py-1 rounded text-[10px] font-bold border border-gray-700 transition-colors truncate px-1">Flat Check</button>
+                    </div>
+                </div>
+                <form class="flex gap-2" onsubmit="event.preventDefault(); customDiceRoll();">
+                    <input type="text" id="custom-dice-input" placeholder="e.g. 2d6+4" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:border-amber-500 text-center font-mono">
+                    <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-sm font-bold transition-colors shadow-md border-none">Roll</button>
+                </form>
+            </div>
+        </div>
+        <button onclick="toggleDicePanel()" class="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 rounded-full shadow-xl border-none flex items-center justify-center text-white transition-transform hover:scale-105 z-[100] ring-4 ring-gray-900">
+            <span class="font-header text-xl tracking-tighter">d20</span>
+        </button>
+    </div>
+
+    <script>
+        const pcName = {{ pc.name | tojson | safe }};
+        const pcNameEncoded = encodeURIComponent(pcName);
+        const pcLevel = parseInt("{{ pc.level }}") || 1;
+
+        // ==========================================
+        // PORTRAIT UPLOAD
+        // ==========================================
+        async function uploadPortrait(input) {
+            if (!input.files || !input.files[0]) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            try {
+                const res = await fetch(`/api/upload_portrait/${pcNameEncoded}`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error('Portrait upload error:', e); }
+        }
+
+        // ==========================================
+        // PINNED ROLLS QUICK BAR
+        // ==========================================
+        let pinMode = false;
+        const PIN_KEY = `pinned_rolls_${pcName}`;
+        
+        function getPinnedRolls() {
+            try { return JSON.parse(localStorage.getItem(PIN_KEY)) || []; } catch(e) { return []; }
+        }
+        function savePinnedRolls(pins) { localStorage.setItem(PIN_KEY, JSON.stringify(pins)); }
+        
+        function renderPinnedBar() {
+            const pins = getPinnedRolls();
+            const container = document.getElementById('pinned-rolls');
+            if (pins.length === 0) {
+                container.innerHTML = '<span class="text-gray-600 text-xs italic">Click 📌 Edit, then click skills or saves to pin them here</span>';
+                return;
+            }
+            container.innerHTML = pins.map(p => 
+                `<button class="pin-btn" onclick="rollSkill('${p.name}', ${p.mod})">${p.name} <span style="opacity:0.7">${p.mod >= 0 ? '+' : ''}${p.mod}</span></button>`
+            ).join('');
+        }
+        
+        function togglePinMode() {
+            pinMode = !pinMode;
+            const btn = document.getElementById('btn-pin-mode');
+            btn.style.borderColor = pinMode ? 'rgba(94,173,173,0.5)' : '';
+            btn.style.color = pinMode ? '#7DC4C4' : '';
+            btn.innerText = pinMode ? '📌 Done' : '📌 Edit';
+            // When in pin mode, clicking a skill row toggles its pinned state
+        }
+        
+        function tryPinRoll(name, mod) {
+            if (!pinMode) return false;
+            let pins = getPinnedRolls();
+            const idx = pins.findIndex(p => p.name === name);
+            if (idx >= 0) { pins.splice(idx, 1); } 
+            else { pins.push({ name: name, mod: parseInt(mod) }); }
+            savePinnedRolls(pins);
+            renderPinnedBar();
+            return true; // consumed the click
+        }
+
+        renderPinnedBar();
+
+        // ==========================================
+        // RAISE SHIELD TOGGLE
+        // ==========================================
+        async function toggleShield() {
+            try {
+                const res = await fetch(`/api/toggle_shield/${pcNameEncoded}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error('Shield toggle error:', e); }
+        }
+
+        // ==========================================
+        // MANUAL FOCUS SPELL MANAGEMENT
+        // ==========================================
+        async function addFocusSpellManual() {
+            const name = prompt('Enter focus spell name (e.g. "Weapon Surge", "Ki Strike"):');
+            if (!name || !name.trim()) return;
+            try {
+                const res = await fetch(`/api/set_focus_spells/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'add', name: name.trim()})
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+
+        // ==========================================
+        // PET / COMPANION MANAGEMENT
+        // ==========================================
+        async function savePet() {
+            const atkRaw = document.getElementById('pet-attack').value.trim();
+            let attacks = [];
+            if (atkRaw) {
+                // Support multiple attacks separated by |
+                const atkEntries = atkRaw.split('|').map(e => e.trim()).filter(e => e);
+                for (const entry of atkEntries) {
+                    const parts = entry.split(',').map(p => p.trim());
+                    if (parts.length >= 3) {
+                        attacks.push({name: parts[0], bonus: parseInt(parts[1]) || 0, damage: parts.slice(2).join(', ')});
+                    } else if (parts.length === 1) {
+                        attacks.push({name: parts[0], bonus: 0, damage: '1d6'});
+                    }
+                }
+            }
+            
+            const pet = {
+                name: document.getElementById('pet-name').value.trim() || 'Unnamed Pet',
+                type: document.getElementById('pet-type').value,
+                size: document.getElementById('pet-size').value,
+                hp: parseInt(document.getElementById('pet-hp').value) || 20,
+                speed: parseInt(document.getElementById('pet-speed').value) || 25,
+                ac: parseInt(document.getElementById('pet-ac').value) || 16,
+                fort: parseInt(document.getElementById('pet-fort').value) || 5,
+                ref: parseInt(document.getElementById('pet-ref').value) || 5,
+                will: parseInt(document.getElementById('pet-will').value) || 3,
+                str_mod: parseInt(document.getElementById('pet-str').value) || 0,
+                dex_mod: parseInt(document.getElementById('pet-dex').value) || 0,
+                con_mod: parseInt(document.getElementById('pet-con').value) || 0,
+                int_mod: parseInt(document.getElementById('pet-int').value) || -4,
+                wis_mod: parseInt(document.getElementById('pet-wis').value) || 0,
+                cha_mod: parseInt(document.getElementById('pet-cha').value) || 0,
+                attacks: attacks,
+                abilities: document.getElementById('pet-abilities').value.trim(),
+            };
+            
+            try {
+                const res = await fetch(`/api/add_pet/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(pet)
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+        
+        function fillPetPreset(name, type, size, hp, ac, fort, ref, will, speed, attacks, str, dex, con, int_, wis, cha, abilities) {
+            document.getElementById('pet-name').value = name;
+            document.getElementById('pet-type').value = type;
+            document.getElementById('pet-size').value = size;
+            document.getElementById('pet-hp').value = hp;
+            document.getElementById('pet-ac').value = ac;
+            document.getElementById('pet-fort').value = fort;
+            document.getElementById('pet-ref').value = ref;
+            document.getElementById('pet-will').value = will;
+            document.getElementById('pet-speed').value = speed;
+            document.getElementById('pet-str').value = str;
+            document.getElementById('pet-dex').value = dex;
+            document.getElementById('pet-con').value = con;
+            document.getElementById('pet-int').value = int_;
+            document.getElementById('pet-wis').value = wis;
+            document.getElementById('pet-cha').value = cha;
+            document.getElementById('pet-abilities').value = abilities;
+            if (attacks.length > 0) {
+                document.getElementById('pet-attack').value = attacks.map(a => `${a.name}, ${a.bonus}, ${a.damage}`).join(' | ');
+            }
+        }
+        
+        async function removePet(name) {
+            if (!confirm(`Remove ${name}?`)) return;
+            try {
+                const res = await fetch(`/api/remove_pet/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name})
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+
+        // ==========================================
+        // CLASS FEATURE TOGGLES (Rage, Panache, etc.)
+        // ==========================================
+        async function toggleFeature(featureName) {
+            try {
+                const res = await fetch(`/api/toggle_feature/${pcNameEncoded}/${encodeURIComponent(featureName)}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error('Toggle error:', e); }
+        }
+
+        // ==========================================
+        // PLAYER CONDITION MATRIX
+        // ==========================================
+        function openConditionAdder() {
+            document.getElementById('cond-adder').classList.toggle('hidden');
+        }
+
+        async function adjustCondition(cond, delta) {
+            try {
+                const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({condition: cond, delta: delta})
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+        
+        async function toggleBoolCondition(cond) {
+            try {
+                const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({condition: cond, toggle: true})
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+
+        // ==========================================
+        // CUSTOM DICE ROLLER
+        // ==========================================
+        function rollCustomDice() {
+            const expr = (document.getElementById('custom-dice').value || '').trim();
+            if (!expr) return;
+            const result = parseDiceAndRoll(expr);
+            if (result) {
+                showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false);
+                broadcastToGM('Custom Roll', result.total.toString(), expr + ' = ' + result.detail);
+            }
+        }
+        document.getElementById('custom-dice').addEventListener('keydown', e => { if (e.key === 'Enter') rollCustomDice(); });
+
+        function parseDiceAndRoll(expr) {
+            // Parse expressions like "2d6+4", "1d8+1d6+3", "4d6"
+            let total = 0; let detail = '';
+            const parts = expr.replace(/\s/g, '').replace(/-/g, '+-').split('+').filter(p => p);
+            for (const part of parts) {
+                const diceMatch = part.match(/^(-?\d*)d(\d+)$/);
+                if (diceMatch) {
+                    const count = parseInt(diceMatch[1] || '1');
+                    const sides = parseInt(diceMatch[2]);
+                    let rolls = [];
+                    for (let i = 0; i < Math.abs(count); i++) {
+                        rolls.push(Math.floor(Math.random() * sides) + 1);
+                    }
+                    const sum = rolls.reduce((a, b) => a + b, 0) * (count < 0 ? -1 : 1);
+                    total += sum;
+                    detail += (detail ? ' + ' : '') + `${count}d${sides}[${rolls.join(',')}]`;
+                } else {
+                    const num = parseInt(part);
+                    if (!isNaN(num)) { total += num; detail += (detail ? (num >= 0 ? ' + ' : ' - ') : '') + Math.abs(num); }
+                }
+            }
+            return { total, detail: detail + ' = ' + total };
+        }
+
+        // ==========================================
+        // INITIATIVE ROLLER
+        // ==========================================
+        async function rollInitiativeFromSheet() {
+            const initMod = {{ pc.initiative_mod }};
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + initMod;
+            const detail = `1d20 (${d20}) + ${initMod} = ${total}`;
+            showRollToast('Initiative', total, detail, d20 === 20, d20 === 1);
+            broadcastToGM('Initiative', total.toString(), detail);
+            try {
+                await fetch(`/api/send_initiative/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({total: total})
+                });
+            } catch(e) {}
+        }
+
+        // ==========================================
+        // VAULT EXPORT
+        // ==========================================
+        async function exportToVault() {
+            try {
+                const res = await fetch(`/api/vault_export_character/${pcNameEncoded}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showRollToast('Vault Export', 0, `Saved to ${data.path}`, false, false);
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // ==========================================
+        // SESSION JOURNAL
+        // ==========================================
+        async function addSessionNote() {
+            const inp = document.getElementById('new-session-note');
+            const text = inp.value.trim();
+            if (!text) return;
+            try {
+                const res = await fetch(`/api/save_session_note/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text})
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+        
+        async function deleteSessionNote(idx) {
+            try {
+                const res = await fetch(`/api/delete_session_note/${pcNameEncoded}/${idx}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+
+        const castersData = {{ pc.spell_casters | tojson | safe }};
+        const dbWeapons = {{ weapons_json | safe }};
+        const dbArmor = {{ armor_json | safe }};
+        const pcProfs = {{ pc.proficiencies | tojson | safe }};
+        const allSpells = {{ spells_json | safe }};
+        let browseActiveCasterIdx = 0;
+
+        // BROWSE SPELLS MODAL
+        function openSpellBrowse(casterIdx) {
+            browseActiveCasterIdx = casterIdx;
+            document.getElementById('spell-browse-modal').classList.remove('hidden');
+            filterBrowseSpells();
+        }
+        
+        function filterBrowseSpells() {
+            const q = (document.getElementById('spell-search').value || '').toLowerCase();
+            const lvl = document.getElementById('spell-level-filter').value;
+            const trad = document.getElementById('spell-trad-filter').value;
+            
+            let filtered = allSpells.filter(s => {
+                if (q && !s.name.toLowerCase().includes(q)) return false;
+                if (lvl !== '' && s.level != parseInt(lvl)) return false;
+                if (trad && (!s.traditions || !s.traditions.includes(trad))) return false;
+                return true;
+            }).slice(0, 60);
+            
+            const list = document.getElementById('spell-browse-list');
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="text-center italic py-8" style="color:#7A7062;">No spells match your filters.</div>';
+                return;
+            }
+            list.innerHTML = filtered.map(s => `
+                <div class="flex justify-between items-center p-2 rounded mb-1 hover:bg-gray-700 transition-colors" style="border:1px solid rgba(168,156,139,0.08);">
+                    <div>
+                        <span class="text-sm font-bold" style="color:#EDE5D8;">${s.name}</span>
+                        <span class="font-header text-[9px] ml-2" style="color:#7A7062;">L${s.level}</span>
+                        ${s.traditions.map(t => `<span class="text-[8px] ml-1 px-1 rounded" style="background:rgba(94,173,173,0.08); color:#7DC4C4;">${t}</span>`).join('')}
+                    </div>
+                    <button onclick="learnSpellFromBrowse('${s.name.replace(/'/g,"\\'")}', ${s.level})" class="font-header text-[9px] px-3 py-1 rounded transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">+ Learn</button>
+                </div>
+            `).join('');
+        }
+        
+        async function learnSpellFromBrowse(name, level) {
+            try {
+                const res = await fetch('/api/learn_spell/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, level, caster_idx: browseActiveCasterIdx})
+                });
+                const data = await res.json();
+                if (data.success) { window.location.reload(); }
+            } catch(e) { console.error(e); }
+        }
+        
+        // SIGNATURE SPELLS
+        async function toggleSignature(spellName) {
+            let sigs = {{ pc.signature_spells | tojson | safe }};
+            const idx = sigs.indexOf(spellName);
+            if (idx >= 0) sigs.splice(idx, 1);
+            else sigs.push(spellName);
+            try {
+                await fetch('/api/set_signature_spells/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({signature_spells: sigs})
+                });
+                window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+
+        // NEW: FRONTEND CONDITION SYNC
+        async function updateCondition(cond, val) {
+            if (typeof val === 'number' && (val < 0 || val > 4)) return;
+            try {
+                const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ condition: cond, value: val })
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch (e) {}
+        }
+
+        function escapeHtml(str) {
+            if(!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            document.getElementById(`btn-tab-${tabId}`).classList.add('active');
+            localStorage.setItem(`pf2e_tab_${pcName}`, tabId);
+        }
+        
+        // Restore last active tab on page load
+        (function() {
+            const savedTab = localStorage.getItem(`pf2e_tab_${pcName}`);
+            if (savedTab && document.getElementById(`tab-${savedTab}`)) {
+                switchTab(savedTab);
+            }
+        })();
+
+        // INIT SLOT TRACKERS
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll('.spell-slot-cb').forEach((cb) => {
+                const cIdx = cb.getAttribute('data-caster-idx');
+                const lvl = cb.getAttribute('data-spell-level');
+                const idx = cb.getAttribute('data-slot-idx');
+                const storageKey = `expended_slot_${pcName}_c${cIdx}_l${lvl}_i${idx}`;
+                
+                if (localStorage.getItem(storageKey) === 'true') cb.checked = true;
+                
+                cb.addEventListener('change', () => {
+                    localStorage.setItem(storageKey, cb.checked);
+                });
+            });
+        });
+
+        async function saveWealth() {
+            const btn = document.getElementById('btn-wealth');
+            btn.innerText = "Saving...";
+            const payload = {
+                pp: document.getElementById('coin-pp').value, gp: document.getElementById('coin-gp').value,
+                sp: document.getElementById('coin-sp').value, cp: document.getElementById('coin-cp').value
+            };
+            try {
+                await fetch(`/api/update_wealth/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                btn.innerText = "Saved!";
+                setTimeout(() => { btn.innerText = "Save Coins"; }, 2000);
+            } catch (e) { btn.innerText = "Error"; }
+        }
+
+        async function addInvItem() {
+            const name = document.getElementById('add-item-name').value.trim();
+            const qty = document.getElementById('add-item-qty').value;
+            if(!name) return;
+            try {
+                const res = await fetch(`/api/add_item/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({name: name, qty: qty}) });
+                const data = await res.json();
+                if(data.success) window.location.reload();
+            } catch (e) {}
+        }
+
+        async function removeInvItem(name) {
+            try {
+                const res = await fetch(`/api/remove_item/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({name: name}) });
+                const data = await res.json();
+                if(data.success) window.location.reload();
+            } catch (e) {}
+        }
+
+        async function quickAddItem(name) {
+            try {
+                const res = await fetch(`/api/add_item/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({name: name, qty: 1}) });
+                if ((await res.json()).success) window.location.reload();
+            } catch(e) {}
+        }
+
+        async function takeLongRest() {
+            if (!confirm("Take a Long Rest (Daily Preparations)?\n\n• Full HP restored\n• Focus Points restored\n• Spell slots refreshed (prepared spells cleared)\n• Conditions cleared (Drained reduces by 1, Doomed persists)\n• Wounded removed")) return;
+            try {
+                // Clear spell prep and expended slots from localStorage
+                Object.keys(localStorage).forEach(key => { 
+                    if (key.startsWith(`pf2e_prep_${pcName}_`) || key.startsWith(`expended_slot_${pcName}_`) || key.startsWith(`cast_prep_${pcName}_`)) {
+                        localStorage.removeItem(key); 
+                    }
+                });
+                
+                const res = await fetch(`/api/long_rest/${pcNameEncoded}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    // Show restoration summary
+                    let summary = `Long Rest Complete!\n\n`;
+                    summary += `HP: ${data.restored.hp}/${data.restored.hp}\n`;
+                    summary += `Focus: ${data.restored.focus} restored\n`;
+                    summary += `Spell slots: Refreshed\n`;
+                    if (data.restored.drained > 0) summary += `Drained: Reduced to ${data.restored.drained}\n`;
+                    if (data.restored.doomed > 0) summary += `Doomed: Still ${data.restored.doomed} (does not clear from rest)\n`;
+                    summary += `\nPrepare your spells for the new day!`;
+                    alert(summary);
+                    window.location.reload();
+                }
+            } catch(e) { console.error('Long rest error:', e); }
+        }
+
+        async function modifyHero(action) {
+            const formData = new FormData(); formData.append('action', action);
+            try {
+                const response = await fetch(`/api/adjust_hero/${pcNameEncoded}`, { method: 'POST', body: formData });
+                const data = await response.json();
+                if (data.success) document.getElementById('current-hero').innerText = data.current_hero;
+            } catch (error) {}
+        }
+
+        async function modifyFocus(action) {
+            const formData = new FormData(); formData.append('action', action);
+            try {
+                const response = await fetch(`/api/adjust_focus/${pcNameEncoded}`, { method: 'POST', body: formData });
+                const data = await response.json();
+                if (data.success) {
+                    const maxFocus = {{ pc.focus_max }};
+                    const curr = data.current_focus;
+                    // Update all focus pip displays
+                    ['header-focus-pips', 'focus-pips'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (!el) return;
+                        let html = '';
+                        for (let i = 0; i < maxFocus; i++) {
+                            html += `<span class="focus-pip ${i < curr ? 'filled' : 'empty'}"></span>`;
+                        }
+                        el.innerHTML = html;
+                    });
+                }
+            } catch (error) {}
+        }
+
+        async function equipArmor(armorName) {
+            try {
+                const res = await fetch(`/api/equip_armor/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: armorName })
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error("Equip armor error:", e); }
+        }
+
+        async function modifyHP(action, amount) {
+            const formData = new FormData(); formData.append('action', action); formData.append('amount', amount);
+            try {
+                const response = await fetch(`/api/adjust_party_hp/${pcNameEncoded}`, { 
+                    method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest'} 
+                });
+                const data = await response.json();
+                if (data.success) {
+                    const hpEl = document.getElementById('current-hp');
+                    hpEl.innerText = data.current_hp;
+                    currentHp = data.current_hp;
+                    
+                    const maxHp = parseInt("{{ pc.hp }}");
+                    const pct = data.current_hp / maxHp;
+                    hpEl.className = 'text-4xl font-bold leading-none ' + 
+                        (data.current_hp === 0 ? 'text-red-600' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-orange-400' : 'text-green-400');
+                    
+                    hpEl.style.transform = 'scale(1.2)';
+                    setTimeout(() => hpEl.style.transform = 'scale(1)', 200);
+                    
+                    // Show dying/wounded alerts
+                    if (data.dead) {
+                        showRollToast('☠ DEAD', 0, `${pcName} has reached Dying 4 and is dead.`, false, true);
+                    } else if (data.dying > 0 && action === 'damage') {
+                        showRollToast('💀 Dying', data.dying, `Dying ${data.dying}${data.wounded > 0 ? ` (Wounded ${data.wounded})` : ''}`, false, true);
+                    } else if (data.dying === 0 && data.wounded > 0 && action === 'heal') {
+                        showRollToast('🩹 Stabilized', 0, `No longer dying. Wounded ${data.wounded}.`, false, false);
+                    }
+                }
+            } catch (error) {}
+        }
+
+        // GM Sync: poll for HP/condition changes made by the GM in the tracker
+        let currentHp = parseInt("{{ pc.current_hp }}");
+        let currentConditions = {{ pc.conditions | tojson }};
+        
+        async function syncFromGM() {
+            try {
+                const res = await fetch('/api/player_state');
+                const data = await res.json();
+                if (!data.encounter) return;
+                
+                const myState = data.encounter.find(c => c.is_pc && c.name === pcName);
+                if (!myState) return;
+                
+                // Check if HP changed (GM adjusted it from tracker)
+                if (myState.current_hp !== undefined && myState.current_hp !== currentHp) {
+                    currentHp = myState.current_hp;
+                    const hpEl = document.getElementById('current-hp');
+                    hpEl.innerText = currentHp;
+                    const maxHp = parseInt("{{ pc.hp }}");
+                    const pct = currentHp / maxHp;
+                    hpEl.className = 'text-4xl font-bold leading-none ' + 
+                        (currentHp === 0 ? 'text-red-600' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-orange-400' : 'text-green-400');
+                    hpEl.style.transform = 'scale(1.2)';
+                    setTimeout(() => hpEl.style.transform = 'scale(1)', 200);
+                }
+                
+                // Check if conditions changed
+                if (myState.conditions && JSON.stringify(myState.conditions) !== JSON.stringify(currentConditions)) {
+                    currentConditions = myState.conditions;
+                    // Update condition badges inline instead of reloading
+                    document.querySelectorAll('[data-cond-name]').forEach(el => {
+                        const cond = el.getAttribute('data-cond-name');
+                        const val = currentConditions[cond] || 0;
+                        const label = el.querySelector('.cond-val');
+                        if (label) label.textContent = `${cond.substring(0,4).toUpperCase()} ${val}`;
+                    });
+                }
+            } catch(e) {}
+        }
+        
+        setInterval(syncFromGM, 4000);
+
+        async function saveNotes() {
+            const btn = document.getElementById('btn-notes');
+            btn.innerText = "Saving...";
+            try {
+                await fetch(`/api/save_notes/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({notes: document.getElementById('pc-notes').value}) });
+                btn.innerText = "Saved!";
+                document.getElementById('notes-autosave-status').innerText = '';
+                setTimeout(() => { btn.innerText = "Save Notes"; }, 2000);
+            } catch (error) { btn.innerText = "Error"; }
+        }
+
+        let autoSaveTimer = null;
+        function scheduleAutoSave() {
+            document.getElementById('notes-autosave-status').innerText = 'Unsaved changes...';
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(async () => {
+                try {
+                    await fetch(`/api/save_notes/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({notes: document.getElementById('pc-notes').value}) });
+                    document.getElementById('notes-autosave-status').innerText = 'Auto-saved ✓';
+                    setTimeout(() => { document.getElementById('notes-autosave-status').innerText = ''; }, 3000);
+                } catch(e) {
+                    document.getElementById('notes-autosave-status').innerText = 'Save failed';
+                }
+            }, 2000);
+        }
+
+        async function exportCharacter() {
+            try {
+                const res = await fetch(`/api/export_character/${pcNameEncoded}`);
+                const data = await res.json();
+                const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${pcName}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch(e) { alert('Export failed.'); }
+        }
+
+        async function revertLevel() {
+            if (!confirm(`Are you sure you want to revert a level? This will permanently delete any feats gained at Level ${pcLevel}.`)) return;
+            const btn = document.getElementById('btn-revert');
+            btn.innerText = "Reverting..."; btn.disabled = true;
+            try {
+                const response = await fetch(`/api/revert_level/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await response.json();
+                if (data.success) window.location.href = `/player/sheet/${pcName}`;
+                else { alert(data.error || "Failed to revert."); btn.innerText = "Error"; }
+            } catch (error) {}
+        }
+
+        async function broadcastToGM(actionName, rollResult, detailText) {
+            try {
+                await fetch('/api/log_roll', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: pcName, action: actionName, result: rollResult, detail: detailText })
+                });
+            } catch (e) {}
+        }
+
+        // ==========================================
+        // INLINE ROLL TOAST SYSTEM (replaces alert())
+        // ==========================================
+        function showRollToast(title, total, detail, isCrit, isFumble) {
+            const container = document.getElementById('roll-toast-container');
+            const toast = document.createElement('div');
+            
+            let borderColor = isCrit ? 'border-amber-500' : isFumble ? 'border-red-500' : 'border-gray-600';
+            let totalColor = isCrit ? 'text-amber-400' : isFumble ? 'text-red-400' : 'text-white';
+            let badge = isCrit ? '<span class="bg-amber-500 text-gray-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 20</span>' 
+                      : isFumble ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 1</span>' : '';
+            
+            toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
+            toast.innerHTML = `
+                <div class="flex justify-between items-start mb-1">
+                    <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">${title}</span>
+                    <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
+                </div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
+                    ${badge}
+                </div>
+                <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700">${detail}</div>
+                <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
+            `;
+            container.prepend(toast);
+            
+            // Auto-remove after 8 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 8000);
+        }
+
+        function rollD20() { return Math.floor(Math.random() * 20) + 1; }
+
+        function rollSkill(skillName, modifier) {
+            if (tryPinRoll(skillName, modifier)) return;
+            const d20 = rollD20();
+            const total = d20 + modifier;
+            let isCrit = d20 === 20, isFumble = d20 === 1;
+            let critStr = isCrit ? " [CRIT SUCCESS]" : isFumble ? " [CRIT FAIL]" : "";
+            let modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
+            const detail = `1d20 (${d20}) ${modStr} = ${total}${critStr}`;
+            showRollToast(skillName, total, detail, isCrit, isFumble);
+            broadcastToGM(skillName, total.toString(), detail);
+        }
+
+        function rollAttack(weaponName, modifier, damageStr) {
+            const d20 = rollD20();
+            const total = d20 + modifier;
+            let isCrit = d20 === 20, isFumble = d20 === 1;
+            let critStr = isCrit ? " [CRIT]" : isFumble ? " [MISS]" : "";
+            let modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
+            const detail = `Hit: 1d20 (${d20}) ${modStr} = ${total}${critStr} | Dmg: ${damageStr}`;
+            
+            // Show toast with inline Roll Damage button
+            const container = document.getElementById('roll-toast-container');
+            const toast = document.createElement('div');
+            let borderColor = isCrit ? 'border-amber-500' : isFumble ? 'border-red-500' : 'border-gray-600';
+            let totalColor = isCrit ? 'text-amber-400' : isFumble ? 'text-red-400' : 'text-white';
+            let badge = isCrit ? '<span class="bg-amber-500 text-gray-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 20</span>' 
+                      : isFumble ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 1</span>' : '';
+            
+            const safeDmg = damageStr.replace(/'/g, "\\'");
+            const safeName = weaponName.replace(/'/g, "\\'");
+            toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
+            toast.innerHTML = `
+                <div class="flex justify-between items-start mb-1">
+                    <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">Attack: ${weaponName}</span>
+                    <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
+                </div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
+                    ${badge}
+                </div>
+                <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700 mb-2">1d20 (${d20}) ${modStr} = ${total}${critStr}</div>
+                <button onclick="rollDamage('${safeName}', '${safeDmg}'); this.disabled=true; this.innerText='Rolled!'; this.classList.add('opacity-50');" class="w-full bg-red-900/40 hover:bg-red-800 border border-red-900 text-red-300 px-3 py-1.5 rounded text-xs font-bold transition-colors uppercase tracking-wider">
+                    🎲 Roll Damage: ${damageStr}
+                </button>
+                <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
+            `;
+            container.prepend(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 15000); // Longer timeout for attack toasts since they have damage button
+            
+            broadcastToGM(`Attack: ${weaponName}`, total.toString(), detail);
+        }
+
+        function rollSpell(spellName) {
+            if (event) event.preventDefault(); 
+            showRollToast(`Cast: ${spellName}`, '✦', `Invoked ${spellName}`, false, false);
+            broadcastToGM(`Cast Spell: ${spellName}`, "Cast", `The player invoked ${spellName}.`);
+        }
+
+        function rollFeature(featureName) {
+            if (event) event.preventDefault(); 
+            showRollToast(`Feature: ${featureName}`, '⚡', `Used ${featureName}`, false, false);
+            broadcastToGM(`Used Feature: ${featureName}`, "Action", `The player used ${featureName}.`);
+        }
+
+        function logRoll(label, valueStr) {
+            // Parse the value — could be a modifier like "3" or a dice expression like "2d8+4"
+            let mod = parseInt(valueStr);
+            if (!isNaN(mod)) {
+                // It's a modifier — roll d20 + mod
+                const d20 = rollD20();
+                const total = d20 + mod;
+                let isCrit = d20 === 20, isFumble = d20 === 1;
+                let modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+                const detail = `1d20 (${d20}) ${modStr} = ${total}`;
+                showRollToast(label, total, detail, isCrit, isFumble);
+                broadcastToGM(label, total.toString(), detail);
+            } else {
+                // It's a dice expression (damage roll) — roll it
+                let result = parseDiceAndRoll(valueStr);
+                if (result) {
+                    showRollToast(label, result.total, result.detail, false, false);
+                    broadcastToGM(label, result.total.toString(), result.detail);
+                }
+            }
+        }
+
+        function rollFlat() {
+            const d20 = rollD20();
+            const detail = `1d20 = ${d20}`;
+            showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1);
+            broadcastToGM('Flat Check', d20.toString(), detail);
+        }
+
+        // ==========================================
+        // FLOATING DICE PANEL FUNCTIONS
+        // ==========================================
+        function toggleDicePanel() {
+            document.getElementById('dice-panel').classList.toggle('hidden');
+        }
+
+        function quickDie(sides) {
+            let roll = Math.floor(Math.random() * sides) + 1;
+            document.getElementById('dice-total').innerText = roll;
+            document.getElementById('dice-breakdown').innerText = `1d${sides} = ${roll}`;
+            document.getElementById('dice-total').classList.add('roll-total-pop');
+            setTimeout(() => document.getElementById('dice-total').classList.remove('roll-total-pop'), 300);
+            broadcastToGM(`Quick Roll: 1d${sides}`, roll.toString(), `1d${sides} = ${roll}`);
+        }
+
+        function parseDiceAndRoll(input) {
+            // Handle complex PF2E damage like "2d8+4 slashing, 1d6 fire" or "3d6+2 piercing"
+            input = input.trim();
+            if (!input) return null;
+            
+            // Split on comma for multi-damage types
+            const parts = input.split(',').map(s => s.trim()).filter(s => s);
+            let grandTotal = 0;
+            let allDetails = [];
+            
+            for (const part of parts) {
+                // Extract dice expression and type label
+                const diceMatch = part.match(/(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
+                if (!diceMatch) continue;
+                
+                const qty = diceMatch[1] ? parseInt(diceMatch[1]) : 1;
+                const sides = parseInt(diceMatch[2]);
+                const modSign = diceMatch[3];
+                const modVal = diceMatch[4] ? parseInt(diceMatch[4]) : 0;
+                if (qty <= 0 || qty > 100 || sides <= 0) continue;
+                
+                // Get the type label (everything after the dice expression)
+                const typeLabel = part.replace(diceMatch[0], '').trim();
+                
+                let rolls = [], sum = 0;
+                for (let i = 0; i < qty; i++) {
+                    let r = Math.floor(Math.random() * sides) + 1;
+                    rolls.push(r); sum += r;
+                }
+                if (modSign === '+') sum += modVal;
+                else if (modSign === '-') sum -= modVal;
+                
+                let expr = `${qty}d${sides}${modSign ? modSign + modVal : ''}`;
+                let detail = `${expr}: [${rolls.join(', ')}]`;
+                if (modSign) detail += ` ${modSign} ${modVal}`;
+                detail += ` = ${sum}`;
+                if (typeLabel) detail += ` ${typeLabel}`;
+                
+                grandTotal += sum;
+                allDetails.push(detail);
+            }
+            
+            if (allDetails.length === 0) return null;
+            return { total: grandTotal, detail: allDetails.join(' + ') };
+        }
+
+        function rollDamage(weaponName, damageStr) {
+            let result = parseDiceAndRoll(damageStr);
+            if (result) {
+                showRollToast(`Damage: ${weaponName}`, result.total, result.detail, false, false);
+                broadcastToGM(`Damage: ${weaponName}`, result.total.toString(), result.detail);
+            } else {
+                showRollToast(`Damage: ${weaponName}`, '?', `Could not parse: ${damageStr}`, false, false);
+            }
+        }
+
+        function customDiceRoll() {
+            const input = document.getElementById('custom-dice-input').value;
+            if (!input) return;
+            let result = parseDiceAndRoll(input);
+            if (result) {
+                document.getElementById('dice-total').innerText = result.total;
+                document.getElementById('dice-breakdown').innerText = result.detail;
+                showRollToast('Custom Roll', result.total, result.detail, false, false);
+                broadcastToGM(`Custom: ${input}`, result.total.toString(), result.detail);
+            } else {
+                document.getElementById('dice-total').innerText = 'ERR';
+                document.getElementById('dice-breakdown').innerText = 'Use format: 2d6+4';
+            }
+            document.getElementById('custom-dice-input').value = '';
+        }
+
+        // ==========================================
+        // EQUIPMENT BROWSER (Armor & Weapons)
+        // ==========================================
+        let equipMode = ''; // 'armor' or 'weapon'
+        let equipCat = 'all';
+        let equipSelected = null;
+        
+        const profRankName = {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'};
+        
+        function canUseArmor(cat) {
+            if (cat === 'unarmored') return (pcProfs['unarmored'] || 0) > 0;
+            if (cat === 'light') return (pcProfs['light'] || 0) > 0;
+            if (cat === 'medium') return (pcProfs['medium'] || 0) > 0;
+            if (cat === 'heavy') return (pcProfs['heavy'] || 0) > 0;
+            return true;
+        }
+        
+        function canUseWeapon(cat) {
+            if (cat === 'simple') return (pcProfs['simple'] || 0) > 0;
+            if (cat === 'martial') return (pcProfs['martial'] || 0) > 0;
+            if (cat === 'advanced') return (pcProfs['advanced'] || 0) > 0;
+            return true;
+        }
+        
+        function toggleArmorBrowser() {
+            equipMode = 'armor'; equipCat = 'all'; equipSelected = null;
+            document.getElementById('equip-modal-title').innerText = 'Armor Browser';
+            document.getElementById('equip-cat-btns').innerHTML = `
+                <button onclick="setEquipCat('all')" class="equip-cat bg-amber-900/40 text-amber-400 border-amber-700 px-2 py-1 rounded text-[10px] font-bold border">All</button>
+                <button onclick="setEquipCat('light')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Light</button>
+                <button onclick="setEquipCat('medium')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Medium</button>
+                <button onclick="setEquipCat('heavy')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Heavy</button>
+                <button onclick="equipArmor('Unarmored')" class="bg-gray-900 text-red-400 border-red-900/50 px-2 py-1 rounded text-[10px] font-bold border hover:border-red-500 ml-2">✕ Unarmored</button>`;
+            document.getElementById('equip-search').value = '';
+            document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select armor to view details.</div>';
+            renderEquipList();
+            document.getElementById('equip-modal').classList.remove('hidden');
+        }
+        
+        function openWeaponBrowser() {
+            equipMode = 'weapon'; equipCat = 'all'; equipSelected = null;
+            document.getElementById('equip-modal-title').innerText = 'Weapon Browser';
+            document.getElementById('equip-cat-btns').innerHTML = `
+                <button onclick="setEquipCat('all')" class="equip-cat bg-amber-900/40 text-amber-400 border-amber-700 px-2 py-1 rounded text-[10px] font-bold border">All</button>
+                <button onclick="setEquipCat('simple')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Simple</button>
+                <button onclick="setEquipCat('martial')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Martial</button>
+                <button onclick="setEquipCat('advanced')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Advanced</button>`;
+            document.getElementById('equip-search').value = '';
+            document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select a weapon to view details.</div>';
+            renderEquipList();
+            document.getElementById('equip-modal').classList.remove('hidden');
+        }
+        
+        function setEquipCat(cat) {
+            equipCat = cat;
+            document.querySelectorAll('.equip-cat').forEach(b => {
+                b.className = 'equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500';
+            });
+            event.target.className = 'equip-cat bg-amber-900/40 text-amber-400 border-amber-700 px-2 py-1 rounded text-[10px] font-bold border';
+            renderEquipList();
+        }
+        
+        document.getElementById('equip-search').addEventListener('input', renderEquipList);
+        
+        function renderEquipList() {
+            const container = document.getElementById('equip-list');
+            const search = document.getElementById('equip-search').value.toLowerCase();
+            let items = equipMode === 'armor' ? dbArmor : dbWeapons;
+            
+            // Filter
+            items = items.filter(item => {
+                if (search && !item.name.toLowerCase().includes(search)) return false;
+                let cat = item.category || 'simple';
+                if (equipCat !== 'all' && cat !== equipCat) return false;
+                return true;
+            });
+            
+            // Sort: usable first, then by name
+            items.sort((a, b) => {
+                let aUsable = equipMode === 'armor' ? canUseArmor(a.category || 'light') : canUseWeapon(a.category || 'simple');
+                let bUsable = equipMode === 'armor' ? canUseArmor(b.category || 'light') : canUseWeapon(b.category || 'simple');
+                if (aUsable !== bUsable) return aUsable ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+            
+            if (items.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-600 text-sm italic py-8">No items match your search.</div>';
+                return;
+            }
+            
+            container.innerHTML = items.slice(0, 500).map((item, idx) => {
+                let cat = item.category || (equipMode === 'armor' ? 'light' : 'simple');
+                let usable = equipMode === 'armor' ? canUseArmor(cat) : canUseWeapon(cat);
+                let opacity = usable ? '' : 'opacity-40';
+                let profBadge = usable 
+                    ? `<span class="text-[9px] bg-green-900/30 text-green-400 px-1 py-0.5 rounded border border-green-800/50">Proficient</span>`
+                    : `<span class="text-[9px] bg-red-900/30 text-red-400 px-1 py-0.5 rounded border border-red-800/50">Untrained</span>`;
+                let catBadge = `<span class="text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700 uppercase">${cat}</span>`;
+                
+                let statsHtml = '';
+                if (equipMode === 'armor') {
+                    statsHtml = `<span class="text-sky-400">AC +${item.ac}</span> · <span class="text-gray-400">Dex +${item.dex_cap}</span>`;
+                    if (item.penalty) statsHtml += ` · <span class="text-red-400">Chk ${item.penalty}</span>`;
+                } else {
+                    statsHtml = `<span class="text-red-300">${item.damage}</span>`;
+                }
+                
+                return `<button onclick="showEquipDetail(${idx}, '${equipMode}')" data-idx="${idx}" class="equip-item w-full text-left bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/30 rounded p-2.5 transition-colors ${opacity}">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-gray-200 text-sm truncate">${escapeHtml(item.name)}</span>
+                        <div class="flex gap-1 shrink-0 ml-2">${catBadge} ${profBadge}</div>
+                    </div>
+                    <div class="text-[10px] mt-1">${statsHtml}</div>
+                </button>`;
+            }).join('');
+        }
+        
+        function showEquipDetail(idx, mode) {
+            let items = mode === 'armor' ? dbArmor : dbWeapons;
+            // Re-filter to get the actual item
+            let search = document.getElementById('equip-search').value.toLowerCase();
+            let filtered = items.filter(item => {
+                if (search && !item.name.toLowerCase().includes(search)) return false;
+                let cat = item.category || 'simple';
+                if (equipCat !== 'all' && cat !== equipCat) return false;
+                return true;
+            });
+            filtered.sort((a, b) => {
+                let aUsable = mode === 'armor' ? canUseArmor(a.category || 'light') : canUseWeapon(a.category || 'simple');
+                let bUsable = mode === 'armor' ? canUseArmor(b.category || 'light') : canUseWeapon(b.category || 'simple');
+                if (aUsable !== bUsable) return aUsable ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+            
+            let item = filtered[idx];
+            if (!item) return;
+            equipSelected = item;
+            
+            let cat = item.category || (mode === 'armor' ? 'light' : 'simple');
+            let usable = mode === 'armor' ? canUseArmor(cat) : canUseWeapon(cat);
+            let profKey = mode === 'armor' ? cat : cat;
+            let profRank = pcProfs[profKey] || 0;
+            
+            let html = `<h3 class="text-xl font-header text-amber-400 mb-1">${escapeHtml(item.name)}</h3>`;
+            html += `<div class="flex flex-wrap gap-1 mb-3">`;
+            html += `<span class="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700 uppercase">${cat}</span>`;
+            if (item.level) html += `<span class="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${item.level}</span>`;
+            if (usable) html += `<span class="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded border border-green-800/50">${profRankName[profRank] || 'Trained'}</span>`;
+            else html += `<span class="text-[10px] bg-red-900/30 text-red-400 px-1.5 py-0.5 rounded border border-red-800/50">Untrained — cannot use effectively</span>`;
+            if (item.traits && item.traits.length) {
+                item.traits.forEach(t => { html += `<span class="text-[10px] bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded border border-gray-700">${escapeHtml(t)}</span>`; });
+            }
+            html += `</div>`;
+            
+            if (mode === 'armor') {
+                html += `<div class="grid grid-cols-2 gap-2 mb-4">
+                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">AC Bonus</div><div class="font-bold text-sky-400 text-lg">+${item.ac}</div></div>
+                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">Dex Cap</div><div class="font-bold text-white text-lg">+${item.dex_cap}</div></div>
+                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">Check Penalty</div><div class="font-bold ${item.penalty ? 'text-red-400' : 'text-gray-400'} text-lg">${item.penalty || '0'}</div></div>
+                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">Speed Penalty</div><div class="font-bold ${item.speed_penalty ? 'text-red-400' : 'text-gray-400'} text-lg">${item.speed_penalty || '0'}</div></div>
+                </div>`;
+                if (item.str_req) html += `<div class="text-xs text-gray-400 mb-3">Strength Requirement: <span class="text-white font-bold">${item.str_req}</span></div>`;
+                html += `<button onclick="equipArmorFromBrowser('${escapeHtml(item.name).replace(/'/g, "\\'")}')" class="w-full ${usable ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'} font-bold py-2 rounded text-sm transition-colors mb-4">${usable ? 'Equip This Armor' : 'Cannot Equip (Untrained)'}</button>`;
+            } else {
+                html += `<div class="bg-gray-900 p-3 rounded border border-gray-700 mb-4">
+                    <div class="text-[10px] text-gray-500 uppercase mb-1">Damage</div>
+                    <div class="font-bold text-red-300 text-lg font-mono">${escapeHtml(item.damage)}</div>
+                </div>`;
+                html += `<button onclick="forgeWeaponFromBrowser('${escapeHtml(item.name).replace(/'/g, "\\'")}')" class="w-full ${usable ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-gray-700 text-gray-400'} font-bold py-2 rounded text-sm transition-colors mb-4">${usable ? 'Equip This Weapon' : 'Equip (Untrained — penalties apply)'}</button>`;
+            }
+            
+            if (item.description) {
+                html += `<div class="border-t border-gray-700 pt-3 text-sm text-gray-400 leading-relaxed foundry-content">${item.description}</div>`;
+            }
+            
+            document.getElementById('equip-detail').innerHTML = html;
+        }
+        
+        function equipArmorFromBrowser(name) {
+            equipArmor(name);
+            document.getElementById('equip-modal').classList.add('hidden');
+        }
+        
+        async function forgeWeaponFromBrowser(name) {
+            // Find weapon and use default stat/prof
+            try {
+                const res = await fetch(`/api/add_weapon/${pcNameEncoded}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, attack_stat: 'str', prof_val: pcProfs['martial'] || pcProfs['simple'] || 2 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('equip-modal').classList.add('hidden');
+                    window.location.reload();
+                }
+            } catch(e) {}
+        }
+
+        function toggleForge() {
+            const ui = document.getElementById('forge-ui');
+            ui.classList.toggle('hidden');
+            if (!ui.classList.contains('hidden') && document.getElementById('forge-base').options.length === 0) {
+                const sel = document.getElementById('forge-base');
+                sel.innerHTML = '<option value="">Select a base weapon...</option>';
+                dbWeapons.sort((a,b) => a.name.localeCompare(b.name)).forEach(w => {
+                    let opt = document.createElement('option');
+                    opt.value = w.name;
+                    opt.innerHTML = escapeHtml(w.name);
+                    sel.appendChild(opt);
+                });
+            }
+        }
+
+        function calcForge() {
+            const wName = document.getElementById('forge-base').value;
+            if (!wName) return;
+            const stat = document.getElementById('forge-stat').value; 
+            const profVal = parseInt(document.getElementById('forge-prof').value); 
+            return { stat: stat, prof: profVal }; 
+        }
+
+        async function saveForgedWeapon() {
+            const wName = document.getElementById('forge-base').value;
+            if (!wName) return alert("Select a base weapon first.");
+            const stat = document.getElementById('forge-stat').value;
+            const profVal = parseInt(document.getElementById('forge-prof').value);
+            const btn = document.getElementById('btn-forge-save');
+            btn.innerText = "Forging..."; btn.disabled = true;
+            try {
+                const res = await fetch(`/api/add_weapon/${pcNameEncoded}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ name: wName, attack_stat: stat, prof_val: profVal })
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch (e) { btn.innerText = "Error"; }
+        }
+
+        async function deleteWeapon(name) {
+            if (!confirm(`Are you sure you want to drop your ${name}?`)) return;
+            try {
+                const res = await fetch(`/api/delete_weapon/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch (e) {}
+        }
+        
+        async function toggleTwoHand(weaponName) {
+            try {
+                const res = await fetch(`/api/toggle_two_hand/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: weaponName })
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error("Toggle error:", e); }
+        }
+
+        // ==========================================
+        // DAILY PREPARATIONS SPA ENGINE
+        // ==========================================
+        function initDailyPrep() {
+            if (!castersData || castersData.length === 0) return;
+            castersData.forEach((caster, idx) => {
+                if (caster.type.toLowerCase().includes('prepared')) renderPrepUI(idx, caster);
+            });
+        }
+
+        function getPrepStorageKey(cIdx) { return `pf2e_prep_${pcName}_${cIdx}`; }
+
+        function renderPrepUI(cIdx, caster) {
+            const ui = document.getElementById(`prep-ui-${cIdx}`);
+            if(!ui) return;
+            
+            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            let html = "";
+            
+            // Build a lookup for spell base levels and action costs
+            let spellBaseLevels = {};
+            let spellActions = {};
+            (caster.levels || []).forEach(lvl => {
+                (lvl.spells || []).forEach(sp => {
+                    if (!spellBaseLevels[sp.name] || spellBaseLevels[sp.name] > lvl.level) {
+                        spellBaseLevels[sp.name] = lvl.level;
+                    }
+                    if (sp.actions) spellActions[sp.name] = sp.actions;
+                });
+            });
+
+            caster.levels.forEach(lvl => {
+                let slots = lvl.slots;
+                if(slots <= 0) return;
+
+                if(!prepState[lvl.level]) prepState[lvl.level] = new Array(slots).fill(null);
+                if(prepState[lvl.level].length !== slots) {
+                    let oldArr = prepState[lvl.level];
+                    prepState[lvl.level] = new Array(slots).fill(null).map((_, i) => oldArr[i] || null);
+                }
+
+                let filledCount = prepState[lvl.level].filter(x => x !== null).length;
+
+                html += `
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-header text-[10px] tracking-wider uppercase" style="color:#A89C8B;">${lvl.label}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold" style="color:#7A7062;">${filledCount}/${slots}</span>
+                            <div class="flex gap-1">
+                                ${Array(slots).fill().map((_, i) => `<input type="checkbox" data-caster-idx="${cIdx}" data-spell-level="${lvl.level}" data-slot-idx="${i}" class="spell-slot-cb w-3 h-3 accent-amber-500" title="Expend Slot">`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                `;
+
+                for(let i=0; i<slots; i++) {
+                    let spellName = prepState[lvl.level][i];
+                    if(spellName) {
+                        let baseLvl = spellBaseLevels[spellName] || 0;
+                        let isHeightened = lvl.level > 0 && baseLvl > 0 && lvl.level > baseLvl;
+                        let heightenTag = isHeightened ? `<span class="text-[8px] ml-1 px-1 rounded" style="background:rgba(167,139,250,0.15); color:#B8A0FF;">↑${lvl.level}</span>` : '';
+                        let actionTag = spellActions[spellName] ? `<span class="text-[9px] ml-1 opacity-50" style="color:#7DC4C4;">${spellActions[spellName]}</span>` : '';
+                        let expendKey = `cast_prep_${pcName}_c${cIdx}_l${lvl.level}_i${i}`;
+                        let isExpended = localStorage.getItem(expendKey) === 'true';
+                        
+                        html += `
+                        <div class="prep-slot filled group relative ${isExpended ? 'expended' : ''}" data-expend-key="${expendKey}">
+                            <div class="flex items-center gap-1 truncate pr-1">
+                                <span class="text-xs truncate ${isExpended ? 'line-through opacity-40' : ''}">${spellName}</span>
+                                ${actionTag}
+                                ${heightenTag}
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                ${isExpended 
+                                    ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(168,156,139,0.1); color:#7A7062;">Undo</button>`
+                                    : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(94,173,173,0.15); color:#7DC4C4;">Cast</button>`
+                                }
+                                <button onclick="event.stopPropagation(); unprepSpell(${cIdx}, ${lvl.level}, ${i})" class="text-gray-600 hover:text-red-400 text-[10px]">✕</button>
+                            </div>
+                        </div>`;
+                    } else {
+                        html += `<div class="prep-slot text-[10px] uppercase tracking-widest font-bold" style="color:#524C42;">Empty</div>`;
+                    }
+                }
+                html += `</div></div>`;
+            });
+            
+            localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+            ui.innerHTML = html || "<div class='text-xs italic text-center' style='color:#7A7062;'>No spell slots available.</div>";
+
+            document.querySelectorAll('#prep-ui-'+cIdx+' .spell-slot-cb').forEach((cb) => {
+                const s_cIdx = cb.getAttribute('data-caster-idx');
+                const s_lvl = cb.getAttribute('data-spell-level');
+                const s_idx = cb.getAttribute('data-slot-idx');
+                const storageKey = `expended_slot_${pcName}_c${s_cIdx}_l${s_lvl}_i${s_idx}`;
+                if (localStorage.getItem(storageKey) === 'true') cb.checked = true;
+                cb.addEventListener('change', () => localStorage.setItem(storageKey, cb.checked));
+            });
+        }
+
+        function prepareSpell(cIdx, lvlNum, spellName) {
+            event.preventDefault();
+            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            let lvlArr = prepState[lvlNum];
+            if(!lvlArr) return;
+
+            let emptyIdx = lvlArr.indexOf(null);
+            if(emptyIdx === -1) { alert(`No empty slots left for Level ${lvlNum}. Un-prepare a spell first.`); return; }
+
+            lvlArr[emptyIdx] = spellName;
+            localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+            renderPrepUI(cIdx, castersData[cIdx]);
+        }
+
+        function unprepSpell(cIdx, lvlNum, slotIdx) {
+            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            if(prepState[lvlNum]) {
+                // Also clear expended state
+                localStorage.removeItem(`cast_prep_${pcName}_c${cIdx}_l${lvlNum}_i${slotIdx}`);
+                prepState[lvlNum][slotIdx] = null;
+                localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+                renderPrepUI(cIdx, castersData[cIdx]);
+            }
+        }
+
+        function castPrepSpell(spellName, expendKey, cIdx) {
+            // Roll the spell AND mark it as expended
+            rollSpell(spellName);
+            localStorage.setItem(expendKey, 'true');
+            renderPrepUI(cIdx, castersData[cIdx]);
+        }
+        
+        function uncastSpell(expendKey, cIdx) {
+            localStorage.removeItem(expendKey);
+            renderPrepUI(cIdx, castersData[cIdx]);
+        }
+
+        function clearPrep(cIdx) {
+            if(confirm("Clear all prepared spells for this class?")) {
+                localStorage.removeItem(getPrepStorageKey(cIdx));
+                renderPrepUI(cIdx, castersData[cIdx]);
+            }
+        }
+
+        switchTab('core');
+        initDailyPrep();
+    </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+{
+    "_id": "tNjimcyUwn8afeH6",
+    "img": "icons/weapons/ammunition/arrowhead-glowing-blue.webp",
+    "name": "Spell Effect: Gravity Weapon",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Gravity Weapon]</p>\n<p>On your first weapon Strike each round, you gain a status bonus to damage equal to twice the number of weapon damage dice.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "domain": "damage",
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Ranger.FocusSpells.GravityWeapon.RollOptionLabel",
+                "option": "gravity-weapon",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "gravity-weapon",
+                    {
+                        "not": "item:category:unarmed"
+                    }
+                ],
+                "selector": "strike-damage",
+                "slug": "gravity-weapon",
+                "type": "status",
+                "value": "@weapon.system.damage.dice * 2"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

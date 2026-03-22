@@ -1,0 +1,62 @@
+{
+    "_id": "9j1uTGBGAc7GIhjm",
+    "img": "systems/pf2e/icons/equipment/consumables/potions/dragonfly-potion.webp",
+    "name": "Effect: Dragonfly Potion",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Dragonfly Potion]</p>\n<p>You gain a fly Speed equal to your land Speed, low-light vision and a +2 item bonus to visual Perception checks.</p>\n<p>You can't be flanked except by creatures higher level than you are (though lower-level creatures can still help their higher-level allies flank).</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 12
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens The Grand Bazaar"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "visual"
+                ],
+                "selector": "perception",
+                "type": "item",
+                "value": 2
+            },
+            {
+                "key": "Sense",
+                "selector": "low-light-vision"
+            },
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": "@actor.system.movement.speeds.land.value"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.flanking.offGuardable",
+                "value": "@actor.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,78 @@
+{
+    "_id": "ysXXa8K9fa383HAD",
+    "folder": "l9aCv9fdO0FpcMZx",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "Great Bear",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "class",
+        "description": {
+            "value": "<p><strong>Frequency</strong> once per hour</p><hr /><p>When you transform, you can take on a bear's bulk and size. You can spend an additional action when using Ursine Avenger Form to gain the effects of a 1st-rank @UUID[Compendium.pf2e.spells-srd.Item.Enlarge] spell, which lasts for the spell's normal duration or until you leave your Ursine Avenger Form, whichever comes first.</p>"
+        },
+        "frequency": {
+            "max": 1,
+            "per": "PT1H"
+        },
+        "level": {
+            "value": 12
+        },
+        "prerequisites": {
+            "value": [
+                {
+                    "value": "Ursine Avenger Form"
+                }
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "RollOption",
+                "option": "great-bear",
+                "toggleable": true
+            },
+            {
+                "itemType": "action",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "great-bear"
+                ],
+                "property": "description",
+                "value": [
+                    {
+                        "text": "PF2E.SpecificRule.UrsineAvenger.GreatBear.Frequency"
+                    },
+                    {
+                        "text": "PF2E.SpecificRule.UrsineAvenger.GreatBear.Description"
+                    },
+                    {
+                        "text": "PF2E.SpecificRule.UrsineAvenger.GreatBear.Effect"
+                    },
+                    {
+                        "divider": true,
+                        "predicate": [
+                            "feat:mighty-bear"
+                        ],
+                        "text": "PF2E.SpecificRule.UrsineAvenger.GreatBear.MightyBear"
+                    }
+                ]
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "archetype"
+            ]
+        }
+    },
+    "type": "feat"
+}

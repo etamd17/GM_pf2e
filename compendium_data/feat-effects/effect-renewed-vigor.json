@@ -1,0 +1,61 @@
+{
+    "_id": "jlZjUtrfcfIWumSe",
+    "img": "systems/pf2e/icons/spells/enduring-might.webp",
+    "name": "Effect: Renewed Vigor",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Renewed Vigor]</p>\n<p>You gain temporary Hit Points equal to half your level plus your Constitution modifier. If you made an attack action this turn, increase the number of temporary Hit Points to your level plus your Constitution modifier.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 8
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.YesLabel",
+                        "value": 1
+                    },
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.NoLabel",
+                        "value": 2
+                    }
+                ],
+                "flag": "outcome",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Barbarian.RenewedVigor.Prompt"
+            },
+            {
+                "key": "TempHP",
+                "predicate": [
+                    "self:effect:rage"
+                ],
+                "value": "floor(@actor.level/@item.flags.pf2e.rulesSelections.outcome) + @actor.abilities.con.mod"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

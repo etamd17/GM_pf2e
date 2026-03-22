@@ -1,0 +1,123 @@
+{
+    "_id": "WLvFC2eE80SEZpUg",
+    "img": "icons/creatures/claws/claw-hooked-purple.webp",
+    "name": "Effect: Wyrm Claw - Armor",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Wyrm Claw], @UUID[Compendium.pf2e.equipment-srd.Item.Wyrm Claw (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Wyrm Claw (Major)]</p>\n<p>You gain resistance to acid, cold, electricity, and fire.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 12
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Treasure Vault"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:wyrm-claw",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Wyrm Claw"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:wyrm-claw-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Wyrm Claw (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:wyrm-claw-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Wyrm Claw (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "wyrm-claw"
+            },
+            {
+                "key": "Resistance",
+                "predicate": [
+                    "wyrm-claw:wyrm-claw"
+                ],
+                "type": [
+                    "acid",
+                    "cold",
+                    "electricity",
+                    "fire"
+                ],
+                "value": 5
+            },
+            {
+                "key": "Resistance",
+                "predicate": [
+                    "wyrm-claw:wyrm-claw-greater"
+                ],
+                "type": [
+                    "acid",
+                    "cold",
+                    "electricity",
+                    "fire"
+                ],
+                "value": 10
+            },
+            {
+                "key": "Resistance",
+                "predicate": [
+                    "wyrm-claw:wyrm-claw-major"
+                ],
+                "type": [
+                    "acid",
+                    "cold",
+                    "electricity",
+                    "fire"
+                ],
+                "value": 15
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

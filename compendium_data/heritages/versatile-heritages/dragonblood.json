@@ -1,0 +1,483 @@
+{
+    "_id": "cbbXIV4QBred4lM5",
+    "folder": "khXMNyAoAoZ70PpT",
+    "img": "systems/pf2e/icons/ancestries/dragonblood.webp",
+    "name": "Dragonblood",
+    "system": {
+        "ancestry": null,
+        "description": {
+            "value": "<p>You're descended in some way from a dragon. Your physical features might show this outwardly, with a pair of draconic horns, patches of scaly skin, or even a tail, or you might develop an internal reserve of draconic power. You gain the dragonblood trait, in addition to the traits from your ancestry. Add Draconic to your ancestry's list of additional languages (allowing you to choose it as a language if your Intelligence modifier is positive). When you roll a success on a saving throw against a fear effect, you get a critical success instead. You can choose from dragonblood feats and feats from your ancestry whenever you gain an ancestry feat.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "actorFlag": true,
+                "choices": [
+                    {
+                        "label": "PF2E.Dragon.Adamantine",
+                        "value": {
+                            "damageType": "bludgeoning",
+                            "dragon": "adamantine",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "burrow",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Barrage",
+                        "value": {
+                            "damageType": "force",
+                            "dragon": "barrage",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Bog",
+                        "value": {
+                            "damageType": "acid",
+                            "dragon": "bog",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "swim",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Brine",
+                        "value": {
+                            "damageType": "bludgeoning",
+                            "dragon": "brine",
+                            "save": "reflex",
+                            "shape": "line",
+                            "speed": "swim",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Cinder",
+                        "value": {
+                            "damageType": "fire",
+                            "dragon": "cinder",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Cloud",
+                        "value": {
+                            "damageType": "electricity",
+                            "dragon": "cloud",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Conspirator",
+                        "value": {
+                            "damageType": "poison",
+                            "dragon": "conspirator",
+                            "save": "fortitude",
+                            "shape": "cone",
+                            "speed": "climb",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Coral",
+                        "value": {
+                            "damageType": "bludgeoning",
+                            "dragon": "coral",
+                            "save": "reflex",
+                            "shape": "line",
+                            "speed": "swim",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Crystal",
+                        "value": {
+                            "damageType": "piercing",
+                            "dragon": "crystal",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Delight",
+                        "value": {
+                            "damageType": "spirit",
+                            "dragon": "delight",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Despair",
+                        "value": {
+                            "damageType": "sonic",
+                            "dragon": "despair",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Diabolic",
+                        "value": {
+                            "damageType": "fire",
+                            "dragon": "diabolic",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Empyreal",
+                        "value": {
+                            "damageType": "spirit",
+                            "dragon": "empyreal",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Executor",
+                        "value": {
+                            "damageType": "sonic",
+                            "dragon": "executor",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Forest",
+                        "value": {
+                            "damageType": "piercing",
+                            "dragon": "forest",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Fortune",
+                        "value": {
+                            "damageType": "force",
+                            "dragon": "fortune",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Horned",
+                        "value": {
+                            "damageType": "poison",
+                            "dragon": "horned",
+                            "save": "fortitude",
+                            "shape": "cone",
+                            "speed": "swim",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Magma",
+                        "value": {
+                            "damageType": "fire",
+                            "dragon": "magma",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "burrow",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Mirage",
+                        "value": {
+                            "damageType": "mental",
+                            "dragon": "mirage",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "climb",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Mocking",
+                        "value": {
+                            "damageType": "bludgeoning",
+                            "dragon": "mocking",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Oath",
+                        "value": {
+                            "damageType": "spirit",
+                            "dragon": "oath",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Omen",
+                        "value": {
+                            "damageType": "mental",
+                            "dragon": "omen",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Phase",
+                        "value": {
+                            "damageType": "force",
+                            "dragon": "phase",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Requiem",
+                        "value": {
+                            "damageType": "spirit",
+                            "dragon": "requiem",
+                            "save": "will",
+                            "shape": "line",
+                            "speed": "swim",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Resurrection",
+                        "value": {
+                            "damageType": "void",
+                            "dragon": "resurrection",
+                            "save": "fortitude",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Rime",
+                        "value": {
+                            "damageType": "cold",
+                            "dragon": "rime",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "swim",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Rune",
+                        "value": {
+                            "damageType": "fire",
+                            "dragon": "rune",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Sage",
+                        "value": {
+                            "damageType": "mental",
+                            "dragon": "sage",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Sea",
+                        "value": {
+                            "damageType": "bludgeoning",
+                            "dragon": "sea",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "swim",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Sky",
+                        "value": {
+                            "damageType": "electricity",
+                            "dragon": "sky",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "divine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Sovereign",
+                        "value": {
+                            "damageType": "mental",
+                            "dragon": "sovereign",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Stormcrown",
+                        "value": {
+                            "damageType": "electricity",
+                            "dragon": "stormcrown",
+                            "save": "reflex",
+                            "shape": "line",
+                            "speed": "none",
+                            "tradition": "primal"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Time",
+                        "value": {
+                            "damageType": "force",
+                            "dragon": "time",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Umbral",
+                        "value": {
+                            "damageType": "void",
+                            "dragon": "umbral",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Underworld",
+                        "value": {
+                            "damageType": "fire",
+                            "dragon": "underworld",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "burrow",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Vizier",
+                        "value": {
+                            "damageType": "fire",
+                            "dragon": "vizier",
+                            "save": "reflex",
+                            "shape": "cone",
+                            "speed": "swim",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Vorpal",
+                        "value": {
+                            "damageType": "void",
+                            "dragon": "vorpal",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Wailing",
+                        "value": {
+                            "damageType": "sonic",
+                            "dragon": "wailing",
+                            "save": "fortitude",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "arcane"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Whisper",
+                        "value": {
+                            "damageType": "mental",
+                            "dragon": "whisper",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "none",
+                            "tradition": "occult"
+                        }
+                    },
+                    {
+                        "label": "PF2E.Dragon.Wish",
+                        "value": {
+                            "damageType": "mental",
+                            "dragon": "wish",
+                            "save": "will",
+                            "shape": "cone",
+                            "speed": "climb",
+                            "tradition": "arcane"
+                        }
+                    }
+                ],
+                "flag": "dragonblood",
+                "key": "ChoiceSet"
+            },
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    "item:trait:fear"
+                ],
+                "selector": "saving-throw"
+            }
+        ],
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "dragonblood"
+            ]
+        }
+    },
+    "type": "heritage"
+}

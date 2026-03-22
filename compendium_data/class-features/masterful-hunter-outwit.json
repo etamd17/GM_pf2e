@@ -1,0 +1,109 @@
+{
+    "_id": "vWZaLE2fEKMBw3D5",
+    "img": "icons/creatures/invertebrates/spider-web-black.webp",
+    "name": "Masterful Hunter (Outwit)",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your mastery of skills allows you to overwhelm your prey. If you have master proficiency in Deception, Intimidation, Stealth, or the skill you use to Recall Knowledge about your prey, increase the circumstance bonus against the prey with that skill from +2 to +4. If you have master proficiency with your armor, increase the circumstance bonus to AC against the prey from +1 to +2.</p>"
+        },
+        "level": {
+            "value": 17
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    {
+                        "or": [
+                            "proficiency:master",
+                            "proficiency:legendary"
+                        ]
+                    }
+                ],
+                "selector": "skill-check",
+                "slug": "outwit",
+                "value": 4
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    {
+                        "or": [
+                            {
+                                "and": [
+                                    "armor:category:light",
+                                    {
+                                        "gte": [
+                                            "defense:light:rank",
+                                            3
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "and": [
+                                    "armor:category:medium",
+                                    {
+                                        "gte": [
+                                            "defense:medium:rank",
+                                            3
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "and": [
+                                    "armor:category:heavy",
+                                    {
+                                        "gte": [
+                                            "defense:heavy:rank",
+                                            3
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "and": [
+                                    "armor:category:unarmored",
+                                    {
+                                        "gte": [
+                                            "defense:unarmored:rank",
+                                            3
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "selector": "ac",
+                "slug": "outwit",
+                "value": 2
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "ranger"
+            ]
+        }
+    },
+    "type": "feat"
+}

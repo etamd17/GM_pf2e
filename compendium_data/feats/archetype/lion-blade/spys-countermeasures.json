@@ -1,0 +1,41 @@
+{
+    "_id": "2xxFg9yRuCDpME3z",
+    "folder": "bviEMqBLpX2bzyPl",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "Spy's Countermeasures",
+    "system": {
+        "actionType": {
+            "value": "free"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "class",
+        "description": {
+            "value": "<p><strong>Trigger</strong> You succeed at a save against a detection, mental, or scrying effect.</p><hr /><p>You've learned how to analyze and fake your responses to the most common magic used against spies. You can attempt to identify the effect via @UUID[Compendium.pf2e.actionspf2e.Item.Identify Magic] using the magical tradition skill of the effect or Espionage Lore, even if you didn't notice the spell being cast.</p>\n<p>If you successfully identify the triggering effect, and it would normally fail or have no effect, you can make the caster of the triggering effect think the effect or spell succeeded. If they would obtain a result, such as receive a piece of information, you decide what that result is. If the effect would influence you to take certain actions, you can make it appear as if you were affected and attempt to play along; if the effect normally establishes a mental link, it functions normally, but you can disregard any commands you receive through the link.</p>"
+        },
+        "level": {
+            "value": 10
+        },
+        "prerequisites": {
+            "value": [
+                {
+                    "value": "Lion Blade Dedication"
+                }
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Shining Kingdoms"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "archetype"
+            ]
+        }
+    },
+    "type": "feat"
+}

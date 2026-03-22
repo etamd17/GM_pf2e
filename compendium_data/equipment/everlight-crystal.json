@@ -1,0 +1,70 @@
+{
+    "_id": "mRz8Jmk4Q06SsZpC",
+    "img": "systems/pf2e/icons/equipment/held-items/everburning-torch.webp",
+    "name": "Everlight Crystal",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>An <em>everlight</em> crystal is one of the most common applications of permanent magic. This stone or gem sheds magical bright light constantly in a 20-foot radius (and dim light for the next 20 feet). The light requires no oxygen, generates no heat, and can't be extinguished, though the crystal can be covered.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 1
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 15
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder GM Core"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "key": "TokenLight",
+                "value": {
+                    "alpha": 0.15,
+                    "animation": {
+                        "speed": 1,
+                        "type": "starlight"
+                    },
+                    "attenuation": 0.4,
+                    "bright": 20,
+                    "color": "#ffdf3d",
+                    "dim": 40
+                }
+            },
+            {
+                "key": "TokenEffectIcon",
+                "value": "systems/pf2e/icons/equipment/held-items/everburning-torch.webp"
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "light",
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "equipment"
+}

@@ -1,0 +1,46 @@
+{
+    "_id": "0iidKkzC2yy13lIf",
+    "img": "icons/magic/fire/flame-burning-fist-strike.webp",
+    "name": "Master Strikes",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You've honed your body into an even deadlier weapon. Your proficiency ranks for unarmed attacks and simple weapons increase to master.</p>"
+        },
+        "level": {
+            "value": 13
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "subfeatures": {
+            "proficiencies": {
+                "simple": {
+                    "rank": 3
+                },
+                "unarmed": {
+                    "rank": 3
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "monk"
+            ]
+        }
+    },
+    "type": "feat"
+}

@@ -1,0 +1,100 @@
+{
+    "_id": "xldy59c3WDGYlAYs",
+    "img": "icons/sundries/flags/banner-blue.webp",
+    "name": "Banner of the Restful",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This peach-colored magical banner offers the promise of a good watch and a comfortable sleep. You and allies within the banner's aura gain a +1 item bonus to Perception DCs and protection from severe cold and heat.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 4
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 100
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Battlecry!"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Equipment.Banner.CommandersBanner",
+                "mergeable": true,
+                "option": "magical-commanders-banner",
+                "predicate": [
+                    "feature:commanders-banner"
+                ],
+                "suboptions": [
+                    {
+                        "label": "{item|name}",
+                        "value": "banner-of-the-restful"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "effects": [
+                    {
+                        "affects": "allies",
+                        "uuid": "Compendium.pf2e.equipment-effects.Item.Effect: Banner of the Restful"
+                    }
+                ],
+                "key": "Aura",
+                "level": 4,
+                "predicate": [
+                    {
+                        "not": "magical-commanders-banner:banner-of-the-restful"
+                    }
+                ],
+                "radius": 30
+            },
+            {
+                "effects": [
+                    {
+                        "affects": "allies",
+                        "uuid": "Compendium.pf2e.equipment-effects.Item.Effect: Banner of the Restful"
+                    }
+                ],
+                "key": "Aura",
+                "level": 4,
+                "predicate": [
+                    "magical-commanders-banner:banner-of-the-restful",
+                    "commanders-banner"
+                ],
+                "radius": 30,
+                "slug": "commanders-banner"
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "aura",
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "affixed-or-held-in-one-hand"
+        }
+    },
+    "type": "equipment"
+}

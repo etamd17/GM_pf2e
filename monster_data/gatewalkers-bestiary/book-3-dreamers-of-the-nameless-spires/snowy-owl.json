@@ -1,0 +1,1346 @@
+{
+    "_id": "DP1XF7ygEPlBOdVB",
+    "folder": "4aRsm6CfdI22pko7",
+    "img": "systems/pf2e/icons/default-icons/npc.svg",
+    "items": [
+        {
+            "_id": "vKkfbxJTjIIVwnj3",
+            "img": "systems/pf2e/icons/default-icons/spellcastingEntry.svg",
+            "name": "Occult Prepared Spells",
+            "sort": 100000,
+            "system": {
+                "autoHeightenLevel": {
+                    "value": null
+                },
+                "description": {
+                    "value": ""
+                },
+                "prepared": {
+                    "flexible": false,
+                    "value": "prepared"
+                },
+                "proficiency": {
+                    "value": 1
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slots": {
+                    "slot0": {
+                        "max": 5,
+                        "prepared": [
+                            {
+                                "id": "rbXwG2iSDDjXO8Zz"
+                            },
+                            {
+                                "id": "ExXO1qtkz258bv4W"
+                            },
+                            {
+                                "id": "by3izQo2K2320BCz"
+                            },
+                            {
+                                "id": "QdYqNAZCszP9MRmN"
+                            },
+                            {
+                                "id": "9bXfgEInnOvyTXI0"
+                            }
+                        ]
+                    },
+                    "slot1": {
+                        "max": 3,
+                        "prepared": [
+                            {
+                                "id": "PoWfLqQk7lolG9HG"
+                            },
+                            {
+                                "id": "YJtHohHThg47BHos"
+                            },
+                            {
+                                "id": "oe08sCoOOhpFdt7h"
+                            }
+                        ]
+                    },
+                    "slot2": {
+                        "max": 3,
+                        "prepared": [
+                            {
+                                "id": "mVXlih0aGJXXZqPI"
+                            },
+                            {
+                                "id": "MfFoTTnNxwHGzcPj"
+                            },
+                            {
+                                "id": "oe08sCoOOhpFdt7h"
+                            }
+                        ]
+                    },
+                    "slot3": {
+                        "max": 3,
+                        "prepared": [
+                            {
+                                "id": "gPwldoqhebMzRRJk"
+                            },
+                            {
+                                "id": "W6MYdfDkRoK9KdqH"
+                            },
+                            {
+                                "id": "oe08sCoOOhpFdt7h"
+                            }
+                        ]
+                    },
+                    "slot4": {
+                        "max": 2,
+                        "prepared": [
+                            {
+                                "id": "wJFd0BOzPY41zCWf"
+                            },
+                            {
+                                "id": "oe08sCoOOhpFdt7h"
+                            }
+                        ]
+                    }
+                },
+                "slug": null,
+                "spelldc": {
+                    "dc": 18,
+                    "value": 12
+                },
+                "tradition": {
+                    "value": "occult"
+                },
+                "traits": {}
+            },
+            "type": "spellcastingEntry"
+        },
+        {
+            "_id": "wJFd0BOzPY41zCWf",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.pkcOby5prOausy1k"
+            },
+            "folder": "7cyoYPoPYA01mErU",
+            "img": "icons/sundries/gaming/playing-cards-black.webp",
+            "name": "Read Omens",
+            "sort": 200000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You peek into the future. Choose a particular goal or activity you plan to engage in within 1 week, or an event you expect might happen within 1 week. You learn a cryptic clue or piece of advice that could help with the chosen event, often in the form of a rhyme or omen.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 4
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": ""
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "read-omens",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "10 minutes"
+                },
+                "traits": {
+                    "rarity": "uncommon",
+                    "traditions": [
+                        "divine",
+                        "occult"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "manipulate",
+                        "prediction"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "W6MYdfDkRoK9KdqH",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.ZYoC630tNGutgbE0"
+            },
+            "folder": "4fJHnYFqH0VjZXPv",
+            "img": "icons/magic/light/orb-lightbulb-gray.webp",
+            "name": "Hypercognition",
+            "sort": 300000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You rapidly catalog and collate information relevant to your current situation. You can instantly use up to 6 Recall Knowledge actions as part of Casting this Spell. For these actions, you can't use any special abilities, reactions, or free actions that trigger when you Recall Knowledge.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 3
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": ""
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "hypercognition",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "1"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "occult"
+                    ],
+                    "value": [
+                        "concentrate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "mVXlih0aGJXXZqPI",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.SUKaxVZW2TlM8lu0"
+            },
+            "folder": "lPzcDrjGDFbzuF2r",
+            "img": "icons/consumables/fruit/berry-clustered-white.webp",
+            "name": "Cleanse Affliction",
+            "sort": 400000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": true,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>Gentle restorative magic pushes back the effects of toxins and more complex maladies. Choose an affliction on the target, such as a curse, disease, or poison. If it has advanced past stage one, reduce the stage by one. This reduction can be applied only once to a given case of an affliction, with the case ending when it's completely cured. Although the reduction can't occur again, heightened versions of this spell attempt to counteract with each casting.</p>\n<hr />\n<p><strong>Heightened (3rd)</strong> Attempt to counteract the affliction if it is a disease or poison.</p>\n<p><strong>Heightened (4th)</strong> Attempt to counteract the affliction if it is a curse, disease, or poison.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 2
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "touch"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "cleanse-affliction",
+                "target": {
+                    "value": "1 willing creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "healing",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "gPwldoqhebMzRRJk",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.9HpwDN4MYQJnW0LG"
+            },
+            "folder": "lPzcDrjGDFbzuF2r",
+            "img": "systems/pf2e/icons/spells/dispel-magic.webp",
+            "name": "Dispel Magic",
+            "sort": 500000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": true,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You unravel the magic behind a spell or effect. Attempt a counteract check against the target. If you successfully counteract a magic item, the item becomes a mundane item of its type for 10 minutes. This doesn't change the item's non-magical properties. If the target is an artifact or similar item, you automatically fail.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 2
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "120 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "dispel-magic",
+                "target": {
+                    "value": "1 spell effect or unattended magic item"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "MfFoTTnNxwHGzcPj",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.Fr58LDSrbndgld9n"
+            },
+            "folder": "lPzcDrjGDFbzuF2r",
+            "img": "icons/magic/defensive/shield-barrier-deflect-teal.webp",
+            "name": "Resist Energy",
+            "sort": 600000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>A shield of elemental energy protects a creature against one type of energy damage. Choose acid, cold, electricity, fire, or sonic damage. The target and its gear gain resistance 5 against the damage type you chose.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Resist Energy]</p>\n<hr />\n<p><strong>Heightened (4th)</strong> The resistance increases to 10, and you can target up to two creatures.</p>\n<p><strong>Heightened (7th)</strong> The resistance increases to 15, and you can target up to five creatures.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "10 minutes"
+                },
+                "heightening": {
+                    "levels": {
+                        "4": {
+                            "target": {
+                                "value": "2 creatures"
+                            }
+                        },
+                        "7": {
+                            "target": {
+                                "value": "5 creatures"
+                            }
+                        }
+                    },
+                    "type": "fixed"
+                },
+                "level": {
+                    "value": 2
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "touch"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "resist-energy",
+                "target": {
+                    "value": "1 creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "PoWfLqQk7lolG9HG",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.4WAib3GichxLjp5p"
+            },
+            "folder": "T8AzYUgNIAgTJ9Iz",
+            "img": "systems/pf2e/icons/spells/alarm.webp",
+            "name": "Alarm",
+            "sort": 700000,
+            "system": {
+                "area": {
+                    "type": "burst",
+                    "value": 20
+                },
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You ward an area to alert you when creatures enter without your permission. When you cast alarm, select a password. Whenever a Small or larger corporeal creature enters the spell's area without speaking the password, alarm sends your choice of a mental alert (in which case the spell gains the mental trait) or an audible alarm with the sound and volume of a hand bell (in which case the spell gains the auditory trait). Either option automatically awakens you, and the bell allows each creature in the area to attempt a @Check[perception|dc:15] check to wake up. A creature aware of the alarm must succeed at a Stealth check against the spell's DC or trigger the spell when moving into the area.</p>\n<hr />\n<p><strong>Heightened (3rd)</strong> You can specify a trigger for which types of creatures sound the alarm spell.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "8 hours"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "touch"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "alarm",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "10 minutes"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "YJtHohHThg47BHos",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.XSujb7EsSwKl19Uu"
+            },
+            "folder": "T8AzYUgNIAgTJ9Iz",
+            "img": "systems/pf2e/icons/spells/bless.webp",
+            "name": "Bless",
+            "sort": 800000,
+            "system": {
+                "area": {
+                    "type": "emanation",
+                    "value": 15
+                },
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": true,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>Blessings from beyond help your companions strike true. You and your allies gain a +1 status bonus to attack rolls while within the emanation. Once per round on subsequent turns, you can Sustain the spell to increase the emanation's radius by 10 feet.</p>\n<p>Bless can counteract @UUID[Compendium.pf2e.spells-srd.Item.Bane].</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Aura: Bless]</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "1 minute"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": ""
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "bless",
+                "target": {
+                    "value": "you and allies in the area"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "divine",
+                        "occult"
+                    ],
+                    "value": [
+                        "aura",
+                        "concentrate",
+                        "manipulate",
+                        "mental"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "rbXwG2iSDDjXO8Zz",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.gpzpAAAJ1Lza2JVl"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "systems/pf2e/icons/spells/detect-magic.webp",
+            "name": "Detect Magic",
+            "sort": 900000,
+            "system": {
+                "area": {
+                    "type": "emanation",
+                    "value": 30
+                },
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You send out a pulse that registers the presence of magic. You receive no information beyond the presence or absence of magic. You can choose to ignore magic you're fully aware of, such as the magic items and ongoing spells of you and your allies. You detect illusion magic only if that magic's effect has a lower rank than the rank of your <em>detect magic</em> spell. However, items that have an illusion aura but aren't deceptive in appearance (such as an @UUID[Compendium.pf2e.equipment-srd.Item.Invisibility Potion]) typically are detected normally.</p>\n<hr />\n<p><strong>Heightened (3rd)</strong> You learn the rank or level of the most powerful magical effect the spell detects, as determined by the GM.</p>\n<p><strong>Heightened (4th)</strong> As 3rd rank, but you also pinpoint the source of the highest-rank magic. Like for an imprecise sense, you don't learn the exact location, but can narrow down the source to within a 5-foot cube (or the nearest if larger than that).</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": ""
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "detect-magic",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate",
+                        "detection",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "ExXO1qtkz258bv4W",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.izcxFQFwf3woCnFs"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "systems/pf2e/icons/spells/guidance.webp",
+            "name": "Guidance",
+            "sort": 1000000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You ask for the guidance of supernatural entities, granting the target a +1 status bonus to one attack roll, Perception check, saving throw, or skill check the target attempts before the duration ends. The target chooses which roll to use the bonus on before rolling. If the target uses the bonus, the spell ends. Either way, the target is then temporarily immune for 1 hour.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Guidance]</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Effect: Guidance Immunity]</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "until the start of your next turn"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "30 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "guidance",
+                "target": {
+                    "value": "1 creature"
+                },
+                "time": {
+                    "value": "1"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "by3izQo2K2320BCz",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.WBmvzNDfpwka3qT4"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "systems/pf2e/icons/spells/light.webp",
+            "name": "Light",
+            "sort": 1100000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You create an orb of light that sheds bright light in a 20-foot radius (and dim light for the next 20 feet) in a color you choose. If you create the light in the same space as a willing creature, you can attach the light to the creature, causing it to float near that creature as it moves. You can Sustain the spell to move the light up to 60 feet; you can attach or detach it from a creature as part of this movement.</p>\n<p>You can Dismiss the spell. If you Cast the Spell while you already have four <em>light</em> spells active, you must choose one of the existing spells to end.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Light]</p>\n<hr />\n<p><strong>Heightened (4th)</strong> The orb sheds light in a 60-foot radius (and dim light for the next 60 feet).</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "until your next daily preparations"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "120 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "light",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate",
+                        "light",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "QdYqNAZCszP9MRmN",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.OhD2Z6rIGGD5ocZA"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "icons/magic/light/explosion-star-glow-silhouette.webp",
+            "name": "Read Aura",
+            "sort": 1200000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You focus on the target object, opening your mind to perceive magical auras. When the casting is complete, you know whether that item is magical. You or anyone you advise about the aura gains a +2 circumstance bonus to @UUID[Compendium.pf2e.actionspf2e.Item.Identify Magic] on the item. If the object is illusory, you detect this only if the effect's rank is lower than the rank of your <em>read aura</em> spell.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Read Aura]</p><hr /><p><strong>Heightened (3rd)</strong> You can target up to 10 objects.</p>\n<p><strong>Heightened (6th)</strong> You can target any number of objects.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "heightening": {
+                    "levels": {
+                        "3": {
+                            "target": {
+                                "value": "10 objects"
+                            }
+                        },
+                        "6": {
+                            "target": {
+                                "value": "any number of objects"
+                            }
+                        }
+                    },
+                    "type": "fixed"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "30 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "read-aura",
+                "target": {
+                    "value": "1 object"
+                },
+                "time": {
+                    "value": "1 minute"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate",
+                        "detection",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "9bXfgEInnOvyTXI0",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.TVKNbcgTee19PXZR"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "systems/pf2e/icons/spells/shield.webp",
+            "name": "Shield",
+            "sort": 1300000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You raise a magical shield of force. This counts as using the Raise a Shield action, giving you a +1 circumstance bonus to AC until the start of your next turn, but it doesn't require a hand to use.</p>\n<p>While the spell is in effect, you can use the @UUID[Compendium.pf2e.feats-srd.Item.Shield Block] reaction with your magic shield. The shield has Hardness 5. You can use the spell's reaction to reduce damage from any spell or magical effect, even if it doesn't deal physical damage. After you use Shield Block, the spell ends and you can't cast it again for 10 minutes.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Shield]</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Effect: Shield Immunity]</p>\n<hr />\n<p><strong>Heightened (+2)</strong> The shield's Hardness increases by 5.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "until the start of your next turn"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": ""
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "shield",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "1"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate",
+                        "force"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "oe08sCoOOhpFdt7h",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.szIyEsvihc5e1w8n"
+            },
+            "folder": "T8AzYUgNIAgTJ9Iz",
+            "img": "icons/magic/air/air-burst-spiral-teal-green.webp",
+            "name": "Soothe",
+            "sort": 1400000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {
+                    "0": {
+                        "applyMod": false,
+                        "category": null,
+                        "formula": "1d10+4",
+                        "kinds": [
+                            "healing"
+                        ],
+                        "materials": [],
+                        "type": "untyped"
+                    }
+                },
+                "defense": null,
+                "description": {
+                    "value": "<p>You grace the target's mind, boosting its mental defenses and healing its wounds. The target regains 1d10+4 Hit Points when you Cast the Spell and gains a +2 status bonus to saves against mental effects for the duration.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Soothe]</p>\n<hr />\n<p><strong>Heightened (+1)</strong> The amount of healing increases by 1d10+4.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "1 minute"
+                },
+                "heightening": {
+                    "damage": {
+                        "0": "1d10+4"
+                    },
+                    "interval": 1,
+                    "type": "interval"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "vKkfbxJTjIIVwnj3"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "30 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "soothe",
+                "target": {
+                    "value": "1 willing creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "occult"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "emotion",
+                        "healing",
+                        "manipulate",
+                        "mental"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "d9kZ2cFLPzn2QBP2",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.equipment-srd.Item.SLQgdLk5K9JV4ACF"
+            },
+            "img": "icons/equipment/head/hood-leather-fur-brown.webp",
+            "name": "Hide Clothing",
+            "sort": 1500000,
+            "system": {
+                "baseItem": null,
+                "bulk": {
+                    "value": 0.1
+                },
+                "containerId": null,
+                "description": {
+                    "value": ""
+                },
+                "equipped": {
+                    "carryType": "worn",
+                    "handsHeld": 0,
+                    "invested": null
+                },
+                "hardness": 0,
+                "hp": {
+                    "max": 0,
+                    "value": 0
+                },
+                "level": {
+                    "value": 0
+                },
+                "material": {
+                    "grade": null,
+                    "type": null
+                },
+                "price": {
+                    "value": {
+                        "sp": 4
+                    }
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "quantity": 1,
+                "rules": [],
+                "size": "med",
+                "slug": "clothing-cold-weather",
+                "traits": {
+                    "rarity": "common",
+                    "value": []
+                },
+                "usage": {
+                    "value": "worn"
+                }
+            },
+            "type": "equipment"
+        },
+        {
+            "_id": "xHRjkDVIptyCFt7d",
+            "img": "systems/pf2e/icons/default-icons/melee.svg",
+            "name": "Fist",
+            "sort": 1600000,
+            "system": {
+                "attack": {
+                    "value": ""
+                },
+                "attackEffects": {
+                    "value": []
+                },
+                "bonus": {
+                    "value": 12
+                },
+                "damageRolls": {
+                    "Dg5YshNjxNgEFdQ0": {
+                        "damage": "1d4",
+                        "damageType": "bludgeoning"
+                    }
+                },
+                "description": {
+                    "value": ""
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "range": null,
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "agile",
+                        "finesse",
+                        "nonlethal",
+                        "unarmed"
+                    ]
+                }
+            },
+            "type": "melee"
+        },
+        {
+            "_id": "gxgGTjEOXwlSsEhe",
+            "img": "systems/pf2e/icons/actions/Passive.webp",
+            "name": "Ruun's Blessing",
+            "sort": 1700000,
+            "system": {
+                "actionType": {
+                    "value": "passive"
+                },
+                "actions": {
+                    "value": null
+                },
+                "category": "defensive",
+                "description": {
+                    "value": "<p>The presence of Ruun's soul merged with her own grants Snowy Owl immunity to cold. In addition, she no longer needs to eat or drink, but often chooses to do so out of habit or politeness.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": []
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "iOok9WPRTw4wyJGd",
+            "img": "systems/pf2e/icons/actions/OneAction.webp",
+            "name": "Ruun's Wings",
+            "sort": 1800000,
+            "system": {
+                "actionType": {
+                    "value": "action"
+                },
+                "actions": {
+                    "value": 1
+                },
+                "category": "offensive",
+                "description": {
+                    "value": "<p>Snowy Owl manifests a spectral pair of owl's wings that grant her a fly Speed of 25 feet. She can use this action again to hide her wings, which she often does when in mixed company in order to avoid drawing too much attention. If she falls, she can activate this ability as a reaction to immediately arrest her fall.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [
+                    {
+                        "key": "RollOption",
+                        "option": "ruuns-wings",
+                        "toggleable": true,
+                        "value": true
+                    },
+                    {
+                        "key": "BaseSpeed",
+                        "predicate": [
+                            "ruuns-wings"
+                        ],
+                        "selector": "fly",
+                        "value": 25
+                    }
+                ],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "occult"
+                    ]
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "js2T7qrPcI5OCefY",
+            "img": "systems/pf2e/icons/default-icons/lore.svg",
+            "name": "Astronomy Lore",
+            "sort": 1900000,
+            "system": {
+                "description": {
+                    "value": ""
+                },
+                "mod": {
+                    "value": 15
+                },
+                "proficient": {
+                    "value": 0
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null
+            },
+            "type": "lore"
+        },
+        {
+            "_id": "PGHKdPg7PIG2Xt4q",
+            "img": "systems/pf2e/icons/default-icons/lore.svg",
+            "name": "Fortune-Telling Lore",
+            "sort": 2000000,
+            "system": {
+                "description": {
+                    "value": ""
+                },
+                "mod": {
+                    "value": 15
+                },
+                "proficient": {
+                    "value": 0
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null
+            },
+            "type": "lore"
+        }
+    ],
+    "name": "Snowy Owl",
+    "system": {
+        "abilities": {
+            "cha": {
+                "mod": 4
+            },
+            "con": {
+                "mod": 2
+            },
+            "dex": {
+                "mod": 1
+            },
+            "int": {
+                "mod": 1
+            },
+            "str": {
+                "mod": 0
+            },
+            "wis": {
+                "mod": 5
+            }
+        },
+        "attributes": {
+            "ac": {
+                "details": "",
+                "value": 21
+            },
+            "allSaves": {
+                "value": ""
+            },
+            "hp": {
+                "details": "",
+                "max": 60,
+                "temp": 0,
+                "value": 60
+            },
+            "immunities": [
+                {
+                    "exceptions": [],
+                    "type": "cold"
+                }
+            ],
+            "speed": {
+                "otherSpeeds": [],
+                "value": 25
+            }
+        },
+        "details": {
+            "blurb": "Female avatar of a Sarkorian god",
+            "languages": {
+                "details": "",
+                "value": [
+                    "common",
+                    "elven",
+                    "empyrean",
+                    "erutaki"
+                ]
+            },
+            "level": {
+                "value": 7
+            },
+            "privateNotes": "",
+            "publicNotes": "",
+            "publication": {
+                "license": "ORC",
+                "remaster": true,
+                "title": "Pathfinder Adventure Path: Gatewalkers"
+            }
+        },
+        "initiative": {
+            "statistic": "perception"
+        },
+        "perception": {
+            "details": "",
+            "mod": 16,
+            "senses": [
+                {
+                    "type": "darkvision"
+                }
+            ]
+        },
+        "resources": {},
+        "saves": {
+            "fortitude": {
+                "saveDetail": "",
+                "value": 11
+            },
+            "reflex": {
+                "saveDetail": "",
+                "value": 10
+            },
+            "will": {
+                "saveDetail": "",
+                "value": 14
+            }
+        },
+        "skills": {
+            "medicine": {
+                "base": 16
+            },
+            "nature": {
+                "base": 16
+            },
+            "occultism": {
+                "base": 15
+            },
+            "religion": {
+                "base": 14
+            },
+            "survival": {
+                "base": 16
+            }
+        },
+        "traits": {
+            "rarity": "unique",
+            "size": {
+                "value": "med"
+            },
+            "value": [
+                "human",
+                "humanoid"
+            ]
+        }
+    },
+    "type": "npc"
+}

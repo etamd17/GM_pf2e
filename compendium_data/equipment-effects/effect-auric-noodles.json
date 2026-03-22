@@ -1,0 +1,52 @@
+{
+    "_id": "uijpoXaiKXcCYrSD",
+    "img": "systems/pf2e/icons/equipment/alchemical-items/food/auric-noodles.webp",
+    "name": "Effect: Auric Noodles",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Auric Noodles]</p>\n<p>You gain a +1 item bonus to checks to Identify Magic.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:identify-magic"
+                ],
+                "selector": [
+                    "arcana",
+                    "nature",
+                    "religion",
+                    "occultism"
+                ],
+                "type": "item",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

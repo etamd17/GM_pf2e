@@ -1,0 +1,97 @@
+{
+    "_id": "oW9neeVcpHjEvjcN",
+    "img": "systems/pf2e/icons/default-icons/weapon.svg",
+    "name": "Mikazuki",
+    "system": {
+        "ammo": {
+            "baseType": "arrows",
+            "builtIn": false,
+            "capacity": null
+        },
+        "baseItem": "mikazuki",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 2
+        },
+        "category": "martial",
+        "containerId": null,
+        "damage": {
+            "damageType": "piercing",
+            "dice": 1,
+            "die": "d6"
+        },
+        "description": {
+            "value": "<p>The mikazuki combines a sansetsukon with a thin length of metal string and several locking mechanisms built into the joints, allowing it to be quickly locked into configuration as a bow.</p>"
+        },
+        "expend": 1,
+        "grade": null,
+        "group": "bow",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "meleeUsage": {
+            "damage": {
+                "die": "d6",
+                "type": "bludgeoning"
+            },
+            "group": "flail",
+            "traits": [
+                "backswing",
+                "disarm",
+                "monk",
+                "parry"
+            ]
+        },
+        "price": {
+            "value": {
+                "gp": 8
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "range": 70,
+        "reload": {
+            "value": "0"
+        },
+        "rules": [],
+        "runes": {
+            "potency": 0,
+            "property": [],
+            "striking": 0
+        },
+        "size": "med",
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "combination",
+                "monk",
+                "propulsive"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-plus-hands"
+        }
+    },
+    "type": "weapon"
+}

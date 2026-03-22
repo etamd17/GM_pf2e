@@ -1,0 +1,51 @@
+{
+    "_id": "jO7wMhnjT7yoAtQg",
+    "img": "icons/containers/bags/sack-simple-leather-tan.webp",
+    "name": "Effect: Root Magic",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Root Magic]</p>\n<p>You gain a circumstance bonus to a saving throw against a spell or haunt.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:type:spell",
+                            "origin:trait:haunt"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "type": "circumstance",
+                "value": "ternary(eq(@item.origin.skills.occultism.rank,4),3,ternary(gt(@item.origin.skills.occultism.rank,1),2,1))"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

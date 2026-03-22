@@ -1,0 +1,51 @@
+{
+    "_id": "7JK2a1D3VeWDcObo",
+    "img": "icons/commodities/materials/bowl-powder-teal.webp",
+    "name": "Powerful Alchemy",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Alchemical items you infuse are particularly potent. When you create an infused alchemical item that allows a saving throw, you can change its DC to your class DC.</p>"
+        },
+        "level": {
+            "value": 5
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:trait:infused"
+                ],
+                "selector": "inline-dc",
+                "value": "@actor.classDCs.alchemist.mod"
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {},
+            "senses": {},
+            "suppressedFeatures": []
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

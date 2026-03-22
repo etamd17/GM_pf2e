@@ -1,0 +1,60 @@
+{
+    "_id": "UQ7vZgmfK0VSFS8A",
+    "img": "icons/commodities/biological/eye-blue-gold.webp",
+    "name": "Effect: Aberrant Blood Magic",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.classfeatures.Item.Bloodline: Aberrant]</p>\n<p>Either one target takes a –1 status penalty to Will saving throws for 1 round or you gain a +2 status bonus to Will saving throws for 1 round.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "self:signature:{item|origin.signature}"
+                ],
+                "selector": "will",
+                "slug": "aberrant-bonus",
+                "type": "status",
+                "value": 2
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "not": "self:signature:{item|origin.signature}"
+                    }
+                ],
+                "selector": "will",
+                "slug": "aberrant-penalty",
+                "type": "status",
+                "value": -1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

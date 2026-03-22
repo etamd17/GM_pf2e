@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}{{ note_title }} - Obsidian Vault{% endblock %}
+
+{% block content %}
+<div class="flex h-[calc(100vh-8rem)] gap-6">
+    <div class="w-1/3 xl:w-1/4 bg-gray-800 rounded-lg shadow-xl border border-gray-700 flex flex-col overflow-hidden shrink-0">
+        <div class="bg-gray-900 p-4 border-b border-gray-700">
+            <h2 class="text-xl font-header text-amber-500">Vault Explorer</h2>
+        </div>
+        <div class="p-4 overflow-y-auto custom-scrollbar flex-1 text-sm font-body">
+            
+            {% macro render_tree(nodes, parent_path='') %}
+                <ul class="space-y-1 ml-4 border-l border-gray-700/50 pl-2 mt-1">
+                {% for node in nodes %}
+                    {% if node.type == 'folder' %}
+                        {% set current_id = parent_path ~ '-' ~ node.name | replace(' ', '-') | replace('/', '-') %}
+                        <li class="mt-1">
+                            <details id="folder-{{ current_id }}" class="group vault-folder cursor-pointer">
+                                <summary class="py-1.5 px-2 hover:bg-gray-700/50 rounded text-gray-300 font-semibold select-none flex items-center gap-2 transition-colors">
+                                    <span class="text-amber-500 opacity-80 group-open:rotate-90 transition-transform text-[10px] w-3 text-center">▶</span>
+                                    <span class="text-gray-400 opacity-70">📁</span> <span class="truncate">{{ node.name }}</span>
+                                </summary>
+                                {{ render_tree(node.children, current_id) }}
+                            </details>
+                        </li>
+                    {% else %}
+                        <li class="mt-1">
+                            <a href="/vault/{{ node.path }}" class="vault-file block py-1.5 px-2 hover:bg-gray-700/50 rounded text-gray-400 hover:text-amber-400 transition-colors flex items-center gap-2 {% if request.path == '/vault/' ~ node.path %}bg-gray-700/50 text-amber-400 font-bold border-l-2 border-amber-500{% endif %}" data-path="{{ node.path }}">
+                                <span class="text-gray-600 text-xs w-3 text-center">📄</span> <span class="truncate">{{ node.name }}</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                </ul>
+            {% endmacro %}
+            
+            <ul class="space-y-1">
+            {% for node in tree %}
+                {% if node.type == 'folder' %}
+                    <li>
+                        <details id="folder-root-{{ node.name | replace(' ', '-') | replace('/', '-') }}" class="group vault-folder cursor-pointer">
+                            <summary class="py-1.5 px-2 hover:bg-gray-700/50 rounded text-gray-300 font-semibold select-none flex items-center gap-2 transition-colors list-none">
+                                <span class="text-amber-500 opacity-80 group-open:rotate-90 transition-transform text-[10px] w-3 text-center">▶</span>
+                                <span class="text-gray-400 opacity-70">📁</span> <span class="truncate">{{ node.name }}</span>
+                            </summary>
+                            {{ render_tree(node.children, 'root-' ~ node.name) }}
+                        </details>
+                    </li>
+                {% else %}
+                    <li>
+                        <a href="/vault/{{ node.path }}" class="vault-file block py-1.5 px-2 hover:bg-gray-700/50 rounded text-gray-400 hover:text-amber-400 transition-colors flex items-center gap-2 {% if request.path == '/vault/' ~ node.path %}bg-gray-700/50 text-amber-400 font-bold border-l-2 border-amber-500{% endif %}" data-path="{{ node.path }}">
+                            <span class="text-gray-600 text-xs w-3 text-center">📄</span> <span class="truncate">{{ node.name }}</span>
+                        </a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="flex-1 bg-gray-800 rounded-lg shadow-xl border border-gray-700 flex flex-col overflow-hidden min-w-0">
+        <div class="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center shrink-0">
+            <h1 class="text-2xl font-header text-amber-400 truncate">{{ note_title }}</h1>
+            <div class="flex gap-2">
+                <button onclick="document.getElementById('session-export-modal').classList.remove('hidden')" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">📓 Export Session</button>
+                <button onclick="exportEncounter()" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">⚔ Export Encounter</button>
+                <button onclick="exportAllCharacters()" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">👥 Export Party</button>
+            </div>
+        </div>
+        <div class="p-8 overflow-y-auto custom-scrollbar flex-1 vault-content text-gray-300 leading-relaxed">
+            {{ content | safe }}
+        </div>
+    </div>
+</div>
+
+<!-- Session Export Modal -->
+<div id="session-export-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:#33302A; border:1px solid rgba(168,156,139,0.2);">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-header text-lg" style="color:#7DC4C4;">Export Session Recap</h3>
+            <button onclick="document.getElementById('session-export-modal').classList.add('hidden')" class="text-xl" style="color:#7A7062;">&times;</button>
+        </div>
+        <div class="space-y-3">
+            <div>
+                <label class="font-header text-[10px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Session Number</label>
+                <input type="number" id="session-num" value="1" min="1" class="w-full rounded px-3 py-2 text-sm focus:outline-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+            </div>
+            <div>
+                <label class="font-header text-[10px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Title</label>
+                <input type="text" id="session-title" placeholder="e.g. The Caves of Despair" class="w-full rounded px-3 py-2 text-sm focus:outline-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+            </div>
+            <div>
+                <label class="font-header text-[10px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Recap / GM Notes</label>
+                <textarea id="session-recap" rows="4" placeholder="What happened this session..." class="w-full rounded px-3 py-2 text-sm focus:outline-none resize-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="document.getElementById('session-export-modal').classList.add('hidden')" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="border:1px solid rgba(168,156,139,0.2); color:#A89C8B;">Cancel</button>
+                <button onclick="submitSessionExport()" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Export to Vault</button>
+            </div>
+            <div id="export-status" class="hidden text-sm font-bold p-2 rounded text-center"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- 1. PERSIST LAST OPENED FILE ---
+        const currentPath = window.location.pathname;
+        const savedPath = localStorage.getItem('lastVaultFile');
+
+        // If user clicks the main Vault link, redirect them to their last open file instantly
+        if ((currentPath === '/vault' || currentPath === '/vault/') && savedPath) {
+            window.location.replace('/vault/' + savedPath);
+            return; 
+        }
+
+        // If user is actively reading a file, save it so we know where they are
+        if (currentPath.startsWith('/vault/') && currentPath.length > 7) {
+            const filePath = currentPath.substring(7); 
+            localStorage.setItem('lastVaultFile', filePath);
+        }
+
+        // --- 2. PERSIST FOLDER EXPANSION STATE ---
+        const folders = document.querySelectorAll('.vault-folder');
+        
+        // Grab the saved array of open folders from the browser
+        let openFolders = JSON.parse(localStorage.getItem('openVaultFolders') || '[]');
+        
+        // Loop through and force the saved folders open
+        openFolders.forEach(id => {
+            const folder = document.getElementById(id);
+            if (folder) folder.open = true;
+        });
+
+        // Listen for user clicks to update the memory
+        folders.forEach(folder => {
+            folder.addEventListener('toggle', (e) => {
+                const id = e.target.id;
+                let currentOpen = JSON.parse(localStorage.getItem('openVaultFolders') || '[]');
+                
+                if (e.target.open) {
+                    if (!currentOpen.includes(id)) currentOpen.push(id);
+                } else {
+                    currentOpen = currentOpen.filter(folderId => folderId !== id);
+                }
+                
+                localStorage.setItem('openVaultFolders', JSON.stringify(currentOpen));
+            });
+        });
+    });
+</script>
+
+<script>
+    async function submitSessionExport() {
+        const num = document.getElementById('session-num').value;
+        const title = document.getElementById('session-title').value || `Session ${num}`;
+        const recap = document.getElementById('session-recap').value;
+        const status = document.getElementById('export-status');
+        try {
+            const res = await fetch('/api/vault_export_session', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({session_number: num, title, recap})
+            });
+            const data = await res.json();
+            if (data.success) {
+                status.className = 'text-sm font-bold p-2 rounded text-center';
+                status.style.background = 'rgba(74,222,128,0.1)';
+                status.style.color = '#86EFAC';
+                status.innerText = `Saved to ${data.path}`;
+                status.classList.remove('hidden');
+                setTimeout(() => window.location.href = '/vault/' + data.path, 1500);
+            }
+        } catch(e) { console.error(e); }
+    }
+    
+    async function exportEncounter() {
+        const name = prompt('Encounter name:', 'Combat Encounter');
+        if (!name) return;
+        const outcome = prompt('Outcome (Victory/Retreat/TPK/etc.):', 'Victory');
+        const loot = prompt('Loot found (optional):', '');
+        const xp = prompt('XP earned (optional):', '');
+        try {
+            const res = await fetch('/api/vault_export_encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, outcome, loot, xp})
+            });
+            const data = await res.json();
+            if (data.success) { alert(`Saved to ${data.path}`); window.location.href = '/vault/' + data.path; }
+        } catch(e) { console.error(e); }
+    }
+    
+    async function exportAllCharacters() {
+        try {
+            const res = await fetch('/api/party_list');
+            const data = await res.json();
+            let count = 0;
+            for (const pc of (data.party || [])) {
+                await fetch(`/api/vault_export_character/${pc.name}`, { method: 'POST' });
+                count++;
+            }
+            alert(`Exported ${count} character(s) to vault/Characters/`);
+            window.location.reload();
+        } catch(e) { console.error(e); }
+    }
+</script>
+
+<style>
+    /* Details marker hiding for clean UI */
+    details > summary { list-style: none; outline: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    
+    /* Vault content styling — matches verdigris theme */
+    .vault-content h1 { font-family: 'Cinzel', serif; font-size: 2em; font-weight: 700; color: #EDE5D8; margin-bottom: 0.5em; margin-top: 1em; letter-spacing: 0.02em; }
+    .vault-content h2 { font-family: 'Cinzel', serif; font-size: 1.4em; font-weight: 700; color: #7DC4C4; margin-bottom: 0.5em; margin-top: 1.5em; border-bottom: 1px solid rgba(168,156,139,0.15); padding-bottom: 0.25em; }
+    .vault-content h3 { font-family: 'Cinzel', serif; font-size: 1.15em; font-weight: 700; color: #CFC5B4; margin-bottom: 0.5em; margin-top: 1.2em; }
+    .vault-content p { margin-bottom: 1.2em; color: #CFC5B4; }
+    .vault-content ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.2em; color: #B5A998; }
+    .vault-content ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1.2em; color: #B5A998; }
+    .vault-content li { margin-bottom: 0.3em; }
+    .vault-content blockquote { border-left: 4px solid #5EADAD; padding-left: 1em; color: #A89C8B; font-style: italic; background: rgba(0,0,0,0.15); padding: 0.8em 1em; border-radius: 0 4px 4px 0; margin-bottom: 1.2em; }
+    .vault-content code { background-color: #1C1917; padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; color: #7DC4C4; font-size: 0.9em; border: 1px solid rgba(168,156,139,0.1); }
+    .vault-content pre { background-color: #1C1917; padding: 1.2em; border-radius: 6px; overflow-x: auto; margin-bottom: 1.2em; border: 1px solid rgba(168,156,139,0.1); }
+    .vault-content pre code { background-color: transparent; padding: 0; color: #EDE5D8; border: none; font-size: 0.85em; }
+    .vault-content table { width: 100%; border-collapse: collapse; margin-bottom: 1.2em; border-radius: 6px; overflow: hidden; }
+    .vault-content th, .vault-content td { border-bottom: 1px solid rgba(168,156,139,0.1); padding: 0.75em 1em; text-align: left; }
+    .vault-content th { background-color: rgba(0,0,0,0.2); font-family: 'Cinzel', serif; font-weight: 600; color: #7DC4C4; text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
+    .vault-content tr:last-child td { border-bottom: none; }
+    .vault-content a { color: #7DC4C4; text-decoration: underline; text-decoration-color: rgba(125,196,196,0.3); }
+    .vault-content a:hover { text-decoration-color: rgba(125,196,196,0.6); }
+</style>
+{% endblock %}

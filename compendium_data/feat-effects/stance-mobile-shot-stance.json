@@ -1,0 +1,36 @@
+{
+    "_id": "NWOmJ6WJFheaGhho",
+    "img": "systems/pf2e/icons/spells/jump.webp",
+    "name": "Stance: Mobile Shot Stance",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Mobile Shot Stance]</p>\n<p>Your ranged Strikes don't trigger Attacks of Opportunity or other reactions that are triggered by a ranged attack.</p>\n<p>If you have @UUID[Compendium.pf2e.actionspf2e.Item.Reactive Strike], you can use it with a loaded ranged weapon you're wielding. The triggering creature must be within 5 feet of you for you to do so.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

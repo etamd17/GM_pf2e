@@ -1,0 +1,103 @@
+{
+    "_id": "LGbyZ4z6SLRC1cuB",
+    "img": "systems/pf2e/icons/default-icons/weapon.svg",
+    "name": "Spider Gun (Major)",
+    "system": {
+        "ammo": {
+            "baseType": "rounds-spider-gun",
+            "builtIn": false,
+            "capacity": 1
+        },
+        "baseItem": null,
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 2
+        },
+        "category": "martial",
+        "containerId": null,
+        "damage": {
+            "damageType": "poison",
+            "dice": 1,
+            "die": "d10"
+        },
+        "description": {
+            "value": "<p>A <em>major</em> <em>spider gun</em> is a <em>+2 greater striking</em> weapon. It's a distinct type of martial firearm made from the fangs and spinneret of a Large spider. It deals 1d10 poison damage with a range increment of 30 feet and reload 1. On a critical hit, the venom clings to the target and they take persistent poison damage equal to @Damage[(1d4+@item.system.damage.dice)[persistent,poison]]. A spider gun does not add critical specialization effects. The gun can be activated to fire webbing that hampers other creatures.</p><hr /><p><strong>Activate—Web Shot</strong> <span class=\"action-glyph\">1</span> (manipulate)</p>\n<p><strong>Frequency</strong> once per round</p>\n<p><strong>Effect</strong> You fire a mass of webbing at a square within 30 feet. That square becomes covered in webbing for 1 minute. A square covered with the webbing from a spider gun can be cleared by a single attack or effect that deals at least @Damage[25[slashing]] damage or @Damage[15[fire]] damage. A square has AC 5, and it automatically fails its saving throws. The first time each turn a creature in the webbing begins to use a move action or enters the webbing during a move action, it must attempt an @Check[athletics|dc:34]{Athletics} check or @Check[reflex|dc:34]{Reflex} save against DC 34. On a success, it moves normally through the webbing and clears away the webbing from any squares it enters this turn. On a failure, it treats squares of webbing as difficult terrain this turn, and on a critical failure, it's @UUID[Compendium.pf2e.conditionitems.Item.Immobilized] for 1 round or until it Escapes ([[/act escape dc=34]]{DC 34}) or destroys the webbing.</p><hr /><p><strong>Craft Requirements</strong> The initial raw materials for the spider gun must include the fangs and spinneret of a giant spider or other Large spider.</p>"
+        },
+        "expend": 1,
+        "grade": null,
+        "group": "firearm",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 15
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 6500
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "quantity": 1,
+        "range": 30,
+        "reload": {
+            "value": "1"
+        },
+        "rules": [
+            {
+                "key": "Note",
+                "outcome": [
+                    "criticalSuccess"
+                ],
+                "selector": "{item|_id}-damage",
+                "text": "On a critical hit, the venom clings to the target and they take @UUID[Compendium.pf2e.conditionitems.Item.Persistent Damage]{Persistent Poison Damage} equal to @Damage[(1d4+@item.system.damage.dice)[persistent,poison]]. A <em>spider gun</em> does not add critical specialization effects.",
+                "title": "{item|name}"
+            }
+        ],
+        "runes": {
+            "potency": 2,
+            "property": [],
+            "striking": 2
+        },
+        "size": "med",
+        "specific": {
+            "material": {
+                "grade": null,
+                "type": null
+            },
+            "runes": {
+                "potency": 2,
+                "property": [],
+                "striking": 2
+            }
+        },
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "held-in-two-hands"
+        }
+    },
+    "type": "weapon"
+}

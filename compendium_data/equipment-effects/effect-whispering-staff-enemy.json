@@ -1,0 +1,47 @@
+{
+    "_id": "NBxTbdCCqmilAxqA",
+    "img": "icons/weapons/staves/staff-simple-spiral-brown.webp",
+    "name": "Effect: Whispering Staff (Enemy)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Whispering Staff]</p>\n<p>You take a –2 circumstance penalty to saving throws against the origin's spells.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 20
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:type:spell",
+                    "origin:signature:{item|origin.signature}"
+                ],
+                "selector": "saving-throw",
+                "type": "circumstance",
+                "value": -2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Party View - Pathfinder Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+    .pv-card { background: linear-gradient(135deg, #33302A, #28241F); border: 1px solid rgba(168,156,139,0.18); border-radius: 0.75rem; overflow: hidden; transition: all 0.3s; }
+    .pv-card:hover { border-color: rgba(94,173,173,0.25); box-shadow: 0 12px 28px rgba(0,0,0,0.3); }
+    .pv-head { background: linear-gradient(135deg, #3F3A33, #33302A); padding: 1.25rem; border-bottom: 1px solid rgba(168,156,139,0.12); }
+    .pv-stat { background: #1C1917; border: 1px solid rgba(168,156,139,0.15); border-radius: 0.5rem; padding: 0.5rem; text-align: center; }
+    .fn { font-family: 'Cinzel', serif; }
+    .fb { font-family: 'Crimson Text', Georgia, serif; }
+    .pv-feat { font-family: 'Crimson Text', serif; font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #3F3A33; border: 1px solid rgba(168,156,139,0.15); color: #D6CBBA; cursor: pointer; transition: all 0.2s; display: inline-block; }
+    .pv-feat:hover { border-color: rgba(94,173,173,0.3); color: #7DC4C4; }
+    .portrait-sm { width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(94,173,173,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center; background: #28241F; flex-shrink: 0; }
+    .portrait-sm img { width: 100%; height: 100%; object-fit: cover; }
+</style>
+
+<div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6 pb-3" style="border-bottom: 1px solid rgba(168,156,139,0.15);">
+        <h1 class="fn text-2xl tracking-wide" style="color: #7DC4C4;">Current Party</h1>
+        <a href="/tracker" class="fn text-xs tracking-wider uppercase px-4 py-2 rounded transition-colors" style="background: #33302A; border: 1px solid rgba(168,156,139,0.2); color: #B5A998;">
+            Encounter Tracker →
+        </a>
+    </div>
+
+    {% if not party %}
+    <div class="pv-card p-8 text-center">
+        <h2 class="fn text-lg mb-3" style="color: #B5A998;">No Characters Found</h2>
+        <p class="fb" style="color: #8A7D6E;">Export from Pathbuilder 2e and place JSON files in <code style="background:#1C1917; padding:2px 6px; border-radius:3px; color:#7DC4C4;">party_data/</code></p>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {% for pc in party %}
+        <div class="pv-card">
+            <div class="pv-head flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="portrait-sm">
+                        {% if pc.portrait %}
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
+                        {% else %}
+                        <span class="fn text-lg" style="color: #7DC4C4;">{{ pc.name[0] }}</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h2 class="fn text-xl leading-none" style="color: #EDE5D8;">{{ pc.name }}</h2>
+                        <p class="fb text-sm mt-1" style="color: #7DC4C4;">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} · {{ pc.subclass }}{% endif %}</p>
+                    </div>
+                </div>
+                <div class="text-center px-3 py-1.5 rounded" style="background: #1C1917; border: 1px solid rgba(168,156,139,0.15);">
+                    <span class="fn text-[9px] uppercase tracking-widest block" style="color: #8A7D6E;">Level</span>
+                    <span class="fn text-xl font-bold leading-none" style="color: #EDE5D8;">{{ pc.level }}</span>
+                </div>
+            </div>
+
+            <div class="p-5 fb">
+                <!-- HP + Core Stats -->
+                <div class="flex flex-wrap gap-3 mb-5">
+                    <div class="pv-stat flex-1 min-w-[120px]">
+                        <div class="fn text-[9px] uppercase tracking-widest mb-1" style="color: #8A7D6E;">Hit Points</div>
+                        <div class="fn text-xl font-bold {% if pc.current_hp == 0 %}text-red-400{% elif pc.current_hp < pc.hp * 0.5 %}text-amber-400{% else %}text-green-400{% endif %}">
+                            {{ pc.current_hp }} <span style="color: #44392E; font-size: 14px;">/ {{ pc.hp }}</span>
+                        </div>
+                        <form action="/api/adjust_party_hp/{{ pc.name }}" method="POST" class="flex items-center justify-center gap-1 mt-2">
+                            <input type="number" name="amount" value="1" min="1" class="fb text-xs w-10 text-center rounded py-1 focus:outline-none" style="background: #28241F; border: 1px solid rgba(168,156,139,0.15); color: #EDE5D8;">
+                            <button type="submit" name="action" value="damage" class="px-2 py-1 rounded text-xs font-bold transition-colors" style="background: rgba(107,21,37,0.25); border: 1px solid rgba(251,113,133,0.15); color: #FDA4AF;">−</button>
+                            <button type="submit" name="action" value="heal" class="px-2 py-1 rounded text-xs font-bold transition-colors" style="background: rgba(20,83,45,0.25); border: 1px solid rgba(74,222,128,0.15); color: #86EFAC;">+</button>
+                        </form>
+                    </div>
+                    <div class="pv-stat flex-1">
+                        <div class="fn text-[9px] uppercase tracking-widest mb-1" style="color: #8A7D6E;">AC</div>
+                        <div class="fn text-xl font-bold" style="color: #93C5FD;">{{ pc.ac }}</div>
+                    </div>
+                    <div class="pv-stat flex-1">
+                        <div class="fn text-[9px] uppercase tracking-widest mb-1" style="color: #8A7D6E;">Perc</div>
+                        <div class="fn text-xl font-bold" style="color: #EDE5D8;">+{{ pc.perception }}</div>
+                    </div>
+                </div>
+
+                <!-- Saves -->
+                <div class="flex gap-3 mb-5">
+                    <div class="flex-1 rounded p-2 text-center" style="background: rgba(20,83,45,0.15); border: 1px solid rgba(74,222,128,0.12);">
+                        <span class="fn text-[9px] uppercase tracking-widest block" style="color: rgba(134,239,172,0.6);">Fort</span>
+                        <span class="fn text-lg font-bold" style="color: #86EFAC;">+{{ pc.fort }}</span>
+                    </div>
+                    <div class="flex-1 rounded p-2 text-center" style="background: rgba(30,42,74,0.2); border: 1px solid rgba(147,197,253,0.12);">
+                        <span class="fn text-[9px] uppercase tracking-widest block" style="color: rgba(147,197,253,0.6);">Ref</span>
+                        <span class="fn text-lg font-bold" style="color: #93C5FD;">+{{ pc.ref }}</span>
+                    </div>
+                    <div class="flex-1 rounded p-2 text-center" style="background: rgba(76,29,149,0.12); border: 1px solid rgba(196,181,253,0.12);">
+                        <span class="fn text-[9px] uppercase tracking-widest block" style="color: rgba(196,181,253,0.6);">Will</span>
+                        <span class="fn text-lg font-bold" style="color: #C4B5FD;">+{{ pc.will }}</span>
+                    </div>
+                </div>
+
+                <!-- Ability Scores -->
+                <div class="grid grid-cols-6 gap-2 mb-5">
+                    {% for stat in pc.ability_display %}
+                    <div class="rounded p-1.5 text-center" style="background: #28241F; border: 1px solid rgba(168,156,139,0.12);">
+                        <span class="fn text-[8px] uppercase tracking-widest" style="color: #8A7D6E;">{{ stat.label }}</span>
+                        <div class="fn text-lg font-bold leading-none my-0.5" style="color: #EDE5D8;">{{ stat.mod }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Attacks & Feats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded p-3" style="background: #252320; border: 1px solid rgba(168,156,139,0.1);">
+                        <h3 class="fn text-[10px] uppercase tracking-widest mb-2 pb-1" style="color: #8A7D6E; border-bottom: 1px solid rgba(168,156,139,0.1);">Attacks</h3>
+                        <ul class="space-y-1.5">
+                            {% for attack in pc.attacks %}
+                            <li class="flex justify-between items-center text-sm fb">
+                                <span style="color: #D6CBBA;" class="truncate mr-2">{{ attack.name }}</span>
+                                <span class="fn text-xs shrink-0" style="color: #7DC4C4;">{{ attack.strikes[0].label }} <span style="color:#8A7D6E">({{ attack.damage }})</span></span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="rounded p-3" style="background: #252320; border: 1px solid rgba(168,156,139,0.1);">
+                        <h3 class="fn text-[10px] uppercase tracking-widest mb-2 pb-1" style="color: #8A7D6E; border-bottom: 1px solid rgba(168,156,139,0.1);">Feats</h3>
+                        <div class="flex flex-wrap gap-1">
+                            {% for feat in pc.feats %}
+                            <div class="pv-feat" onclick="toggleTooltip(event, this)">
+                                {{ feat.name }}
+                                <div class="tooltip-popup absolute hidden text-xs p-4 rounded mb-2 w-80 max-h-72 overflow-y-auto z-[9999] shadow-2xl text-left cursor-auto fb" style="background: #1C1917; border: 2px solid rgba(94,173,173,0.4); color: #D6CBBA; bottom: 100%; left: 50%; transform: translateX(-50%);" onclick="event.stopPropagation()">
+                                    <strong class="fn block mb-2 pb-1" style="color: #7DC4C4; border-bottom: 1px solid rgba(168,156,139,0.15); font-size: 13px;">{{ feat.name }}</strong>
+                                    {{ feat.desc | safe }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                {% if pc.spell_casters %}
+                <div class="mt-4 pt-3" style="border-top: 1px solid rgba(168,156,139,0.1);">
+                    <h3 class="fn text-[10px] uppercase tracking-widest mb-2" style="color: #8A7D6E;">Spellcasting</h3>
+                    {% for caster in pc.spell_casters %}
+                    <div class="rounded p-2 mb-2" style="background: #252320; border: 1px solid rgba(168,156,139,0.1);">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="fn text-xs font-bold" style="color: #A78BFA;">{{ caster.name }} ({{ caster.tradition }})</span>
+                            {% if pc.focus_points > 0 and loop.first %}
+                            <span class="fn text-[9px] px-1.5 py-0.5 rounded" style="background: rgba(30,42,74,0.2); border: 1px solid rgba(96,165,250,0.15); color: #93C5FD;">Focus: {{ pc.focus_points }}/{{ pc.focus_max }}</span>
+                            {% endif %}
+                        </div>
+                        {% for level in caster.levels %}
+                        <div class="text-[11px] fb mb-1 flex flex-wrap items-baseline gap-1" style="color: #B5A998;">
+                            <span class="fn text-[10px] font-bold w-full" style="color: #D6CBBA;">{{ level.label }} <span style="color: rgba(167,139,250,0.4);">({{ level.slots }} Slots)</span>:</span>
+                            {% for spell in level.spells %}
+                            <div class="relative cursor-pointer inline-block mx-1" onclick="toggleTooltip(event, this)">
+                                <span class="underline transition-colors" style="color: #C4B5FD; text-decoration-color: rgba(167,139,250,0.3);">{{ spell.name }}</span>
+                                <div class="tooltip-popup absolute hidden text-xs p-4 rounded mb-2 w-72 max-h-72 overflow-y-auto z-[9999] shadow-2xl text-left cursor-auto fb" style="background: #1C1917; border: 2px solid rgba(94,173,173,0.4); color: #D6CBBA; bottom: 100%; left: 0;" onclick="event.stopPropagation()">
+                                    <strong class="fn block mb-2 pb-1" style="color: #7DC4C4; border-bottom: 1px solid rgba(168,156,139,0.15); font-size: 13px;">{{ spell.name }}</strong>
+                                    {{ spell.desc | safe }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    function toggleTooltip(event, element) {
+        event.stopPropagation();
+        const tooltip = element.querySelector('.tooltip-popup');
+        const isOpen = !tooltip.classList.contains('hidden');
+        document.querySelectorAll('.tooltip-popup').forEach(el => el.classList.add('hidden'));
+        if (!isOpen) tooltip.classList.remove('hidden');
+    }
+    document.addEventListener('click', () => { document.querySelectorAll('.tooltip-popup').forEach(el => el.classList.add('hidden')); });
+</script>
+{% endblock %}

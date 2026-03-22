@@ -1,0 +1,89 @@
+{
+    "_id": "P6PcVnCkh4XMdefw",
+    "img": "systems/pf2e/icons/ancestries/ratfolk.webp",
+    "name": "Ratfolk",
+    "system": {
+        "additionalLanguages": {
+            "count": 0,
+            "custom": "",
+            "value": [
+                "aklo",
+                "draconic",
+                "dwarven",
+                "gnomish",
+                "goblin",
+                "halfling",
+                "kholo",
+                "orcish",
+                "sakvroth"
+            ]
+        },
+        "boosts": {
+            "0": {
+                "value": [
+                    "dex"
+                ]
+            },
+            "1": {
+                "value": [
+                    "int"
+                ]
+            },
+            "2": {
+                "value": [
+                    "str",
+                    "dex",
+                    "con",
+                    "int",
+                    "wis",
+                    "cha"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p><em>Ysoki are beings that most surface-dwelling humanoids refer to as \"ratfolk.\" They are a communal people who prefer cramped conditions, with up to 100 individuals living in a given home. If they can't find homes in town, ratfolk may instead live in caves and cavern complexes, as these provide great storage for the many and varied goods they bring back from trading expeditions.</em></p>\n<p>@UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.zoSkNev57C8OEDYL]{Ratfolk}</p>"
+        },
+        "flaws": {
+            "0": {
+                "value": [
+                    "str"
+                ]
+            }
+        },
+        "hands": 2,
+        "hp": 6,
+        "items": {
+            "jkllM": {
+                "img": "icons/commodities/bones/skull-lizard-tan.webp",
+                "level": 1,
+                "name": "Sharp Teeth",
+                "uuid": "Compendium.pf2e.ancestryfeatures.Item.Sharp Teeth"
+            }
+        },
+        "languages": {
+            "custom": "",
+            "value": [
+                "common",
+                "ysoki"
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "reach": 5,
+        "rules": [],
+        "size": "sm",
+        "speed": 25,
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "humanoid",
+                "ratfolk"
+            ]
+        },
+        "vision": "low-light-vision"
+    },
+    "type": "ancestry"
+}

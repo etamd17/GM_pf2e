@@ -1,0 +1,42 @@
+{
+    "_id": "TrmNSuv6zWEiceqn",
+    "img": "systems/pf2e/icons/spells/incendiary-ashes.webp",
+    "name": "Spell Effect: Incendiary Ashes (Failure)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Incendiary Ashes]</p>\n<p>You have weakness to fire.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "key": "Weakness",
+                "type": "fire",
+                "value": "@item.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

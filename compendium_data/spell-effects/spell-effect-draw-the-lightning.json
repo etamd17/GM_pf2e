@@ -1,0 +1,66 @@
+{
+    "_id": "fCIT9YgGUwIc3Z9G",
+    "img": "icons/magic/lightning/bolt-strike-blue.webp",
+    "name": "Spell Effect: Draw the Lightning",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Draw the Lightning]</p>\n<p>Your first Strike each round with the weapon you held aloft (or with your unarmed attacks if you held an empty hand aloft) deals additional electricity damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "choices": {
+                    "includeHandwraps": true,
+                    "ownedItems": true,
+                    "types": [
+                        "weapon"
+                    ]
+                },
+                "flag": "weapon",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Weapon"
+            },
+            {
+                "domain": "damage",
+                "key": "RollOption",
+                "option": "draw-the-lightning",
+                "toggleable": true
+            },
+            {
+                "damageType": "electricity",
+                "diceNumber": "ternary(gte(@item.level,8),2,1)",
+                "dieSize": "d12",
+                "key": "DamageDice",
+                "predicate": [
+                    "draw-the-lightning"
+                ],
+                "selector": "{item|flags.pf2e.rulesSelections.weapon}-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

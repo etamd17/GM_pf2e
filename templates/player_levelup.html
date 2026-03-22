@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Level Up Forge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(92,75,60,0.06) 0%,transparent 55%),#1C1917; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3228; border-radius: 10px; }
+        .foundry-content p { margin-bottom: 0.75rem; }
+        
+        .nav-item { display: none; font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.06em; } 
+        .nav-item.active { background: linear-gradient(90deg, rgba(58,120,120,0.15), transparent); border-left: 3px solid #5EADAD; color: #7DC4C4; }
+        .step-panel { display: none; animation: fadeIn 0.25s ease-out; }
+        .step-panel.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .choice-card { background: linear-gradient(135deg, #33302A, #252320); border: 1px solid rgba(139,115,85,0.18); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
+        .choice-card:hover { border-color: rgba(94,173,173,0.35); background: linear-gradient(135deg, #3F3A33, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
+        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #7DC4C4; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
+        .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+        
+        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #1C1917; border: 1px solid rgba(139,115,85,0.2); color: #D4C4A8; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
+        .stat-pill:hover:not(.locked) { border-color: rgba(139,115,85,0.5); }
+        .stat-pill.selected { background: rgba(4,120,87,0.3); border-color: #4ADE80; color: #A7F3D0; }
+        .stat-pill.locked { background: rgba(6,95,70,0.25); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
+        
+        .rank-box { width: 12px; height: 12px; border: 1px solid rgba(139,115,85,0.3); display: inline-block; margin-right: 2px; border-radius: 2px; }
+        .rank-box.fill { background-color: #5EADAD; border-color: #5EADAD; }
+        .rank-box.fill-new { background-color: #4ADE80; border-color: #4ADE80; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; }
+        .mod-tab-btn.active { color: #7DC4C4; background: rgba(58,120,120,0.15); border-color: rgba(94,173,173,0.3); }
+        
+        h2, h3, h4, label { font-family: 'Cinzel', serif; }
+        input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-body flex h-screen">
+
+    <div class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
+        <div class="p-6 border-b border-gray-800">
+            <a id="btn-back-sheet" href="/player" class="text-xs text-gray-500 hover:text-white transition-colors mb-2 block uppercase tracking-wider font-bold">← Back to Sheet</a>
+            <h1 class="text-2xl font-header text-amber-500 leading-none">Level Up</h1>
+            <p class="text-xs text-gray-400 mt-1">Advancing to Level <span id="lbl-target-level" class="text-white font-bold"></span></p>
+        </div>
+        <div class="flex-1 overflow-y-auto py-4 space-y-1" id="nav-container">
+            <button onclick="navTo('classfeatures')" id="nav-classfeatures" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
+                <span>1. Class Features</span> <span id="chk-classfeatures" class="text-xs text-green-400 text-lg font-bold leading-none">✓</span>
+            </button>
+            <button onclick="navTo('abilities')" id="nav-abilities" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>2. Abilities</span> <span id="chk-abilities" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('skills')" id="nav-skills" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>3. Skills</span> <span id="chk-skills" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('feats')" id="nav-feats" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>4. Feats</span> <span id="chk-feats" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('magic')" id="nav-magic" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
+                <span>5. Magic</span> <span id="chk-magic" class="text-xs"></span>
+            </button>
+            <button onclick="navTo('retrain')" id="nav-retrain" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
+                <span>6. Retraining</span> <span class="text-xs text-gray-600">Opt</span>
+            </button>
+            <button onclick="navTo('review')" id="nav-review" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
+                <span>7. Review</span> <span id="chk-review" class="text-xs"></span>
+            </button>
+        </div>
+        <div class="p-6 border-t border-gray-800 bg-gray-900">
+            <button id="btn-finish" onclick="submitLevelUp()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
+                Incomplete
+            </button>
+        </div>
+    </div>
+
+    <div class="flex-1 bg-gray-900 overflow-y-auto custom-scrollbar relative flex flex-col">
+        
+        <div id="step-classfeatures" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Automatic Class Features</h2>
+            <p class="text-gray-400 mb-8">These proficiency increases are applied automatically by your class at this level. No choices needed.</p>
+            <div id="ui-classfeatures" class="space-y-3"></div>
+            <div id="ui-classfeatures-none" class="hidden bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
+                <p class="text-gray-500 italic">No automatic proficiency changes at this level. Your class may still grant feats, skill increases, or other features.</p>
+            </div>
+        </div>
+
+        <div id="step-abilities" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Ability Boosts</h2>
+            <p class="text-gray-400 mb-8">Select your 4 Free Boosts. Increasing Intelligence grants retroactive skills.</p>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">The 4 Free Boosts</h3>
+                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-abilities-done">✓ 4/4 Allocated</span>
+                </div>
+                <div id="ui-abilities" class="flex flex-wrap gap-4"></div>
+            </div>
+            <div class="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-inner">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 text-center">New Modifiers</h3>
+                <div class="grid grid-cols-3 md:grid-cols-6 gap-4" id="ui-abilities-math"></div>
+            </div>
+        </div>
+
+        <div id="step-skills" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Skill Increases</h2>
+            <p class="text-gray-400 mb-6">Spend your skill increases. You cannot exceed Master before Lvl 7, or Legendary before Lvl 15.</p>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                <div class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-500">Skill Upgrades</h3>
+                        <p class="text-xs text-gray-400" id="lbl-skill-math">Calculating...</p>
+                    </div>
+                    <div class="text-2xl font-bold text-white" id="lbl-skill-remaining">0 left</div>
+                </div>
+                <div id="ui-skills" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                
+                <div class="mt-6 pt-4 border-t border-gray-700">
+                    <h4 class="text-sm font-bold text-gray-400 mb-2">Custom Lore Increases</h4>
+                    <div id="ui-lore-skills" class="space-y-2 mb-4"></div>
+                    <button onclick="addLore()" class="text-xs font-bold text-amber-500 hover:text-amber-400">+ Train a New Lore Skill</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-feats" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-white mb-2">Feat Selection</h2>
+                    <p class="text-gray-400">Select the feats granted to you at this level.</p>
+                </div>
+                <button onclick="addBonusFeatLevelUp()" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded transition-colors shadow">
+                    + Add Bonus Feat
+                </button>
+            </div>
+            <div id="ui-feats" class="space-y-4"></div>
+        </div>
+
+        <div id="step-magic" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-blue-400 mb-2">Magical Advancement</h2>
+                    <p class="text-gray-400">Expand your spellbook or repertoire based on your new spell slots.</p>
+                </div>
+                <button onclick="unlockArchetypeMagic()" id="btn-unlock-archetype" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded hidden shadow">
+                    + Initialize Archetype Spellcasting
+                </button>
+            </div>
+            <div id="ui-magic-containers" class="space-y-8"></div>
+        </div>
+
+        <div id="step-retrain" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Downtime Retraining</h2>
+            <p class="text-gray-400 mb-8">You can permanently delete an old feat and replace it with a new one. <span class="text-amber-500 font-bold">(Optional)</span></p>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Your Current Feats</h3>
+                <div id="ui-retrain-list" class="grid grid-cols-1 gap-2"></div>
+            </div>
+        </div>
+
+        <div id="step-review" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Review Changes</h2>
+            <p class="text-gray-400 mb-8">Verify your level up choices before locking them into the database.</p>
+            <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl" id="ui-review-content"></div>
+        </div>
+    </div>
+
+    <div id="uni-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 md:p-8 opacity-0 transition-opacity duration-200">
+        <div class="bg-gray-900 w-full max-w-6xl h-full max-h-[85vh] rounded-xl shadow-2xl border border-gray-700 flex flex-col md:flex-row overflow-hidden transform scale-95 transition-transform duration-200" id="uni-window">
+            
+            <div class="w-full md:w-1/3 bg-gray-950 border-r border-gray-800 flex flex-col h-1/2 md:h-full shrink-0">
+                <div class="p-6 border-b border-gray-800 bg-gray-900 flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 id="mod-title" class="font-bold text-amber-500 uppercase tracking-wider text-sm">Select...</h3>
+                        <label class="text-xs text-gray-400 flex items-center cursor-pointer">
+                            <input type="checkbox" id="chk-ignore-reqs" class="mr-1 accent-amber-500" onchange="filterModal()"> Ignore Pre-Reqs
+                        </label>
+                    </div>
+                    <input type="text" id="mod-search" placeholder="Search to filter..." class="w-full bg-gray-950 border border-gray-700 rounded p-3 text-sm text-white focus:border-amber-500 outline-none" onkeyup="filterModal()">
+                    
+                    <div id="mod-tabs" class="flex gap-2 mt-3 overflow-x-auto custom-scrollbar hidden"></div>
+                </div>
+                <div id="mod-list" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1"></div>
+            </div>
+
+            <div class="w-full md:w-2/3 bg-gray-900 flex flex-col relative h-1/2 md:h-full">
+                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">✖</button>
+                <div class="p-8 md:p-12 flex-1 overflow-y-auto custom-scrollbar relative" id="mod-preview"></div>
+                <div class="p-6 border-t border-gray-800 bg-gray-950 flex justify-end shrink-0">
+                    <button id="btn-lock" class="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg hidden transition-transform transform hover:scale-105" onclick="lockModal()">Lock In Choice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const pc = {{ pc.as_dict | tojson | safe }};
+        const currentLevel = parseInt(pc.level);
+        const targetLevel = currentLevel + 1;
+        const pcClass = pc.class_name.toLowerCase();
+        
+        document.getElementById('btn-back-sheet').href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+        
+        const dbFeats = {{ feats | tojson | safe }};
+        const dbSpells = {{ spells | tojson | safe }};
+        const classMatrix = {{ class_matrix | tojson | safe }};
+        const bData = {{ builder_data | tojson | safe }};
+        const classProgression = {{ class_progression | tojson | safe }};
+        const subclassProgression = {{ subclass_progression | tojson | safe }};
+        const monkPathConfig = {{ monk_path_config | tojson | safe }};
+        
+        const RANK_NAMES = {0: "Untrained", 2: "Trained", 4: "Expert", 6: "Master", 8: "Legendary"};
+
+        const SPELL_SLOTS = {
+            "prepared": { 1: [2,0,0,0,0,0,0,0,0,0], 2: [3,0,0,0,0,0,0,0,0,0], 3: [3,2,0,0,0,0,0,0,0,0], 4: [3,3,0,0,0,0,0,0,0,0], 5: [3,3,2,0,0,0,0,0,0,0], 6: [3,3,3,0,0,0,0,0,0,0], 7: [3,3,3,2,0,0,0,0,0,0], 8: [3,3,3,3,0,0,0,0,0,0], 9: [3,3,3,3,2,0,0,0,0,0], 10: [3,3,3,3,3,0,0,0,0,0], 11: [3,3,3,3,3,2,0,0,0,0], 12: [3,3,3,3,3,3,0,0,0,0], 13: [3,3,3,3,3,3,2,0,0,0], 14: [3,3,3,3,3,3,3,0,0,0], 15: [3,3,3,3,3,3,3,2,0,0], 16: [3,3,3,3,3,3,3,3,0,0], 17: [3,3,3,3,3,3,3,3,2,0], 18: [3,3,3,3,3,3,3,3,3,0], 19: [3,3,3,3,3,3,3,3,3,1], 20: [3,3,3,3,3,3,3,3,3,2] },
+            "spontaneous": { 1: [2,0,0,0,0,0,0,0,0,0], 2: [3,0,0,0,0,0,0,0,0,0], 3: [3,2,0,0,0,0,0,0,0,0], 4: [3,3,0,0,0,0,0,0,0,0], 5: [3,3,2,0,0,0,0,0,0,0], 6: [3,3,3,0,0,0,0,0,0,0], 7: [3,3,3,2,0,0,0,0,0,0], 8: [3,3,3,3,0,0,0,0,0,0], 9: [3,3,3,3,2,0,0,0,0,0], 10: [3,3,3,3,3,0,0,0,0,0], 11: [3,3,3,3,3,2,0,0,0,0], 12: [3,3,3,3,3,3,0,0,0,0], 13: [3,3,3,3,3,3,2,0,0,0], 14: [3,3,3,3,3,3,3,0,0,0], 15: [3,3,3,3,3,3,3,2,0,0], 16: [3,3,3,3,3,3,3,3,0,0], 17: [3,3,3,3,3,3,3,3,2,0], 18: [3,3,3,3,3,3,3,3,3,0], 19: [3,3,3,3,3,3,3,3,3,1], 20: [3,3,3,3,3,3,3,3,3,2] },
+            "sorcerer": { 1: [4,0,0,0,0,0,0,0,0,0], 2: [4,0,0,0,0,0,0,0,0,0], 3: [4,4,0,0,0,0,0,0,0,0], 4: [4,4,0,0,0,0,0,0,0,0], 5: [4,4,4,0,0,0,0,0,0,0], 6: [4,4,4,0,0,0,0,0,0,0], 7: [4,4,4,4,0,0,0,0,0,0], 8: [4,4,4,4,0,0,0,0,0,0], 9: [4,4,4,4,4,0,0,0,0,0], 10: [4,4,4,4,4,0,0,0,0,0], 11: [4,4,4,4,4,4,0,0,0,0], 12: [4,4,4,4,4,4,0,0,0,0], 13: [4,4,4,4,4,4,4,0,0,0], 14: [4,4,4,4,4,4,4,0,0,0], 15: [4,4,4,4,4,4,4,4,0,0], 16: [4,4,4,4,4,4,4,4,0,0], 17: [4,4,4,4,4,4,4,4,4,0], 18: [4,4,4,4,4,4,4,4,4,0], 19: [4,4,4,4,4,4,4,4,4,1], 20: [4,4,4,4,4,4,4,4,4,2] },
+            "bounded_prepared": { 1: [1,0,0,0,0,0,0,0,0,0], 2: [2,0,0,0,0,0,0,0,0,0], 3: [1,2,0,0,0,0,0,0,0,0], 4: [0,2,0,0,0,0,0,0,0,0], 5: [0,2,2,0,0,0,0,0,0,0], 6: [0,0,2,0,0,0,0,0,0,0], 7: [0,0,2,2,0,0,0,0,0,0], 8: [0,0,0,2,0,0,0,0,0,0], 9: [0,0,0,2,2,0,0,0,0,0], 10: [0,0,0,0,2,0,0,0,0,0], 11: [0,0,0,0,2,2,0,0,0,0], 12: [0,0,0,0,0,2,0,0,0,0], 13: [0,0,0,0,0,2,2,0,0,0], 14: [0,0,0,0,0,0,2,0,0,0], 15: [0,0,0,0,0,0,2,2,0,0], 16: [0,0,0,0,0,0,0,2,0,0], 17: [0,0,0,0,0,0,0,2,2,0], 18: [0,0,0,0,0,0,0,0,2,0], 19: [0,0,0,0,0,0,0,0,2,0], 20: [0,0,0,0,0,0,0,0,2,0] },
+            "bounded_spontaneous": { 1: [1,0,0,0,0,0,0,0,0,0], 2: [2,0,0,0,0,0,0,0,0,0], 3: [1,2,0,0,0,0,0,0,0,0], 4: [0,2,0,0,0,0,0,0,0,0], 5: [0,2,2,0,0,0,0,0,0,0], 6: [0,0,2,0,0,0,0,0,0,0], 7: [0,0,2,2,0,0,0,0,0,0], 8: [0,0,0,2,0,0,0,0,0,0], 9: [0,0,0,2,2,0,0,0,0,0], 10: [0,0,0,0,2,0,0,0,0,0], 11: [0,0,0,0,2,2,0,0,0,0], 12: [0,0,0,0,0,2,0,0,0,0], 13: [0,0,0,0,0,2,2,0,0,0], 14: [0,0,0,0,0,0,2,0,0,0], 15: [0,0,0,0,0,0,2,2,0,0], 16: [0,0,0,0,0,0,0,2,0,0], 17: [0,0,0,0,0,0,0,2,2,0], 18: [0,0,0,0,0,0,0,0,2,0], 19: [0,0,0,0,0,0,0,0,2,0], 20: [0,0,0,0,0,0,0,0,2,0] }
+        };
+
+        const stdSkills = ['acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery'];
+
+        let reqs = null;
+        let state = {
+            abilities: {...pc.abilities},
+            half_boosts: [...(pc.half_boosts || [])],
+            free_boosts_selected: [],
+            base_profs: {...pc.proficiencies},
+            skill_increases_selected: [],
+            retro_int_skills: 0,
+            feats_selected: {},
+            retrained_feats: [], 
+            spellCasters: JSON.parse(JSON.stringify(pc.raw_spellCasters || [])),
+            bonus_feats_added: 0,
+            auto_bumps: {},        // Populated from CLASS_PROGRESSION
+            new_spells: [],
+            monk_path_choice: null  // For Monk Path to Perfection saves
+        };
+        let mCtx = { type: null, data: [], active: null, meta: {}, tab: 'all', activeTabs: false };
+
+        function esc(str) { return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+        document.getElementById('lbl-target-level').innerText = targetLevel;
+
+        function init() {
+            reqs = classMatrix[pcClass]?.progression?.[targetLevel] || classMatrix[pcClass]?.progression?.[String(targetLevel)];
+            if(!reqs) { 
+                console.error("No progression found for", pcClass, "level", targetLevel, "classMatrix keys:", Object.keys(classMatrix[pcClass]?.progression || {}));
+                alert(`Matrix Error: No progression found for ${pcClass} level ${targetLevel}. Check class_matrix.py.`); 
+                return; 
+            }
+
+            // --- COMPUTE AUTO BUMPS FROM CLASS_PROGRESSION ---
+            // Check subclass-specific progression first, then fall back to class
+            let progressionForClass = null;
+            let pcSubclass = pc.subclass || '';
+            if (pcSubclass && subclassProgression[pcSubclass]) {
+                progressionForClass = subclassProgression[pcSubclass];
+            } else {
+                progressionForClass = classProgression[pcClass] || {};
+            }
+            let bumpsAtThisLevel = progressionForClass[targetLevel] || {};
+            state.auto_bumps = bumpsAtThisLevel;
+            
+            // Apply auto bumps to base_profs immediately so all downstream UI sees them
+            for (let key in bumpsAtThisLevel) {
+                let newVal = bumpsAtThisLevel[key];
+                let oldVal = state.base_profs[key] || 0;
+                if (newVal > oldVal) {
+                    state.base_profs[key] = newVal;
+                }
+            }
+            
+            // Build the class features display
+            buildClassFeaturesUI(bumpsAtThisLevel);
+
+            if (reqs.ability_boosts) document.getElementById('nav-abilities').style.display = 'flex';
+            if (reqs.skill_increase) document.getElementById('nav-skills').style.display = 'flex';
+            if (reqs.class_feat || reqs.general_feat || reqs.skill_feat || reqs.ancestry_feat) document.getElementById('nav-feats').style.display = 'flex';
+            
+            if (state.spellCasters.length > 0 || classMatrix[pcClass]?.spellcasting) {
+                document.getElementById('nav-magic').style.display = 'flex';
+            }
+
+            if (reqs.ability_boosts) buildAbilitiesUI();
+            buildSkillsUI();
+            buildFeatsUI();
+            buildMagicUI();
+            buildRetrainUI();
+
+            // Always start on class features so the player sees what's automatic
+            navTo('classfeatures');
+        }
+        
+        function buildClassFeaturesUI(bumps) {
+            const ui = document.getElementById('ui-classfeatures');
+            const noneMsg = document.getElementById('ui-classfeatures-none');
+            
+            // Check if this level has a Monk Path to Perfection choice
+            const isMonk = pcClass === 'monk';
+            const pathConfig = isMonk ? monkPathConfig[targetLevel] : null;
+            const previousPaths = pc.monk_paths || {};
+            
+            let bumpKeys = Object.keys(bumps);
+            if (bumpKeys.length === 0 && !pathConfig) {
+                noneMsg.classList.remove('hidden');
+                ui.innerHTML = '';
+                return;
+            }
+            noneMsg.classList.add('hidden');
+            
+            const friendlyNames = {
+                'perception': 'Perception', 'fortitude': 'Fortitude Save', 'reflex': 'Reflex Save', 'will': 'Will Save',
+                'simple': 'Simple Weapons', 'martial': 'Martial Weapons', 'advanced': 'Advanced Weapons', 'unarmed': 'Unarmed Attacks',
+                'unarmored': 'Unarmored Defense', 'light': 'Light Armor', 'medium': 'Medium Armor', 'heavy': 'Heavy Armor',
+                'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC', 'ac': 'Armor Class'
+            };
+            
+            const iconMap = {
+                'perception': '👁', 'fortitude': '🛡', 'reflex': '⚡', 'will': '🧠',
+                'simple': '⚔️', 'martial': '⚔️', 'advanced': '⚔️', 'unarmed': '👊',
+                'unarmored': '🧥', 'light': '🧥', 'medium': '🧥', 'heavy': '🧥',
+                'class_dc': '🎯', 'spell_attack': '✨', 'spell_dc': '✨'
+            };
+            
+            let html = '';
+            bumpKeys.forEach(key => {
+                let newRank = bumps[key];
+                let oldRank = pc.proficiencies[key] || 0;
+                let rankName = RANK_NAMES[newRank] || `Rank ${newRank}`;
+                let oldRankName = RANK_NAMES[oldRank] || `Rank ${oldRank}`;
+                let name = friendlyNames[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let icon = iconMap[key] || '📈';
+                
+                let isUpgrade = newRank > oldRank;
+                let borderColor = isUpgrade ? 'border-green-600' : 'border-gray-700';
+                let bgColor = isUpgrade ? 'bg-green-900/20' : 'bg-gray-800';
+                
+                // Rank boxes visualization
+                let boxes = '';
+                for (let i = 2; i <= 8; i += 2) {
+                    if (i <= oldRank) boxes += `<div class="rank-box fill"></div>`;
+                    else if (i <= newRank) boxes += `<div class="rank-box fill-new"></div>`;
+                    else boxes += `<div class="rank-box"></div>`;
+                }
+                
+                let arrowText = isUpgrade 
+                    ? `<span class="text-gray-500">${oldRankName}</span> <span class="text-green-400 mx-2">→</span> <span class="text-green-400 font-bold">${rankName}</span>`
+                    : `<span class="text-gray-400">Already ${rankName} or higher</span>`;
+                
+                html += `
+                <div class="${bgColor} ${borderColor} border rounded-lg p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">${icon}</span>
+                        <div>
+                            <div class="font-bold text-white text-sm">${name}</div>
+                            <div class="text-xs mt-1">${arrowText}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1">${boxes}</div>
+                </div>`;
+            });
+            
+            // --- MONK PATH TO PERFECTION PICKER ---
+            if (pathConfig) {
+                let targetRank = pathConfig.target_rank;
+                let targetRankName = RANK_NAMES[targetRank] || `Rank ${targetRank}`;
+                let restriction = pathConfig.restriction;
+                
+                // Determine which saves are available based on restrictions
+                let availableSaves = ['fortitude', 'reflex', 'will'];
+                let restrictionNote = '';
+                
+                if (restriction === 'exclude_previous') {
+                    // L11: Must be different from L7 choice
+                    let l7choice = previousPaths['7'] || null;
+                    if (l7choice) {
+                        availableSaves = availableSaves.filter(s => s !== l7choice);
+                        let l7name = friendlyNames[l7choice] || l7choice;
+                        restrictionNote = `<span class="text-amber-400 text-[10px]">(Must differ from L7 choice: ${l7name})</span>`;
+                    }
+                } else if (restriction === 'only_previous') {
+                    // L15: Must be one of L7 or L11 choices
+                    let prev = [];
+                    if (previousPaths['7']) prev.push(previousPaths['7']);
+                    if (previousPaths['11']) prev.push(previousPaths['11']);
+                    if (prev.length > 0) {
+                        availableSaves = prev;
+                        let prevNames = prev.map(s => friendlyNames[s] || s).join(' or ');
+                        restrictionNote = `<span class="text-amber-400 text-[10px]">(Must be one of your previous choices: ${prevNames})</span>`;
+                    }
+                }
+                
+                let saveButtons = availableSaves.map(save => {
+                    let saveName = save.charAt(0).toUpperCase() + save.slice(1);
+                    let saveIcon = iconMap[save] || '🧠';
+                    let currentRank = state.base_profs[save] || 0;
+                    let currentRankName = RANK_NAMES[currentRank] || 'Untrained';
+                    let isSelected = state.monk_path_choice === save;
+                    
+                    let btnBorder = isSelected ? 'border-amber-500 bg-amber-900/30' : 'border-gray-600 bg-gray-900 hover:border-amber-500/50 hover:bg-gray-800';
+                    let btnText = isSelected ? 'text-amber-400' : 'text-gray-300';
+                    let checkMark = isSelected ? '<span class="text-amber-500 text-lg ml-2">✓</span>' : '';
+                    
+                    // Rank boxes for this save showing the upgrade
+                    let boxes = '';
+                    for (let i = 2; i <= 8; i += 2) {
+                        if (i <= currentRank) boxes += `<div class="rank-box fill"></div>`;
+                        else if (i <= targetRank && isSelected) boxes += `<div class="rank-box fill-new"></div>`;
+                        else boxes += `<div class="rank-box"></div>`;
+                    }
+                    
+                    return `
+                    <button onclick="selectMonkPath('${save}')" class="flex items-center justify-between p-4 rounded-lg border ${btnBorder} transition-all cursor-pointer w-full">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">${saveIcon}</span>
+                            <div class="text-left">
+                                <div class="font-bold ${btnText} text-sm">${saveName}</div>
+                                <div class="text-xs text-gray-500">${currentRankName} → <span class="${isSelected ? 'text-green-400 font-bold' : 'text-gray-400'}">${targetRankName}</span></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">${boxes}</div>
+                            ${checkMark}
+                        </div>
+                    </button>`;
+                }).join('');
+                
+                html += `
+                <div class="mt-6 bg-purple-900/20 border border-purple-700 rounded-lg p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="text-2xl">🙏</span>
+                        <div>
+                            <h3 class="font-bold text-purple-300 text-lg">${pathConfig.feature_name}</h3>
+                            <p class="text-xs text-gray-400 mt-1">${pathConfig.description}</p>
+                        </div>
+                    </div>
+                    ${restrictionNote ? `<div class="mb-3 mt-2">${restrictionNote}</div>` : ''}
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-bold mb-3 mt-4">Choose a saving throw to upgrade to ${targetRankName}:</div>
+                    <div class="space-y-2" id="monk-path-buttons">
+                        ${saveButtons}
+                    </div>
+                </div>`;
+            }
+            
+            ui.innerHTML = html;
+        }
+        
+        function selectMonkPath(save) {
+            state.monk_path_choice = save;
+            
+            // Apply the proficiency bump to base_profs
+            let pathConfig = monkPathConfig[targetLevel];
+            if (pathConfig) {
+                // First, undo any previous monk path choice at this level
+                ['fortitude', 'reflex', 'will'].forEach(s => {
+                    // Reset to the value from auto_bumps + original profs
+                    let originalVal = pc.proficiencies[s] || 0;
+                    let autoBumpVal = state.auto_bumps[s] || 0;
+                    state.base_profs[s] = Math.max(originalVal, autoBumpVal);
+                });
+                // Re-apply skill increases that may have been on saves (unlikely but safe)
+                
+                // Apply the chosen path
+                let targetRank = pathConfig.target_rank;
+                state.base_profs[save] = Math.max(state.base_profs[save] || 0, targetRank);
+            }
+            
+            // Re-render the class features UI to update button states
+            let bumpsAtThisLevel = state.auto_bumps;
+            buildClassFeaturesUI(bumpsAtThisLevel);
+            
+            runValidation();
+        }
+
+        function navTo(stepId) {
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(`step-${stepId}`).classList.add('active');
+            document.getElementById(`nav-${stepId}`).classList.add('active');
+            if(stepId === 'review') renderReview();
+            runValidation();
+        }
+
+        function getTempFinalStats() {
+            // Detect format: modifiers (0-7) vs scores (8-24)
+            let rawVals = Object.values(pc.abilities).map(v => typeof v === 'object' ? (v.value || 0) : (v || 0));
+            let isScoreFormat = rawVals.some(v => v >= 8);
+            
+            // Work in score format for correct boost math
+            let temp = {};
+            for (let s in pc.abilities) {
+                let raw = typeof pc.abilities[s] === 'object' ? (pc.abilities[s].value || 0) : (pc.abilities[s] || 0);
+                temp[s] = isScoreFormat ? raw : (raw * 2 + 10); // Convert mods to scores
+            }
+            
+            let halfs = [...(pc.half_boosts || [])];
+            state.free_boosts_selected.forEach(s => {
+                let score = temp[s] || 10;
+                if(score >= 18) {
+                    // Half boost: +1 to score (but tracked as pending half)
+                    if(halfs.includes(s)) { temp[s] += 2; halfs = halfs.filter(h=>h!==s); }
+                    else halfs.push(s);
+                } else {
+                    temp[s] += 2;
+                }
+            });
+            
+            // Return as modifiers for prereq checks etc
+            let mods = {};
+            for(let s in temp) { mods[s] = Math.floor((temp[s]-10)/2); }
+            return mods;
+        }
+
+        function getTempFinalSkills() {
+            let profs = {...state.base_profs};
+            state.skill_increases_selected.forEach(sk => {
+                profs[sk] = (profs[sk] || 0) + 2;
+            });
+            return profs;
+        }
+
+        function meetsPrereqs(feat) {
+            if (!feat.prereqs_parsed) return true; 
+            let p = feat.prereqs_parsed;
+            let cStats = getTempFinalStats();
+            let cSkills = getTempFinalSkills();
+            
+            if (p.stats) {
+                for (let stat in p.stats) {
+                    if ((cStats[stat] || 0) < p.stats[stat]) return false;
+                }
+            }
+            if (p.skills) {
+                for (let skill in p.skills) {
+                    if ((cSkills[skill] || 0) < p.skills[skill]) return false;
+                }
+            }
+            return true;
+        }
+
+        function buildAbilitiesUI() {
+            const ui = document.getElementById('ui-abilities');
+            ui.innerHTML = ['str','dex','con','int','wis','cha'].map(s => {
+                let mod = pc.mods[s];
+                let isHalf = state.half_boosts.includes(s);
+                let display = mod >= 0 ? `+${mod}` : mod;
+                if(isHalf) display += `<span class="text-amber-500 ml-1 text-sm font-normal">(½)</span>`;
+                
+                return `
+                <div onclick="toggleAbility(this.dataset.stat)" data-stat="${s}" id="fin-btn-${s}" class="flex-1 min-w-[80px] bg-gray-950 border border-gray-700 rounded p-4 flex flex-col items-center cursor-pointer hover:border-amber-500 transition-colors user-select-none">
+                    <span class="text-xs text-gray-500 font-bold uppercase mb-1">${s}</span>
+                    <span class="text-xl text-white font-bold mb-2 flex items-center">${display}</span>
+                    <div class="w-4 h-4 rounded-full border-2 border-gray-600 flex items-center justify-center text-xs font-bold text-black" id="fin-chk-${s}"></div>
+                </div>`;
+            }).join('');
+            renderAbilityMath();
+        }
+
+        function toggleAbility(stat) {
+            const idx = state.free_boosts_selected.indexOf(stat);
+            if (idx > -1) {
+                state.free_boosts_selected.splice(idx, 1);
+                document.getElementById(`fin-btn-${stat}`).classList.remove('bg-amber-900/20', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('bg-amber-500', 'border-gray-600');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-amber-500', 'border-gray-600');
+                document.getElementById(`fin-chk-${stat}`).innerText = "";
+            } else {
+                if(state.free_boosts_selected.length >= 4) return;
+                state.free_boosts_selected.push(stat);
+                document.getElementById(`fin-btn-${stat}`).classList.add('bg-amber-900/20', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'bg-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).innerText = "✓";
+            }
+            if(state.free_boosts_selected.length === 4) document.getElementById('msg-abilities-done').classList.remove('hidden');
+            else document.getElementById('msg-abilities-done').classList.add('hidden');
+            renderAbilityMath();
+            buildSkillsUI(); 
+            runValidation();
+        }
+
+        function renderAbilityMath() {
+            let mods = {...pc.mods};
+            let newHalfs = [...(pc.half_boosts || [])];
+            
+            state.free_boosts_selected.forEach(s => {
+                if(mods[s] >= 4) {
+                    if(newHalfs.includes(s)) { mods[s]++; newHalfs = newHalfs.filter(h=>h!==s); }
+                    else newHalfs.push(s);
+                } else {
+                    mods[s]++;
+                }
+            });
+
+            document.getElementById('ui-abilities-math').innerHTML = Object.keys(mods).map(k => {
+                let disp = mods[k] >= 0 ? `+${mods[k]}` : mods[k];
+                if(newHalfs.includes(k)) disp += `<span class="text-amber-500 ml-1 text-sm font-normal">(½)</span>`;
+                let colorClass = state.free_boosts_selected.includes(k) ? 'text-green-400' : 'text-white';
+                return `
+                <div class="bg-gray-950 p-3 rounded border border-gray-800 text-center shadow-inner relative group cursor-help">
+                    <span class="text-[10px] text-gray-500 uppercase block font-bold tracking-widest">${k}</span>
+                    <span class="text-2xl font-bold ${colorClass} leading-none inline-flex items-center mt-2">${disp}</span>
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-32 bg-gray-900 border border-gray-700 rounded p-2 text-[10px] text-left text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl whitespace-pre-line leading-relaxed">Current Base: ${pc.mods[k]}\nLevel Up Free: ${state.free_boosts_selected.includes(k) ? "+1" : "0"}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function getSkillCap() {
+            if(targetLevel >= 15) return {val: 8, name: "Legendary (4 Boxes)"};
+            if(targetLevel >= 7) return {val: 6, name: "Master (3 Boxes)"};
+            return {val: 4, name: "Expert (2 Boxes)"};
+        }
+
+        function buildSkillsUI() {
+            if(!reqs.skill_increase) return;
+
+            let oldIntMod = pc.mods['int'] || 0;
+            let newIntMod = oldIntMod;
+            if (state.free_boosts_selected.includes('int') && oldIntMod < 4) newIntMod++;
+            else if (state.free_boosts_selected.includes('int') && oldIntMod >= 4 && pc.half_boosts.includes('int')) newIntMod++;
+            state.retro_int_skills = Math.max(0, newIntMod - oldIntMod);
+            
+            let totalIncreases = reqs.skill_increase + state.retro_int_skills;
+            let mathStr = `Matrix Base (${reqs.skill_increase})`;
+            if(state.retro_int_skills > 0) mathStr += ` + Retro INT (${state.retro_int_skills})`;
+            document.getElementById('lbl-skill-math').innerText = mathStr;
+
+            const ui = document.getElementById('ui-skills');
+            const cap = getSkillCap();
+            
+            ui.innerHTML = stdSkills.map(sk => {
+                let baseProf = state.base_profs[sk] || 0;
+                let added = state.skill_increases_selected.filter(x => x === sk).length * 2;
+                let totalProf = baseProf + added;
+                
+                let boxes = "";
+                for(let i=2; i<=8; i+=2) {
+                    if(i <= baseProf) boxes += `<div class="rank-box fill"></div>`;
+                    else if(i <= totalProf) boxes += `<div class="rank-box fill-new"></div>`;
+                    else boxes += `<div class="rank-box"></div>`;
+                }
+
+                let btnClass = "bg-gray-950 border-gray-700 text-gray-300";
+                if(added > 0) btnClass = "bg-amber-900/20 border-amber-500 text-white";
+                
+                let isCapped = totalProf >= cap.val || totalProf >= 8;
+                let disabledAttr = isCapped ? `opacity-50 cursor-not-allowed` : `cursor-pointer hover:border-amber-500`;
+
+                return `
+                <div class="flex items-center justify-between p-3 border rounded transition-colors ${btnClass} ${disabledAttr}" onclick="${isCapped ? '' : `incrementSkill('${sk}', ${totalIncreases})`}">
+                    <span class="text-sm font-bold capitalize">${sk}</span>
+                    <div class="flex items-center space-x-1">${boxes}</div>
+                </div>`;
+            }).join('');
+
+            const loresUI = document.getElementById('ui-lore-skills');
+            let lores = Object.keys(state.base_profs).filter(k => k.startsWith('lore:'));
+            state.skill_increases_selected.forEach(sk => { if(sk.startsWith('lore:') && !lores.includes(sk)) lores.push(sk); });
+
+            loresUI.innerHTML = lores.map(sk => {
+                let baseProf = state.base_profs[sk] || 0;
+                let added = state.skill_increases_selected.filter(x => x === sk).length * 2;
+                let totalProf = baseProf + added;
+                
+                let boxes = "";
+                for(let i=2; i<=8; i+=2) {
+                    if(i <= baseProf) boxes += `<div class="rank-box fill"></div>`;
+                    else if(i <= totalProf) boxes += `<div class="rank-box fill-new"></div>`;
+                    else boxes += `<div class="rank-box"></div>`;
+                }
+                
+                let btnClass = added > 0 ? "bg-amber-900/20 border-amber-500 text-white" : "bg-gray-950 border-gray-700 text-gray-300";
+                let isCapped = totalProf >= cap.val || totalProf >= 8;
+                let disabledAttr = isCapped ? `opacity-50 cursor-not-allowed` : `cursor-pointer hover:border-amber-500`;
+                let niceName = sk.replace('lore:', '').trim().replace(/\b\w/g, l => l.toUpperCase()) + " Lore";
+
+                return `
+                <div class="flex items-center justify-between p-2 border rounded text-xs transition-colors ${btnClass} ${disabledAttr}" onclick="${isCapped ? '' : `incrementSkill('${sk}', ${totalIncreases})`}">
+                    <span class="font-bold">${niceName}</span>
+                    <div class="flex items-center space-x-1">${boxes}</div>
+                </div>`;
+            }).join('');
+
+            let spent = state.skill_increases_selected.length;
+            document.getElementById('lbl-skill-remaining').innerText = `${totalIncreases - spent} left`;
+            if (spent === totalIncreases) document.getElementById('lbl-skill-remaining').className = "text-2xl font-bold text-green-400";
+            else document.getElementById('lbl-skill-remaining').className = "text-2xl font-bold text-white";
+            
+            runValidation();
+        }
+
+        function incrementSkill(sk, max) {
+            let spent = state.skill_increases_selected.length;
+            if(state.skill_increases_selected.includes(sk)) {
+                let idx = state.skill_increases_selected.lastIndexOf(sk);
+                state.skill_increases_selected.splice(idx, 1);
+                buildSkillsUI(); return;
+            }
+            if(spent >= max) return; 
+            state.skill_increases_selected.push(sk);
+            buildSkillsUI();
+        }
+
+        function addLore() {
+            let max = reqs.skill_increase + state.retro_int_skills;
+            if(state.skill_increases_selected.length >= max) return alert("No skill increases left to spend.");
+            let name = prompt("Enter the specific Lore subject (e.g., Sailing, Undead):");
+            if(!name) return;
+            let key = "lore:" + name.toLowerCase();
+            state.skill_increases_selected.push(key);
+            buildSkillsUI();
+        }
+
+        function buildFeatsUI() {
+            const ui = document.getElementById('ui-feats');
+            let html = "";
+
+            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat'].forEach(ft => {
+                let count = reqs[ft] || 0;
+                
+                if (ft === 'class_feat') count += state.bonus_feats_added;
+                
+                for(let i=0; i<count; i++) {
+                    let key = count > 1 ? `${ft}_${i}` : ft;
+                    
+                    let label = ft.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    if (pcClass === 'kineticist' && ft === 'class_feat') label = "Class / Impulse Feat";
+                    if (count > 1) label += ` ${i + 1}`;
+                    
+                    let val = state.feats_selected[key] ? state.feats_selected[key].name : "Select Feat...";
+                    let subtitle = state.feats_selected[key] ? "Locked In" : `${label} *`;
+                    
+                    html += `
+                    <div class="choice-card bg-gray-900 hover:bg-gray-800" onclick="openModal('${ft}', {key: '${key}'})">
+                        <div class="flex justify-between items-center w-full">
+                            <div>
+                                <div class="subtitle ${state.feats_selected[key] ? 'text-green-400' : ''}">${subtitle}</div>
+                                <div class="title">${val}</div>
+                            </div>
+                            <span class="text-gray-500 font-bold text-xl">→</span>
+                        </div>
+                    </div>`;
+                }
+            });
+            
+            if(html === "") html = "<div class='text-gray-500 italic'>No feats granted at this level.</div>";
+            ui.innerHTML = html;
+        }
+
+        function addBonusFeatLevelUp() {
+            state.bonus_feats_added++;
+            buildFeatsUI();
+            runValidation();
+        }
+
+        function buildMagicUI() {
+            const container = document.getElementById('ui-magic-containers');
+            container.innerHTML = "";
+            document.getElementById('btn-unlock-archetype').classList.remove('hidden');
+
+            if(state.spellCasters.length === 0) {
+                container.innerHTML = "<div class='text-gray-500 italic'>You do not have any spellcasting classes.</div>";
+                return;
+            }
+
+            state.spellCasters.forEach((caster, idx) => {
+                let html = `<div class="bg-gray-800 p-6 rounded-lg border border-blue-900/50 shadow-xl mb-6 relative">
+                    <div class="absolute top-0 right-0 bg-blue-900/40 text-blue-400 px-3 py-1 rounded-bl-lg text-[10px] font-bold uppercase tracking-widest border-b border-l border-blue-900/50">${caster.magicTradition || 'Unknown'}</div>
+                    <h3 class="text-xl font-bold text-blue-400 mb-1">${caster.name}</h3>
+                    <p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-4 border-b border-gray-700 pb-2">${caster.castingType || caster.type || 'Focus'} Casting</p>
+                `;
+
+                let oldSlots = [0,0,0,0,0,0,0,0,0,0]; let newSlots = [0,0,0,0,0,0,0,0,0,0];
+                let tLower = (caster.castingType || caster.type || "unknown").toLowerCase();
+                let cType = null;
+                
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+
+                let slotDiff = []; 
+                if(cType && SPELL_SLOTS[cType]) {
+                    oldSlots = SPELL_SLOTS[cType][currentLevel] || oldSlots;
+                    newSlots = SPELL_SLOTS[cType][targetLevel] || newSlots;
+                    
+                    for(let lvl=0; lvl<=10; lvl++) {
+                        let oldAmt = lvl===0 ? 5 : (oldSlots[lvl-1] || 0); 
+                        let newAmt = lvl===0 ? 5 : (newSlots[lvl-1] || 0);
+                        if (newAmt > oldAmt) slotDiff.push({lvl: lvl, req: newAmt - oldAmt});
+                    }
+                }
+
+                let canSwap = cType && cType.includes("spontaneous") && currentLevel >= 1;
+
+                if(slotDiff.length === 0 && !canSwap) {
+                    html += `<div class="text-gray-500 italic text-sm">No standard spell slots gained for this matrix at Level ${targetLevel}.</div></div>`;
+                    container.innerHTML += html;
+                    return;
+                }
+
+                if (slotDiff.length > 0) {
+                    html += `<div class="grid grid-cols-1 gap-4 mb-6">`;
+                    slotDiff.forEach(diff => {
+                        let label = diff.lvl === 0 ? "Cantrips" : `Level ${diff.lvl} Spells`;
+                        let addedCount = (state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).length;
+                        
+                        html += `
+                        <div class="bg-gray-950 p-4 rounded border border-gray-800">
+                            <div class="flex justify-between items-center mb-3">
+                                <div><h4 class="text-sm font-bold text-gray-300">Learn ${label}</h4><span class="text-[10px] text-amber-500 font-bold">${addedCount} / ${diff.req} Picked</span></div>
+                                <button onclick="openModal('spell', {cIdx: ${idx}, lvl: ${diff.lvl}, req: ${diff.req}})" class="bg-blue-900/40 hover:bg-blue-800 border border-blue-800 text-blue-200 px-3 py-1 rounded text-xs font-bold transition-colors">Browse</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2" id="ui-new-spells-${idx}-${diff.lvl}">
+                                ${(state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).map(s => 
+                                    `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${esc(s.name)}')" class="text-red-500 ml-1 hidden group-hover:inline">✖</button></div>`
+                                ).join('')}
+                            </div>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                }
+                html += `</div>`;
+                container.innerHTML += html;
+            });
+        }
+        
+        function unlockArchetypeMagic() {
+            let trad = prompt("Enter the Magic Tradition for your new Archetype (Arcane, Divine, Occult, Primal):");
+            if(!trad) return;
+            state.spellCasters.push({
+                "name": `${trad} Archetype`,
+                "magicTradition": trad,
+                "castingType": "Spontaneous",
+                "spells": [],
+                "perDay": [0,0,0,0,0,0,0,0,0,0]
+            });
+            buildMagicUI();
+        }
+
+        if(!state.new_spells) state.new_spells = [];
+        function removeNewSpell(cIdx, lvl, name) {
+            state.new_spells = state.new_spells.filter(s => !(s.cIdx === cIdx && s.lvl === lvl && s.name === name));
+            buildMagicUI(); runValidation();
+        }
+
+        function buildRetrainUI() {
+            const ui = document.getElementById('ui-retrain-list');
+            ui.innerHTML = pc.feats.map((f, i) => `
+                <div class="flex justify-between items-center bg-gray-950 border border-gray-700 p-3 rounded group hover:border-amber-500 transition-colors">
+                    <div>
+                        <div class="text-sm font-bold text-gray-200">${f.name}</div>
+                        <div class="text-[10px] text-gray-500 uppercase">${f.desc && f.desc.substring(0,30)}...</div>
+                    </div>
+                    <button onclick="initRetrainFeat(${i}, '${esc(f.name)}')" class="bg-red-900/40 text-red-400 hover:bg-red-800 hover:text-white px-3 py-1 rounded text-xs font-bold border border-red-900 transition-colors opacity-0 group-hover:opacity-100">Retrain</button>
+                </div>
+            `).join('');
+
+            if(state.retrained_feats.length > 0) {
+                ui.innerHTML += `<h4 class="text-sm font-bold text-amber-500 mt-4 border-b border-gray-700 pb-1">Active Retrains:</h4>` + 
+                state.retrained_feats.map((rf, i) => `
+                    <div class="flex justify-between items-center bg-gray-900 border border-amber-500 p-3 rounded">
+                        <div class="text-xs text-gray-300">Dropped <span class="text-red-400 font-bold line-through">${rf.old}</span> → Learned <span class="text-green-400 font-bold">${rf.new.name}</span></div>
+                        <button onclick="cancelRetrain(${i})" class="text-gray-500 hover:text-white">✖</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function initRetrainFeat(idx, oldName) {
+            mCtx.type = "retrain_feat";
+            mCtx.meta = { oldName: oldName };
+            document.getElementById('mod-search').value = "";
+            document.getElementById('mod-preview').innerHTML = `<div class="flex h-full items-center justify-center text-gray-600 italic">Select a replacement feat.</div>`;
+            document.getElementById('btn-lock').classList.add('hidden');
+            
+            let title = `Retrain: ${oldName}`;
+            let raw = [...(dbFeats['general']||[]), ...(dbFeats['skill']||[]), ...(dbFeats['class']||[]), ...(dbFeats['ancestry']||[])];
+            mCtx.data = raw.filter(f => f.level <= currentLevel);
+            
+            const tabsContainer = document.getElementById('mod-tabs');
+            if(tabsContainer) { tabsContainer.innerHTML = ''; tabsContainer.classList.add('hidden'); }
+            mCtx.activeTabs = false;
+            mCtx.tab = 'all';
+
+            document.getElementById('mod-title').innerText = title;
+            renderModalList();
+            
+            const m = document.getElementById('uni-modal'); m.classList.remove('hidden');
+            setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('uni-window').classList.remove('scale-95'); document.getElementById('mod-search').focus(); }, 10);
+        }
+
+        function cancelRetrain(idx) { state.retrained_feats.splice(idx, 1); buildRetrainUI(); }
+
+        function renderReview() {
+            const ui = document.getElementById('ui-review-content');
+            let html = "";
+            
+            // Show automatic class feature bumps
+            let bumpKeys = Object.keys(state.auto_bumps || {});
+            if (bumpKeys.length > 0) {
+                const friendlyNames = {
+                    'perception': 'Perception', 'fortitude': 'Fortitude', 'reflex': 'Reflex', 'will': 'Will',
+                    'simple': 'Simple Weapons', 'martial': 'Martial Weapons', 'advanced': 'Advanced Weapons', 'unarmed': 'Unarmed',
+                    'unarmored': 'Unarmored', 'light': 'Light Armor', 'medium': 'Medium Armor', 'heavy': 'Heavy Armor',
+                    'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC'
+                };
+                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Automatic Class Features</h4><div class="flex flex-wrap gap-2">` +
+                bumpKeys.map(k => {
+                    let name = friendlyNames[k] || k;
+                    let rank = RANK_NAMES[state.auto_bumps[k]] || state.auto_bumps[k];
+                    return `<span class="bg-green-900/30 border border-green-800 px-2 py-1 rounded text-xs font-bold text-green-400">${name} → ${rank}</span>`;
+                }).join('') + `</div></div>`;
+            }
+            
+            // Show Monk Path to Perfection choice
+            if (state.monk_path_choice && pcClass === 'monk' && monkPathConfig[targetLevel]) {
+                let pathConf = monkPathConfig[targetLevel];
+                let saveName = state.monk_path_choice.charAt(0).toUpperCase() + state.monk_path_choice.slice(1);
+                let rankName = RANK_NAMES[pathConf.target_rank] || `Rank ${pathConf.target_rank}`;
+                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">${pathConf.feature_name}</h4>
+                    <span class="bg-purple-900/30 border border-purple-800 px-3 py-1.5 rounded text-sm font-bold text-purple-300">🙏 ${saveName} → ${rankName}</span>
+                </div>`;
+            }
+            
+            if(reqs.ability_boosts) {
+                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Ability Boosts</h4><div class="flex gap-2">` + 
+                state.free_boosts_selected.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-green-400 uppercase">+${s}</span>`).join('') + `</div></div>`;
+            }
+            if(reqs.skill_increase) {
+                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Skill Increases</h4><div class="flex flex-wrap gap-2">` + 
+                state.skill_increases_selected.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-amber-500 capitalize">${s.replace('lore:', 'Lore: ')}</span>`).join('') + `</div></div>`;
+            }
+            let fKeys = Object.keys(state.feats_selected);
+            if(fKeys.length > 0) {
+                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">New Feats</h4><ul class="text-sm text-gray-300 space-y-1">` + 
+                fKeys.map(k => `<li><span class="text-gray-500 mr-2">[${k.replace('_',' ').toUpperCase()}]</span> <span class="font-bold text-white">${state.feats_selected[k].name}</span></li>`).join('') + `</ul></div>`;
+            }
+            if(state.new_spells.length > 0) {
+                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">New Spells</h4><div class="flex flex-wrap gap-2">` + 
+                state.new_spells.map(s => `<span class="bg-gray-950 border border-blue-900/50 px-2 py-1 rounded text-xs font-bold text-blue-300">${s.name} [L${s.lvl}]</span>`).join('') + `</div></div>`;
+            }
+            ui.innerHTML = html || "<div class='text-gray-500 italic text-center'>No changes recorded yet.</div>";
+        }
+
+        function setModalTab(tabName) {
+            mCtx.tab = tabName;
+            document.querySelectorAll('.mod-tab-btn').forEach(b => {
+                if(b.dataset.tab === tabName) {
+                    b.classList.add('text-amber-500', 'bg-gray-700', 'border-amber-500/50');
+                    b.classList.remove('text-gray-300', 'bg-gray-800', 'border-transparent');
+                } else {
+                    b.classList.remove('text-amber-500', 'bg-gray-700', 'border-amber-500/50');
+                    b.classList.add('text-gray-300', 'bg-gray-800', 'border-transparent');
+                }
+            });
+            renderModalList();
+        }
+
+        function openModal(type, meta={}) {
+            try {
+                mCtx.type = type; mCtx.active = null; mCtx.meta = meta;
+                document.getElementById('mod-search').value = "";
+                document.getElementById('mod-preview').innerHTML = `<div class="flex h-full items-center justify-center text-gray-600 italic">Select an option to preview.</div>`;
+                document.getElementById('btn-lock').classList.add('hidden');
+                
+                let title = "Select"; mCtx.data = [];
+                const tabsContainer = document.getElementById('mod-tabs');
+                if(tabsContainer) { tabsContainer.innerHTML = ''; tabsContainer.classList.add('hidden'); }
+                mCtx.activeTabs = false; mCtx.tab = 'all';
+                
+                if (type === 'class_feat') {
+                    title = "Class Feat";
+                    mCtx.data = (dbFeats['class'] || []).filter(f => f.level <= targetLevel && f.traits.some(t => typeof t==='string' && t.toLowerCase() === pcClass) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                }
+                else if (type === 'general_feat') {
+                    title = "General / Skill Feat";
+                    let raw = [...(dbFeats['general']||[]), ...(dbFeats['skill']||[])];
+                    mCtx.data = raw.filter(f => f.level <= targetLevel);
+                }
+                else if (type === 'skill_feat') {
+                    title = "Skill Feat";
+                    mCtx.data = (dbFeats['skill'] || []).filter(f => f.level <= targetLevel);
+                }
+                else if (type === 'ancestry_feat') {
+                    title = "Ancestry Feat";
+                    let raw = dbFeats['ancestry'] || [];
+                    mCtx.data = raw.filter(f => f.level <= targetLevel && f.traits.some(t => typeof t==='string' && t.toLowerCase().includes(pc.ancestry.toLowerCase())));
+                    if(mCtx.data.length === 0) mCtx.data = raw.filter(f => f.level <= targetLevel); 
+                }
+                else if (type === 'spell') {
+                    title = `Select Level ${meta.lvl} Spell`;
+                    let trad = (state.spellCasters[meta.cIdx].magicTradition || "unknown").toLowerCase();
+                    mCtx.data = (dbSpells || []).filter(s => s.level === meta.lvl && s.traditions.some(t => t.toLowerCase() === trad));
+                }
+
+                document.getElementById('mod-title').innerText = title;
+                renderModalList();
+
+                const m = document.getElementById('uni-modal'); m.classList.remove('hidden');
+                setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('uni-window').classList.remove('scale-95'); document.getElementById('mod-search').focus(); }, 10);
+            } catch (err) {
+                console.error("Open Modal Error:", err);
+            }
+        }
+
+        function renderModalList() {
+            const term = document.getElementById('mod-search').value.toLowerCase();
+            const ignoreReqs = document.getElementById('chk-ignore-reqs').checked;
+            const list = document.getElementById('mod-list'); list.innerHTML = "";
+            
+            let filtered = mCtx.data.filter(d => {
+                let n = typeof d.name === 'string' ? d.name : String(d.name);
+                let matchesSearch = n.toLowerCase().includes(term);
+                let matchesTab = true;
+                
+                if (mCtx.activeTabs && mCtx.tab !== 'all') {
+                    if (mCtx.type === 'ancestry' || mCtx.type === 'heritage') matchesTab = (d.rarity || 'common').toLowerCase() === mCtx.tab;
+                    else if (mCtx.type === 'background') matchesTab = (d.category || 'general').toLowerCase() === mCtx.tab;
+                    else if (mCtx.type === 'class') matchesTab = (d.category || 'expanded').toLowerCase() === mCtx.tab;
+                }
+                
+                return matchesSearch && matchesTab;
+            }).sort((a,b) => {
+                let aName = typeof a.name === 'string' ? a.name : String(a.name);
+                let bName = typeof b.name === 'string' ? b.name : String(b.name);
+                return aName.localeCompare(bName);
+            });
+            
+            if(filtered.length === 0) { list.innerHTML = "<div class='text-gray-500 p-4 text-sm italic text-center'>No options found.</div>"; return; }
+
+            filtered.forEach(d => {
+                let n = typeof d.name === 'string' ? d.name : String(d.name);
+                
+                let locked = false; let reqHtml = "";
+                if(d.prerequisites_raw) {
+                    let meets = meetsPrereqs(d);
+                    if (!meets && !ignoreReqs) {
+                        locked = true; 
+                        reqHtml = `<div class="bg-red-900/30 border border-red-900 text-red-400 p-2 rounded text-xs mb-4 font-bold">Unmet Requirement: ${d.prerequisites_raw}</div>`;
+                    } else if (!meets && ignoreReqs) {
+                        reqHtml = `<div class="bg-amber-900/30 border border-amber-900 text-amber-500 p-2 rounded text-xs mb-4 font-bold">Ignored Req: ${d.prerequisites_raw}</div>`;
+                    } else if (meets) {
+                        reqHtml = `<div class="bg-green-900/30 border border-green-900 text-green-400 p-2 rounded text-xs mb-4 font-bold">Requirement Met: ${d.prerequisites_raw}</div>`;
+                    }
+                }
+
+                let btn = document.createElement('button');
+                btn.className = `w-full text-left p-4 border-b border-gray-800/50 flex justify-between items-center transition-colors outline-none ${locked ? 'opacity-40 cursor-not-allowed bg-gray-950' : 'hover:bg-gray-800 focus:bg-gray-800'}`;
+                let badge = d.level !== undefined ? `<span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-1 rounded shrink-0 ml-2">Lv ${d.level}</span>` : "";
+                let ui_badge = d.ui_badge ? d.ui_badge : "";
+                
+                btn.innerHTML = `<div class="flex items-center"><span class="text-sm font-bold text-gray-200">${n}</span>${ui_badge}</div> ${badge}`;
+                
+                btn.onclick = () => {
+                    mCtx.active = locked ? null : d;
+                    let pHtml = `<h2 class="text-4xl font-header text-white mb-4">${n}</h2>`;
+                    if(d.traits && d.traits.length > 0) pHtml += `<div class="flex flex-wrap gap-2 mb-6">` + d.traits.map(t=>`<span class="bg-gray-800 border border-gray-700 text-gray-300 text-xs px-2 py-1 uppercase font-bold tracking-wider rounded">${t}</span>`).join('') + `</div>`;
+                    pHtml += reqHtml;
+                    pHtml += `<div class="text-base text-gray-300 foundry-content leading-relaxed">${d.desc || d.description || 'No description available.'}</div>`;
+                    document.getElementById('mod-preview').innerHTML = pHtml;
+                    
+                    if(!locked) document.getElementById('btn-lock').classList.remove('hidden');
+                    else document.getElementById('btn-lock').classList.add('hidden');
+                };
+                list.appendChild(btn);
+            });
+        }
+        function filterModal() { renderModalList(); }
+        function closeModal() {
+            const m = document.getElementById('uni-modal'); m.classList.add('opacity-0'); document.getElementById('uni-window').classList.add('scale-95');
+            setTimeout(() => { m.classList.add('hidden'); }, 200);
+        }
+
+        function lockModal() {
+            try {
+                if(!mCtx.active) return;
+                const a = mCtx.active;
+                
+                if (mCtx.type.includes('feat') && mCtx.type !== 'retrain_feat') {
+                    let keyToSave = mCtx.meta.key || mCtx.type;
+                    state.feats_selected[keyToSave] = a;
+                    buildFeatsUI();
+                } else if (mCtx.type === 'spell') {
+                    let currentAdded = state.new_spells.filter(s => s.cIdx === mCtx.meta.cIdx && s.lvl === mCtx.meta.lvl).length;
+                    if(currentAdded >= mCtx.meta.req) { alert(`Maximum limit reached for Level ${mCtx.meta.lvl} spells.`); return; }
+                    state.new_spells.push({cIdx: mCtx.meta.cIdx, lvl: mCtx.meta.lvl, name: a.name});
+                    buildMagicUI();
+                } else if (mCtx.type === 'retrain_feat') {
+                    state.retrained_feats.push({ old: mCtx.meta.oldName, new: a });
+                    buildRetrainUI();
+                }
+                closeModal(); runValidation();
+            } catch (err) {
+                console.error("Lock Modal Error:", err);
+            }
+        }
+
+        function runValidation() {
+            // --- Monk Path to Perfection validation ---
+            let monkPathNeeded = pcClass === 'monk' && monkPathConfig[targetLevel];
+            let monkPathValid = !monkPathNeeded || state.monk_path_choice !== null;
+            if (monkPathNeeded) {
+                if (monkPathValid) { document.getElementById('chk-classfeatures').innerText = "✓"; document.getElementById('chk-classfeatures').className = "text-xs text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-classfeatures').innerText = "!"; document.getElementById('chk-classfeatures').className = "text-red-500 font-bold"; }
+            }
+            
+            if(reqs.ability_boosts) {
+                if(state.free_boosts_selected.length === 4) { document.getElementById('chk-abilities').innerText = "✓"; document.getElementById('chk-abilities').className = "text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-abilities').innerText = "!"; document.getElementById('chk-abilities').className = "text-red-500 font-bold"; }
+            }
+            if(reqs.skill_increase) {
+                let max = reqs.skill_increase + state.retro_int_skills;
+                if(state.skill_increases_selected.length === max) { document.getElementById('chk-skills').innerText = "✓"; document.getElementById('chk-skills').className = "text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-skills').innerText = "!"; document.getElementById('chk-skills').className = "text-red-500 font-bold"; }
+            }
+
+            let fValid = true;
+            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat'].forEach(ft => { 
+                let count = reqs[ft] || 0;
+                if (ft === 'class_feat') count += state.bonus_feats_added;
+                for(let i=0; i<count; i++) {
+                    let key = count > 1 ? `${ft}_${i}` : ft;
+                    if(!state.feats_selected[key]) fValid = false;
+                }
+            });
+            if(fValid && (reqs.ancestry_feat || reqs.class_feat || reqs.general_feat || reqs.skill_feat)) { 
+                document.getElementById('chk-feats').innerText = "✓"; document.getElementById('chk-feats').className = "text-green-400 text-lg font-bold leading-none"; 
+            } else if (!fValid) { document.getElementById('chk-feats').innerText = "!"; document.getElementById('chk-feats').className = "text-red-500 font-bold"; }
+
+            let mValid = true;
+            state.spellCasters.forEach((c, idx) => {
+                let tLower = (c.castingType || c.type || "unknown").toLowerCase();
+                let cType = null;
+                
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                
+                if(cType && SPELL_SLOTS[cType]) {
+                    let oldS = SPELL_SLOTS[cType][currentLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    let newS = SPELL_SLOTS[cType][targetLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    
+                    for(let lvl=0; lvl<=10; lvl++) {
+                        let oldAmt = lvl===0 ? 5 : (oldS[lvl-1] || 0);
+                        let newAmt = lvl===0 ? 5 : (newS[lvl-1] || 0);
+                        let req = Math.max(0, newAmt - oldAmt);
+                        let added = state.new_spells.filter(s => s.cIdx === idx && s.lvl === lvl).length;
+                        if(added < req) mValid = false;
+                    }
+                }
+            });
+            
+            if(state.spellCasters.length > 0) {
+                if(mValid) { document.getElementById('chk-magic').innerText = "✓"; document.getElementById('chk-magic').className = "text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-magic').innerText = "!"; document.getElementById('chk-magic').className = "text-red-500 font-bold"; }
+            }
+
+            let globalValid = true;
+            if(reqs.ability_boosts && state.free_boosts_selected.length < 4) globalValid = false;
+            if(reqs.skill_increase && state.skill_increases_selected.length < (reqs.skill_increase + state.retro_int_skills)) globalValid = false;
+            if(!fValid) globalValid = false;
+            if(state.spellCasters.length > 0 && !mValid) globalValid = false;
+            if(!monkPathValid) globalValid = false;
+
+            const btnF = document.getElementById('btn-finish');
+            if(globalValid) {
+                btnF.disabled = false; btnF.innerText = "Lock In Level";
+                btnF.classList.remove('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
+                btnF.classList.add('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
+                document.getElementById('chk-review').innerText = "✓"; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none"; 
+            } else {
+                btnF.disabled = true; btnF.innerText = "Incomplete Form";
+                btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
+                btnF.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
+                document.getElementById('chk-review').innerText = ""; 
+            }
+        }
+
+        async function submitLevelUp() {
+            const btn = document.getElementById('btn-finish'); btn.innerText = "Processing Matrix..."; btn.disabled = true;
+
+            let finalFeats = [...(pc.raw_feats || [])]; 
+            state.retrained_feats.forEach(rf => {
+                finalFeats = finalFeats.filter(f => Array.isArray(f) ? f[0] !== rf.old : f.name !== rf.old);
+                finalFeats.push([rf.new.name, "Feat", targetLevel]); 
+            });
+            Object.values(state.feats_selected).forEach(f => {
+                finalFeats.push([f.name, "Feat", targetLevel]);
+            });
+
+            let finalSkills = {...state.base_profs};
+            state.skill_increases_selected.forEach(sk => {
+                finalSkills[sk] = (finalSkills[sk] || 0) + 2;
+                if(finalSkills[sk] > 8) finalSkills[sk] = 8;
+            });
+
+            // Detect format and work in scores for correct boost math
+            let rawAbilVals = Object.values(pc.abilities).map(v => typeof v === 'object' ? (v.value || 0) : (v || 0));
+            let isScoreFmt = rawAbilVals.some(v => v >= 8);
+            
+            let finalAbilities = {};
+            for (let s in pc.abilities) {
+                let raw = typeof pc.abilities[s] === 'object' ? (pc.abilities[s].value || 0) : (pc.abilities[s] || 0);
+                finalAbilities[s] = isScoreFmt ? raw : (raw * 2 + 10); // Convert to scores
+            }
+            
+            let finalHalfs = [...(pc.half_boosts || [])];
+            state.free_boosts_selected.forEach(s => {
+                let currentScore = finalAbilities[s] || 10;
+                if (currentScore >= 18) {
+                    // Half boost at 18+
+                    if (finalHalfs.includes(s)) { finalAbilities[s] += 2; finalHalfs = finalHalfs.filter(h=>h!==s); }
+                    else finalHalfs.push(s);
+                } else {
+                    finalAbilities[s] += 2;
+                }
+            });
+
+            let finalCasters = JSON.parse(JSON.stringify(state.spellCasters));
+            finalCasters.forEach((c, idx) => {
+                let tLower = (c.castingType || c.type || "unknown").toLowerCase();
+                let cType = null;
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                
+                if(cType && SPELL_SLOTS[cType]) {
+                    let newS = SPELL_SLOTS[cType][targetLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    c.perDay = [5, ...newS.slice(0, 9)]; 
+                }
+                
+                state.new_spells.forEach(ns => {
+                    if (ns.cIdx === idx) {
+                        let lvlObj = c.spells.find(sp => sp.spellLevel === ns.lvl);
+                        if(!lvlObj) { lvlObj = {spellLevel: ns.lvl, list: []}; c.spells.push(lvlObj); }
+                        if(!lvlObj.list.includes(ns.name)) lvlObj.list.push(ns.name);
+                    }
+                });
+            });
+
+            const payload = {
+                new_level: targetLevel,
+                abilities: finalAbilities,
+                half_boosts: finalHalfs,
+                skills: finalSkills,
+                feats: finalFeats,
+                spellCasters: finalCasters,
+                auto_bumps: state.auto_bumps || {},
+                monk_path_choice: state.monk_path_choice || null
+            };
+
+            try {
+                const res = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                const data = await res.json();
+                if(data.success) window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+            } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
+        }
+
+        init();
+    </script>
+</body>
+</html>

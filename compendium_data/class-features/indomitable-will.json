@@ -1,0 +1,51 @@
+{
+    "_id": "BZnqKnqKVImjSIFE",
+    "img": "systems/pf2e/icons/features/classes/indomitable-will.webp",
+    "name": "Indomitable Will",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your rage makes it difficult to control you. Your proficiency rank for Will saves increases to master. When you roll a success on a Will save, you get a critical success instead.</p>"
+        },
+        "level": {
+            "value": 15
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "selector": "will"
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "will": {
+                    "rank": 3
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "barbarian"
+            ]
+        }
+    },
+    "type": "feat"
+}

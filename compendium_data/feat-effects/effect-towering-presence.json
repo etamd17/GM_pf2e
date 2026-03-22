@@ -1,0 +1,53 @@
+{
+    "_id": "XJtlvaqAHseq1yoz",
+    "img": "icons/magic/unholy/silhouette-evil-horned-giant.webp",
+    "name": "Effect: Towering Presence",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Towering Presence]</p>\n<p>You increase your size your size to Large. Your reach increases by 5 feet (or by 10 feet if you started out Tiny), and you gain a +2 status bonus to melee damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder War of Immortals"
+        },
+        "rules": [
+            {
+                "key": "CreatureSize",
+                "value": "large"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "melee-damage",
+                "type": "status",
+                "value": 2
+            },
+            {
+                "allowDuplicate": false,
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.conditionitems.Item.Clumsy"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

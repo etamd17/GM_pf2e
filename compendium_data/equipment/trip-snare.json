@@ -1,0 +1,64 @@
+{
+    "_id": "SWqzv0hYCIczICeR",
+    "img": "icons/commodities/cloth/thread-spindle-white-grey.webp",
+    "name": "Trip Snare",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "category": "snare",
+        "containerId": null,
+        "damage": {
+            "formula": "1d6",
+            "kind": "damage",
+            "type": "bludgeoning"
+        },
+        "description": {
+            "value": "<p>You set a cunning wire to trip a creature. A Medium or smaller creature that enters this snare's square must attempt a @Check[reflex|showDC:all|dc:21] save.</p>\n<p>If you want to create a trip snare to trip a larger creature, you must create a group of contiguous snares of a length equal to the edge of that larger creature's space, and the creature must be moving such that it moves into the full set of snares. For example, three trip snares in a 15-foot-line can trip a Huge creature coming down a corridor into the line of snares.</p><hr /><p><strong>Critical Success</strong> The creature is unaffected.</p>\n<p><strong>Success</strong> The creature is @UUID[Compendium.pf2e.conditionitems.Item.Off-Guard] until the start of its next turn.</p>\n<p><strong>Failure</strong> The creature falls @UUID[Compendium.pf2e.conditionitems.Item.Prone].</p>\n<p><strong>Critical Failure</strong> The creature falls prone and takes @Damage[1d6[bludgeoning]] damage.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 4
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 15
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "consumable",
+                "mechanical",
+                "snare",
+                "trap"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

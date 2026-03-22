@@ -1,0 +1,71 @@
+{
+    "_id": "BBGg5gpMmuBSo7Mi",
+    "img": "icons/magic/water/ice-snowman.webp",
+    "name": "Effect: Deep Freeze",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Deep Freeze]</p>\n<p>On a <strong>Success</strong>, you take a –5-foot status penalty to your Speeds.</p>\n<p>On a <strong>Failure</strong>, you take a –10-foot status penalty to your Speeds.</p>\n<p>On a <strong>Critical Failure</strong>, you are slowed 1 and take a –15-foot status penalty to your Speeds.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 12
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.success",
+                        "value": 5
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.failure",
+                        "value": 10
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalFailure",
+                        "value": 15
+                    }
+                ],
+                "flag": "deepFreezeSpeedPenalty",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess",
+                "rollOption": "deep-freeze-penalty"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "all-speeds",
+                "type": "circumstance",
+                "value": "-@item.flags.pf2e.rulesSelections.deepFreezeSpeedPenalty"
+            },
+            {
+                "inMemoryOnly": true,
+                "key": "GrantItem",
+                "predicate": [
+                    "deep-freeze-penalty:15"
+                ],
+                "uuid": "Compendium.pf2e.conditionitems.Item.Slowed"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

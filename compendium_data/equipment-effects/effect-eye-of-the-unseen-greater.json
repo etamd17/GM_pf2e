@@ -1,0 +1,47 @@
+{
+    "_id": "1ihy7Jvw5PY4WYbP",
+    "img": "systems/pf2e/icons/equipment/worn-items/other-worn-items/eye-of-the-unseen.webp",
+    "name": "Effect: Eye of the Unseen (Greater)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Eye of the Unseen (Greater)]</p>\n<p>You gain a +2 item bonus to visual Perception checks.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 14
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens The Grand Bazaar"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:visual"
+                ],
+                "selector": "perception",
+                "type": "item",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": false
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

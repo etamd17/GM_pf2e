@@ -1,0 +1,122 @@
+{
+    "_id": "Fz3cSffzDAxhCh2D",
+    "img": "systems/pf2e/icons/equipment/consumables/ammunition/exsanguinating-ammunition.webp",
+    "name": "Effect: Exsanguinating Ammunition",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Exsanguinating Ammunition], @UUID[Compendium.pf2e.equipment-srd.Item.Exsanguinating Ammunition (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Exsanguinating Ammunition (Major)]</p>\n<p>You gain weakness to persistent bleed damage. In addition, the DC of any flat checks to end persistent bleed damage increases from 15 to 17 (from 10 to 12 when receiving particularly effective assistance) for the duration.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:exsanguinating-ammunition",
+                                    "parent:origin:item:ammo:slug:exsanguinating-ammunition",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Exsanguinating Ammunition"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:exsanguinating-ammunition-greater",
+                                    "parent:origin:item:ammo:slug:exsanguinating-ammunition-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Exsanguinating Ammunition (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:exsanguinating-ammunition-major",
+                                    "parent:origin:item:ammo:slug:exsanguinating-ammunition-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Exsanguinating Ammunition (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "exsanguinating-ammunition"
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "exsanguinating-ammunition:exsanguinating-ammunition"
+                ],
+                "type": "bleed",
+                "value": 1
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "exsanguinating-ammunition:exsanguinating-ammunition-greater"
+                ],
+                "type": "bleed",
+                "value": 3
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "exsanguinating-ammunition:exsanguinating-ammunition-major"
+                ],
+                "type": "bleed",
+                "value": 5
+            },
+            {
+                "itemType": "condition",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:damage:type:bleed"
+                ],
+                "property": "pd-recovery-dc",
+                "value": 17
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

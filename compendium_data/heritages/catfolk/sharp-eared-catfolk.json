@@ -1,0 +1,43 @@
+{
+    "_id": "NWsZ0cIeghyzk9bU",
+    "folder": "rHnluMPovHqQZC1m",
+    "img": "icons/creatures/mammals/humanoid-fox-cat-archer.webp",
+    "name": "Sharp-Eared Catfolk",
+    "system": {
+        "ancestry": {
+            "name": "Catfolk",
+            "slug": "catfolk",
+            "uuid": "Compendium.pf2e.ancestries.Item.972EkpJOPv9KkQIW"
+        },
+        "description": {
+            "value": "<p>You were born with big, expressive ears that move with your moods and perk up at any unexpected sound. You gain a +2 circumstance bonus to locate undetected creatures that you could hear within 30 feet with a @UUID[Compendium.pf2e.actionspf2e.Item.Seek] action. As long as you're aware of a creature via sound, once per round, your ears can help you @UUID[Compendium.pf2e.actionspf2e.Item.Point Out] the creature to all allies as a free action.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:seek",
+                    {
+                        "lte": [
+                            "target:distance",
+                            30
+                        ]
+                    }
+                ],
+                "selector": "perception",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

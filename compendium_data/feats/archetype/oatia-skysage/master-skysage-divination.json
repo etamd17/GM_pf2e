@@ -1,0 +1,48 @@
+{
+    "_id": "Ruee0G3oZG5n5Auk",
+    "folder": "KwdFTociFQyekZ6o",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "Master Skysage Divination",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "class",
+        "description": {
+            "value": "<p>You unlock the most powerful secrets hidden in the stars above. You choose one of the following 7th-rank spells to add to your spell repertoire: @UUID[Compendium.pf2e.spells-srd.Item.Retrocognition] or @UUID[Compendium.pf2e.spells-srd.Item.True Target]. At 18th level, add @UUID[Compendium.pf2e.spells-srd.Item.Pinpoint] to your spell repertoire, and at 20th level, add @UUID[Compendium.pf2e.spells-srd.Item.Foresight] to your spell repertoire. You gain master proficiency with spell attack rolls and spell DCs for occult spells.</p>"
+        },
+        "level": {
+            "value": 16
+        },
+        "prerequisites": {
+            "value": [
+                {
+                    "value": "Expert Skysage Divination"
+                }
+            ]
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #187: The Seventh Arch"
+        },
+        "rules": [],
+        "subfeatures": {
+            "proficiencies": {
+                "spellcasting": {
+                    "rank": 3
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "archetype"
+            ]
+        }
+    },
+    "type": "feat"
+}

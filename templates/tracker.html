@@ -1,0 +1,572 @@
+{% extends "base.html" %}
+
+{% block title %}Encounter Tracker - Pathfinder Dashboard{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-end mb-6 border-b border-gray-700 pb-2">
+    <div class="flex items-center gap-4">
+        <h1 class="text-3xl font-header text-amber-500">Encounter Tracker</h1>
+        
+        {% if encounter_xp > 0 %}
+        <div class="bg-gray-800 border border-gray-600 px-3 py-1 rounded shadow-inner flex items-center gap-2">
+            <span class="text-xs text-gray-400 uppercase tracking-widest">Party Lvl {{ party_level }}</span>
+            <span class="text-gray-600">|</span>
+            <span class="{{ diff_color }} font-bold text-sm uppercase tracking-wider">{{ diff_label }}</span>
+            <span class="text-gray-400 text-xs font-mono">({{ encounter_xp }} XP)</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="flex flex-col xl:flex-row gap-6 items-start">
+    
+    <div class="flex-1 min-w-0 w-full">
+        <div class="bg-gray-800 p-4 rounded-t-lg shadow-md border-t border-l border-r border-gray-700 flex flex-wrap gap-4 items-center">
+            
+            <form action="/api/add_combatant" method="POST" class="flex gap-2">
+                <input type="hidden" name="type" value="monster">
+                <input list="monster-list" name="path" placeholder="Search Monsters..." required class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-3 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
+                <datalist id="monster-list">
+                    {% for m in monsters %}
+                    <option value="{{ m.file_path }}">{{ m.name }}</option>
+                    {% endfor %}
+                </datalist>
+                <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded text-sm font-bold border border-gray-600 transition-colors">Add Monster</button>
+            </form>
+
+            <div class="flex items-center gap-2">
+                <form action="/api/add_combatant" method="POST" class="flex gap-2">
+                    <input type="hidden" name="type" value="pc">
+                    <select name="path" required class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-3 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
+                        {% if party %}
+                            {% for p in party %}
+                            <option value="{{ p.name }}">{{ p.name }}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="" disabled selected>No PCs Found</option>
+                        {% endif %}
+                    </select>
+                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded text-sm font-bold border border-gray-600 transition-colors">Add PC</button>
+                </form>
+
+                <form action="/api/add_party" method="POST">
+                    <button type="submit" class="bg-blue-900/50 hover:bg-blue-800 text-blue-200 px-3 py-1 rounded text-sm font-bold border border-blue-900 transition-colors ml-2" title="Add all active PCs to the board">Add Full Party</button>
+                </form>
+            </div>
+            
+            <div class="h-8 border-r border-gray-600 mx-2"></div>
+
+            <div class="flex items-center gap-2">
+                <form action="/api/roll_npc_initiative" method="POST">
+                    <button type="submit" class="bg-indigo-900/50 hover:bg-indigo-800 text-indigo-200 px-3 py-1 rounded text-sm font-bold border border-indigo-900 transition-colors" title="Roll 1d20 + Perception for all NPCs and auto-sort">Roll NPC Init</button>
+                </form>
+                
+                <form action="/api/sort_initiative" method="POST">
+                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded text-sm font-bold border border-gray-600 transition-colors" title="Force a manual sort">Sort</button>
+                </form>
+            </div>
+
+            <form action="/api/cycle_turn/next" method="POST">
+                <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-sm font-bold transition-colors ml-2">Next Turn ➡</button>
+            </form>
+
+            <form action="/api/clear_encounter" method="POST" class="ml-auto">
+                <button type="submit" class="bg-red-900/50 hover:bg-red-800/80 text-red-200 px-3 py-1 rounded text-sm font-bold border border-red-900 transition-colors">Clear Board</button>
+            </form>
+        </div>
+
+        <div class="bg-gray-700 p-3 rounded-b-lg shadow-md border-b border-l border-r border-gray-600 flex flex-wrap gap-6 mb-6 items-center">
+            
+            <form action="/api/save_encounter" method="POST" class="flex gap-2 items-center">
+                <label class="text-gray-300 text-xs font-bold uppercase tracking-wider">Save Roster As:</label>
+                <input type="text" name="encounter_name" placeholder="e.g. Goblin Ambush" required class="bg-gray-900 border border-gray-500 text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-40">
+                <button type="submit" class="bg-blue-900/50 hover:bg-blue-800 text-blue-200 px-3 py-1 rounded text-sm font-bold border border-blue-900 transition-colors">Save</button>
+            </form>
+
+            <div class="h-6 border-r border-gray-500 mx-2"></div>
+
+            <form action="/api/load_encounter" method="POST" class="flex gap-2 items-center">
+                <label class="text-gray-300 text-xs font-bold uppercase tracking-wider">Load Roster:</label>
+                <select name="encounter_name" required class="bg-gray-900 border border-gray-500 text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
+                    {% if saved_encounters %}
+                        <option value="" disabled selected>Select an encounter...</option>
+                        {% for enc in saved_encounters %}
+                        <option value="{{ enc }}">{{ enc }}</option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="" disabled selected>No saved encounters</option>
+                    {% endif %}
+                </select>
+                <button type="submit" class="bg-purple-900/50 hover:bg-purple-800 text-purple-200 px-3 py-1 rounded text-sm font-bold border border-purple-900 transition-colors">Load</button>
+            </form>
+
+        </div>
+
+        <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-900/50">
+                    <tr>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-24">Init</th>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm">Name</th>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-16">AC</th>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-40 text-center">HP</th>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-56">Status / Conditions</th>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-20 text-center">Act</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in encounter %}
+                    <tr class="border-b border-gray-700/50 {% if loop.index0 == turn_index %}bg-amber-900/20 border-l-4 border-l-amber-500{% else %}border-l-4 border-l-transparent{% endif %}">
+                        
+                        <td class="p-3">
+                            <form action="/api/update_initiative/{{ c.instance_id }}" method="POST" class="flex flex-col gap-1">
+                                <input type="number" name="initiative" value="{{ c.initiative }}" class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-1 py-1 text-sm w-16 text-center focus:outline-none focus:border-amber-500">
+                                <button type="submit" class="text-[10px] bg-gray-700 hover:bg-gray-600 rounded text-gray-300 py-0.5 w-16">Set</button>
+                            </form>
+                        </td>
+                        
+                        <td class="p-3 font-bold text-gray-200">
+                            <span class="cursor-pointer hover:text-amber-400 transition-colors" onclick="openStatPopup('{{ c.instance_id }}')">{{ c.name }}</span>
+                            {% if loop.index0 == turn_index %}<span class="text-amber-500 text-[10px] uppercase tracking-wider block mt-1">▶ Active Turn</span>{% endif %}
+                        </td>
+                        
+                        <td class="p-3 font-mono text-blue-400 font-bold text-lg">
+                            {{ c.ac }}
+                            {% if c.ac < c.base_ac %}
+                                <span class="text-[10px] text-red-400 block -mt-1 tracking-tighter">(Penalty)</span>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="p-3">
+                            <div class="flex items-center justify-center gap-2">
+                                <span class="font-mono text-green-400 font-bold text-lg w-16 text-right">{{ c.current_hp }} <span class="text-gray-500 text-xs">/ {{ c.hp }}</span></span>
+                                
+                                <form action="/api/adjust_hp/{{ c.instance_id }}" method="POST" class="flex items-center gap-1">
+                                    <input type="number" name="amount" value="1" min="1" class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-1 py-1 text-xs w-10 text-center focus:outline-none focus:border-amber-500">
+                                    <button type="submit" name="action" value="damage" title="Damage" class="bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-1 rounded border border-red-900 transition-colors font-bold">-</button>
+                                    <button type="submit" name="action" value="heal" title="Heal" class="bg-green-900/50 hover:bg-green-800 text-green-200 px-2 py-1 rounded border border-green-900 transition-colors font-bold">+</button>
+                                </form>
+                            </div>
+                        </td>
+
+                        <td class="p-3">
+                            <div class="flex flex-wrap gap-1 mb-1">
+                                {% for cond, val in c.conditions.items() %}
+                                    {% if val is sameas true %}
+                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm">
+                                            {{ cond|replace('_', '-') }}
+                                            <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="inline">
+                                                <input type="hidden" name="condition" value="{{ cond }}">
+                                                <button type="submit" name="action" value="toggle" class="hover:text-white font-bold">&times;</button>
+                                            </form>
+                                        </span>
+                                    {% elif val is number and val > 0 %}
+                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm">
+                                            {{ cond }} {{ val }}
+                                            <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="inline flex gap-1 ml-1 border-l border-red-800/50 pl-1">
+                                                <input type="hidden" name="condition" value="{{ cond }}">
+                                                <button type="submit" name="action" value="decrease" class="hover:text-white font-bold">-</button>
+                                                <button type="submit" name="action" value="increase" class="hover:text-white font-bold">+</button>
+                                            </form>
+                                        </span>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            
+                            <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="flex items-center gap-1 mt-1">
+                                <select name="condition" class="bg-gray-900 border border-gray-600 text-gray-400 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 w-full max-w-[120px]">
+                                    <option value="frightened">Frightened</option>
+                                    <option value="sickened">Sickened</option>
+                                    <option value="off_guard">Off-Guard</option>
+                                    <option value="prone">Prone</option>
+                                    <option value="dying">Dying</option>
+                                    <option value="wounded">Wounded</option>
+                                    <option value="doomed">Doomed</option>
+                                    <option value="concealed">Concealed</option>
+                                    <option value="hidden">Hidden</option>
+                                    <option value="undetected">Undetected</option>
+                                </select>
+                                <button type="submit" name="action" value="add" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-600 transition-colors">+</button>
+                            </form>
+                            
+                            <form action="/api/set_persistent_damage/{{ c.instance_id }}" method="POST" class="flex items-center gap-1 mt-2 border-t border-gray-700 pt-1">
+                                <span class="text-[10px] text-orange-400 font-bold uppercase" title="Persistent Damage">PD:</span>
+                                <input type="text" name="persistent_damage" value="{{ c.persistent_damage }}" placeholder="e.g. 1d6 fire" class="bg-gray-900 border border-gray-600 text-gray-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 w-full max-w-[110px]">
+                                <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-600 transition-colors">Set</button>
+                            </form>
+                        </td>
+
+                        <td class="p-3 text-center">
+                            {% if not c.is_pc %}
+                            <form action="/api/toggle_elite_weak/{{ c.instance_id }}" method="POST" class="inline-flex gap-1 mb-1">
+                                <input type="hidden" name="mode" value="elite">
+                                <button type="submit" class="text-[9px] px-1.5 py-0.5 rounded border transition-colors {% if c.elite_weak == 1 %}bg-amber-900/40 text-amber-400 border-amber-700{% else %}bg-gray-800 text-gray-500 border-gray-700 hover:text-amber-400{% endif %}">Elite</button>
+                            </form>
+                            <form action="/api/toggle_elite_weak/{{ c.instance_id }}" method="POST" class="inline-flex gap-1 mb-1">
+                                <input type="hidden" name="mode" value="normal">
+                                <button type="submit" class="text-[9px] px-1.5 py-0.5 rounded border transition-colors bg-gray-800 text-gray-500 border-gray-700 hover:text-white">Norm</button>
+                            </form>
+                            <form action="/api/toggle_elite_weak/{{ c.instance_id }}" method="POST" class="inline-flex gap-1 mb-1">
+                                <input type="hidden" name="mode" value="weak">
+                                <button type="submit" class="text-[9px] px-1.5 py-0.5 rounded border transition-colors {% if c.elite_weak == -1 %}bg-purple-900/40 text-purple-400 border-purple-700{% else %}bg-gray-800 text-gray-500 border-gray-700 hover:text-purple-400{% endif %}">Weak</button>
+                            </form>
+                            <br>
+                            {% endif %}
+                            <form action="/api/remove_combatant/{{ c.instance_id }}" method="POST">
+                                <button type="submit" class="text-[10px] bg-red-900/40 hover:bg-red-800 text-red-300 px-2 py-1 rounded border border-red-900 transition-colors uppercase tracking-wider">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="p-8 text-center text-gray-500 italic">No combatants added to the encounter yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if encounter %}
+        {% set active_c = encounter[turn_index] %}
+        <div class="w-full xl:w-[400px] shrink-0">
+            <div class="bg-gray-800 rounded-lg shadow-xl border-2 border-amber-500 flex flex-col sticky top-6">
+                
+                <div class="bg-gray-900 p-4 border-b border-amber-500/50 flex justify-between items-center rounded-t-lg">
+                    <div>
+                        <h2 class="text-2xl font-header text-amber-500">{{ active_c.name }}</h2>
+                        <span class="text-xs text-gray-400 uppercase tracking-widest block">
+                            {% if active_c.is_pc %}
+                                PC - Level {{ active_c.level }}
+                            {% else %}
+                                Monster Level {{ active_c.level }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="bg-amber-900/30 border border-amber-500 text-amber-400 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider animate-pulse">
+                        Active Turn
+                    </div>
+                </div>
+                
+                <div class="p-5 overflow-y-auto max-h-[75vh] custom-scrollbar">
+                    
+                    {% if active_c.persistent_damage or active_c.conditions.get('frightened', 0) > 0 %}
+                    <div class="bg-orange-900/20 border border-orange-500/50 rounded p-3 mb-6 shadow-inner">
+                        <span class="text-orange-400 font-bold text-sm uppercase mb-2 block text-center flex items-center justify-center gap-2">
+                            <span class="animate-pulse text-lg">🚨</span> End of Turn Reminders
+                        </span>
+                        <ul class="text-xs text-orange-200 space-y-2 list-disc pl-5">
+                            {% if active_c.persistent_damage %}
+                            <li>Take <strong class="text-orange-400 text-sm">{{ active_c.persistent_damage }}</strong> persistent damage, then roll a flat DC 15 flat check to recover.</li>
+                            {% endif %}
+                            {% if active_c.conditions.get('frightened', 0) > 0 %}
+                            <li>The Frightened condition will automatically decrease by 1 when you end this turn.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-6 gap-2 mb-6">
+                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase">AC</div>
+                            <div class="font-bold text-blue-400 text-xl">{{ active_c.ac }}</div>
+                        </div>
+                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase">Fort</div>
+                            <div class="font-bold text-red-400 text-xl">+{{ active_c.fort }}</div>
+                        </div>
+                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase">Ref</div>
+                            <div class="font-bold text-blue-400 text-xl">+{{ active_c.ref }}</div>
+                        </div>
+                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase">Will</div>
+                            <div class="font-bold text-purple-400 text-xl">+{{ active_c.will }}</div>
+                        </div>
+                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase">Spd</div>
+                            <div class="font-bold text-white text-xl">{{ active_c.speed }}</div>
+                        </div>
+                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
+                            <div class="text-[10px] text-gray-500 uppercase">Perc</div>
+                            <div class="font-bold text-white text-xl">+{{ active_c.perception }}</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3 border-b border-gray-700 pb-1">Strikes & Attacks</h3>
+                        <ul class="space-y-3">
+                            {% if active_c.is_pc %}
+                                {% for attack in active_c.attacks %}
+                                <li class="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-bold text-gray-200">{{ attack.name }}</span>
+                                        <span class="font-mono text-amber-400 font-bold bg-amber-900/20 px-2 py-0.5 rounded">{{ attack.strikes[0].label if attack.strikes else '+?' }}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-400 bg-gray-950 inline-block px-2 py-1 rounded">Damage: <span class="text-gray-300 font-mono">{{ attack.damage }}</span></div>
+                                </li>
+                                {% endfor %}
+                            {% else %}
+                                {% for strike in active_c.strikes %}
+                                <li class="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-bold text-gray-200">{{ strike.name }}</span>
+                                        <span class="font-mono text-amber-400 font-bold bg-amber-900/20 px-2 py-0.5 rounded">
+                                            {% if strike.bonus != 0 %}+{{ strike.bonus }}{% else %}+0{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="text-xs text-gray-400 bg-gray-950 inline-block px-2 py-1 rounded">Damage: <span class="text-gray-300 font-mono">{{ strike.damage }}</span></div>
+                                </li>
+                                {% endfor %}
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3 border-b border-gray-700 pb-1">Abilities & Actions</h3>
+                        {% if active_c.is_pc %}
+                            <div class="flex flex-wrap gap-1.5">
+                                {% for feat in active_c.feats %}
+                                <div class="px-2 py-1 bg-gray-700 text-xs rounded border border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-amber-400 hover:border-amber-500 transition-colors relative cursor-pointer inline-block" onclick="toggleTooltip(event, this)">
+                                    {{ feat.name }}
+                                    <div class="tooltip-popup absolute hidden bg-gray-900 border-2 border-amber-500 text-gray-300 text-xs p-4 rounded top-full left-0 mt-2 w-72 max-h-72 overflow-y-auto z-[9999] shadow-2xl foundry-text font-sans text-left cursor-auto" onclick="event.stopPropagation()">
+                                        <strong class="text-amber-500 block mb-2 border-b border-gray-700 pb-1 text-sm font-header">{{ feat.name }}</strong>
+                                        {{ feat.desc | safe }}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <ul class="space-y-3">
+                                {% for action in active_c.actions %}
+                                <li class="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm">
+                                    <div class="font-bold text-amber-500 mb-2 border-b border-gray-700/50 pb-1">{{ action.name }}</div>
+                                    <div class="text-xs text-gray-300 leading-relaxed foundry-text">{{ action.description | safe }}</div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    
+                    {% if active_c.is_pc and active_c.spell_casters %}
+                    <div class="mt-6 pt-4 border-t border-gray-700">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Spellcasting</h3>
+                        
+                        <div class="space-y-3">
+                            {% for caster in active_c.spell_casters %}
+                            <div class="bg-purple-900/10 border border-purple-900/30 p-2 rounded">
+                                <span class="text-xs font-bold text-purple-400 block mb-2">{{ caster.name }} ({{ caster.tradition }})</span>
+                                
+                                {% for level in caster.levels %}
+                                    <div class="text-[10px] text-gray-400 mb-1 flex flex-wrap items-baseline gap-1">
+                                        <span class="font-bold text-gray-300 w-full">{{ level.label }} <span class="text-purple-500/50">({{ level.slots }} Slots)</span>:</span> 
+                                        
+                                        {% for spell in level.spells %}
+                                            <div class="relative cursor-pointer inline-block mx-1" onclick="toggleTooltip(event, this)">
+                                                <span class="text-purple-300 hover:text-amber-400 underline decoration-purple-900/50">{{ spell.name }}</span>
+                                                <div class="tooltip-popup absolute hidden bg-gray-900 border-2 border-amber-500 text-gray-300 text-xs p-4 rounded bottom-full left-0 mb-2 w-72 max-h-72 overflow-y-auto z-[9999] shadow-2xl foundry-text font-sans text-left cursor-auto" onclick="event.stopPropagation()">
+                                                    <strong class="text-amber-500 block mb-2 border-b border-gray-700 pb-1 text-sm font-header">{{ spell.name }}</strong>
+                                                    {{ spell.desc | safe }}
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+
+<script>
+    function toggleTooltip(event, element) {
+        event.stopPropagation();
+        const tooltip = element.querySelector('.tooltip-popup');
+        const isCurrentlyOpen = !tooltip.classList.contains('hidden');
+        
+        document.querySelectorAll('.tooltip-popup').forEach(el => {
+            el.classList.add('hidden');
+        });
+        
+        if (!isCurrentlyOpen) {
+            tooltip.classList.remove('hidden');
+        }
+    }
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.tooltip-popup').forEach(el => {
+            el.classList.add('hidden');
+        });
+    });
+</script>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    
+    .foundry-text p { margin-bottom: 0.5rem; }
+    .foundry-text p:last-child { margin-bottom: 0; }
+    .foundry-text strong { color: #d1d5db; font-weight: bold; }
+    .foundry-text hr { border-color: #374151; margin: 0.5rem 0; }
+</style>
+
+<!-- Stat Popup Modal -->
+<div id="stat-popup" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" style="background:#2E2B25; border:1px solid rgba(168,156,139,0.25);">
+        <div class="p-4 flex justify-between items-center shrink-0" style="border-bottom:1px solid rgba(168,156,139,0.15);">
+            <div>
+                <h3 id="stat-popup-name" class="font-header text-xl" style="color:#7DC4C4;">Combatant</h3>
+                <span id="stat-popup-subtitle" class="text-xs" style="color:#7A7062;">Loading...</span>
+            </div>
+            <button onclick="document.getElementById('stat-popup').classList.add('hidden')" class="text-xl" style="color:#7A7062;">&times;</button>
+        </div>
+        <div id="stat-popup-body" class="p-5 overflow-y-auto flex-1 custom-scrollbar" style="color:#CFC5B4;">
+            <div class="text-center py-8" style="color:#524C42;">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function openStatPopup(instanceId) {
+        const modal = document.getElementById('stat-popup');
+        modal.classList.remove('hidden');
+        document.getElementById('stat-popup-body').innerHTML = '<div class="text-center py-8" style="color:#524C42;">Loading...</div>';
+        
+        try {
+            const res = await fetch(`/api/combatant_stats/${instanceId}`);
+            const d = await res.json();
+            if (d.error) { document.getElementById('stat-popup-body').innerHTML = `<div class="text-red-400">${d.error}</div>`; return; }
+            
+            document.getElementById('stat-popup-name').textContent = d.name;
+            document.getElementById('stat-popup-subtitle').textContent = d.is_pc 
+                ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '· ' + d.subclass : ''}` 
+                : `Creature Level ${d.level}`;
+            
+            let html = '';
+            
+            // Stats grid
+            html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
+            const stats = [
+                {label:'AC', val:d.ac, color:'#60A5FA'},
+                {label:'Fort', val:'+'+d.fort, color:'#4ADE80'},
+                {label:'Ref', val:'+'+d.ref, color:'#60A5FA'},
+                {label:'Will', val:'+'+d.will, color:'#C4B5FD'},
+                {label:'Per', val:'+'+d.perception, color:'#CFC5B4'},
+                {label:'Spd', val:d.speed, color:'#CFC5B4'},
+            ];
+            stats.forEach(s => {
+                html += `<div class="rounded p-2 text-center" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
+                    <div class="text-[9px] font-header uppercase tracking-wider" style="color:#7A7062;">${s.label}</div>
+                    <div class="font-bold text-lg font-header" style="color:${s.color};">${s.val}</div>
+                </div>`;
+            });
+            html += `</div>`;
+            
+            // HP bar
+            const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
+            const hpColor = hpPct > 50 ? '#4ADE80' : hpPct > 25 ? '#FBBF24' : '#F43F5E';
+            html += `<div class="mb-4 p-3 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-header text-[10px] tracking-wider uppercase" style="color:#7A7062;">Hit Points</span>
+                    <span class="font-bold font-header" style="color:${hpColor};">${d.current_hp} / ${d.max_hp}</span>
+                </div>
+                <div class="w-full h-2 rounded-full" style="background:#1C1917;">
+                    <div class="h-2 rounded-full transition-all" style="width:${hpPct}%; background:${hpColor};"></div>
+                </div>
+            </div>`;
+            
+            // Conditions
+            if (d.conditions && Object.keys(d.conditions).length > 0) {
+                html += `<div class="flex flex-wrap gap-1 mb-4">`;
+                for (const [k, v] of Object.entries(d.conditions)) {
+                    if (v && v !== 0 && v !== false) {
+                        html += `<span class="text-[10px] font-header px-2 py-0.5 rounded" style="background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">${k} ${typeof v === 'number' ? v : ''}</span>`;
+                    }
+                }
+                html += `</div>`;
+            }
+            
+            // Ability scores (PCs only)
+            if (d.is_pc && d.abilities) {
+                html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
+                ['str','dex','con','int','wis','cha'].forEach(ab => {
+                    const mod = d.abilities[ab] || 0;
+                    html += `<div class="rounded p-1.5 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
+                        <div class="text-[8px] font-header uppercase" style="color:#524C42;">${ab}</div>
+                        <div class="text-sm font-bold" style="color:#EDE5D8;">${mod >= 0 ? '+' : ''}${mod}</div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            
+            // Attacks/Strikes
+            if (d.attacks && d.attacks.length > 0) {
+                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#7DC4C4;">Attacks</h4>`;
+                d.attacks.forEach(a => {
+                    const hit = a.hit || (a.strikes && a.strikes[0] ? a.strikes[0].label : '+?');
+                    html += `<div class="flex justify-between items-center p-2 rounded mb-1" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
+                        <span class="text-sm font-bold" style="color:#EDE5D8;">${a.name} <span class="text-xs opacity-50" style="color:#7DC4C4;">◆</span></span>
+                        <div class="flex gap-2 items-center">
+                            <span class="font-mono text-sm font-bold" style="color:#FBBF24;">${hit}</span>
+                            <span class="text-xs" style="color:#7A7062;">${a.damage}</span>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            
+            // Monster actions
+            if (!d.is_pc && d.actions && d.actions.length > 0) {
+                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#7DC4C4;">Abilities</h4>`;
+                d.actions.forEach(a => {
+                    html += `<div class="p-2 rounded mb-2" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
+                        <div class="font-bold text-sm mb-1" style="color:#D4A574;">${a.name}</div>
+                        <div class="text-xs foundry-text" style="color:#B5A998;">${a.description || ''}</div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            
+            // PC Skills
+            if (d.is_pc && d.skills) {
+                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#7DC4C4;">Skills</h4>`;
+                html += `<div class="flex flex-wrap gap-1">`;
+                d.skills.forEach(sk => {
+                    if (sk.total > 0) {
+                        html += `<span class="text-[10px] px-2 py-0.5 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.08); color:#CFC5B4;">${sk.name} <strong style="color:#7DC4C4;">+${sk.total}</strong></span>`;
+                    }
+                });
+                html += `</div></div>`;
+            }
+            
+            // Spells summary
+            if (d.is_pc && d.spell_casters && d.spell_casters.length > 0) {
+                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#C4B5FD;">Spellcasting</h4>`;
+                d.spell_casters.forEach(sc => {
+                    html += `<div class="p-2 rounded mb-2" style="background:rgba(167,139,250,0.05); border:1px solid rgba(167,139,250,0.1);">
+                        <span class="font-header text-[10px]" style="color:#C4B5FD;">${sc.name} (${sc.tradition})</span>`;
+                    (sc.levels || []).forEach(lvl => {
+                        const names = (lvl.spells || []).map(s => s.name).join(', ');
+                        if (names) html += `<div class="text-[10px] mt-1" style="color:#A89C8B;"><strong style="color:#B5A998;">${lvl.label}:</strong> ${names}</div>`;
+                    });
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            document.getElementById('stat-popup-body').innerHTML = html;
+        } catch(e) { 
+            document.getElementById('stat-popup-body').innerHTML = '<div class="text-red-400">Failed to load stats.</div>'; 
+        }
+    }
+</script>
+{% endblock %}

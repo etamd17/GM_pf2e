@@ -1,0 +1,156 @@
+[
+    {
+        "_id": "D7UVaOiB40wTR6kv",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Cantrip",
+        "sort": -100000,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "T8AzYUgNIAgTJ9Iz",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 1",
+        "sort": 0,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "lIWMSDS2Om4RXGjL",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": null,
+        "name": "Spells",
+        "sort": 0,
+        "sorting": "m",
+        "type": "Item"
+    },
+    {
+        "_id": "lPzcDrjGDFbzuF2r",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 2",
+        "sort": 50000,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "4fJHnYFqH0VjZXPv",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 3",
+        "sort": 56250,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "7cyoYPoPYA01mErU",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 4",
+        "sort": 62500,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "iDjm2cXyRAe4VZ35",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 5",
+        "sort": 87500,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "zDlxATrLAlbYA2Mv",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 6",
+        "sort": 93750,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "xqlqJ6eeiNtWb7bq",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 7",
+        "sort": 94532,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "IfuYSF4ymX48CZnm",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 8",
+        "sort": 95313,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "fi1AYNmuCRvoT15b",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 9",
+        "sort": 96094,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "x5tjEh1N0FHzbHkv",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": "lIWMSDS2Om4RXGjL",
+        "name": "Rank 10",
+        "sort": 96485,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "wnvibtD90h7CStDC",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": null,
+        "name": "Focus",
+        "sort": 900000,
+        "sorting": "a",
+        "type": "Item"
+    },
+    {
+        "_id": "6JF73zNhT8zbp1qC",
+        "color": null,
+        "description": "",
+        "flags": {},
+        "folder": null,
+        "name": "Rituals",
+        "sort": 1300000,
+        "sorting": "a",
+        "type": "Item"
+    }
+]

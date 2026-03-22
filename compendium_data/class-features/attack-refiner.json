@@ -1,0 +1,54 @@
+{
+    "_id": "ZcoOMwEY8FX7UzMo",
+    "img": "systems/pf2e/icons/features/classes/implements-empowerment.webp",
+    "name": "Attack Refiner",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your weapon makes minute recalibrations after every missed attack to ensure the next lands with vicious efficacy. Your innovation gains the backswing and forceful traits.</p>"
+        },
+        "level": {
+            "value": 15
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "backswing"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "forceful"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

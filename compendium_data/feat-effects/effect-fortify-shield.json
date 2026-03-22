@@ -1,0 +1,52 @@
+{
+    "_id": "ghZFZWUh5Z20vOlR",
+    "img": "icons/equipment/shield/Scutum-steel-worn.webp",
+    "name": "Effect: Fortify Shield",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Fortify Shield]</p>\n<p>You Raise your Shield. Add your character level to your shield's Hardness.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Ancestry Guide"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.equipment-effects.Item.Effect: Raise a Shield"
+            },
+            {
+                "itemType": "shield",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:equipped"
+                ],
+                "property": "hardness",
+                "value": "@actor.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

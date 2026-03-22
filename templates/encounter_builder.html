@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Encounter Builder - PF2E Dashboard{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-end mb-6 border-b border-gray-700 pb-2">
+    <div>
+        <h1 class="text-3xl font-header text-amber-500">Encounter Builder</h1>
+        <p class="text-sm text-gray-400 mt-1">Stage monsters, balance XP, then load directly into the tracker.</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-3 py-2 rounded">
+            <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Party Level:</label>
+            <input type="number" id="builder-party-level" value="{{ party_level }}" min="1" max="20" onchange="recalcXP()"
+                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-amber-500">
+        </div>
+    </div>
+</div>
+
+<div class="flex gap-6 items-start">
+    <!-- Monster Search -->
+    <div class="w-1/3 space-y-4">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <input type="text" id="monster-search" placeholder="Search monsters by name..." autocomplete="off"
+                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600 mb-3">
+            <div id="monster-results" class="space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <div class="text-center text-gray-600 text-xs italic py-6">Type a monster name to search your library.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staging Area -->
+    <div class="flex-1 space-y-4">
+        <!-- XP Budget Bar -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="font-header text-amber-500 text-lg">Encounter Budget</h2>
+                <div class="flex items-center gap-3">
+                    <span id="xp-total" class="text-2xl font-header text-white">0</span>
+                    <span class="text-gray-500 text-sm">XP</span>
+                    <span id="xp-difficulty" class="text-sm font-bold uppercase px-2 py-1 rounded bg-gray-900 border border-gray-700 text-gray-400">Empty</span>
+                </div>
+            </div>
+            <div class="relative h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
+                <div id="xp-bar" class="absolute top-0 left-0 h-full transition-all duration-300 rounded-full" style="width: 0%; background: #64748B;"></div>
+                <div class="absolute top-0 h-full border-r border-gray-600" style="left: 30%;" title="Low (60 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-yellow-700/50" style="left: 40%;" title="Moderate (80 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-orange-700/50" style="left: 60%;" title="Severe (120 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-red-700/50" style="left: 80%;" title="Extreme (160 XP)"></div>
+            </div>
+            <div class="flex justify-between text-[9px] text-gray-600 mt-1 px-1">
+                <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span>
+            </div>
+        </div>
+
+        <!-- Staged Monsters -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-header text-amber-500 text-lg">Staged Creatures</h2>
+                <button onclick="clearStage()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded border border-gray-600 font-bold uppercase transition-colors">Clear All</button>
+            </div>
+            <div id="staged-list" class="space-y-2">
+                <div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here.</div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3">
+            <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+                <input type="checkbox" id="chk-add-party" checked class="accent-amber-500"> Include full party
+            </label>
+            <div class="flex-1"></div>
+            <button onclick="loadToTracker()" id="btn-load" class="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Load to Tracker →
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let staged = []; // [{path, name, level, count, elite_weak, hp, ac}]
+    let searchTimeout = null;
+    const xpMap = {'-4':10,'-3':15,'-2':20,'-1':30,'0':40,'1':60,'2':80,'3':120,'4':160};
+
+    // --- SEARCH ---
+    document.getElementById('monster-search').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const q = e.target.value.trim();
+        if (q.length < 2) { document.getElementById('monster-results').innerHTML = '<div class="text-center text-gray-600 text-xs italic py-6">Type at least 2 characters...</div>'; return; }
+        searchTimeout = setTimeout(async () => {
+            const res = await fetch(`/api/monster_search?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            const container = document.getElementById('monster-results');
+            if (!data.results.length) {
+                container.innerHTML = '<div class="text-center text-gray-600 text-xs italic py-4">No monsters found.</div>';
+                return;
+            }
+            container.innerHTML = data.results.map(m => {
+                let extras = [];
+                if (m.immunities && m.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(m.immunities.join(', '))}</span>`);
+                if (m.resistances && m.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(m.resistances.join(', '))}</span>`);
+                if (m.weaknesses && m.weaknesses.length) extras.push(`<span class="text-red-400">Weak: ${esc(m.weaknesses.join(', '))}</span>`);
+                let extraHtml = extras.length ? `<div class="text-[10px] mt-0.5">${extras.join(' · ')}</div>` : '';
+                return `
+                <button onclick='addToStage(${JSON.stringify(m).replace(/'/g,"&#39;")})' class="w-full text-left bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded p-2.5 transition-colors">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-gray-200 text-sm">${esc(m.name)}</span>
+                        <div class="flex gap-2 text-[10px]">
+                            <span class="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${m.level}</span>
+                            <span class="text-gray-500">HP ${m.hp}</span>
+                            <span class="text-sky-400">AC ${m.ac}</span>
+                        </div>
+                    </div>
+                    ${extraHtml}
+                </button>`;
+            }).join('');
+        }, 200);
+    });
+
+    // --- STAGING ---
+    function addToStage(monster) {
+        let existing = staged.find(s => s.path === monster.path && s.elite_weak === 0);
+        if (existing) {
+            existing.count++;
+        } else {
+            staged.push({path: monster.path, name: monster.name, level: monster.level, count: 1, elite_weak: 0, hp: monster.hp, ac: monster.ac,
+                immunities: monster.immunities || [], resistances: monster.resistances || [], weaknesses: monster.weaknesses || []});
+        }
+        renderStage();
+    }
+
+    function removeFromStage(idx) { staged.splice(idx, 1); renderStage(); }
+    function adjustCount(idx, delta) { staged[idx].count = Math.max(1, staged[idx].count + delta); renderStage(); }
+    function setEliteWeak(idx, val) { staged[idx].elite_weak = staged[idx].elite_weak === val ? 0 : val; renderStage(); }
+    function clearStage() { staged = []; renderStage(); }
+
+    function renderStage() {
+        const container = document.getElementById('staged-list');
+        if (staged.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here.</div>';
+            document.getElementById('btn-load').disabled = true;
+        } else {
+            document.getElementById('btn-load').disabled = false;
+            container.innerHTML = staged.map((s, i) => {
+                let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-green-600 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-red-600 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
+                let effectiveLevel = s.level + s.elite_weak;
+                let extras = [];
+                if (s.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(s.immunities.join(', '))}</span>`);
+                if (s.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(s.resistances.join(', '))}</span>`);
+                if (s.weaknesses.length) extras.push(`<span class="text-red-400">Weak: ${esc(s.weaknesses.join(', '))}</span>`);
+                let extraHtml = extras.length ? `<div class="text-[10px] mt-1">${extras.join(' · ')}</div>` : '';
+                return `
+                <div class="bg-gray-900 border border-gray-700 rounded-lg p-3 flex flex-col">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-white">${esc(s.name)}</span>
+                            ${ewLabel}
+                            <span class="text-[10px] text-gray-500">Lv ${effectiveLevel}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-green-700 text-white':'bg-gray-800 text-gray-400 hover:text-green-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors">E</button>
+                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-red-700 text-white':'bg-gray-800 text-gray-400 hover:text-red-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors">W</button>
+                            <span class="mx-2 border-r border-gray-700 h-5"></span>
+                            <button onclick="adjustCount(${i}, -1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">-</button>
+                            <span class="text-white font-bold w-8 text-center">${s.count}</span>
+                            <button onclick="adjustCount(${i}, 1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">+</button>
+                            <span class="mx-2 border-r border-gray-700 h-5"></span>
+                            <button onclick="removeFromStage(${i})" class="text-red-400 hover:text-red-300 text-sm font-bold transition-colors">✕</button>
+                        </div>
+                    </div>
+                    ${extraHtml}
+                </div>`;
+            }).join('');
+        }
+        recalcXP();
+    }
+
+    function recalcXP() {
+        const partyLevel = parseInt(document.getElementById('builder-party-level').value) || 1;
+        let totalXP = 0;
+        staged.forEach(s => {
+            let effectiveLevel = s.level + s.elite_weak;
+            let diff = Math.max(-4, Math.min(4, effectiveLevel - partyLevel));
+            let xpPer = xpMap[String(diff)] || (diff > 4 ? 160 : 10);
+            totalXP += xpPer * s.count;
+        });
+        
+        document.getElementById('xp-total').innerText = totalXP;
+        
+        let label, color, barColor, pct;
+        if (totalXP === 0) { label = 'Empty'; color = 'text-gray-400'; barColor = '#64748B'; pct = 0; }
+        else if (totalXP < 60) { label = 'Trivial'; color = 'text-gray-400'; barColor = '#64748B'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 80) { label = 'Low'; color = 'text-green-400'; barColor = '#34D399'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 120) { label = 'Moderate'; color = 'text-yellow-400'; barColor = '#FBBF24'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 160) { label = 'Severe'; color = 'text-orange-500'; barColor = '#F97316'; pct = (totalXP / 200) * 100; }
+        else { label = 'Extreme'; color = 'text-red-500 font-bold'; barColor = '#EF4444'; pct = Math.min((totalXP / 200) * 100, 100); }
+        
+        const diffEl = document.getElementById('xp-difficulty');
+        diffEl.innerText = label;
+        diffEl.className = `text-sm font-bold uppercase px-2 py-1 rounded bg-gray-900 border border-gray-700 ${color}`;
+        document.getElementById('xp-bar').style.width = pct + '%';
+        document.getElementById('xp-bar').style.background = barColor;
+    }
+
+    async function loadToTracker() {
+        const btn = document.getElementById('btn-load');
+        btn.disabled = true; btn.innerText = 'Loading...';
+        try {
+            const res = await fetch('/api/stage_encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    monsters: staged.map(s => ({path: s.path, count: s.count, elite_weak: s.elite_weak})),
+                    add_party: document.getElementById('chk-add-party').checked,
+                    clear_first: true
+                })
+            });
+            const data = await res.json();
+            if (data.success) window.location.href = '/tracker';
+        } catch (e) { btn.disabled = false; btn.innerText = 'Load to Tracker →'; }
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+{
+    "_id": "j2XKVhDuhdcI15kD",
+    "folder": "pMNWYIEl9JJ6xdvz",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "First Frost",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "class",
+        "description": {
+            "value": "<p>The gelid shard within your heart may sap your ability to feel and experience emotion, but it also lets you create and manipulate cold. You learn to cast arcane spontaneous spells, and you gain a spell repertoire with the @UUID[Compendium.pf2e.spells-srd.Item.Frostbite] and @UUID[Compendium.pf2e.spells-srd.Item.Frost's Touch] cantrips. You're trained in spell attack modifier and spell DC. Your key spellcasting attribute is Charisma.</p>"
+        },
+        "level": {
+            "value": 2
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [],
+        "subfeatures": {
+            "proficiencies": {
+                "spellcasting": {
+                    "rank": 1
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "archetype"
+            ]
+        }
+    },
+    "type": "feat"
+}

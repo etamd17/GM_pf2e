@@ -1,0 +1,66 @@
+{
+    "_id": "xLilBqqf34ZJYO9i",
+    "img": "icons/consumables/potions/bottle-metal-yellow-gray.webp",
+    "name": "Effect: Juggernaut Mutagen (Greater)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Juggernaut Mutagen (Greater)]</p>\n<p><strong>Benefit</strong> You gain a +3 item bonus to Fortitude saves and 30 temporary Hit Points. When you roll a success on a Fortitude save, you get a critical success instead.</p>\n<p><strong>Drawback</strong> You take a -2 penalty to Will saves, Perception checks and initiative rolls.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 11
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "fortitude",
+                "type": "item",
+                "value": 3
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "initiative",
+                    "perception",
+                    "will"
+                ],
+                "type": "untyped",
+                "value": -2
+            },
+            {
+                "key": "TempHP",
+                "value": 30
+            },
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "selector": "fortitude",
+                "type": "save"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,51 @@
+{
+    "_id": "fMHYzXEUMoWskKMF",
+    "img": "icons/magic/life/cross-explosion-burst-green.webp",
+    "name": "Rogue Resilience",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your physique is incredibly hardy. Your proficiency rank for Fortitude saves increases to expert. When you roll a success on a Fortitude save, you get a critical success instead.</p>"
+        },
+        "level": {
+            "value": 9
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "selector": "fortitude"
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "fortitude": {
+                    "rank": 2
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "rogue"
+            ]
+        }
+    },
+    "type": "feat"
+}

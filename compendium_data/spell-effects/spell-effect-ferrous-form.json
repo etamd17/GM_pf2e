@@ -1,0 +1,80 @@
+{
+    "_id": "qD1OA6dx8h33nKFC",
+    "img": "icons/creatures/magical/construct-iron-stomping-yellow.webp",
+    "name": "Spell Effect: Ferrous Form",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Ferrous Form]</p>\n<p>You gain resistance to physical damage, except adamantine. You're immune to death effects, disease, drained, fatigued, healing, nonlethal attacks, paralyzed, poison, sickened, vitality, and void.</p>\n<p>Your fist Strikes have a 1d10 damage die, and your metal spells deal one additional die of damage (of the same damage die and damage type the spell uses).</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 8
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "key": "Immunity",
+                "type": [
+                    "death-effects",
+                    "disease",
+                    "drained",
+                    "fatigued",
+                    "healing",
+                    "nonlethal-attacks",
+                    "paralyzed",
+                    "poison",
+                    "sickened",
+                    "vitality",
+                    "void"
+                ]
+            },
+            {
+                "exceptions": [
+                    "adamantine"
+                ],
+                "key": "Resistance",
+                "type": "physical",
+                "value": "ternary(gte(@item.level,9),15,10)"
+            },
+            {
+                "fist": true,
+                "key": "Strike"
+            },
+            {
+                "itemId": "xxxxxxFISTxxxxxx",
+                "key": "ItemAlteration",
+                "mode": "override",
+                "property": "damage-dice-faces",
+                "value": 10
+            },
+            {
+                "diceNumber": 1,
+                "key": "DamageDice",
+                "predicate": [
+                    "item:trait:metal"
+                ],
+                "selector": "spell-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

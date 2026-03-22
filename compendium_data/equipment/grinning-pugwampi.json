@@ -1,0 +1,61 @@
+{
+    "_id": "mJSCOIJllj2GtACC",
+    "img": "systems/pf2e/icons/equipment/consumables/talismans/grinning-pugwampi.webp",
+    "name": "Grinning Pugwampi",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "category": "talisman",
+        "containerId": null,
+        "damage": null,
+        "description": {
+            "value": "<p><strong>Activate</strong> <span class=\"action-glyph\">F</span> (concentrate)</p>\n<p><strong>Trigger</strong> You damage an @UUID[Compendium.pf2e.conditionitems.Item.Off-Guard] creature with the affixed weapon</p><hr /><p>This bone statuette of a sneering gremlin crumbles to dust when activated, imparting a fraction of its subject's infamous misfortune unto those you strike. The damaged creature must attempt a @Check[will|dc:33] save.</p><hr /><p><strong>Critical Success</strong> The creature is unaffected.</p>\n<p><strong>Success</strong> The creature must roll twice and take the worse result on the next check it attempts.</p>\n<p><strong>Failure</strong> The creature must roll twice and take the worse result on all checks until the end of its next turn.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 14
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "per": 1,
+            "value": {
+                "gp": 700
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "consumable",
+                "magical",
+                "misfortune",
+                "talisman"
+            ]
+        },
+        "usage": {
+            "value": "affixed-to-weapon"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

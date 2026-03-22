@@ -1,0 +1,57 @@
+{
+    "_id": "eFsD7W6hnK33jlDQ",
+    "folder": "bB5HzELH07UIY03Z",
+    "img": "systems/pf2e/icons/features/ancestry/sewer-rat.webp",
+    "name": "Sewer Rat",
+    "system": {
+        "ancestry": {
+            "name": "Ratfolk",
+            "slug": "ratfolk",
+            "uuid": "Compendium.pf2e.ancestries.Item.P6PcVnCkh4XMdefw"
+        },
+        "description": {
+            "value": "<p>You come from a long line of ratfolk with a community based in the sewers beneath a large settlement. You are immune to the disease putrid plague. You gain a +1 circumstance bonus to saving throws against diseases and poisons. If you roll a success on a saving throw against a disease or poison, you get a critical success instead. If you have a different ability that would improve the save in this way (such as the @UUID[Compendium.pf2e.classfeatures.Item.Battle Hardened] fighter class feature), if you roll a critical failure on the save you get a failure instead.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:disease",
+                            "item:trait:poison"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:disease",
+                            "item:trait:poison"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

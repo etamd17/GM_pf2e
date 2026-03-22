@@ -1,0 +1,67 @@
+{
+    "_id": "WAMDYE9tt3W8obzr",
+    "img": "systems/pf2e/icons/equipment/held-items/horn-of-blasting.webp",
+    "name": "Horn of Blasting",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>A <em>horn of blasting</em> is a bright brass trumpet. It can be played as an instrument, granting a +2 item bonus to your Performance check.</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">1</span> Interact</p>\n<p><strong>Frequency</strong> once per round</p>\n<p><strong>Effect</strong> Blowing into the horn with destructive intent, you create a blast note targeting one creature within 30 feet. The blast deals @Damage[3d6[sonic]] damage (@Check[fortitude|dc:28|showDC:all|basic] save).</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">2</span> Interact</p>\n<p><strong>Frequency</strong> once per day</p>\n<p><strong>Effect</strong> You blow even louder to create an intense blast wave in a @Template[cone|distance:30] that deals @Damage[8d6[sonic]|options:area-damage] damage. Each creature attempts a @Check[fortitude|dc:28|showDC:all|options:area-effect,damaging-effect,inflicts:deafened] save with the following effects.</p>\n<p><strong>Critical Success</strong> The creature takes no damage.</p>\n<p><strong>Success</strong> The creature takes half damage.</p>\n<p><strong>Failure</strong> The creature takes full damage and is @UUID[Compendium.pf2e.conditionitems.Item.Deafened] for [[/gmr 2d6 #rounds]]{2d6 rounds}.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 9
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 700
+            }
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Core Rulebook"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "domain": "performance",
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.PlayingItem",
+                "option": "playing",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "playing"
+                ],
+                "selector": "performance",
+                "type": "item",
+                "value": 2
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "sonic"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "equipment"
+}

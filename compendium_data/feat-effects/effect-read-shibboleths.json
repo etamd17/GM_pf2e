@@ -1,0 +1,47 @@
+{
+    "_id": "ivGiUp0EC5nWT9Hb",
+    "img": "icons/environment/people/group.webp",
+    "name": "Effect: Read Shibboleths",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Read Shibboleths]</p>\n<p>You gain a +1 circumstance bonus to your Diplomacy and Deception checks.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Advanced Player's Guide"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "deception",
+                    "diplomacy"
+                ],
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

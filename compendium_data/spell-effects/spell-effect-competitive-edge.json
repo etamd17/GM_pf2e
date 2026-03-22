@@ -1,0 +1,66 @@
+{
+    "_id": "iJ7TVW5tDnZG9DG8",
+    "img": "systems/pf2e/icons/spells/competitive-edge.webp",
+    "name": "Spell Effect: Competitive Edge",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Competitive Edge]</p>\n<p>You gain a status bonus to attack rolls and skill checks. This bonus increases if an enemy critically succeeds at an attack roll or skill check.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": true,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Cleric.CompetitiveEdge.RollOptionLabel",
+                "option": "competitive-edge",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "attack-roll",
+                    "skill-check"
+                ],
+                "type": "status",
+                "value": "ternary(gte(@item.level,7),2,1)"
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "override",
+                "predicate": [
+                    "competitive-edge"
+                ],
+                "selectors": [
+                    "attack-roll",
+                    "skill-check"
+                ],
+                "slug": "competitive-edge",
+                "value": "ternary(gte(@item.level,7),4,3)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

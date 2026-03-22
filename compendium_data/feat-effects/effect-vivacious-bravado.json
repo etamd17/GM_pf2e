@@ -1,0 +1,42 @@
+{
+    "_id": "T7AJQbfmlA57y625",
+    "img": "icons/magic/light/explosion-star-glow-blue.webp",
+    "name": "Effect: Vivacious Bravado",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Vivacious Bravado].</p>\n<p>You gain temporary Hit Points equal to your level plus your Charisma modifier.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 8
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "TempHP",
+                "value": "@actor.level + @actor.abilities.cha.mod"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

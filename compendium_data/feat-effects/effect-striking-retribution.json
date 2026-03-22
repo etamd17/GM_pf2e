@@ -1,0 +1,58 @@
+{
+    "_id": "EzgW32MCOGov9h5C",
+    "img": "systems/pf2e/icons/spells/retributive-pain.webp",
+    "name": "Effect: Striking Retribution",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Striking Retribution]</p>\n<p>Your circumstance bonus to damage with weapons and unarmed attacks against creatures from the alghollthu family and those that serve alghollthus increases to +4</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Ancestry Guide"
+        },
+        "rules": [
+            {
+                "key": "TokenMark",
+                "slug": "striking-retribution"
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "add",
+                "predicate": [
+                    {
+                        "or": [
+                            "target:mark:striking-retribution",
+                            "target:tag:alghollthu",
+                            "target:tag:alghollthu-servant"
+                        ]
+                    }
+                ],
+                "selector": "strike-damage",
+                "slug": "striking-retribution",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

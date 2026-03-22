@@ -1,0 +1,65 @@
+{
+    "_id": "zPGVOLz6xhsQN35C",
+    "img": "icons/creatures/mammals/elk-moose-marked-green.webp",
+    "name": "Spell Effect: Envenom Companion",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Envenom Companion]</p>\n<p>The first time each round you hit a creature with an unarmed Strike that deals piercing or slashing damage, that Strike deals an additional 1d8 poison damage. A creature that is damaged by this poison must attempt a Fortitude save. On a failure, it's also clumsy 1 for 1 round.</p><hr /><p><strong>Heightened (+3)</strong> The poison damage increases by 1d8 and the clumsy value imposed on a failed save increases by 1.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "damageType": "poison",
+                "diceNumber": "match(when(btwn(@item.level, 3, 5), 1), when(btwn(@item.level, 6, 8), 2), when(gte(@item.level, 9), 3))",
+                "dieSize": "d8",
+                "key": "DamageDice",
+                "predicate": [
+                    "first-hit",
+                    "unarmed"
+                ],
+                "selector": "strike-damage"
+            },
+            {
+                "key": "Note",
+                "predicate": [
+                    "first-hit"
+                ],
+                "selector": "unarmed-damage",
+                "text": "PF2E.SpecificRule.EnvenomCompanion.DamageNote",
+                "title": "{item|name}"
+            },
+            {
+                "domain": "damage",
+                "key": "RollOption",
+                "label": "First hit of the round",
+                "option": "first-hit",
+                "toggleable": true
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

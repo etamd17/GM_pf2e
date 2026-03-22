@@ -1,0 +1,57 @@
+{
+    "_id": "81TfqzTfIqkQA4Dy",
+    "img": "icons/magic/death/skull-horned-worn-fire-blue.webp",
+    "name": "Spell Effect: Thundering Dominance",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Thundering Dominance]</p>\n<p>The target gains a status bonus to Intimidation checks. Once during this spell's duration, it can take the Thundering Roar action.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "intimidation",
+                "type": "status",
+                "value": "match(when(btwn(@item.level, 2, 3), 1), when(btwn(@item.level, 4, 5), 2), when(btwn(@item.level, 6, 7), 3), when(gte(@item.level, 8), 4))"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.actionspf2e.Item.Thundering Roar"
+            },
+            {
+                "key": "DamageAlteration",
+                "mode": "upgrade",
+                "property": "dice-number",
+                "selectors": [
+                    "thundering-roar-inline-damage"
+                ],
+                "value": "2 + 2*floor(@item.level/2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,66 @@
+{
+    "_id": "WQ0DxUzMgAvo0zy9",
+    "img": "icons/consumables/fruit/apricot-ripe-orange.webp",
+    "name": "Effect: Apricot of Bestial Might",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Apricot of Bestial Might]</p>\n<p>You gain 8 resistance to all physical damage and gain a tusk unarmed attack with the deadly d12 trait that deals 1d10 piercing damage. You become clumsy 1.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #167: Ready? Fight!"
+        },
+        "rules": [
+            {
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "piercing",
+                        "dice": 1,
+                        "die": "d10"
+                    }
+                },
+                "img": "systems/pf2e/icons/unarmed-attacks/tusk.webp",
+                "key": "Strike",
+                "label": "PF2E.BattleForm.Attack.Tusk",
+                "range": null,
+                "traits": [
+                    "unarmed",
+                    "deadly-d12"
+                ]
+            },
+            {
+                "inMemoryOnly": true,
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.conditionitems.Item.Clumsy"
+            },
+            {
+                "key": "Resistance",
+                "type": "physical",
+                "value": 8
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

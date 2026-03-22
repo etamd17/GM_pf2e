@@ -1,0 +1,62 @@
+{
+    "_id": "WxkZMlETXo165XnC",
+    "img": "systems/pf2e/icons/features/classes/tangle-line.webp",
+    "name": "Tangle Line",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p><strong>Thrown Only</strong></p><hr /><p>Your weapon has an extensible line that you can use to knock your enemies over, recall the weapon to your hand and even parry attacks. Your innovation gains the parry, ranged trip and tethered traits.</p>"
+        },
+        "level": {
+            "value": 7
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "parry"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "ranged-trip"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "tethered"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "thrown",
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

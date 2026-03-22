@@ -1,0 +1,42 @@
+{
+    "_id": "6fb15XuSV4TNuVAT",
+    "img": "icons/commodities/biological/hand-gnarled-green.webp",
+    "name": "Effect: Hag Blood Magic",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.classfeatures.Item.Bloodline: Hag]</p>\n<p>You gain temporary Hit Points equal to the spell's rank.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "TempHP",
+                "value": "@item.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

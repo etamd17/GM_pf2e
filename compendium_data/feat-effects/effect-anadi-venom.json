@@ -1,0 +1,47 @@
+{
+    "_id": "gN1LbKYQgi8Fx98V",
+    "img": "icons/creatures/abilities/fang-tooth-venomous.webp",
+    "name": "Effect: Anadi Venom",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.actionspf2e.Item.Anadi Venom]</p>\n<p>Your fangs Strike deals 1d6 poison damage. At 12th level, this poison damage increases to 2d6.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 0
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens The Mwangi Expanse"
+        },
+        "rules": [
+            {
+                "damageType": "poison",
+                "diceNumber": "ternary(gte(@actor.level, 12), 2, 1)",
+                "dieSize": "d6",
+                "key": "DamageDice",
+                "predicate": [
+                    "item:tag:anadi-fangs"
+                ],
+                "selector": "unarmed-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

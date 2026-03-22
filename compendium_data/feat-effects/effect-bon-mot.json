@@ -1,0 +1,111 @@
+{
+    "_id": "GoSls6SKCFmSoDxT",
+    "img": "systems/pf2e/icons/features/feats/bon-mot.webp",
+    "name": "Effect: Bon Mot",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Bon Mot]</p>\n<p>You take a status penalty to Perception and Will saves.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalSuccess",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:context:check:outcome:3",
+                                    {
+                                        "not": {
+                                            "gte": [
+                                                "parent:context:check:outcome",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": -3
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.success",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:context:check:outcome:2",
+                                    {
+                                        "not": {
+                                            "gte": [
+                                                "parent:context:check:outcome",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": -2
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalFailure",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:context:check:outcome:0",
+                                    {
+                                        "not": {
+                                            "gte": [
+                                                "parent:context:check:outcome",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": -2
+                    }
+                ],
+                "flag": "penalty",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "perception",
+                    "will"
+                ],
+                "type": "status",
+                "value": "@item.flags.pf2e.rulesSelections.penalty"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

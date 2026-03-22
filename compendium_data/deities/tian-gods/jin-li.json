@@ -1,0 +1,51 @@
+{
+    "_id": "w9vtltygWNG4eZDR",
+    "folder": "7N23JPmpkjz88mao",
+    "img": "systems/pf2e/icons/default-icons/deity.svg",
+    "name": "Jin Li",
+    "system": {
+        "attribute": [
+            "str",
+            "wis"
+        ],
+        "category": "deity",
+        "description": {
+            "value": "<p>Once a humble carp, Jin Li is the god of the determined and the hardworking. Just as he worked day after day to successfully jump a waterfall and ascend to godhood, he guides those who look to improve themselves and face challenges head-on. For Jin Li, there is no success without hard work, tenacity, and a little bit of luck. Failure and weakness are not something to be ashamed of, but rather opportunities to learn and grow. Success is also not a one-time thing for Jin Li, and once he has achieved one goal, he soon sets his eyes on another. The road to self-improvement doesn't end with godhood, after all.</p>\n<p><strong>Title</strong> The Golden Dragon Carp</p>\n<p><strong>Areas of Concern</strong> Challenges, dares, promotions, self-improvement</p>\n<p><strong>Edicts</strong> Take up dares and challenges in good faith, persist with creativity and tenacity, own up to your failures as a way to improve oneself</p>\n<p><strong>Anathema</strong> Give up without trying, dismiss or mock someone's effort, take success for granted, discount the power of beginner's luck or luck in general</p>\n<p><strong>Religious Symbol</strong> dragon carp jumping a waterfall</p>\n<p><strong>Sacred Animal</strong> carp</p>\n<p><strong>Sacred Colors</strong> blue, gold</p>"
+        },
+        "domains": {
+            "alternate": [
+                "water",
+                "luck"
+            ],
+            "primary": [
+                "ambition",
+                "change",
+                "might",
+                "toil"
+            ]
+        },
+        "font": [
+            "heal"
+        ],
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries Web Supplement"
+        },
+        "rules": [],
+        "sanctification": null,
+        "skill": [
+            "athletics"
+        ],
+        "spells": {
+            "1": "Compendium.pf2e.spells-srd.Item.Jump",
+            "3": "Compendium.pf2e.spells-srd.Item.Feet to Fins",
+            "4": "Compendium.pf2e.spells-srd.Item.Hydraulic Torrent"
+        },
+        "traits": {},
+        "weapons": [
+            "sansetsukon"
+        ]
+    },
+    "type": "deity"
+}

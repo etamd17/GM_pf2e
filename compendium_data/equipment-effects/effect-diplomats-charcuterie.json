@@ -1,0 +1,55 @@
+{
+    "_id": "inqXnzrqYzbUBuOj",
+    "img": "icons/consumables/food/plate-lobster-red.webp",
+    "name": "Effect: Diplomat's Charcuterie",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Diplomat's Charcuterie]</p>\n<p>You gain a +1 item bonus to Diplomacy checks to Make an Impression and Perception checks to Sense Motive.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "action:make-an-impression",
+                            "action:sense-motive"
+                        ]
+                    }
+                ],
+                "selector": [
+                    "diplomacy",
+                    "perception"
+                ],
+                "type": "item",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

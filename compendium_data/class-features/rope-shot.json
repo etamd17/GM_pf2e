@@ -1,0 +1,65 @@
+{
+    "_id": "ptBLVvRqn1fA3A4l",
+    "img": "systems/pf2e/icons/features/classes/rope-shot.webp",
+    "name": "Rope Shot",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p><strong>Ranged Only</strong></p><hr /><p>Your weapon can shoot projectiles that split into simple ropes or nets around your foes' legs to trip your targets, and you can climb using the grappling hooks built into the weapon. Your weapon innovation gains the climbing and ranged trip traits, as well as the tethered trait if it is thrown.</p>"
+        },
+        "level": {
+            "value": 7
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "climbing"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "ranged-trip"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:trait:thrown"
+                ],
+                "property": "traits",
+                "value": "tethered"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "ranged",
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

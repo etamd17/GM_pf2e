@@ -1,0 +1,52 @@
+{
+    "_id": "wNCxSxruzLVGtLE4",
+    "img": "icons/creatures/invertebrates/spider-striped-web-red.webp",
+    "name": "Effect: Spiderfoot Brew (Lesser)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Spiderfoot Brew (Lesser)]</p>\n<p>You gain a climb Speed of 15 feet and a +1 item bonus to athletics checks made to Climb.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:climb"
+                ],
+                "selector": "athletics",
+                "type": "item",
+                "value": 1
+            },
+            {
+                "key": "BaseSpeed",
+                "selector": "climb",
+                "value": 15
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

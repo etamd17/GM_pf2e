@@ -1,0 +1,111 @@
+{
+    "_id": "AYLthNtyUlWmKqhW",
+    "img": "icons/commodities/bones/bone-jaw-teeth-beige.webp",
+    "name": "Effect: Saurian Spike - Armor",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Saurian Spike], @UUID[Compendium.pf2e.equipment-srd.Item.Saurian Spike (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Saurian Spike (Major)]</p>\n<p>You gain an imprecise scent, or precise scent (<em>major</em>).</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 9
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:saurian-spike",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Saurian Spike"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:saurian-spike-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Saurian Spike (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:saurian-spike-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Saurian Spike (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "saurian-spike"
+            },
+            {
+                "acuity": "imprecise",
+                "key": "Sense",
+                "predicate": [
+                    "saurian-spike:saurian-spike"
+                ],
+                "range": 30,
+                "selector": "scent"
+            },
+            {
+                "acuity": "imprecise",
+                "key": "Sense",
+                "predicate": [
+                    "saurian-spike:saurian-spike-greater"
+                ],
+                "range": 60,
+                "selector": "scent"
+            },
+            {
+                "acuity": "precise",
+                "key": "Sense",
+                "predicate": [
+                    "saurian-spike:saurian-spike-major"
+                ],
+                "range": 60,
+                "selector": "scent"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

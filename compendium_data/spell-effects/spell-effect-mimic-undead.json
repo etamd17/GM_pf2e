@@ -1,0 +1,60 @@
+{
+    "_id": "xPVOvWNJORvm8EwP",
+    "img": "icons/magic/death/undead-skeleton-rags-fire-green.webp",
+    "name": "Spell Effect: Mimic Undead",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Mimic Undead]</p>\n<p>You gain a +4 status bonus to Impersonate an undead but physically intact version of yourself and can add your level as your proficiency bonus even if you're untrained.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:impersonate",
+                    "impersonate-undead"
+                ],
+                "selector": "deception",
+                "slug": "mimic-undead-status",
+                "type": "status",
+                "value": 4
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:impersonate",
+                    "impersonate-undead"
+                ],
+                "selector": "deception",
+                "slug": "mimic-undead-proficiency",
+                "type": "proficiency",
+                "value": "@actor.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,83 @@
+{
+    "_id": "B7RMnrHwQHlezlJT",
+    "img": "icons/magic/control/buff-strength-muscle-damage.webp",
+    "name": "Gymnast",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You reposition, maneuver, and bewilder your foes with daring feats of physical prowess. You are trained in Athletics. When you @UUID[Compendium.pf2e.actionspf2e.Item.Grapple], @UUID[Compendium.pf2e.actionspf2e.Item.Reposition], @UUID[Compendium.pf2e.actionspf2e.Item.Shove], or @UUID[Compendium.pf2e.actionspf2e.Item.Trip], the action gains the bravado trait.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.athletics.rank",
+                "predicate": [
+                    "class:swashbuckler"
+                ],
+                "value": 1
+            },
+            {
+                "hideIfDisabled": true,
+                "key": "FlatModifier",
+                "label": "PF2E.SpecificRule.ExemplaryFinisher.Name",
+                "predicate": [
+                    "finisher",
+                    "feature:exemplary-finisher",
+                    {
+                        "or": [
+                            "target:condition:grabbed",
+                            "target:condition:restrained",
+                            "target:condition:prone"
+                        ]
+                    }
+                ],
+                "selector": "strike-damage",
+                "type": "circumstance",
+                "value": "2* @weapon.system.damage.dice"
+            },
+            {
+                "domain": "skill-check",
+                "key": "RollOption",
+                "option": "item:trait:bravado",
+                "predicate": [
+                    {
+                        "or": [
+                            "action:grapple",
+                            "action:reposition",
+                            "action:shove",
+                            "action:trip"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "swashbuckler-style"
+            ],
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

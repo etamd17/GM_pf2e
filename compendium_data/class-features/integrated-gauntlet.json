@@ -1,0 +1,50 @@
+{
+    "_id": "tPL4lrGLCB5XbgeV",
+    "img": "icons/weapons/fist/fist-katar-triple-gold-black.webp",
+    "name": "Integrated Gauntlet",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Combining your weapon with a gauntlet, you make it so you can quickly switch between attacking with your weapon and tinkering using your hands. Your innovation gains the free-hand trait. This cannot be used with weapons that have the two-hand or fatal aim traits.</p>"
+        },
+        "level": {
+            "value": 7
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "free-hand"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "not-fatal-trait",
+                "not-two-handed-trait",
+                "one-handed",
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

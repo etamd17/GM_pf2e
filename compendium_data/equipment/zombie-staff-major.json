@@ -1,0 +1,80 @@
+{
+    "_id": "kJzp8I0rAmcucHuw",
+    "img": "icons/weapons/staves/staff-simple.webp",
+    "name": "Zombie Staff (Major)",
+    "system": {
+        "ammo": null,
+        "baseItem": "staff",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 1
+        },
+        "category": "simple",
+        "containerId": null,
+        "damage": {
+            "damageType": "bludgeoning",
+            "dice": 1,
+            "die": "d4"
+        },
+        "description": {
+            "value": "<p>A <em>zombie staff</em> is etched with the rotting visage of an undead humanoid grimacing in terror and dismay carved atop it. The staff's <em>summon undead</em> spells can summon only undead that have flesh and an Intelligence modifier of –4 or lower.</p>\n<p><strong>Activate</strong> Cast a Spell</p><hr /><p><strong>Effect</strong> You expend a number of charges from the staff to cast a spell from its list. If you cast <em>summon undead</em>, you can also cast <em>protect companion</em> on the resulting minion as a free action.</p><ul><li><strong>Cantrip</strong> @UUID[Compendium.pf2e.spells-srd.Item.Protect Companion]</li><li><strong>1st</strong> @UUID[Compendium.pf2e.spells-srd.Item.Necromancer's Generosity], @UUID[Compendium.pf2e.spells-srd.Item.Summon Undead]</li><li><strong>2nd</strong> @UUID[Compendium.pf2e.spells-srd.Item.Final Sacrifice], @UUID[Compendium.pf2e.spells-srd.Item.Summon Undead]</li><li><strong>3rd</strong> @UUID[Compendium.pf2e.spells-srd.Item.Bind Undead], @UUID[Compendium.pf2e.spells-srd.Item.Necromancer's Generosity], @UUID[Compendium.pf2e.spells-srd.Item.Summon Undead]</li><li><strong>4th</strong> @UUID[Compendium.pf2e.spells-srd.Item.Final Sacrifice], @UUID[Compendium.pf2e.spells-srd.Item.Summon Undead], @UUID[Compendium.pf2e.spells-srd.Item.Talking Corpse]</li><li><strong>5th</strong> @UUID[Compendium.pf2e.spells-srd.Item.Necromancer's Generosity], @UUID[Compendium.pf2e.spells-srd.Item.Summon Undead]</li><li><strong>6th</strong> @UUID[Compendium.pf2e.spells-srd.Item.Final Sacrifice], @UUID[Compendium.pf2e.spells-srd.Item.Necrotize], @UUID[Compendium.pf2e.spells-srd.Item.Summon Undead]</li></ul><hr /><p><strong>Craft Requirements</strong> Supply one casting of all listed ranks of all listed spells.</p>"
+        },
+        "expend": null,
+        "grade": null,
+        "group": "club",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 15
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 5600
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "range": null,
+        "reload": {
+            "value": null
+        },
+        "rules": [],
+        "runes": {
+            "potency": 0,
+            "property": [],
+            "striking": 0
+        },
+        "size": "med",
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "magical",
+                "staff",
+                "two-hand-d8"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "weapon"
+}

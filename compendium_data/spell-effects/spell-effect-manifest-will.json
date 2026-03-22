@@ -1,0 +1,182 @@
+{
+    "_id": "Vd72sGiTl7Pq8iQv",
+    "img": "icons/magic/symbols/star-rising-purple.webp",
+    "name": "Spell Effect: Manifest Will",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Manifest Will]</p>\n<p>You gain an effect depending on the spell's tradition, or the tradition selected with Multifaceted Will.</p><ul><li><strong>Arcane</strong> You gain weakness to spell damage equal to the spell's rank.</li><li><strong>Divine</strong> You gain temporary Hit Points equal to twice the spell's rank.</li><li><strong>Occult</strong> You gain lesser cover.</li><li><strong>Primal</strong> You have a –10-foot status penalty to all your Speeds.</li></ul>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder War of Immortals"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.TraitArcane",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:tag:manifest-will:arcane",
+                                    {
+                                        "and": [
+                                            "parent:spellcasting:tradition:arcane",
+                                            {
+                                                "nor": [
+                                                    "parent:origin:item:tag:manifest-will:divine",
+                                                    "parent:origin:item:tag:manifest-will:occult",
+                                                    "parent:origin:item:tag:manifest-will:primal"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "arcane"
+                    },
+                    {
+                        "label": "PF2E.TraitDivine",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:tag:manifest-will:divine",
+                                    {
+                                        "and": [
+                                            "parent:spellcasting:tradition:divine",
+                                            {
+                                                "nor": [
+                                                    "parent:origin:item:tag:manifest-will:arcane",
+                                                    "parent:origin:item:tag:manifest-will:occult",
+                                                    "parent:origin:item:tag:manifest-will:primal"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "divine"
+                    },
+                    {
+                        "label": "PF2E.TraitOccult",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:tag:manifest-will:occult",
+                                    {
+                                        "and": [
+                                            "parent:spellcasting:tradition:occult",
+                                            {
+                                                "nor": [
+                                                    "parent:origin:item:tag:manifest-will:arcane",
+                                                    "parent:origin:item:tag:manifest-will:divine",
+                                                    "parent:origin:item:tag:manifest-will:primal"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "occult"
+                    },
+                    {
+                        "label": "PF2E.TraitPrimal",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:tag:manifest-will:primal",
+                                    {
+                                        "and": [
+                                            "parent:spellcasting:tradition:primal",
+                                            {
+                                                "nor": [
+                                                    "parent:origin:item:tag:manifest-will:arcane",
+                                                    "parent:origin:item:tag:manifest-will:divine",
+                                                    "parent:origin:item:tag:manifest-will:occult"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "primal"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Tradition",
+                "rollOption": "manifest-will"
+            },
+            {
+                "key": "Weakness",
+                "predicate": [
+                    "manifest-will:arcane"
+                ],
+                "type": "spells",
+                "value": "@item.level"
+            },
+            {
+                "key": "TempHP",
+                "predicate": [
+                    "manifest-will:divine"
+                ],
+                "value": "2*@item.level"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "manifest-will:primal"
+                ],
+                "selector": "all-speeds",
+                "type": "status",
+                "value": -10
+            },
+            {
+                "key": "GrantItem",
+                "onDeleteActions": {
+                    "granter": "detach"
+                },
+                "predicate": [
+                    "manifest-will:occult"
+                ],
+                "uuid": "Compendium.pf2e.other-effects.Item.Effect: Cover"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

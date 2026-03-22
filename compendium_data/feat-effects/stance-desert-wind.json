@@ -1,0 +1,81 @@
+{
+    "_id": "gcR66Xgi12ICOVt7",
+    "img": "icons/magic/perception/eye-slit-red-orange.webp",
+    "name": "Stance: Desert Wind",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Desert Wind]</p>\n<p>When you use a damaging air impulse that affects at least one creature in your kinetic aura, that impulse deals additional slashing damage. This damage is doubled if the impulse has a single target.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "encounter",
+            "value": -1
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Kineticist.DesertWind.DamageToggle",
+                "option": "desert-wind-damage",
+                "suboptions": [
+                    {
+                        "label": "PF2E.GenericLabel.TargetNumber.Multiple",
+                        "value": "multiple"
+                    },
+                    {
+                        "label": "PF2E.GenericLabel.TargetNumber.Single",
+                        "value": "single"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "damageType": "slashing",
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:air",
+                    "item:trait:impulse",
+                    "desert-wind-damage"
+                ],
+                "selector": [
+                    "inline-damage",
+                    "impulse-damage"
+                ],
+                "slug": "desert-wind",
+                "value": "floor(@actor.level/2) - 2"
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "multiply",
+                "predicate": [
+                    "desert-wind-damage:single"
+                ],
+                "selectors": [
+                    "inline-damage",
+                    "impulse-damage"
+                ],
+                "slug": "desert-wind",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

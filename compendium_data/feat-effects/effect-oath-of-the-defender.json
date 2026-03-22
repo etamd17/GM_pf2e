@@ -1,0 +1,63 @@
+{
+    "_id": "nBQZdTtwNLJ70J6C",
+    "img": "icons/equipment/shield/heater-steel-sword-yellow-black.webp",
+    "name": "Effect: Oath of the Defender",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Oath of the Defender]</p>\n<p>You gain resistance to damage dealt by creatures with the chosen trait.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "definition": [
+                    "origin:trait:{item|origin.flags.pf2e.oathOfTheDefender}"
+                ],
+                "key": "Resistance",
+                "label": "PF2E.IWR.Custom.DamageFromSwornCreatures",
+                "predicate": [
+                    {
+                        "not": "self:effect:champions-resistance"
+                    }
+                ],
+                "type": "custom",
+                "value": "2 + floor((@item.origin.level - 2)/5)"
+            },
+            {
+                "definition": [
+                    "origin:trait:{item|origin.flags.pf2e.oathOfTheDefender}"
+                ],
+                "key": "Resistance",
+                "label": "PF2E.IWR.Custom.DamageFromSwornCreatures",
+                "predicate": [
+                    "self:effect:champions-resistance"
+                ],
+                "type": "custom",
+                "value": "7 + @item.origin.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

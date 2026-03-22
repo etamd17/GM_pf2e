@@ -1,0 +1,124 @@
+{
+    "_id": "g8JS6wsw5sRWOJLg",
+    "img": "systems/pf2e/icons/equipment/worn-items/other-worn-items/day-goggles.webp",
+    "name": "Effect: Stalk Goggles",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Stalk Goggles], @UUID[Compendium.pf2e.equipment-srd.Item.Stalk Goggles (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Stalk Goggles (Major)]</p>\n<p>You gain all-around vision and can't be flanked, gain an item bonus to Perception checks involving sight (<em>greater</em> and <em>major</em>), and gain low-light vision (<em>major</em>).</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Adventure Path: Gatewalkers"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:stalk-goggles",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Stalk Goggles"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:stalk-goggles-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Stalk Goggles (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:stalk-goggles-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Stalk Goggles (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "stalk-goggles"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.flanking.flankable",
+                "value": false
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "stalk-goggles:stalk-goggles-greater",
+                            "stalk-goggles:stalk-goggles-major"
+                        ]
+                    },
+                    "item:trait:visual"
+                ],
+                "selector": "perception",
+                "slug": "stalk-goggles-bonus",
+                "type": "item",
+                "value": 1
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "stalk-goggles:stalk-goggles-major"
+                ],
+                "selector": "perception",
+                "slug": "stalk-goggles-bonus",
+                "value": 2
+            },
+            {
+                "key": "Sense",
+                "predicate": [
+                    "stalk-goggles:stalk-goggles-major"
+                ],
+                "selector": "low-light-vision"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

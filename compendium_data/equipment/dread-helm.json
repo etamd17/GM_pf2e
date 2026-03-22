@@ -1,0 +1,54 @@
+{
+    "_id": "LSbv4rdvKfm4bPrR",
+    "img": "icons/equipment/head/helm-barbute-brass-steel.webp",
+    "name": "Dread Helm",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>The faceplate of a dread helm has a fierce visage that magnifies the effects of fear. Concealed within is a reservoir that can hold a single @UUID[Compendium.pf2e.equipment-srd.Item.Dread Ampoule (Lesser)]{Dread Ampoule}, which takes 3 Interact actions to install.</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (manipulate)</p>\n<p><strong>Requirements</strong> A dread ampoule is installed in the helm</p><hr /><p><strong>Effect</strong> The dread ampoule atomizes, creating a fear-inducing mist that hangs around your face for 3 rounds. The mist grants an item bonus to Intimidation checks equal to the dread ampoule's item bonus. The mist also deals mental damage equal to the dread ampoule's splash damage to all creatures within a @Template[type:emanation|distance:5] other than you. The activation uses up the dread ampoule, and the helm can't be activated again until a new one is installed.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 4
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 100
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemical",
+                "aura",
+                "emotion",
+                "fear",
+                "mental"
+            ]
+        },
+        "usage": {
+            "value": "wornheadwear"
+        }
+    },
+    "type": "equipment"
+}
