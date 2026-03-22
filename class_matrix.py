@@ -844,6 +844,54 @@ base_prog = {
     20: {"class_feat": 1, "skill_feat": 1, "ability_boosts": 4}
 }
 
+# Rogue: skill feat at EVERY level, skill increase at EVERY level starting L2
+rogue_prog = {
+    1: {"class_feat": 1, "ancestry_feat": 1, "skill_feat": 1},
+    2: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    3: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    4: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    5: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    6: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    7: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    8: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    9: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    10: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    11: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    12: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    13: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    14: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    15: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    16: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    17: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    18: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    19: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    20: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4}
+}
+
+# Investigator: standard skill feats, but skill increase at EVERY level starting L2
+investigator_prog = {
+    1: {"class_feat": 1, "ancestry_feat": 1},
+    2: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    3: {"general_feat": 1, "skill_increase": 1},
+    4: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    5: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    6: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    7: {"general_feat": 1, "skill_increase": 1},
+    8: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    9: {"ancestry_feat": 1, "skill_increase": 1},
+    10: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    11: {"general_feat": 1, "skill_increase": 1},
+    12: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    13: {"ancestry_feat": 1, "skill_increase": 1},
+    14: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    15: {"general_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    16: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    17: {"ancestry_feat": 1, "skill_increase": 1},
+    18: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
+    19: {"general_feat": 1, "skill_increase": 1},
+    20: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4}
+}
+
 # =============================================================================
 # CLASS_MATRIX - Initial proficiencies (level 1)
 # =============================================================================
@@ -860,7 +908,7 @@ CLASS_MATRIX = {
     "fighter":      {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 2, "unarmed": 4, "simple": 4, "martial": 4, "advanced": 2, "perception": 4, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 2}, "progression": base_prog},
     "guardian":     {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 2, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4}, "progression": base_prog},
     "gunslinger":   {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 4, "martial": 4, "advanced": 2, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 2}, "progression": base_prog},
-    "investigator": {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},
+    "investigator": {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": investigator_prog},
     "inventor":     {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4}, "progression": base_prog},
     "kineticist":   {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 2}, "progression": base_prog},
     "magus":        {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
@@ -868,7 +916,7 @@ CLASS_MATRIX = {
     "oracle":       {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "psychic":      {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "ranger":       {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 2}, "progression": base_prog},
-    "rogue":        {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},
+    "rogue":        {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": rogue_prog},
     "sorcerer":     {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "summoner":     {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "swashbuckler": {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},
