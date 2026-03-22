@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session
 import sqlite3
 import json
 import math
@@ -10,6 +10,7 @@ import urllib.parse
 import markdown
 import random
 import time
+from functools import wraps
 
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
 from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES
@@ -19,13 +20,52 @@ from class_matrix import SPELL_ACTIONS, get_action_cost
 from pf2e_generator import RobustPF2eGenerator
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
+
+# --- GM ACCESS CONTROL ---
+GM_PASSWORD = os.environ.get('GM_PASSWORD', '')  # Set in Railway env vars
+
+def gm_required(f):
+    """Decorator: requires GM password to access route."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not GM_PASSWORD:
+            return f(*args, **kwargs)  # No password set = open access (local dev)
+        if session.get('gm_authenticated'):
+            return f(*args, **kwargs)
+        return redirect('/gm/login')
+    return decorated
+
+# GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
+GM_API_PREFIXES = (
+    '/api/add_combatant', '/api/add_party', '/api/remove_combatant', '/api/clear_encounter',
+    '/api/adjust_hp/',  # Encounter tracker HP (not adjust_party_hp which is player-facing)
+    '/api/toggle_condition/', '/api/set_persistent_damage/', '/api/toggle_elite_weak/',
+    '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
+    '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
+    '/api/save_encounter', '/api/load_encounter',
+    '/api/monster_search', '/api/stage_encounter', '/api/party_stats',
+    '/api/monster_statblock/', '/api/combatant_stats/',
+    '/api/generate/', '/api/vault_',
+)
+
+@app.before_request
+def check_gm_access():
+    """Block GM API routes for unauthenticated users."""
+    if not GM_PASSWORD:
+        return  # No password = open access
+    path = request.path
+    if any(path.startswith(prefix) for prefix in GM_API_PREFIXES):
+        if not session.get('gm_authenticated'):
+            return jsonify({"error": "GM authentication required"}), 403
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-MONSTER_DIR = os.path.join(BASE_DIR, 'monster_data')
-PARTY_DIR = os.path.join(BASE_DIR, 'party_data') 
-ENCOUNTER_DIR = os.path.join(BASE_DIR, 'saved_encounters') 
-OBSIDIAN_DIR = os.path.join(BASE_DIR, 'obsidian_vault')
-DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')
+DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)  # Railway volume mount or local
+MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')
+PARTY_DIR = os.path.join(DATA_DIR, 'party_data') 
+ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters') 
+OBSIDIAN_DIR = os.path.join(DATA_DIR, 'obsidian_vault')
+DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
@@ -2162,9 +2202,52 @@ def get_vault_tree(dir_path):
 load_libraries()
 
 @app.route('/')
+def index():
+    """Root redirects to player hub (public). GMs go to /gm."""
+    return redirect('/player')
+
+@app.route('/party')
+@gm_required
 def party_view(): return render_template('party_view.html', party=list(PARTY_LIBRARY.values()))
 
+@app.route('/gm/login', methods=['GET', 'POST'])
+def gm_login():
+    if request.method == 'POST':
+        pw = request.form.get('password', '')
+        if pw == GM_PASSWORD:
+            session['gm_authenticated'] = True
+            return redirect(request.args.get('next', '/party'))
+        return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+            <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+            .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
+            h1{font-family:'Cinzel',serif;color:#F43F5E;font-size:18px;margin-bottom:8px;}
+            p{color:#7A7062;font-size:13px;}
+            input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin:16px 0;box-sizing:border-box;}
+            button{width:100%;padding:12px;border-radius:6px;border:none;background:linear-gradient(135deg,#2C5C5C,#1E4040);color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
+            </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
+            <body><div class="box"><h1>Wrong Password</h1><p>Try again.</p>
+            <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
+            <button type="submit">Enter the Vault</button></form></div></body></html>'''
+    return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+        .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
+        h1{font-family:'Cinzel',serif;color:#7DC4C4;font-size:22px;margin-bottom:4px;}
+        p{color:#7A7062;font-size:13px;margin-bottom:20px;}
+        input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin-bottom:16px;box-sizing:border-box;}
+        button{width:100%;padding:12px;border-radius:6px;border:none;background:linear-gradient(135deg,#2C5C5C,#1E4040);color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
+        button:hover{background:linear-gradient(135deg,#3A7878,#2C5C5C);}
+        </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
+        <body><div class="box"><h1>GM Access</h1><p>This area is restricted to the Game Master.</p>
+        <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
+        <button type="submit">Enter the Vault</button></form></div></body></html>'''
+
+@app.route('/gm/logout')
+def gm_logout():
+    session.pop('gm_authenticated', None)
+    return redirect('/player')
+
 @app.route('/tracker')
+@gm_required
 def tracker_view():
     sorted_monsters = sorted(MONSTER_LIBRARY.values(), key=lambda m: m.name)
     sorted_party = sorted(PARTY_LIBRARY.values(), key=lambda p: p.name)
@@ -2648,10 +2731,12 @@ def load_encounter():
     return redirect(url_for('tracker_view'))
 
 @app.route('/gmscreen')
+@gm_required
 def gm_screen(): 
     return render_template('gmscreen.html')
 
 @app.route('/encounter_builder')
+@gm_required
 def encounter_builder():
     sorted_party = sorted(PARTY_LIBRARY.values(), key=lambda p: p.name)
     party_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
@@ -2748,6 +2833,7 @@ def api_monster_statblock(instance_id):
     return jsonify({"error": "Not found"}), 404
 
 @app.route('/generator')
+@gm_required
 def dm_generator():
     party_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
     data = {k: getattr(pf2e_gen, f'get_{k}')(level=party_level, biome="City") for k in ['npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter']}
@@ -2911,6 +2997,7 @@ def api_vault_resolve():
 
 @app.route('/vault')
 @app.route('/vault/<path:file_path>')
+@gm_required
 def vault_view(file_path=None):
     tree = get_vault_tree(OBSIDIAN_DIR)
     content_html = ""
