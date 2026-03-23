@@ -69,7 +69,7 @@ DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-on
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, OBSIDIAN_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -2218,7 +2218,7 @@ def gm_login():
         pw = request.form.get('password', '')
         if pw == GM_PASSWORD:
             session['gm_authenticated'] = True
-            return redirect(request.args.get('next', '/party'))
+            return redirect(request.args.get('next', '/gm'))
         return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
             <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
             .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
@@ -2247,6 +2247,64 @@ def gm_login():
 def gm_logout():
     session.pop('gm_authenticated', None)
     return redirect('/player')
+
+@app.route('/gm')
+@gm_required
+def gm_hub():
+    """GM Dashboard hub — links to all GM tools."""
+    party_count = len(PARTY_LIBRARY)
+    monster_count = len(MONSTER_LIBRARY)
+    encounter_count = len(ACTIVE_ENCOUNTER)
+    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>GM Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+        body {{ font-family:'Crimson Text',Georgia,serif; background:#1C1917; color:#EDE5D8; }}
+        body::before {{ content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,120,120,0.08) 0%,transparent 60%),#1C1917; }}
+        .fn {{ font-family:'Cinzel',serif; }}
+        .gm-card {{ background:linear-gradient(135deg,#33302A,#28241F); border:1px solid rgba(156,139,118,0.18); border-radius:12px; padding:24px; transition:all 0.3s; }}
+        .gm-card:hover {{ border-color:rgba(94,173,173,0.3); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
+    </style></head>
+    <body class="min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-2xl w-full">
+        <div class="text-center mb-10">
+            <h1 class="fn text-3xl text-amber-300 tracking-wide mb-2" style="text-shadow:0 2px 20px rgba(94,173,173,0.15);">Game Master</h1>
+            <p class="text-sm" style="color:#7A7062;">Dashboard &amp; Tools</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <a href="/party" class="gm-card block">
+                <div class="fn text-lg mb-1" style="color:#7DC4C4;">Party View</div>
+                <p class="text-sm" style="color:#7A7062;">Manage HP, conditions, and party overview</p>
+                <span class="fn text-xs mt-2 block" style="color:#524C42;">{party_count} characters loaded</span>
+            </a>
+            <a href="/tracker" class="gm-card block">
+                <div class="fn text-lg mb-1" style="color:#D4A574;">Encounter Tracker</div>
+                <p class="text-sm" style="color:#7A7062;">Initiative, turns, HP, and conditions</p>
+                <span class="fn text-xs mt-2 block" style="color:#524C42;">{encounter_count} combatants active</span>
+            </a>
+            <a href="/encounter_builder" class="gm-card block">
+                <div class="fn text-lg mb-1" style="color:#FBBF24;">Encounter Builder</div>
+                <p class="text-sm" style="color:#7A7062;">Search monsters, build balanced encounters</p>
+                <span class="fn text-xs mt-2 block" style="color:#524C42;">{monster_count} monsters in library</span>
+            </a>
+            <a href="/gmscreen" class="gm-card block">
+                <div class="fn text-lg mb-1" style="color:#C4B5FD;">GM Screen</div>
+                <p class="text-sm" style="color:#7A7062;">Quick reference tables and rules</p>
+            </a>
+            <a href="/generator" class="gm-card block">
+                <div class="fn text-lg mb-1" style="color:#86EFAC;">Generator</div>
+                <p class="text-sm" style="color:#7A7062;">NPCs, loot, and encounter ideas</p>
+            </a>
+            <a href="/player" class="gm-card block">
+                <div class="fn text-lg mb-1" style="color:#FDA4AF;">Player Hub</div>
+                <p class="text-sm" style="color:#7A7062;">View what your players see</p>
+            </a>
+        </div>
+        <div class="text-center">
+            <a href="/gm/logout" class="fn text-xs tracking-wider uppercase" style="color:#524C42;">Logout</a>
+        </div>
+    </div></body></html>'''
 
 @app.route('/tracker')
 @gm_required

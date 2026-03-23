@@ -196,7 +196,6 @@
                 {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-red-900/20 border border-red-800/25 text-red-300 hover:bg-red-900/30 transition-colors">⏬ Undo</button>{% endif %}
                 <a href="/player/levelup/{{ pc.name|urlencode }}" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:linear-gradient(135deg,#2C5C5C,#1E4040); border:1px solid rgba(94,173,173,0.25); color:#A8DEDE;">⭐ Level Up</a>
                 <button onclick="window.print()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors">🖨 Print</button>
-                <button onclick="exportToVault()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors" title="Save character snapshot to Obsidian vault">📓 Vault</button>
             </div>
         </div>
         
@@ -1653,16 +1652,6 @@
         // ==========================================
         // VAULT EXPORT
         // ==========================================
-        async function exportToVault() {
-            try {
-                const res = await fetch(`/api/vault_export_character/${pcNameEncoded}`, { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    showRollToast('Vault Export', 0, `Saved to ${data.path}`, false, false);
-                }
-            } catch(e) { console.error(e); }
-        }
-
         // ==========================================
         // SESSION JOURNAL
         // ==========================================
