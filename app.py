@@ -2313,7 +2313,7 @@ def gm_login():
             h1{font-family:'Cinzel',serif;color:#F43F5E;font-size:18px;margin-bottom:8px;}
             p{color:#7A7062;font-size:13px;}
             input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin:16px 0;box-sizing:border-box;}
-            button{width:100%;padding:12px;border-radius:6px;border:none;background:linear-gradient(135deg,#2C5C5C,#1E4040);color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
+            button{width:100%;padding:12px;border-radius:6px;border:none;background:#265050;color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
             </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
             <body><div class="box"><h1>Wrong Password</h1><p>Try again.</p>
             <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
@@ -2324,8 +2324,8 @@ def gm_login():
         h1{font-family:'Cinzel',serif;color:#7DC4C4;font-size:22px;margin-bottom:4px;}
         p{color:#7A7062;font-size:13px;margin-bottom:20px;}
         input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin-bottom:16px;box-sizing:border-box;}
-        button{width:100%;padding:12px;border-radius:6px;border:none;background:linear-gradient(135deg,#2C5C5C,#1E4040);color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
-        button:hover{background:linear-gradient(135deg,#3A7878,#2C5C5C);}
+        button{width:100%;padding:12px;border-radius:6px;border:none;background:#265050;color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
+        button:hover{background:#3A7878;}
         </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
         <body><div class="box"><h1>GM Access</h1><p>This area is restricted to the Game Master.</p>
         <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
@@ -2351,7 +2351,7 @@ def gm_hub():
         body {{ font-family:'Crimson Text',Georgia,serif; background:#1C1917; color:#EDE5D8; }}
         body::before {{ content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,120,120,0.08) 0%,transparent 60%),#1C1917; }}
         .fn {{ font-family:'Cinzel',serif; }}
-        .gm-card {{ background:linear-gradient(135deg,#33302A,#28241F); border:1px solid rgba(156,139,118,0.18); border-radius:12px; padding:24px; transition:all 0.3s; }}
+        .gm-card {{ background:#2E2B25; border:1px solid rgba(156,139,118,0.18); border-radius:12px; padding:24px; transition:all 0.3s; }}
         .gm-card:hover {{ border-color:rgba(94,173,173,0.3); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
     </style></head>
     <body class="min-h-screen flex items-center justify-center p-6">
@@ -3785,6 +3785,27 @@ def update_wealth(pc_name):
     build['money']['cp'] = int(data.get('cp', 0))
     
     save_and_reload_character(pc_name, pc_json, file_path)
+    return jsonify({"success": True})
+
+@app.route('/api/spell_slots/<pc_name>', methods=['GET', 'POST'])
+def spell_slots(pc_name):
+    """Server-side spell slot persistence. GET returns current state, POST saves it."""
+    file_path = get_pc_file_path(pc_name)
+    if not os.path.exists(file_path):
+        return jsonify({"error": "Character not found"}), 404
+    
+    if request.method == 'GET':
+        with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        return jsonify({"success": True, "expended_slots": build.get('expended_slots', {})})
+    
+    # POST — save slot state
+    data = request.json
+    slots = data.get('expended_slots', {})
+    with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
+    build = pc_json.get('build', pc_json)
+    build['expended_slots'] = slots
+    with open(file_path, 'w', encoding='utf-8') as f: json.dump(pc_json, f, indent=2)
     return jsonify({"success": True})
 
 @app.route('/api/add_item/<pc_name>', methods=['POST'])

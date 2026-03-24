@@ -73,7 +73,7 @@
         .cond-strip.active { max-height:120px; opacity:1; padding:8px 0; }
         
         /* Portrait */
-        .portrait-circle { width:56px; height:56px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid rgba(168,156,139,0.25); background:linear-gradient(135deg,#33302A,#252320); transition:border-color 0.3s; }
+        .portrait-circle { width:56px; height:56px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid rgba(168,156,139,0.25); background:#2E2B25; transition:border-color 0.3s; }
         .portrait-circle:hover { border-color:rgba(94,173,173,0.5); }
         .portrait-circle img { width:100%; height:100%; object-fit:cover; }
         .portrait-badge { position:absolute; bottom:-2px; right:-2px; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; border:2px solid #1C1917; }
@@ -161,7 +161,7 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- CHARACTER HEADER — Always visible, like top of a real sheet   -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div class="w-full" style="background:linear-gradient(180deg, #28241F 0%, #1C1917 100%); border-bottom:1px solid rgba(168,156,139,0.18);">
+    <div class="w-full" style="background:#252220; border-bottom:1px solid rgba(168,156,139,0.18);">
         
         <!-- Top Bar: Name + Actions -->
         <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex justify-between items-center">
@@ -194,7 +194,7 @@
             <div class="flex gap-2">
                 <button onclick="takeLongRest()" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-blue-900/20 border border-blue-800/25 text-blue-300 hover:bg-blue-900/30 transition-colors">⛺ Rest</button>
                 {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-red-900/20 border border-red-800/25 text-red-300 hover:bg-red-900/30 transition-colors">⏬ Undo</button>{% endif %}
-                <a href="/player/levelup/{{ pc.name|urlencode }}" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:linear-gradient(135deg,#2C5C5C,#1E4040); border:1px solid rgba(94,173,173,0.25); color:#A8DEDE;">⭐ Level Up</a>
+                <a href="/player/levelup/{{ pc.name|urlencode }}" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:#265050; border:1px solid rgba(94,173,173,0.25); color:#A8DEDE;">⭐ Level Up</a>
                 <button onclick="window.print()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors">🖨 Print</button>
             </div>
         </div>
@@ -208,7 +208,7 @@
                 <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')" 
                      class="flex flex-col items-center cursor-pointer group" title="Click to roll {{ stat.label }} check">
                     <div class="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold font-header transition-all group-hover:scale-110 group-hover:shadow-lg relative"
-                         style="background:linear-gradient(135deg, #33302A, #252320); border:2px solid rgba(168,156,139,0.25); color:#F5F0E8; text-shadow:0 1px 4px rgba(0,0,0,0.5);">
+                         style="background:#2E2B25; border:2px solid rgba(168,156,139,0.25); color:#F5F0E8; text-shadow:0 1px 4px rgba(0,0,0,0.5);">
                         <span class="group-hover:text-amber-300 transition-colors">{{ stat.mod|safe }}</span>
                     </div>
                     <span class="font-header text-[9px] text-gray-500 mt-1 tracking-widest group-hover:text-amber-400 transition-colors">{{ stat.label }}</span>
@@ -227,7 +227,7 @@
                 </div>
                 
                 <div class="flex flex-col items-center" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
-                    <div class="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header" style="background:linear-gradient(135deg,#1E2A4A,#162040); border:1px solid rgba(96,165,250,0.25); color:#93C5FD;">
+                    <div class="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header" style="background:#1A2540; border:1px solid rgba(96,165,250,0.25); color:#93C5FD;">
                         {{ pc.ac }}
                     </div>
                     <span class="font-header text-[8px] text-blue-400/60 mt-1 tracking-widest">AC</span>
@@ -252,7 +252,7 @@
                     <span class="font-header text-[7px] text-blue-400/50 mt-0.5 tracking-widest">REF</span>
                 </div>
                 <div onclick="rollSkill('Will Save', {{ pc.will }})" class="flex flex-col items-center cursor-pointer group" title="Roll Will Save">
-                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(76,29,149,0.2); border:1px solid rgba(196,181,253,0.2); color:#C4B5FD;">
+                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(76,29,149,0.12); border:1px solid rgba(196,181,253,0.2); color:#C4B5FD;">
                         +{{ pc.will }}
                     </div>
                     <span class="font-header text-[7px] text-purple-400/50 mt-0.5 tracking-widest">WILL</span>
@@ -788,6 +788,18 @@
 
         <div id="tab-magic" data-print-title="Magic &amp; Spells" class="tab-content sheet-page space-y-6">
             {% if pc.spell_casters %}
+                <!-- Spell Search -->
+                <div class="no-print flex items-center gap-2 mb-2">
+                    <input type="text" id="spell-search" placeholder="Search spells..." oninput="filterSpells(this.value)" class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:#252320; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+                    <select id="spell-rank-filter" onchange="filterSpells(document.getElementById('spell-search').value)" class="rounded px-2 py-2 text-sm focus:outline-none" style="background:#252320; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
+                        <option value="">All Ranks</option>
+                        <option value="0">Cantrips</option>
+                        {% for i in range(1, 11) %}
+                        <option value="{{ i }}">Rank {{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
                 {% for caster in pc.spell_casters %}
                 {% set caster_idx = loop.index0 %}
                 {% set c_type_lower = caster.type | lower %}
@@ -850,7 +862,7 @@
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {% for sp in lvl.spells %}
-                                <details class="group rounded overflow-hidden spell-rank-{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
+                                <details class="group rounded overflow-hidden spell-rank-{{ lvl.level }} spell-entry" data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
                                     <summary class="flex justify-between items-center p-3 cursor-pointer list-none outline-none hover:bg-gray-700 transition-colors">
                                         <div class="flex items-center gap-2 pr-2">
                                             <span style="color:#7DC4C4;" class="text-[10px] transition-transform group-open:rotate-90">▶</span>
@@ -889,7 +901,7 @@
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         {% for sp in lvl.spells %}
-                                        <details class="group rounded spell-rank-{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
+                                        <details class="group rounded spell-rank-{{ lvl.level }} spell-entry" data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
                                             <summary class="flex justify-between items-center p-2 cursor-pointer list-none outline-none hover:bg-gray-700 transition-colors">
                                                 <div class="flex items-center gap-2 truncate pr-2">
                                                     <span style="color:#7DC4C4;" class="text-[9px] transition-transform group-open:rotate-90">▶</span>
@@ -996,7 +1008,7 @@
                         <button onclick="toggleFeature('{{ feat.name }}')" 
                                 id="toggle-btn-{{ feat.name|replace(' ', '-') }}"
                                 class="shrink-0 w-12 h-7 rounded-full transition-all relative no-print"
-                                style="{% if feat.name in pc.active_toggles %}background: linear-gradient(135deg, #3A7878, #2C5C5C); border: 1px solid rgba(94,173,173,0.5);{% else %}background: #252320; border: 1px solid rgba(168,156,139,0.2);{% endif %}">
+                                style="{% if feat.name in pc.active_toggles %}background: #2C5C5C; border: 1px solid rgba(94,173,173,0.5);{% else %}background: #252320; border: 1px solid rgba(168,156,139,0.2);{% endif %}">
                             <span class="absolute top-0.5 w-6 h-6 rounded-full transition-all"
                                   style="{% if feat.name in pc.active_toggles %}left: 22px; background: #7DC4C4;{% else %}left: 2px; background: #8A7D6E;{% endif %}"></span>
                         </button>
@@ -1772,6 +1784,19 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
+        // Spell search/filter
+        function filterSpells(query) {
+            const q = (query || '').toLowerCase().trim();
+            const rankFilter = document.getElementById('spell-rank-filter')?.value || '';
+            document.querySelectorAll('.spell-entry').forEach(el => {
+                const name = el.dataset.spellName || '';
+                const rank = el.dataset.spellRank || '';
+                const matchesName = !q || name.includes(q);
+                const matchesRank = !rankFilter || rank === rankFilter;
+                el.style.display = (matchesName && matchesRank) ? '' : 'none';
+            });
+        }
+
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1788,18 +1813,39 @@
             }
         })();
 
-        // INIT SLOT TRACKERS
-        document.addEventListener("DOMContentLoaded", () => {
+        // INIT SLOT TRACKERS — server-side persistence
+        document.addEventListener("DOMContentLoaded", async () => {
+            // Load expended slots from server
+            window._expendedSlots = {};
+            try {
+                const res = await fetch(`/api/spell_slots/${pcNameEncoded}`);
+                const data = await res.json();
+                if (data.success) window._expendedSlots = data.expended_slots || {};
+            } catch(e) {}
+            
             document.querySelectorAll('.spell-slot-cb').forEach((cb) => {
                 const cIdx = cb.getAttribute('data-caster-idx');
                 const lvl = cb.getAttribute('data-spell-level');
                 const idx = cb.getAttribute('data-slot-idx');
-                const storageKey = `expended_slot_${pcName}_c${cIdx}_l${lvl}_i${idx}`;
+                const key = `c${cIdx}_l${lvl}`;
                 
-                if (localStorage.getItem(storageKey) === 'true') cb.checked = true;
+                // Restore from server
+                if (window._expendedSlots[key] && window._expendedSlots[key][parseInt(idx)]) cb.checked = true;
                 
-                cb.addEventListener('change', () => {
-                    localStorage.setItem(storageKey, cb.checked);
+                cb.addEventListener('change', async () => {
+                    // Update local state
+                    if (!window._expendedSlots[key]) window._expendedSlots[key] = [];
+                    while (window._expendedSlots[key].length <= parseInt(idx)) window._expendedSlots[key].push(false);
+                    window._expendedSlots[key][parseInt(idx)] = cb.checked;
+                    
+                    // Save to server
+                    try {
+                        await fetch(`/api/spell_slots/${pcNameEncoded}`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({expended_slots: window._expendedSlots})
+                        });
+                    } catch(e) {}
                 });
             });
         });
@@ -1847,11 +1893,18 @@
         async function takeLongRest() {
             if (!confirm("Take a Long Rest (Daily Preparations)?\n\n• Full HP restored\n• Focus Points restored\n• Spell slots refreshed (prepared spells cleared)\n• Conditions cleared (Drained reduces by 1, Doomed persists)\n• Wounded removed")) return;
             try {
-                // Clear spell prep and expended slots from localStorage
+                // Clear spell prep from localStorage (prep UI is still client-side)
                 Object.keys(localStorage).forEach(key => { 
-                    if (key.startsWith(`pf2e_prep_${pcName}_`) || key.startsWith(`expended_slot_${pcName}_`) || key.startsWith(`cast_prep_${pcName}_`)) {
+                    if (key.startsWith(`pf2e_prep_${pcName}_`) || key.startsWith(`cast_prep_${pcName}_`)) {
                         localStorage.removeItem(key); 
                     }
+                });
+                
+                // Clear server-side spell slots
+                await fetch(`/api/spell_slots/${pcNameEncoded}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({expended_slots: {}})
                 });
                 
                 const res = await fetch(`/api/long_rest/${pcNameEncoded}`, { method: 'POST' });
@@ -2692,9 +2745,15 @@
                 const s_cIdx = cb.getAttribute('data-caster-idx');
                 const s_lvl = cb.getAttribute('data-spell-level');
                 const s_idx = cb.getAttribute('data-slot-idx');
-                const storageKey = `expended_slot_${pcName}_c${s_cIdx}_l${s_lvl}_i${s_idx}`;
-                if (localStorage.getItem(storageKey) === 'true') cb.checked = true;
-                cb.addEventListener('change', () => localStorage.setItem(storageKey, cb.checked));
+                const key = `c${s_cIdx}_l${s_lvl}`;
+                if (window._expendedSlots && window._expendedSlots[key] && window._expendedSlots[key][parseInt(s_idx)]) cb.checked = true;
+                cb.addEventListener('change', async () => {
+                    if (!window._expendedSlots) window._expendedSlots = {};
+                    if (!window._expendedSlots[key]) window._expendedSlots[key] = [];
+                    while (window._expendedSlots[key].length <= parseInt(s_idx)) window._expendedSlots[key].push(false);
+                    window._expendedSlots[key][parseInt(s_idx)] = cb.checked;
+                    try { await fetch(`/api/spell_slots/${pcNameEncoded}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({expended_slots: window._expendedSlots}) }); } catch(e) {}
+                });
             });
         }
 

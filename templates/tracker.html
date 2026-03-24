@@ -158,7 +158,8 @@
                             <div class="flex flex-wrap gap-1 mb-1">
                                 {% for cond, val in c.conditions.items() %}
                                     {% if val is sameas true %}
-                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm">
+                                        {% set cond_tip = {'prone': 'AC −2 circumstance. Melee attacks take −2. Standing costs 1 action. Ranged attacks take −2 vs you.', 'off_guard': 'AC −2 circumstance (flanked, flat-footed, etc.)', 'concealed': 'DC 5 flat check for attackers to target. Hidden from some senses.', 'hidden': 'DC 11 flat check to target. Attacker must guess square.', 'undetected': 'Must guess square. DC 11 flat check even if correct.'}.get(cond, cond|title) %}
+                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm" title="{{ cond_tip }}">
                                             {{ cond|replace('_', '-') }}
                                             <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="inline">
                                                 <input type="hidden" name="condition" value="{{ cond }}">
@@ -166,7 +167,8 @@
                                             </form>
                                         </span>
                                     {% elif val is number and val > 0 %}
-                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm">
+                                        {% set cond_tip = {'frightened': 'Status penalty −X to all checks, DCs, saves, attacks. Decreases by 1 at end of turn.', 'sickened': 'Status penalty −X to all checks, DCs, saves, attacks. Must Retch (Fortitude) to reduce.', 'enfeebled': '−X status penalty to Str-based rolls and DCs.', 'clumsy': '−X status penalty to Dex-based rolls, DCs, and AC.', 'drained': '−X status penalty to Con-based rolls. Lose X×level max HP.', 'stupefied': '−X status penalty to Int/Wis/Cha-based rolls. DC 5+X flat check to cast spells.', 'wounded': 'When you gain Dying, add Wounded value. Increases by 1 each time you recover from Dying.', 'doomed': 'Die at Dying (4 − Doomed). Cannot reduce below Doomed value.', 'dying': 'Unconscious. At start of turn, roll recovery check (DC 10+dying). Dying 4 = death.'}.get(cond, cond|title) %}
+                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm" title="{{ cond_tip }}">
                                             {{ cond }} {{ val }}
                                             <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="inline flex gap-1 ml-1 border-l border-red-800/50 pl-1">
                                                 <input type="hidden" name="condition" value="{{ cond }}">
