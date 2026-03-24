@@ -335,6 +335,14 @@
             </div>
         </div>
         
+        <!-- Encounter Initiative Bar (populated live via SSE) -->
+        <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
+            <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2">
+                <span class="font-header text-[8px] tracking-widest uppercase" style="color:#7A7062;">⚔ Combat</span>
+                <div id="encounter-initiative-bar" class="flex flex-wrap gap-1 flex-1"></div>
+            </div>
+        </div>
+
         <!-- Condition Strip — auto-shows when any condition is active -->
         {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
         <div class="no-print cond-strip {% if has_any_condition %}active{% endif %}" id="condition-strip" style="border-bottom:1px solid rgba(251,113,133,0.1);">
@@ -1937,47 +1945,112 @@
             } catch (error) {}
         }
 
-        // GM Sync: poll for HP/condition changes made by the GM in the tracker
+        // ==========================================
+        // REAL-TIME GM SYNC VIA SERVER-SENT EVENTS
+        // ==========================================
         let currentHp = parseInt("{{ pc.current_hp }}");
         let currentConditions = {{ pc.conditions | tojson }};
+        const maxHp = parseInt("{{ pc.hp }}");
         
+        function applyHpUpdate(newHp) {
+            if (newHp === currentHp) return;
+            currentHp = newHp;
+            const hpEl = document.getElementById('current-hp');
+            if (!hpEl) return;
+            hpEl.innerText = currentHp;
+            const pct = currentHp / maxHp;
+            hpEl.className = 'text-2xl font-bold leading-none font-header ' + 
+                (currentHp === 0 ? 'text-red-500' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-amber-400' : 'text-green-400');
+            hpEl.style.transform = 'scale(1.2)';
+            setTimeout(() => hpEl.style.transform = 'scale(1)', 200);
+            // Update HP gauge bar
+            const gauge = document.querySelector('.hp-gauge-fill');
+            if (gauge) {
+                gauge.style.width = Math.round(pct * 100) + '%';
+                gauge.className = 'hp-gauge-fill ' + (currentHp === 0 ? 'dead' : pct <= 0.25 ? 'low' : pct <= 0.5 ? 'mid' : 'high');
+            }
+        }
+        
+        function applyConditionUpdate(conditions) {
+            if (JSON.stringify(conditions) === JSON.stringify(currentConditions)) return;
+            currentConditions = conditions;
+            // Refresh condition strip visibility
+            const strip = document.getElementById('condition-strip');
+            if (strip) {
+                const hasAny = Object.values(conditions).some(v => v && v !== 0 && v !== false);
+                strip.classList.toggle('active', hasAny);
+            }
+        }
+        
+        // SSE connection with auto-reconnect
+        function connectSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.addEventListener('pc_update', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.name !== pcName) return;
+                    applyHpUpdate(data.current_hp);
+                    applyConditionUpdate(data.conditions || {});
+                    // Update focus pips
+                    if (data.focus !== undefined) {
+                        const focusMax = {{ pc.focus_max }};
+                        ['header-focus-pips', 'focus-pips'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (!el) return;
+                            let html = '';
+                            for (let i = 0; i < focusMax; i++) {
+                                html += `<span class="focus-pip ${i < data.focus ? 'filled' : 'empty'}"></span>`;
+                            }
+                            el.innerHTML = html;
+                        });
+                    }
+                } catch(err) { console.error('SSE pc_update error:', err); }
+            });
+            
+            evtSource.addEventListener('encounter_update', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    const wrapper = document.getElementById('encounter-bar-wrapper');
+                    const initBar = document.getElementById('encounter-initiative-bar');
+                    if (wrapper && initBar && data.encounter && data.encounter.length > 0) {
+                        wrapper.style.display = 'block';
+                        let html = '';
+                        data.encounter.forEach(c => {
+                            const isMe = c.name === pcName;
+                            const style = c.is_active 
+                                ? 'background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.25);' 
+                                : 'border:1px solid rgba(168,156,139,0.08);';
+                            html += `<span class="text-[10px] px-2 py-0.5 rounded font-header" style="${style} color:${c.is_active ? '#FBBF24' : isMe ? '#7DC4C4' : '#524C42'}; ${isMe ? 'font-weight:700;' : ''}">${c.is_pc ? c.name : '???'}${c.is_active ? ' ▶' : ''}</span>`;
+                        });
+                        html += `<span class="text-[9px] ml-auto font-header" style="color:#524C42;">Round ${data.round || 1}</span>`;
+                        initBar.innerHTML = html;
+                    } else if (wrapper && (!data.encounter || data.encounter.length === 0)) {
+                        wrapper.style.display = 'none';
+                    }
+                } catch(err) { console.error('SSE encounter_update error:', err); }
+            });
+            
+            evtSource.onerror = () => {
+                evtSource.close();
+                setTimeout(connectSSE, 5000); // Reconnect after 5s
+            };
+        }
+        connectSSE();
+        
+        // Fallback polling (in case SSE fails)
         async function syncFromGM() {
             try {
                 const res = await fetch('/api/player_state');
                 const data = await res.json();
                 if (!data.encounter) return;
-                
                 const myState = data.encounter.find(c => c.is_pc && c.name === pcName);
                 if (!myState) return;
-                
-                // Check if HP changed (GM adjusted it from tracker)
-                if (myState.current_hp !== undefined && myState.current_hp !== currentHp) {
-                    currentHp = myState.current_hp;
-                    const hpEl = document.getElementById('current-hp');
-                    hpEl.innerText = currentHp;
-                    const maxHp = parseInt("{{ pc.hp }}");
-                    const pct = currentHp / maxHp;
-                    hpEl.className = 'text-4xl font-bold leading-none ' + 
-                        (currentHp === 0 ? 'text-red-600' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-orange-400' : 'text-green-400');
-                    hpEl.style.transform = 'scale(1.2)';
-                    setTimeout(() => hpEl.style.transform = 'scale(1)', 200);
-                }
-                
-                // Check if conditions changed
-                if (myState.conditions && JSON.stringify(myState.conditions) !== JSON.stringify(currentConditions)) {
-                    currentConditions = myState.conditions;
-                    // Update condition badges inline instead of reloading
-                    document.querySelectorAll('[data-cond-name]').forEach(el => {
-                        const cond = el.getAttribute('data-cond-name');
-                        const val = currentConditions[cond] || 0;
-                        const label = el.querySelector('.cond-val');
-                        if (label) label.textContent = `${cond.substring(0,4).toUpperCase()} ${val}`;
-                    });
-                }
+                if (myState.current_hp !== undefined) applyHpUpdate(myState.current_hp);
+                if (myState.conditions) applyConditionUpdate(myState.conditions);
             } catch(e) {}
         }
-        
-        setInterval(syncFromGM, 4000);
+        setInterval(syncFromGM, 15000); // Slow fallback every 15s
 
         async function saveNotes() {
             const btn = document.getElementById('btn-notes');

@@ -106,6 +106,7 @@
             <table class="w-full text-left border-collapse">
                 <thead class="bg-gray-900/50">
                     <tr>
+                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-8"></th>
                         <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-24">Init</th>
                         <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm">Name</th>
                         <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-16">AC</th>
@@ -114,9 +115,13 @@
                         <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-20 text-center">Act</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="initiative-list">
                     {% for c in encounter %}
-                    <tr class="border-b border-gray-700/50 {% if loop.index0 == turn_index %}bg-amber-900/20 border-l-4 border-l-amber-500{% else %}border-l-4 border-l-transparent{% endif %}">
+                    <tr data-id="{{ c.instance_id }}" class="border-b border-gray-700/50 {% if loop.index0 == turn_index %}bg-amber-900/20 border-l-4 border-l-amber-500{% else %}border-l-4 border-l-transparent{% endif %}">
+                        
+                        <td class="p-2 text-center cursor-grab active:cursor-grabbing drag-handle" title="Drag to reorder">
+                            <span class="text-gray-600 hover:text-amber-400 text-lg">⠿</span>
+                        </td>
                         
                         <td class="p-3">
                             <form action="/api/update_initiative/{{ c.instance_id }}" method="POST" class="flex flex-col gap-1">
@@ -567,6 +572,30 @@
         } catch(e) { 
             document.getElementById('stat-popup-body').innerHTML = '<div class="text-red-400">Failed to load stats.</div>'; 
         }
+    }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+    // Drag-and-drop initiative reordering
+    const initList = document.getElementById('initiative-list');
+    if (initList) {
+        new Sortable(initList, {
+            handle: '.drag-handle',
+            animation: 150,
+            ghostClass: 'bg-amber-900/30',
+            onEnd: async function(evt) {
+                const rows = initList.querySelectorAll('tr[data-id]');
+                const order = Array.from(rows).map(r => r.dataset.id);
+                try {
+                    await fetch('/api/reorder_initiative', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ order: order })
+                    });
+                    window.location.reload();
+                } catch(e) { console.error('Reorder error:', e); }
+            }
+        });
     }
 </script>
 {% endblock %}

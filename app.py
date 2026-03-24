@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response
 import sqlite3
 import json
 import math
@@ -10,6 +10,8 @@ import urllib.parse
 import markdown
 import random
 import time
+import queue
+import threading
 from functools import wraps
 
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
@@ -79,6 +81,58 @@ ACTIVE_ENCOUNTER = []
 TURN_INDEX = 0
 ROUND_NUMBER = 1
 COMBAT_LOGS = []
+
+# --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
+_sse_subscribers = []  # List of queue.Queue objects, one per connected client
+_sse_lock = threading.Lock()
+
+def sse_broadcast(event_type, data):
+    """Push an event to all connected SSE clients."""
+    msg = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+    with _sse_lock:
+        dead = []
+        for q in _sse_subscribers:
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_subscribers.remove(q)
+
+def _broadcast_pc_state(pc_name):
+    """Broadcast a PC's current state to all SSE clients."""
+    if pc_name in PARTY_LIBRARY:
+        pc = PARTY_LIBRARY[pc_name]
+        pct = pc.current_hp / pc.hp if pc.hp > 0 else 0
+        sse_broadcast('pc_update', {
+            'name': pc_name,
+            'current_hp': pc.current_hp,
+            'max_hp': pc.hp,
+            'hp_pct': round(pct * 100),
+            'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
+            'focus': getattr(pc, 'current_focus', 0),
+            'hero_points': getattr(pc, 'hero_points', 1),
+        })
+
+def _broadcast_encounter_state():
+    """Broadcast the full encounter state to all SSE clients."""
+    active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+    combatants = []
+    for i, c in enumerate(ACTIVE_ENCOUNTER):
+        entry = {'name': c.name, 'is_pc': c.is_pc, 'initiative': c.initiative, 'is_active': (i == TURN_INDEX)}
+        if c.is_pc:
+            pct = c.current_hp / c.hp if c.hp > 0 else 0
+            entry['current_hp'] = c.current_hp
+            entry['max_hp'] = c.hp
+            entry['hp_pct'] = round(pct * 100)
+        else:
+            pct = c.current_hp / c.hp if c.hp > 0 else 0
+            if c.current_hp == 0: entry['hp_status'] = 'Dead'
+            elif pct <= 0.5: entry['hp_status'] = 'Wounded'
+            else: entry['hp_status'] = ''
+        entry['conditions'] = {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False}
+        combatants.append(entry)
+    sse_broadcast('encounter_update', {'encounter': combatants, 'round': ROUND_NUMBER, 'active_name': active_name, 'turn_index': TURN_INDEX})
 
 COMPENDIUM_LIBRARY = {} 
 COMPENDIUM_RULES = {} 
@@ -467,6 +521,46 @@ class Character:
                 key = f"lore:{lore_name}"
                 if key not in self.proficiencies:
                     self.proficiencies[key] = lore_rank
+        
+        # --- AUTO PROFICIENCY BUMPS ---
+        # Apply class-based proficiency progression (saves, weapons, armor, perception, DCs)
+        # This guarantees correct proficiency ranks regardless of Pathbuilder data quality
+        cls_lower = self.class_name.lower()
+        cls_data = CLASS_MATRIX.get(cls_lower, {})
+        base_profs = cls_data.get('base_proficiencies', {})
+        
+        # Start with base proficiencies from CLASS_MATRIX (level 1 values)
+        self._class_profs = dict(base_profs)
+        
+        # Apply CLASS_PROGRESSION bumps up to current level
+        cumulative_bumps = get_class_proficiency_at_level(cls_lower, self.level, subclass=self.subclass)
+        for key, val in cumulative_bumps.items():
+            self._class_profs[key] = max(self._class_profs.get(key, 0), val)
+        
+        # Merge into self.proficiencies (upgrade only — never downgrade)
+        COMBAT_PROF_KEYS = {'fortitude', 'reflex', 'will', 'perception', 'ac',
+                            'unarmored', 'light', 'medium', 'heavy',
+                            'unarmed', 'simple', 'martial', 'advanced',
+                            'class_dc', 'spell_attack', 'spell_dc'}
+        for key in COMBAT_PROF_KEYS:
+            computed = self._class_profs.get(key, 0)
+            if computed > 0:
+                current = safe_int(self.proficiencies.get(key, 0))
+                self.proficiencies[key] = max(current, computed)
+        
+        # Compute AC proficiency from best armor proficiency the character actually uses
+        armor_name = build.get('armor_name', '')
+        if armor_name:
+            # Determine which armor category is equipped
+            armor_cat = 'unarmored'
+            for a in BUILDER_ARMOR:
+                if a.get('name', '').lower() == armor_name.lower():
+                    cat = a.get('category', 'unarmored').lower()
+                    if cat in ('light', 'medium', 'heavy'): armor_cat = cat
+                    break
+            self.proficiencies['ac'] = max(safe_int(self.proficiencies.get('ac', 0)), self._class_profs.get(armor_cat, 2))
+        else:
+            self.proficiencies['ac'] = max(safe_int(self.proficiencies.get('ac', 0)), self._class_profs.get('unarmored', 2))
         
         self.rule_modifiers = {}
         self.senses = []
@@ -1156,9 +1250,7 @@ class Character:
 
     @property
     def class_dc(self):
-        prof = 2
-        if self.level >= 17: prof = 6
-        elif self.level >= 9: prof = 4
+        prof = safe_int(self.proficiencies.get('class_dc', 2))
         
         c_name = self.class_name.lower()
         key_options = BUILDER_DATA['classes'].get(c_name, {}).get("key_options", ["str"])
@@ -1176,20 +1268,16 @@ class Character:
         
         if not self.spell_casters and not is_kineticist: return 0
         
-        prof = 2
+        # Use auto-computed proficiency from CLASS_PROGRESSION
         if is_kineticist:
-            if self.level >= 15: prof = 8
-            elif self.level >= 7: prof = 6
+            prof = safe_int(self.proficiencies.get('class_dc', 2))
         else:
-            c_type = self.spell_casters[0].get("castingType", "").lower() if self.spell_casters else ""
-            if "alchemical" in c_type: return 0
-            if "bounded" in c_type:
-                if self.level >= 17: prof = 6
-                elif self.level >= 9: prof = 4
-            else:
-                if self.level >= 19: prof = 8
-                elif self.level >= 15: prof = 6
-                elif self.level >= 7: prof = 4
+            prof = safe_int(self.proficiencies.get('spell_attack', 0))
+            if prof == 0:
+                # Fallback for classes without spell_attack in CLASS_PROGRESSION (multiclass, etc.)
+                c_type = self.spell_casters[0].get("castingType", "").lower() if self.spell_casters else ""
+                if "alchemical" in c_type: return 0
+                prof = 2  # Trained default
             
         key_options = BUILDER_DATA["classes"].get(c_name, {}).get("key_options", ["cha"])
         subclass_info = SUBCLASS_MATRIX.get(self.subclass, {})
@@ -2367,6 +2455,8 @@ def adjust_hp(instance_id):
                     PARTY_LIBRARY[c.name].current_hp = c.current_hp
                     PARTY_LIBRARY[c.name].conditions['dying'] = c.conditions['dying']
                     PARTY_LIBRARY[c.name].conditions['wounded'] = c.conditions['wounded']
+                    _broadcast_pc_state(c.name)
+                _broadcast_encounter_state()
                 break
     except ValueError: pass
     return redirect(url_for('tracker_view'))
@@ -2404,6 +2494,7 @@ def adjust_party_hp(pc_name):
                     c.conditions['dying'] = pc.conditions['dying']
                     c.conditions['wounded'] = pc.conditions['wounded']
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json: 
+                _broadcast_pc_state(pc_name)
                 return jsonify({
                     "success": True, "current_hp": pc.current_hp,
                     "conditions": {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
@@ -2478,6 +2569,7 @@ def update_pc_condition(pc_name):
             build['conditions'][cond] = val
         
         save_and_reload_character(pc_name, pc_json, file_path)
+        _broadcast_pc_state(pc_name)
         return jsonify({"success": True})
     return jsonify({"success": False})
 
@@ -2496,7 +2588,10 @@ def toggle_condition(instance_id):
             elif condition in ['prone', 'off_guard', 'concealed', 'hidden', 'undetected']:
                 if action == 'toggle': combatant.conditions[condition] = not combatant.conditions[condition]
                 elif action == 'add': combatant.conditions[condition] = True
-            if combatant.is_pc and combatant.name in PARTY_LIBRARY: PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
+            if combatant.is_pc and combatant.name in PARTY_LIBRARY: 
+                PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
+                _broadcast_pc_state(combatant.name)
+            _broadcast_encounter_state()
             break
     return redirect(url_for('tracker_view'))
 
@@ -2535,7 +2630,33 @@ def roll_npc_initiative():
 
 @app.route('/api/sort_initiative', methods=['POST'])
 def sort_initiative():
-    _sort_encounter(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _broadcast_encounter_state(); return redirect(url_for('tracker_view'))
+
+@app.route('/api/reorder_initiative', methods=['POST'])
+def reorder_initiative():
+    """Reorder encounter list based on drag-and-drop order."""
+    global ACTIVE_ENCOUNTER, TURN_INDEX
+    data = request.json
+    order = data.get('order', [])
+    if not order or len(order) != len(ACTIVE_ENCOUNTER):
+        return jsonify({"error": "Invalid order"}), 400
+    
+    # Find which combatant was active before reorder
+    active_id = ACTIVE_ENCOUNTER[TURN_INDEX].instance_id if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+    
+    # Build new order from instance_ids
+    id_map = {c.instance_id: c for c in ACTIVE_ENCOUNTER}
+    new_order = [id_map[iid] for iid in order if iid in id_map]
+    if len(new_order) == len(ACTIVE_ENCOUNTER):
+        ACTIVE_ENCOUNTER = new_order
+        # Preserve active turn
+        if active_id:
+            for i, c in enumerate(ACTIVE_ENCOUNTER):
+                if c.instance_id == active_id:
+                    TURN_INDEX = i
+                    break
+    _broadcast_encounter_state()
+    return jsonify({"success": True})
 
 @app.route('/api/cycle_turn/<direction>', methods=['POST'])
 def cycle_turn(direction):
@@ -2570,6 +2691,7 @@ def cycle_turn(direction):
                 break
             old_index = TURN_INDEX
         _generate_turn_reminders()
+    _broadcast_encounter_state()
     return redirect(url_for('tracker_view'))
 
 TURN_REMINDERS = []  # List of reminder dicts for active combatant
@@ -3346,6 +3468,34 @@ def player_state():
             safe_c['hp_color'] = "text-red-400" if c.current_hp == 0 else "text-orange-400" if pct <= 0.5 else ""
         state.append(safe_c)
     return jsonify({'encounter': state, 'round': ROUND_NUMBER, 'active_name': active_name})
+
+@app.route('/api/events')
+def sse_stream():
+    """Server-Sent Events stream for real-time updates to player sheets."""
+    def generate():
+        q = queue.Queue(maxsize=50)
+        with _sse_lock:
+            _sse_subscribers.append(q)
+        try:
+            yield "event: connected\ndata: {}\n\n"
+            while True:
+                try:
+                    msg = q.get(timeout=30)
+                    yield msg
+                except queue.Empty:
+                    yield ": heartbeat\n\n"  # Keep connection alive
+        except GeneratorExit:
+            pass
+        finally:
+            with _sse_lock:
+                if q in _sse_subscribers:
+                    _sse_subscribers.remove(q)
+    
+    return Response(generate(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Connection': 'keep-alive'
+    })
 
 @app.route('/api/party_list')
 def party_list():
