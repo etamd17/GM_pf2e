@@ -11,7 +11,7 @@
             theme: {
                 extend: {
                     colors: {
-                        gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', },
+                        gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#7A7062', 600: '#8A8279', 500: '#9E968B', 400: '#C2B9AD', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', },
                         amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' },
                         red: { 300: '#FDA4AF', 400: '#FB7185', 500: '#F43F5E', 800: '#6B1525', 900: '#3D0A13', },
                         green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
@@ -37,7 +37,7 @@
         .hp-gauge-fill.dead { background:#7F1D1D; }
         
         /* Trait Pills */
-        .trait-pill { display:inline-block; font-family:'Cinzel',serif; font-size:8px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; padding:2px 6px; border-radius:3px; background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#A89C8B; margin-right:3px; margin-bottom:2px; }
+        .trait-pill { display:inline-block; font-family:'Cinzel',serif; font-size:8px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; padding:2px 6px; border-radius:3px; background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#C2B9AD; margin-right:3px; margin-bottom:2px; }
         .trait-pill.agile { background:rgba(74,222,128,0.08); border-color:rgba(74,222,128,0.2); color:#86EFAC; }
         .trait-pill.finesse { background:rgba(96,165,250,0.08); border-color:rgba(96,165,250,0.2); color:#93C5FD; }
         .trait-pill.deadly, .trait-pill.fatal { background:rgba(251,113,133,0.08); border-color:rgba(251,113,133,0.2); color:#FDA4AF; }
@@ -77,6 +77,48 @@
         .portrait-circle:hover { border-color:rgba(94,173,173,0.5); }
         .portrait-circle img { width:100%; height:100%; object-fit:cover; }
         .portrait-badge { position:absolute; bottom:-2px; right:-2px; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; border:2px solid #1C1917; }
+        
+        /* Mobile Responsive */
+        @media (max-width: 640px) {
+            .portrait-circle { width:40px; height:40px; }
+            .portrait-badge { width:16px; height:16px; font-size:8px; }
+            .tab-bar-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+            .tab-bar-scroll::-webkit-scrollbar { display:none; }
+            .tab-bar-scroll .tab-btn { white-space:nowrap; padding:8px 12px; font-size:9px; }
+            .mobile-actions { display:flex; gap:4px; flex-wrap:wrap; }
+            .mobile-actions > * { font-size:8px !important; padding:4px 8px !important; }
+            /* Ability circles */
+            .ability-strip .flex.gap-2 > div > div:first-child,
+            .ability-strip div[onclick] > div:first-child { width:38px !important; height:38px !important; font-size:15px !important; }
+            .ability-strip span.font-header { font-size:7px !important; }
+            /* Defense boxes */
+            .defense-strip > div > div:first-child { width:34px !important; height:34px !important; font-size:13px !important; }
+            .defense-strip span.font-header { font-size:6px !important; }
+            /* HP area compact */
+            .hp-area button { width:24px !important; height:28px !important; font-size:10px !important; padding:2px !important; }
+            .hp-area .text-2xl { font-size:20px !important; }
+            /* Tab content */
+            .sheet-page .grid.grid-cols-1.xl\\:grid-cols-3 { grid-template-columns:1fr !important; }
+            .sheet-page .grid.grid-cols-1.md\\:grid-cols-2 { grid-template-columns:1fr !important; }
+            .sheet-page .grid.grid-cols-1.lg\\:grid-cols-3 { grid-template-columns:1fr !important; }
+            /* Skills */
+            .sheet-page .grid.gap-x-6.gap-y-2 { grid-template-columns:1fr !important; }
+            /* Weapon cards */
+            .sheet-page .flex.flex-col.md\\:flex-row { flex-direction:column !important; }
+            /* Quick rolls bar */
+            #pinned-bar .flex { flex-wrap:wrap; }
+            #pinned-bar input { width:60px !important; }
+            /* Focus pips smaller */
+            .focus-pip { width:10px; height:10px; }
+            /* Character name */
+            h1.font-header { font-size:20px !important; }
+        }
+        @media (max-width: 480px) {
+            .max-w-6xl { padding-left:8px !important; padding-right:8px !important; }
+            .sheet-page { padding:12px !important; }
+            .sheet-page .p-5 { padding:12px !important; }
+            .tab-btn { padding:6px 10px !important; font-size:8px !important; }
+        }
         .font-body { font-family: 'Crimson Text', Georgia, serif; }
         body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,173,173,0.03) 0%,transparent 60%),#1C1917; }
         .border, .border-t, .border-b, .border-l, .border-r { border-color: rgba(168, 156, 139, 0.2) !important; }
@@ -89,7 +131,7 @@
         .tab-content.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
-        .tab-btn { background: transparent; color: #7A7062; border: 1px solid transparent; border-bottom: none; }
+        .tab-btn { background: transparent; color: #9E968B; border: 1px solid transparent; border-bottom: none; }
         .tab-btn.active { background: #2E2B25; color: #7DC4C4; border-color: rgba(168,156,139,0.2); border-bottom: 1px solid #2E2B25; position: relative; z-index: 2; }
         .tab-btn:not(.active):hover { color: #CFC5B4; }
         
@@ -164,8 +206,8 @@
     <div class="w-full" style="background:#252220; border-bottom:1px solid rgba(168,156,139,0.18);">
         
         <!-- Top Bar: Name + Actions -->
-        <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex justify-between items-center">
-            <div class="flex items-center gap-4">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap justify-between items-center gap-2">
+            <div class="flex items-center gap-3">
                 <a href="/player" class="text-gray-500 hover:text-amber-300 transition-colors text-sm">←</a>
                 <!-- Portrait -->
                 <div class="portrait-circle" onclick="document.getElementById('portrait-upload').click()" title="Click to upload portrait">
@@ -182,8 +224,8 @@
                 <div class="flex-1 min-w-0">
                     <h1 class="font-header text-2xl md:text-3xl text-amber-300 leading-none tracking-wide" style="text-shadow:0 1px 12px rgba(94,173,173,0.12);">{{ pc.name }}</h1>
                     <p class="text-gray-500 text-xs tracking-wider mt-0.5">Level {{ pc.level }} {{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} · {{ pc.subclass }}{% endif %} · {{ pc.size }}</p>
-                    <p class="text-[10px] mt-0.5" style="color:#524C42;">
-                        {% if pc.deity != 'None' and pc.deity != 'Not set' %}<span style="color:#7A7062;">{{ pc.deity }}</span> · {% endif %}
+                    <p class="text-[10px] mt-0.5" style="color:#8A8279;">
+                        {% if pc.deity != 'None' and pc.deity != 'Not set' %}<span style="color:#9E968B;">{{ pc.deity }}</span> · {% endif %}
                         {% if pc.senses %}<span style="color:#5EADAD;">{{ pc.senses|join(', ') }}</span> · {% endif %}
                         <span>{{ pc.languages|join(', ') }}</span>
                     </p>
@@ -191,11 +233,12 @@
                 {% if pc.status_penalty > 0 %}<span class="font-header text-[8px] tracking-wider uppercase px-2 py-0.5 rounded bg-red-900/30 border border-red-800/30 text-red-300">Debuffed</span>{% endif %}
                 {% if pc.active_toggles %}<span class="font-header text-[8px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.12); border:1px solid rgba(94,173,173,0.25); color:#7DC4C4;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
             </div>
-            <div class="flex gap-2">
+            <div class="flex gap-2 flex-wrap mobile-actions">
                 <button onclick="takeLongRest()" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-blue-900/20 border border-blue-800/25 text-blue-300 hover:bg-blue-900/30 transition-colors">⛺ Rest</button>
                 {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-red-900/20 border border-red-800/25 text-red-300 hover:bg-red-900/30 transition-colors">⏬ Undo</button>{% endif %}
                 <a href="/player/levelup/{{ pc.name|urlencode }}" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:#265050; border:1px solid rgba(94,173,173,0.25); color:#A8DEDE;">⭐ Level Up</a>
                 <button onclick="window.print()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors">🖨 Print</button>
+                <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors" title="Download character sheet PDF">📄 PDF</a>
             </div>
         </div>
         
@@ -207,11 +250,11 @@
                 {% for stat in pc.ability_display %}
                 <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')" 
                      class="flex flex-col items-center cursor-pointer group" title="Click to roll {{ stat.label }} check">
-                    <div class="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold font-header transition-all group-hover:scale-110 group-hover:shadow-lg relative"
+                    <div class="ability-circle w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold font-header transition-all group-hover:scale-110 group-hover:shadow-lg relative"
                          style="background:#2E2B25; border:2px solid rgba(168,156,139,0.25); color:#F5F0E8; text-shadow:0 1px 4px rgba(0,0,0,0.5);">
                         <span class="group-hover:text-amber-300 transition-colors">{{ stat.mod|safe }}</span>
                     </div>
-                    <span class="font-header text-[9px] text-gray-500 mt-1 tracking-widest group-hover:text-amber-400 transition-colors">{{ stat.label }}</span>
+                    <span class="ability-label font-header text-[9px] text-gray-500 mt-1 tracking-widest group-hover:text-amber-400 transition-colors">{{ stat.label }}</span>
                 </div>
                 {% endfor %}
             </div>
@@ -220,47 +263,47 @@
             <div class="flex gap-3 items-end">
                 {% set perc_val = pc.proficiencies.get('perception', 2) %}
                 <div onclick="rollSkill('Perception', {{ pc.perception }})" class="flex flex-col items-center cursor-pointer group" title="Roll Perception">
-                    <div class="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header group-hover:scale-110 transition-all" style="background:#33302A; border:1px solid rgba(168,156,139,0.22); color:#F5F0E8;">
+                    <div class="defense-item w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header group-hover:scale-110 transition-all" style="background:#33302A; border:1px solid rgba(168,156,139,0.22); color:#F5F0E8;">
                         +{{ pc.perception }}
                     </div>
-                    <span class="font-header text-[8px] text-gray-500 mt-1 tracking-widest">PER</span>
+                    <span class="defense-label font-header text-[8px] text-gray-500 mt-1 tracking-widest">PER</span>
                 </div>
                 
                 <div class="flex flex-col items-center" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
-                    <div class="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header" style="background:#1A2540; border:1px solid rgba(96,165,250,0.25); color:#93C5FD;">
+                    <div class="defense-item w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold font-header" style="background:#1A2540; border:1px solid rgba(96,165,250,0.25); color:#93C5FD;">
                         {{ pc.ac }}
                     </div>
-                    <span class="font-header text-[8px] text-blue-400/60 mt-1 tracking-widest">AC</span>
+                    <span class="defense-label font-header text-[8px] text-blue-400/60 mt-1 tracking-widest">AC</span>
                 </div>
                 <button onclick="toggleShield()" class="no-print flex flex-col items-center cursor-pointer group" title="Raise Shield (◆) — +{{ pc.shield_ac_bonus }} circumstance AC">
-                    <div class="w-7 h-7 rounded flex items-center justify-center text-sm transition-all group-hover:scale-110" style="{% if pc.shield_raised %}background:rgba(96,165,250,0.2); border:1px solid rgba(96,165,250,0.4); color:#93C5FD;{% else %}background:#252320; border:1px solid rgba(168,156,139,0.15); color:#524C42;{% endif %}">
+                    <div class="w-7 h-7 rounded flex items-center justify-center text-sm transition-all group-hover:scale-110" style="{% if pc.shield_raised %}background:rgba(96,165,250,0.2); border:1px solid rgba(96,165,250,0.4); color:#93C5FD;{% else %}background:#252320; border:1px solid rgba(168,156,139,0.15); color:#8A8279;{% endif %}">
                         🛡
                     </div>
                     <span class="font-header text-[6px] mt-0.5 tracking-widest {% if pc.shield_raised %}text-blue-400{% else %}text-gray-600{% endif %}">SHIELD</span>
                 </button>
                 
                 <div onclick="rollSkill('Fortitude Save', {{ pc.fort }})" class="flex flex-col items-center cursor-pointer group" title="Roll Fort Save">
-                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(20,83,45,0.25); border:1px solid rgba(74,222,128,0.2); color:#86EFAC;">
+                    <div class="save-box w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(20,83,45,0.25); border:1px solid rgba(74,222,128,0.2); color:#86EFAC;">
                         +{{ pc.fort }}
                     </div>
-                    <span class="font-header text-[7px] text-green-400/50 mt-0.5 tracking-widest">FORT</span>
+                    <span class="defense-label font-header text-[7px] text-green-400/50 mt-0.5 tracking-widest">FORT</span>
                 </div>
                 <div onclick="rollSkill('Reflex Save', {{ pc.ref }})" class="flex flex-col items-center cursor-pointer group" title="Roll Ref Save">
-                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(30,42,74,0.25); border:1px solid rgba(147,197,253,0.2); color:#93C5FD;">
+                    <div class="save-box w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(30,42,74,0.25); border:1px solid rgba(147,197,253,0.2); color:#93C5FD;">
                         +{{ pc.ref }}
                     </div>
-                    <span class="font-header text-[7px] text-blue-400/50 mt-0.5 tracking-widest">REF</span>
+                    <span class="defense-label font-header text-[7px] text-blue-400/50 mt-0.5 tracking-widest">REF</span>
                 </div>
                 <div onclick="rollSkill('Will Save', {{ pc.will }})" class="flex flex-col items-center cursor-pointer group" title="Roll Will Save">
-                    <div class="w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(76,29,149,0.12); border:1px solid rgba(196,181,253,0.2); color:#C4B5FD;">
+                    <div class="save-box w-9 h-9 rounded flex items-center justify-center text-sm font-bold font-header group-hover:scale-110 transition-all" style="background:rgba(76,29,149,0.12); border:1px solid rgba(196,181,253,0.2); color:#C4B5FD;">
                         +{{ pc.will }}
                     </div>
-                    <span class="font-header text-[7px] text-purple-400/50 mt-0.5 tracking-widest">WILL</span>
+                    <span class="defense-label font-header text-[7px] text-purple-400/50 mt-0.5 tracking-widest">WILL</span>
                 </div>
             </div>
             
             <!-- HP / Resources -->
-            <div class="flex items-end gap-4">
+            <div class="flex items-end gap-4 hp-area">
                 {% if pc.focus_max > 0 %}
                 <div class="flex flex-col items-center">
                     <span class="font-header text-[8px] text-blue-400/60 tracking-widest mb-1">FOCUS</span>
@@ -338,7 +381,7 @@
         <!-- Encounter Initiative Bar (populated live via SSE) -->
         <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
             <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2">
-                <span class="font-header text-[8px] tracking-widest uppercase" style="color:#7A7062;">⚔ Combat</span>
+                <span class="font-header text-[8px] tracking-widest uppercase" style="color:#9E968B;">⚔ Combat</span>
                 <div id="encounter-initiative-bar" class="flex flex-wrap gap-1 flex-1"></div>
             </div>
         </div>
@@ -347,7 +390,7 @@
         {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
         <div class="no-print cond-strip {% if has_any_condition %}active{% endif %}" id="condition-strip" style="border-bottom:1px solid rgba(251,113,133,0.1);">
             <div class="max-w-6xl mx-auto px-4 md:px-6 flex flex-wrap gap-1 items-center">
-                <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#7A7062;">Active Conditions</span>
+                <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#9E968B;">Active Conditions</span>
                 {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'wounded', 'doomed', 'dying'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
                 {% if cval > 0 %}
@@ -368,35 +411,35 @@
                 </button>
                 {% endif %}
                 {% endfor %}
-                <button onclick="openConditionAdder()" class="font-header text-[8px] tracking-wider uppercase px-2 py-1 rounded ml-auto transition-colors" style="border:1px solid rgba(168,156,139,0.1); color:#524C42;" title="Add/manage conditions">+ Condition</button>
+                <button onclick="openConditionAdder()" class="font-header text-[8px] tracking-wider uppercase px-2 py-1 rounded ml-auto transition-colors" style="border:1px solid rgba(168,156,139,0.1); color:#8A8279;" title="Add/manage conditions">+ Condition</button>
             </div>
         </div>
         
         <!-- Hidden condition controls (shown via + Condition button) -->
         <div id="cond-adder" class="hidden no-print" style="background:rgba(30,28,25,0.95); border-bottom:1px solid rgba(168,156,139,0.1);">
             <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap gap-1 items-center">
-                <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#7A7062;">Manage</span>
+                <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#9E968B;">Manage</span>
                 {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'wounded', 'doomed'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
                 <div class="flex items-center gap-0.5 rounded px-1.5 py-0.5" style="{% if cval > 0 %}background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);{% else %}border:1px solid rgba(168,156,139,0.08);{% endif %}">
-                    <button onclick="adjustCondition('{{ cond }}', -1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#7A7062;">−</button>
-                    <span class="font-header text-[9px] tracking-wide w-14 text-center" style="{% if cval > 0 %}color:#FDA4AF;{% else %}color:#3F3A33;{% endif %}">{{ cond[:4]|upper }} {{ cval }}</span>
-                    <button onclick="adjustCondition('{{ cond }}', 1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#7A7062;">+</button>
+                    <button onclick="adjustCondition('{{ cond }}', -1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#9E968B;">−</button>
+                    <span class="font-header text-[9px] tracking-wide w-14 text-center" style="{% if cval > 0 %}color:#FDA4AF;{% else %}color:#7A7062;{% endif %}">{{ cond[:4]|upper }} {{ cval }}</span>
+                    <button onclick="adjustCondition('{{ cond }}', 1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#9E968B;">+</button>
                 </div>
                 {% endfor %}
                 {% for cond in ['prone', 'off_guard'] %}
                 {% set cval = pc.conditions.get(cond, false) %}
                 <button onclick="toggleBoolCondition('{{ cond }}')" class="font-header text-[9px] tracking-wide px-2 py-0.5 rounded transition-colors" 
-                        style="{% if cval %}background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;{% else %}color:#3F3A33; border:1px solid rgba(168,156,139,0.08);{% endif %}">
+                        style="{% if cval %}background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;{% else %}color:#7A7062; border:1px solid rgba(168,156,139,0.08);{% endif %}">
                     {{ cond|replace('_','-')|upper }}
                 </button>
                 {% endfor %}
-                <button onclick="document.getElementById('cond-adder').classList.add('hidden')" class="ml-auto text-[9px]" style="color:#524C42;">Close</button>
+                <button onclick="document.getElementById('cond-adder').classList.add('hidden')" class="ml-auto text-[9px]" style="color:#8A8279;">Close</button>
             </div>
         </div>
         
         <!-- Tab Bar -->
-        <div class="flex gap-1 mb-4">
+        <div class="flex gap-1 mb-4 tab-bar-scroll">
             <button onclick="switchTab('core')" class="tab-btn active px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-core">Core & Skills</button>
             <button onclick="switchTab('combat')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-combat">Combat</button>
             <button onclick="switchTab('magic')" class="tab-btn px-5 py-2.5 font-header text-[10px] tracking-[0.12em] uppercase rounded-t-lg transition-colors" id="btn-tab-magic">Magic</button>
@@ -414,7 +457,7 @@
                             <!-- DCs Row -->
                             <div class="grid grid-cols-{% if pc.spell_dc > 0 %}3{% else %}1{% endif %} gap-2">
                                 <div class="bg-gray-900 px-2 py-2 rounded border border-gray-700 text-center">
-                                    <span class="text-[8px] font-header tracking-widest uppercase block" style="color:#524C42;">Class DC</span>
+                                    <span class="text-[8px] font-header tracking-widest uppercase block" style="color:#8A8279;">Class DC</span>
                                     <span class="text-lg font-bold" style="color:#EDE5D8;">{{ pc.class_dc }}</span>
                                 </div>
                                 {% if pc.spell_dc > 0 %}
@@ -436,7 +479,7 @@
                             {% if pc.deity != 'None' and pc.deity != 'Not set' %}
                             <div class="flex justify-between items-center bg-gray-900 px-3 py-2 rounded border border-gray-700">
                                 <span class="text-[10px] text-gray-500 uppercase font-bold">Deity</span>
-                                <span class="text-sm font-bold text-gray-200">{{ pc.deity }}{% if pc.sanctification != 'Neutral' %} <span class="text-[9px]" style="color:#7A7062;">({{ pc.sanctification }})</span>{% endif %}</span>
+                                <span class="text-sm font-bold text-gray-200">{{ pc.deity }}{% if pc.sanctification != 'Neutral' %} <span class="text-[9px]" style="color:#9E968B;">({{ pc.sanctification }})</span>{% endif %}</span>
                             </div>
                             {% endif %}
                             {% if pc.senses %}
@@ -757,9 +800,9 @@
                                     <div class="flex flex-col md:flex-row gap-3 w-full">
                                         <div class="flex flex-1 gap-1">
                                             {% for strike in attack.strikes %}
-                                            <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 py-2 rounded shadow text-sm transition-transform transform hover:scale-105 first:bg-blue-900/40 first:border-blue-900/50 first:{{ accent_color }}">
-                                                <span class="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">
-                                                    {% if loop.index0 == 0 %}1st Atk{% elif loop.index0 == 1 %}2nd Atk{% else %}3rd Atk{% endif %}
+                                            <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 py-2 rounded shadow text-sm transition-transform transform hover:scale-105 {% if loop.index0 == 0 %}bg-blue-900/40 border-blue-900/50{% elif loop.index0 == 1 %}bg-amber-900/20 border-amber-900/30{% else %}bg-red-900/20 border-red-900/30{% endif %}">
+                                                <span class="block text-[10px] font-bold uppercase tracking-widest mb-1 {% if loop.index0 == 0 %}text-blue-400{% elif loop.index0 == 1 %}text-amber-400{% else %}text-red-400{% endif %}">
+                                                    {% if loop.index0 == 0 %}1st ◆{% elif loop.index0 == 1 %}2nd ◆ (MAP){% else %}3rd ◆ (MAP){% endif %}
                                                 </span>
                                                 <span class="block text-lg font-bold leading-none">{{ strike.label }}</span>
                                             </button>
@@ -818,7 +861,7 @@
                                 <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.15); color:#7DC4C4;">Atk +{{ pc.spell_attack }}</span>
                                 <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.15); color:#7DC4C4;">DC {{ pc.spell_dc }}</span>
                                 {% endif %}
-                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#A89C8B;">Cantrips = Rank {{ pc.cantrip_rank }}</span>
+                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#C2B9AD;">Cantrips = Rank {{ pc.cantrip_rank }}</span>
                             </div>
                         </div>
                         <div class="flex items-center gap-3">
@@ -849,11 +892,11 @@
                             <div class="flex justify-between items-center mb-3 pb-1" style="border-bottom:1px solid rgba(168,156,139,0.1);">
                                 <span class="font-header text-sm tracking-wider" style="color:#CFC5B4;">
                                     {{ lvl.label }}
-                                    {% if lvl.level == 0 %}<span style="color:#7A7062;" class="text-[10px] ml-1">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                    {% if lvl.level == 0 %}<span style="color:#9E968B;" class="text-[10px] ml-1">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
                                 </span>
                                 {% if lvl.level > 0 and lvl.slots > 0 and 'focus' not in c_type_lower %}
                                 <div class="flex gap-1 items-center px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
-                                    <span class="font-header text-[8px] tracking-widest uppercase mr-1" style="color:#7A7062;">Slots</span>
+                                    <span class="font-header text-[8px] tracking-widest uppercase mr-1" style="color:#9E968B;">Slots</span>
                                     {% for i in range(lvl.slots) %}
                                     <input type="checkbox" data-caster-idx="{{ caster_idx }}" data-spell-level="{{ lvl.level }}" data-slot-idx="{{ i }}" class="spell-slot-cb w-3.5 h-3.5 accent-amber-500 cursor-pointer">
                                     {% endfor %}
@@ -877,7 +920,7 @@
                                             <button onclick="event.stopPropagation(); rollSpell('{{ sp.name|replace("'", "\\'") }}')" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">Cast</button>
                                         </div>
                                     </summary>
-                                    <div class="p-3 text-sm border-t foundry-content leading-relaxed" style="color:#B5A998; border-color:rgba(168,156,139,0.1);">
+                                    <div class="p-3 text-sm border-t foundry-content leading-relaxed" style="color:#D1C9BD; border-color:rgba(168,156,139,0.1);">
                                         {{ sp.desc | safe }}
                                     </div>
                                 </details>
@@ -892,12 +935,12 @@
                     <div class="flex flex-col lg:flex-row" style="min-height:450px;">
                         <!-- Spellbook (left) -->
                         <div class="w-full lg:w-5/12 p-5 border-b lg:border-b-0 lg:border-r border-gray-700" style="background:#2E2B25;">
-                            <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:#A89C8B;">Spellbook — Known Spells</h4>
+                            <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:#C2B9AD;">Spellbook — Known Spells</h4>
                             <div class="space-y-4 max-h-[550px] overflow-y-auto custom-scrollbar pr-2">
                                 {% for lvl in caster.levels %}
                                 <div>
-                                    <div class="font-header text-[10px] tracking-wider uppercase mb-2 pb-1" style="color:#7A7062; border-bottom:1px solid rgba(168,156,139,0.08);">
-                                        {{ lvl.label }}{% if lvl.level == 0 %} <span style="color:#524C42;">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                    <div class="font-header text-[10px] tracking-wider uppercase mb-2 pb-1" style="color:#9E968B; border-bottom:1px solid rgba(168,156,139,0.08);">
+                                        {{ lvl.label }}{% if lvl.level == 0 %} <span style="color:#8A8279;">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         {% for sp in lvl.spells %}
@@ -912,7 +955,7 @@
                                                     + Prep
                                                 </button>
                                             </summary>
-                                            <div class="p-2 text-xs border-t foundry-content leading-relaxed" style="color:#B5A998; border-color:rgba(168,156,139,0.08);">
+                                            <div class="p-2 text-xs border-t foundry-content leading-relaxed" style="color:#D1C9BD; border-color:rgba(168,156,139,0.08);">
                                                 {{ sp.desc | safe }}
                                             </div>
                                         </details>
@@ -927,12 +970,12 @@
                         <div class="w-full lg:w-7/12 p-5" style="background:#252320;">
                             <div class="flex justify-between items-center mb-4">
                                 <h4 class="font-header text-xs tracking-wider uppercase" style="color:#7DC4C4;">Daily Preparations</h4>
-                                <button onclick="clearPrep({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase transition-colors" style="color:#7A7062;">Clear All</button>
+                                <button onclick="clearPrep({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase transition-colors" style="color:#9E968B;">Clear All</button>
                             </div>
-                            <p class="text-xs mb-4" style="color:#7A7062;">Drag spells from your spellbook. Heightened spells show their effective rank.</p>
+                            <p class="text-xs mb-4" style="color:#9E968B;">Drag spells from your spellbook. Heightened spells show their effective rank.</p>
                             
                             <div class="space-y-5 max-h-[550px] overflow-y-auto custom-scrollbar pr-2" id="prep-ui-{{ caster_idx }}">
-                                <div class="text-center italic py-8" style="color:#524C42;">Loading preparation slots...</div>
+                                <div class="text-center italic py-8" style="color:#8A8279;">Loading preparation slots...</div>
                             </div>
                         </div>
                     </div>
@@ -941,7 +984,7 @@
                 {% endfor %}
             {% else %}
                 <div class="bg-gray-800 border border-gray-700 rounded-lg p-10 text-center shadow-xl">
-                    <div class="italic" style="color:#7A7062;">This character does not possess spellcasting abilities.</div>
+                    <div class="italic" style="color:#9E968B;">This character does not possess spellcasting abilities.</div>
                 </div>
             {% endif %}
             
@@ -950,7 +993,7 @@
                 <div class="rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col" style="background:#2E2B25; border:1px solid rgba(168,156,139,0.2);">
                     <div class="p-4 flex justify-between items-center" style="border-bottom:1px solid rgba(168,156,139,0.15);">
                         <h3 class="font-header text-lg" style="color:#7DC4C4;">Browse Spells</h3>
-                        <button onclick="document.getElementById('spell-browse-modal').classList.add('hidden')" class="text-xl" style="color:#7A7062;">&times;</button>
+                        <button onclick="document.getElementById('spell-browse-modal').classList.add('hidden')" class="text-xl" style="color:#9E968B;">&times;</button>
                     </div>
                     <div class="p-4 flex gap-2 flex-wrap" style="border-bottom:1px solid rgba(168,156,139,0.1);">
                         <input type="text" id="spell-search" oninput="filterBrowseSpells()" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8; min-width:150px;">
@@ -982,9 +1025,9 @@
                     <div class="flex items-center gap-2 mb-1">
                         {% if feat.get('actions') %}<span class="font-header text-sm" style="color:rgba(212,165,116,0.5);">{{ feat.actions }}</span>{% endif %}
                         <h4 class="font-header text-sm" style="color:#D4A574;">{{ feat.name }}</h4>
-                        <span class="text-[9px] font-header uppercase tracking-wider" style="color:#7A7062;">{{ feat.type|title }}</span>
+                        <span class="text-[9px] font-header uppercase tracking-wider" style="color:#9E968B;">{{ feat.type|title }}</span>
                     </div>
-                    <p class="text-sm" style="color:#B5A998;">{{ feat.desc }}</p>
+                    <p class="text-sm" style="color:#D1C9BD;">{{ feat.desc }}</p>
                 </div>
                 {% endfor %}
             </div>
@@ -1114,10 +1157,10 @@
                         <button onclick="addInvItem()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-4 py-2 rounded shadow-lg transition-colors text-sm">Add</button>
                     </div>
                     <details class="group">
-                        <summary class="text-[9px] font-header tracking-wider uppercase cursor-pointer" style="color:#7A7062;">▸ Quick Add Common Items</summary>
+                        <summary class="text-[9px] font-header tracking-wider uppercase cursor-pointer" style="color:#9E968B;">▸ Quick Add Common Items</summary>
                         <div class="flex flex-wrap gap-1 mt-2">
                             {% for qitem in ['Adventurer\'s Pack', 'Bedroll', 'Rope (50ft)', 'Torch', 'Rations (1 day)', 'Waterskin', 'Healing Potion (Minor)', 'Antidote (Lesser)', 'Thieves\' Tools', 'Disguise Kit', 'Healer\'s Tools', 'Repair Kit', 'Climbing Kit', 'Writing Set', 'Lantern (Hooded)', 'Oil (1 pint)', 'Crowbar', 'Grappling Hook', 'Manacles', 'Signal Whistle', 'Caltrops'] %}
-                            <button onclick="quickAddItem('{{ qitem|replace("'", "\\'") }}')" class="text-[9px] px-2 py-1 rounded transition-colors" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">{{ qitem }}</button>
+                            <button onclick="quickAddItem('{{ qitem|replace("'", "\\'") }}')" class="text-[9px] px-2 py-1 rounded transition-colors" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">{{ qitem }}</button>
                             {% endfor %}
                         </div>
                     </details>
@@ -1147,7 +1190,7 @@
                 <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-6">
                     <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
                         <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Session Journal</h3>
-                        <span class="text-[10px]" style="color:#7A7062;">{{ pc.session_notes | length }} entries</span>
+                        <span class="text-[10px]" style="color:#9E968B;">{{ pc.session_notes | length }} entries</span>
                     </div>
                     
                     <div class="flex gap-2 mb-4">
@@ -1160,13 +1203,13 @@
                         {% set note_idx = pc.session_notes | length - loop.index %}
                         <div class="flex justify-between items-start p-2 rounded group" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
                             <div class="flex-1">
-                                <span class="font-header text-[9px] tracking-wider" style="color:#7A7062;">{{ note.date }}</span>
+                                <span class="font-header text-[9px] tracking-wider" style="color:#9E968B;">{{ note.date }}</span>
                                 <p class="text-sm mt-0.5" style="color:#CFC5B4;">{{ note.text }}</p>
                             </div>
-                            <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:#7A7062;" title="Delete">✕</button>
+                            <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:#9E968B;" title="Delete">✕</button>
                         </div>
                         {% else %}
-                        <div class="text-center py-4 italic text-sm" style="color:#524C42;">No journal entries yet. Add notes after each session.</div>
+                        <div class="text-center py-4 italic text-sm" style="color:#8A8279;">No journal entries yet. Add notes after each session.</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -1188,34 +1231,34 @@
                         <div class="flex justify-between items-start mb-3">
                             <div>
                                 <h4 class="font-header text-lg" style="color:#D4A574;">{{ pet.name }}</h4>
-                                <span class="text-xs" style="color:#7A7062;">{{ pet.type }} · {{ pet.size }}{% if pet.senses %} · {{ pet.senses }}{% endif %}</span>
+                                <span class="text-xs" style="color:#9E968B;">{{ pet.type }} · {{ pet.size }}{% if pet.senses %} · {{ pet.senses }}{% endif %}</span>
                             </div>
                             <button onclick="removePet('{{ pet.name }}')" class="text-xs opacity-50 hover:opacity-100 transition-opacity" style="color:#FDA4AF;">Remove</button>
                         </div>
                         
                         <div class="grid grid-cols-6 gap-2 mb-3">
                             <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">AC</div>
+                                <div class="text-[8px] font-header uppercase" style="color:#8A8279;">AC</div>
                                 <div class="text-sm font-bold" style="color:#60A5FA;">{{ pet.ac }}</div>
                             </div>
                             <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">HP</div>
+                                <div class="text-[8px] font-header uppercase" style="color:#8A8279;">HP</div>
                                 <div class="text-sm font-bold" style="color:#4ADE80;">{{ pet.hp }}</div>
                             </div>
                             <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Fort</div>
+                                <div class="text-[8px] font-header uppercase" style="color:#8A8279;">Fort</div>
                                 <div class="text-sm font-bold" style="color:#4ADE80;">+{{ pet.fort }}</div>
                             </div>
                             <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Ref</div>
+                                <div class="text-[8px] font-header uppercase" style="color:#8A8279;">Ref</div>
                                 <div class="text-sm font-bold" style="color:#60A5FA;">+{{ pet.ref }}</div>
                             </div>
                             <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Will</div>
+                                <div class="text-[8px] font-header uppercase" style="color:#8A8279;">Will</div>
                                 <div class="text-sm font-bold" style="color:#C4B5FD;">+{{ pet.will }}</div>
                             </div>
                             <div class="rounded p-2 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                                <div class="text-[8px] font-header uppercase" style="color:#524C42;">Spd</div>
+                                <div class="text-[8px] font-header uppercase" style="color:#8A8279;">Spd</div>
                                 <div class="text-sm font-bold" style="color:#CFC5B4;">{{ pet.speed }}</div>
                             </div>
                         </div>
@@ -1224,8 +1267,8 @@
                         <div class="grid grid-cols-6 gap-2 mb-3">
                             {% for ab, val in [('STR', pet.str_mod), ('DEX', pet.dex_mod), ('CON', pet.con_mod), ('INT', pet.int_mod), ('WIS', pet.wis_mod), ('CHA', pet.cha_mod)] %}
                             <div class="rounded p-1 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.05);">
-                                <div class="text-[7px] font-header uppercase" style="color:#3F3A33;">{{ ab }}</div>
-                                <div class="text-xs font-bold" style="color:#A89C8B;">{% if val >= 0 %}+{% endif %}{{ val }}</div>
+                                <div class="text-[7px] font-header uppercase" style="color:#7A7062;">{{ ab }}</div>
+                                <div class="text-xs font-bold" style="color:#C2B9AD;">{% if val >= 0 %}+{% endif %}{{ val }}</div>
                             </div>
                             {% endfor %}
                         </div>
@@ -1233,25 +1276,25 @@
                         
                         {% if pet.attacks %}
                         <div class="mb-2">
-                            <span class="font-header text-[9px] tracking-wider uppercase" style="color:#7A7062;">Attacks</span>
+                            <span class="font-header text-[9px] tracking-wider uppercase" style="color:#9E968B;">Attacks</span>
                             {% for atk in pet.attacks %}
                             <div class="flex justify-between items-center p-2 mt-1 rounded" style="background:#1C1917; border:1px solid rgba(168,156,139,0.06);">
                                 <span class="text-sm font-bold" style="color:#EDE5D8;">{{ atk.name }} <span class="text-xs opacity-50" style="color:#7DC4C4;">◆</span></span>
-                                <span class="text-xs" style="color:#FBBF24;">+{{ atk.bonus }} <span style="color:#7A7062;">({{ atk.damage }})</span></span>
+                                <span class="text-xs" style="color:#FBBF24;">+{{ atk.bonus }} <span style="color:#9E968B;">({{ atk.damage }})</span></span>
                             </div>
                             {% endfor %}
                         </div>
                         {% endif %}
                         
                         {% if pet.abilities %}
-                        <div class="mt-2 p-2 rounded text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.05); color:#B5A998;">
+                        <div class="mt-2 p-2 rounded text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.05); color:#D1C9BD;">
                             {{ pet.abilities }}
                         </div>
                         {% endif %}
                     </div>
                     {% endfor %}
                 {% else %}
-                    <div class="text-center py-10 italic" style="color:#524C42;">
+                    <div class="text-center py-10 italic" style="color:#8A8279;">
                         No companions or familiars. Click "+ Add Pet" to create one.
                     </div>
                 {% endif %}
@@ -1263,69 +1306,69 @@
             <div class="rounded-xl w-full max-w-lg p-6" style="background:#2E2B25; border:1px solid rgba(168,156,139,0.25);">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-header text-lg" style="color:#7DC4C4;">Add Companion / Familiar</h3>
-                    <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="text-xl" style="color:#7A7062;">&times;</button>
+                    <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="text-xl" style="color:#9E968B;">&times;</button>
                 </div>
                 <div class="space-y-3">
                     <details class="group">
                         <summary class="font-header text-[9px] tracking-wider uppercase cursor-pointer mb-2" style="color:#7DC4C4;">▸ Quick Fill — Common Companions</summary>
                         <div class="flex flex-wrap gap-1 mb-3">
-                            <button onclick="fillPetPreset('Bear','Animal Companion','Medium',35,18,8,7,4,30,[{name:'Jaws',bonus:9,damage:'1d8+3 P'},{name:'Claw',bonus:9,damage:'1d6+3 S'}],3,3,3,-4,1,0,'Support: +1d8 extra damage on Strikes vs grabbed foe')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Bear</button>
-                            <button onclick="fillPetPreset('Wolf','Animal Companion','Small',24,16,6,6,4,35,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,2,2,-4,1,0,'Support: +1d4 damage. Knockdown on crit.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Wolf</button>
-                            <button onclick="fillPetPreset('Horse','Animal Companion','Large',26,16,6,6,4,40,[{name:'Hoof',bonus:7,damage:'1d6+2 B'}],3,1,2,-4,1,0,'Support: +2 damage on mounted Strikes. Mount ability.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Horse</button>
-                            <button onclick="fillPetPreset('Cat','Animal Companion','Small',20,17,5,7,3,35,[{name:'Jaws',bonus:7,damage:'1d6+1 P'},{name:'Claw',bonus:7,damage:'1d4+1 S'}],0,3,1,-4,2,0,'Support: Target is off-guard until start of your next turn.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Cat</button>
-                            <button onclick="fillPetPreset('Snake','Animal Companion','Small',20,17,5,7,3,25,[{name:'Fangs',bonus:7,damage:'1d8+1 P'}],1,3,1,-4,2,0,'Support: +1d4 poison damage on Strikes.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Snake</button>
-                            <button onclick="fillPetPreset('Bird','Animal Companion','Small',18,18,4,7,3,10,[{name:'Talons',bonus:7,damage:'1d4+1 S'}],0,3,0,-4,2,0,'Fly 60 ft. Support: Target is off-guard vs next attack.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Bird</button>
-                            <button onclick="fillPetPreset('Badger','Animal Companion','Small',22,16,6,6,4,25,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,1,2,-4,2,0,'Burrow 10 ft. Support: +1d8 damage vs prone.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#A89C8B;">Badger</button>
+                            <button onclick="fillPetPreset('Bear','Animal Companion','Medium',35,18,8,7,4,30,[{name:'Jaws',bonus:9,damage:'1d8+3 P'},{name:'Claw',bonus:9,damage:'1d6+3 S'}],3,3,3,-4,1,0,'Support: +1d8 extra damage on Strikes vs grabbed foe')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Bear</button>
+                            <button onclick="fillPetPreset('Wolf','Animal Companion','Small',24,16,6,6,4,35,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,2,2,-4,1,0,'Support: +1d4 damage. Knockdown on crit.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Wolf</button>
+                            <button onclick="fillPetPreset('Horse','Animal Companion','Large',26,16,6,6,4,40,[{name:'Hoof',bonus:7,damage:'1d6+2 B'}],3,1,2,-4,1,0,'Support: +2 damage on mounted Strikes. Mount ability.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Horse</button>
+                            <button onclick="fillPetPreset('Cat','Animal Companion','Small',20,17,5,7,3,35,[{name:'Jaws',bonus:7,damage:'1d6+1 P'},{name:'Claw',bonus:7,damage:'1d4+1 S'}],0,3,1,-4,2,0,'Support: Target is off-guard until start of your next turn.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Cat</button>
+                            <button onclick="fillPetPreset('Snake','Animal Companion','Small',20,17,5,7,3,25,[{name:'Fangs',bonus:7,damage:'1d8+1 P'}],1,3,1,-4,2,0,'Support: +1d4 poison damage on Strikes.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Snake</button>
+                            <button onclick="fillPetPreset('Bird','Animal Companion','Small',18,18,4,7,3,10,[{name:'Talons',bonus:7,damage:'1d4+1 S'}],0,3,0,-4,2,0,'Fly 60 ft. Support: Target is off-guard vs next attack.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Bird</button>
+                            <button onclick="fillPetPreset('Badger','Animal Companion','Small',22,16,6,6,4,25,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,1,2,-4,2,0,'Burrow 10 ft. Support: +1d8 damage vs prone.')" class="text-[9px] px-2 py-1 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1); color:#C2B9AD;">Badger</button>
                         </div>
                     </details>
                     <div class="grid grid-cols-2 gap-3">
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Name</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Name</label>
                         <input type="text" id="pet-name" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Type</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Type</label>
                         <select id="pet-type" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
                             <option>Animal Companion</option><option>Familiar</option><option>Eidolon</option><option>Construct</option><option>Other</option>
                         </select></div>
                     </div>
                     <div class="grid grid-cols-4 gap-3">
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Size</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Size</label>
                         <select id="pet-size" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;">
                             <option>Tiny</option><option selected>Small</option><option>Medium</option><option>Large</option>
                         </select></div>
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">HP</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">HP</label>
                         <input type="number" id="pet-hp" value="20" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Speed</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Speed</label>
                         <input type="number" id="pet-speed" value="25" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">AC</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">AC</label>
                         <input type="number" id="pet-ac" value="16" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
                     </div>
                     <div class="grid grid-cols-3 gap-3">
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Fort</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Fort</label>
                         <input type="number" id="pet-fort" value="5" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Ref</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Ref</label>
                         <input type="number" id="pet-ref" value="5" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Will</label>
+                        <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Will</label>
                         <input type="number" id="pet-will" value="3" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
                     </div>
                     <div class="grid grid-cols-6 gap-2">
-                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">STR</label>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#8A8279;">STR</label>
                         <input type="number" id="pet-str" value="2" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">DEX</label>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#8A8279;">DEX</label>
                         <input type="number" id="pet-dex" value="2" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">CON</label>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#8A8279;">CON</label>
                         <input type="number" id="pet-con" value="2" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">INT</label>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#8A8279;">INT</label>
                         <input type="number" id="pet-int" value="-4" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">WIS</label>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#8A8279;">WIS</label>
                         <input type="number" id="pet-wis" value="1" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
-                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#524C42;">CHA</label>
+                        <div><label class="font-header text-[8px] tracking-wider uppercase block mb-1" style="color:#8A8279;">CHA</label>
                         <input type="number" id="pet-cha" value="0" class="w-full rounded px-2 py-1 text-xs text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.1); color:#EDE5D8;"></div>
                     </div>
-                    <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Attack (name, bonus, damage — e.g. "Jaws, 9, 1d8+2 P")</label>
+                    <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Attack (name, bonus, damage — e.g. "Jaws, 9, 1d8+2 P")</label>
                     <input type="text" id="pet-attack" placeholder="Jaws, 9, 1d8+2 P" class="w-full rounded px-3 py-2 text-sm" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></div>
-                    <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#A89C8B;">Abilities / Notes</label>
+                    <div><label class="font-header text-[9px] tracking-wider uppercase block mb-1" style="color:#C2B9AD;">Abilities / Notes</label>
                     <textarea id="pet-abilities" rows="2" placeholder="Support Benefit, special senses, etc." class="w-full rounded px-3 py-2 text-sm resize-none" style="background:#1C1917; border:1px solid rgba(168,156,139,0.15); color:#EDE5D8;"></textarea></div>
                     <div class="flex justify-end gap-2 pt-2">
-                        <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="border:1px solid rgba(168,156,139,0.2); color:#A89C8B;">Cancel</button>
+                        <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="border:1px solid rgba(168,156,139,0.2); color:#C2B9AD;">Cancel</button>
                         <button onclick="savePet()" class="font-header text-[9px] tracking-wider uppercase px-4 py-2 rounded" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Add Companion</button>
                     </div>
                 </div>
@@ -1725,14 +1768,14 @@
             
             const list = document.getElementById('spell-browse-list');
             if (filtered.length === 0) {
-                list.innerHTML = '<div class="text-center italic py-8" style="color:#7A7062;">No spells match your filters.</div>';
+                list.innerHTML = '<div class="text-center italic py-8" style="color:#9E968B;">No spells match your filters.</div>';
                 return;
             }
             list.innerHTML = filtered.map(s => `
                 <div class="flex justify-between items-center p-2 rounded mb-1 hover:bg-gray-700 transition-colors" style="border:1px solid rgba(168,156,139,0.08);">
                     <div>
                         <span class="text-sm font-bold" style="color:#EDE5D8;">${s.name}</span>
-                        <span class="font-header text-[9px] ml-2" style="color:#7A7062;">L${s.level}</span>
+                        <span class="font-header text-[9px] ml-2" style="color:#9E968B;">L${s.level}</span>
                         ${s.traditions.map(t => `<span class="text-[8px] ml-1 px-1 rounded" style="background:rgba(94,173,173,0.08); color:#7DC4C4;">${t}</span>`).join('')}
                     </div>
                     <button onclick="learnSpellFromBrowse('${s.name.replace(/'/g,"\\'")}', ${s.level})" class="font-header text-[9px] px-3 py-1 rounded transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">+ Learn</button>
@@ -2074,9 +2117,9 @@
                             const style = c.is_active 
                                 ? 'background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.25);' 
                                 : 'border:1px solid rgba(168,156,139,0.08);';
-                            html += `<span class="text-[10px] px-2 py-0.5 rounded font-header" style="${style} color:${c.is_active ? '#FBBF24' : isMe ? '#7DC4C4' : '#524C42'}; ${isMe ? 'font-weight:700;' : ''}">${c.is_pc ? c.name : '???'}${c.is_active ? ' ▶' : ''}</span>`;
+                            html += `<span class="text-[10px] px-2 py-0.5 rounded font-header" style="${style} color:${c.is_active ? '#FBBF24' : isMe ? '#7DC4C4' : '#8A8279'}; ${isMe ? 'font-weight:700;' : ''}">${c.is_pc ? c.name : '???'}${c.is_active ? ' ▶' : ''}</span>`;
                         });
-                        html += `<span class="text-[9px] ml-auto font-header" style="color:#524C42;">Round ${data.round || 1}</span>`;
+                        html += `<span class="text-[9px] ml-auto font-header" style="color:#8A8279;">Round ${data.round || 1}</span>`;
                         initBar.innerHTML = html;
                     } else if (wrapper && (!data.encounter || data.encounter.length === 0)) {
                         wrapper.style.display = 'none';
@@ -2695,9 +2738,9 @@
                 html += `
                 <div>
                     <div class="flex justify-between items-center mb-2">
-                        <span class="font-header text-[10px] tracking-wider uppercase" style="color:#A89C8B;">${lvl.label}</span>
+                        <span class="font-header text-[10px] tracking-wider uppercase" style="color:#C2B9AD;">${lvl.label}</span>
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold" style="color:#7A7062;">${filledCount}/${slots}</span>
+                            <span class="text-[10px] font-bold" style="color:#9E968B;">${filledCount}/${slots}</span>
                             <div class="flex gap-1">
                                 ${Array(slots).fill().map((_, i) => `<input type="checkbox" data-caster-idx="${cIdx}" data-spell-level="${lvl.level}" data-slot-idx="${i}" class="spell-slot-cb w-3 h-3 accent-amber-500" title="Expend Slot">`).join('')}
                             </div>
@@ -2725,21 +2768,21 @@
                             </div>
                             <div class="flex items-center gap-1 shrink-0">
                                 ${isExpended 
-                                    ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(168,156,139,0.1); color:#7A7062;">Undo</button>`
+                                    ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(168,156,139,0.1); color:#9E968B;">Undo</button>`
                                     : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(94,173,173,0.15); color:#7DC4C4;">Cast</button>`
                                 }
                                 <button onclick="event.stopPropagation(); unprepSpell(${cIdx}, ${lvl.level}, ${i})" class="text-gray-600 hover:text-red-400 text-[10px]">✕</button>
                             </div>
                         </div>`;
                     } else {
-                        html += `<div class="prep-slot text-[10px] uppercase tracking-widest font-bold" style="color:#524C42;">Empty</div>`;
+                        html += `<div class="prep-slot text-[10px] uppercase tracking-widest font-bold" style="color:#8A8279;">Empty</div>`;
                     }
                 }
                 html += `</div></div>`;
             });
             
             localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
-            ui.innerHTML = html || "<div class='text-xs italic text-center' style='color:#7A7062;'>No spell slots available.</div>";
+            ui.innerHTML = html || "<div class='text-xs italic text-center' style='color:#9E968B;'>No spell slots available.</div>";
 
             document.querySelectorAll('#prep-ui-'+cIdx+' .spell-slot-cb').forEach((cb) => {
                 const s_cIdx = cb.getAttribute('data-caster-idx');

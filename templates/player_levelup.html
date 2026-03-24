@@ -7,7 +7,7 @@
     <title>Level Up Forge</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
+        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#7A7062', 600: '#8A8279', 500: '#9E968B', 400: '#C2B9AD', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
@@ -25,7 +25,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .choice-card { background: linear-gradient(135deg, #33302A, #252320); border: 1px solid rgba(139,115,85,0.18); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
-        .choice-card:hover { border-color: rgba(94,173,173,0.35); background: linear-gradient(135deg, #3F3A33, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
+        .choice-card:hover { border-color: rgba(94,173,173,0.35); background: linear-gradient(135deg, #7A7062, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
         .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #7DC4C4; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
         .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
         
@@ -217,6 +217,20 @@
         const classProgression = {{ class_progression | tojson | safe }};
         const subclassProgression = {{ subclass_progression | tojson | safe }};
         const monkPathConfig = {{ monk_path_config | tojson | safe }};
+        const skillFeatPrereqs = {{ skill_feat_prereqs | tojson | safe }};
+        const charProfs = {{ char_proficiencies | tojson | safe }};
+        
+        // Enrich skill feats with prerequisite data
+        const RANK_MAP = {'untrained': 0, 'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8};
+        ['skill', 'general'].forEach(cat => {
+            (dbFeats[cat] || []).forEach(f => {
+                const prereq = skillFeatPrereqs[f.name];
+                if (prereq && prereq.skill !== '*') {
+                    f.prerequisites_raw = `${prereq.rank.charAt(0).toUpperCase() + prereq.rank.slice(1)} in ${prereq.skill.charAt(0).toUpperCase() + prereq.skill.slice(1)}`;
+                    f.prereqs_parsed = { skills: { [prereq.skill]: RANK_MAP[prereq.rank] || 2 } };
+                }
+            });
+        });
         
         const RANK_NAMES = {0: "Untrained", 2: "Trained", 4: "Expert", 6: "Master", 8: "Legendary"};
 

@@ -19,6 +19,7 @@ from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_prof
 from class_matrix import MONK_PATH_CONFIG
 from class_matrix import SUBCLASS_DESCRIPTIONS
 from class_matrix import SPELL_ACTIONS, get_action_cost
+from class_matrix import SKILL_FEAT_PREREQS, check_feat_prereqs, RANK_VALUES
 from pf2e_generator import RobustPF2eGenerator
 
 app = Flask(__name__)
@@ -81,6 +82,15 @@ ACTIVE_ENCOUNTER = []
 TURN_INDEX = 0
 ROUND_NUMBER = 1
 COMBAT_LOGS = []
+
+def _combat_log(msg, log_type='action'):
+    """Append a timestamped entry to the combat log."""
+    COMBAT_LOGS.append({
+        'time': time.strftime('%H:%M:%S'),
+        'round': ROUND_NUMBER,
+        'msg': msg,
+        'type': log_type
+    })
 
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
 _sse_subscribers = []  # List of queue.Queue objects, one per connected client
@@ -1337,7 +1347,7 @@ class Character:
         for skill, prof_val in self.proficiencies.items():
             if skill.startswith('lore:'):
                 stat = 'int'
-                val = self.mods.get(stat, 0) + self.level + prof_val
+                val = self.mods.get(stat, 0) if prof_val == 0 else self.mods.get(stat, 0) + self.level + prof_val
                 total_mod = val - self.get_status_penalty(stat) + self.highest_buff + self.get_rule_mod(skill.lower())
                 prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'U')
                 display_name = "Lore: " + skill.replace('lore:', '').strip().title()
@@ -2311,7 +2321,7 @@ def gm_login():
             <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
             .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
             h1{font-family:'Cinzel',serif;color:#F43F5E;font-size:18px;margin-bottom:8px;}
-            p{color:#7A7062;font-size:13px;}
+            p{color:#9E968B;font-size:13px;}
             input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin:16px 0;box-sizing:border-box;}
             button{width:100%;padding:12px;border-radius:6px;border:none;background:#265050;color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
             </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
@@ -2322,7 +2332,7 @@ def gm_login():
         <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
         .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
         h1{font-family:'Cinzel',serif;color:#7DC4C4;font-size:22px;margin-bottom:4px;}
-        p{color:#7A7062;font-size:13px;margin-bottom:20px;}
+        p{color:#9E968B;font-size:13px;margin-bottom:20px;}
         input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin-bottom:16px;box-sizing:border-box;}
         button{width:100%;padding:12px;border-radius:6px;border:none;background:#265050;color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
         button:hover{background:#3A7878;}
@@ -2358,39 +2368,39 @@ def gm_hub():
     <div class="max-w-2xl w-full">
         <div class="text-center mb-10">
             <h1 class="fn text-3xl text-amber-300 tracking-wide mb-2" style="text-shadow:0 2px 20px rgba(94,173,173,0.15);">Game Master</h1>
-            <p class="text-sm" style="color:#7A7062;">Dashboard &amp; Tools</p>
+            <p class="text-sm" style="color:#9E968B;">Dashboard &amp; Tools</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <a href="/party" class="gm-card block">
                 <div class="fn text-lg mb-1" style="color:#7DC4C4;">Party View</div>
-                <p class="text-sm" style="color:#7A7062;">Manage HP, conditions, and party overview</p>
-                <span class="fn text-xs mt-2 block" style="color:#524C42;">{party_count} characters loaded</span>
+                <p class="text-sm" style="color:#9E968B;">Manage HP, conditions, and party overview</p>
+                <span class="fn text-xs mt-2 block" style="color:#8A8279;">{party_count} characters loaded</span>
             </a>
             <a href="/tracker" class="gm-card block">
                 <div class="fn text-lg mb-1" style="color:#D4A574;">Encounter Tracker</div>
-                <p class="text-sm" style="color:#7A7062;">Initiative, turns, HP, and conditions</p>
-                <span class="fn text-xs mt-2 block" style="color:#524C42;">{encounter_count} combatants active</span>
+                <p class="text-sm" style="color:#9E968B;">Initiative, turns, HP, and conditions</p>
+                <span class="fn text-xs mt-2 block" style="color:#8A8279;">{encounter_count} combatants active</span>
             </a>
             <a href="/encounter_builder" class="gm-card block">
                 <div class="fn text-lg mb-1" style="color:#FBBF24;">Encounter Builder</div>
-                <p class="text-sm" style="color:#7A7062;">Search monsters, build balanced encounters</p>
-                <span class="fn text-xs mt-2 block" style="color:#524C42;">{monster_count} monsters in library</span>
+                <p class="text-sm" style="color:#9E968B;">Search monsters, build balanced encounters</p>
+                <span class="fn text-xs mt-2 block" style="color:#8A8279;">{monster_count} monsters in library</span>
             </a>
             <a href="/gmscreen" class="gm-card block">
                 <div class="fn text-lg mb-1" style="color:#C4B5FD;">GM Screen</div>
-                <p class="text-sm" style="color:#7A7062;">Quick reference tables and rules</p>
+                <p class="text-sm" style="color:#9E968B;">Quick reference tables and rules</p>
             </a>
             <a href="/generator" class="gm-card block">
                 <div class="fn text-lg mb-1" style="color:#86EFAC;">Generator</div>
-                <p class="text-sm" style="color:#7A7062;">NPCs, loot, and encounter ideas</p>
+                <p class="text-sm" style="color:#9E968B;">NPCs, loot, and encounter ideas</p>
             </a>
             <a href="/player" class="gm-card block">
                 <div class="fn text-lg mb-1" style="color:#FDA4AF;">Player Hub</div>
-                <p class="text-sm" style="color:#7A7062;">View what your players see</p>
+                <p class="text-sm" style="color:#9E968B;">View what your players see</p>
             </a>
         </div>
         <div class="text-center">
-            <a href="/gm/logout" class="fn text-xs tracking-wider uppercase" style="color:#524C42;">Logout</a>
+            <a href="/gm/logout" class="fn text-xs tracking-wider uppercase" style="color:#8A8279;">Logout</a>
         </div>
     </div></body></html>'''
 
@@ -2433,8 +2443,22 @@ def remove_combatant(instance_id):
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
     global TURN_INDEX, ROUND_NUMBER
+    if ACTIVE_ENCOUNTER:
+        names = [c.name for c in ACTIVE_ENCOUNTER]
+        _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
     ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
     return redirect(url_for('tracker_view'))
+
+@app.route('/api/combat_log')
+def get_combat_log():
+    """Return combat log entries."""
+    return jsonify({"log": COMBAT_LOGS, "count": len(COMBAT_LOGS)})
+
+@app.route('/api/combat_log/clear', methods=['POST'])
+def clear_combat_log():
+    """Clear the combat log."""
+    COMBAT_LOGS.clear()
+    return jsonify({"success": True})
 
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
 def adjust_hp(instance_id):
@@ -2443,14 +2467,21 @@ def adjust_hp(instance_id):
         action = request.form.get('action')
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
+                old_hp = c.current_hp
                 if action == 'damage':
                     was_above_zero = c.current_hp > 0
                     c.current_hp = max(0, c.current_hp - amount)
-                    if c.current_hp == 0: c.conditions['dying'] = 1 + c.conditions.get('wounded', 0) if was_above_zero else c.conditions.get('dying', 0) + 1
+                    _combat_log(f"{c.name} took {amount} damage ({old_hp}→{c.current_hp})", 'damage')
+                    if c.current_hp == 0: 
+                        c.conditions['dying'] = 1 + c.conditions.get('wounded', 0) if was_above_zero else c.conditions.get('dying', 0) + 1
+                        _combat_log(f"{c.name} is Dying {c.conditions['dying']}!", 'critical')
                 elif action == 'heal':
                     was_dying = c.conditions.get('dying', 0) > 0
                     c.current_hp = min(c.hp, c.current_hp + amount)
-                    if c.current_hp > 0 and was_dying: c.conditions['dying'] = 0; c.conditions['wounded'] = c.conditions.get('wounded', 0) + 1
+                    _combat_log(f"{c.name} healed {amount} HP ({old_hp}→{c.current_hp})", 'heal')
+                    if c.current_hp > 0 and was_dying: 
+                        c.conditions['dying'] = 0; c.conditions['wounded'] = c.conditions.get('wounded', 0) + 1
+                        _combat_log(f"{c.name} recovered from Dying! (Wounded {c.conditions['wounded']})", 'critical')
                 if c.is_pc and c.name in PARTY_LIBRARY:
                     PARTY_LIBRARY[c.name].current_hp = c.current_hp
                     PARTY_LIBRARY[c.name].conditions['dying'] = c.conditions['dying']
@@ -2591,6 +2622,11 @@ def toggle_condition(instance_id):
             if combatant.is_pc and combatant.name in PARTY_LIBRARY: 
                 PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
                 _broadcast_pc_state(combatant.name)
+            new_val = combatant.conditions.get(condition, 0)
+            if isinstance(new_val, bool):
+                _combat_log(f"{combatant.name} {'gained' if new_val else 'lost'} {condition.replace('_','-').title()}", 'condition')
+            else:
+                _combat_log(f"{combatant.name}: {condition.title()} → {new_val}", 'condition')
             _broadcast_encounter_state()
             break
     return redirect(url_for('tracker_view'))
@@ -2691,6 +2727,8 @@ def cycle_turn(direction):
                 break
             old_index = TURN_INDEX
         _generate_turn_reminders()
+    current_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else '?'
+    _combat_log(f"Round {ROUND_NUMBER}: {current_name}'s turn", 'turn')
     _broadcast_encounter_state()
     return redirect(url_for('tracker_view'))
 
@@ -4460,7 +4498,8 @@ def save_new_character():
 @app.route('/player/levelup/<pc_name>')
 def player_levelup(pc_name):
     if pc_name in PARTY_LIBRARY: 
-        return render_template('player_levelup.html', pc=PARTY_LIBRARY[pc_name], feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG)
+        pc = PARTY_LIBRARY[pc_name]
+        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies)
     return redirect(url_for('player_view'))
 
 @app.route('/api/submit_levelup/<pc_name>', methods=['POST'])
@@ -4622,6 +4661,248 @@ def revert_level(pc_name):
             save_and_reload_character(pc_name, pc_json, file_path)
             return jsonify({"success": True})
     return jsonify({"success": False, "error": "Character not found or already at Level 1."})
+
+# =============================================================================
+# PDF CHARACTER EXPORT
+# =============================================================================
+@app.route('/api/export_pdf/<pc_name>')
+def export_pdf(pc_name):
+    """Generate a printable PDF character sheet."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"error": "Character not found"}), 404
+    
+    pc = PARTY_LIBRARY[pc_name]
+    
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.colors import HexColor
+        import io
+        
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        w, h = letter
+        
+        # Colors
+        bg = HexColor('#1C1917')
+        panel = HexColor('#2E2B25')
+        border = HexColor('#4A453D')
+        title_color = HexColor('#FBBF24')
+        teal = HexColor('#7DC4C4')
+        text_color = HexColor('#EDE5D8')
+        label = HexColor('#9E968B')
+        white = HexColor('#FFFFFF')
+        
+        # Background
+        c.setFillColor(bg)
+        c.rect(0, 0, w, h, fill=1)
+        
+        # Header
+        c.setFillColor(title_color)
+        c.setFont("Helvetica-Bold", 22)
+        c.drawString(40, h - 50, pc.name)
+        c.setFillColor(label)
+        c.setFont("Helvetica", 11)
+        c.drawString(40, h - 68, f"Level {pc.level} {pc.ancestry} {pc.class_name}")
+        if pc.subclass:
+            c.drawString(40, h - 82, pc.subclass)
+        
+        # Ability Scores row
+        y = h - 115
+        c.setFillColor(panel)
+        c.roundRect(35, y - 10, w - 70, 45, 5, fill=1, stroke=0)
+        stats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+        stat_keys = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+        col_w = (w - 80) / 6
+        for i, (s, k) in enumerate(zip(stats, stat_keys)):
+            x = 45 + i * col_w
+            mod = pc.mods.get(k, 0)
+            c.setFillColor(label)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawCentredString(x + col_w/2, y + 22, s)
+            c.setFillColor(text_color)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawCentredString(x + col_w/2, y + 2, f"+{mod}" if mod >= 0 else str(mod))
+        
+        # Defenses row
+        y -= 55
+        c.setFillColor(panel)
+        c.roundRect(35, y - 10, w - 70, 45, 5, fill=1, stroke=0)
+        defs = [
+            ('AC', str(pc.ac)), ('FORT', f"+{pc.fort}"), ('REF', f"+{pc.ref}"),
+            ('WILL', f"+{pc.will}"), ('PER', f"+{pc.perception}"),
+            ('HP', f"{pc.current_hp}/{pc.hp}"), ('SPD', f"{pc.active_speed}ft")
+        ]
+        col_w = (w - 80) / len(defs)
+        for i, (lbl, val) in enumerate(defs):
+            x = 45 + i * col_w
+            c.setFillColor(label)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawCentredString(x + col_w/2, y + 22, lbl)
+            c.setFillColor(teal if lbl in ('AC', 'HP') else text_color)
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(x + col_w/2, y + 2, val)
+        
+        # Skills - left column
+        y -= 35
+        c.setFillColor(title_color)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, y, "Skills")
+        y -= 18
+        rank_letters = {0: 'U', 2: 'T', 4: 'E', 6: 'M', 8: 'L'}
+        for i, sk in enumerate(pc.skills):
+            col = 0 if i < len(pc.skills) // 2 + 1 else 1
+            row = i if col == 0 else i - (len(pc.skills) // 2 + 1)
+            sx = 45 + col * 265
+            sy = y - row * 16
+            if sy < 80:  # Stop before page bottom
+                break
+            prof = rank_letters.get(sk['prof_val'], 'U')
+            c.setFillColor(teal if prof != 'U' else label)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(sx, sy, f"[{prof}]")
+            c.setFillColor(text_color)
+            c.setFont("Helvetica", 10)
+            c.drawString(sx + 25, sy, sk['name'])
+            c.setFont("Helvetica-Bold", 10)
+            c.drawRightString(sx + 240, sy, str(sk['total']))
+        
+        # Attacks section
+        atk_y = y - (len(pc.skills) // 2 + 2) * 16
+        if atk_y > 120 and pc.attacks:
+            c.setFillColor(title_color)
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(40, atk_y, "Attacks")
+            atk_y -= 18
+            for atk in pc.attacks:
+                if atk_y < 80: break
+                c.setFillColor(text_color)
+                c.setFont("Helvetica-Bold", 11)
+                c.drawString(50, atk_y, atk['name'])
+                strikes_text = " / ".join(s['label'] for s in atk['strikes'])
+                c.setFillColor(teal)
+                c.setFont("Helvetica", 10)
+                c.drawString(200, atk_y, strikes_text)
+                c.setFillColor(label)
+                c.drawString(380, atk_y, f"Dmg: {atk['damage']}")
+                atk_y -= 16
+        
+        # Footer
+        c.setFillColor(label)
+        c.setFont("Helvetica", 8)
+        c.drawString(40, 30, f"PF2E Dashboard — {pc.name} — Exported {time.strftime('%Y-%m-%d')}")
+        
+        c.save()
+        buf.seek(0)
+        
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', pc.name)
+        return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=f"{safe_name}_character_sheet.pdf")
+    except ImportError:
+        return jsonify({"error": "reportlab not installed. Add to requirements.txt."}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# =============================================================================
+# MONSTER IMPORT
+# =============================================================================
+@app.route('/api/import_monster', methods=['POST'])
+@gm_required
+def import_monster():
+    """Import a monster from JSON (Foundry PF2E format or simplified)."""
+    try:
+        if 'file' in request.files:
+            raw = request.files['file'].read().decode('utf-8')
+            data = json.loads(raw)
+        elif request.json:
+            data = request.json
+        else:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Accept Foundry format or simplified
+        name = data.get('name', '')
+        if not name:
+            # Try nested format
+            name = data.get('system', {}).get('details', {}).get('name', '')
+        if not name:
+            return jsonify({"error": "Monster has no name"}), 400
+        
+        # Save to monster_data
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
+        file_path = os.path.join(MONSTER_DIR, f"{safe_name}.json")
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        
+        # Try to load into library
+        try:
+            m = Monster(data, f"{safe_name}.json")
+            MONSTER_LIBRARY[f"{safe_name}.json"] = m
+            return jsonify({"success": True, "name": name, "level": m.level})
+        except Exception as e:
+            return jsonify({"success": True, "name": name, "warning": f"Saved but parse error: {e}"})
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid JSON"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/create_monster', methods=['POST'])
+@gm_required
+def create_custom_monster():
+    """Create a monster from a simple form (name, level, hp, ac, saves, attacks)."""
+    data = request.json
+    name = data.get('name', 'Unknown Monster')
+    
+    monster_json = {
+        "name": name,
+        "type": "npc",
+        "system": {
+            "details": {"level": {"value": int(data.get('level', 1))}},
+            "attributes": {
+                "hp": {"value": int(data.get('hp', 20)), "max": int(data.get('hp', 20))},
+                "ac": {"value": int(data.get('ac', 15))},
+                "speed": {"value": int(data.get('speed', 25))}
+            },
+            "saves": {
+                "fortitude": {"value": int(data.get('fort', 5))},
+                "reflex": {"value": int(data.get('ref', 5))},
+                "will": {"value": int(data.get('will', 5))}
+            },
+            "perception": {"value": int(data.get('perception', 5))},
+            "traits": {"value": data.get('traits', [])},
+        },
+        "items": []
+    }
+    
+    # Add strikes
+    for i, strike in enumerate(data.get('strikes', [])):
+        monster_json['items'].append({
+            "name": strike.get('name', f'Strike {i+1}'),
+            "type": "melee",
+            "system": {
+                "bonus": {"value": int(strike.get('attack', 10))},
+                "damageRolls": {"0": {"damage": strike.get('damage', '1d8+4'), "damageType": strike.get('type', 'slashing')}},
+                "traits": {"value": strike.get('traits', [])},
+            }
+        })
+    
+    # Add special actions
+    for action in data.get('actions', []):
+        monster_json['items'].append({
+            "name": action.get('name', 'Action'),
+            "type": "action",
+            "system": {"description": {"value": action.get('desc', '')}}
+        })
+    
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
+    file_path = os.path.join(MONSTER_DIR, f"{safe_name}.json")
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(monster_json, f, indent=2)
+    
+    try:
+        m = Monster(monster_json, f"{safe_name}.json")
+        MONSTER_LIBRARY[f"{safe_name}.json"] = m
+        return jsonify({"success": True, "name": name, "level": m.level})
+    except Exception as e:
+        return jsonify({"success": True, "name": name, "warning": f"Saved but parse error: {e}"})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

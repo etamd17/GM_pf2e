@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { colors: {
-            parch: { 950:'#1C1917', 900:'#28241F', 800:'#33302A', 700:'#3F3A33', 600:'#524C42', 500:'#7A7062', 400:'#A89C8B', 300:'#CFC5B4', 200:'#E8E0D2', 100:'#EDE4D3' },
+            parch: { 950:'#1C1917', 900:'#28241F', 800:'#33302A', 700:'#7A7062', 600:'#8A8279', 500:'#9E968B', 400:'#C2B9AD', 300:'#CFC5B4', 200:'#E8E0D2', 100:'#EDE4D3' },
             ember: { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878', 700:'#2C5C5C' },
             blood: { 300:'#FDA4AF', 400:'#FB7185', 500:'#F43F5E', 800:'#6B1525' },
             verdant: { 400:'#4ADE80', 500:'#22C55E' },
@@ -19,22 +19,22 @@
         body { font-family:'Crimson Text',Georgia,serif; background:#1C1917; color:#E8E0D2; }
         body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,120,120,0.08) 0%,transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(94,120,120,0.05) 0%,transparent 50%),#1C1917; }
         .fn { font-family:'Cinzel',serif; }
-        .card { background:linear-gradient(135deg,#33302A,#28241F); border:1px solid rgba(156,139,118,0.18); transition:all .35s cubic-bezier(.4,0,.2,1); position:relative; overflow:hidden; }
-        .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(94,173,173,0.5),transparent); opacity:0; transition:opacity .35s; }
+        .card { background:#2E2B25; border:1px solid rgba(156,139,118,0.18); transition:all .35s cubic-bezier(.4,0,.2,1); position:relative; overflow:hidden; }
+        .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:rgba(94,173,173,0.4); opacity:0; transition:opacity .35s; }
         .card:hover { border-color:rgba(94,173,173,0.3); transform:translateY(-3px); box-shadow:0 16px 32px rgba(0,0,0,0.5),0 0 24px rgba(94,173,173,0.04); }
         .card:hover::before { opacity:1; }
         .hp-ring { width:48px; height:48px; position:relative; display:flex; align-items:center; justify-content:center; }
         .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
         .erow { transition:all .3s; border-left:3px solid transparent; }
-        .erow.on { border-left-color:#5EADAD; background:linear-gradient(90deg,rgba(94,173,173,0.06),transparent 60%); }
+        .erow.on { border-left-color:#5EADAD; background:rgba(94,173,173,0.04); }
         .sdiv { display:flex; align-items:center; gap:16px; margin:2.5rem 0 1.5rem; }
-        .sdiv::before,.sdiv::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,rgba(156,139,118,0.3),transparent); }
+        .sdiv::before,.sdiv::after { content:''; flex:1; height:1px; background:rgba(156,139,118,0.15); }
         @keyframes glow { 0%,100%{opacity:.5} 50%{opacity:1} }
         .glow { animation:glow 2.5s ease-in-out infinite; }
         .cb { font-family:'Cinzel',serif; font-size:9px; letter-spacing:.08em; padding:2px 7px; border-radius:3px; text-transform:uppercase; }
-        .bp { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:linear-gradient(135deg,#3A7878,#2C5C5C); border:1px solid rgba(94,173,173,0.3); color:#A8DEDE; padding:8px 20px; border-radius:6px; font-size:12px; transition:all .2s; text-transform:uppercase; }
-        .bp:hover { background:linear-gradient(135deg,#4A9696,#3A7878); transform:translateY(-1px); box-shadow:0 4px 12px rgba(94,173,173,0.2); }
-        .bg { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:transparent; border:1px solid rgba(156,139,118,0.3); color:#A89C8B; padding:8px 16px; border-radius:6px; font-size:11px; transition:all .2s; text-transform:uppercase; }
+        .bp { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:#2C5C5C; border:1px solid rgba(94,173,173,0.3); color:#A8DEDE; padding:8px 20px; border-radius:6px; font-size:12px; transition:all .2s; text-transform:uppercase; }
+        .bp:hover { background:#3A7878; transform:translateY(-1px); box-shadow:0 4px 12px rgba(94,173,173,0.2); }
+        .bg { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:transparent; border:1px solid rgba(156,139,118,0.3); color:#C2B9AD; padding:8px 16px; border-radius:6px; font-size:11px; transition:all .2s; text-transform:uppercase; }
         .bg:hover { border-color:rgba(156,139,118,0.6); color:#CFC5B4; }
     </style>
 </head>
@@ -48,7 +48,7 @@
     </div>
 
     <!-- My Character Quick Access -->
-    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:linear-gradient(135deg,rgba(94,173,173,0.08),rgba(94,173,173,0.03)); border:1px solid rgba(94,173,173,0.2);">
+    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:rgba(94,173,173,0.05); border:1px solid rgba(94,173,173,0.2);">
         <span class="fn text-ember-300 text-sm tracking-wider">Welcome back, <strong id="my-char-name"></strong></span>
         <a id="my-char-link" href="#" class="ml-3 fn text-xs tracking-wider uppercase px-4 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Go to My Sheet →</a>
         <button onclick="clearMyChar()" class="ml-2 text-parch-600 text-xs hover:text-parch-400 transition-colors" title="Forget my character">✕</button>
@@ -63,9 +63,9 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
         {% for pc in party %}
         <div class="card rounded-xl p-5 block relative">
-            <a href="/player/sheet/{{ pc.name }}" class="absolute inset-0 z-0"></a>
-            <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar('{{ pc.name }}')" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="color:#5EADAD; opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==='{{ pc.name }}'?1:0.3">⭐</button>
-            <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar('{{ pc.name }}')" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs opacity-0 hover:opacity-100 transition-opacity" style="background:rgba(107,21,37,0.3); color:#FDA4AF; border:1px solid rgba(251,113,133,0.2);" title="Delete character">✕</button>
+            <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0"></a>
+            <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="color:#5EADAD; opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson }}?1:0.3">⭐</button>
+            <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(107,21,37,0.3); color:#FDA4AF; border:1px solid rgba(251,113,133,0.2); opacity:0.4;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">✕</button>
             <div class="flex items-start gap-4 relative z-1 pointer-events-none">
                 <div class="hp-ring shrink-0">
                     <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(156,139,118,0.15)" stroke-width="2.5"/>
@@ -111,12 +111,12 @@
         <div id="round-badge" class="hidden fn text-xs text-parch-400 tracking-wider">Round <span id="round-number" class="text-ember-300 text-lg font-bold ml-1">1</span></div>
     </div>
 
-    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center" style="background:linear-gradient(90deg,transparent,rgba(94,173,173,0.08),transparent); border:1px solid rgba(94,173,173,0.15)">
+    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center" style="background:rgba(94,173,173,0.05); border:1px solid rgba(94,173,173,0.15)">
         <span class="fn text-ember-300 text-lg tracking-wide glow" id="turn-banner-name">---</span>
         <span class="text-parch-500 text-xs tracking-wider ml-2">is acting</span>
     </div>
 
-    <div class="rounded-xl overflow-hidden" style="background:linear-gradient(180deg,#28241F,#1C1917); border:1px solid rgba(156,139,118,0.12)">
+    <div class="rounded-xl overflow-hidden" style="background:#252220; border:1px solid rgba(156,139,118,0.12)">
         <table class="w-full text-left border-collapse">
             <thead><tr style="border-bottom:1px solid rgba(156,139,118,0.12)">
                 <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-14 text-center">Init</th>
@@ -133,7 +133,7 @@
 
 <!-- IMPORT MODAL -->
 <div id="import-modal" class="fixed inset-0 bg-black/85 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="rounded-xl w-full max-w-lg p-6" style="background:linear-gradient(135deg,#33302A,#28241F); border:1px solid rgba(156,139,118,0.25)">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:#2E2B25; border:1px solid rgba(156,139,118,0.25)">
         <div class="flex justify-between items-center mb-5">
             <h3 class="fn text-ember-300 text-lg tracking-wide">Import from Pathbuilder</h3>
             <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-parch-600 hover:text-parch-300 text-xl">&times;</button>

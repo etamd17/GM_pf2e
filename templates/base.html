@@ -11,7 +11,7 @@
             theme: {
                 extend: {
                     colors: {
-                        gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', },
+                        gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#7A7062', 600: '#8A8279', 500: '#9E968B', 400: '#C2B9AD', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', },
                         amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' },
                         red: { 300: '#FDA4AF', 400: '#FB7185', 500: '#F43F5E', 800: '#6B1525', 900: '#3D0A13', },
                         green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
@@ -35,8 +35,8 @@
         .shadow-md { box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #3F3A33; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #524C42; }
+        ::-webkit-scrollbar-thumb { background: #7A7062; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8A8279; }
 
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .toast-animate { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -49,10 +49,11 @@
     <nav class="border-b shadow-md shrink-0" style="background:#28241F;">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-14">
-                <div class="flex items-center">
-                    <span class="font-header text-amber-400 text-lg tracking-wide">PF2E Dashboard</span>
+                <div class="flex items-center shrink-0">
+                    <span class="font-header text-amber-400 text-lg tracking-wide">PF2E</span>
                 </div>
-                <div class="flex space-x-1">
+                <div class="flex space-x-1 overflow-x-auto" style="scrollbar-width:none; -webkit-overflow-scrolling:touch;">
+                    <style>.gm-nav-link{white-space:nowrap;}</style>
                     <a href="/gm" class="text-amber-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">⚙ GM Hub</a>
                     <a href="/party" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Party</a>
                     <a href="/tracker" class="text-gray-400 hover:text-amber-300 px-3 py-2 rounded-md text-xs font-header tracking-wider transition-colors">Tracker</a>

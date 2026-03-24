@@ -22,9 +22,67 @@
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <input type="text" id="monster-search" placeholder="Search monsters by name..." autocomplete="off"
                 class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600 mb-3">
-            <div id="monster-results" class="space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div id="monster-results" class="space-y-1 max-h-[40vh] overflow-y-auto custom-scrollbar">
                 <div class="text-center text-gray-600 text-xs italic py-6">Type a monster name to search your library.</div>
             </div>
+        </div>
+        
+        <!-- Custom Monster Builder -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <details>
+                <summary class="font-header text-sm text-amber-500 cursor-pointer mb-3">+ Create Custom Monster</summary>
+                <div class="space-y-3 mt-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="cm-name" placeholder="Monster Name" class="col-span-2 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                        <div class="flex gap-2">
+                            <input type="number" id="cm-level" placeholder="Lvl" value="1" min="-1" max="25" class="w-16 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="number" id="cm-hp" placeholder="HP" value="20" min="1" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="number" id="cm-ac" placeholder="AC" value="15" min="0" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="number" id="cm-speed" placeholder="Spd" value="25" min="0" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="number" id="cm-fort" placeholder="Fort" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        <input type="number" id="cm-ref" placeholder="Ref" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        <input type="number" id="cm-will" placeholder="Will" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="cm-perc" placeholder="Perception" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        <input type="text" id="cm-traits" placeholder="Traits (comma sep)" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                    </div>
+                    
+                    <div class="border-t border-gray-700 pt-2">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Strike 1</span>
+                        <div class="grid grid-cols-3 gap-2 mt-1">
+                            <input type="text" id="cm-s1-name" placeholder="Jaws" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                            <input type="number" id="cm-s1-atk" placeholder="+10" value="10" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="text" id="cm-s1-dmg" placeholder="2d8+4 P" value="1d8+4 piercing" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                        </div>
+                    </div>
+                    <div class="border-t border-gray-700 pt-2">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Strike 2 (optional)</span>
+                        <div class="grid grid-cols-3 gap-2 mt-1">
+                            <input type="text" id="cm-s2-name" placeholder="Claw" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                            <input type="number" id="cm-s2-atk" placeholder="+10" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="text" id="cm-s2-dmg" placeholder="1d6+4 S" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                        </div>
+                    </div>
+                    
+                    <button onclick="createCustomMonster()" class="w-full bg-amber-900/30 hover:bg-amber-900/50 text-amber-400 border border-amber-900/50 rounded py-2 text-sm font-bold transition-colors">Create Monster</button>
+                </div>
+            </details>
+        </div>
+        
+        <!-- Import Monster JSON -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <details>
+                <summary class="font-header text-sm text-teal-400 cursor-pointer mb-3">📥 Import Monster JSON</summary>
+                <textarea id="monster-json-paste" rows="4" placeholder="Paste Foundry PF2E monster JSON here..." class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-xs font-mono mt-2 mb-2"></textarea>
+                <button onclick="importMonsterJSON()" class="w-full bg-teal-900/30 hover:bg-teal-900/50 text-teal-400 border border-teal-900/50 rounded py-2 text-sm font-bold transition-colors">Import</button>
+                <div id="import-monster-status" class="text-xs mt-2 hidden"></div>
+            </details>
         </div>
     </div>
 
@@ -219,5 +277,65 @@
     }
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    async function createCustomMonster() {
+        const name = document.getElementById('cm-name').value.trim();
+        if (!name) { alert('Monster needs a name!'); return; }
+        
+        const strikes = [];
+        const s1Name = document.getElementById('cm-s1-name').value.trim();
+        if (s1Name) strikes.push({ name: s1Name, attack: document.getElementById('cm-s1-atk').value, damage: document.getElementById('cm-s1-dmg').value, type: 'slashing' });
+        const s2Name = document.getElementById('cm-s2-name').value.trim();
+        if (s2Name) strikes.push({ name: s2Name, attack: document.getElementById('cm-s2-atk').value, damage: document.getElementById('cm-s2-dmg').value, type: 'slashing' });
+        
+        const traitsRaw = document.getElementById('cm-traits').value.trim();
+        const traits = traitsRaw ? traitsRaw.split(',').map(t => t.trim()) : [];
+        
+        try {
+            const res = await fetch('/api/create_monster', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name, level: document.getElementById('cm-level').value,
+                    hp: document.getElementById('cm-hp').value,
+                    ac: document.getElementById('cm-ac').value,
+                    speed: document.getElementById('cm-speed').value,
+                    fort: document.getElementById('cm-fort').value,
+                    ref: document.getElementById('cm-ref').value,
+                    will: document.getElementById('cm-will').value,
+                    perception: document.getElementById('cm-perc').value,
+                    traits, strikes
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Created ${data.name} (Level ${data.level})`);
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to create monster');
+            }
+        } catch(e) { alert('Error creating monster'); }
+    }
+
+    async function importMonsterJSON() {
+        const raw = document.getElementById('monster-json-paste').value.trim();
+        const status = document.getElementById('import-monster-status');
+        if (!raw) { status.textContent = 'Paste JSON first.'; status.className = 'text-xs mt-2 text-red-400'; status.classList.remove('hidden'); return; }
+        let parsed;
+        try { parsed = JSON.parse(raw); } catch(e) { status.textContent = 'Invalid JSON.'; status.className = 'text-xs mt-2 text-red-400'; status.classList.remove('hidden'); return; }
+        try {
+            const res = await fetch('/api/import_monster', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(parsed) });
+            const data = await res.json();
+            if (data.success) {
+                status.textContent = `Imported ${data.name}!`;
+                status.className = 'text-xs mt-2 text-green-400';
+                status.classList.remove('hidden');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                status.textContent = data.error || 'Import failed';
+                status.className = 'text-xs mt-2 text-red-400';
+                status.classList.remove('hidden');
+            }
+        } catch(e) { status.textContent = 'Error.'; status.className = 'text-xs mt-2 text-red-400'; status.classList.remove('hidden'); }
+    }
 </script>
 {% endblock %}

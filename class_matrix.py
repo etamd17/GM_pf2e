@@ -409,70 +409,6 @@ CLASS_PROGRESSION = {
         19: {"class_dc": 6, "perception": 6},                                               # Master Inventor
     },
     # -------------------------------------------------------------------------
-    # KINETICIST (Rage of Elements)
-    # -------------------------------------------------------------------------
-    "kineticist": {
-        # L1 initial: perception=2, fort=4, ref=4, will=2, simple=2, unarmed=2, light=2, unarmored=2, class_dc=2
-        3:  {"will": 4},                                                                    # Will Expertise
-        5:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (kinetic blasts)
-        7:  {"perception": 4, "class_dc": 4},                                               # Alertness + Kinetic Expertise (impulse attack/DC → Expert)
-        9:  {"fortitude": 6},                                                                # Juggernaut
-        11: {"unarmored": 4, "light": 4, "reflex": 6},                                      # Armor Expertise + Evasion
-        13: {"class_dc": 6},                                                                 # Kinetic Mastery (impulse attack/DC → Master)
-        15: {"will": 6},                                                                     # Greater Will
-        17: {"unarmored": 6, "light": 6, "fortitude": 8},                                   # Armor Mastery + Legendary Fort
-        19: {"class_dc": 8, "reflex": 8},                                                   # Kinetic Legend + Improved Evasion
-    },
-    # =========================================================================
-    # FULL CASTER CLASSES
-    # Common pattern: spell_attack/spell_dc → Expert at 7, Master at 15, Legendary at 19
-    # =========================================================================
-    # -------------------------------------------------------------------------
-    # WIZARD (Player Core p.192)
-    # -------------------------------------------------------------------------
-    "wizard": {
-        # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, unarmored=2, spell_attack=2, spell_dc=2
-        5:  {"fortitude": 4},                                                                # Expert Fortitude
-        7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        9:  {"perception": 4, "will": 6},                                                    # Alertness + Resolve
-        11: {"reflex": 4, "simple": 4, "unarmed": 4},                                       # Lightning Reflexes + Weapon Expertise
-        13: {"unarmored": 4},                                                                # Defensive Robes
-        15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"will": 8},                                                                     # Legendary Will (Resolve upgrade)
-        19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
-    },
-    # -------------------------------------------------------------------------
-    # CLERIC (Player Core p.68) — Base = Cloistered Cleric
-    # Warpriest has different doctrine timing — see SUBCLASS_PROGRESSION
-    # -------------------------------------------------------------------------
-    "cleric": {
-        # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, unarmored=2, spell_attack=2, spell_dc=2
-        # This is the CLOISTERED CLERIC progression (default)
-        3:  {"fortitude": 4},                                                                # 2nd Doctrine: Expert Fort
-        5:  {"perception": 4},                                                               # Alertness (shared)
-        7:  {"spell_attack": 4, "spell_dc": 4},                                             # 3rd Doctrine: Expert Spellcaster
-        9:  {"will": 6},                                                                     # Resolute Faith (shared)
-        11: {"reflex": 4, "simple": 4, "unarmed": 4},                                       # Lightning Reflexes (shared) + 4th Doctrine: Expert weapons
-        13: {"unarmored": 4},                                                                # Divine Defense (shared)
-        15: {"spell_attack": 6, "spell_dc": 6},                                             # 5th Doctrine: Master Spellcaster
-        17: {"will": 8, "fortitude": 6},                                                     # Greater Will + Greater Fort (shared)
-        19: {"spell_attack": 8, "spell_dc": 8},                                             # Final Doctrine: Legendary Spellcaster
-    },
-    # -------------------------------------------------------------------------
-    # DRUID (Player Core p.94)
-    # Verified against Pathbuilder L10 character export
-    # -------------------------------------------------------------------------
-    "druid": {
-        # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, light=2, medium=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"fortitude": 4},                                                                # Great Fortitude
-        5:  {"perception": 4, "reflex": 4},                                                  # Alertness + Lightning Reflexes
-        7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        11: {"will": 6, "unarmored": 4, "light": 4, "medium": 4, "simple": 4, "unarmed": 4}, # Resolve + Druid Weapon Expertise + Medium Armor Expertise
-        15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"will": 8},                                                                     # Legendary Will
-        19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
-    },
-    # -------------------------------------------------------------------------
     # BARD (Player Core p.56)
     # -------------------------------------------------------------------------
     "bard": {
@@ -650,8 +586,8 @@ CLASS_PROGRESSION = {
         3:  {"reflex": 4},                                                                  # Expert Reflex (Arcane Resilience area)
         5:  {"fortitude": 4},                                                                # Expert Fort (Magical Fortitude)
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        9:  {"will": 6},                                                                     # Resolve (Master Will)
-        11: {"perception": 4, "simple": 4, "unarmed": 4, "unarmored": 4},                   # Alertness + Weapon Expertise + Defensive Robes (Expert Unarmored)
+        9:  {"perception": 4, "will": 6},                                                    # Alertness (Expert Perception) + Resolve (Master Will)
+        11: {"simple": 4, "unarmed": 4, "unarmored": 4, "reflex": 4},                         # Weapon Expertise + Defensive Robes + Lightning Reflexes
         13: {},                                                                              # Weapon Specialization
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
         17: {"will": 8, "fortitude": 6},                                                     # Legendary Will + Greater Fortitude (Master Fort)
@@ -678,8 +614,7 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "druid": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, light=2, medium=2, unarmored=2, spell_attack=2, spell_dc=2
-        2:  {"perception": 4},                                                               # Alertness (L2!)
-        3:  {"fortitude": 4},                                                                # Great Fortitude
+        3:  {"perception": 4, "fortitude": 4},                                              # Alertness (L3) + Great Fortitude
         5:  {"reflex": 4},                                                                   # Lightning Reflexes
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
         9:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (simple + unarmed)
@@ -1376,3 +1311,98 @@ CLASS_FEATURES = {
 
 # Keep backward compat — PASSIVE_FEATURES points to CLASS_FEATURES
 PASSIVE_FEATURES = CLASS_FEATURES
+
+# =============================================================================
+# FEAT PREREQUISITE VALIDATION
+# =============================================================================
+# Skill feat → required skill + rank. Auto-generated from compendium + manual additions.
+RANK_VALUES = {'untrained': 0, 'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8}
+
+SKILL_FEAT_PREREQS = {
+    # Common L1 skill feats
+    "Assurance": {"skill": "*", "rank": "trained"},  # any trained skill
+    "Battle Medicine": {"skill": "medicine", "rank": "trained"},
+    "Cat Fall": {"skill": "acrobatics", "rank": "trained"},
+    "Charming Liar": {"skill": "deception", "rank": "trained"},
+    "Combat Climber": {"skill": "athletics", "rank": "trained"},
+    "Courtly Graces": {"skill": "society", "rank": "trained"},
+    "Experienced Tracker": {"skill": "survival", "rank": "trained"},
+    "Forager": {"skill": "survival", "rank": "trained"},
+    "Group Coercion": {"skill": "intimidation", "rank": "trained"},
+    "Group Impression": {"skill": "diplomacy", "rank": "trained"},
+    "Hefty Hauler": {"skill": "athletics", "rank": "trained"},
+    "Hobnobber": {"skill": "diplomacy", "rank": "trained"},
+    "Intimidating Glare": {"skill": "intimidation", "rank": "trained"},
+    "Intimidating Prowess": {"skill": "intimidation", "rank": "trained"},
+    "Lie to Me": {"skill": "deception", "rank": "trained"},
+    "Multilingual": {"skill": "society", "rank": "trained"},
+    "Natural Medicine": {"skill": "medicine", "rank": "trained"},
+    "Pickpocket": {"skill": "thievery", "rank": "trained"},
+    "Quick Coercion": {"skill": "intimidation", "rank": "trained"},
+    "Quick Identification": {"skill": "arcana", "rank": "trained"},  # or nature/occultism/religion
+    "Quick Jump": {"skill": "athletics", "rank": "trained"},
+    "Quick Repair": {"skill": "crafting", "rank": "trained"},
+    "Read Lips": {"skill": "society", "rank": "trained"},
+    "Robust Recovery": {"skill": "medicine", "rank": "trained"},
+    "Snare Crafting": {"skill": "crafting", "rank": "trained"},
+    "Specialty Crafting": {"skill": "crafting", "rank": "trained"},
+    "Steady Balance": {"skill": "acrobatics", "rank": "trained"},
+    "Streetwise": {"skill": "society", "rank": "trained"},
+    "Subtle Theft": {"skill": "thievery", "rank": "trained"},
+    "Survey Wildlife": {"skill": "survival", "rank": "trained"},
+    "Terrain Expertise": {"skill": "survival", "rank": "trained"},
+    "Terrain Stalker": {"skill": "stealth", "rank": "trained"},
+    "Titan Wrestler": {"skill": "athletics", "rank": "trained"},
+    "Trick Magic Item": {"skill": "arcana", "rank": "trained"},
+    "Trip Acumen": {"skill": "athletics", "rank": "trained"},
+    "Virtuosic Performer": {"skill": "performance", "rank": "trained"},
+    "Ward Medic": {"skill": "medicine", "rank": "trained"},
+    # Common L2+ skill feats
+    "Bon Mot": {"skill": "diplomacy", "rank": "trained"},
+    "Glad-Hand": {"skill": "diplomacy", "rank": "trained"},
+    "Continual Recovery": {"skill": "medicine", "rank": "expert"},
+    "Magical Crafting": {"skill": "crafting", "rank": "expert"},
+    "Impeccable Crafting": {"skill": "crafting", "rank": "master"},
+    "Unified Theory": {"skill": "arcana", "rank": "legendary"},
+    "Legendary Medic": {"skill": "medicine", "rank": "legendary"},
+    "Legendary Negotiation": {"skill": "diplomacy", "rank": "legendary"},
+    "Legendary Sneak": {"skill": "stealth", "rank": "legendary"},
+    "Cloud Jump": {"skill": "athletics", "rank": "legendary"},
+    "Scare to Death": {"skill": "intimidation", "rank": "legendary"},
+    "Shameless Request": {"skill": "diplomacy", "rank": "expert"},
+    "Terrified Retreat": {"skill": "intimidation", "rank": "expert"},
+    "Powerful Leap": {"skill": "athletics", "rank": "expert"},
+    "Rapid Mantel": {"skill": "athletics", "rank": "expert"},
+    "Quick Squeeze": {"skill": "acrobatics", "rank": "trained"},
+    "Kip Up": {"skill": "acrobatics", "rank": "trained"},
+    "Confabulator": {"skill": "deception", "rank": "expert"},
+    "Slippery Secrets": {"skill": "deception", "rank": "expert"},
+    "Quick Disguise": {"skill": "deception", "rank": "master"},
+}
+
+def check_feat_prereqs(feat_name, character_proficiencies):
+    """
+    Check if a character meets prerequisites for a feat.
+    Returns: {'met': True/False, 'reason': 'explanation'} or None if no prereqs known.
+    """
+    prereq = SKILL_FEAT_PREREQS.get(feat_name)
+    if not prereq:
+        return None  # No prereqs known — don't block
+    
+    required_skill = prereq['skill']
+    required_rank = prereq['rank']
+    required_val = RANK_VALUES.get(required_rank, 2)
+    
+    if required_skill == '*':
+        # Any trained skill (e.g., Assurance)
+        return {'met': True, 'reason': f'Requires {required_rank} in any skill'}
+    
+    current_val = character_proficiencies.get(required_skill, 0)
+    met = current_val >= required_val
+    
+    return {
+        'met': met,
+        'reason': f'{required_rank.title()} in {required_skill.title()}',
+        'skill': required_skill,
+        'required_rank': required_rank,
+    }
