@@ -23,16 +23,24 @@
     <div class="flex-1 min-w-0 w-full">
         <div class="bg-gray-800 p-4 rounded-t-lg shadow-md border-t border-l border-r border-gray-700 flex flex-wrap gap-4 items-center">
             
-            <form action="/api/add_combatant" method="POST" class="flex gap-2">
-                <input type="hidden" name="type" value="monster">
-                <input list="monster-list" name="path" placeholder="Search Monsters..." required class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-3 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
-                <datalist id="monster-list">
+            <!-- Monster Search Dropdown -->
+            <div class="relative" id="monster-search-container">
+                <input type="text" id="monster-search-input" placeholder="Search Monsters..." autocomplete="off"
+                    class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-3 py-1 text-sm focus:outline-none focus:border-amber-500 w-56"
+                    onfocus="showMonsterDropdown()" oninput="filterMonsters()">
+                <div id="monster-dropdown" class="hidden absolute top-full left-0 mt-1 w-72 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar">
                     {% for m in monsters %}
-                    <option value="{{ m.file_path }}">{{ m.name }}</option>
+                    <div class="monster-option px-3 py-2 hover:bg-amber-900/30 cursor-pointer text-sm border-b border-gray-800 last:border-0 flex justify-between items-center"
+                         data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonsterFromDropdown('{{ m.file_path }}')">
+                        <span class="text-gray-200">{{ m.name }}</span>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">L{{ m.level }}</span>
+                    </div>
                     {% endfor %}
-                </datalist>
-                <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded text-sm font-bold border border-gray-600 transition-colors">Add Monster</button>
-            </form>
+                    {% if not monsters %}
+                    <div class="px-3 py-4 text-center text-gray-500 text-sm italic">No monsters in library</div>
+                    {% endif %}
+                </div>
+            </div>
             
             <button onclick="document.getElementById('quick-monster-form').classList.toggle('hidden')" class="bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 px-3 py-1 rounded text-sm font-bold border border-amber-900/50 transition-colors font-header text-[10px] tracking-wider uppercase">+ Custom Monster</button>
 
@@ -89,7 +97,7 @@
 
             <form action="/api/load_encounter" method="POST" class="flex gap-2 items-center">
                 <label class="text-gray-300 text-xs font-bold uppercase tracking-wider">Load Roster:</label>
-                <select name="encounter_name" required class="bg-gray-900 border border-gray-500 text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
+                <select name="encounter_name" id="encounter-select" required class="bg-gray-900 border border-gray-500 text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
                     {% if saved_encounters %}
                         <option value="" disabled selected>Select an encounter...</option>
                         {% for enc in saved_encounters %}
@@ -100,6 +108,7 @@
                     {% endif %}
                 </select>
                 <button type="submit" class="bg-purple-900/50 hover:bg-purple-800 text-purple-200 px-3 py-1 rounded text-sm font-bold border border-purple-900 transition-colors">Load</button>
+                <button type="button" onclick="deleteSelectedEncounter()" class="bg-red-900/30 hover:bg-red-900/50 text-red-300 px-2 py-1 rounded text-sm font-bold border border-red-900/50 transition-colors" title="Delete selected encounter">🗑</button>
             </form>
 
         </div>
@@ -195,6 +204,7 @@
                         <td class="p-3 font-bold text-gray-200">
                             <span class="cursor-pointer hover:text-amber-400 transition-colors" onclick="openStatPopup('{{ c.instance_id }}')">{{ c.name }}</span>
                             {% if loop.index0 == turn_index %}<span class="text-amber-500 text-[10px] uppercase tracking-wider block mt-1">▶ Active Turn</span>{% endif %}
+                            {% if c.delaying %}<span class="text-blue-400 text-[10px] uppercase tracking-wider block mt-1">⏸ Delaying</span>{% endif %}
                         </td>
                         
                         <td class="p-3 font-mono text-blue-400 font-bold text-lg">
@@ -205,14 +215,23 @@
                         </td>
                         
                         <td class="p-3">
-                            <div class="flex items-center justify-center gap-2">
-                                <span class="font-mono text-green-400 font-bold text-lg w-16 text-right">{{ c.current_hp }} <span class="text-gray-500 text-xs">/ {{ c.hp }}</span></span>
+                            <div class="flex flex-col gap-1">
+                                <!-- HP Bar -->
+                                {% set hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0 %}
+                                {% set hp_color = 'bg-green-500' if hp_pct > 50 else ('bg-amber-500' if hp_pct > 25 else 'bg-red-500') %}
+                                <div class="w-full h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
+                                    <div class="{{ hp_color }} h-full transition-all duration-300" style="width: {{ hp_pct }}%;"></div>
+                                </div>
                                 
-                                <form action="/api/adjust_hp/{{ c.instance_id }}" method="POST" class="flex items-center gap-1">
-                                    <input type="number" name="amount" value="1" min="1" class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-1 py-1 text-xs w-10 text-center focus:outline-none focus:border-amber-500">
-                                    <button type="submit" name="action" value="damage" title="Damage" class="bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-1 rounded border border-red-900 transition-colors font-bold">-</button>
-                                    <button type="submit" name="action" value="heal" title="Heal" class="bg-green-900/50 hover:bg-green-800 text-green-200 px-2 py-1 rounded border border-green-900 transition-colors font-bold">+</button>
-                                </form>
+                                <div class="flex items-center justify-center gap-2">
+                                    <span class="font-mono {% if c.current_hp == 0 %}text-red-400{% elif hp_pct <= 50 %}text-amber-400{% else %}text-green-400{% endif %} font-bold text-lg w-16 text-right">{{ c.current_hp }} <span class="text-gray-500 text-xs">/ {{ c.hp }}</span></span>
+                                    
+                                    <form action="/api/adjust_hp/{{ c.instance_id }}" method="POST" class="flex items-center gap-1">
+                                        <input type="number" name="amount" value="1" min="1" class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-1 py-1 text-xs w-10 text-center focus:outline-none focus:border-amber-500">
+                                        <button type="submit" name="action" value="damage" title="Damage" class="bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-1 rounded border border-red-900 transition-colors font-bold">-</button>
+                                        <button type="submit" name="action" value="heal" title="Heal" class="bg-green-900/50 hover:bg-green-800 text-green-200 px-2 py-1 rounded border border-green-900 transition-colors font-bold">+</button>
+                                    </form>
+                                </div>
                             </div>
                         </td>
 
@@ -281,6 +300,20 @@
                             </form>
                             <br>
                             {% endif %}
+                            
+                            <!-- Delay / Ready buttons -->
+                            <div class="flex gap-1 mb-1">
+                                {% if c.delaying %}
+                                <form action="/api/reenter_initiative/{{ c.instance_id }}" method="POST" class="inline">
+                                    <button type="submit" class="text-[9px] px-2 py-0.5 rounded border transition-colors bg-blue-900/40 text-blue-300 border-blue-700 hover:bg-blue-800" title="Re-enter initiative before current combatant">Ready</button>
+                                </form>
+                                {% elif loop.index0 == turn_index %}
+                                <form action="/api/delay_turn/{{ c.instance_id }}" method="POST" class="inline">
+                                    <button type="submit" class="text-[9px] px-2 py-0.5 rounded border transition-colors bg-gray-800 text-gray-400 border-gray-700 hover:text-blue-400 hover:border-blue-700" title="Delay turn — act later in the round">Delay</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            
                             <form action="/api/remove_combatant/{{ c.instance_id }}" method="POST">
                                 <button type="submit" class="text-[10px] bg-red-900/40 hover:bg-red-800 text-red-300 px-2 py-1 rounded border border-red-900 transition-colors uppercase tracking-wider">Remove</button>
                             </form>
@@ -732,5 +765,66 @@
             }
         });
     }
+
+    // Delete saved encounter
+    async function deleteSelectedEncounter() {
+        const select = document.getElementById('encounter-select');
+        const name = select.value;
+        if (!name) { alert('Select an encounter to delete first.'); return; }
+        if (!confirm(`Delete saved encounter "${name}"? This cannot be undone.`)) return;
+        try {
+            const res = await fetch('/api/delete_encounter', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ encounter_name: name })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Remove from dropdown
+                select.querySelector(`option[value="${name}"]`)?.remove();
+                select.value = '';
+            } else {
+                alert(data.error || 'Failed to delete encounter');
+            }
+        } catch(e) { console.error('Delete error:', e); }
+    }
+
+    // Monster search dropdown
+    function showMonsterDropdown() {
+        document.getElementById('monster-dropdown').classList.remove('hidden');
+    }
+    
+    function filterMonsters() {
+        const query = document.getElementById('monster-search-input').value.toLowerCase().trim();
+        const options = document.querySelectorAll('.monster-option');
+        let visibleCount = 0;
+        options.forEach(opt => {
+            const name = opt.dataset.name;
+            const match = !query || name.includes(query);
+            opt.classList.toggle('hidden', !match);
+            if (match) visibleCount++;
+        });
+        // Show dropdown if we have results
+        document.getElementById('monster-dropdown').classList.remove('hidden');
+    }
+    
+    async function addMonsterFromDropdown(path) {
+        const formData = new FormData();
+        formData.append('type', 'monster');
+        formData.append('path', path);
+        try {
+            await fetch('/api/add_combatant', { method: 'POST', body: formData });
+            window.location.reload();
+        } catch(e) { console.error(e); }
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('monster-search-container');
+        if (container && !container.contains(e.target)) {
+            document.getElementById('monster-dropdown').classList.add('hidden');
+        }
+    });
+
 </script>
 {% endblock %}

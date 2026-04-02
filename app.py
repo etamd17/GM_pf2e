@@ -95,9 +95,11 @@ def _combat_log(msg, log_type='action'):
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
 _sse_subscribers = []  # List of queue.Queue objects, one per connected client
 _sse_lock = threading.Lock()
+_sse_last_cleanup = time.time()
 
 def sse_broadcast(event_type, data):
     """Push an event to all connected SSE clients."""
+    global _sse_last_cleanup
     msg = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
     with _sse_lock:
         dead = []
@@ -108,6 +110,18 @@ def sse_broadcast(event_type, data):
                 dead.append(q)
         for q in dead:
             _sse_subscribers.remove(q)
+        
+        # Periodic cleanup logging (every 5 minutes)
+        now = time.time()
+        if now - _sse_last_cleanup > 300:
+            _sse_last_cleanup = now
+            if _sse_subscribers:
+                print(f"[SSE] Active connections: {len(_sse_subscribers)}")
+
+def sse_subscriber_count():
+    """Return the number of active SSE subscribers."""
+    with _sse_lock:
+        return len(_sse_subscribers)
 
 def _broadcast_pc_state(pc_name):
     """Broadcast a PC's current state to all SSE clients."""
@@ -310,6 +324,18 @@ def safe_json_load(row, key, default):
     try: return json.loads(val)
     except: return default
 
+def safe_load_json_file(file_path):
+    """Safely load a JSON file with proper file handle management. Returns (data, error)."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as fp:
+            return json.load(fp), None
+    except json.JSONDecodeError as e:
+        return None, f"Invalid JSON: {e}"
+    except OSError as e:
+        return None, f"File error: {e}"
+    except Exception as e:
+        return None, f"Load error: {e}"
+
 def extract_traits(raw_val):
     if not raw_val: return []
     if isinstance(raw_val, str):
@@ -388,11 +414,51 @@ def reload_single_character(file_path):
 
 def save_and_reload_character(pc_name, pc_json, file_path):
     """Save a character JSON to disk and reload just that character (not the whole compendium)."""
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(pc_json, f, indent=4)
-    # Update the cache in case the name or file changed
-    _PC_FILE_CACHE[pc_name] = os.path.basename(file_path)
-    reload_single_character(file_path)
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(pc_json, f, indent=4)
+        # Update the cache in case the name or file changed
+        _PC_FILE_CACHE[pc_name] = os.path.basename(file_path)
+        reload_single_character(file_path)
+        return True, None
+    except OSError as e:
+        print(f"[SAVE ERROR] {pc_name}: {e}")
+        return False, str(e)
+    except Exception as e:
+        print(f"[SAVE ERROR] {pc_name}: {e}")
+        return False, str(e)
+
+# --- REQUEST VALIDATION HELPERS ---
+def require_pc(pc_name):
+    """Validate that a PC exists. Returns (pc, file_path, error_response).
+    If error_response is not None, return it immediately from the route."""
+    if not pc_name:
+        return None, None, (jsonify({'success': False, 'error': 'No character name provided'}), 400)
+    if pc_name not in PARTY_LIBRARY:
+        _sync_party_from_disk()  # Try reloading in case it was just added
+        if pc_name not in PARTY_LIBRARY:
+            return None, None, (jsonify({'success': False, 'error': f'Character "{pc_name}" not found'}), 404)
+    file_path = get_pc_file_path(pc_name)
+    return PARTY_LIBRARY[pc_name], file_path, None
+
+def require_pc_json(pc_name):
+    """Validate PC exists and load its JSON for modification. Returns (pc_json, file_path, error_response)."""
+    pc, file_path, err = require_pc(pc_name)
+    if err:
+        return None, None, err
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        return pc_json, file_path, None
+    except Exception as e:
+        return None, None, (jsonify({'success': False, 'error': f'Failed to load character: {e}'}), 500)
+
+def require_combatant(instance_id):
+    """Validate that a combatant exists in the active encounter. Returns (combatant, index, error_response)."""
+    for i, c in enumerate(ACTIVE_ENCOUNTER):
+        if c.instance_id == instance_id:
+            return c, i, None
+    return None, None, (jsonify({'success': False, 'error': 'Combatant not found in encounter'}), 404)
 
 def _sort_encounter():
     global ACTIVE_ENCOUNTER, TURN_INDEX
@@ -2064,8 +2130,10 @@ def load_compendium():
             for root, _, files in os.walk(p_anc):
                 for f in files:
                     if f.endswith('.json'):
+                        data, err = safe_load_json_file(os.path.join(root, f))
+                        if err or not data:
+                            continue
                         try:
-                            data = json.load(open(os.path.join(root, f), 'r', encoding='utf-8'))
                             name = data.get('name')
                             if name and name not in BUILDER_ANCESTRIES:
                                 sys = data.get('system', {})
@@ -2082,8 +2150,10 @@ def load_compendium():
             for root, _, files in os.walk(p_her):
                 for f in files:
                     if f.endswith('.json'):
+                        data, err = safe_load_json_file(os.path.join(root, f))
+                        if err or not data:
+                            continue
                         try:
-                            data = json.load(open(os.path.join(root, f), 'r', encoding='utf-8'))
                             name = data.get('name')
                             sys = data.get('system', {})
                             desc = sys.get('description', {}).get('value', '')
@@ -2122,8 +2192,10 @@ def load_compendium():
             for root, _, files in os.walk(p_bg):
                 for f in files:
                     if f.endswith('.json'):
+                        data, err = safe_load_json_file(os.path.join(root, f))
+                        if err or not data:
+                            continue
                         try:
-                            data = json.load(open(os.path.join(root, f), 'r', encoding='utf-8'))
                             name = data.get('name')
                             if name and name not in BUILDER_BACKGROUNDS:
                                 sys = data.get('system', {})
@@ -2146,8 +2218,10 @@ def load_compendium():
             for root, _, files in os.walk(p_cls):
                 for f in files:
                     if f.endswith('.json'):
+                        data, err = safe_load_json_file(os.path.join(root, f))
+                        if err or not data:
+                            continue
                         try:
-                            data = json.load(open(os.path.join(root, f), 'r', encoding='utf-8'))
                             name = data.get('name')
                             if name and name not in BUILDER_CLASSES:
                                 sys = data.get('system', {})
@@ -2181,8 +2255,10 @@ def load_compendium():
                 for root, _, files in os.walk(p_eq):
                     for f in files:
                         if f.endswith('.json'):
+                            data, err = safe_load_json_file(os.path.join(root, f))
+                            if err or not data:
+                                continue
                             try:
-                                data = json.load(open(os.path.join(root, f), 'r', encoding='utf-8'))
                                 name = data.get('name')
                                 if not name: continue
                                 sys = data.get('system', {})
@@ -2221,8 +2297,10 @@ def load_compendium():
                 for root, _, files in os.walk(p_cf):
                     for f in files:
                         if f.endswith('.json'):
+                            data, err = safe_load_json_file(os.path.join(root, f))
+                            if err or not data:
+                                continue
                             try:
-                                data = json.load(open(os.path.join(root, f), 'r', encoding='utf-8'))
                                 name = data.get('name')
                                 sys = data.get('system', {})
                                 desc = sys.get('description', {}).get('value', '')
@@ -2264,16 +2342,28 @@ def load_libraries():
         for root, dirs, files in os.walk(MONSTER_DIR):
             for file in files:
                 if file.endswith('.json') and not file.startswith('_'):
+                    file_path = os.path.join(root, file)
+                    data, err = safe_load_json_file(file_path)
+                    if err:
+                        print(f"[LOAD ERROR] Monster {file}: {err}")
+                        continue
                     try:
-                        data = json.load(open(os.path.join(root, file), 'r', encoding='utf-8'))
-                        if isinstance(data, dict) and ('system' in data or data.get('type') == 'npc'): MONSTER_LIBRARY[os.path.relpath(os.path.join(root, file), MONSTER_DIR)] = Monster(data, os.path.relpath(os.path.join(root, file), MONSTER_DIR))
-                    except: pass
+                        if isinstance(data, dict) and ('system' in data or data.get('type') == 'npc'): 
+                            rel_path = os.path.relpath(file_path, MONSTER_DIR)
+                            MONSTER_LIBRARY[rel_path] = Monster(data, rel_path)
+                    except Exception as e:
+                        print(f"[LOAD ERROR] Monster {file}: {e}")
+    
     PARTY_LIBRARY.clear()
     if not os.path.exists(PARTY_DIR): os.makedirs(PARTY_DIR) 
     for file in os.listdir(PARTY_DIR):
         if file.endswith('.json'):
+            file_path = os.path.join(PARTY_DIR, file)
+            data, err = safe_load_json_file(file_path)
+            if err:
+                print(f"[LOAD ERROR] Character {file}: {err}")
+                continue
             try:
-                data = json.load(open(os.path.join(PARTY_DIR, file), 'r', encoding='utf-8'))
                 if isinstance(data, list):
                     for idx, char_data in enumerate(data): 
                         pc = Character(char_data, f"{file}[{idx}]")
@@ -2281,7 +2371,8 @@ def load_libraries():
                 else: 
                     pc = Character(data, file)
                     PARTY_LIBRARY[pc.name] = pc
-            except Exception as e: print(f"Load Error: {e}")
+            except Exception as e: 
+                print(f"[LOAD ERROR] Character {file}: {e}")
     _build_pc_file_cache()
 
 def get_vault_tree(dir_path):
@@ -2298,6 +2389,17 @@ def get_vault_tree(dir_path):
     return tree
 
 load_libraries()
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Railway/container orchestration."""
+    return jsonify({
+        'status': 'healthy',
+        'party_count': len(PARTY_LIBRARY),
+        'monster_count': len(MONSTER_LIBRARY),
+        'encounter_active': len(ACTIVE_ENCOUNTER),
+        'sse_connections': sse_subscriber_count(),
+    })
 
 @app.route('/')
 def index():
@@ -2950,6 +3052,24 @@ def load_encounter():
         if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
     return redirect(url_for('tracker_view'))
 
+@app.route('/api/delete_encounter', methods=['POST'])
+@gm_required
+def delete_encounter():
+    """Delete a saved encounter file."""
+    name = request.form.get('encounter_name') or (request.json or {}).get('encounter_name')
+    if not name:
+        return jsonify({'success': False, 'error': 'No encounter name provided'}), 400
+    
+    # Sanitize filename to prevent directory traversal
+    safe_name = os.path.basename(name)
+    enc_path = os.path.join(ENCOUNTER_DIR, f"{safe_name}.json")
+    
+    if os.path.exists(enc_path):
+        os.remove(enc_path)
+        return jsonify({'success': True, 'deleted': safe_name})
+    else:
+        return jsonify({'success': False, 'error': 'Encounter not found'}), 404
+
 @app.route('/gmscreen')
 @gm_required
 def gm_screen(): 
@@ -3452,27 +3572,49 @@ def player_view():
 def _sync_party_from_disk():
     """Ensure PARTY_LIBRARY matches what's on disk. Adds missing characters, removes deleted ones."""
     if not os.path.exists(PARTY_DIR): return
-    disk_files = {f for f in os.listdir(PARTY_DIR) if f.endswith('.json')}
+    
+    try:
+        disk_files = {f for f in os.listdir(PARTY_DIR) if f.endswith('.json')}
+    except OSError as e:
+        print(f"[SYNC ERROR] Failed to list party directory: {e}")
+        return
+    
     disk_names = set()
+    load_errors = []
+    
     for f in disk_files:
+        file_path = os.path.join(PARTY_DIR, f)
+        data, err = safe_load_json_file(file_path)
+        if err:
+            load_errors.append(f"[SYNC ERROR] {f}: {err}")
+            continue
+            
         try:
-            data = json.load(open(os.path.join(PARTY_DIR, f), 'r', encoding='utf-8'))
             if isinstance(data, list):
                 for item in data:
                     name = (item.get('build') or item).get('name')
-                    if name: disk_names.add(name)
-                    if name and name not in PARTY_LIBRARY:
-                        PARTY_LIBRARY[name] = Character(item, f)
+                    if name: 
+                        disk_names.add(name)
+                        if name not in PARTY_LIBRARY:
+                            PARTY_LIBRARY[name] = Character(item, f)
             else:
                 name = (data.get('build') or data).get('name')
-                if name: disk_names.add(name)
-                if name and name not in PARTY_LIBRARY:
-                    PARTY_LIBRARY[name] = Character(data, f)
-        except: pass
+                if name: 
+                    disk_names.add(name)
+                    if name not in PARTY_LIBRARY:
+                        PARTY_LIBRARY[name] = Character(data, f)
+        except Exception as e:
+            load_errors.append(f"[SYNC ERROR] Failed to load character from {f}: {e}")
+    
+    # Log any errors encountered
+    for err in load_errors:
+        print(err)
+    
     # Remove characters from memory that were deleted from disk
     for name in list(PARTY_LIBRARY.keys()):
         if name not in disk_names:
             del PARTY_LIBRARY[name]
+    
     _build_pc_file_cache()
 
 @app.route('/player/sheet/<pc_name>')

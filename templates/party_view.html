@@ -45,7 +45,9 @@
                         {% endif %}
                     </div>
                     <div>
-                        <h2 class="fn text-xl leading-none" style="color: #EDE5D8;">{{ pc.name }}</h2>
+                        <a href="/player/sheet/{{ pc.name | urlencode }}" target="_blank" class="fn text-xl leading-none hover:text-amber-400 transition-colors" style="color: #EDE5D8;" title="Open full character sheet">
+                            {{ pc.name }} <span class="text-xs opacity-50">↗</span>
+                        </a>
                         <p class="fb text-sm mt-1" style="color: #7DC4C4;">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} · {{ pc.subclass }}{% endif %}</p>
                     </div>
                 </div>

@@ -190,6 +190,21 @@
     function adjustCount(idx, delta) { staged[idx].count = Math.max(1, staged[idx].count + delta); renderStage(); }
     function setEliteWeak(idx, val) { staged[idx].elite_weak = staged[idx].elite_weak === val ? 0 : val; renderStage(); }
     function clearStage() { staged = []; renderStage(); }
+    function duplicateEntry(idx) {
+        // Create a copy of the staged monster as a new entry (resets count to 1, keeps elite/weak)
+        const original = staged[idx];
+        staged.push({
+            path: original.path,
+            name: original.name,
+            level: original.level,
+            count: 1,
+            elite_weak: 0,  // Reset to normal so you can make it different
+            immunities: [...original.immunities],
+            resistances: [...original.resistances],
+            weaknesses: [...original.weaknesses]
+        });
+        renderStage();
+    }
 
     function renderStage() {
         const container = document.getElementById('staged-list');
@@ -215,14 +230,15 @@
                             <span class="text-[10px] text-gray-500">Lv ${effectiveLevel}</span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-green-700 text-white':'bg-gray-800 text-gray-400 hover:text-green-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors">E</button>
-                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-red-700 text-white':'bg-gray-800 text-gray-400 hover:text-red-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors">W</button>
-                            <span class="mx-2 border-r border-gray-700 h-5"></span>
+                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-green-700 text-white':'bg-gray-800 text-gray-400 hover:text-green-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Elite (+2 to everything)">E</button>
+                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-red-700 text-white':'bg-gray-800 text-gray-400 hover:text-red-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Weak (-2 to everything)">W</button>
+                            <span class="mx-1 border-r border-gray-700 h-5"></span>
                             <button onclick="adjustCount(${i}, -1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">-</button>
                             <span class="text-white font-bold w-8 text-center">${s.count}</span>
                             <button onclick="adjustCount(${i}, 1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">+</button>
-                            <span class="mx-2 border-r border-gray-700 h-5"></span>
-                            <button onclick="removeFromStage(${i})" class="text-red-400 hover:text-red-300 text-sm font-bold transition-colors">✕</button>
+                            <span class="mx-1 border-r border-gray-700 h-5"></span>
+                            <button onclick="duplicateEntry(${i})" class="text-[10px] bg-gray-800 hover:bg-amber-900/50 text-gray-400 hover:text-amber-400 px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Duplicate as separate entry (for mixed Elite/Normal)">⧉</button>
+                            <button onclick="removeFromStage(${i})" class="text-red-400 hover:text-red-300 text-sm font-bold transition-colors" title="Remove">✕</button>
                         </div>
                     </div>
                     ${extraHtml}
