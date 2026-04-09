@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTT Map - Player View</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            height: 100%; 
+            overflow: hidden; 
+            background: #000; 
+            font-family: system-ui, -apple-system, sans-serif;
+            color: #e0e0e0;
+        }
+        
+        #map-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            cursor: grab;
+        }
+        #map-container.dragging { cursor: grabbing; }
+        
+        #map-canvas {
+            position: absolute;
+            transform-origin: 0 0;
+        }
+        
+        /* Header */
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.85);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 100;
+            border-bottom: 1px solid #333;
+        }
+        
+        #header a {
+            color: #888;
+            text-decoration: none;
+            font-size: 12px;
+        }
+        #header a:hover { color: #fff; }
+        
+        #map-name {
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .player-controls {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .player-input {
+            padding: 6px 10px;
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 12px;
+            width: 140px;
+        }
+        .player-input:focus { border-color: #3b82f6; outline: none; }
+        
+        .player-btn {
+            padding: 6px 12px;
+            background: #2563eb;
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .player-btn:hover { background: #1d4ed8; }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+        .status-badge.connected { background: #166534; color: #86efac; }
+        .status-badge.disconnected { background: #7f1d1d; color: #fca5a5; }
+        
+        /* Turn Indicator */
+        #turn-indicator {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e3a5f;
+            border: 2px solid #3b82f6;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+            animation: pulse-border 2s infinite;
+        }
+        
+        #turn-indicator.active { display: block; }
+        
+        @keyframes pulse-border {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            50% { box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.4); }
+        }
+        
+        /* Ping Indicator */
+        .ping {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #fbbf24;
+            border-radius: 50%;
+            animation: ping-expand 1s ease-out forwards;
+            pointer-events: none;
+        }
+        
+        @keyframes ping-expand {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        
+        /* Status Bar */
+        #status-bar {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        .status-item {
+            background: rgba(0,0,0,0.7);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #888;
+        }
+        
+        /* Action Buttons */
+        #action-buttons {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }
+        
+        .action-btn {
+            padding: 10px 16px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #ccc;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .action-btn:hover { background: #333; border-color: #666; color: #fff; }
+        
+        /* No map message */
+        #no-map {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+        }
+        #no-map h2 { font-size: 24px; margin-bottom: 10px; }
+        #no-map p { font-size: 14px; }
+        
+        /* Character Sheet Modal */
+        #sheet-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #sheet-modal.active { display: flex; }
+        
+        #sheet-content {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* Dice Roller */
+        #dice-modal {
+            position: fixed;
+            bottom: 60px;
+            right: 10px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 150;
+            display: none;
+            width: 280px;
+        }
+        #dice-modal.active { display: block; }
+        
+        .dice-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .dice-btn {
+            padding: 12px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .dice-btn:hover { background: #3a3a3a; }
+        
+        #dice-result {
+            background: #252525;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        @keyframes turnBannerOut { from { transform:translateY(0); opacity:1; } to { transform:translateY(-100%); opacity:0; } }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div id="header">
+        <a href="/player">← Player Hub</a>
+        <span id="map-name">{{ current_map.name or 'Map' }}</span>
+        
+        <div class="player-controls">
+            <span style="color: #666; font-size: 11px;">Playing as:</span>
+            <input type="text" id="player-name-input" class="player-input" placeholder="Your name">
+            <button class="player-btn" onclick="setPlayerName()">Set</button>
+            <span id="connection-status" class="status-badge connected">Connected</span>
+        </div>
+    </div>
+    
+    <!-- Turn Indicator -->
+    <div id="turn-indicator">
+        ⚔️ <span id="turn-text">Your Turn!</span>
+    </div>
+    
+    <!-- Map Container -->
+    <div id="map-container">
+        <canvas id="map-canvas"></canvas>
+    </div>
+    
+    <!-- No map message -->
+    <div id="no-map" style="display: none;">
+        <h2>🗺 Waiting for Map</h2>
+        <p>The GM hasn't loaded a map yet.<br>This page will update automatically.</p>
+    </div>
+    
+    <!-- Status Bar -->
+    <div id="status-bar">
+        <span class="status-item" id="zoom-display">100%</span>
+        <span class="status-item" id="token-status">No token assigned</span>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div id="action-buttons">
+        <button class="action-btn" onclick="pingLocation()">📍 Ping</button>
+        <button class="action-btn" onclick="toggleDice()">🎲 Dice</button>
+        <button class="action-btn" onclick="showSheet()">📋 Sheet</button>
+    </div>
+    
+    <!-- Dice Modal -->
+    <div id="dice-modal">
+        <div style="font-size: 12px; color: #888; margin-bottom: 8px;">Quick Roll</div>
+        <div class="dice-grid">
+            <button class="dice-btn" onclick="rollDice(4)">d4</button>
+            <button class="dice-btn" onclick="rollDice(6)">d6</button>
+            <button class="dice-btn" onclick="rollDice(8)">d8</button>
+            <button class="dice-btn" onclick="rollDice(10)">d10</button>
+            <button class="dice-btn" onclick="rollDice(12)">d12</button>
+            <button class="dice-btn" onclick="rollDice(20)">d20</button>
+            <button class="dice-btn" onclick="rollDice(100)">d100</button>
+            <button class="dice-btn" onclick="closeDice()">✕</button>
+        </div>
+        <div id="dice-result">--</div>
+    </div>
+    
+    <!-- Character Sheet Modal -->
+    <div id="sheet-modal">
+        <div id="sheet-content">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                <h2 id="sheet-name">Character Sheet</h2>
+                <button onclick="closeSheet()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">×</button>
+            </div>
+            <div id="sheet-body">
+                Loading...
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ===========================================
+        // STATE
+        // ===========================================
+        let mapState = {{ current_map | tojson }};
+        let canvas, ctx;
+        let mapImage = null;
+        let viewX = 0, viewY = 0, zoom = 1;
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0, viewX: 0, viewY: 0, tokenX: 0, tokenY: 0 };
+        
+        let playerName = null;
+        let myToken = null;
+        let draggingToken = null;
+        let dragTokenOffset = { x: 0, y: 0 };
+        let isMyTurn = false;
+        
+        // Try to get player name from localStorage
+        playerName = localStorage.getItem('pf2e_player_name') || new URLSearchParams(window.location.search).get('player');
+        
+        // Auto-register with server session if we have a saved name
+        if (playerName) {
+            fetch('/api/map/player/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: playerName })
+            });
+        }
+        
+        // ===========================================
+        // INITIALIZATION
+        // ===========================================
+        function init() {
+            canvas = document.getElementById('map-canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set player name input
+            if (playerName) {
+                document.getElementById('player-name-input').value = playerName;
+                updateTokenStatus();
+            }
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Mouse events
+            const container = document.getElementById('map-container');
+            container.addEventListener('mousedown', onMouseDown);
+            container.addEventListener('mousemove', onMouseMove);
+            container.addEventListener('mouseup', onMouseUp);
+            container.addEventListener('mouseleave', onMouseUp);
+            container.addEventListener('wheel', onWheel);
+            
+            // Load map
+            if (mapState.image) {
+                loadMapImage(mapState.image);
+                document.getElementById('no-map').style.display = 'none';
+            } else {
+                document.getElementById('no-map').style.display = 'block';
+                render();
+            }
+            
+            setupSSE();
+        }
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            render();
+        }
+        
+        function loadMapImage(filename) {
+            mapImage = new Image();
+            mapImage.onload = () => {
+                viewX = (canvas.width - mapImage.width * zoom) / 2;
+                viewY = (canvas.height - mapImage.height * zoom) / 2;
+                render();
+            };
+            mapImage.src = `/api/map/image/${filename}`;
+        }
+        
+        // ===========================================
+        // SSE
+        // ===========================================
+        function setupSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.addEventListener('map_state', (e) => {
+                const newState = JSON.parse(e.data);
+                const hadMap = !!mapState.image;
+                mapState = newState;
+                
+                document.getElementById('map-name').textContent = mapState.name || 'Map';
+                
+                if (mapState.image) {
+                    document.getElementById('no-map').style.display = 'none';
+                    if (!hadMap || !mapImage || !mapImage.src.includes(mapState.image)) {
+                        loadMapImage(mapState.image);
+                    } else {
+                        render();
+                    }
+                } else {
+                    document.getElementById('no-map').style.display = 'block';
+                    mapImage = null;
+                    render();
+                }
+                
+                updateTokenStatus();
+            });
+            
+            evtSource.addEventListener('map_tokens', (e) => {
+                mapState.tokens = JSON.parse(e.data).tokens;
+                updateTokenStatus();
+                render();
+            });
+            
+            evtSource.addEventListener('map_walls', (e) => {
+                mapState.walls = JSON.parse(e.data).walls;
+                render();
+            });
+            
+            evtSource.addEventListener('ping', (e) => {
+                const data = JSON.parse(e.data);
+                showPing(data.x, data.y, data.player);
+            });
+            
+            evtSource.addEventListener('turn_update', (e) => {
+                const data = JSON.parse(e.data);
+                checkIfMyTurn(data.current_token);
+            });
+            
+            evtSource.addEventListener('encounter_update', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.active_name && playerName) {
+                        // Check if active combatant matches our assigned token
+                        const myTok = (mapState.tokens || []).find(t => t.assigned_player === playerName);
+                        if (myTok && (data.active_name === myTok.name || data.active_name === playerName)) {
+                            showTurnBanner(data.round || 0);
+                        }
+                    }
+                } catch(e) {}
+            });
+            
+            evtSource.onerror = () => {
+                document.getElementById('connection-status').className = 'status-badge disconnected';
+                document.getElementById('connection-status').textContent = 'Reconnecting...';
+            };
+            
+            evtSource.onopen = () => {
+                document.getElementById('connection-status').className = 'status-badge connected';
+                document.getElementById('connection-status').textContent = 'Connected';
+            };
+        }
+        
+        // ===========================================
+        // RENDERING
+        // ===========================================
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!mapImage || !mapImage.complete) {
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+            
+            ctx.save();
+            ctx.translate(viewX, viewY);
+            ctx.scale(zoom, zoom);
+            
+            // Draw map
+            ctx.drawImage(mapImage, 0, 0);
+            
+            // Draw grid (subtle)
+            drawGrid();
+            
+            // Draw fog of war (what hasn't been explored)
+            drawFogOfWar();
+            
+            // Draw difficult terrain
+            drawDifficultTerrain();
+            
+            // Draw visible tokens
+            drawTokens();
+            
+            ctx.restore();
+            
+            document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+        }
+        
+        function drawGrid() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1 / zoom;
+            
+            for (let x = ox; x < mapImage.width; x += gs) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.height);
+                ctx.stroke();
+            }
+            
+            for (let y = oy; y < mapImage.height; y += gs) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.width, y);
+                ctx.stroke();
+            }
+        }
+        
+        function drawFogOfWar() {
+            // Black fog over unexplored areas
+            // Applies dim/darkness visual tint to visible areas based on lighting
+            
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const explored = new Set(mapState.explored || []);
+            const lighting = mapState.lighting || 'bright';
+            
+            const cols = Math.ceil(mapImage.width / gs);
+            const rows = Math.ceil(mapImage.height / gs);
+            
+            // Get currently visible cells from PC positions
+            const visible = calculateVisibleCells();
+            
+            for (let gx = 0; gx < cols; gx++) {
+                for (let gy = 0; gy < rows; gy++) {
+                    const key = `${gx},${gy}`;
+                    const isExplored = explored.has(key);
+                    const isVisible = visible.has(key);
+                    const px = gx * gs + ox;
+                    const py = gy * gs + oy;
+                    
+                    if (!isExplored && !isVisible) {
+                        // Never seen - full black
+                        ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+                        ctx.fillRect(px, py, gs, gs);
+                    } else if (isExplored && !isVisible) {
+                        // Explored but not currently visible - dimmed
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                        ctx.fillRect(px, py, gs, gs);
+                    } else if (isVisible) {
+                        // Currently visible — apply lighting tint
+                        if (lighting === 'dim') {
+                            ctx.fillStyle = 'rgba(15, 25, 50, 0.3)';
+                            ctx.fillRect(px, py, gs, gs);
+                        } else if (lighting === 'darkness') {
+                            ctx.fillStyle = 'rgba(30, 15, 50, 0.45)';
+                            ctx.fillRect(px, py, gs, gs);
+                        }
+                        // bright = no tint (map shows through clean)
+                    }
+                }
+            }
+        }
+        
+        function calculateVisibleCells() {
+            const visible = new Set();
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const lighting = mapState.lighting || 'bright';
+            
+            const pcTokens = (mapState.tokens || []).filter(t => t.is_pc && t.visible_to_players !== false);
+            const walls = mapState.walls || [];
+            
+            const cols = Math.ceil(mapImage.width / gs);
+            const rows = Math.ceil(mapImage.height / gs);
+            
+            for (const pc of pcTokens) {
+                const size = pc.size || 1;
+                const cx = pc.x * gs + ox + (gs * size) / 2;
+                const cy = pc.y * gs + oy + (gs * size) / 2;
+                
+                // Effective vision radius based on lighting + senses
+                let visionRadius = pc.vision_radius || 6;
+                if (lighting === 'dim') {
+                    if (!pc.low_light_vision && !pc.darkvision) visionRadius = Math.ceil(visionRadius / 2);
+                } else if (lighting === 'darkness') {
+                    if (pc.darkvision) visionRadius = Math.ceil(visionRadius / 2);
+                    else visionRadius = 0;
+                }
+                if (visionRadius <= 0) continue;
+                
+                const visionPx = visionRadius * gs;
+                
+                for (let gx = 0; gx < cols; gx++) {
+                    for (let gy = 0; gy < rows; gy++) {
+                        const cellCenterX = gx * gs + ox + gs / 2;
+                        const cellCenterY = gy * gs + oy + gs / 2;
+                        
+                        // Range check
+                        const dist = Math.hypot(cellCenterX - cx, cellCenterY - cy);
+                        if (dist > visionPx) continue;
+                        
+                        // Check corners and center
+                        const points = [
+                            [gx * gs + ox, gy * gs + oy],
+                            [gx * gs + ox + gs, gy * gs + oy],
+                            [gx * gs + ox, gy * gs + oy + gs],
+                            [gx * gs + ox + gs, gy * gs + oy + gs],
+                            [cellCenterX, cellCenterY]
+                        ];
+                        
+                        for (const [px, py] of points) {
+                            if (!isBlockedByWalls(cx, cy, px, py, walls)) {
+                                visible.add(`${gx},${gy}`);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return visible;
+        }
+        
+        function isBlockedByWalls(x1, y1, x2, y2, walls) {
+            for (const wall of walls) {
+                if (wall.type === 'door' && wall.open) continue;
+                if (wall.type === 'invisible') continue; // Invisible walls don't block vision
+                
+                const points = wall.points || [];
+                if (points.length < 2) continue;
+                
+                for (let i = 0; i < points.length - 1; i++) {
+                    if (lineIntersects(x1, y1, x2, y2, points[i][0], points[i][1], points[i+1][0], points[i+1][1])) {
+                        return true;
+                    }
+                }
+                
+                if (wall.closed && points.length > 2) {
+                    const last = points.length - 1;
+                    if (lineIntersects(x1, y1, x2, y2, points[last][0], points[last][1], points[0][0], points[0][1])) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function lineIntersects(x1, y1, x2, y2, x3, y3, x4, y4) {
+            const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+            if (Math.abs(denom) < 0.0001) return false;
+            
+            const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+            const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+            
+            return ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999;
+        }
+        
+        function drawDifficultTerrain() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const explored = new Set(mapState.explored || []);
+            const visible = calculateVisibleCells();
+            
+            ctx.fillStyle = 'rgba(139, 92, 246, 0.15)';
+            
+            for (const cell of (mapState.difficult_terrain || [])) {
+                const key = `${cell.x},${cell.y}`;
+                // Only show if visible or explored
+                if (explored.has(key) || visible.has(key)) {
+                    const px = cell.x * gs + ox;
+                    const py = cell.y * gs + oy;
+                    ctx.fillRect(px, py, gs, gs);
+                }
+            }
+        }
+        
+        function drawTokens() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const visible = calculateVisibleCells();
+            
+            for (const token of (mapState.tokens || [])) {
+                // Only show visible tokens
+                if (token.visible_to_players === false) continue;
+                
+                // Check if token is in a visible area (for enemies)
+                const tokenKey = `${token.x},${token.y}`;
+                if (!token.is_pc && !visible.has(tokenKey)) continue;
+                
+                const size = token.size || 1;
+                
+                // Apply drag offset if this is our token being dragged
+                let tokenX = token.x;
+                let tokenY = token.y;
+                if (draggingToken && draggingToken.id === token.id) {
+                    tokenX = dragStart.tokenX + dragTokenOffset.x;
+                    tokenY = dragStart.tokenY + dragTokenOffset.y;
+                }
+                
+                const cx = tokenX * gs + ox + (gs * size) / 2;
+                const cy = tokenY * gs + oy + (gs * size) / 2;
+                const r = (gs * size) / 2 - 4;
+                
+                const isOwn = token.assigned_player === playerName;
+                
+                // Token circle
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fillStyle = token.color || (token.is_pc ? '#22c55e' : '#ef4444');
+                ctx.fill();
+                
+                // Border
+                ctx.strokeStyle = isOwn ? '#22c55e' : '#fff';
+                ctx.lineWidth = (isOwn ? 4 : 2) / zoom;
+                ctx.stroke();
+                
+                // Initials
+                ctx.fillStyle = '#fff';
+                ctx.font = `bold ${Math.max(12, r * 0.5)}px system-ui`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const initials = token.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                ctx.fillText(initials, cx, cy);
+                
+                // HP bar (for own token)
+                if (isOwn && token.max_hp > 0) {
+                    const hpPct = Math.max(0, (token.hp || 0) / token.max_hp);
+                    const barW = gs * size - 8;
+                    const barH = 6/zoom;
+                    const barX = cx - barW/2;
+                    const barY = cy + r + 4/zoom;
+                    
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(barX, barY, barW, barH);
+                    
+                    ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
+                    ctx.fillRect(barX, barY, barW * hpPct, barH);
+                }
+            }
+        }
+        
+        // ===========================================
+        // MOUSE EVENTS
+        // ===========================================
+        function onMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = (mouseX - viewX) / zoom;
+            const mapY = (mouseY - viewY) / zoom;
+            
+            // Check if clicking own token
+            if (mapState.player_control && playerName) {
+                const token = getOwnTokenAtPoint(mapX, mapY);
+                if (token) {
+                    draggingToken = token;
+                    dragStart = { x: e.clientX, y: e.clientY, tokenX: token.x, tokenY: token.y };
+                    dragTokenOffset = { x: 0, y: 0 };
+                    document.getElementById('map-container').classList.add('dragging');
+                    return;
+                }
+            }
+            
+            // Pan
+            isDragging = true;
+            dragStart = { x: e.clientX, y: e.clientY, viewX, viewY };
+            document.getElementById('map-container').classList.add('dragging');
+        }
+        
+        function onMouseMove(e) {
+            if (draggingToken) {
+                const gs = mapState.grid_size || 70;
+                const dx = e.clientX - dragStart.x;
+                const dy = e.clientY - dragStart.y;
+                const newX = dragStart.tokenX + Math.round(dx / zoom / gs);
+                const newY = dragStart.tokenY + Math.round(dy / zoom / gs);
+                
+                // Store offset for rendering
+                dragTokenOffset = {
+                    x: newX - dragStart.tokenX,
+                    y: newY - dragStart.tokenY
+                };
+                render();
+            } else if (isDragging) {
+                viewX = dragStart.viewX + (e.clientX - dragStart.x);
+                viewY = dragStart.viewY + (e.clientY - dragStart.y);
+                render();
+            }
+        }
+        
+        function onMouseUp(e) {
+            if (draggingToken && (dragTokenOffset.x !== 0 || dragTokenOffset.y !== 0)) {
+                const finalX = dragStart.tokenX + dragTokenOffset.x;
+                const finalY = dragStart.tokenY + dragTokenOffset.y;
+                moveToken(draggingToken.id, finalX, finalY);
+            }
+            draggingToken = null;
+            dragTokenOffset = { x: 0, y: 0 };
+            isDragging = false;
+            document.getElementById('map-container').classList.remove('dragging');
+        }
+        
+        function onWheel(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = Math.max(0.1, Math.min(5, zoom * zoomFactor));
+            
+            viewX = mouseX - (mouseX - viewX) * (newZoom / zoom);
+            viewY = mouseY - (mouseY - viewY) * (newZoom / zoom);
+            zoom = newZoom;
+            
+            render();
+        }
+        
+        function getOwnTokenAtPoint(mapX, mapY) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            for (const token of (mapState.tokens || [])) {
+                if (token.assigned_player !== playerName) continue;
+                
+                const size = token.size || 1;
+                const cx = token.x * gs + ox + (gs * size) / 2;
+                const cy = token.y * gs + oy + (gs * size) / 2;
+                const r = (gs * size) / 2;
+                
+                if (Math.hypot(mapX - cx, mapY - cy) <= r) {
+                    return token;
+                }
+            }
+            return null;
+        }
+        
+        // ===========================================
+        // PLAYER ACTIONS
+        // ===========================================
+        async function setPlayerName() {
+            const input = document.getElementById('player-name-input');
+            const name = input.value.trim();
+            if (name) {
+                // Register with server session for secure token auth
+                await fetch('/api/map/player/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                playerName = name;
+                localStorage.setItem('pf2e_player_name', name);
+                updateTokenStatus();
+                render();
+            }
+        }
+        
+        function updateTokenStatus() {
+            const status = document.getElementById('token-status');
+            myToken = (mapState.tokens || []).find(t => t.assigned_player === playerName);
+            
+            if (!playerName) {
+                status.textContent = 'Enter your name above';
+            } else if (myToken) {
+                status.textContent = `Playing as ${myToken.name}`;
+                status.style.color = '#86efac';
+            } else {
+                status.textContent = 'No token assigned to you';
+                status.style.color = '#fca5a5';
+            }
+        }
+        
+        async function moveToken(tokenId, x, y) {
+            await fetch('/api/map/token/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tokenId, x, y })
+            });
+        }
+        
+        function pingLocation() {
+            // Enable ping mode
+            document.getElementById('map-container').style.cursor = 'crosshair';
+            document.getElementById('map-container').onclick = async (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mapX = (e.clientX - rect.left - viewX) / zoom;
+                const mapY = (e.clientY - rect.top - viewY) / zoom;
+                
+                await fetch('/api/map/ping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: mapX, y: mapY, player: playerName || 'Unknown' })
+                });
+                
+                document.getElementById('map-container').style.cursor = '';
+                document.getElementById('map-container').onclick = null;
+            };
+        }
+        
+        function showPing(x, y, player) {
+            // Convert map coords to screen coords
+            const screenX = x * zoom + viewX;
+            const screenY = y * zoom + viewY;
+            
+            const ping = document.createElement('div');
+            ping.className = 'ping';
+            ping.style.left = screenX + 'px';
+            ping.style.top = screenY + 'px';
+            document.body.appendChild(ping);
+            
+            setTimeout(() => ping.remove(), 1000);
+        }
+        
+        function checkIfMyTurn(currentTokenId) {
+            const indicator = document.getElementById('turn-indicator');
+            
+            if (myToken && myToken.id === currentTokenId) {
+                indicator.classList.add('active');
+                document.getElementById('turn-text').textContent = "It's your turn!";
+                isMyTurn = true;
+            } else {
+                indicator.classList.remove('active');
+                isMyTurn = false;
+            }
+        }
+        
+        // ===========================================
+        // DICE ROLLER
+        // ===========================================
+        function toggleDice() {
+            document.getElementById('dice-modal').classList.toggle('active');
+        }
+        
+        function closeDice() {
+            document.getElementById('dice-modal').classList.remove('active');
+        }
+        
+        async function rollDice(sides) {
+            const roll = Math.floor(Math.random() * sides) + 1;
+            const isCrit = sides === 20 && roll === 20;
+            const isFumble = sides === 20 && roll === 1;
+            
+            let resultText = `d${sides}: ${roll}`;
+            if (isCrit) resultText = `🎯 NAT 20! d${sides}: ${roll}`;
+            if (isFumble) resultText = `💥 NAT 1! d${sides}: ${roll}`;
+            
+            document.getElementById('dice-result').textContent = resultText;
+            document.getElementById('dice-result').style.color = isCrit ? '#22c55e' : isFumble ? '#ef4444' : '#fff';
+            
+            // Broadcast roll to GM
+            await fetch('/api/map/roll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player: playerName || 'Unknown',
+                    dice: `d${sides}`,
+                    result: roll,
+                    crit: isCrit,
+                    fumble: isFumble
+                })
+            });
+        }
+        
+        async function rollAttack(attackName, bonus, damageDice) {
+            const roll = Math.floor(Math.random() * 20) + 1;
+            const total = roll + bonus;
+            const isCrit = roll === 20;
+            const isFumble = roll === 1;
+            
+            // Show result popup
+            showRollResult(attackName, roll, bonus, total, isCrit, isFumble, damageDice);
+            
+            // Broadcast to GM
+            await fetch('/api/map/roll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player: playerName || 'Unknown',
+                    attack: attackName,
+                    dice: 'd20',
+                    roll: roll,
+                    bonus: bonus,
+                    total: total,
+                    crit: isCrit,
+                    fumble: isFumble,
+                    damage: damageDice
+                })
+            });
+        }
+        
+        function showRollResult(name, roll, bonus, total, isCrit, isFumble, damage) {
+            // Remove any existing popup
+            const existing = document.getElementById('roll-popup');
+            if (existing) existing.remove();
+            
+            const popup = document.createElement('div');
+            popup.id = 'roll-popup';
+            popup.style.cssText = `
+                position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+                background: rgba(0,0,0,0.95); border: 2px solid ${isCrit ? '#22c55e' : isFumble ? '#ef4444' : '#3b82f6'};
+                padding: 16px 24px; border-radius: 12px; z-index: 500; text-align: center;
+                animation: pop-in 0.2s ease-out;
+            `;
+            popup.innerHTML = `
+                <div style="font-size: 12px; color: #888;">${name}</div>
+                <div style="font-size: 28px; font-weight: bold; color: ${isCrit ? '#22c55e' : isFumble ? '#ef4444' : '#fff'};">
+                    ${isCrit ? '🎯 CRIT! ' : isFumble ? '💥 FUMBLE! ' : ''}${total}
+                </div>
+                <div style="font-size: 11px; color: #888;">d20(${roll}) + ${bonus}</div>
+                ${damage ? `<div style="font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #333;">Damage: ${damage}</div>` : ''}
+            `;
+            document.body.appendChild(popup);
+            
+            setTimeout(() => popup.remove(), 5000);
+        }
+        
+        // ===========================================
+        // CHARACTER SHEET
+        // ===========================================
+        function showSheet() {
+            if (!myToken) {
+                alert('No character assigned to you');
+                return;
+            }
+            
+            document.getElementById('sheet-modal').classList.add('active');
+            document.getElementById('sheet-name').textContent = myToken.name;
+            
+            // Load character data
+            fetch(`/api/character/${encodeURIComponent(myToken.name)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        renderSheet(data.character);
+                    } else {
+                        document.getElementById('sheet-body').innerHTML = '<p>Character not found</p>';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('sheet-body').innerHTML = '<p>Error loading character</p>';
+                });
+        }
+        
+        function renderSheet(char) {
+            document.getElementById('sheet-body').innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">HP</div>
+                        <div style="font-size: 20px; font-weight: bold;">${char.current_hp || 0}/${char.hp || 0}</div>
+                    </div>
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">AC</div>
+                        <div style="font-size: 20px; font-weight: bold;">${char.ac || 10}</div>
+                    </div>
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">Speed</div>
+                        <div style="font-size: 20px; font-weight: bold;">${char.speed || 25}ft</div>
+                    </div>
+                </div>
+                <p style="color: #888; font-size: 12px;">Full character sheet coming soon...</p>
+            `;
+        }
+        
+        function closeSheet() {
+            document.getElementById('sheet-modal').classList.remove('active');
+        }
+        
+        // ===========================================
+        // TURN TRANSITION BANNER
+        // ===========================================
+        function showTurnBanner(round) {
+            const existing = document.getElementById('turn-banner');
+            if (existing) existing.remove();
+            
+            const banner = document.createElement('div');
+            banner.id = 'turn-banner';
+            banner.style.cssText = `
+                position:fixed; top:0; left:0; right:0; z-index:9999;
+                background: linear-gradient(135deg, rgba(94,173,173,0.95), rgba(59,130,246,0.95));
+                color:#fff; text-align:center; padding:20px;
+                font-family:system-ui,-apple-system,sans-serif; font-size:28px; font-weight:700;
+                letter-spacing:0.08em; text-transform:uppercase;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                transform:translateY(-100%); opacity:0;
+                animation: turnBannerIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                pointer-events:none;
+            `;
+            banner.innerHTML = `
+                <div style="text-shadow:0 2px 8px rgba(0,0,0,0.4);">Your Turn</div>
+                ${round ? `<div style="font-size:12px; opacity:0.7; letter-spacing:0.15em; margin-top:4px;">Round ${round}</div>` : ''}
+            `;
+            document.body.appendChild(banner);
+            
+            setTimeout(() => {
+                banner.style.animation = 'turnBannerOut 0.4s ease forwards';
+                setTimeout(() => banner.remove(), 400);
+            }, 3000);
+            
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 523; gain.gain.value = 0.1;
+                osc.start(); osc.stop(ctx.currentTime + 0.15);
+                setTimeout(() => {
+                    const osc2 = ctx.createOscillator();
+                    const gain2 = ctx.createGain();
+                    osc2.connect(gain2); gain2.connect(ctx.destination);
+                    osc2.frequency.value = 659; gain2.gain.value = 0.1;
+                    osc2.start(); osc2.stop(ctx.currentTime + 0.2);
+                }, 150);
+            } catch(e) {}
+        }
+        
+        // ===========================================
+        // INIT
+        // ===========================================
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

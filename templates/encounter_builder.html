@@ -84,6 +84,31 @@
                 <div id="import-monster-status" class="text-xs mt-2 hidden"></div>
             </details>
         </div>
+        
+        <!-- Quick Add Hazard -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <details>
+                <summary class="font-header text-sm text-orange-400 cursor-pointer mb-3">⚠ Add Hazard / Trap</summary>
+                <div class="space-y-2 mt-3">
+                    <input type="text" id="hz-name" placeholder="Hazard Name" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] text-gray-500 uppercase">Level</label>
+                            <input type="number" id="hz-level" value="1" min="-1" max="25" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-gray-500 uppercase">Type</label>
+                            <select id="hz-type" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                                <option value="simple">Simple</option>
+                                <option value="complex">Complex</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button onclick="addHazard()" class="w-full bg-orange-900/30 hover:bg-orange-900/50 text-orange-400 border border-orange-900/50 rounded py-2 text-sm font-bold transition-colors">Add Hazard to Budget</button>
+                    <p class="text-[10px] text-gray-600 italic">Hazards use the same XP table as creatures. Simple hazards award XP once; complex hazards act in initiative.</p>
+                </div>
+            </details>
+        </div>
     </div>
 
     <!-- Staging Area -->
@@ -100,13 +125,14 @@
             </div>
             <div class="relative h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
                 <div id="xp-bar" class="absolute top-0 left-0 h-full transition-all duration-300 rounded-full" style="width: 0%; background: #64748B;"></div>
-                <div class="absolute top-0 h-full border-r border-gray-600" style="left: 30%;" title="Low (60 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-yellow-700/50" style="left: 40%;" title="Moderate (80 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-orange-700/50" style="left: 60%;" title="Severe (120 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-red-700/50" style="left: 80%;" title="Extreme (160 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-gray-600" style="left: 20%;" title="Low (40 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-yellow-700/50" style="left: 30%;" title="Moderate (60 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-orange-700/50" style="left: 40%;" title="Severe (80 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-red-700/50" style="left: 60%;" title="Extreme (120 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-red-900/50" style="left: 80%;" title="Impossible (160 XP)"></div>
             </div>
             <div class="flex justify-between text-[9px] text-gray-600 mt-1 px-1">
-                <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span>
+                <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span><span>!!!</span>
             </div>
         </div>
 
@@ -215,6 +241,7 @@
             document.getElementById('btn-load').disabled = false;
             container.innerHTML = staged.map((s, i) => {
                 let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-green-600 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-red-600 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
+                let hazardLabel = s.is_hazard ? `<span class="text-[10px] bg-orange-600 text-white px-1 py-0.5 rounded font-bold ml-1">${s.hazard_type === 'complex' ? 'COMPLEX' : 'SIMPLE'} HAZARD</span>` : '';
                 let effectiveLevel = s.level + s.elite_weak;
                 let extras = [];
                 if (s.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(s.immunities.join(', '))}</span>`);
@@ -227,6 +254,7 @@
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-white">${esc(s.name)}</span>
                             ${ewLabel}
+                            ${hazardLabel}
                             <span class="text-[10px] text-gray-500">Lv ${effectiveLevel}</span>
                         </div>
                         <div class="flex items-center gap-1">
@@ -260,13 +288,15 @@
         
         document.getElementById('xp-total').innerText = totalXP;
         
+        // PF2E GM Core p.74 thresholds (4-player party)
         let label, color, barColor, pct;
         if (totalXP === 0) { label = 'Empty'; color = 'text-gray-400'; barColor = '#64748B'; pct = 0; }
-        else if (totalXP < 60) { label = 'Trivial'; color = 'text-gray-400'; barColor = '#64748B'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 80) { label = 'Low'; color = 'text-green-400'; barColor = '#34D399'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 120) { label = 'Moderate'; color = 'text-yellow-400'; barColor = '#FBBF24'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 160) { label = 'Severe'; color = 'text-orange-500'; barColor = '#F97316'; pct = (totalXP / 200) * 100; }
-        else { label = 'Extreme'; color = 'text-red-500 font-bold'; barColor = '#EF4444'; pct = Math.min((totalXP / 200) * 100, 100); }
+        else if (totalXP < 40) { label = 'Trivial'; color = 'text-gray-400'; barColor = '#64748B'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 60) { label = 'Low'; color = 'text-green-400'; barColor = '#34D399'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 80) { label = 'Moderate'; color = 'text-yellow-400'; barColor = '#FBBF24'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 120) { label = 'Severe'; color = 'text-orange-500'; barColor = '#F97316'; pct = (totalXP / 200) * 100; }
+        else if (totalXP < 160) { label = 'Extreme'; color = 'text-red-500 font-bold'; barColor = '#EF4444'; pct = (totalXP / 200) * 100; }
+        else { label = 'Impossible'; color = 'text-red-600 font-bold'; barColor = '#DC2626'; pct = Math.min((totalXP / 200) * 100, 100); }
         
         const diffEl = document.getElementById('xp-difficulty');
         diffEl.innerText = label;
@@ -293,6 +323,25 @@
     }
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function addHazard() {
+        const name = document.getElementById('hz-name').value.trim();
+        if (!name) { alert('Hazard needs a name!'); return; }
+        const level = parseInt(document.getElementById('hz-level').value) || 1;
+        const type = document.getElementById('hz-type').value;
+        staged.push({
+            path: '__hazard__' + name,
+            name: name,
+            level: level,
+            count: 1,
+            elite_weak: 0,
+            hp: 0, ac: 0,
+            immunities: [], resistances: [], weaknesses: [],
+            is_hazard: true,
+            hazard_type: type
+        });
+        renderStage();
+    }
 
     async function createCustomMonster() {
         const name = document.getElementById('cm-name').value.trim();

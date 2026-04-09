@@ -68,11 +68,12 @@ MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')
 PARTY_DIR = os.path.join(DATA_DIR, 'party_data') 
 ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters') 
 OBSIDIAN_DIR = os.path.join(DATA_DIR, 'obsidian_vault')
+MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -83,19 +84,72 @@ TURN_INDEX = 0
 ROUND_NUMBER = 1
 COMBAT_LOGS = []
 
+# --- VTT MAP STATE ---
+ACTIVE_MAP = {
+    'id': None,
+    'name': None,
+    'image': None,  # filename
+    'grid_size': 70,  # pixels per square
+    'grid_offset_x': 0,
+    'grid_offset_y': 0,
+    'tokens': [],  # [{id, name, x, y, size, color, hp, max_hp, ac, speed, is_pc, conditions, assigned_player, visible_to_players, initiative}]
+    'walls': [],  # [{id, points: [[x,y],...], type: 'normal'|'terrain'|'invisible'|'ethereal'|'door', closed: bool, open: bool}]
+    'explored': [],  # List of "x,y" strings for explored grid cells
+    'difficult_terrain': [],  # [{x, y}] grid cells with difficult terrain
+    'spawn_point': None,  # {x, y} grid position for party spawn
+    'player_control': True,  # Can players move their own tokens?
+}
+MAP_LOCK = threading.Lock()
+
 def _combat_log(msg, log_type='action'):
     """Append a timestamped entry to the combat log."""
     COMBAT_LOGS.append({
+        'id': str(uuid.uuid4())[:8],
         'time': time.strftime('%H:%M:%S'),
         'round': ROUND_NUMBER,
         'msg': msg,
         'type': log_type
     })
 
+def _persist_encounter_state():
+    """Auto-save the active encounter to disk so it survives restarts."""
+    if not ACTIVE_ENCOUNTER:
+        # Remove autosave file if encounter is empty
+        autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
+        if os.path.exists(autosave_path):
+            os.remove(autosave_path)
+        return
+    try:
+        os.makedirs(ENCOUNTER_DIR, exist_ok=True)
+        encounter_data = {
+            "round": ROUND_NUMBER,
+            "turn_index": TURN_INDEX,
+            "combatants": []
+        }
+        for c in ACTIVE_ENCOUNTER:
+            entry = {
+                'type': 'pc' if c.is_pc else 'monster',
+                'path': c.name if c.is_pc else c.file_path,
+                'instance_id': c.instance_id,
+                'initiative': c.initiative,
+                'current_hp': c.current_hp,
+                'conditions': c.conditions,
+                'persistent_damage': getattr(c, 'persistent_damage', ''),
+                'elite_weak': getattr(c, 'elite_weak', 0),
+                'delaying': getattr(c, 'delaying', False),
+            }
+            encounter_data['combatants'].append(entry)
+        with open(os.path.join(ENCOUNTER_DIR, '_autosave.json'), 'w', encoding='utf-8') as f:
+            json.dump(encounter_data, f, indent=2)
+    except Exception as e:
+        print(f"[ENCOUNTER PERSIST ERROR] {e}")
+
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
 _sse_subscribers = []  # List of queue.Queue objects, one per connected client
 _sse_lock = threading.Lock()
 _sse_last_cleanup = time.time()
+_SSE_MAX_SUBSCRIBERS = 50  # Hard cap to prevent memory leaks
+_SSE_STALE_TIMEOUT = 120  # Seconds before a non-consuming queue is considered stale
 
 def sse_broadcast(event_type, data):
     """Push an event to all connected SSE clients."""
@@ -111,12 +165,16 @@ def sse_broadcast(event_type, data):
         for q in dead:
             _sse_subscribers.remove(q)
         
-        # Periodic cleanup logging (every 5 minutes)
+        # Periodic stale subscriber cleanup (every 60 seconds)
         now = time.time()
-        if now - _sse_last_cleanup > 300:
+        if now - _sse_last_cleanup > 60:
             _sse_last_cleanup = now
-            if _sse_subscribers:
-                print(f"[SSE] Active connections: {len(_sse_subscribers)}")
+            # Remove queues that are nearly full (stale clients)
+            stale = [q for q in _sse_subscribers if q.qsize() > 40]
+            for q in stale:
+                _sse_subscribers.remove(q)
+            if _sse_subscribers or stale:
+                print(f"[SSE] Active: {len(_sse_subscribers)}, Cleaned: {len(stale)}")
 
 def sse_subscriber_count():
     """Return the number of active SSE subscribers."""
@@ -428,6 +486,27 @@ def save_and_reload_character(pc_name, pc_json, file_path):
         print(f"[SAVE ERROR] {pc_name}: {e}")
         return False, str(e)
 
+def _persist_pc_combat_state(pc_name):
+    """Lightweight persistence of HP, conditions, and focus to disk without full reload.
+    Used by adjust_party_hp and adjust_focus to survive server restarts."""
+    if pc_name not in PARTY_LIBRARY:
+        return
+    pc = PARTY_LIBRARY[pc_name]
+    file_path = get_pc_file_path(pc_name)
+    if not file_path or not os.path.exists(file_path):
+        return
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        build['current_hp'] = pc.current_hp
+        build['current_focus'] = getattr(pc, 'current_focus', 0)
+        build['conditions'] = {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False}
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(pc_json, f, indent=2)
+    except Exception as e:
+        print(f"[PERSIST ERROR] {pc_name}: {e}")
+
 # --- REQUEST VALIDATION HELPERS ---
 def require_pc(pc_name):
     """Validate that a PC exists. Returns (pc, file_path, error_response).
@@ -483,11 +562,13 @@ def calculate_encounter_xp(encounter, party_level):
     return total_xp
 
 def get_difficulty_label(xp):
-    if xp < 60: return "Trivial", "text-gray-400"
-    elif xp < 80: return "Low", "text-green-400"
-    elif xp < 120: return "Moderate", "text-yellow-400"
-    elif xp < 160: return "Severe", "text-orange-500"
-    else: return "Extreme", "text-red-600 font-bold"
+    """PF2E encounter difficulty (GM Core p.74, 4-player party)."""
+    if xp < 40: return "Trivial", "text-gray-400"
+    elif xp < 60: return "Low", "text-green-400"
+    elif xp < 80: return "Moderate", "text-yellow-400"
+    elif xp < 120: return "Severe", "text-orange-500"
+    elif xp < 160: return "Extreme", "text-red-600 font-bold"
+    else: return "Impossible", "text-red-600 font-bold animate-pulse"
 
 class Character:
     def __init__(self, data, file_path=""):
@@ -820,6 +901,8 @@ class Character:
             'clumsy': safe_int(saved_conds.get('clumsy', 0)),
             'drained': safe_int(saved_conds.get('drained', 0)),
             'stupefied': safe_int(saved_conds.get('stupefied', 0)),
+            'stunned': safe_int(saved_conds.get('stunned', 0)),
+            'slowed': safe_int(saved_conds.get('slowed', 0)),
             'dying': safe_int(saved_conds.get('dying', 0)),
             'wounded': safe_int(saved_conds.get('wounded', 0)),
             'doomed': safe_int(saved_conds.get('doomed', 0)),
@@ -1626,7 +1709,7 @@ class Monster:
             elif item_type == 'action':
                 self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', ''))})
 
-        self.conditions = { 'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0, 'doomed': 0, 'prone': False, 'off_guard': False, 'concealed': False, 'hidden': False, 'undetected': False }
+        self.conditions = { 'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0, 'doomed': 0, 'stunned': 0, 'slowed': 0, 'enfeebled': 0, 'clumsy': 0, 'drained': 0, 'stupefied': 0, 'prone': False, 'off_guard': False, 'concealed': False, 'hidden': False, 'undetected': False }
         
         # Elite/Weak adjustment tracking
         self.elite_weak = 0  # 0=normal, 1=elite, -1=weak
@@ -2374,6 +2457,44 @@ def load_libraries():
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
     _build_pc_file_cache()
+    
+    # --- AUTO-RESTORE ENCOUNTER FROM AUTOSAVE ---
+    _restore_encounter_autosave()
+
+def _restore_encounter_autosave():
+    """Restore the active encounter from autosave file on startup."""
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER
+    autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
+    if not os.path.exists(autosave_path):
+        return
+    try:
+        with open(autosave_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        combatants = raw.get('combatants', [])
+        ROUND_NUMBER = raw.get('round', 1)
+        TURN_INDEX = raw.get('turn_index', 0)
+        ACTIVE_ENCOUNTER.clear()
+        for item in combatants:
+            new_c = None
+            if item.get('type') == 'monster' and item.get('path') in MONSTER_LIBRARY:
+                new_c = copy.deepcopy(MONSTER_LIBRARY[item['path']])
+            elif item.get('type') == 'pc' and item.get('path') in PARTY_LIBRARY:
+                new_c = copy.deepcopy(PARTY_LIBRARY[item['path']])
+            if new_c:
+                new_c.instance_id = item.get('instance_id', str(uuid.uuid4()))
+                new_c.initiative = item.get('initiative', 0)
+                if 'current_hp' in item: new_c.current_hp = item['current_hp']
+                if 'conditions' in item: new_c.conditions = item['conditions']
+                if 'persistent_damage' in item: new_c.persistent_damage = item['persistent_damage']
+                if 'delaying' in item: new_c.delaying = item['delaying']
+                if 'elite_weak' in item and hasattr(new_c, 'apply_elite_weak'):
+                    new_c.apply_elite_weak(item['elite_weak'])
+                ACTIVE_ENCOUNTER.append(new_c)
+        if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
+        if ACTIVE_ENCOUNTER:
+            print(f"[ENCOUNTER] Restored autosave: {len(ACTIVE_ENCOUNTER)} combatants, Round {ROUND_NUMBER}")
+    except Exception as e:
+        print(f"[ENCOUNTER] Failed to restore autosave: {e}")
 
 def get_vault_tree(dir_path):
     tree = []
@@ -2524,6 +2645,7 @@ def add_combatant():
     if c_type == 'monster' and path in MONSTER_LIBRARY: ACTIVE_ENCOUNTER.append(copy.deepcopy(MONSTER_LIBRARY[path]).__setattr__('instance_id', str(uuid.uuid4())) or copy.deepcopy(MONSTER_LIBRARY[path]))
     elif c_type == 'pc' and path in PARTY_LIBRARY: ACTIVE_ENCOUNTER.append(copy.deepcopy(PARTY_LIBRARY[path]).__setattr__('instance_id', str(uuid.uuid4())) or copy.deepcopy(PARTY_LIBRARY[path]))
     if ACTIVE_ENCOUNTER: ACTIVE_ENCOUNTER[-1].instance_id = str(uuid.uuid4())
+    _persist_encounter_state()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/add_party', methods=['POST'])
@@ -2532,6 +2654,7 @@ def add_party():
         new_c = copy.deepcopy(pc_data)
         new_c.instance_id = str(uuid.uuid4())
         ACTIVE_ENCOUNTER.append(new_c)
+    _persist_encounter_state()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/remove_combatant/<instance_id>', methods=['POST'])
@@ -2540,6 +2663,7 @@ def remove_combatant(instance_id):
     ACTIVE_ENCOUNTER = [c for c in ACTIVE_ENCOUNTER if c.instance_id != instance_id]
     if len(ACTIVE_ENCOUNTER) > 0 and TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = len(ACTIVE_ENCOUNTER) - 1
     elif len(ACTIVE_ENCOUNTER) == 0: TURN_INDEX = 0
+    _persist_encounter_state()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/clear_encounter', methods=['POST'])
@@ -2549,6 +2673,7 @@ def clear_encounter():
         names = [c.name for c in ACTIVE_ENCOUNTER]
         _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
     ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
+    _persist_encounter_state()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/combat_log')
@@ -2589,6 +2714,8 @@ def adjust_hp(instance_id):
                     PARTY_LIBRARY[c.name].conditions['dying'] = c.conditions['dying']
                     PARTY_LIBRARY[c.name].conditions['wounded'] = c.conditions['wounded']
                     _broadcast_pc_state(c.name)
+                    _persist_pc_combat_state(c.name)
+                _persist_encounter_state()
                 _broadcast_encounter_state()
                 break
     except ValueError: pass
@@ -2626,6 +2753,8 @@ def adjust_party_hp(pc_name):
                     c.current_hp = pc.current_hp
                     c.conditions['dying'] = pc.conditions['dying']
                     c.conditions['wounded'] = pc.conditions['wounded']
+            # Persist HP and conditions to disk
+            _persist_pc_combat_state(pc_name)
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json: 
                 _broadcast_pc_state(pc_name)
                 return jsonify({
@@ -2648,6 +2777,7 @@ def adjust_focus(pc_name):
             elif action == 'decrease' and pc.current_focus > 0: pc.current_focus -= 1
             for c in ACTIVE_ENCOUNTER:
                 if c.is_pc and c.name == pc_name: c.current_focus = pc.current_focus
+            _persist_pc_combat_state(pc_name)
             return jsonify({"success": True, "current_focus": pc.current_focus})
     except ValueError: pass
     return jsonify({"success": False})
@@ -2671,6 +2801,243 @@ def adjust_hero(pc_name):
             return jsonify({"success": True, "current_hero": pc.hero_points})
     except ValueError: pass
     return jsonify({"success": False})
+
+# =============================================================================
+# DAILY PREPARATIONS
+# =============================================================================
+@app.route('/api/daily_prep/<pc_name>', methods=['POST'])
+def daily_preparations(pc_name):
+    """Daily preparations: reset spell slots, focus points, conditions, optionally heal to full."""
+    pc, file_path, err = require_pc(pc_name)
+    if err: return err
+    
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err: return err
+    build = pc_json.get('build', pc_json)
+    
+    data = request.json or {}
+    heal_full = data.get('heal_full', True)
+    
+    # Reset expended spell slots
+    build['expended_slots'] = {}
+    
+    # Restore focus to max
+    build['current_focus'] = pc.focus_max
+    
+    # Clear combat conditions that don't persist overnight
+    conditions_to_clear = ['frightened', 'sickened', 'stunned', 'slowed', 'dying', 'off_guard', 'concealed', 'hidden', 'prone']
+    if 'conditions' not in build: build['conditions'] = {}
+    for cond in conditions_to_clear:
+        build['conditions'][cond] = False if cond in ['off_guard', 'concealed', 'hidden', 'prone'] else 0
+    
+    # Clear persistent damage
+    build['persistent_damage'] = ''
+    
+    # Reset hero points to 1
+    build['hero_points'] = 1
+    
+    # Heal to full HP if requested
+    if heal_full:
+        build.pop('current_hp', None)  # Removing it makes Character.__init__ default to max
+    
+    save_and_reload_character(pc_name, pc_json, file_path)
+    _broadcast_pc_state(pc_name)
+    
+    return jsonify({"success": True, "message": f"{pc_name} completed daily preparations."})
+
+@app.route('/api/daily_prep_all', methods=['POST'])
+def daily_preparations_all():
+    """Daily preparations for all party members at once."""
+    data = request.json or {}
+    heal_full = data.get('heal_full', True)
+    results = []
+    for pc_name in list(PARTY_LIBRARY.keys()):
+        try:
+            pc_json, file_path, err = require_pc_json(pc_name)
+            if err: continue
+            build = pc_json.get('build', pc_json)
+            build['expended_slots'] = {}
+            pc = PARTY_LIBRARY[pc_name]
+            build['current_focus'] = pc.focus_max
+            if 'conditions' not in build: build['conditions'] = {}
+            for cond in ['frightened', 'sickened', 'stunned', 'slowed', 'dying', 'off_guard', 'concealed', 'hidden', 'prone']:
+                build['conditions'][cond] = False if cond in ['off_guard', 'concealed', 'hidden', 'prone'] else 0
+            build['persistent_damage'] = ''
+            build['hero_points'] = 1
+            if heal_full:
+                build.pop('current_hp', None)
+            save_and_reload_character(pc_name, pc_json, file_path)
+            _broadcast_pc_state(pc_name)
+            results.append(pc_name)
+        except Exception as e:
+            print(f"[DAILY PREP] Error for {pc_name}: {e}")
+    return jsonify({"success": True, "prepared": results})
+
+# =============================================================================
+# SHIELD BLOCK SYSTEM
+# =============================================================================
+@app.route('/api/shield_block/<pc_name>', methods=['POST'])
+def shield_block(pc_name):
+    """Use Shield Block reaction: reduce damage by hardness, shield takes remaining."""
+    pc, file_path, err = require_pc(pc_name)
+    if err: return err
+    
+    data = request.json or {}
+    damage = safe_int(data.get('damage', 0))
+    
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err: return err
+    build = pc_json.get('build', pc_json)
+    
+    # Get shield stats from build or defaults
+    shield_hp = safe_int(build.get('shield_hp'), 20)
+    shield_max_hp = safe_int(build.get('shield_max_hp'), 20)
+    shield_hardness = safe_int(build.get('shield_hardness'), 5)
+    shield_bt = safe_int(build.get('shield_bt'), shield_max_hp // 2)  # Broken threshold = half max HP
+    
+    if shield_hp <= 0:
+        return jsonify({"success": False, "error": "Shield is broken/destroyed"})
+    if shield_hp <= shield_bt:
+        return jsonify({"success": False, "error": "Shield is broken (below BT)"})
+    
+    # Shield Block: reduce damage by hardness, shield takes the rest
+    blocked = min(damage, shield_hardness)
+    damage_to_char = max(0, damage - shield_hardness)
+    damage_to_shield = max(0, damage - shield_hardness)
+    
+    shield_hp = max(0, shield_hp - damage_to_shield)
+    shield_broken = shield_hp <= shield_bt
+    shield_destroyed = shield_hp <= 0
+    
+    # Apply reduced damage to character
+    pc.current_hp = max(0, pc.current_hp - damage_to_char)
+    
+    # Save shield state
+    build['shield_hp'] = shield_hp
+    build['current_hp'] = pc.current_hp
+    
+    save_and_reload_character(pc_name, pc_json, file_path)
+    _broadcast_pc_state(pc_name)
+    
+    status = "destroyed" if shield_destroyed else "broken" if shield_broken else "intact"
+    _combat_log(f"{pc_name}: Shield Block! Blocked {blocked} dmg (Hardness {shield_hardness}). Shield took {damage_to_shield} ({status}). {damage_to_char} dmg to HP.", 'action')
+    
+    return jsonify({
+        "success": True,
+        "blocked": blocked,
+        "damage_to_char": damage_to_char,
+        "damage_to_shield": damage_to_shield,
+        "shield_hp": shield_hp,
+        "shield_max_hp": shield_max_hp,
+        "shield_broken": shield_broken,
+        "shield_destroyed": shield_destroyed,
+        "current_hp": pc.current_hp
+    })
+
+@app.route('/api/repair_shield/<pc_name>', methods=['POST'])
+def repair_shield(pc_name):
+    """Repair a shield (Crafting check during daily prep or Repair action)."""
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err: return err
+    build = pc_json.get('build', pc_json)
+    
+    data = request.json or {}
+    amount = safe_int(data.get('amount'), 0)
+    full_repair = data.get('full_repair', False)
+    
+    shield_max_hp = safe_int(build.get('shield_max_hp'), 20)
+    shield_hp = safe_int(build.get('shield_hp'), shield_max_hp)
+    
+    if full_repair:
+        build['shield_hp'] = shield_max_hp
+    else:
+        build['shield_hp'] = min(shield_max_hp, shield_hp + amount)
+    
+    save_and_reload_character(pc_name, pc_json, file_path)
+    return jsonify({"success": True, "shield_hp": build['shield_hp'], "shield_max_hp": shield_max_hp})
+
+@app.route('/api/set_shield_stats/<pc_name>', methods=['POST'])
+def set_shield_stats(pc_name):
+    """Set shield stats (hardness, HP, BT) when equipping a new shield."""
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err: return err
+    build = pc_json.get('build', pc_json)
+    
+    data = request.json or {}
+    build['shield_hardness'] = safe_int(data.get('hardness'), 5)
+    build['shield_max_hp'] = safe_int(data.get('max_hp'), 20)
+    build['shield_hp'] = safe_int(data.get('hp'), build['shield_max_hp'])
+    build['shield_bt'] = safe_int(data.get('bt'), build['shield_max_hp'] // 2)
+    build['shield_ac_bonus'] = safe_int(data.get('ac_bonus'), 2)
+    
+    save_and_reload_character(pc_name, pc_json, file_path)
+    return jsonify({"success": True})
+
+# =============================================================================
+# MAP FLANKING DETECTION
+# =============================================================================
+@app.route('/api/map/flanking', methods=['GET'])
+def check_flanking():
+    """Check all token pairs for flanking geometry on the VTT map.
+    Two allied tokens flank an enemy when they are on opposite sides (within 45 degrees of a line through the enemy).
+    Returns list of enemy token IDs that are currently flanked."""
+    with MAP_LOCK:
+        tokens = ACTIVE_MAP.get('tokens', [])
+    
+    gs = ACTIVE_MAP.get('grid_size', 70)
+    flanked_ids = []
+    
+    # Separate PCs and NPCs
+    pcs = [t for t in tokens if t.get('is_pc')]
+    npcs = [t for t in tokens if not t.get('is_pc') and t.get('visible_to_players', True)]
+    
+    for npc in npcs:
+        npc_cx = npc['x'] + (npc.get('size', 1) / 2)
+        npc_cy = npc['y'] + (npc.get('size', 1) / 2)
+        
+        # Check all pairs of PCs
+        is_flanked = False
+        for i in range(len(pcs)):
+            if is_flanked: break
+            for j in range(i + 1, len(pcs)):
+                pc_a = pcs[i]
+                pc_b = pcs[j]
+                
+                ax = pc_a['x'] + (pc_a.get('size', 1) / 2)
+                ay = pc_a['y'] + (pc_a.get('size', 1) / 2)
+                bx = pc_b['x'] + (pc_b.get('size', 1) / 2)
+                by = pc_b['y'] + (pc_b.get('size', 1) / 2)
+                
+                # Both must be adjacent to the enemy (within 1.5 squares for reach/diagonals)
+                dist_a = max(abs(ax - npc_cx), abs(ay - npc_cy))
+                dist_b = max(abs(bx - npc_cx), abs(by - npc_cy))
+                if dist_a > 1.5 or dist_b > 1.5:
+                    continue
+                
+                # Check if PCs are on opposite sides: the line from A to B must pass through or near the enemy
+                # Vector from A to B
+                dx = bx - ax
+                dy = by - ay
+                line_len_sq = dx * dx + dy * dy
+                if line_len_sq < 0.01: continue
+                
+                # Project enemy onto line A→B
+                t = ((npc_cx - ax) * dx + (npc_cy - ay) * dy) / line_len_sq
+                
+                # Enemy should be between A and B (t between 0.1 and 0.9)
+                # and close to the line
+                if 0.1 <= t <= 0.9:
+                    proj_x = ax + t * dx
+                    proj_y = ay + t * dy
+                    perp_dist = math.hypot(npc_cx - proj_x, npc_cy - proj_y)
+                    if perp_dist <= 0.75:  # Within tolerance
+                        is_flanked = True
+                        break
+        
+        if is_flanked:
+            flanked_ids.append(npc['id'])
+    
+    return jsonify({"success": True, "flanked": flanked_ids})
 
 # NEW: FRONTEND CONDITION SYNC
 @app.route('/api/update_pc_condition/<pc_name>', methods=['POST'])
@@ -2712,7 +3079,7 @@ def toggle_condition(instance_id):
     action = request.form.get('action') 
     for combatant in ACTIVE_ENCOUNTER:
         if combatant.instance_id == instance_id:
-            if condition in ['frightened', 'sickened', 'dying', 'wounded', 'doomed']:
+            if condition in ['frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned', 'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied']:
                 current = combatant.conditions.get(condition, 0)
                 if action in ['increase', 'add']: combatant.conditions[condition] = current + 1
                 elif action == 'decrease' and current > 0:
@@ -2724,11 +3091,13 @@ def toggle_condition(instance_id):
             if combatant.is_pc and combatant.name in PARTY_LIBRARY: 
                 PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
                 _broadcast_pc_state(combatant.name)
+                _persist_pc_combat_state(combatant.name)
             new_val = combatant.conditions.get(condition, 0)
             if isinstance(new_val, bool):
                 _combat_log(f"{combatant.name} {'gained' if new_val else 'lost'} {condition.replace('_','-').title()}", 'condition')
             else:
                 _combat_log(f"{combatant.name}: {condition.title()} → {new_val}", 'condition')
+            _persist_encounter_state()
             _broadcast_encounter_state()
             break
     return redirect(url_for('tracker_view'))
@@ -2739,6 +3108,7 @@ def set_persistent_damage(instance_id):
         if c.instance_id == instance_id:
             c.persistent_damage = request.form.get('persistent_damage', '')
             if c.is_pc and c.name in PARTY_LIBRARY: PARTY_LIBRARY[c.name].persistent_damage = c.persistent_damage
+            _persist_encounter_state()
             break
     return redirect(url_for('tracker_view'))
 
@@ -2749,6 +3119,7 @@ def toggle_elite_weak(instance_id):
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id and not c.is_pc and hasattr(c, 'apply_elite_weak'):
             c.apply_elite_weak(mode_val)
+            _persist_encounter_state()
             break
     return redirect(url_for('tracker_view'))
 
@@ -2758,17 +3129,70 @@ def update_initiative(instance_id):
     except ValueError: init_val = 0
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id: c.initiative = init_val; break
-    _sort_encounter(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _persist_encounter_state(); return redirect(url_for('tracker_view'))
 
 @app.route('/api/roll_npc_initiative', methods=['POST'])
 def roll_npc_initiative():
     for c in ACTIVE_ENCOUNTER:
         if not c.is_pc: c.initiative = random.randint(1, 20) + getattr(c, 'perception', 0)
-    _sort_encounter(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _persist_encounter_state(); return redirect(url_for('tracker_view'))
+
+@app.route('/api/roll_all_initiative', methods=['POST'])
+def roll_all_initiative():
+    """Roll initiative for all combatants. PCs use perception by default, NPCs use perception.
+    Supports skill override (stealth, deception, etc.) and secret GM rolls."""
+    data = request.json or {}
+    skill_overrides = data.get('overrides', {})  # {instance_id: "stealth"} or {instance_id: "perception"}
+    secret_roll = data.get('secret', False)  # If true, don't broadcast PC rolls
+    results = []
+    
+    for c in ACTIVE_ENCOUNTER:
+        override_skill = skill_overrides.get(c.instance_id, '').lower()
+        
+        d20 = random.randint(1, 20)
+        
+        if c.is_pc:
+            # PC initiative: perception by default, or use skill override
+            if override_skill and override_skill != 'perception':
+                # Use a skill check instead of perception
+                skill_map = {'acrobatics':'dex', 'arcana':'int', 'athletics':'str', 'crafting':'int',
+                             'deception':'cha', 'diplomacy':'cha', 'intimidation':'cha', 'medicine':'wis',
+                             'nature':'wis', 'occultism':'int', 'performance':'cha', 'religion':'wis',
+                             'society':'int', 'stealth':'dex', 'survival':'wis', 'thievery':'dex'}
+                stat = skill_map.get(override_skill, 'wis')
+                prof_val = safe_int(c.proficiencies.get(override_skill, 0))
+                mod = c.mods.get(stat, 0)
+                skill_bonus = mod + (c.level + prof_val if prof_val > 0 else 0)
+                c.initiative = d20 + skill_bonus
+                used_skill = override_skill.title()
+            else:
+                c.initiative = d20 + c.perception
+                used_skill = "Perception"
+            
+            if not secret_roll:
+                _combat_log(f"{c.name} rolled Initiative ({used_skill}): {d20} + {c.initiative - d20} = {c.initiative}", 'action')
+            else:
+                _combat_log(f"{c.name} rolled Initiative (secret)", 'action')
+        else:
+            # NPC initiative: always perception
+            perc = getattr(c, 'perception', 0) if hasattr(c, 'perception') else getattr(c, 'base_perception', 0)
+            c.initiative = d20 + perc
+            _combat_log(f"{c.name} rolled Initiative: {d20} + {perc} = {c.initiative}", 'action')
+        
+        results.append({'name': c.name, 'instance_id': c.instance_id, 'initiative': c.initiative, 
+                         'roll': d20, 'is_pc': c.is_pc, 'secret': secret_roll and c.is_pc})
+    
+    _sort_encounter()
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    
+    if request.is_json:
+        return jsonify({"success": True, "results": results})
+    return redirect(url_for('tracker_view'))
 
 @app.route('/api/sort_initiative', methods=['POST'])
 def sort_initiative():
-    _sort_encounter(); _broadcast_encounter_state(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state(); return redirect(url_for('tracker_view'))
 
 @app.route('/api/reorder_initiative', methods=['POST'])
 def reorder_initiative():
@@ -2794,6 +3218,7 @@ def reorder_initiative():
                     TURN_INDEX = i
                     break
     _broadcast_encounter_state()
+    _persist_encounter_state()
     return jsonify({"success": True})
 
 @app.route('/api/cycle_turn/<direction>', methods=['POST'])
@@ -2806,6 +3231,7 @@ def cycle_turn(direction):
         # Frightened decreases by 1 at end of turn (PF2E Core)
         if current_c.conditions.get('frightened', 0) > 0:
             current_c.conditions['frightened'] -= 1
+            _combat_log(f"{current_c.name}: Frightened reduced to {current_c.conditions['frightened']}", 'condition')
             if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['frightened'] = current_c.conditions['frightened']
         
         # Advance turn index, skipping delaying combatants
@@ -2817,7 +3243,42 @@ def cycle_turn(direction):
                 break
             old_index = TURN_INDEX
         
-        # === START OF NEW TURN: generate reminders ===
+        # === START OF NEW TURN: auto-apply start-of-turn mechanics ===
+        new_c = ACTIVE_ENCOUNTER[TURN_INDEX]
+        
+        # Stunned: lose actions, then reduce stunned by the number lost (PF2E Core p.448)
+        stunned_val = new_c.conditions.get('stunned', 0)
+        if stunned_val > 0:
+            actions_lost = min(stunned_val, 3)
+            new_c.conditions['stunned'] = max(0, stunned_val - actions_lost)
+            _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
+            if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
+        
+        # Persistent damage auto-roll (start of turn, PF2E Core p.451)
+        pd = getattr(new_c, 'persistent_damage', '')
+        if pd:
+            import re as _re
+            pd_match = _re.search(r'(\d+)d(\d+)(?:\s*\+\s*(\d+))?', pd)
+            if pd_match:
+                pd_qty = int(pd_match.group(1))
+                pd_sides = int(pd_match.group(2))
+                pd_bonus = int(pd_match.group(3)) if pd_match.group(3) else 0
+                pd_total = sum(random.randint(1, pd_sides) for _ in range(pd_qty)) + pd_bonus
+                old_hp = new_c.current_hp
+                new_c.current_hp = max(0, new_c.current_hp - pd_total)
+                _combat_log(f"{new_c.name}: Persistent {pd} dealt {pd_total} ({old_hp}→{new_c.current_hp})", 'damage')
+                if new_c.is_pc and new_c.name in PARTY_LIBRARY:
+                    PARTY_LIBRARY[new_c.name].current_hp = new_c.current_hp
+                    _broadcast_pc_state(new_c.name)
+                # Auto-roll DC 15 flat check to end persistent damage
+                flat_roll = random.randint(1, 20)
+                if flat_roll >= 15:
+                    new_c.persistent_damage = ''
+                    if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].persistent_damage = ''
+                    _combat_log(f"{new_c.name}: Flat check {flat_roll} >= 15 — persistent damage ends!", 'heal')
+                else:
+                    _combat_log(f"{new_c.name}: Flat check {flat_roll} < 15 — persistent damage continues", 'damage')
+        
         _generate_turn_reminders()
         
     elif direction == 'prev':
@@ -2831,6 +3292,7 @@ def cycle_turn(direction):
         _generate_turn_reminders()
     current_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else '?'
     _combat_log(f"Round {ROUND_NUMBER}: {current_name}'s turn", 'turn')
+    _persist_encounter_state()
     _broadcast_encounter_state()
     return redirect(url_for('tracker_view'))
 
@@ -2952,6 +3414,7 @@ def delay_turn(instance_id):
                         break
                     old_index = TURN_INDEX
                 _generate_turn_reminders()
+            _persist_encounter_state()
             break
     return redirect(url_for('tracker_view'))
 
@@ -2984,6 +3447,7 @@ def reenter_initiative(instance_id):
     ACTIVE_ENCOUNTER.insert(TURN_INDEX, combatant)
     # The inserted combatant is now at TURN_INDEX, so it's their turn
     _generate_turn_reminders()
+    _persist_encounter_state()
     
     return redirect(url_for('tracker_view'))
 
@@ -3655,6 +4119,10 @@ def sse_stream():
     def generate():
         q = queue.Queue(maxsize=50)
         with _sse_lock:
+            # Enforce max subscriber cap
+            if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
+                # Remove oldest subscriber
+                _sse_subscribers.pop(0)
             _sse_subscribers.append(q)
         try:
             yield "event: connected\ndata: {}\n\n"
@@ -3729,7 +4197,7 @@ def combatant_stats(instance_id):
 def log_roll():
     data = request.json
     from datetime import datetime
-    COMBAT_LOGS.append({
+    log_entry = {
         'id': str(uuid.uuid4()), 
         'name': data.get('name', 'Player'), 
         'action': data.get('action', 'Action'), 
@@ -3737,8 +4205,19 @@ def log_roll():
         'detail': data.get('detail', ''),
         'time': datetime.now().strftime('%H:%M:%S'),
         'round': ROUND_NUMBER
-    })
+    }
+    COMBAT_LOGS.append(log_entry)
     if len(COMBAT_LOGS) > 200: COMBAT_LOGS.pop(0)
+    
+    # Broadcast to all connected clients so everyone sees each other's rolls
+    sse_broadcast('player_roll', {
+        'name': log_entry['name'],
+        'action': log_entry['action'],
+        'result': log_entry['result'],
+        'detail': log_entry['detail'],
+        'time': log_entry['time']
+    })
+    
     return jsonify({"success": True})
 
 @app.route('/api/get_logs')
@@ -3985,7 +4464,7 @@ def spell_slots(pc_name):
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     build['expended_slots'] = slots
-    with open(file_path, 'w', encoding='utf-8') as f: json.dump(pc_json, f, indent=2)
+    save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
 @app.route('/api/add_item/<pc_name>', methods=['POST'])
@@ -4046,11 +4525,20 @@ def add_weapon(pc_name):
             w_dmg = bw.get('damage', '1d4')
             w_traits = bw.get('traits', [])
             break
+    
+    # Fallback: consult hardcoded PF2E weapon table if DB gave default 1d4
+    if w_dmg == '1d4' and w_name in PF2E_WEAPON_DAMAGE:
+        w_dmg = PF2E_WEAPON_DAMAGE[w_name]
+    
+    # Auto-detect weapon category for proficiency
+    w_cat = PF2E_WEAPON_CATEGORIES.get(w_name, 'simple')
+    prof_map = {'simple': 'simple', 'martial': 'martial', 'advanced': 'advanced'}
+    auto_prof = safe_int(build.get('proficiencies', {}).get(prof_map.get(w_cat, 'simple'), 2))
 
     build['weapons'].append({
         'name': w_name, 
         'attack_stat': data.get('attack_stat', 'str'), 
-        'prof_val': data.get('prof_val', 2), 
+        'prof_val': data.get('prof_val', auto_prof), 
         'damage': w_dmg, 
         'traits': w_traits,
         'is_two_handed': False
@@ -4304,24 +4792,6 @@ def remove_pet(pc_name):
     build['pets_custom'] = [p for p in pets if p.get('name') != pet_name]
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
-    """Delete a character from the party library."""
-    file_path = get_pc_file_path(pc_name)
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({"error": "Character not found"}), 404
-    
-    os.remove(file_path)
-    if pc_name in PARTY_LIBRARY:
-        del PARTY_LIBRARY[pc_name]
-    
-    # Remove portrait if exists
-    portraits_dir = os.path.join(PARTY_DIR, 'portraits')
-    if os.path.exists(portraits_dir):
-        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', pc_name)
-        for f in os.listdir(portraits_dir):
-            if f.startswith(safe_name + '.'):
-                os.remove(os.path.join(portraits_dir, f))
-    
-    return jsonify({"success": True})
 
 @app.route('/api/send_initiative/<pc_name>', methods=['POST'])
 def send_initiative(pc_name):
@@ -4444,7 +4914,9 @@ def export_character(pc_name):
 
 @app.route('/api/import_pathbuilder', methods=['POST'])
 def import_pathbuilder():
-    """Import a Pathbuilder 2e JSON export directly as a character."""
+    """Import a Pathbuilder 2e JSON export. If character already exists, smart-merges
+    to update abilities/feats/spells/proficiencies from Pathbuilder while preserving
+    HP, conditions, notes, custom weapons, pets, shield stats, expended slots, and session data."""
     try:
         # Accept either file upload or JSON body
         if 'file' in request.files:
@@ -4457,36 +4929,111 @@ def import_pathbuilder():
             return jsonify({"error": "No data provided"}), 400
         
         # Pathbuilder wraps in {"success": true, "build": {...}} 
-        build = pc_json.get('build', pc_json)
+        new_build = pc_json.get('build', pc_json)
         
         # Validate required fields
-        name = build.get('name', '').strip()
+        name = new_build.get('name', '').strip()
         if not name:
             return jsonify({"error": "Character has no name"}), 400
-        if not build.get('class'):
+        if not new_build.get('class'):
             return jsonify({"error": "Character has no class"}), 400
-        if not build.get('ancestry'):
+        if not new_build.get('ancestry'):
             return jsonify({"error": "Character has no ancestry"}), 400
         
-        # Ensure proper wrapper format
-        if 'build' not in pc_json:
-            pc_json = {"success": True, "build": build}
-        
-        # Save to party_data
         safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
         file_path = os.path.join(PARTY_DIR, f"{safe_name}.json")
         
+        merged = False
+        if name in PARTY_LIBRARY and os.path.exists(file_path):
+            # --- SMART MERGE: Character exists, preserve runtime state ---
+            with open(file_path, 'r', encoding='utf-8') as f:
+                existing_json = json.load(f)
+            existing_build = existing_json.get('build', existing_json)
+            
+            # Fields to IMPORT from Pathbuilder (game rules data)
+            PB_IMPORT_KEYS = [
+                'name', 'class', 'dualClass', 'level', 'xp', 'ancestry', 'heritage',
+                'background', 'alignment', 'gender', 'age', 'deity', 'size', 'sizeName',
+                'keyability', 'languages', 'rituals', 'resistances', 'inventorMods',
+                'abilities', 'attributes', 'proficiencies', 'mods', 'feats', 'specials',
+                'lores', 'specificProficiencies', 'armor', 'spellCasters', 'focusPoints',
+                'focus', 'formula', 'acTotal', 'pets', 'familiars',
+            ]
+            
+            # Fields to PRESERVE from existing (runtime/custom data)
+            PRESERVE_KEYS = [
+                'current_hp', 'conditions', 'current_focus', 'hero_points',
+                'notes', 'session_notes', 'portrait', 'active_toggles',
+                'shield_raised', 'shield_hp', 'shield_max_hp', 'shield_hardness', 'shield_bt', 'shield_ac_bonus',
+                'expended_slots', 'signature_spells', 'active_effects',
+                'weapons',  # Preserve custom weapons added in-app
+                'pets_custom',  # Preserve custom pets
+                'level_history', 'monk_paths', 'half_boosts',
+                'persistent_damage',
+            ]
+            
+            # Start with existing build as base
+            merged_build = dict(existing_build)
+            
+            # Overlay Pathbuilder data for rules fields
+            for key in PB_IMPORT_KEYS:
+                if key in new_build:
+                    merged_build[key] = new_build[key]
+            
+            # Merge weapons: keep custom weapons (those with no PB equivalent), add PB weapons
+            existing_weapons = existing_build.get('weapons') or []
+            pb_weapons = new_build.get('weapons') or []
+            # Custom weapons = those that don't match any PB weapon name
+            pb_weapon_names = {(w.get('name','') if isinstance(w, dict) else '').lower() for w in pb_weapons}
+            custom_weapons = [w for w in existing_weapons if isinstance(w, dict) and w.get('name','').lower() not in pb_weapon_names and w.get('name','') != 'Fist']
+            merged_build['weapons'] = pb_weapons + custom_weapons
+            
+            # Merge equipment: Pathbuilder's equipment list takes precedence, but append custom items
+            pb_equipment = new_build.get('equipment') or []
+            existing_equipment = existing_build.get('equipment') or []
+            pb_eq_names = set()
+            for eq in pb_equipment:
+                if isinstance(eq, list) and len(eq) >= 1: pb_eq_names.add(str(eq[0]).lower())
+                elif isinstance(eq, dict): pb_eq_names.add(str(eq.get('name','')).lower())
+            custom_eq = []
+            for eq in existing_equipment:
+                eq_name = ''
+                if isinstance(eq, list) and len(eq) >= 1: eq_name = str(eq[0]).lower()
+                elif isinstance(eq, dict): eq_name = str(eq.get('name','')).lower()
+                if eq_name and eq_name not in pb_eq_names:
+                    custom_eq.append(eq)
+            merged_build['equipment'] = pb_equipment + custom_eq
+            
+            # Restore preserved fields from existing
+            for key in PRESERVE_KEYS:
+                if key in existing_build and key not in ['weapons']:
+                    merged_build[key] = existing_build[key]
+            
+            # Cap current_hp to new max (level might have changed)
+            # Don't set current_hp if it wasn't previously saved (let Character.__init__ default to max)
+            
+            final_json = {"success": True, "build": merged_build}
+            merged = True
+        else:
+            # --- FRESH IMPORT: No existing character ---
+            if 'build' not in pc_json:
+                final_json = {"success": True, "build": new_build}
+            else:
+                final_json = pc_json
+        
+        # Save to disk
         with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(pc_json, f, indent=2)
+            json.dump(final_json, f, indent=2)
         
         # Reload into library
         try:
-            PARTY_LIBRARY[name] = Character(pc_json, file_path)
+            PARTY_LIBRARY[name] = Character(final_json, file_path)
             _build_pc_file_cache()
         except Exception as e:
             return jsonify({"error": f"Character loaded but had parse issues: {str(e)}", "success": True, "name": name})
         
-        return jsonify({"success": True, "name": name, "level": build.get('level', 1), "class": build.get('class', 'Unknown')})
+        action = "merged" if merged else "imported"
+        return jsonify({"success": True, "name": name, "level": new_build.get('level', 1), "class": new_build.get('class', 'Unknown'), "action": action})
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid JSON format"}), 400
     except Exception as e:
@@ -4590,12 +5137,23 @@ def save_new_character():
 
     weapons_arr = []
     if class_name.lower() == 'kineticist':
+        # Determine element from guided choices in feats
+        kin_element = 'fire'  # Default
+        for f in data.get('feats', []):
+            f_name = f.get('name', '') if isinstance(f, dict) else str(f)
+            if 'Elements:' in f_name:
+                el = f_name.replace('Elements:', '').strip().lower().split(',')[0].strip()
+                kin_element = el
+                break
+        # Map elements to damage types
+        kin_dmg_map = {'fire': 'F', 'water': 'B', 'earth': 'B', 'air': 'S', 'metal': 'S', 'wood': 'B'}
+        kin_dmg_type = kin_dmg_map.get(kin_element, 'B')
         weapons_arr.append({
             "name": "Elemental Blast",
             "attack_stat": "con",
             "prof_val": 2,
-            "damage": "1d8",
-            "traits": ["kineticist", "magical"]
+            "damage": f"1d8 {kin_dmg_type}",
+            "traits": ["kineticist", "magical", kin_element]
         })
 
     anc_hp = BUILDER_ANCESTRIES.get(ancestry_name, {}).get('hp', 8)
@@ -4668,8 +5226,12 @@ def submit_levelup(pc_name):
     
     build['level'] = new_level
     
-    if 'abilities' in data: build['abilities'] = data['abilities']
-    if 'half_boosts' in data: build['half_boosts'] = data['half_boosts']
+    # Only apply ability boosts at PF2E-qualifying levels (5, 10, 15, 20)
+    ABILITY_BOOST_LEVELS = {5, 10, 15, 20}
+    if 'abilities' in data and new_level in ABILITY_BOOST_LEVELS:
+        build['abilities'] = data['abilities']
+    if 'half_boosts' in data and new_level in ABILITY_BOOST_LEVELS:
+        build['half_boosts'] = data['half_boosts']
     
     if 'feats' in data: build['feats'] = data['feats']
     
@@ -5045,6 +5607,986 @@ def create_custom_monster():
         return jsonify({"success": True, "name": name, "level": m.level})
     except Exception as e:
         return jsonify({"success": True, "name": name, "warning": f"Saved but parse error: {e}"})
+
+# =============================================================================
+# VTT MAP SYSTEM
+# =============================================================================
+
+def _broadcast_map_state():
+    """Broadcast full map state to all connected clients."""
+    with MAP_LOCK:
+        state = {
+            'id': ACTIVE_MAP['id'],
+            'name': ACTIVE_MAP['name'],
+            'image': ACTIVE_MAP['image'],
+            'grid_size': ACTIVE_MAP['grid_size'],
+            'grid_offset_x': ACTIVE_MAP['grid_offset_x'],
+            'grid_offset_y': ACTIVE_MAP['grid_offset_y'],
+            'tokens': ACTIVE_MAP['tokens'],
+            'walls': ACTIVE_MAP.get('walls', []),
+            'explored': ACTIVE_MAP.get('explored', []),
+            'difficult_terrain': ACTIVE_MAP.get('difficult_terrain', []),
+            'spawn_point': ACTIVE_MAP.get('spawn_point'),
+            'player_control': ACTIVE_MAP['player_control'],
+        }
+    sse_broadcast('map_state', state)
+
+def _broadcast_map_tokens():
+    """Broadcast just token positions."""
+    with MAP_LOCK:
+        tokens = ACTIVE_MAP['tokens']
+    sse_broadcast('map_tokens', {'tokens': tokens})
+
+def _broadcast_map_fog():
+    """Broadcast fog state (GM only sends, players receive filtered)."""
+    with MAP_LOCK:
+        fog = ACTIVE_MAP['fog']
+    sse_broadcast('map_fog', {'fog': fog})
+
+def _broadcast_event(event_type, data):
+    """Broadcast a generic event to all connected clients."""
+    sse_broadcast(event_type, data)
+
+def _save_map_state():
+    """Persist current map state to disk."""
+    with MAP_LOCK:
+        if not ACTIVE_MAP['id']:
+            return
+        state_path = os.path.join(MAP_DIR, f"{ACTIVE_MAP['id']}_state.json")
+        with open(state_path, 'w', encoding='utf-8') as f:
+            json.dump(ACTIVE_MAP, f, indent=2)
+
+def _load_map_state(map_id):
+    """Load map state from disk."""
+    global ACTIVE_MAP
+    state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
+    if os.path.exists(state_path):
+        with open(state_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            with MAP_LOCK:
+                ACTIVE_MAP.update(data)
+            return True
+    return False
+
+@app.route('/gm/map')
+@gm_required
+def gm_map_view():
+    """GM's full-control VTT map view."""
+    # Get list of available maps
+    maps = []
+    if os.path.exists(MAP_DIR):
+        for f in os.listdir(MAP_DIR):
+            if f.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                maps.append({'id': f.rsplit('.', 1)[0], 'filename': f})
+    
+    with MAP_LOCK:
+        current_map = dict(ACTIVE_MAP)
+    
+    # Get party with full stats for token options
+    party = []
+    for pc in PARTY_LIBRARY.values():
+        party.append({
+            'name': pc.name,
+            'hp': pc.hp,
+            'max_hp': pc.hp,
+            'current_hp': pc.current_hp,
+            'ac': pc.ac,
+            'speed': getattr(pc, 'speed', 25),
+            'perception': pc.perception if hasattr(pc, 'perception') else 10,
+        })
+    
+    # Get encounter with full stats
+    encounter = []
+    for c in ACTIVE_ENCOUNTER:
+        encounter.append({
+            'id': c.instance_id,
+            'name': c.name,
+            'hp': c.hp,
+            'current_hp': c.current_hp,
+            'ac': c.ac if hasattr(c, 'ac') else 10,
+            'is_pc': c.is_pc,
+            'initiative': getattr(c, 'initiative', 0),
+            'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False} if hasattr(c, 'conditions') else {},
+        })
+    
+    return render_template('map_vtt.html', 
+                           maps=maps, 
+                           current_map=current_map,
+                           party=party,
+                           encounter=encounter,
+                           turn_index=TURN_INDEX,
+                           round_number=ROUND_NUMBER)
+
+@app.route('/map')
+def player_map_view():
+    """Player's restricted map view."""
+    with MAP_LOCK:
+        current_map = dict(ACTIVE_MAP)
+        # Players don't see fog data - they just see what's revealed
+    return render_template('map_player.html', current_map=current_map)
+
+@app.route('/api/map/upload', methods=['POST'])
+@gm_required
+def upload_map():
+    """Upload a new map image."""
+    if 'map' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+    
+    file = request.files['map']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+    
+    # Validate file type
+    allowed = {'png', 'jpg', 'jpeg', 'webp'}
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if ext not in allowed:
+        return jsonify({'success': False, 'error': f'Invalid file type. Allowed: {allowed}'}), 400
+    
+    # Generate unique ID and save
+    map_id = str(uuid.uuid4())[:8]
+    filename = f"{map_id}.{ext}"
+    filepath = os.path.join(MAP_DIR, filename)
+    file.save(filepath)
+    
+    # Get custom name or use filename
+    map_name = request.form.get('name', file.filename.rsplit('.', 1)[0])
+    
+    return jsonify({
+        'success': True,
+        'id': map_id,
+        'filename': filename,
+        'name': map_name
+    })
+
+@app.route('/api/map/load', methods=['POST'])
+@gm_required
+def load_map():
+    """Load a map as the active map."""
+    global ACTIVE_MAP
+    data = request.json or {}
+    map_id = data.get('id')
+    filename = data.get('filename')
+    
+    if not filename:
+        return jsonify({'success': False, 'error': 'No map specified'}), 400
+    
+    filepath = os.path.join(MAP_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({'success': False, 'error': 'Map file not found'}), 404
+    
+    # Try to load existing state, or create new
+    if not _load_map_state(map_id):
+        with MAP_LOCK:
+            ACTIVE_MAP = {
+                'id': map_id,
+                'name': data.get('name', map_id),
+                'image': filename,
+                'grid_size': int(data.get('grid_size', 70)),
+                'grid_offset_x': 0,
+                'grid_offset_y': 0,
+                'tokens': [],
+                'fog': [],
+                'walls': [],
+                'fog_enabled': True,
+                'player_control': False,
+                'vision_mode': 'explored',
+            }
+    
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'map': ACTIVE_MAP})
+
+@app.route('/api/map/settings', methods=['POST'])
+@gm_required
+def update_map_settings():
+    """Update map settings (grid size, offset, etc.)."""
+    data = request.json or {}
+    with MAP_LOCK:
+        if 'grid_size' in data:
+            ACTIVE_MAP['grid_size'] = int(data['grid_size'])
+        if 'grid_offset_x' in data:
+            ACTIVE_MAP['grid_offset_x'] = int(data['grid_offset_x'])
+        if 'grid_offset_y' in data:
+            ACTIVE_MAP['grid_offset_y'] = int(data['grid_offset_y'])
+        if 'fog_enabled' in data:
+            ACTIVE_MAP['fog_enabled'] = bool(data['fog_enabled'])
+        if 'player_control' in data:
+            ACTIVE_MAP['player_control'] = bool(data['player_control'])
+        if 'vision_mode' in data:
+            ACTIVE_MAP['vision_mode'] = data['vision_mode']
+        if 'lighting' in data:
+            ACTIVE_MAP['lighting'] = data['lighting']  # bright, dim, darkness
+        if 'name' in data:
+            ACTIVE_MAP['name'] = data['name']
+    
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+@app.route('/api/map/image/<filename>')
+def serve_map_image(filename):
+    """Serve map image files."""
+    return send_from_directory(MAP_DIR, filename)
+
+# --- TOKEN MANAGEMENT ---
+
+@app.route('/api/map/token/add', methods=['POST'])
+@gm_required
+def add_map_token():
+    """Add a token to the map."""
+    data = request.json or {}
+    
+    # Default vision: 6 squares (30ft) for PCs, 0 for monsters (GM controls monster visibility)
+    default_vision = 6 if data.get('is_pc', False) else 0
+    
+    # Auto-detect senses from character data for PCs
+    has_darkvision = data.get('darkvision', False)
+    has_low_light = data.get('low_light_vision', False)
+    pc_name = data.get('pc_name') or data.get('name')
+    if data.get('is_pc') and pc_name:
+        for lib_name, pc in PARTY_LIBRARY.items():
+            if lib_name == pc_name or pc.name == pc_name:
+                senses = getattr(pc, 'senses', [])
+                if any('darkvision' in s.lower() for s in senses):
+                    has_darkvision = True
+                if any('low-light' in s.lower() for s in senses):
+                    has_low_light = True
+                break
+    
+    token = {
+        'id': str(uuid.uuid4())[:8],
+        'name': data.get('name', 'Token'),
+        'x': int(data.get('x', 0)),  # Grid coordinates
+        'y': int(data.get('y', 0)),
+        'size': int(data.get('size', 1)),  # 1 = medium, 2 = large, etc.
+        'color': data.get('color', '#3B82F6'),
+        'image': data.get('image'),  # Optional custom image
+        'pc_name': data.get('pc_name'),  # Link to party member
+        'instance_id': data.get('instance_id'),  # Link to encounter combatant
+        'is_pc': data.get('is_pc', False),
+        'hp': int(data.get('hp', 0)),
+        'max_hp': int(data.get('max_hp', 0)),
+        'visible_to_players': data.get('visible_to_players', True),
+        'vision_radius': int(data.get('vision_radius', default_vision)),  # Squares of vision (0 = no vision)
+        'assigned_player': data.get('assigned_player'),  # Player name who can control this token
+        'darkvision': has_darkvision,
+        'low_light_vision': has_low_light,
+    }
+    
+    with MAP_LOCK:
+        ACTIVE_MAP['tokens'].append(token)
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True, 'token': token})
+
+@app.route('/api/map/player/register', methods=['POST'])
+def register_player_name():
+    """Register a player name in the server session for token auth."""
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'No name provided'}), 400
+    session['player_name'] = name
+    return jsonify({'success': True, 'name': name})
+
+@app.route('/api/map/token/move', methods=['POST'])
+def move_map_token():
+    """Move a token on the map."""
+    data = request.json or {}
+    token_id = data.get('id')
+    new_x = int(data.get('x', 0))
+    new_y = int(data.get('y', 0))
+    
+    # Check if player is allowed to move tokens
+    is_gm = session.get('gm_authenticated', False)
+    
+    with MAP_LOCK:
+        if not is_gm and not ACTIVE_MAP.get('player_control'):
+            return jsonify({'success': False, 'error': 'Player movement disabled'}), 403
+        
+        for token in ACTIVE_MAP['tokens']:
+            if token['id'] == token_id:
+                # If player, verify they are assigned to this token via server-side session
+                if not is_gm:
+                    player_name = session.get('player_name')
+                    if not player_name:
+                        return jsonify({'success': False, 'error': 'Register your player name first'}), 403
+                    if token.get('assigned_player') != player_name:
+                        return jsonify({'success': False, 'error': 'Not your token'}), 403
+                
+                token['x'] = new_x
+                token['y'] = new_y
+                break
+        else:
+            return jsonify({'success': False, 'error': 'Token not found'}), 404
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+@app.route('/api/map/token/update', methods=['POST'])
+@gm_required
+def update_map_token():
+    """Update token properties."""
+    data = request.json or {}
+    token_id = data.get('id')
+    
+    with MAP_LOCK:
+        for token in ACTIVE_MAP['tokens']:
+            if token['id'] == token_id:
+                if 'name' in data: token['name'] = data['name']
+                if 'color' in data: token['color'] = data['color']
+                if 'size' in data: token['size'] = int(data['size'])
+                if 'hp' in data: token['hp'] = int(data['hp'])
+                if 'max_hp' in data: token['max_hp'] = int(data['max_hp'])
+                if 'visible_to_players' in data: token['visible_to_players'] = bool(data['visible_to_players'])
+                if 'vision_radius' in data: token['vision_radius'] = int(data['vision_radius'])
+                if 'assigned_player' in data: token['assigned_player'] = data['assigned_player']
+                if 'initiative' in data: token['initiative'] = data['initiative']
+                if 'conditions' in data: token['conditions'] = data['conditions']  # Can be dict or list
+                if 'ac' in data: token['ac'] = int(data['ac'])
+                if 'speed' in data: token['speed'] = int(data['speed'])
+                break
+        else:
+            return jsonify({'success': False, 'error': 'Token not found'}), 404
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+@app.route('/api/map/token/remove', methods=['POST'])
+@gm_required
+def remove_map_token():
+    """Remove a token from the map."""
+    data = request.json or {}
+    token_id = data.get('id')
+    
+    with MAP_LOCK:
+        ACTIVE_MAP['tokens'] = [t for t in ACTIVE_MAP['tokens'] if t['id'] != token_id]
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+@app.route('/api/map/token/sync_encounter', methods=['POST'])
+@gm_required
+def sync_tokens_from_encounter():
+    """Sync tokens with the active encounter (add missing, update HP)."""
+    added = 0
+    updated = 0
+    
+    with MAP_LOCK:
+        existing_ids = {t.get('instance_id') for t in ACTIVE_MAP['tokens'] if t.get('instance_id')}
+        
+        for i, combatant in enumerate(ACTIVE_ENCOUNTER):
+            if combatant.instance_id in existing_ids:
+                # Update stats
+                for token in ACTIVE_MAP['tokens']:
+                    if token.get('instance_id') == combatant.instance_id:
+                        token['hp'] = combatant.current_hp
+                        token['max_hp'] = combatant.hp
+                        token['ac'] = combatant.ac if hasattr(combatant, 'ac') else 10
+                        token['conditions'] = [f"{k}:{v}" if isinstance(v, int) and v > 0 else k 
+                                               for k, v in combatant.conditions.items() 
+                                               if v and v != 0 and v is not False] if hasattr(combatant, 'conditions') else []
+                        token['initiative'] = getattr(combatant, 'initiative', 0)
+                        updated += 1
+                        break
+            else:
+                # Add new token
+                color = '#22C55E' if combatant.is_pc else '#EF4444'
+                # Get speed from party library if PC
+                speed = 25
+                if combatant.is_pc and combatant.name in PARTY_LIBRARY:
+                    pc = PARTY_LIBRARY[combatant.name]
+                    speed = getattr(pc, 'speed', 25)
+                
+                token = {
+                    'id': str(uuid.uuid4())[:8],
+                    'name': combatant.name,
+                    'x': 5 + (i % 5),  # Spread out initially
+                    'y': 5 + (i // 5),
+                    'size': getattr(combatant, 'size', 1) if hasattr(combatant, 'size') else 1,
+                    'color': color,
+                    'instance_id': combatant.instance_id,
+                    'is_pc': combatant.is_pc,
+                    'hp': combatant.current_hp,
+                    'max_hp': combatant.hp,
+                    'ac': combatant.ac if hasattr(combatant, 'ac') else 10,
+                    'speed': speed,
+                    'conditions': [],
+                    'assigned_player': combatant.name if combatant.is_pc else None,
+                    'visible_to_players': True,
+                    'initiative': getattr(combatant, 'initiative', 0),
+                }
+                ACTIVE_MAP['tokens'].append(token)
+                added += 1
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True, 'added': added, 'updated': updated})
+
+@app.route('/api/map/token/damage', methods=['POST'])
+@gm_required
+def damage_map_token():
+    """Apply damage to a token and sync with encounter."""
+    data = request.json or {}
+    token_id = data.get('id')
+    amount = int(data.get('amount', 0))
+    
+    with MAP_LOCK:
+        for token in ACTIVE_MAP['tokens']:
+            if token['id'] == token_id:
+                token['hp'] = max(0, token['hp'] - amount)
+                
+                # Sync with encounter if linked
+                if token.get('instance_id'):
+                    for c in ACTIVE_ENCOUNTER:
+                        if c.instance_id == token['instance_id']:
+                            c.current_hp = token['hp']
+                            # Handle dying/wounded
+                            if c.current_hp <= 0 and hasattr(c, 'conditions'):
+                                if c.is_pc:
+                                    c.conditions['dying'] = 1 + c.conditions.get('wounded', 0)
+                            break
+                break
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+@app.route('/api/map/token/heal', methods=['POST'])
+@gm_required
+def heal_map_token():
+    """Heal a token and sync with encounter."""
+    data = request.json or {}
+    token_id = data.get('id')
+    amount = int(data.get('amount', 0))
+    
+    with MAP_LOCK:
+        for token in ACTIVE_MAP['tokens']:
+            if token['id'] == token_id:
+                token['hp'] = min(token['max_hp'], token['hp'] + amount)
+                
+                # Sync with encounter if linked
+                if token.get('instance_id'):
+                    for c in ACTIVE_ENCOUNTER:
+                        if c.instance_id == token['instance_id']:
+                            c.current_hp = token['hp']
+                            # Clear dying if healed above 0
+                            if c.current_hp > 0 and hasattr(c, 'conditions'):
+                                if c.conditions.get('dying', 0) > 0:
+                                    c.conditions['dying'] = 0
+                                    c.conditions['wounded'] = c.conditions.get('wounded', 0) + 1
+                            break
+                break
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+@app.route('/api/map/token/condition', methods=['POST'])
+@gm_required
+def toggle_map_token_condition():
+    """Toggle a condition on a token."""
+    data = request.json or {}
+    token_id = data.get('id')
+    condition = data.get('condition', '')
+    value = data.get('value')  # Optional value for valued conditions
+    
+    with MAP_LOCK:
+        for token in ACTIVE_MAP['tokens']:
+            if token['id'] == token_id:
+                conditions = token.get('conditions', [])
+                
+                # Check if condition exists
+                existing = None
+                for i, c in enumerate(conditions):
+                    if c.startswith(condition.lower()):
+                        existing = i
+                        break
+                
+                if existing is not None:
+                    # Remove condition
+                    conditions.pop(existing)
+                else:
+                    # Add condition
+                    if value is not None:
+                        conditions.append(f"{condition.lower()}:{value}")
+                    else:
+                        conditions.append(condition.lower())
+                
+                token['conditions'] = conditions
+                
+                # Sync with encounter
+                if token.get('instance_id'):
+                    for c in ACTIVE_ENCOUNTER:
+                        if c.instance_id == token['instance_id'] and hasattr(c, 'conditions'):
+                            cond_lower = condition.lower().replace('-', '_').replace(' ', '_')
+                            if cond_lower in c.conditions:
+                                if isinstance(c.conditions[cond_lower], bool):
+                                    c.conditions[cond_lower] = not c.conditions[cond_lower]
+                                elif isinstance(c.conditions[cond_lower], int):
+                                    if c.conditions[cond_lower] > 0:
+                                        c.conditions[cond_lower] = 0
+                                    else:
+                                        c.conditions[cond_lower] = value if value else 1
+                            break
+                break
+    
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+@app.route('/api/map/terrain/toggle', methods=['POST'])
+@gm_required
+def toggle_difficult_terrain():
+    """Toggle difficult terrain on a grid cell."""
+    data = request.json or {}
+    x = int(data.get('x', 0))
+    y = int(data.get('y', 0))
+    
+    with MAP_LOCK:
+        terrain = ACTIVE_MAP.get('difficult_terrain', [])
+        cell = {'x': x, 'y': y}
+        
+        # Check if already marked
+        found = False
+        for i, t in enumerate(terrain):
+            if t['x'] == x and t['y'] == y:
+                terrain.pop(i)
+                found = True
+                break
+        
+        if not found:
+            terrain.append(cell)
+        
+        ACTIVE_MAP['difficult_terrain'] = terrain
+    
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+@app.route('/api/map/spawn', methods=['POST'])
+@gm_required
+def set_spawn_point():
+    """Set the party spawn point on the map."""
+    data = request.json or {}
+    x = int(data.get('x', 0))
+    y = int(data.get('y', 0))
+    
+    with MAP_LOCK:
+        ACTIVE_MAP['spawn_point'] = {'x': x, 'y': y}
+    
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+@app.route('/api/map/wall/toggle_door', methods=['POST'])
+@gm_required
+def toggle_door():
+    """Toggle a door open/closed."""
+    data = request.json or {}
+    wall_id = data.get('id')
+    
+    with MAP_LOCK:
+        for wall in ACTIVE_MAP.get('walls', []):
+            if wall['id'] == wall_id and wall.get('type') == 'door':
+                wall['open'] = not wall.get('open', False)
+                break
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True})
+
+@app.route('/api/map/walls/clear', methods=['POST'])
+@gm_required
+def clear_all_walls():
+    """Clear all walls from the map."""
+    with MAP_LOCK:
+        ACTIVE_MAP['walls'] = []
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True})
+
+@app.route('/api/map/border', methods=['POST'])
+@gm_required
+def border_map():
+    """Create invisible walls around the entire map border."""
+    if not ACTIVE_MAP.get('image'):
+        return jsonify({'success': False, 'error': 'No map loaded'}), 400
+    
+    # Get map image dimensions
+    map_path = os.path.join(MAP_DIR, ACTIVE_MAP['image'])
+    if not os.path.exists(map_path):
+        return jsonify({'success': False, 'error': 'Map file not found'}), 400
+    
+    # Use PIL to get dimensions
+    try:
+        from PIL import Image
+        with Image.open(map_path) as img:
+            width, height = img.size
+    except:
+        # Fallback: estimate from grid
+        width = 2000
+        height = 2000
+    
+    # Create border walls (invisible type - blocks movement only)
+    border_wall = {
+        'id': 'border-' + str(uuid.uuid4())[:8],
+        'points': [
+            [0, 0],
+            [width, 0],
+            [width, height],
+            [0, height]
+        ],
+        'type': 'invisible',
+        'closed': True,
+        'open': False,
+    }
+    
+    with MAP_LOCK:
+        # Remove any existing border walls
+        ACTIVE_MAP['walls'] = [w for w in ACTIVE_MAP.get('walls', []) if not w['id'].startswith('border-')]
+        ACTIVE_MAP['walls'].append(border_wall)
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True, 'width': width, 'height': height})
+
+# --- EXPLORED FOG (Grid-based) ---
+
+@app.route('/api/map/explored', methods=['POST'])
+@gm_required
+def update_explored():
+    """Update explored grid cells."""
+    data = request.json or {}
+    explored = data.get('explored', [])
+    
+    with MAP_LOCK:
+        ACTIVE_MAP['explored'] = explored
+    
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+@app.route('/api/map/explored/clear', methods=['POST'])
+@gm_required
+def clear_explored():
+    """Clear all explored areas (reset fog)."""
+    with MAP_LOCK:
+        ACTIVE_MAP['explored'] = []
+    
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+# --- PING ---
+
+@app.route('/api/map/ping', methods=['POST'])
+def map_ping():
+    """Broadcast a ping to all players."""
+    data = request.json or {}
+    x = data.get('x', 0)
+    y = data.get('y', 0)
+    player = data.get('player', 'Unknown')
+    
+    # Broadcast ping event to all clients
+    _broadcast_event('ping', {'x': x, 'y': y, 'player': player})
+    return jsonify({'success': True})
+
+@app.route('/api/map/roll', methods=['POST'])
+def broadcast_roll():
+    """Broadcast a dice roll to all clients (especially GM)."""
+    data = request.json or {}
+    
+    roll_data = {
+        'player': data.get('player', 'Unknown'),
+        'dice': data.get('dice', 'd20'),
+        'result': data.get('result') or data.get('roll'),
+        'total': data.get('total'),
+        'bonus': data.get('bonus'),
+        'attack': data.get('attack'),
+        'damage': data.get('damage'),
+        'crit': data.get('crit', False),
+        'fumble': data.get('fumble', False),
+        'time': time.strftime('%H:%M:%S')
+    }
+    
+    sse_broadcast('dice_roll', roll_data)
+    return jsonify({'success': True})
+
+# --- CHARACTER API ---
+
+@app.route('/api/character/<name>')
+def get_character_api(n):
+    """Get character data by name."""
+    # Check party library
+    for pc in PARTY_LIBRARY.values():
+        if pc.name.lower() == n.lower():
+            return jsonify({
+                'success': True,
+                'character': {
+                    'name': pc.name,
+                    'hp': pc.hp,
+                    'current_hp': pc.current_hp,
+                    'ac': pc.ac,
+                    'speed': getattr(pc, 'speed', 25),
+                    'perception': pc.perception if hasattr(pc, 'perception') else 10,
+                    'level': pc.level if hasattr(pc, 'level') else 1,
+                }
+            })
+    
+    return jsonify({'success': False, 'error': 'Character not found'})
+
+@app.route('/api/creature/<name>')
+def get_creature_api(n):
+    """Get full creature data by name (from encounter or monster library)."""
+    name = n
+    # Check active encounter
+    for c in ACTIVE_ENCOUNTER:
+        if c.name.lower() == name.lower() or (hasattr(c, 'instance_id') and c.instance_id == name):
+            return jsonify({
+                'success': True,
+                'creature': {
+                    'name': c.name,
+                    'level': getattr(c, 'level', 0),
+                    'hp': c.hp,
+                    'current_hp': c.current_hp,
+                    'ac': c.ac if hasattr(c, 'ac') else 10,
+                    'speed': getattr(c, 'speed', 25),
+                    'perception': c.base_perception if hasattr(c, 'base_perception') else 0,
+                    'fort': c.base_fort if hasattr(c, 'base_fort') else 0,
+                    'ref': c.base_ref if hasattr(c, 'base_ref') else 0,
+                    'will': c.base_will if hasattr(c, 'base_will') else 0,
+                    'strikes': getattr(c, 'strikes', []),
+                    'actions': getattr(c, 'actions', []),
+                    'immunities': getattr(c, 'immunities', []),
+                    'resistances': getattr(c, 'resistances', []),
+                    'weaknesses': getattr(c, 'weaknesses', []),
+                    'traits': getattr(c, 'traits', []),
+                    'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False} if hasattr(c, 'conditions') else {},
+                    'is_pc': getattr(c, 'is_pc', False),
+                }
+            })
+    
+    # Check party library
+    for pc in PARTY_LIBRARY.values():
+        if pc.name.lower() == name.lower():
+            return jsonify({
+                'success': True,
+                'creature': {
+                    'name': pc.name,
+                    'level': pc.level if hasattr(pc, 'level') else 1,
+                    'hp': pc.hp,
+                    'current_hp': pc.current_hp,
+                    'ac': pc.ac,
+                    'speed': getattr(pc, 'speed', 25),
+                    'perception': pc.perception if hasattr(pc, 'perception') else 10,
+                    'fort': pc.fort if hasattr(pc, 'fort') else 0,
+                    'ref': pc.ref if hasattr(pc, 'ref') else 0,
+                    'will': pc.will if hasattr(pc, 'will') else 0,
+                    'strikes': [],  # PC strikes would need different handling
+                    'actions': [],
+                    'immunities': [],
+                    'resistances': [],
+                    'weaknesses': [],
+                    'traits': [],
+                    'conditions': {},
+                    'is_pc': True,
+                }
+            })
+    
+    return jsonify({'success': False, 'error': 'Creature not found'})
+
+# --- FOG OF WAR (Legacy) ---
+
+@app.route('/api/map/fog/reveal', methods=['POST'])
+@gm_required
+def reveal_fog():
+    """Reveal an area of the map (add to revealed regions)."""
+    data = request.json or {}
+    region = {
+        'id': str(uuid.uuid4())[:8],
+        'type': data.get('type', 'rect'),  # rect, circle, polygon
+        'x': int(data.get('x', 0)),
+        'y': int(data.get('y', 0)),
+        'w': int(data.get('w', 1)),
+        'h': int(data.get('h', 1)),
+        'r': int(data.get('r', 0)),  # For circles
+        'points': data.get('points', []),  # For polygons
+        'revealed': True,
+    }
+    
+    with MAP_LOCK:
+        ACTIVE_MAP['fog'].append(region)
+    
+    _save_map_state()
+    _broadcast_map_fog()
+    return jsonify({'success': True, 'region': region})
+
+@app.route('/api/map/fog/hide', methods=['POST'])
+@gm_required
+def hide_fog():
+    """Hide an area (remove from revealed regions or add hidden region)."""
+    data = request.json or {}
+    region_id = data.get('id')
+    
+    if region_id:
+        # Remove specific region
+        with MAP_LOCK:
+            ACTIVE_MAP['fog'] = [r for r in ACTIVE_MAP['fog'] if r['id'] != region_id]
+    else:
+        # Add a hidden region
+        region = {
+            'id': str(uuid.uuid4())[:8],
+            'type': data.get('type', 'rect'),
+            'x': int(data.get('x', 0)),
+            'y': int(data.get('y', 0)),
+            'w': int(data.get('w', 1)),
+            'h': int(data.get('h', 1)),
+            'revealed': False,
+        }
+        with MAP_LOCK:
+            ACTIVE_MAP['fog'].append(region)
+    
+    _save_map_state()
+    _broadcast_map_fog()
+    return jsonify({'success': True})
+
+@app.route('/api/map/fog/reset', methods=['POST'])
+@gm_required
+def reset_fog():
+    """Reset all fog (either reveal all or hide all)."""
+    data = request.json or {}
+    mode = data.get('mode', 'hide_all')  # 'hide_all' or 'reveal_all'
+    
+    with MAP_LOCK:
+        if mode == 'reveal_all':
+            ACTIVE_MAP['fog'] = [{'id': 'all', 'type': 'all', 'revealed': True}]
+        else:
+            ACTIVE_MAP['fog'] = []
+    
+    _save_map_state()
+    _broadcast_map_fog()
+    return jsonify({'success': True})
+
+# --- WALL MANAGEMENT ---
+
+def _broadcast_map_walls():
+    """Broadcast wall state to all clients."""
+    with MAP_LOCK:
+        walls = ACTIVE_MAP.get('walls', [])
+    sse_broadcast('map_walls', {'walls': walls})
+
+@app.route('/api/map/wall/add', methods=['POST'])
+@gm_required
+def add_wall():
+    """Add a wall segment to the map."""
+    data = request.json or {}
+    points = data.get('points', [])
+    
+    if len(points) < 2:
+        return jsonify({'success': False, 'error': 'Wall needs at least 2 points'}), 400
+    
+    wall = {
+        'id': str(uuid.uuid4())[:8],
+        'points': points,  # [[x1,y1], [x2,y2], ...] in pixel coordinates
+        'type': data.get('type', 'normal'),  # 'normal', 'terrain', 'invisible', 'ethereal', 'door'
+        'open': False,  # For doors
+        'closed': data.get('closed', False),  # Whether the wall forms a closed shape
+    }
+    
+    with MAP_LOCK:
+        if 'walls' not in ACTIVE_MAP:
+            ACTIVE_MAP['walls'] = []
+        ACTIVE_MAP['walls'].append(wall)
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True, 'wall': wall})
+
+@app.route('/api/map/wall/remove', methods=['POST'])
+@gm_required
+def remove_wall():
+    """Remove a wall from the map."""
+    data = request.json or {}
+    wall_id = data.get('id')
+    
+    with MAP_LOCK:
+        ACTIVE_MAP['walls'] = [w for w in ACTIVE_MAP.get('walls', []) if w['id'] != wall_id]
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True})
+
+@app.route('/api/map/wall/hidden_side', methods=['POST'])
+@gm_required
+def set_wall_hidden_side():
+    """Set which side of a wall is hidden from players."""
+    data = request.json or {}
+    wall_id = data.get('id')
+    hidden_side = data.get('hidden_side', 'none')  # 'none', 'left', 'right'
+    
+    with MAP_LOCK:
+        for wall in ACTIVE_MAP.get('walls', []):
+            if wall['id'] == wall_id:
+                wall['hidden_side'] = hidden_side
+                break
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True})
+
+@app.route('/api/map/wall/clear', methods=['POST'])
+@gm_required
+def clear_walls():
+    """Clear all walls from the map."""
+    with MAP_LOCK:
+        ACTIVE_MAP['walls'] = []
+    
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True})
+
+@app.route('/api/map/state')
+def get_map_state():
+    """Get current map state (filtered for players)."""
+    is_gm = session.get('gm_authenticated', False)
+    
+    with MAP_LOCK:
+        state = dict(ACTIVE_MAP)
+        
+        if not is_gm:
+            # Filter tokens not visible to players
+            state['tokens'] = [t for t in state['tokens'] if t.get('visible_to_players', True)]
+            # Don't send raw fog data to players - they'll compute visibility client-side
+    
+    return jsonify(state)
+
+@app.route('/api/map/clear', methods=['POST'])
+@gm_required  
+def clear_map():
+    """Clear the current map."""
+    global ACTIVE_MAP
+    with MAP_LOCK:
+        ACTIVE_MAP = {
+            'id': None,
+            'name': None,
+            'image': None,
+            'grid_size': 70,
+            'grid_offset_x': 0,
+            'grid_offset_y': 0,
+            'tokens': [],
+            'fog': [],
+            'walls': [],
+            'fog_enabled': True,
+            'player_control': False,
+        }
+    _broadcast_map_state()
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

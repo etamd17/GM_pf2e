@@ -1,0 +1,3612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTT Map - GM View</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            height: 100%; 
+            overflow: hidden; 
+            background: #0a0a0a; 
+            font-family: system-ui, -apple-system, sans-serif;
+            color: #e0e0e0;
+        }
+        
+        /* ===== LAYOUT ===== */
+        #app {
+            display: grid;
+            grid-template-rows: 1fr auto;
+            grid-template-columns: 1fr minmax(0, 320px);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        
+        #map-area {
+            grid-row: 1;
+            grid-column: 1;
+            position: relative;
+            overflow: hidden;
+            background: #111;
+            min-width: 0; /* Prevent grid blowout */
+        }
+        
+        #right-sidebar {
+            grid-row: 1 / 3;
+            grid-column: 2;
+            background: #1a1a1a;
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            width: 320px;
+            max-width: 320px;
+        }
+        
+        #bottom-toolbar {
+            grid-row: 2;
+            grid-column: 1;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: #555 #1a1a1a;
+            min-width: 0; /* Allow shrinking */
+        }
+        #bottom-toolbar::-webkit-scrollbar { height: 4px; }
+        #bottom-toolbar::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        #bottom-toolbar::-webkit-scrollbar-track { background: transparent; }
+        
+        /* ===== CANVAS ===== */
+        #map-canvas {
+            position: absolute;
+            transform-origin: 0 0;
+        }
+        
+        #map-area.tool-pan { cursor: grab; }
+        #map-area.tool-pan.dragging { cursor: grabbing; }
+        #map-area.tool-select { cursor: default; }
+        #map-area.tool-token { cursor: crosshair; }
+        #map-area.tool-wall { cursor: crosshair; }
+        #map-area.tool-terrain { cursor: cell; }
+        #map-area.tool-spawn { cursor: crosshair; }
+        
+        /* ===== BOTTOM TOOLBAR ===== */
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 8px;
+            border-right: 1px solid #333;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .toolbar-group:last-child { border-right: none; }
+        .toolbar-group-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 4px;
+        }
+        
+        .tool-btn {
+            padding: 8px 12px;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            color: #aaa;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tool-btn:hover { background: #333; border-color: #555; color: #fff; }
+        .tool-btn.active { background: #2563eb; border-color: #3b82f6; color: #fff; }
+        .tool-btn.small { padding: 6px 10px; font-size: 11px; }
+        .tool-btn.danger { background: #7f1d1d; border-color: #991b1b; }
+        .tool-btn.danger:hover { background: #991b1b; border-color: #dc2626; }
+        
+        .tool-select {
+            padding: 6px 10px;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            color: #aaa;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .tool-select:hover { border-color: #555; }
+        
+        /* ===== RIGHT SIDEBAR ===== */
+        .sidebar-header {
+            padding: 12px 16px;
+            background: #222;
+            border-bottom: 1px solid #333;
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .sidebar-section {
+            border-bottom: 1px solid #2a2a2a;
+        }
+        
+        .section-header {
+            padding: 10px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #1e1e1e;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        .section-header:hover { background: #252525; }
+        
+        .section-content {
+            padding: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        /* Combat Tracker */
+        #combat-tracker {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .combatant {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 4px 8px;
+            background: #252525;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .combatant:hover { background: #2a2a2a; }
+        .combatant.active { 
+            background: #1e3a5f; 
+            border-left: 3px solid #3b82f6;
+            animation: pulse-glow 2s infinite;
+        }
+        .combatant.selected { 
+            outline: 2px solid #f59e0b;
+            outline-offset: -2px;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            50% { box-shadow: 0 0 8px 2px rgba(59, 130, 246, 0.3); }
+        }
+        
+        .combatant-token {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .combatant-token.pc { border-color: #22c55e; }
+        .combatant-token.enemy { border-color: #ef4444; }
+        
+        .combatant-info { flex: 1; min-width: 0; }
+        .combatant-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ddd; }
+        .combatant-hp { font-size: 11px; color: #aaa; font-weight: 600; font-variant-numeric: tabular-nums; }
+        
+        .hp-btn {
+            width: 26px;
+            height: 22px;
+            padding: 0;
+            font-size: 11px;
+            font-weight: 700;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            color: #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .hp-btn:hover { background: #444; color: #fff; border-color: #555; }
+        .hp-btn:active { background: #555; transform: scale(0.95); }
+        .hp-btn.dmg { color: #fca5a5; }
+        .hp-btn.dmg:hover { background: #7f1d1d; color: #fff; border-color: #dc2626; }
+        .hp-btn.heal { color: #86efac; }
+        .hp-btn.heal:hover { background: #14532d; color: #fff; border-color: #22c55e; }
+        
+        .custom-dmg-input {
+            width: 36px; height: 22px; padding: 0 3px;
+            font-size: 11px; font-weight: 600; text-align: center;
+            background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px;
+            color: #ddd; outline: none; font-variant-numeric: tabular-nums;
+        }
+        .custom-dmg-input:focus { border-color: #f59e0b; }
+        
+        .tool-btn.danger { background: #7f1d1d; border-color: #991b1b; }
+        .tool-btn.danger:hover { background: #991b1b; }
+        
+        .combatant-init {
+            font-size: 12px;
+            font-weight: 700;
+            color: #888;
+            background: #1a1a1a;
+            padding: 3px 8px;
+            border-radius: 4px;
+            min-width: 28px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* HP Bar */
+        .hp-bar {
+            height: 6px;
+            background: #252525;
+            border-radius: 3px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+        .hp-bar-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+        .hp-bar-fill.healthy { background: linear-gradient(90deg, #16a34a, #22c55e); }
+        .hp-bar-fill.wounded { background: linear-gradient(90deg, #d97706, #f59e0b); }
+        .hp-bar-fill.critical { background: linear-gradient(90deg, #dc2626, #ef4444); }
+        
+        /* Condition dots */
+        .cond-dot {
+            width: 16px; height: 16px; border-radius: 4px;
+            font-size: 9px; font-weight: 700; display: flex;
+            align-items: center; justify-content: center;
+            color: #fff; cursor: default; position: relative;
+        }
+        .cond-dot[title]:hover::after {
+            content: attr(title);
+            position: absolute; bottom: 100%; left: 50%;
+            transform: translateX(-50%); margin-bottom: 4px;
+            background: #111; color: #ddd; padding: 2px 6px;
+            border-radius: 4px; font-size: 9px; white-space: nowrap;
+            pointer-events: none; z-index: 10;
+        }
+        
+        /* Token Details Panel */
+        #token-details {
+            background: #1e1e1e;
+            border-top: 1px solid #333;
+            max-height: 40%;
+            overflow-y: auto;
+        }
+        
+        #token-details.hidden { display: none; }
+        
+        .detail-header {
+            padding: 12px 16px;
+            background: #252525;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .detail-content {
+            padding: 12px 16px;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .stat-box {
+            background: #252525;
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-label { font-size: 9px; color: #666; text-transform: uppercase; }
+        .stat-value { font-size: 16px; font-weight: bold; }
+        
+        /* ===== CONTEXT MENU ===== */
+        #context-menu {
+            position: fixed;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 4px 0;
+            min-width: 180px;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        
+        .context-item {
+            padding: 8px 16px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .context-item:hover { background: #3a3a3a; }
+        .context-item.danger { color: #f87171; }
+        .context-divider { height: 1px; background: #444; margin: 4px 0; }
+        
+        .context-submenu {
+            position: relative;
+        }
+        .context-submenu > .context-item::after {
+            content: '▶';
+            margin-left: auto;
+            font-size: 10px;
+        }
+        .submenu-content {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 4px 0;
+            min-width: 160px;
+            display: none;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        .context-submenu:hover > .submenu-content { display: block; }
+        
+        /* ===== TOP NAV ===== */
+        #top-nav {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 50;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav-btn {
+            padding: 6px 12px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #aaa;
+            font-size: 11px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .nav-btn:hover { background: rgba(0,0,0,0.9); color: #fff; }
+        
+        /* ===== STATUS BAR ===== */
+        #status-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: #666;
+            z-index: 50;
+        }
+        
+        .status-item {
+            background: rgba(0,0,0,0.7);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        /* ===== DRAWING STATUS ===== */
+        #drawing-status {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: none;
+            z-index: 100;
+            font-size: 12px;
+        }
+        
+        #drawing-status.active { display: flex; align-items: center; gap: 12px; }
+        
+        .status-btn {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .status-btn.success { background: #22c55e; color: #000; }
+        .status-btn.danger { background: #ef4444; color: #fff; }
+        .status-btn.warning { background: #f59e0b; color: #000; }
+        
+        /* ===== WALL COLORS ===== */
+        .wall-normal { stroke: #ef4444; }
+        .wall-terrain { stroke: #8b5cf6; }
+        .wall-invisible { stroke: #888; stroke-dasharray: 8 4; }
+        .wall-ethereal { stroke: #06b6d4; stroke-dasharray: 4 4; }
+        .wall-door { stroke: #f59e0b; }
+        .wall-door.open { stroke: #22c55e; stroke-dasharray: 8 4; }
+        
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        
+        /* ===== MOVEMENT PREVIEW ===== */
+        #movement-preview {
+            position: fixed;
+            background: rgba(0,0,0,0.9);
+            border: 1px solid #3b82f6;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 200;
+            display: none;
+        }
+        #movement-preview.active { display: block; }
+        #movement-preview .actions { color: #3b82f6; font-weight: bold; }
+        #movement-preview .warning { color: #f59e0b; }
+        #movement-preview .error { color: #ef4444; }
+        
+        /* ===== FLANKING INDICATOR ===== */
+        .flanked-indicator {
+            position: absolute;
+            background: #ec4899;
+            color: #fff;
+            font-size: 9px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+        
+        /* ===== CONDITION BADGES ===== */
+        .condition-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            margin: 2px;
+        }
+        .condition-badge .value {
+            background: #555;
+            padding: 0 4px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+        .condition-badge.frightened { background: #7c3aed; }
+        .condition-badge.sickened { background: #65a30d; }
+        .condition-badge.stunned { background: #d97706; }
+        .condition-badge.slowed { background: #4f46e5; }
+        .condition-badge.dying { background: #dc2626; }
+        .condition-badge.wounded { background: #ea580c; }
+        .condition-badge.persistent { background: #b91c1c; animation: pulse-damage 1s infinite; }
+        
+        @keyframes pulse-damage {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        /* ===== TURN NOTIFICATION ===== */
+        #turn-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            border: 2px solid #3b82f6;
+            padding: 20px 40px;
+            border-radius: 12px;
+            z-index: 300;
+            display: none;
+            text-align: center;
+        }
+        #turn-notification.active { display: block; animation: fade-in 0.3s; }
+        #turn-notification h2 { font-size: 18px; margin-bottom: 8px; }
+        #turn-notification .reminders { color: #f59e0b; font-size: 12px; margin-top: 8px; }
+        
+        @keyframes fade-in {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        @keyframes slide-in {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes pop-in {
+            from { opacity: 0; transform: translateX(-50%) scale(0.8); }
+            to { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+        
+        /* ===== CREATURE CARDS ===== */
+        .creature-card {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            cursor: grab;
+            transition: all 0.15s;
+        }
+        .creature-card:hover { background: #2a2a2a; border-color: #444; }
+        .creature-card.dragging { opacity: 0.5; cursor: grabbing; }
+        .creature-card.pc { border-left: 3px solid #22c55e; }
+        .creature-card.enemy { border-left: 3px solid #ef4444; }
+        
+        .creature-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .creature-card.pc .creature-icon { background: #166534; color: #86efac; }
+        .creature-card.enemy .creature-icon { background: #7f1d1d; color: #fca5a5; }
+        
+        .creature-info { flex: 1; min-width: 0; }
+        .creature-name { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .creature-stats { font-size: 9px; color: #888; }
+        
+        /* ===== WALL LIST ===== */
+        .wall-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            background: #252525;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            font-size: 10px;
+        }
+        .wall-item .wall-type {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        .wall-item .wall-type.normal { background: #7f1d1d; color: #fca5a5; }
+        .wall-item .wall-type.terrain { background: #4c1d95; color: #c4b5fd; }
+        .wall-item .wall-type.invisible { background: #374151; color: #9ca3af; }
+        .wall-item .wall-type.ethereal { background: #164e63; color: #67e8f9; }
+        .wall-item .wall-type.door { background: #78350f; color: #fcd34d; }
+        
+        .wall-item .wall-info { flex: 1; color: #888; }
+        .wall-item .wall-delete {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 2px;
+        }
+        .wall-item .wall-delete:hover { color: #ef4444; }
+        
+        /* ===== MAP MODAL ===== */
+        #map-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 400;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #map-modal.active { display: flex; }
+        
+        .modal-content {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h2 { font-size: 16px; font-weight: 600; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: #fff; }
+        
+        .modal-body {
+            padding: 16px 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        
+        .map-card {
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+        .map-card:hover { border-color: #3b82f6; background: #2a2a2a; }
+        .map-card.active { border-color: #22c55e; }
+        
+        .map-card img {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
+        .map-card .map-name {
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* ===== SPAWN POINT ===== */
+        .spawn-marker {
+            fill: none;
+            stroke: #22c55e;
+            stroke-width: 3;
+            stroke-dasharray: 8 4;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Map Area -->
+        <div id="map-area" class="tool-select">
+            <canvas id="map-canvas"></canvas>
+            
+            <!-- Top Navigation -->
+            <div id="top-nav">
+                <a href="/gm" class="nav-btn">← GM Hub</a>
+                <a href="/gm/tracker" class="nav-btn">⚔ Tracker</a>
+                <a href="/map" target="_blank" class="nav-btn">👁 Player View</a>
+            </div>
+            
+            <!-- Status Bar -->
+            <div id="status-bar">
+                <span class="status-item" id="zoom-display">100%</span>
+                <span class="status-item" id="cursor-pos">0, 0</span>
+            </div>
+            
+            <!-- Drawing Status -->
+            <div id="drawing-status">
+                <span id="drawing-text">Drawing: 0 points</span>
+                <button class="status-btn warning" onclick="undoWallPoint()">↩ Undo</button>
+                <button class="status-btn success" onclick="finishWall()">✓ Done</button>
+                <button class="status-btn danger" onclick="cancelWall()">✕ Cancel</button>
+            </div>
+        </div>
+        
+        <!-- Right Sidebar -->
+        <div id="right-sidebar">
+            <div class="sidebar-header">
+                <span>⚔ Combat</span>
+                <div style="display: flex; gap: 4px;">
+                    <button class="tool-btn small" onclick="rollAllInitiative()">🎲 Roll Init</button>
+                    <button class="tool-btn small" onclick="nextTurn()">Next →</button>
+                </div>
+            </div>
+            
+            <div id="combat-tracker" style="flex: 1; overflow-y: auto;">
+                <div class="section-header" onclick="toggleSection('turn-order')">
+                    <span>Turn Order</span>
+                    <span id="round-display">Round 1</span>
+                </div>
+                <div id="combatant-list" class="section-content">
+                    <!-- Populated by JS -->
+                </div>
+                
+                <!-- Monster/Creature Panel -->
+                <div class="section-header" onclick="toggleSection('creatures')">
+                    <span>👹 Creatures</span>
+                    <span style="font-size: 10px;">drag to map</span>
+                </div>
+                <div id="creature-panel" class="section-content" style="display: none;">
+                    <div style="margin-bottom: 8px;">
+                        <div style="font-size: 10px; color: #666; margin-bottom: 4px;">FROM ENCOUNTER</div>
+                        <div id="encounter-creatures"></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 10px; color: #666; margin-bottom: 4px;">PARTY</div>
+                        <div id="party-creatures"></div>
+                    </div>
+                </div>
+                
+                <!-- Walls Panel -->
+                <div class="section-header" onclick="toggleSection('walls')">
+                    <span>🧱 Walls</span>
+                    <span id="wall-count" style="font-size: 10px;">0</span>
+                </div>
+                <div id="walls-panel" class="section-content" style="display: none; max-height: 200px;">
+                    <div id="wall-list"></div>
+                    <button class="tool-btn small" style="width: 100%; margin-top: 8px;" onclick="clearAllWalls()">🗑 Clear All Walls</button>
+                </div>
+            </div>
+            
+            <div id="token-details" class="hidden">
+                <div class="detail-header">
+                    <span id="detail-name">Token Name</span>
+                    <button onclick="closeTokenDetails()" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px;">×</button>
+                </div>
+                <div class="detail-content">
+                    <div class="stat-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">HP</div>
+                            <div class="stat-value" id="detail-hp">--</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">AC</div>
+                            <div class="stat-value" id="detail-ac">--</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Speed</div>
+                            <div class="stat-value" id="detail-speed">--</div>
+                        </div>
+                    </div>
+                    <div id="detail-conditions"></div>
+                    <div id="detail-abilities">
+                        <!-- Abilities/attacks listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bottom Toolbar -->
+        <div id="bottom-toolbar">
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Tools</span>
+                <button class="tool-btn active" id="tool-select" onclick="setTool('select')">Select</button>
+                <button class="tool-btn" id="tool-pan" onclick="setTool('pan')">Pan</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Tokens</span>
+                <select class="tool-select" id="token-size-select" style="width: 80px;">
+                    <option value="1">Medium</option>
+                    <option value="2">Large</option>
+                    <option value="3">Huge</option>
+                    <option value="4">Gargantuan</option>
+                </select>
+                <button class="tool-btn" id="tool-token" onclick="setTool('token')">Place</button>
+                <button class="tool-btn" onclick="addPartyToMap()">Add Party</button>
+                <button class="tool-btn" id="tool-spawn" onclick="setTool('spawn')">Set Spawn</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Walls</span>
+                <select class="tool-select" id="wall-type-select" onchange="setWallType(this.value)">
+                    <option value="normal">Normal</option>
+                    <option value="terrain">Terrain</option>
+                    <option value="invisible">Invisible</option>
+                    <option value="ethereal">Ethereal</option>
+                    <option value="door">Door</option>
+                </select>
+                <button class="tool-btn" id="tool-wall" onclick="setTool('wall')">Draw</button>
+                <button class="tool-btn" onclick="borderMap()">Border</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Terrain</span>
+                <button class="tool-btn" id="tool-terrain" onclick="setTool('terrain')">Difficult</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Lighting</span>
+                <select class="tool-select" id="lighting-select" onchange="setLighting(this.value)">
+                    <option value="bright">Bright</option>
+                    <option value="dim">Dim</option>
+                    <option value="darkness">Darkness</option>
+                </select>
+            </div>
+            
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Map</span>
+                <button class="tool-btn" onclick="showMapModal()">Load</button>
+                <button class="tool-btn" onclick="showUploadModal()">Upload</button>
+                <button class="tool-btn" id="btn-calibrate" onclick="startCalibration()">Calibrate</button>
+                <button class="tool-btn" onclick="showGridModal()">Grid</button>
+            </div>
+            
+            <div style="margin-left: auto; display: flex; gap: 4px;">
+                <button class="tool-btn" onclick="clearExplored()">Reset Fog</button>
+                <button class="tool-btn" onclick="clearMap()">Clear Map</button>
+                <button class="tool-btn danger" onclick="resetAll()">Reset All</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Calibration Status -->
+    <div id="calibration-status" style="position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); 
+         background: rgba(245, 158, 11, 0.95); color: #000; padding: 8px 16px; border-radius: 6px; 
+         font-weight: bold; font-size: 12px; z-index: 200; display: none;"></div>
+    
+    <!-- Context Menu -->
+    <div id="context-menu">
+        <div class="context-item" onclick="contextAction('damage')">Apply Damage</div>
+        <div class="context-item" onclick="contextAction('heal')">Heal</div>
+        <div class="context-divider"></div>
+        <div class="context-submenu">
+            <div class="context-item">Conditions</div>
+            <div class="submenu-content" id="condition-submenu">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+        <div class="context-divider"></div>
+        <div class="context-item" onclick="contextAction('visible')">Toggle Visibility</div>
+        <div class="context-item" onclick="contextAction('details')">View Details</div>
+        <div class="context-divider"></div>
+        <div class="context-item danger" onclick="contextAction('remove')">Remove</div>
+    </div>
+    
+    <!-- Movement Preview Tooltip -->
+    <div id="movement-preview">
+        <span class="label">Move:</span>
+        <span class="distance">0 ft</span>
+        <span class="actions">(0 actions)</span>
+    </div>
+    
+    <!-- Turn Start Notification -->
+    <div id="turn-notification">
+        <h2 id="turn-creature-name">Creature's Turn</h2>
+        <div id="turn-reminders" class="reminders"></div>
+        <button onclick="dismissTurnNotification()" style="margin-top:12px;padding:6px 16px;background:#3b82f6;border:none;border-radius:6px;color:#fff;cursor:pointer;">OK</button>
+    </div>
+    
+    <!-- Map Selection Modal -->
+    <div id="map-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📁 Select Map</h2>
+                <button class="modal-close" onclick="closeMapModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="map-grid" class="map-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ===========================================
+        // STATE
+        // ===========================================
+        let mapState = {{ current_map | tojson }};
+        const partyList = {{ party | tojson }};
+        const encounterList = {{ encounter | tojson }};
+        const availableMaps = {{ maps | tojson }};
+        
+        let canvas, ctx;
+        let mapImage = null;
+        let viewX = 0, viewY = 0, zoom = 1;
+        
+        // Tool state
+        let currentTool = 'select';
+        let wallType = 'normal';
+        
+        // Dragging creature from panel
+        let draggingCreature = null;
+        
+        // Interaction state
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0, viewX: 0, viewY: 0, tokenX: 0, tokenY: 0 };
+        let draggingToken = null;
+        let dragTokenOffset = { x: 0, y: 0 }; // Track visual offset during drag
+        let selectedToken = null;
+        let contextToken = null;
+        
+        // Wall drawing state
+        let wallPoints = [];
+        let isDrawingWall = false;
+        
+        // Calibration state
+        let isCalibrating = false;
+        let calibrationStep = 0;
+        let calibrationPoints = [];
+        
+        // Lighting state
+        let lightingMode = '{{ current_map.get("lighting", "bright") }}'; // bright, dim, darkness
+        
+        // Combat state
+        let currentTurnIndex = 0;
+        let roundNumber = 1;
+        
+        // Conditions - some have values, some are boolean
+        const CONDITIONS = {
+            // Value conditions (1-4 scale typically)
+            'Clumsy': { hasValue: true, max: 4 },
+            'Doomed': { hasValue: true, max: 4 },
+            'Drained': { hasValue: true, max: 4 },
+            'Dying': { hasValue: true, max: 4 },
+            'Enfeebled': { hasValue: true, max: 4 },
+            'Frightened': { hasValue: true, max: 4, autoDecrement: true },
+            'Sickened': { hasValue: true, max: 4, autoDecrement: true },
+            'Slowed': { hasValue: true, max: 3 },
+            'Stunned': { hasValue: true, max: 4 },
+            'Stupefied': { hasValue: true, max: 4 },
+            'Wounded': { hasValue: true, max: 4 },
+            // Boolean conditions
+            'Blinded': { hasValue: false },
+            'Broken': { hasValue: false },
+            'Concealed': { hasValue: false },
+            'Confused': { hasValue: false },
+            'Controlled': { hasValue: false },
+            'Dazzled': { hasValue: false },
+            'Deafened': { hasValue: false },
+            'Encumbered': { hasValue: false },
+            'Fascinated': { hasValue: false },
+            'Fatigued': { hasValue: false },
+            'Flat-Footed': { hasValue: false },
+            'Fleeing': { hasValue: false },
+            'Grabbed': { hasValue: false },
+            'Hidden': { hasValue: false },
+            'Immobilized': { hasValue: false },
+            'Invisible': { hasValue: false },
+            'Observed': { hasValue: false },
+            'Off-Guard': { hasValue: false },
+            'Paralyzed': { hasValue: false },
+            'Persistent Damage': { hasValue: true, special: 'damage' },
+            'Petrified': { hasValue: false },
+            'Prone': { hasValue: false },
+            'Quickened': { hasValue: false },
+            'Restrained': { hasValue: false },
+            'Unconscious': { hasValue: false },
+            'Undetected': { hasValue: false },
+            'Unnoticed': { hasValue: false },
+        };
+        
+        // Movement preview state
+        let showingMovementPreview = false;
+        let movementStartToken = null;
+        
+        // ===========================================
+        // INITIALIZATION
+        // ===========================================
+        function init() {
+            canvas = document.getElementById('map-canvas');
+            ctx = canvas.getContext('2d');
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Mouse events
+            const mapArea = document.getElementById('map-area');
+            mapArea.addEventListener('mousedown', onMouseDown);
+            mapArea.addEventListener('mousemove', onMouseMove);
+            mapArea.addEventListener('mouseup', onMouseUp);
+            mapArea.addEventListener('mouseleave', onMouseUp);
+            mapArea.addEventListener('wheel', onWheel);
+            mapArea.addEventListener('contextmenu', onContextMenu);
+            
+            // Hide context menu on click elsewhere
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#context-menu')) {
+                    hideContextMenu();
+                }
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', onKeyDown);
+            
+            // Load map image
+            if (mapState.image) {
+                loadMapImage(mapState.image);
+            } else {
+                render();
+            }
+            
+            // Setup SSE
+            setupSSE();
+            
+            // Populate UI
+            populateConditionMenu();
+            populateCreaturePanel();
+            updateWallList();
+            updateCombatantList();
+            
+            // Setup creature drag and drop
+            setupCreatureDragDrop();
+            
+            // Sync lighting dropdown to saved state
+            const lightingSelect = document.getElementById('lighting-select');
+            if (lightingSelect && lightingMode) {
+                lightingSelect.value = lightingMode;
+            }
+        }
+        
+        function resizeCanvas() {
+            const area = document.getElementById('map-area');
+            canvas.width = area.clientWidth;
+            canvas.height = area.clientHeight;
+            render();
+        }
+        
+        function loadMapImage(filename) {
+            mapImage = new Image();
+            mapImage.onload = () => {
+                // Center the map
+                viewX = (canvas.width - mapImage.width * zoom) / 2;
+                viewY = (canvas.height - mapImage.height * zoom) / 2;
+                render();
+            };
+            mapImage.src = `/api/map/image/${filename}`;
+        }
+        
+        // ===========================================
+        // SSE - Real-time Updates
+        // ===========================================
+        function setupSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.addEventListener('map_state', (e) => {
+                mapState = JSON.parse(e.data);
+                if (mapState.image && (!mapImage || !mapImage.src.includes(mapState.image))) {
+                    loadMapImage(mapState.image);
+                }
+                // Sync lighting mode from state
+                if (mapState.lighting) {
+                    lightingMode = mapState.lighting;
+                    const ls = document.getElementById('lighting-select');
+                    if (ls) ls.value = lightingMode;
+                }
+                updateCombatantList();
+                render();
+            });
+            
+            evtSource.addEventListener('map_tokens', (e) => {
+                mapState.tokens = JSON.parse(e.data).tokens;
+                updateCombatantList();
+                render();
+            });
+            
+            evtSource.addEventListener('map_walls', (e) => {
+                mapState.walls = JSON.parse(e.data).walls;
+                updateWallList();
+                render();
+            });
+            
+            evtSource.addEventListener('encounter_update', (e) => {
+                // Sync HP/conditions from encounter
+            });
+            
+            evtSource.addEventListener('dice_roll', (e) => {
+                const roll = JSON.parse(e.data);
+                showDiceRollNotification(roll);
+            });
+            
+            evtSource.onerror = () => console.log('SSE reconnecting...');
+        }
+        
+        function showDiceRollNotification(roll) {
+            // Show a notification for player dice rolls
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed; top: 60px; right: 340px;
+                background: rgba(0,0,0,0.95); border: 2px solid ${roll.crit ? '#22c55e' : roll.fumble ? '#ef4444' : '#3b82f6'};
+                padding: 12px 16px; border-radius: 8px; z-index: 500;
+                animation: slide-in 0.3s ease-out;
+                max-width: 250px;
+            `;
+            
+            let content = `<div style="font-size: 11px; color: #888;">${roll.player} rolled</div>`;
+            
+            if (roll.attack) {
+                content += `
+                    <div style="font-size: 12px; margin-top: 4px;">${roll.attack}</div>
+                    <div style="font-size: 20px; font-weight: bold; color: ${roll.crit ? '#22c55e' : roll.fumble ? '#ef4444' : '#fff'};">
+                        ${roll.crit ? '🎯 ' : roll.fumble ? '💥 ' : ''}${roll.total}
+                    </div>
+                    <div style="font-size: 10px; color: #888;">d20(${roll.result}) + ${roll.bonus}</div>
+                    ${roll.damage ? `<div style="font-size: 11px; margin-top: 4px;">Dmg: ${roll.damage}</div>` : ''}
+                `;
+            } else {
+                content += `
+                    <div style="font-size: 20px; font-weight: bold; color: ${roll.crit ? '#22c55e' : roll.fumble ? '#ef4444' : '#fff'}; margin-top: 4px;">
+                        ${roll.crit ? '🎯 ' : roll.fumble ? '💥 ' : ''}${roll.dice}: ${roll.result}
+                    </div>
+                `;
+            }
+            
+            notification.innerHTML = content;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
+        
+        // ===========================================
+        // RENDERING
+        // ===========================================
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!mapImage || !mapImage.complete) {
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#444';
+                ctx.font = '16px system-ui';
+                ctx.textAlign = 'center';
+                ctx.fillText('No map loaded. Use Map → Load or Upload.', canvas.width/2, canvas.height/2);
+                return;
+            }
+            
+            ctx.save();
+            ctx.translate(viewX, viewY);
+            ctx.scale(zoom, zoom);
+            
+            // Draw map image
+            ctx.drawImage(mapImage, 0, 0);
+            
+            // Draw grid
+            drawGrid();
+            
+            // Draw difficult terrain
+            drawDifficultTerrain();
+            
+            // Draw explored fog overlay (dimmed areas)
+            drawExploredFog();
+            
+            // Draw walls (GM sees all walls)
+            drawWalls();
+            
+            // Draw wall preview if drawing
+            drawWallPreview();
+            
+            // Draw spawn point
+            drawSpawnPoint();
+            
+            // Draw calibration points if calibrating
+            drawCalibrationPoints();
+            
+            // Draw tokens
+            drawTokens();
+            
+            // Draw movement range if token selected
+            if (selectedToken) {
+                drawMovementRange();
+            }
+            
+            ctx.restore();
+            
+            // Update status bar
+            document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+        }
+        
+        function drawGrid() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1 / zoom;
+            
+            for (let x = ox; x < mapImage.width; x += gs) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, mapImage.height);
+                ctx.stroke();
+            }
+            
+            for (let y = oy; y < mapImage.height; y += gs) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(mapImage.width, y);
+                ctx.stroke();
+            }
+        }
+        
+        function drawDifficultTerrain() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            ctx.fillStyle = 'rgba(139, 92, 246, 0.2)';
+            ctx.strokeStyle = 'rgba(139, 92, 246, 0.5)';
+            ctx.lineWidth = 2 / zoom;
+            
+            for (const cell of (mapState.difficult_terrain || [])) {
+                const px = cell.x * gs + ox;
+                const py = cell.y * gs + oy;
+                ctx.fillRect(px, py, gs, gs);
+                ctx.strokeRect(px, py, gs, gs);
+            }
+        }
+        
+        function drawExploredFog() {
+            // GM view: unexplored areas get a subtle dim overlay
+            // Also applies dim/darkness visual tint to visible areas based on lighting
+            
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const explored = new Set(mapState.explored || []);
+            const lighting = lightingMode || mapState.lighting || 'bright';
+            
+            // Get all grid cells
+            const cols = Math.ceil(mapImage.width / gs);
+            const rows = Math.ceil(mapImage.height / gs);
+            
+            // First, calculate what PCs can currently see
+            const visible = calculateVisibleCells();
+            
+            for (let gx = 0; gx < cols; gx++) {
+                for (let gy = 0; gy < rows; gy++) {
+                    const key = `${gx},${gy}`;
+                    const isExplored = explored.has(key);
+                    const isVisible = visible.has(key);
+                    const px = gx * gs + ox;
+                    const py = gy * gs + oy;
+                    
+                    if (!isExplored && !isVisible) {
+                        // Never seen - dim overlay for GM
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                        ctx.fillRect(px, py, gs, gs);
+                    } else if (isVisible && lighting === 'dim') {
+                        // Visible but dim lighting — subtle blue-gray tint
+                        ctx.fillStyle = 'rgba(20, 30, 60, 0.25)';
+                        ctx.fillRect(px, py, gs, gs);
+                    } else if (isVisible && lighting === 'darkness') {
+                        // Visible via darkvision in darkness — desaturated purple tint
+                        ctx.fillStyle = 'rgba(40, 20, 60, 0.35)';
+                        ctx.fillRect(px, py, gs, gs);
+                    }
+                }
+            }
+        }
+        
+        function calculateVisibleCells() {
+            // Ray-cast from each PC token to determine visible cells
+            // Now factors in vision_radius and lighting conditions
+            const visible = new Set();
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            const pcTokens = (mapState.tokens || []).filter(t => t.is_pc);
+            const walls = mapState.walls || [];
+            
+            const cols = Math.ceil(mapImage.width / gs);
+            const rows = Math.ceil(mapImage.height / gs);
+            
+            for (const pc of pcTokens) {
+                const size = pc.size || 1;
+                const cx = pc.x * gs + ox + (gs * size) / 2;
+                const cy = pc.y * gs + oy + (gs * size) / 2;
+                
+                // Get effective vision radius based on lighting
+                const visionRadius = getEffectiveVisionRadius(pc);
+                if (visionRadius <= 0) continue; // Blind — can't see anything
+                
+                const visionPx = visionRadius * gs;
+                
+                for (let gx = 0; gx < cols; gx++) {
+                    for (let gy = 0; gy < rows; gy++) {
+                        const cellCenterX = gx * gs + ox + gs / 2;
+                        const cellCenterY = gy * gs + oy + gs / 2;
+                        
+                        // Range check — skip cells beyond vision radius
+                        const dist = Math.hypot(cellCenterX - cx, cellCenterY - cy);
+                        if (dist > visionPx) continue;
+                        
+                        // Check corners too for partial visibility
+                        const corners = [
+                            [gx * gs + ox, gy * gs + oy],
+                            [gx * gs + ox + gs, gy * gs + oy],
+                            [gx * gs + ox, gy * gs + oy + gs],
+                            [gx * gs + ox + gs, gy * gs + oy + gs],
+                            [cellCenterX, cellCenterY]
+                        ];
+                        
+                        for (const [px, py] of corners) {
+                            if (!isBlockedByWalls(cx, cy, px, py, walls)) {
+                                visible.add(`${gx},${gy}`);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return visible;
+        }
+        
+        function isBlockedByWalls(x1, y1, x2, y2, walls) {
+            for (const wall of walls) {
+                // Skip open doors
+                if (wall.type === 'door' && wall.open) continue;
+                // Skip invisible walls (don't block vision)
+                if (wall.type === 'invisible') continue;
+                
+                const points = wall.points || [];
+                if (points.length < 2) continue;
+                
+                for (let i = 0; i < points.length - 1; i++) {
+                    if (lineIntersects(x1, y1, x2, y2, points[i][0], points[i][1], points[i+1][0], points[i+1][1])) {
+                        return true;
+                    }
+                }
+                
+                // Check if wall is closed (connects back to start)
+                if (wall.closed && points.length > 2) {
+                    const last = points.length - 1;
+                    if (lineIntersects(x1, y1, x2, y2, points[last][0], points[last][1], points[0][0], points[0][1])) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function lineIntersects(x1, y1, x2, y2, x3, y3, x4, y4) {
+            const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+            if (Math.abs(denom) < 0.0001) return false;
+            
+            const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+            const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+            
+            return ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999;
+        }
+        
+        function drawWalls() {
+            for (const wall of (mapState.walls || [])) {
+                const points = wall.points || [];
+                if (points.length < 2) continue;
+                
+                ctx.beginPath();
+                ctx.moveTo(points[0][0], points[0][1]);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i][0], points[i][1]);
+                }
+                
+                // Close if marked closed
+                if (wall.closed) {
+                    ctx.closePath();
+                }
+                
+                // Style based on type
+                ctx.lineWidth = 4 / zoom;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                switch (wall.type) {
+                    case 'normal':
+                        ctx.strokeStyle = '#ef4444';
+                        ctx.setLineDash([]);
+                        break;
+                    case 'terrain':
+                        ctx.strokeStyle = '#8b5cf6';
+                        ctx.setLineDash([]);
+                        break;
+                    case 'invisible':
+                        ctx.strokeStyle = '#888';
+                        ctx.setLineDash([8/zoom, 4/zoom]);
+                        break;
+                    case 'ethereal':
+                        ctx.strokeStyle = '#06b6d4';
+                        ctx.setLineDash([4/zoom, 4/zoom]);
+                        break;
+                    case 'door':
+                        ctx.strokeStyle = wall.open ? '#22c55e' : '#f59e0b';
+                        ctx.setLineDash(wall.open ? [8/zoom, 4/zoom] : []);
+                        break;
+                    default:
+                        ctx.strokeStyle = '#ef4444';
+                        ctx.setLineDash([]);
+                }
+                
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Draw door icon for doors
+                if (wall.type === 'door' && points.length >= 2) {
+                    const mx = (points[0][0] + points[points.length-1][0]) / 2;
+                    const my = (points[0][1] + points[points.length-1][1]) / 2;
+                    
+                    ctx.fillStyle = wall.open ? '#22c55e' : '#f59e0b';
+                    ctx.beginPath();
+                    ctx.arc(mx, my, 8/zoom, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.font = `${12/zoom}px system-ui`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(wall.open ? '○' : '●', mx, my);
+                }
+            }
+        }
+        
+        function drawWallPreview() {
+            if (!isDrawingWall || wallPoints.length === 0) return;
+            
+            ctx.beginPath();
+            ctx.moveTo(wallPoints[0][0], wallPoints[0][1]);
+            for (let i = 1; i < wallPoints.length; i++) {
+                ctx.lineTo(wallPoints[i][0], wallPoints[i][1]);
+            }
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 4 / zoom;
+            ctx.setLineDash([8/zoom, 4/zoom]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw points
+            for (const pt of wallPoints) {
+                ctx.beginPath();
+                ctx.arc(pt[0], pt[1], 6/zoom, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            }
+        }
+        
+        function drawSpawnPoint() {
+            if (!mapState.spawn_point) return;
+            
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            const px = mapState.spawn_point.x * gs + ox;
+            const py = mapState.spawn_point.y * gs + oy;
+            
+            // Draw spawn marker (dashed green square)
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 3 / zoom;
+            ctx.setLineDash([8/zoom, 4/zoom]);
+            ctx.strokeRect(px + 4/zoom, py + 4/zoom, gs - 8/zoom, gs - 8/zoom);
+            ctx.setLineDash([]);
+            
+            // Draw icon
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.3)';
+            ctx.fillRect(px, py, gs, gs);
+            
+            ctx.fillStyle = '#22c55e';
+            ctx.font = `${20/zoom}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('📍', px + gs/2, py + gs/2);
+        }
+        
+        function drawTokens() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            for (const token of (mapState.tokens || [])) {
+                const size = token.size || 1;
+                
+                // Apply drag offset if this token is being dragged
+                let tokenX = token.x;
+                let tokenY = token.y;
+                if (draggingToken && draggingToken.id === token.id) {
+                    tokenX = dragStart.tokenX + dragTokenOffset.x;
+                    tokenY = dragStart.tokenY + dragTokenOffset.y;
+                }
+                
+                const cx = tokenX * gs + ox + (gs * size) / 2;
+                const cy = tokenY * gs + oy + (gs * size) / 2;
+                const r = (gs * size) / 2 - 4;
+                
+                // Check if this is the active combatant
+                const isActive = isActiveCombatant(token);
+                const isSelected = selectedToken === token.id;
+                
+                // Pulse effect for active combatant
+                if (isActive) {
+                    const pulse = (Math.sin(Date.now() / 300) + 1) / 2;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r + 8/zoom + pulse * 6/zoom, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(59, 130, 246, ${0.3 + pulse * 0.4})`;
+                    ctx.lineWidth = 3/zoom;
+                    ctx.stroke();
+                }
+                
+                // Token circle
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fillStyle = token.color || (token.is_pc ? '#22c55e' : '#ef4444');
+                ctx.fill();
+                
+                // Flanking indicator (orange dashed ring for flanked enemies)
+                if (!token.is_pc && token._flanked) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r + 5/zoom, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#f97316';
+                    ctx.lineWidth = 3/zoom;
+                    ctx.setLineDash([6/zoom, 4/zoom]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                
+                // Border
+                ctx.strokeStyle = isSelected ? '#fbbf24' : '#fff';
+                ctx.lineWidth = (isSelected ? 4 : 2) / zoom;
+                ctx.stroke();
+                
+                // Initials
+                ctx.fillStyle = '#fff';
+                ctx.font = `bold ${Math.max(12, r * 0.5)}px system-ui`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const initials = token.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                ctx.fillText(initials, cx, cy);
+                
+                // HP bar
+                if (token.max_hp > 0) {
+                    const hpPct = Math.max(0, (token.hp || 0) / token.max_hp);
+                    const barW = gs * size - 8;
+                    const barH = 6/zoom;
+                    const barX = cx - barW/2;
+                    const barY = cy + r + 4/zoom;
+                    
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(barX, barY, barW, barH);
+                    
+                    ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
+                    ctx.fillRect(barX, barY, barW * hpPct, barH);
+                }
+                
+                // Condition icons (small circles around edge)
+                drawConditionIcons(token, cx, cy, r);
+            }
+            
+            // Request animation frame for active token pulse
+            if ((mapState.tokens || []).some(t => isActiveCombatant(t))) {
+                requestAnimationFrame(render);
+            }
+        }
+        
+        function drawConditionIcons(token, cx, cy, r) {
+            let conditions = token.conditions || {};
+            
+            // Handle both array and object formats
+            let condList = [];
+            if (Array.isArray(conditions)) {
+                condList = conditions.map(c => ({ name: c, value: 1 }));
+            } else if (typeof conditions === 'object') {
+                condList = Object.entries(conditions)
+                    .filter(([k, v]) => v)
+                    .map(([k, v]) => ({ name: k, value: typeof v === 'number' ? v : 1 }));
+            }
+            
+            if (condList.length === 0) return;
+            
+            const iconSize = 12 / zoom;
+            const angleStep = (Math.PI * 2) / Math.max(condList.length, 6);
+            
+            condList.slice(0, 6).forEach((cond, i) => {
+                const angle = -Math.PI/2 + i * angleStep;
+                const ix = cx + (r + iconSize) * Math.cos(angle);
+                const iy = cy + (r + iconSize) * Math.sin(angle);
+                
+                // Draw circle
+                ctx.beginPath();
+                ctx.arc(ix, iy, iconSize, 0, Math.PI * 2);
+                ctx.fillStyle = getConditionColor(cond.name);
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1/zoom;
+                ctx.stroke();
+                
+                // Draw value if > 1
+                if (typeof cond.value === 'number' && cond.value > 1) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `bold ${iconSize * 0.8}px system-ui`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(cond.value.toString(), ix, iy);
+                }
+            });
+        }
+        
+        function getConditionColor(condition) {
+            const colors = {
+                'Frightened': '#a855f7', 'Sickened': '#84cc16', 'Stunned': '#fbbf24',
+                'Slowed': '#6366f1', 'Prone': '#78716c', 'Dying': '#dc2626',
+                'Wounded': '#f97316', 'Flat-Footed': '#ec4899', 'Invisible': '#e0e0e0',
+                'Hidden': '#737373', 'Quickened': '#14b8a6', 'Persistent Damage': '#b91c1c',
+                'Clumsy': '#f472b6', 'Drained': '#9ca3af', 'Enfeebled': '#a78bfa',
+                'Doomed': '#1e1b4b', 'Unconscious': '#374151', 'Dead': '#000'
+            };
+            return colors[condition] || '#6b7280';
+        }
+        
+        function drawMovementRange() {
+            const token = (mapState.tokens || []).find(t => t.id === selectedToken);
+            if (!token || !token.speed) return;
+            
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const size = token.size || 1;
+            const cx = token.x * gs + ox + (gs * size) / 2;
+            const cy = token.y * gs + oy + (gs * size) / 2;
+            
+            // Speed in feet, 1 square = 5 feet
+            const speedSquares = Math.floor(token.speed / 5);
+            const radiusPx = speedSquares * gs;
+            
+            // Draw range circle (1 action)
+            ctx.beginPath();
+            ctx.arc(cx, cy, radiusPx, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
+            ctx.lineWidth = 2/zoom;
+            ctx.setLineDash([8/zoom, 4/zoom]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Fill with very subtle color
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.05)';
+            ctx.fill();
+        }
+        
+        function isActiveCombatant(token) {
+            const sortedTokens = getSortedCombatants();
+            if (sortedTokens.length === 0) return false;
+            const activeToken = sortedTokens[currentTurnIndex % sortedTokens.length];
+            return activeToken && activeToken.id === token.id;
+        }
+        
+        // ===========================================
+        // MOUSE EVENTS
+        // ===========================================
+        function onMouseDown(e) {
+            if (e.button === 2) return; // Right click handled by context menu
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = (mouseX - viewX) / zoom;
+            const mapY = (mouseY - viewY) / zoom;
+            
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const gridX = Math.floor((mapX - ox) / gs);
+            const gridY = Math.floor((mapY - oy) / gs);
+            
+            hideContextMenu();
+            
+            // Handle calibration mode first
+            if (isCalibrating) {
+                handleCalibrationClick(mapX, mapY);
+                return;
+            }
+            
+            if (currentTool === 'pan') {
+                isDragging = true;
+                dragStart = { x: e.clientX, y: e.clientY, viewX, viewY };
+                document.getElementById('map-area').classList.add('dragging');
+            } else if (currentTool === 'select') {
+                const token = getTokenAtPoint(mapX, mapY);
+                if (token) {
+                    selectedToken = token.id;
+                    draggingToken = token;
+                    dragStart = { x: e.clientX, y: e.clientY, tokenX: token.x, tokenY: token.y };
+                    dragTokenOffset = { x: 0, y: 0 }; // Reset offset
+                    showTokenDetails(token);
+                } else {
+                    selectedToken = null;
+                    draggingToken = null;
+                    isDragging = true;
+                    dragStart = { x: e.clientX, y: e.clientY, viewX, viewY };
+                }
+                render();
+            } else if (currentTool === 'token') {
+                placeToken(mapX, mapY);
+            } else if (currentTool === 'wall') {
+                addWallPoint(mapX, mapY);
+            } else if (currentTool === 'terrain') {
+                toggleDifficultTerrain(mapX, mapY);
+            } else if (currentTool === 'spawn') {
+                setSpawnPoint(gridX, gridY);
+                setTool('select'); // Switch back to select after setting spawn
+            }
+        }
+        
+        function onMouseMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = (mouseX - viewX) / zoom;
+            const mapY = (mouseY - viewY) / zoom;
+            
+            // Update cursor position display
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const gx = Math.floor((mapX - ox) / gs);
+            const gy = Math.floor((mapY - oy) / gs);
+            document.getElementById('cursor-pos').textContent = `${gx}, ${gy}`;
+            
+            if (draggingToken) {
+                // Calculate new grid position based on drag
+                const dx = e.clientX - dragStart.x;
+                const dy = e.clientY - dragStart.y;
+                const newX = dragStart.tokenX + Math.round(dx / zoom / gs);
+                const newY = dragStart.tokenY + Math.round(dy / zoom / gs);
+                
+                // Store offset for rendering (don't modify token directly - SSE will reset it)
+                dragTokenOffset = { 
+                    x: newX - dragStart.tokenX, 
+                    y: newY - dragStart.tokenY 
+                };
+                
+                // Show movement preview
+                showMovementPreview(e.clientX, e.clientY, draggingToken, dragStart.tokenX, dragStart.tokenY, newX, newY);
+                
+                render();
+            } else if (isDragging) {
+                viewX = dragStart.viewX + (e.clientX - dragStart.x);
+                viewY = dragStart.viewY + (e.clientY - dragStart.y);
+                render();
+            } else if (selectedToken && currentTool === 'select') {
+                // Show movement preview when hovering with token selected
+                const token = mapState.tokens.find(t => t.id === selectedToken);
+                if (token) {
+                    showMovementPreview(e.clientX, e.clientY, token, token.x, token.y, gx, gy);
+                }
+            }
+        }
+        
+        function showMovementPreview(screenX, screenY, token, fromX, fromY, toX, toY) {
+            const preview = document.getElementById('movement-preview');
+            
+            // Calculate distance (diagonal = 1.5 for first, then 1)
+            const dx = Math.abs(toX - fromX);
+            const dy = Math.abs(toY - fromY);
+            const diag = Math.min(dx, dy);
+            const straight = Math.abs(dx - dy);
+            
+            // PF2E diagonal movement: 5ft, 10ft, 5ft, 10ft...
+            let totalFeet = straight * 5;
+            for (let i = 0; i < diag; i++) {
+                totalFeet += (i % 2 === 0) ? 5 : 10;
+            }
+            
+            // Check for difficult terrain
+            const difficultCells = countDifficultTerrainCells(fromX, fromY, toX, toY);
+            totalFeet += difficultCells * 5; // Each difficult terrain cell costs extra 5ft
+            
+            // Calculate actions needed based on speed
+            const speed = token.speed || 25;
+            const actions = Math.ceil(totalFeet / speed);
+            
+            // Position and show preview
+            preview.style.left = (screenX + 15) + 'px';
+            preview.style.top = (screenY + 15) + 'px';
+            
+            let actionsClass = 'actions';
+            if (actions > 3) actionsClass = 'error';
+            else if (actions > 2) actionsClass = 'warning';
+            
+            preview.innerHTML = `
+                <span>${totalFeet} ft</span>
+                <span class="${actionsClass}">(${actions} action${actions !== 1 ? 's' : ''})</span>
+                ${difficultCells > 0 ? '<span class="warning">⚠ difficult terrain</span>' : ''}
+            `;
+            preview.classList.add('active');
+        }
+        
+        function hideMovementPreview() {
+            document.getElementById('movement-preview').classList.remove('active');
+        }
+        
+        function countDifficultTerrainCells(fromX, fromY, toX, toY) {
+            const terrain = mapState.difficult_terrain || [];
+            let count = 0;
+            
+            // Simple check - count difficult terrain cells in path
+            // For now just check destination
+            for (const cell of terrain) {
+                if (cell.x === toX && cell.y === toY) {
+                    count++;
+                }
+            }
+            return count;
+        }
+        
+        function onMouseUp(e) {
+            if (draggingToken && (dragTokenOffset.x !== 0 || dragTokenOffset.y !== 0)) {
+                // Calculate final position from start + offset
+                const finalX = dragStart.tokenX + dragTokenOffset.x;
+                const finalY = dragStart.tokenY + dragTokenOffset.y;
+                
+                // Save token position to server
+                moveToken(draggingToken.id, finalX, finalY);
+            }
+            
+            draggingToken = null;
+            dragTokenOffset = { x: 0, y: 0 };
+            hideMovementPreview();
+            
+            isDragging = false;
+            document.getElementById('map-area').classList.remove('dragging');
+        }
+        
+        function onWheel(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = Math.max(0.1, Math.min(5, zoom * zoomFactor));
+            
+            // Zoom towards cursor
+            viewX = mouseX - (mouseX - viewX) * (newZoom / zoom);
+            viewY = mouseY - (mouseY - viewY) * (newZoom / zoom);
+            zoom = newZoom;
+            
+            render();
+        }
+        
+        function onContextMenu(e) {
+            e.preventDefault();
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = (mouseX - viewX) / zoom;
+            const mapY = (mouseY - viewY) / zoom;
+            
+            const token = getTokenAtPoint(mapX, mapY);
+            if (token) {
+                contextToken = token;
+                showContextMenu(e.clientX, e.clientY);
+            }
+        }
+        
+        function onKeyDown(e) {
+            if (e.key === 'Escape') {
+                if (isDrawingWall) {
+                    cancelWall();
+                }
+                hideContextMenu();
+            } else if (e.key === 'Enter' && isDrawingWall) {
+                finishWall();
+            }
+        }
+        
+        // ===========================================
+        // HELPERS
+        // ===========================================
+        function getTokenAtPoint(mapX, mapY) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            for (let i = (mapState.tokens || []).length - 1; i >= 0; i--) {
+                const token = mapState.tokens[i];
+                const size = token.size || 1;
+                const cx = token.x * gs + ox + (gs * size) / 2;
+                const cy = token.y * gs + oy + (gs * size) / 2;
+                const r = (gs * size) / 2;
+                
+                if (Math.hypot(mapX - cx, mapY - cy) <= r) {
+                    return token;
+                }
+            }
+            return null;
+        }
+        
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            const btn = document.getElementById(`tool-${tool}`);
+            if (btn) btn.classList.add('active');
+            
+            const area = document.getElementById('map-area');
+            area.className = `tool-${tool}`;
+            
+            // Cancel wall drawing when switching tools
+            if (tool !== 'wall' && isDrawingWall) {
+                cancelWall();
+            }
+        }
+        
+        function setWallType(type) {
+            wallType = type;
+        }
+        
+        // ===========================================
+        // WALL DRAWING
+        // ===========================================
+        function addWallPoint(x, y) {
+            // Check if clicking near start point to close
+            if (wallPoints.length >= 3) {
+                const start = wallPoints[0];
+                const dist = Math.hypot(x - start[0], y - start[1]);
+                if (dist < 20 / zoom) {
+                    finishWall(true); // Close the shape
+                    return;
+                }
+            }
+            
+            wallPoints.push([x, y]);
+            isDrawingWall = true;
+            
+            document.getElementById('drawing-status').classList.add('active');
+            document.getElementById('drawing-text').textContent = `Drawing ${wallType}: ${wallPoints.length} points`;
+            
+            render();
+        }
+        
+        function undoWallPoint() {
+            if (wallPoints.length > 0) {
+                wallPoints.pop();
+                document.getElementById('drawing-text').textContent = `Drawing ${wallType}: ${wallPoints.length} points`;
+                render();
+            }
+            if (wallPoints.length === 0) {
+                cancelWall();
+            }
+        }
+        
+        async function finishWall(closed = false) {
+            if (wallPoints.length < 2) {
+                cancelWall();
+                return;
+            }
+            
+            await fetch('/api/map/wall/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    points: wallPoints,
+                    type: wallType,
+                    closed: closed
+                })
+            });
+            
+            cancelWall();
+        }
+        
+        function cancelWall() {
+            wallPoints = [];
+            isDrawingWall = false;
+            document.getElementById('drawing-status').classList.remove('active');
+            render();
+        }
+        
+        async function borderMap() {
+            if (!mapImage) return;
+            
+            const margin = 10;
+            const points = [
+                [margin, margin],
+                [mapImage.width - margin, margin],
+                [mapImage.width - margin, mapImage.height - margin],
+                [margin, mapImage.height - margin]
+            ];
+            
+            await fetch('/api/map/wall/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    points: points,
+                    type: 'invisible',
+                    closed: true
+                })
+            });
+        }
+        
+        // ===========================================
+        // TOKEN MANAGEMENT
+        // ===========================================
+        async function placeToken(mapX, mapY) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            const gridX = Math.floor((mapX - ox) / gs);
+            const gridY = Math.floor((mapY - oy) / gs);
+            
+            const name = prompt('Token name:');
+            if (!name) return;
+            
+            const size = parseInt(document.getElementById('token-size-select').value) || 1;
+            
+            await fetch('/api/map/token/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    x: gridX,
+                    y: gridY,
+                    color: '#3b82f6',
+                    size: size
+                })
+            });
+        }
+        
+        async function moveToken(tokenId, x, y) {
+            await fetch('/api/map/token/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tokenId, x, y })
+            });
+            
+            // Update explored cells based on new PC positions
+            updateExplored();
+            
+            // Check flanking after any token move
+            checkAndApplyFlanking();
+        }
+        
+        async function checkAndApplyFlanking() {
+            try {
+                const res = await fetch('/api/map/flanking');
+                const data = await res.json();
+                if (!data.success) return;
+                
+                const flankedIds = new Set(data.flanked || []);
+                
+                // Update flanking indicators on tokens
+                for (const token of (mapState.tokens || [])) {
+                    if (token.is_pc) continue;
+                    const wasFlanked = token._flanked || false;
+                    const isFlanked = flankedIds.has(token.id);
+                    token._flanked = isFlanked;
+                    
+                    // Auto-apply/remove off_guard via encounter condition if flanking changed
+                    if (isFlanked && !wasFlanked) {
+                        // Apply off-guard to this NPC token in the encounter
+                        if (token.instance_id) {
+                            fetch('/api/toggle_condition/' + token.instance_id, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: 'condition=off_guard&action=add'
+                            });
+                        }
+                    } else if (!isFlanked && wasFlanked) {
+                        // Remove off-guard
+                        if (token.instance_id) {
+                            fetch('/api/toggle_condition/' + token.instance_id, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: 'condition=off_guard&action=toggle'
+                            });
+                        }
+                    }
+                }
+                
+                render(); // Redraw to show flanking indicators
+            } catch(e) { console.error('Flanking check error:', e); }
+        }
+        
+        async function updateExplored() {
+            const visible = calculateVisibleCells();
+            const explored = new Set(mapState.explored || []);
+            
+            for (const cell of visible) {
+                explored.add(cell);
+            }
+            
+            mapState.explored = Array.from(explored);
+            
+            // Save to server
+            await fetch('/api/map/explored', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ explored: mapState.explored })
+            });
+        }
+        
+        async function addPartyToMap() {
+            // Cluster party members in a 2x2 formation around spawn point
+            const offsets = [[0, 0], [1, 0], [0, 1], [1, 1], [2, 0], [2, 1]]; // Up to 6 PCs
+            
+            for (let i = 0; i < partyList.length; i++) {
+                const pc = partyList[i];
+                const spawnX = mapState.spawn_point?.x ?? 2;
+                const spawnY = mapState.spawn_point?.y ?? 2;
+                const offset = offsets[i] || [i % 3, Math.floor(i / 3)];
+                
+                await fetch('/api/map/token/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: pc.name,
+                        x: spawnX + offset[0],
+                        y: spawnY + offset[1],
+                        color: '#22c55e',
+                        size: 1,
+                        is_pc: true,
+                        hp: pc.current_hp || pc.hp || 0,
+                        max_hp: pc.max_hp || pc.hp || 0,
+                        ac: pc.ac || 10,
+                        speed: pc.speed || 25,
+                        assigned_player: pc.name
+                    })
+                });
+            }
+        }
+        
+        // ===========================================
+        // DIFFICULT TERRAIN
+        // ===========================================
+        async function toggleDifficultTerrain(mapX, mapY) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            
+            const gx = Math.floor((mapX - ox) / gs);
+            const gy = Math.floor((mapY - oy) / gs);
+            
+            await fetch('/api/map/terrain/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: gx, y: gy })
+            });
+        }
+        
+        // ===========================================
+        // CONTEXT MENU & CONDITIONS
+        // ===========================================
+        function showContextMenu(x, y) {
+            const menu = document.getElementById('context-menu');
+            menu.style.display = 'block';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+        }
+        
+        function hideContextMenu() {
+            document.getElementById('context-menu').style.display = 'none';
+            contextToken = null;
+        }
+        
+        function populateConditionMenu() {
+            const submenu = document.getElementById('condition-submenu');
+            submenu.innerHTML = Object.entries(CONDITIONS).map(([name, config]) => {
+                if (config.hasValue) {
+                    return `
+                        <div class="context-submenu">
+                            <div class="context-item">${name}</div>
+                            <div class="submenu-content">
+                                ${[1,2,3,4].slice(0, config.max || 4).map(v => 
+                                    `<div class="context-item" onclick="setCondition('${name}', ${v})">${name} ${v}</div>`
+                                ).join('')}
+                                <div class="context-item" onclick="setCondition('${name}', 0)">Remove</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `<div class="context-item" onclick="toggleCondition('${name}')">${name}</div>`;
+                }
+            }).join('');
+        }
+        
+        async function setCondition(condition, value) {
+            if (!contextToken) return;
+            
+            // Update token conditions object
+            let conditions = contextToken.conditions || {};
+            if (typeof conditions === 'object' && !Array.isArray(conditions)) {
+                // Already object format
+            } else if (Array.isArray(conditions)) {
+                // Convert from array to object
+                const obj = {};
+                conditions.forEach(c => obj[c] = 1);
+                conditions = obj;
+            } else {
+                conditions = {};
+            }
+            
+            if (value > 0) {
+                conditions[condition] = value;
+            } else {
+                delete conditions[condition];
+            }
+            
+            // Check for flanking/flat-footed effects
+            checkFlankingStatus(contextToken);
+            
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: contextToken.id,
+                    conditions
+                })
+            });
+            
+            hideContextMenu();
+        }
+        
+        async function toggleCondition(condition) {
+            if (!contextToken) return;
+            
+            let conditions = contextToken.conditions || {};
+            if (Array.isArray(conditions)) {
+                const obj = {};
+                conditions.forEach(c => obj[c] = 1);
+                conditions = obj;
+            }
+            
+            if (conditions[condition]) {
+                delete conditions[condition];
+            } else {
+                conditions[condition] = true;
+            }
+            
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: contextToken.id,
+                    conditions
+                })
+            });
+            
+            hideContextMenu();
+        }
+        
+        // ===========================================
+        // FLANKING DETECTION
+        // ===========================================
+        function checkFlankingStatus(token) {
+            if (!token || token.is_pc) return; // Only check enemies
+            
+            const gs = mapState.grid_size || 70;
+            const tokens = mapState.tokens || [];
+            const pcTokens = tokens.filter(t => t.is_pc && t.id !== token.id);
+            
+            // Check if any two PCs are on opposite sides
+            for (let i = 0; i < pcTokens.length; i++) {
+                for (let j = i + 1; j < pcTokens.length; j++) {
+                    if (isFlankingPair(pcTokens[i], pcTokens[j], token)) {
+                        // Auto-apply flat-footed
+                        let conditions = token.conditions || {};
+                        if (typeof conditions !== 'object' || Array.isArray(conditions)) {
+                            conditions = {};
+                        }
+                        conditions['Flat-Footed'] = true;
+                        token.conditions = conditions;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function isFlankingPair(pc1, pc2, enemy) {
+            // Check if pc1 and pc2 are on opposite sides of enemy
+            // Simple check: they're roughly opposite (180° ± 45°)
+            const dx1 = pc1.x - enemy.x;
+            const dy1 = pc1.y - enemy.y;
+            const dx2 = pc2.x - enemy.x;
+            const dy2 = pc2.y - enemy.y;
+            
+            // Must be adjacent (within 1 square)
+            if (Math.abs(dx1) > 1 || Math.abs(dy1) > 1) return false;
+            if (Math.abs(dx2) > 1 || Math.abs(dy2) > 1) return false;
+            
+            // Check if opposite (dot product negative = opposite direction)
+            const dot = dx1 * dx2 + dy1 * dy2;
+            return dot < 0;
+        }
+        
+        function checkAllFlanking() {
+            const enemies = (mapState.tokens || []).filter(t => !t.is_pc);
+            enemies.forEach(e => checkFlankingStatus(e));
+        }
+        
+        function contextAction(action) {
+            if (!contextToken) return;
+            
+            switch (action) {
+                case 'damage':
+                    const dmg = prompt('Damage amount:');
+                    if (dmg) applyDamageWithDying(contextToken.id, parseInt(dmg));
+                    break;
+                case 'heal':
+                    const heal = prompt('Heal amount:');
+                    if (heal) applyHeal(contextToken.id, parseInt(heal));
+                    break;
+                case 'visible':
+                    toggleVisibility(contextToken.id);
+                    break;
+                case 'details':
+                    showTokenDetails(contextToken);
+                    break;
+                case 'remove':
+                    removeToken(contextToken.id);
+                    break;
+            }
+            
+            hideContextMenu();
+        }
+        
+        async function applyDamage(tokenId, amount) {
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (!token) return;
+            
+            const newHp = Math.max(0, (token.hp || 0) - amount);
+            await updateTokenHP(tokenId, newHp);
+        }
+        
+        async function applyHeal(tokenId, amount) {
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (!token) return;
+            
+            const newHp = Math.min(token.max_hp || 0, (token.hp || 0) + amount);
+            await updateTokenHP(tokenId, newHp);
+        }
+        
+        async function updateTokenHP(tokenId, hp) {
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tokenId, hp })
+            });
+        }
+        
+        async function toggleVisibility(tokenId) {
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (!token) return;
+            
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: tokenId,
+                    visible_to_players: !token.visible_to_players
+                })
+            });
+        }
+        
+        async function removeToken(tokenId) {
+            await fetch('/api/map/token/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tokenId })
+            });
+        }
+        
+        // ===========================================
+        // TOKEN DETAILS PANEL
+        // ===========================================
+        async function showTokenDetails(token) {
+            const panel = document.getElementById('token-details');
+            panel.classList.remove('hidden');
+            
+            // Basic info from token
+            document.getElementById('detail-name').textContent = token.name;
+            document.getElementById('detail-hp').textContent = `${token.hp || 0}/${token.max_hp || 0}`;
+            document.getElementById('detail-ac').textContent = token.ac || '--';
+            document.getElementById('detail-speed').textContent = token.speed ? `${token.speed}ft` : '--';
+            
+            // Build conditions display
+            let conditionsHtml = buildConditionsHtml(token);
+            document.getElementById('detail-conditions').innerHTML = conditionsHtml;
+            
+            // Fetch full creature data
+            document.getElementById('detail-abilities').innerHTML = '<div style="color: #666; font-size: 11px;">Loading...</div>';
+            
+            try {
+                const res = await fetch(`/api/creature/${encodeURIComponent(token.name)}`);
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('detail-abilities').innerHTML = buildCreatureAbilitiesHtml(data.creature);
+                } else {
+                    document.getElementById('detail-abilities').innerHTML = '<div style="color: #666; font-size: 11px;">No detailed stats available</div>';
+                }
+            } catch (e) {
+                document.getElementById('detail-abilities').innerHTML = '<div style="color: #666; font-size: 11px;">Could not load stats</div>';
+            }
+        }
+        
+        function buildConditionsHtml(token) {
+            let html = '';
+            const conditions = token.conditions || {};
+            
+            if (typeof conditions === 'object' && !Array.isArray(conditions)) {
+                const condEntries = Object.entries(conditions).filter(([k, v]) => v);
+                if (condEntries.length > 0) {
+                    html = '<div style="margin-bottom: 8px;"><strong style="font-size: 10px; color: #888;">CONDITIONS</strong><div style="margin-top: 4px;">';
+                    html += condEntries.map(([name, value]) => {
+                        const cssClass = name.toLowerCase().replace(/[^a-z]/g, '');
+                        const valueStr = typeof value === 'number' && value > 1 ? `<span class="value">${value}</span>` : '';
+                        return `<span class="condition-badge ${cssClass}">${name} ${valueStr}</span>`;
+                    }).join('');
+                    html += '</div></div>';
+                }
+            } else if (Array.isArray(conditions) && conditions.length > 0) {
+                html = '<div style="margin-bottom: 8px;"><strong style="font-size: 10px; color: #888;">CONDITIONS</strong><div style="margin-top: 4px;">';
+                html += conditions.map(c => `<span class="condition-badge">${c}</span>`).join('');
+                html += '</div></div>';
+            }
+            
+            // Check flanking status
+            const isFlanked = !token.is_pc && checkFlankingStatus(token);
+            if (isFlanked) {
+                html += '<div style="color: #ec4899; font-size: 11px; margin-bottom: 8px;">⚔️ Flanked (Flat-Footed)</div>';
+            }
+            
+            return html;
+        }
+        
+        function buildCreatureAbilitiesHtml(creature) {
+            let html = '';
+            
+            // Saves
+            if (creature.fort || creature.ref || creature.will) {
+                html += `
+                    <div style="margin-bottom: 8px;">
+                        <strong style="font-size: 10px; color: #888;">SAVES</strong>
+                        <div style="display: flex; gap: 12px; margin-top: 4px; font-size: 12px;">
+                            <span>Fort <strong>+${creature.fort}</strong></span>
+                            <span>Ref <strong>+${creature.ref}</strong></span>
+                            <span>Will <strong>+${creature.will}</strong></span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Perception
+            if (creature.perception) {
+                html += `<div style="font-size: 11px; margin-bottom: 8px;">Perception <strong>+${creature.perception}</strong></div>`;
+            }
+            
+            // Immunities, Resistances, Weaknesses
+            if (creature.immunities?.length > 0) {
+                html += `<div style="font-size: 11px; margin-bottom: 4px;"><strong style="color: #22c55e;">Immunities</strong> ${creature.immunities.join(', ')}</div>`;
+            }
+            if (creature.resistances?.length > 0) {
+                html += `<div style="font-size: 11px; margin-bottom: 4px;"><strong style="color: #3b82f6;">Resistances</strong> ${creature.resistances.join(', ')}</div>`;
+            }
+            if (creature.weaknesses?.length > 0) {
+                html += `<div style="font-size: 11px; margin-bottom: 4px;"><strong style="color: #ef4444;">Weaknesses</strong> ${creature.weaknesses.join(', ')}</div>`;
+            }
+            
+            // Strikes
+            if (creature.strikes?.length > 0) {
+                html += `<div style="margin-top: 8px;"><strong style="font-size: 10px; color: #888;">STRIKES</strong></div>`;
+                html += creature.strikes.map(s => `
+                    <div class="strike-item" onclick="rollStrike('${s.name}', ${s.bonus}, '${s.damage}')" 
+                         style="background: #252525; padding: 6px 8px; border-radius: 4px; margin: 4px 0; cursor: pointer; font-size: 11px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <strong>${s.name}</strong>
+                            <span style="color: #3b82f6;">+${s.bonus}</span>
+                        </div>
+                        <div style="color: #888; font-size: 10px;">${s.damage}</div>
+                    </div>
+                `).join('');
+            }
+            
+            // Actions
+            if (creature.actions?.length > 0) {
+                html += `<div style="margin-top: 8px;"><strong style="font-size: 10px; color: #888;">ABILITIES</strong></div>`;
+                html += creature.actions.slice(0, 5).map(a => `
+                    <div style="background: #252525; padding: 6px 8px; border-radius: 4px; margin: 4px 0; font-size: 11px;">
+                        <strong>${a.name}</strong>
+                        <div style="color: #888; font-size: 10px; max-height: 40px; overflow: hidden;">${a.description.slice(0, 150)}${a.description.length > 150 ? '...' : ''}</div>
+                    </div>
+                `).join('');
+            }
+            
+            return html || '<div style="color: #666; font-size: 11px;">No detailed stats available</div>';
+        }
+        
+        function rollStrike(name, bonus, damage) {
+            const roll = Math.floor(Math.random() * 20) + 1;
+            const total = roll + bonus;
+            const isCrit = roll === 20;
+            const isFumble = roll === 1;
+            
+            let resultHtml = `
+                <div style="position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); 
+                     background: rgba(0,0,0,0.95); border: 2px solid ${isCrit ? '#22c55e' : isFumble ? '#ef4444' : '#3b82f6'}; 
+                     padding: 12px 20px; border-radius: 8px; z-index: 500; text-align: center;">
+                    <div style="font-size: 12px; color: #888;">${name} Attack</div>
+                    <div style="font-size: 24px; font-weight: bold; color: ${isCrit ? '#22c55e' : isFumble ? '#ef4444' : '#fff'};">
+                        ${isCrit ? '🎯 CRIT! ' : isFumble ? '💥 FUMBLE! ' : ''}${total}
+                    </div>
+                    <div style="font-size: 11px; color: #888;">d20(${roll}) + ${bonus}</div>
+                    <div style="font-size: 12px; margin-top: 4px;">Damage: ${damage}</div>
+                </div>
+            `;
+            
+            const div = document.createElement('div');
+            div.innerHTML = resultHtml;
+            document.body.appendChild(div.firstElementChild);
+            
+            setTimeout(() => {
+                const popup = document.querySelector('[style*="position: fixed"][style*="bottom: 80px"]');
+                if (popup) popup.remove();
+            }, 4000);
+        }
+        
+        function closeTokenDetails() {
+            document.getElementById('token-details').classList.add('hidden');
+            selectedToken = null;
+            render();
+        }
+        
+        // ===========================================
+        // COMBAT TRACKER
+        // ===========================================
+        function getSortedCombatants() {
+            return [...(mapState.tokens || [])]
+                .filter(t => t.initiative !== undefined && t.initiative !== null)
+                .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+        }
+        
+        function updateCombatantList() {
+            const list = document.getElementById('combatant-list');
+            const sorted = getSortedCombatants();
+            
+            if (sorted.length === 0) {
+                list.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #666; font-size: 12px;">
+                        No combatants with initiative.<br>
+                        Add tokens and roll initiative to begin.
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = sorted.map((token, i) => {
+                const hpPct = token.max_hp > 0 ? (token.hp || 0) / token.max_hp : 1;
+                const hpClass = hpPct > 0.5 ? 'healthy' : hpPct > 0.25 ? 'wounded' : 'critical';
+                const isActive = i === (currentTurnIndex % sorted.length);
+                const isSelected = selectedToken === token.id;
+                const isDead = (token.hp || 0) <= 0 && token.max_hp > 0;
+                
+                // Build condition dots with tooltips
+                let condDots = '';
+                const conditions = token.conditions || {};
+                if (typeof conditions === 'object' && !Array.isArray(conditions)) {
+                    const keys = Object.keys(conditions).filter(k => conditions[k] && conditions[k] !== 0 && conditions[k] !== false);
+                    if (keys.length > 0) {
+                        condDots = '<div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;">';
+                        condDots += keys.map(k => {
+                            const color = getConditionColor(k);
+                            const val = typeof conditions[k] === 'number' ? conditions[k] : '';
+                            const label = k.replace('_','-').charAt(0).toUpperCase() + k.replace('_','-').slice(1);
+                            return `<span class="cond-dot" style="background:${color};" title="${label}${val ? ' '+val : ''}">${val}</span>`;
+                        }).join('');
+                        condDots += '</div>';
+                    }
+                }
+                
+                const tokenId = token.id;
+                
+                return `
+                    <div class="combatant ${isActive ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isDead ? 'opacity-40' : ''}" 
+                         onclick="selectCombatant('${tokenId}')">
+                        <div class="combatant-token ${token.is_pc ? 'pc' : 'enemy'}" style="background: ${token.color || '#666'}">
+                            ${token.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div class="combatant-info">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                                <div class="combatant-name" title="${token.name}">${token.name}</div>
+                                <button onclick="event.stopPropagation();openCombatantModal('${tokenId}')" class="hp-btn" style="font-size:9px; width:auto; padding:2px 8px;">Stats</button>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:3px;">
+                                <button onclick="event.stopPropagation();adjustHP('${tokenId}',-5)" class="hp-btn dmg" title="-5 HP">-5</button>
+                                <button onclick="event.stopPropagation();adjustHP('${tokenId}',-1)" class="hp-btn dmg" title="-1 HP">-1</button>
+                                <input type="number" class="custom-dmg-input" id="dmg-${tokenId}" value="" placeholder="0" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){event.stopPropagation();applyCustomDmg('${tokenId}');}">
+                                <button onclick="event.stopPropagation();applyCustomDmg('${tokenId}')" class="hp-btn dmg" title="Apply damage" style="width:auto; padding:0 4px;">Dmg</button>
+                                <span class="combatant-hp">${token.hp || 0}/${token.max_hp || 0}</span>
+                                <button onclick="event.stopPropagation();adjustHP('${tokenId}',1)" class="hp-btn heal" title="+1 HP">+1</button>
+                                <button onclick="event.stopPropagation();adjustHP('${tokenId}',5)" class="hp-btn heal" title="+5 HP">+5</button>
+                            </div>
+                            <div class="hp-bar">
+                                <div class="hp-bar-fill ${hpClass}" style="width: ${Math.max(0, hpPct * 100)}%"></div>
+                            </div>
+                            ${condDots}
+                        </div>
+                        <div class="combatant-init" title="Initiative">${token.initiative || '--'}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('round-display').textContent = `Round ${roundNumber}`;
+        }
+        
+        function selectCombatant(tokenId, openModal = false) {
+            selectedToken = tokenId;
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (token) {
+                if (openModal) {
+                    showStatModal(token);
+                } else {
+                    showTokenDetails(token);
+                }
+            }
+            updateCombatantList();
+            render();
+        }
+        
+        function openCombatantModal(tokenId) {
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (token) {
+                showStatModal(token);
+            }
+        }
+        
+        async function rollAllInitiative() {
+            for (const token of (mapState.tokens || [])) {
+                // Roll d20 + perception (or +0)
+                const roll = Math.floor(Math.random() * 20) + 1;
+                const bonus = token.perception || 0;
+                const init = roll + bonus;
+                
+                await fetch('/api/map/token/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: token.id,
+                        initiative: init
+                    })
+                });
+            }
+            
+            currentTurnIndex = 0;
+            roundNumber = 1;
+            updateCombatantList();
+            render();
+        }
+        
+        function applyCustomDmg(tokenId) {
+            const input = document.getElementById(`dmg-${tokenId}`);
+            if (!input) return;
+            const val = parseInt(input.value);
+            if (!val || val === 0) return;
+            adjustHP(tokenId, -Math.abs(val));
+            input.value = '';
+        }
+        
+        async function adjustHP(tokenId, delta) {
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (!token) return;
+            
+            const newHp = Math.max(0, Math.min(token.max_hp || 100, (token.hp || 0) + delta));
+            
+            // Use dying system for damage at 0 HP
+            if (delta < 0 && newHp === 0 && token.hp > 0) {
+                applyDamageWithDying(token, -delta);
+            } else {
+                await fetch('/api/map/token/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: tokenId, hp: newHp })
+                });
+            }
+        }
+        
+        function nextTurn() {
+            const sorted = getSortedCombatants();
+            if (sorted.length === 0) return;
+            
+            // End of current turn - decrement conditions for current creature
+            const currentCreature = sorted[currentTurnIndex % sorted.length];
+            if (currentCreature) {
+                decrementTurnEndConditions(currentCreature);
+            }
+            
+            currentTurnIndex++;
+            
+            if (currentTurnIndex >= sorted.length) {
+                currentTurnIndex = 0;
+                roundNumber++;
+            }
+            
+            // Start of new turn - show notification with reminders
+            const newCreature = sorted[currentTurnIndex % sorted.length];
+            if (newCreature) {
+                showTurnNotification(newCreature);
+                checkFlankingStatus(newCreature);
+            }
+            
+            updateCombatantList();
+            render();
+        }
+        
+        function showTurnNotification(token) {
+            const notification = document.getElementById('turn-notification');
+            const nameEl = document.getElementById('turn-creature-name');
+            const remindersEl = document.getElementById('turn-reminders');
+            
+            nameEl.textContent = `${token.name}'s Turn`;
+            
+            // Build reminders
+            const reminders = [];
+            const conditions = token.conditions || {};
+            
+            // Persistent damage reminder
+            if (conditions['Persistent Damage']) {
+                reminders.push(`⚠️ Take ${conditions['Persistent Damage']} persistent damage, then flat check DC 15 to end`);
+            }
+            
+            // Dying check reminder
+            if (conditions['Dying']) {
+                reminders.push(`💀 Dying ${conditions['Dying']} - Recovery check required (DC 10 + dying value)`);
+            }
+            
+            // Frightened/Sickened reminder (will decrement at end)
+            if (conditions['Frightened']) {
+                reminders.push(`😨 Frightened ${conditions['Frightened']} - penalty to checks (decreases by 1 at end of turn)`);
+            }
+            if (conditions['Sickened']) {
+                reminders.push(`🤢 Sickened ${conditions['Sickened']} - penalty to checks (can retch to reduce)`);
+            }
+            
+            // Slowed reminder
+            if (conditions['Slowed']) {
+                reminders.push(`🐌 Slowed ${conditions['Slowed']} - lose ${conditions['Slowed']} action(s) this turn`);
+            }
+            
+            // Stunned reminder  
+            if (conditions['Stunned']) {
+                reminders.push(`⚡ Stunned ${conditions['Stunned']} - lose ${conditions['Stunned']} action(s) (decreases by actions lost)`);
+            }
+            
+            remindersEl.innerHTML = reminders.join('<br>');
+            
+            notification.classList.add('active');
+        }
+        
+        function dismissTurnNotification() {
+            document.getElementById('turn-notification').classList.remove('active');
+        }
+        
+        async function decrementTurnEndConditions(token) {
+            // Decrement Frightened, Sickened at end of turn
+            let conditions = token.conditions || {};
+            if (typeof conditions !== 'object' || Array.isArray(conditions)) return;
+            
+            let changed = false;
+            
+            // Frightened decreases by 1 at end of turn
+            if (conditions['Frightened'] && typeof conditions['Frightened'] === 'number') {
+                conditions['Frightened']--;
+                if (conditions['Frightened'] <= 0) delete conditions['Frightened'];
+                changed = true;
+            }
+            
+            // Note: Sickened doesn't auto-decrement - you need to retch (spend action, Fortitude save)
+            // But we'll flag it for GM awareness
+            
+            if (changed) {
+                await fetch('/api/map/token/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: token.id,
+                        conditions
+                    })
+                });
+            }
+        }
+        
+        // ===========================================
+        // DYING / WOUNDED AUTOMATION
+        // ===========================================
+        async function handleDyingCheck(token, success, critSuccess = false) {
+            let conditions = token.conditions || {};
+            if (typeof conditions !== 'object') conditions = {};
+            
+            const dying = conditions['Dying'] || 0;
+            const wounded = conditions['Wounded'] || 0;
+            
+            if (critSuccess) {
+                // Crit success: reduce dying by 2
+                const newDying = Math.max(0, dying - 2);
+                if (newDying === 0) {
+                    delete conditions['Dying'];
+                    // Gain wounded
+                    conditions['Wounded'] = wounded + 1;
+                    // Wake up at 0 HP
+                } else {
+                    conditions['Dying'] = newDying;
+                }
+            } else if (success) {
+                // Success: reduce dying by 1
+                const newDying = dying - 1;
+                if (newDying <= 0) {
+                    delete conditions['Dying'];
+                    conditions['Wounded'] = wounded + 1;
+                } else {
+                    conditions['Dying'] = newDying;
+                }
+            } else {
+                // Failure: increase dying by 1
+                const newDying = dying + 1;
+                if (newDying >= 4) {
+                    // Death
+                    conditions['Dead'] = true;
+                    delete conditions['Dying'];
+                } else {
+                    conditions['Dying'] = newDying;
+                }
+            }
+            
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: token.id, conditions })
+            });
+        }
+        
+        async function applyDamageWithDying(tokenId, amount) {
+            const token = mapState.tokens.find(t => t.id === tokenId);
+            if (!token) return;
+            
+            let newHp = (token.hp || 0) - amount;
+            let conditions = token.conditions || {};
+            if (typeof conditions !== 'object') conditions = {};
+            
+            // Check if this knocks to 0 or below
+            if (newHp <= 0 && token.hp > 0) {
+                // Just dropped to 0
+                newHp = 0;
+                const wounded = conditions['Wounded'] || 0;
+                conditions['Dying'] = 1 + wounded;
+                conditions['Unconscious'] = true;
+            } else if (newHp < 0 && conditions['Dying']) {
+                // Already dying, taking more damage increases dying
+                conditions['Dying'] = Math.min(4, (conditions['Dying'] || 0) + 1);
+                if (conditions['Dying'] >= 4) {
+                    conditions['Dead'] = true;
+                }
+                newHp = 0;
+            }
+            
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: token.id, hp: newHp, conditions })
+            });
+        }
+        
+        // ===========================================
+        // SIDEBAR PANELS
+        // ===========================================
+        function toggleSection(section) {
+            const panels = {
+                'turn-order': 'combatant-list',
+                'creatures': 'creature-panel',
+                'walls': 'walls-panel'
+            };
+            const panelId = panels[section];
+            if (!panelId) return;
+            
+            const panel = document.getElementById(panelId);
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+        
+        function populateCreaturePanel() {
+            // Party creatures
+            const partyDiv = document.getElementById('party-creatures');
+            if (partyList.length === 0) {
+                partyDiv.innerHTML = '<div style="color: #666; font-size: 10px; padding: 4px;">No party members</div>';
+            } else {
+                partyDiv.innerHTML = partyList.map(pc => `
+                    <div class="creature-card pc" draggable="true" 
+                         data-type="pc" data-name="${pc.name}" data-hp="${pc.hp || pc.max_hp}" 
+                         data-maxhp="${pc.max_hp || pc.hp}" data-ac="${pc.ac}" data-speed="${pc.speed || 25}">
+                        <div class="creature-icon">${pc.name.slice(0, 2).toUpperCase()}</div>
+                        <div class="creature-info">
+                            <div class="creature-name">${pc.name}</div>
+                            <div class="creature-stats">HP ${pc.hp || pc.max_hp} | AC ${pc.ac}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            // Encounter creatures
+            const encounterDiv = document.getElementById('encounter-creatures');
+            if (encounterList.length === 0) {
+                encounterDiv.innerHTML = '<div style="color: #666; font-size: 10px; padding: 4px;">No active encounter</div>';
+            } else {
+                encounterDiv.innerHTML = encounterList.filter(c => !c.is_pc).map(creature => `
+                    <div class="creature-card enemy" draggable="true"
+                         data-type="enemy" data-name="${creature.name}" data-hp="${creature.current_hp || creature.hp}"
+                         data-maxhp="${creature.hp}" data-ac="${creature.ac || 10}" data-id="${creature.id}">
+                        <div class="creature-icon">${creature.name.slice(0, 2).toUpperCase()}</div>
+                        <div class="creature-info">
+                            <div class="creature-name">${creature.name}</div>
+                            <div class="creature-stats">HP ${creature.current_hp || creature.hp}/${creature.hp} | AC ${creature.ac || '?'}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        function setupCreatureDragDrop() {
+            // Make creature cards draggable
+            document.querySelectorAll('.creature-card').forEach(card => {
+                card.addEventListener('dragstart', (e) => {
+                    draggingCreature = {
+                        type: card.dataset.type,
+                        name: card.dataset.name,
+                        hp: parseInt(card.dataset.hp),
+                        maxHp: parseInt(card.dataset.maxhp),
+                        ac: parseInt(card.dataset.ac),
+                        speed: parseInt(card.dataset.speed) || 25,
+                        id: card.dataset.id
+                    };
+                    card.classList.add('dragging');
+                });
+                
+                card.addEventListener('dragend', () => {
+                    card.classList.remove('dragging');
+                    draggingCreature = null;
+                });
+            });
+            
+            // Allow dropping on map
+            const mapArea = document.getElementById('map-area');
+            mapArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+            
+            mapArea.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                if (!draggingCreature) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const mapX = (e.clientX - rect.left - viewX) / zoom;
+                const mapY = (e.clientY - rect.top - viewY) / zoom;
+                
+                const gs = mapState.grid_size || 70;
+                const ox = mapState.grid_offset_x || 0;
+                const oy = mapState.grid_offset_y || 0;
+                const gridX = Math.floor((mapX - ox) / gs);
+                const gridY = Math.floor((mapY - oy) / gs);
+                
+                await fetch('/api/map/token/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: draggingCreature.name,
+                        x: gridX,
+                        y: gridY,
+                        color: draggingCreature.type === 'pc' ? '#22c55e' : '#ef4444',
+                        size: 1,
+                        is_pc: draggingCreature.type === 'pc',
+                        hp: draggingCreature.hp,
+                        max_hp: draggingCreature.maxHp,
+                        ac: draggingCreature.ac,
+                        speed: draggingCreature.speed,
+                        assigned_player: draggingCreature.type === 'pc' ? draggingCreature.name : null
+                    })
+                });
+                
+                draggingCreature = null;
+            });
+        }
+        
+        function updateWallList() {
+            const walls = mapState.walls || [];
+            document.getElementById('wall-count').textContent = walls.length;
+            
+            const list = document.getElementById('wall-list');
+            if (walls.length === 0) {
+                list.innerHTML = '<div style="color: #666; font-size: 10px; padding: 4px;">No walls drawn</div>';
+                return;
+            }
+            
+            list.innerHTML = walls.map((wall, i) => `
+                <div class="wall-item">
+                    <span class="wall-type ${wall.type}">${wall.type}</span>
+                    <span class="wall-info">${wall.points?.length || 0} pts ${wall.closed ? '(closed)' : ''}</span>
+                    ${wall.type === 'door' ? `<button class="wall-delete" onclick="toggleDoor('${wall.id}')">${wall.open ? '🔓' : '🔒'}</button>` : ''}
+                    <button class="wall-delete" onclick="deleteWall('${wall.id}')">🗑</button>
+                </div>
+            `).join('');
+        }
+        
+        async function deleteWall(wallId) {
+            await fetch('/api/map/wall/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: wallId })
+            });
+        }
+        
+        async function toggleDoor(wallId) {
+            const wall = (mapState.walls || []).find(w => w.id === wallId);
+            if (!wall || wall.type !== 'door') return;
+            
+            await fetch('/api/map/wall/toggle_door', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: wallId })
+            });
+        }
+        
+        async function clearAllWalls() {
+            if (!confirm('Clear all walls? This cannot be undone.')) return;
+            
+            await fetch('/api/map/walls/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        
+        // ===========================================
+        // MAP MODAL
+        // ===========================================
+        function showMapModal() {
+            const modal = document.getElementById('map-modal');
+            const grid = document.getElementById('map-grid');
+            
+            if (availableMaps.length === 0) {
+                grid.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No maps available. Upload one first.</div>';
+            } else {
+                grid.innerHTML = availableMaps.map(map => `
+                    <div class="map-card ${mapState.image === map.filename ? 'active' : ''}" onclick="selectMap('${map.filename}')">
+                        <img src="/api/map/image/${map.filename}" alt="${map.id}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No preview</text></svg>'">
+                        <div class="map-name">${map.id}</div>
+                    </div>
+                `).join('');
+            }
+            
+            modal.classList.add('active');
+        }
+        
+        function closeMapModal() {
+            document.getElementById('map-modal').classList.remove('active');
+        }
+        
+        async function selectMap(filename) {
+            await fetch('/api/map/load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename })
+            });
+            closeMapModal();
+        }
+        
+        function showUploadModal() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.png,.jpg,.jpeg,.webp';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('name', file.name.replace(/\.[^.]+$/, ''));
+                
+                const res = await fetch('/api/map/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    loadMapImage(data.filename);
+                }
+            };
+            input.click();
+        }
+        
+        function showGridModal() {
+            // Create modal for grid settings
+            const existing = document.getElementById('grid-settings-modal');
+            if (existing) existing.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'grid-settings-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.8); z-index: 1000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            modal.innerHTML = `
+                <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 24px; width: 320px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px;">Grid Settings</h3>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Grid Size (px)</label>
+                        <input type="number" id="grid-size-input" value="${mapState.grid_size || 70}" 
+                               style="width: 100%; padding: 8px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #fff;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Offset X</label>
+                            <input type="number" id="grid-offset-x" value="${mapState.grid_offset_x || 0}" 
+                                   style="width: 100%; padding: 8px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #fff;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Offset Y</label>
+                            <input type="number" id="grid-offset-y" value="${mapState.grid_offset_y || 0}" 
+                                   style="width: 100%; padding: 8px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #fff;">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; margin-top: 16px;">
+                        <button onclick="applyGridSettings()" style="flex: 1; padding: 10px; background: #3b82f6; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Apply</button>
+                        <button onclick="document.getElementById('grid-settings-modal').remove()" style="flex: 1; padding: 10px; background: #333; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancel</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        async function applyGridSettings() {
+            const size = parseInt(document.getElementById('grid-size-input').value) || 70;
+            const offsetX = parseInt(document.getElementById('grid-offset-x').value) || 0;
+            const offsetY = parseInt(document.getElementById('grid-offset-y').value) || 0;
+            
+            mapState.grid_size = size;
+            mapState.grid_offset_x = offsetX;
+            mapState.grid_offset_y = offsetY;
+            
+            await fetch('/api/map/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ grid_size: size, grid_offset_x: offsetX, grid_offset_y: offsetY })
+            });
+            
+            document.getElementById('grid-settings-modal').remove();
+            render();
+        }
+        
+        async function clearExplored() {
+            mapState.explored = [];
+            await fetch('/api/map/explored', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ explored: [] })
+            });
+            render();
+        }
+        
+        // ===========================================
+        // SPAWN POINT
+        // ===========================================
+        async function setSpawnPoint(gridX, gridY) {
+            mapState.spawn_point = { x: gridX, y: gridY };
+            await fetch('/api/map/spawn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: gridX, y: gridY })
+            });
+            render();
+        }
+        
+        // ===========================================
+        // GRID CALIBRATION
+        // ===========================================
+        function startCalibration() {
+            if (isCalibrating) {
+                cancelCalibration();
+                return;
+            }
+            
+            isCalibrating = true;
+            calibrationStep = 1;
+            calibrationPoints = [];
+            
+            const btn = document.getElementById('btn-calibrate');
+            btn.textContent = 'Cancel';
+            btn.classList.add('active');
+            
+            updateCalibrationStatus('Step 1: Click on a grid intersection');
+            render();
+        }
+        
+        function cancelCalibration() {
+            isCalibrating = false;
+            calibrationStep = 0;
+            calibrationPoints = [];
+            
+            const btn = document.getElementById('btn-calibrate');
+            btn.textContent = 'Calibrate';
+            btn.classList.remove('active');
+            
+            updateCalibrationStatus('');
+            render();
+        }
+        
+        function handleCalibrationClick(mapX, mapY) {
+            calibrationPoints.push({ x: mapX, y: mapY });
+            
+            if (calibrationStep === 1) {
+                calibrationStep = 2;
+                updateCalibrationStatus('Step 2: Click an adjacent grid intersection');
+                render();
+            } else if (calibrationStep === 2) {
+                // Calculate grid size from the two points
+                const p1 = calibrationPoints[0];
+                const p2 = calibrationPoints[1];
+                
+                const dx = Math.abs(p2.x - p1.x);
+                const dy = Math.abs(p2.y - p1.y);
+                
+                // Use the larger distance
+                let gridSize = dx > dy ? Math.round(dx) : Math.round(dy);
+                
+                if (gridSize < 10) {
+                    updateCalibrationStatus('Points too close! Try again.');
+                    calibrationStep = 1;
+                    calibrationPoints = [];
+                    return;
+                }
+                
+                if (gridSize > 300) {
+                    updateCalibrationStatus('Points too far apart!');
+                    calibrationStep = 1;
+                    calibrationPoints = [];
+                    return;
+                }
+                
+                // Calculate offset from first point
+                const offsetX = Math.round(p1.x % gridSize);
+                const offsetY = Math.round(p1.y % gridSize);
+                
+                // Apply calibration
+                mapState.grid_size = gridSize;
+                mapState.grid_offset_x = offsetX;
+                mapState.grid_offset_y = offsetY;
+                
+                // Save to server
+                fetch('/api/map/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ grid_size: gridSize, grid_offset_x: offsetX, grid_offset_y: offsetY })
+                });
+                
+                cancelCalibration();
+                updateCalibrationStatus(`Grid: ${gridSize}px, Offset: (${offsetX}, ${offsetY})`);
+                setTimeout(() => updateCalibrationStatus(''), 3000);
+            }
+        }
+        
+        function updateCalibrationStatus(msg) {
+            const el = document.getElementById('calibration-status');
+            if (msg) {
+                el.textContent = msg;
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
+        }
+        
+        function drawCalibrationPoints() {
+            if (!isCalibrating || calibrationPoints.length === 0) return;
+            
+            for (const pt of calibrationPoints) {
+                ctx.strokeStyle = '#F59E0B';
+                ctx.lineWidth = 2 / zoom;
+                
+                const size = 15 / zoom;
+                ctx.beginPath();
+                ctx.moveTo(pt.x - size, pt.y);
+                ctx.lineTo(pt.x + size, pt.y);
+                ctx.moveTo(pt.x, pt.y - size);
+                ctx.lineTo(pt.x, pt.y + size);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, size * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+        
+        // ===========================================
+        // LIGHTING
+        // ===========================================
+        function setLighting(mode) {
+            lightingMode = mode;
+            mapState.lighting = mode;
+            
+            fetch('/api/map/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lighting: mode })
+            });
+            
+            render();
+        }
+        
+        function hasTokenDarkvision(token) {
+            return token.darkvision || false;
+        }
+        
+        function hasTokenLowLightVision(token) {
+            return token.low_light_vision || token.darkvision || false;
+        }
+        
+        function getEffectiveVisionRadius(token) {
+            // PF2E lighting rules:
+            // Bright: full vision_radius for everyone
+            // Dim: halved radius unless low-light or darkvision
+            // Darkness: 0 unless darkvision (then halved)
+            const base = token.vision_radius || 6;
+            const lighting = lightingMode || mapState.lighting || 'bright';
+            
+            if (lighting === 'bright') return base;
+            if (lighting === 'dim') {
+                if (hasTokenLowLightVision(token)) return base;
+                return Math.ceil(base / 2);
+            }
+            if (lighting === 'darkness') {
+                if (hasTokenDarkvision(token)) return Math.ceil(base / 2);
+                return 0; // Blind in darkness without darkvision
+            }
+            return base;
+        }
+        
+        // ===========================================
+        // CLEAR / RESET FUNCTIONS
+        // ===========================================
+        async function clearMap() {
+            if (!confirm('Clear all tokens, walls, and terrain from the map?')) return;
+            
+            // Clear tokens
+            for (const token of [...(mapState.tokens || [])]) {
+                await fetch('/api/map/token/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: token.id })
+                });
+            }
+            
+            // Clear walls
+            await fetch('/api/map/walls/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            // Clear terrain and fog
+            mapState.difficult_terrain = [];
+            mapState.explored = [];
+            mapState.spawn_point = null;
+            
+            await fetch('/api/map/explored', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ explored: [] })
+            });
+        }
+        
+        async function resetAll() {
+            if (!confirm('Reset EVERYTHING? This will clear the map and reload the page.')) return;
+            
+            await clearMap();
+            
+            // Reset map settings
+            await fetch('/api/map/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ grid_size: 70, grid_offset_x: 0, grid_offset_y: 0 })
+            });
+            
+            location.reload();
+        }
+        
+        // ===========================================
+        // FULL STAT MODAL
+        // ===========================================
+        async function showStatModal(tokenOrName) {
+            const name = typeof tokenOrName === 'string' ? tokenOrName : tokenOrName.name;
+            
+            // Remove existing modal
+            const existing = document.getElementById('stat-modal');
+            if (existing) existing.remove();
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.id = 'stat-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.85); z-index: 1000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            modal.innerHTML = `
+                <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 12px; 
+                     width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0; font-size: 20px;">${name}</h2>
+                        <button onclick="closeStatModal()" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">&times;</button>
+                    </div>
+                    <div id="stat-modal-content">Loading...</div>
+                </div>
+            `;
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeStatModal();
+            });
+            document.body.appendChild(modal);
+            
+            // Fetch creature data
+            try {
+                const res = await fetch(`/api/creature/${encodeURIComponent(name)}`);
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('stat-modal-content').innerHTML = buildFullStatBlock(data.creature);
+                } else {
+                    document.getElementById('stat-modal-content').innerHTML = '<p style="color: #888;">No detailed stats available</p>';
+                }
+            } catch (e) {
+                document.getElementById('stat-modal-content').innerHTML = '<p style="color: #ef4444;">Error loading stats</p>';
+            }
+        }
+        
+        function closeStatModal() {
+            const modal = document.getElementById('stat-modal');
+            if (modal) modal.remove();
+        }
+        
+        function buildFullStatBlock(creature) {
+            let html = '';
+            
+            // Level and traits
+            html += `<div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">`;
+            html += `<span style="background: #333; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Level ${creature.level || '?'}</span>`;
+            for (const trait of (creature.traits || [])) {
+                html += `<span style="background: #2563eb; padding: 4px 8px; border-radius: 4px; font-size: 11px;">${trait}</span>`;
+            }
+            html += `</div>`;
+            
+            // Core stats
+            html += `
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">HP</div>
+                        <div style="font-size: 18px; font-weight: bold;">${creature.current_hp || creature.hp}/${creature.hp}</div>
+                    </div>
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">AC</div>
+                        <div style="font-size: 18px; font-weight: bold;">${creature.ac}</div>
+                    </div>
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">Speed</div>
+                        <div style="font-size: 18px; font-weight: bold;">${creature.speed} ft</div>
+                    </div>
+                    <div style="background: #252525; padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">Perception</div>
+                        <div style="font-size: 18px; font-weight: bold;">+${creature.perception}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Saves
+            html += `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="background: #252525; padding: 10px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">Fortitude</div>
+                        <div style="font-size: 16px; font-weight: bold;">+${creature.fort}</div>
+                    </div>
+                    <div style="background: #252525; padding: 10px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">Reflex</div>
+                        <div style="font-size: 16px; font-weight: bold;">+${creature.ref}</div>
+                    </div>
+                    <div style="background: #252525; padding: 10px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 10px; color: #888;">Will</div>
+                        <div style="font-size: 16px; font-weight: bold;">+${creature.will}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Immunities, Resistances, Weaknesses
+            if (creature.immunities?.length > 0) {
+                html += `<div style="margin-bottom: 8px;"><strong style="color: #22c55e;">Immunities</strong> ${creature.immunities.join(', ')}</div>`;
+            }
+            if (creature.resistances?.length > 0) {
+                html += `<div style="margin-bottom: 8px;"><strong style="color: #3b82f6;">Resistances</strong> ${creature.resistances.join(', ')}</div>`;
+            }
+            if (creature.weaknesses?.length > 0) {
+                html += `<div style="margin-bottom: 8px;"><strong style="color: #ef4444;">Weaknesses</strong> ${creature.weaknesses.join(', ')}</div>`;
+            }
+            
+            // Strikes
+            if (creature.strikes?.length > 0) {
+                html += `<h3 style="margin: 16px 0 8px 0; font-size: 14px; border-bottom: 1px solid #333; padding-bottom: 4px;">Strikes</h3>`;
+                for (const s of creature.strikes) {
+                    html += `
+                        <div style="background: #252525; padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer;" 
+                             onclick="rollStrike('${s.name}', ${s.bonus}, '${s.damage}')">
+                            <div style="display: flex; justify-content: space-between;">
+                                <strong>${s.name}</strong>
+                                <span style="color: #3b82f6;">+${s.bonus}</span>
+                            </div>
+                            <div style="color: #888; font-size: 12px;">${s.damage}</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Abilities
+            if (creature.actions?.length > 0) {
+                html += `<h3 style="margin: 16px 0 8px 0; font-size: 14px; border-bottom: 1px solid #333; padding-bottom: 4px;">Abilities</h3>`;
+                for (const a of creature.actions) {
+                    html += `
+                        <div style="background: #252525; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+                            <strong>${a.name}</strong>
+                            <div style="color: #ccc; font-size: 12px; margin-top: 4px;">${a.description}</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            return html;
+        }
+        
+        // ===========================================
+        // INIT
+        // ===========================================
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

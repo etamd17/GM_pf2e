@@ -1,0 +1,61 @@
+{
+  "round": 2,
+  "turn_index": 0,
+  "combatants": [
+    {
+      "type": "pc",
+      "path": "Kyle",
+      "instance_id": "9da043f8-8159-48a6-a772-fe6218b87831",
+      "initiative": 0,
+      "current_hp": 26,
+      "conditions": {
+        "frightened": 0,
+        "sickened": 0,
+        "enfeebled": 0,
+        "clumsy": 0,
+        "drained": 0,
+        "stupefied": 0,
+        "stunned": 0,
+        "slowed": 0,
+        "dying": 0,
+        "wounded": 0,
+        "doomed": 0,
+        "prone": false,
+        "off_guard": false,
+        "concealed": false,
+        "hidden": false
+      },
+      "persistent_damage": "",
+      "elite_weak": 0,
+      "delaying": false
+    },
+    {
+      "type": "monster",
+      "path": "pathfinder-bestiary/aasimar-redeemer.json",
+      "instance_id": "5b6feb15-0547-4462-bffc-c3e35515a6f9",
+      "initiative": 0,
+      "current_hp": 73,
+      "conditions": {
+        "frightened": 0,
+        "sickened": 0,
+        "dying": 0,
+        "wounded": 0,
+        "doomed": 0,
+        "stunned": 0,
+        "slowed": 0,
+        "enfeebled": 0,
+        "clumsy": 0,
+        "drained": 0,
+        "stupefied": 0,
+        "prone": false,
+        "off_guard": false,
+        "concealed": false,
+        "hidden": false,
+        "undetected": false
+      },
+      "persistent_damage": "",
+      "elite_weak": 0,
+      "delaying": false
+    }
+  ]
+}

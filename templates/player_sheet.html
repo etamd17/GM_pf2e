@@ -57,6 +57,33 @@
         .spell-rank-9 { border-left:3px solid #EF4444; } /* 9th - red */
         .spell-rank-10 { border-left:3px solid #FFD700; } /* 10th - gold */
         
+        /* Spell Card Popup */
+        .spell-card-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:500; display:flex; align-items:center; justify-content:center; padding:1rem; animation:fadeIn 0.15s ease; }
+        .spell-card {
+            background:#2E2B25; border:2px solid rgba(94,173,173,0.3); border-radius:12px; 
+            width:100%; max-width:480px; max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+            animation: cardSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes cardSlideUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        .spell-card-header { padding:16px 20px; border-bottom:1px solid rgba(168,156,139,0.15); }
+        .spell-card-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+        .spell-card-meta-tag { font-family:'Cinzel',serif; font-size:9px; letter-spacing:0.05em; text-transform:uppercase; padding:3px 10px; border-radius:4px; font-weight:600; }
+        .spell-card-body { padding:16px 20px; font-family:'Crimson Text',serif; font-size:14px; line-height:1.7; color:#D1C9BD; }
+        .spell-card-body p { margin-bottom:0.8rem; }
+        .spell-card-body strong, .spell-card-body b { color:#7DC4C4; }
+        .spell-card-body hr { border:none; border-top:1px solid rgba(168,156,139,0.1); margin:12px 0; }
+        .spell-card-heightened { background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.15); border-radius:8px; padding:10px 14px; margin-top:10px; }
+        .spell-card-heightened-title { font-family:'Cinzel',serif; font-size:10px; color:#A78BFA; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
+        .spell-card-footer { padding:12px 20px; border-top:1px solid rgba(168,156,139,0.12); display:flex; justify-content:flex-end; gap:8px; }
+        .action-pips { display:inline-flex; gap:2px; vertical-align:middle; }
+        .action-pip { display:inline-block; width:14px; height:14px; background:#7DC4C4; border-radius:3px; }
+        .action-pip.free { background:none; border:2px solid #7DC4C4; width:12px; height:12px; border-radius:50%; }
+        .action-pip.reaction { background:none; border:2px solid #F59E0B; width:14px; height:14px; border-radius:50%; position:relative; }
+        .action-pip.reaction::after { content:''; position:absolute; top:2px; left:5px; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:6px solid #F59E0B; transform:translateX(-2px); }
+        
+        @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        @keyframes turnBannerOut { from { transform:translateY(0); opacity:1; } to { transform:translateY(-100%); opacity:0; } }
+        
         /* Proficiency Badges: T=teal, E=blue, M=gold, L=red */
         .prof-t { background:rgba(94,173,173,0.15); color:#5EADAD; border:1px solid rgba(94,173,173,0.3); }
         .prof-e { background:rgba(96,165,250,0.15); color:#60A5FA; border:1px solid rgba(96,165,250,0.3); }
@@ -158,13 +185,45 @@
         .prep-slot:hover { border-color: #60A5FA; background: rgba(30,42,74,0.2); }
         .prep-slot.filled { border: 1px solid rgba(96,165,250,0.35); background: rgba(30,42,74,0.2); color: #93C5FD; font-weight: bold; justify-content: space-between; padding: 0 0.5rem; }
         .prep-slot.expended { opacity: 0.45; border-style: solid; border-color: rgba(168,156,139,0.1); background: rgba(28,25,23,0.5); }
+        .prep-slot.drop-highlight { border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.05); }
+        .prep-slot.drop-active { border-color: rgba(74,222,128,0.7); background: rgba(74,222,128,0.12); transform: scale(1.02); box-shadow: 0 0 12px rgba(74,222,128,0.2); }
+        [draggable="true"] { user-select: none; }
+        [draggable="true"]:active { opacity: 0.6; cursor: grabbing; }
         .bulk-bar { height: 8px; background: #1E1914; border-radius: 4px; overflow: hidden; position: relative; }
         .bulk-fill { height: 100%; transition: width 0.3s ease; }
         
         @keyframes rollSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes rollPop { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes diceBounce {
+            0% { transform: translateY(-40px) rotate(-15deg) scale(0.6); opacity: 0; }
+            40% { transform: translateY(4px) rotate(5deg) scale(1.05); opacity: 1; }
+            60% { transform: translateY(-6px) rotate(-2deg) scale(0.98); }
+            75% { transform: translateY(2px) rotate(1deg) scale(1.01); }
+            100% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+        }
+        @keyframes diceGlow {
+            0% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
+            50% { box-shadow: 0 0 12px 4px rgba(251,191,36,0.3); }
+            100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+        }
         .roll-toast { animation: rollSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .roll-total-pop { animation: rollPop 0.3s ease; }
+        .dice-face {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; border-radius: 6px; font-weight: 800;
+            font-family: 'Cinzel', serif; font-size: 15px; margin: 2px;
+            opacity: 0; animation: diceBounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            border: 2px solid rgba(255,255,255,0.15);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .dice-face.nat20 { animation: diceBounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, diceGlow 0.8s ease-out 0.45s forwards; }
+        .dice-d4  { background: linear-gradient(135deg, #7c3aed, #5b21b6); color: #e9d5ff; }
+        .dice-d6  { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #bfdbfe; }
+        .dice-d8  { background: linear-gradient(135deg, #059669, #047857); color: #a7f3d0; }
+        .dice-d10 { background: linear-gradient(135deg, #d97706, #b45309); color: #fde68a; }
+        .dice-d12 { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fecaca; }
+        .dice-d20 { background: linear-gradient(135deg, #f59e0b, #d97706); color: #1c1917; }
+        .dice-d100 { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #c7d2fe; }
         
         .foundry-content p { margin-bottom: 0.5rem; }
         .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; }
@@ -234,6 +293,7 @@
                 {% if pc.active_toggles %}<span class="font-header text-[8px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(94,173,173,0.12); border:1px solid rgba(94,173,173,0.25); color:#7DC4C4;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
             </div>
             <div class="flex gap-2 flex-wrap mobile-actions">
+                <a href="/map" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-emerald-900/20 border border-emerald-800/25 text-emerald-300 hover:bg-emerald-900/30 transition-colors">🗺 Map</a>
                 <button onclick="takeLongRest()" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-blue-900/20 border border-blue-800/25 text-blue-300 hover:bg-blue-900/30 transition-colors">⛺ Rest</button>
                 {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded bg-red-900/20 border border-red-800/25 text-red-300 hover:bg-red-900/30 transition-colors">⏬ Undo</button>{% endif %}
                 <a href="/player/levelup/{{ pc.name|urlencode }}" class="font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:#265050; border:1px solid rgba(94,173,173,0.25); color:#A8DEDE;">⭐ Level Up</a>
@@ -279,7 +339,13 @@
                     <div class="w-7 h-7 rounded flex items-center justify-center text-sm transition-all group-hover:scale-110" style="{% if pc.shield_raised %}background:rgba(96,165,250,0.2); border:1px solid rgba(96,165,250,0.4); color:#93C5FD;{% else %}background:#252320; border:1px solid rgba(168,156,139,0.15); color:#8A8279;{% endif %}">
                         🛡
                     </div>
-                    <span class="font-header text-[6px] mt-0.5 tracking-widest {% if pc.shield_raised %}text-blue-400{% else %}text-gray-600{% endif %}">SHIELD</span>
+                    <span class="font-header text-[6px] mt-0.5 tracking-widest {% if pc.shield_raised %}text-blue-400{% else %}text-gray-600{% endif %}">RAISE</span>
+                </button>
+                <button onclick="useShieldBlock()" class="no-print flex flex-col items-center cursor-pointer group" title="Shield Block (⟳) — Reduce damage by hardness, shield takes the rest">
+                    <div class="w-7 h-7 rounded flex items-center justify-center text-sm transition-all group-hover:scale-110" style="background:#252320; border:1px solid rgba(168,156,139,0.15); color:#d97706;">
+                        ⟳
+                    </div>
+                    <span class="font-header text-[6px] mt-0.5 tracking-widest text-amber-600/60">BLOCK</span>
                 </button>
                 
                 <div onclick="rollSkill('Fortitude Save', {{ pc.fort }})" class="flex flex-col items-center cursor-pointer group" title="Roll Fort Save">
@@ -387,29 +453,25 @@
         </div>
 
         <!-- Condition Strip — auto-shows when any condition is active -->
-        {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
+        {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('stunned', 0) > 0 or pc.conditions.get('slowed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
         <div class="no-print cond-strip {% if has_any_condition %}active{% endif %}" id="condition-strip" style="border-bottom:1px solid rgba(251,113,133,0.1);">
             <div class="max-w-6xl mx-auto px-4 md:px-6 flex flex-wrap gap-1 items-center">
                 <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#9E968B;">Active Conditions</span>
-                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'wounded', 'doomed', 'dying'] %}
+                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed', 'dying'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
-                {% if cval > 0 %}
-                <div class="flex items-center gap-0.5 rounded px-2 py-1" data-cond-name="{{ cond }}" 
-                     style="background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);">
+                <div class="flex items-center gap-0.5 rounded px-2 py-1" id="cond-wrap-{{ cond }}" data-cond-name="{{ cond }}" 
+                     style="{% if cval > 0 %}background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);{% else %}display:none; background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);{% endif %}">
                     <button onclick="adjustCondition('{{ cond }}', -1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#FDA4AF;">−</button>
-                    <span class="font-header text-[9px] tracking-wide text-red-300 px-1">{{ cond|upper }} {{ cval }}</span>
+                    <span class="font-header text-[9px] tracking-wide text-red-300 px-1">{{ cond|upper }} <span id="cond-val-{{ cond }}">{{ cval }}</span></span>
                     <button onclick="adjustCondition('{{ cond }}', 1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#FDA4AF;">+</button>
                 </div>
-                {% endif %}
                 {% endfor %}
-                {% for cond in ['prone', 'off_guard'] %}
+                {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
                 {% set cval = pc.conditions.get(cond, false) %}
-                {% if cval %}
-                <button onclick="toggleBoolCondition('{{ cond }}')" class="font-header text-[9px] tracking-wide px-2 py-1 rounded" 
-                        style="background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">
-                    {{ cond|replace('_','-')|upper }} ✕
+                <button onclick="toggleBoolCondition('{{ cond }}')" id="cond-btn-{{ cond }}" class="font-header text-[9px] tracking-wide px-2 py-1 rounded"
+                        style="{% if cval %}background:rgba(251,113,133,0.15); border:1px solid rgba(251,113,133,0.3); color:#FDA4AF;{% else %}background:rgba(30,28,25,0.5); border:1px solid rgba(168,156,139,0.1); color:#7A7062;{% endif %}">
+                    {{ cond|replace('_','-')|upper }}{% if cval %} ✕{% endif %}
                 </button>
-                {% endif %}
                 {% endfor %}
                 <button onclick="openConditionAdder()" class="font-header text-[8px] tracking-wider uppercase px-2 py-1 rounded ml-auto transition-colors" style="border:1px solid rgba(168,156,139,0.1); color:#8A8279;" title="Add/manage conditions">+ Condition</button>
             </div>
@@ -419,7 +481,7 @@
         <div id="cond-adder" class="hidden no-print" style="background:rgba(30,28,25,0.95); border-bottom:1px solid rgba(168,156,139,0.1);">
             <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap gap-1 items-center">
                 <span class="font-header text-[8px] tracking-widest uppercase mr-2" style="color:#9E968B;">Manage</span>
-                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'wounded', 'doomed'] %}
+                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
                 <div class="flex items-center gap-0.5 rounded px-1.5 py-0.5" style="{% if cval > 0 %}background:rgba(251,113,133,0.08); border:1px solid rgba(251,113,133,0.2);{% else %}border:1px solid rgba(168,156,139,0.08);{% endif %}">
                     <button onclick="adjustCondition('{{ cond }}', -1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#9E968B;">−</button>
@@ -427,13 +489,15 @@
                     <button onclick="adjustCondition('{{ cond }}', 1)" class="text-[10px] w-4 h-4 rounded hover:bg-gray-700 transition-colors" style="color:#9E968B;">+</button>
                 </div>
                 {% endfor %}
-                {% for cond in ['prone', 'off_guard'] %}
+                {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
                 {% set cval = pc.conditions.get(cond, false) %}
                 <button onclick="toggleBoolCondition('{{ cond }}')" class="font-header text-[9px] tracking-wide px-2 py-0.5 rounded transition-colors" 
                         style="{% if cval %}background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;{% else %}color:#7A7062; border:1px solid rgba(168,156,139,0.08);{% endif %}">
                     {{ cond|replace('_','-')|upper }}
                 </button>
                 {% endfor %}
+                <div class="h-4 border-r border-gray-700 mx-1"></div>
+                <button onclick="dailyPrep()" class="font-header text-[8px] tracking-wider uppercase px-2 py-1 rounded transition-colors" style="background:rgba(94,173,173,0.08); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;" title="Daily preparations: reset spells, focus, conditions">Daily Prep</button>
                 <button onclick="document.getElementById('cond-adder').classList.add('hidden')" class="ml-auto text-[9px]" style="color:#8A8279;">Close</button>
             </div>
         </div>
@@ -905,25 +969,22 @@
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {% for sp in lvl.spells %}
-                                <details class="group rounded overflow-hidden spell-rank-{{ lvl.level }} spell-entry" data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
-                                    <summary class="flex justify-between items-center p-3 cursor-pointer list-none outline-none hover:bg-gray-700 transition-colors">
-                                        <div class="flex items-center gap-2 pr-2">
-                                            <span style="color:#7DC4C4;" class="text-[10px] transition-transform group-open:rotate-90">▶</span>
-                                            <span class="text-sm font-bold" style="color:#EDE5D8;">{{ sp.name }}</span>
-                                            {% if sp.actions %}<span class="text-xs ml-1 opacity-60" style="color:#7DC4C4;" title="Action cost">{{ sp.actions }}</span>{% endif %}
-                                            {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell">⭐</span>{% endif %}
-                                        </div>
-                                        <div class="flex items-center gap-2 shrink-0">
-                                            {% if 'spontaneous' in c_type_lower and 'bounded' not in c_type_lower and lvl.level > 0 %}
-                                            <button onclick="event.stopPropagation(); toggleSignature('{{ sp.name|replace("'", "\\'") }}')" class="no-print text-[9px] px-1.5 py-0.5 rounded transition-colors {% if sp.name in pc.signature_spells %}text-amber-400{% else %}text-gray-600 hover:text-amber-400{% endif %}" title="Toggle Signature">⭐</button>
-                                            {% endif %}
-                                            <button onclick="event.stopPropagation(); rollSpell('{{ sp.name|replace("'", "\\'") }}')" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">Cast</button>
-                                        </div>
-                                    </summary>
-                                    <div class="p-3 text-sm border-t foundry-content leading-relaxed" style="color:#D1C9BD; border-color:rgba(168,156,139,0.1);">
-                                        {{ sp.desc | safe }}
+                                <div class="flex justify-between items-center p-3 rounded cursor-pointer hover:bg-gray-700 transition-colors spell-rank-{{ lvl.level }} spell-entry" 
+                                     data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}"
+                                     onclick="openSpellCard('{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, '{{ caster.tradition }}', '{{ caster.type }}')"
+                                     style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
+                                    <div class="flex items-center gap-2 pr-2 truncate">
+                                        <span class="text-sm font-bold truncate" style="color:#EDE5D8;">{{ sp.name }}</span>
+                                        {% if sp.actions %}<span class="action-pips ml-1">{{ sp.actions }}</span>{% endif %}
+                                        {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell">S</span>{% endif %}
                                     </div>
-                                </details>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        {% if 'spontaneous' in c_type_lower and 'bounded' not in c_type_lower and lvl.level > 0 %}
+                                        <button onclick="event.stopPropagation(); toggleSignature('{{ sp.name|replace("'", "\\'") }}')" class="no-print text-[9px] px-1.5 py-0.5 rounded transition-colors {% if sp.name in pc.signature_spells %}text-amber-400{% else %}text-gray-600 hover:text-amber-400{% endif %}" title="Toggle Signature">S</button>
+                                        {% endif %}
+                                        <button onclick="event.stopPropagation(); rollSpell('{{ sp.name|replace("'", "\\'") }}', event)" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">Cast</button>
+                                    </div>
+                                </div>
                                 {% endfor %}
                             </div>
                         </div>
@@ -935,7 +996,7 @@
                     <div class="flex flex-col lg:flex-row" style="min-height:450px;">
                         <!-- Spellbook (left) -->
                         <div class="w-full lg:w-5/12 p-5 border-b lg:border-b-0 lg:border-r border-gray-700" style="background:#2E2B25;">
-                            <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:#C2B9AD;">Spellbook — Known Spells</h4>
+                            <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:#C2B9AD;">Spellbook — Drag to Prepare</h4>
                             <div class="space-y-4 max-h-[550px] overflow-y-auto custom-scrollbar pr-2">
                                 {% for lvl in caster.levels %}
                                 <div>
@@ -944,21 +1005,21 @@
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         {% for sp in lvl.spells %}
-                                        <details class="group rounded spell-rank-{{ lvl.level }} spell-entry" data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
-                                            <summary class="flex justify-between items-center p-2 cursor-pointer list-none outline-none hover:bg-gray-700 transition-colors">
-                                                <div class="flex items-center gap-2 truncate pr-2">
-                                                    <span style="color:#7DC4C4;" class="text-[9px] transition-transform group-open:rotate-90">▶</span>
-                                                    <span class="text-xs font-bold truncate" style="color:#EDE5D8;">{{ sp.name }}</span>
-                                                    {% if sp.actions %}<span class="text-[10px] ml-1 opacity-60" style="color:#7DC4C4;">{{ sp.actions }}</span>{% endif %}
-                                                </div>
-                                                <button onclick="event.stopPropagation(); prepareSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="px-2 py-1 rounded text-[10px] font-bold transition-colors shrink-0" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">
-                                                    + Prep
-                                                </button>
-                                            </summary>
-                                            <div class="p-2 text-xs border-t foundry-content leading-relaxed" style="color:#D1C9BD; border-color:rgba(168,156,139,0.08);">
-                                                {{ sp.desc | safe }}
+                                        <div class="flex justify-between items-center p-2 rounded cursor-grab hover:bg-gray-700 transition-colors spell-rank-{{ lvl.level }} spell-entry"
+                                             draggable="true"
+                                             data-spell-name="{{ sp.name }}" data-spell-level="{{ lvl.level }}" data-caster-idx="{{ caster_idx }}"
+                                             ondragstart="onSpellDragStart(event, '{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, {{ caster_idx }})"
+                                             onclick="openSpellCard('{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, '{{ caster.tradition }}', '{{ caster.type }}')"
+                                             style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
+                                            <div class="flex items-center gap-2 truncate pr-2">
+                                                <span class="text-[9px] opacity-40 cursor-grab" style="color:#9E968B;">&#x2630;</span>
+                                                <span class="text-xs font-bold truncate" style="color:#EDE5D8;">{{ sp.name }}</span>
+                                                {% if sp.actions %}<span class="text-[10px] ml-1 opacity-60" style="color:#7DC4C4;">{{ sp.actions }}</span>{% endif %}
                                             </div>
-                                        </details>
+                                            <button onclick="event.stopPropagation(); prepareSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="px-2 py-1 rounded text-[10px] font-bold transition-colors shrink-0" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">
+                                                + Prep
+                                            </button>
+                                        </div>
                                         {% endfor %}
                                     </div>
                                 </div>
@@ -1140,9 +1201,11 @@
 
                     <div class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                         {% for item in pc.equipment %}
+                        {% set raw_bulk = item.bulk|string|upper %}
+                        {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
                         <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group">
                             <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
-                            <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2">Bulk: {{ item.bulk }}</span>
+                            <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2 {% if display_bulk == 'L' %}text-amber-600{% elif display_bulk|int > 0 %}text-amber-500{% endif %}">{{ display_bulk }}B</span>
                             <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
                             <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">✖</button>
                         </div>
@@ -1634,6 +1697,45 @@
         function openConditionAdder() {
             document.getElementById('cond-adder').classList.toggle('hidden');
         }
+        
+        async function dailyPrep() {
+            if (!confirm('Daily Preparations: This will reset all spell slots, restore focus points, clear combat conditions, and heal to full HP. Continue?')) return;
+            try {
+                const res = await fetch(`/api/daily_prep/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({heal_full: true})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showRollToast('Daily Preparations', '✓', data.message || 'Spells, focus, and HP restored.', false, false);
+                    setTimeout(() => window.location.reload(), 1500);
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        async function useShieldBlock(incomingDamage) {
+            if (!incomingDamage) {
+                incomingDamage = parseInt(prompt('Incoming damage amount:'));
+                if (!incomingDamage || incomingDamage <= 0) return;
+            }
+            try {
+                const res = await fetch(`/api/shield_block/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({damage: incomingDamage})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    let status = data.shield_destroyed ? 'DESTROYED' : data.shield_broken ? 'BROKEN' : `${data.shield_hp}/${data.shield_max_hp} HP`;
+                    showRollToast('Shield Block', 
+                        data.damage_to_char, 
+                        `Blocked ${data.blocked} (Hardness). Shield: ${status}. You take ${data.damage_to_char} damage.`,
+                        false, data.shield_destroyed);
+                    setTimeout(() => _refreshConditionStrip(), 500);
+                } else {
+                    alert(data.error || 'Shield Block failed');
+                }
+            } catch(e) { console.error(e); }
+        }
 
         async function adjustCondition(cond, delta) {
             try {
@@ -1642,7 +1744,10 @@
                     body: JSON.stringify({condition: cond, delta: delta})
                 });
                 const data = await res.json();
-                if (data.success) window.location.reload();
+                if (data.success) {
+                    // Update in-place instead of full page reload
+                    _refreshConditionStrip();
+                }
             } catch(e) { console.error(e); }
         }
         
@@ -1653,8 +1758,161 @@
                     body: JSON.stringify({condition: cond, toggle: true})
                 });
                 const data = await res.json();
-                if (data.success) window.location.reload();
+                if (data.success) {
+                    _refreshConditionStrip();
+                }
             } catch(e) { console.error(e); }
+        }
+        
+        async function _refreshConditionStrip() {
+            // Fetch current state and update condition badges without reloading
+            try {
+                const res = await fetch(`/api/export_character/${pcNameEncoded}`);
+                const charData = await res.json();
+                const build = charData.build || charData;
+                const conds = build.conditions || {};
+                
+                // Update numeric condition badges
+                ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'dying', 'wounded', 'doomed', 'stunned', 'slowed'].forEach(c => {
+                    const val = conds[c] || 0;
+                    const el = document.getElementById(`cond-val-${c}`);
+                    if (el) el.textContent = val;
+                    const wrap = document.getElementById(`cond-wrap-${c}`);
+                    if (wrap) wrap.style.display = val > 0 ? '' : 'none';
+                });
+                
+                // Update boolean condition buttons
+                ['prone', 'off_guard', 'concealed', 'hidden'].forEach(c => {
+                    const active = !!conds[c];
+                    const el = document.getElementById(`cond-btn-${c}`);
+                    if (el) {
+                        el.style.background = active ? 'rgba(251,113,133,0.15)' : 'rgba(30,28,25,0.5)';
+                        el.style.borderColor = active ? 'rgba(251,113,133,0.3)' : 'rgba(168,156,139,0.1)';
+                    }
+                });
+                
+                // Show/hide the condition strip
+                const hasAny = Object.entries(conds).some(([k,v]) => v && v !== 0 && v !== false);
+                const strip = document.getElementById('condition-strip');
+                if (strip) strip.classList.toggle('active', hasAny);
+            } catch(e) {
+                // Fallback: reload if AJAX update fails
+                window.location.reload();
+            }
+        }
+        
+        // ==========================================
+        // SSE: SHARED ROLL FEED (see other players' rolls)
+        // ==========================================
+        (function setupPlayerSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.addEventListener('player_roll', (e) => {
+                try {
+                    const roll = JSON.parse(e.data);
+                    // Don't show our own rolls (we already see them via showRollToast)
+                    if (roll.name === pcName) return;
+                    
+                    // Show a mini-toast for other players' rolls
+                    const container = document.getElementById('roll-toast-container');
+                    const toast = document.createElement('div');
+                    const isCrit = roll.result && (roll.detail || '').includes('[CRIT');
+                    toast.className = 'roll-toast bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-3 relative overflow-hidden pointer-events-auto';
+                    toast.style.opacity = '0.85';
+                    toast.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <span class="font-bold text-xs tracking-wide uppercase" style="color:#7DC4C4;">${roll.name}</span>
+                            <button onclick="this.closest('.roll-toast').remove()" class="text-gray-600 hover:text-white text-xs ml-2">✕</button>
+                        </div>
+                        <div class="text-sm text-gray-300 mt-1">${roll.action}: <span class="font-bold ${isCrit ? 'text-amber-400' : 'text-white'}">${roll.result}</span></div>
+                        <div class="text-[10px] text-gray-500 font-mono mt-1">${roll.detail || ''}</div>
+                    `;
+                    container.prepend(toast);
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        toast.style.transform = 'translateX(100%)';
+                        toast.style.transition = 'all 0.3s ease';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 6000);
+                } catch(e) {}
+            });
+            
+            evtSource.addEventListener('pc_update', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.name === pcName) {
+                        // Update HP display in-place
+                        const hpEl = document.getElementById('hp-current');
+                        if (hpEl) hpEl.textContent = data.current_hp;
+                        _refreshConditionStrip();
+                    }
+                } catch(e) {}
+            });
+            
+            evtSource.addEventListener('encounter_update', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.active_name === pcName) {
+                        showTurnBanner();
+                    }
+                } catch(e) {}
+            });
+            
+            evtSource.onerror = () => {
+                // Auto-reconnect handled by browser EventSource
+            };
+        })();
+        
+        // ==========================================
+        // TURN TRANSITION BANNER
+        // ==========================================
+        function showTurnBanner() {
+            // Remove existing banner if any
+            const existing = document.getElementById('turn-banner');
+            if (existing) existing.remove();
+            
+            const banner = document.createElement('div');
+            banner.id = 'turn-banner';
+            banner.style.cssText = `
+                position:fixed; top:0; left:0; right:0; z-index:9999;
+                background: linear-gradient(135deg, rgba(94,173,173,0.95), rgba(59,130,246,0.95));
+                color:#fff; text-align:center; padding:20px;
+                font-family:'Cinzel',serif; font-size:28px; font-weight:700;
+                letter-spacing:0.08em; text-transform:uppercase;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                animation: turnBannerIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                pointer-events:none;
+            `;
+            banner.innerHTML = `
+                <div style="text-shadow:0 2px 8px rgba(0,0,0,0.4);">Your Turn</div>
+                <div style="font-size:12px; opacity:0.7; letter-spacing:0.15em; margin-top:4px;">Round ${document.getElementById('turn-banner-round')?.textContent || ''}</div>
+            `;
+            document.body.appendChild(banner);
+            
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => {
+                banner.style.animation = 'turnBannerOut 0.4s ease forwards';
+                setTimeout(() => banner.remove(), 400);
+            }, 3000);
+            
+            // Also play a subtle sound if available
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 523; // C5
+                gain.gain.value = 0.1;
+                osc.start(); osc.stop(ctx.currentTime + 0.15);
+                setTimeout(() => {
+                    const osc2 = ctx.createOscillator();
+                    const gain2 = ctx.createGain();
+                    osc2.connect(gain2); gain2.connect(ctx.destination);
+                    osc2.frequency.value = 659; // E5
+                    gain2.gain.value = 0.1;
+                    osc2.start(); osc2.stop(ctx.currentTime + 0.2);
+                }, 150);
+            } catch(e) {}
         }
 
         // ==========================================
@@ -1663,9 +1921,9 @@
         function rollCustomDice() {
             const expr = (document.getElementById('custom-dice').value || '').trim();
             if (!expr) return;
-            const result = parseDiceAndRoll(expr);
+            const result = parseDiceAndRollDetailed(expr, false);
             if (result) {
-                showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false);
+                showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice);
                 broadcastToGM('Custom Roll', result.total.toString(), expr + ' = ' + result.detail);
             }
         }
@@ -2216,7 +2474,7 @@
         // ==========================================
         // INLINE ROLL TOAST SYSTEM (replaces alert())
         // ==========================================
-        function showRollToast(title, total, detail, isCrit, isFumble) {
+        function showRollToast(title, total, detail, isCrit, isFumble, diceResults) {
             const container = document.getElementById('roll-toast-container');
             const toast = document.createElement('div');
             
@@ -2225,12 +2483,26 @@
             let badge = isCrit ? '<span class="bg-amber-500 text-gray-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 20</span>' 
                       : isFumble ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 1</span>' : '';
             
+            // Build dice faces HTML with staggered bounce animation
+            let diceHTML = '';
+            if (diceResults && diceResults.length > 0) {
+                diceHTML = '<div class="flex flex-wrap gap-1 mb-2">';
+                diceResults.forEach((die, i) => {
+                    let dieClass = `dice-d${die.sides}`;
+                    let extraClass = (die.sides === 20 && die.value === 20) ? ' nat20' : '';
+                    let fumbleStyle = (die.sides === 20 && die.value === 1) ? ' border-red-500 border-2' : '';
+                    diceHTML += `<span class="dice-face ${dieClass}${extraClass}" style="animation-delay:${i * 0.08}s;${fumbleStyle}">${die.value}</span>`;
+                });
+                diceHTML += '</div>';
+            }
+            
             toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">${title}</span>
                     <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
                 </div>
+                ${diceHTML}
                 <div class="flex items-center gap-2 mb-1">
                     <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
                     ${badge}
@@ -2260,7 +2532,7 @@
             let critStr = isCrit ? " [CRIT SUCCESS]" : isFumble ? " [CRIT FAIL]" : "";
             let modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
             const detail = `1d20 (${d20}) ${modStr} = ${total}${critStr}`;
-            showRollToast(skillName, total, detail, isCrit, isFumble);
+            showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}]);
             broadcastToGM(skillName, total.toString(), detail);
         }
 
@@ -2272,7 +2544,7 @@
             let modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
             const detail = `Hit: 1d20 (${d20}) ${modStr} = ${total}${critStr} | Dmg: ${damageStr}`;
             
-            // Show toast with inline Roll Damage button
+            // Show toast with inline Roll Damage button (normal + crit)
             const container = document.getElementById('roll-toast-container');
             const toast = document.createElement('div');
             let borderColor = isCrit ? 'border-amber-500' : isFumble ? 'border-red-500' : 'border-gray-600';
@@ -2282,20 +2554,33 @@
             
             const safeDmg = damageStr.replace(/'/g, "\\'");
             const safeName = weaponName.replace(/'/g, "\\'");
+            
+            // Dice face for the d20
+            let diceHTML = `<div class="flex flex-wrap gap-1 mb-2"><span class="dice-face dice-d20${isCrit ? ' nat20' : ''}" style="animation-delay:0s;${isFumble ? 'border-color:#ef4444;' : ''}">${d20}</span></div>`;
+            
+            // Build damage buttons — always show normal, show crit button if nat20
+            let dmgButtons = `<button onclick="rollDamage('${safeName}', '${safeDmg}', false); this.disabled=true; this.innerText='Rolled!'; this.classList.add('opacity-50');" class="flex-1 bg-red-900/40 hover:bg-red-800 border border-red-900 text-red-300 px-3 py-1.5 rounded text-xs font-bold transition-colors uppercase tracking-wider">
+                    Roll Damage: ${damageStr}
+                </button>`;
+            if (isCrit) {
+                dmgButtons += `<button onclick="rollDamage('${safeName}', '${safeDmg}', true); this.disabled=true; this.innerText='Rolled!'; this.classList.add('opacity-50');" class="flex-1 bg-amber-900/40 hover:bg-amber-800 border border-amber-700 text-amber-300 px-3 py-1.5 rounded text-xs font-bold transition-colors uppercase tracking-wider">
+                    CRIT Damage (x2)
+                </button>`;
+            }
+            
             toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">Attack: ${weaponName}</span>
                     <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
                 </div>
+                ${diceHTML}
                 <div class="flex items-center gap-2 mb-1">
                     <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
                     ${badge}
                 </div>
                 <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700 mb-2">1d20 (${d20}) ${modStr} = ${total}${critStr}</div>
-                <button onclick="rollDamage('${safeName}', '${safeDmg}'); this.disabled=true; this.innerText='Rolled!'; this.classList.add('opacity-50');" class="w-full bg-red-900/40 hover:bg-red-800 border border-red-900 text-red-300 px-3 py-1.5 rounded text-xs font-bold transition-colors uppercase tracking-wider">
-                    🎲 Roll Damage: ${damageStr}
-                </button>
+                <div class="flex gap-2">${dmgButtons}</div>
                 <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
             `;
             container.prepend(toast);
@@ -2308,14 +2593,157 @@
             broadcastToGM(`Attack: ${weaponName}`, total.toString(), detail);
         }
 
-        function rollSpell(spellName) {
-            if (event) event.preventDefault(); 
+        function rollSpell(spellName, e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
             showRollToast(`Cast: ${spellName}`, '✦', `Invoked ${spellName}`, false, false);
             broadcastToGM(`Cast Spell: ${spellName}`, "Cast", `The player invoked ${spellName}.`);
         }
 
-        function rollFeature(featureName) {
-            if (event) event.preventDefault(); 
+        // ==========================================
+        // SPELL CARD POPUP
+        // ==========================================
+        const _spellDescCache = {};
+        // Pre-populate from template data
+        (function() {
+            const casters = {{ pc.spell_casters | tojson | safe }};
+            casters.forEach(c => {
+                (c.levels || []).forEach(lvl => {
+                    (lvl.spells || []).forEach(sp => {
+                        _spellDescCache[sp.name.toLowerCase()] = {
+                            name: sp.name,
+                            desc: sp.desc || '',
+                            actions: sp.actions || '',
+                            level: lvl.level,
+                            tradition: c.tradition || '',
+                            type: c.type || ''
+                        };
+                    });
+                });
+            });
+        })();
+
+        function openSpellCard(spellName, level, tradition, castType) {
+            const cached = _spellDescCache[spellName.toLowerCase()];
+            const desc = cached ? cached.desc : '<em>No description available.</em>';
+            const actions = cached ? cached.actions : '';
+            
+            // Parse metadata from description text
+            const meta = parseSpellMeta(desc, actions);
+            
+            // Build action pips HTML
+            let actionHTML = '';
+            if (actions) {
+                actionHTML = buildActionPips(actions);
+            }
+            
+            // Rank colors
+            const rankColors = ['#6B7280','#60A5FA','#4ADE80','#FBBF24','#F97316','#F43F5E','#A855F7','#6366F1','#EC4899','#EF4444','#FFD700'];
+            const rankColor = rankColors[level] || '#6B7280';
+            const rankLabel = level === 0 ? 'Cantrip' : `Rank ${level}`;
+            
+            // Parse heightened entries from description
+            let mainDesc = desc;
+            let heightenedHTML = '';
+            const heightenPattern = /<hr[^>]*>[\s\S]*?<strong>Heightened/i;
+            if (heightenPattern.test(desc)) {
+                const parts = desc.split(/<hr[^>]*>/i);
+                mainDesc = parts[0];
+                const heightParts = parts.slice(1).filter(p => /heightened/i.test(p));
+                if (heightParts.length > 0) {
+                    heightenedHTML = `<div class="spell-card-heightened">
+                        <div class="spell-card-heightened-title">Heightened</div>
+                        <div class="text-xs" style="color:#C4B5FD;">${heightParts.join('<hr style="border:none;border-top:1px solid rgba(167,139,250,0.1);margin:6px 0;">')}</div>
+                    </div>`;
+                }
+            }
+            
+            // Build meta tags
+            let metaTags = '';
+            metaTags += `<span class="spell-card-meta-tag" style="background:${rankColor}22; border:1px solid ${rankColor}44; color:${rankColor};">${rankLabel}</span>`;
+            if (tradition) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.2); color:#C4B5FD;">${tradition}</span>`;
+            if (meta.range) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2); color:#FDE68A;">Range ${meta.range}</span>`;
+            if (meta.save) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:#FCA5A5;">${meta.save} Save</span>`;
+            if (meta.area) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); color:#86EFAC;">${meta.area}</span>`;
+            if (meta.duration) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(168,156,139,0.08); border:1px solid rgba(168,156,139,0.15); color:#C2B9AD;">${meta.duration}</span>`;
+            
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'spell-card-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            
+            overlay.innerHTML = `
+                <div class="spell-card" onclick="event.stopPropagation()">
+                    <div class="spell-card-header">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center gap-3">
+                                <h3 class="font-header text-xl" style="color:#EDE5D8;">${spellName}</h3>
+                                ${actionHTML ? `<div>${actionHTML}</div>` : ''}
+                            </div>
+                            <button onclick="this.closest('.spell-card-overlay').remove()" class="text-xl leading-none" style="color:#9E968B;">x</button>
+                        </div>
+                        <div class="spell-card-meta">${metaTags}</div>
+                    </div>
+                    <div class="spell-card-body foundry-content">
+                        ${mainDesc}
+                        ${heightenedHTML}
+                    </div>
+                    <div class="spell-card-footer">
+                        <button onclick="rollSpell('${spellName.replace(/'/g,"\\'")}', event); this.closest('.spell-card-overlay').remove();" class="px-4 py-2 rounded text-sm font-bold transition-colors" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Cast ${spellName}</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+        }
+        
+        function buildActionPips(actionStr) {
+            const s = actionStr.trim().toLowerCase();
+            if (s === 'reaction' || s === '⟳') return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === '◇') return '<span class="action-pips"><span class="action-pip free"></span></span>';
+            
+            // Count action pips (◆ characters or "1 action", "2 actions" etc.)
+            let count = 0;
+            if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) count = parseInt(s);
+            else count = (actionStr.match(/◆/g) || []).length;
+            if (count === 0 && /◆/.test(actionStr)) count = 1;
+            if (count === 0) return `<span class="text-[10px]" style="color:#7DC4C4;">${actionStr}</span>`;
+            
+            let pips = '';
+            for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
+            return `<span class="action-pips">${pips}</span>`;
+        }
+        
+        function parseSpellMeta(desc, actions) {
+            const text = desc.replace(/<[^>]+>/g, ' ').toLowerCase();
+            const meta = {};
+            
+            // Range
+            const rangeMatch = text.match(/range\s+(\d+\s*(?:feet|ft|foot))/i);
+            if (rangeMatch) meta.range = rangeMatch[1].replace(/feet|foot/i, 'ft');
+            else if (/touch/i.test(text) && /range/i.test(text)) meta.range = 'Touch';
+            
+            // Save
+            const saveMatch = text.match(/(fortitude|reflex|will|basic)\s*(fortitude|reflex|will)?\s*(?:save|saving)/i);
+            if (saveMatch) {
+                let save = (saveMatch[2] || saveMatch[1]).charAt(0).toUpperCase() + (saveMatch[2] || saveMatch[1]).slice(1);
+                if (saveMatch[1].toLowerCase() === 'basic') save = 'Basic ' + save;
+                meta.save = save;
+            }
+            
+            // Area
+            const areaMatch = text.match(/(\d+[- ]foot\s*(?:burst|cone|emanation|line|radius|cube|wall|cylinder))/i);
+            if (areaMatch) meta.area = areaMatch[1].replace(/foot/i, 'ft');
+            
+            // Duration  
+            const durMatch = text.match(/duration\s+(\d+\s*(?:minutes?|hours?|rounds?|days?|sustained|until)[\w\s]*)/i);
+            if (durMatch) meta.duration = durMatch[1].trim().replace(/^(\d+\s*\w+).*$/, '$1');
+            else if (/sustained/i.test(text)) meta.duration = 'Sustained';
+            
+            return meta;
+        }
+
+        function rollFeature(featureName, e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
             showRollToast(`Feature: ${featureName}`, '⚡', `Used ${featureName}`, false, false);
             broadcastToGM(`Used Feature: ${featureName}`, "Action", `The player used ${featureName}.`);
         }
@@ -2330,13 +2758,13 @@
                 let isCrit = d20 === 20, isFumble = d20 === 1;
                 let modStr = mod >= 0 ? `+${mod}` : `${mod}`;
                 const detail = `1d20 (${d20}) ${modStr} = ${total}`;
-                showRollToast(label, total, detail, isCrit, isFumble);
+                showRollToast(label, total, detail, isCrit, isFumble, [{sides: 20, value: d20}]);
                 broadcastToGM(label, total.toString(), detail);
             } else {
                 // It's a dice expression (damage roll) — roll it
-                let result = parseDiceAndRoll(valueStr);
+                let result = parseDiceAndRollDetailed(valueStr, false);
                 if (result) {
-                    showRollToast(label, result.total, result.detail, false, false);
+                    showRollToast(label, result.total, result.detail, false, false, result.dice);
                     broadcastToGM(label, result.total.toString(), result.detail);
                 }
             }
@@ -2345,7 +2773,7 @@
         function rollFlat() {
             const d20 = rollD20();
             const detail = `1d20 = ${d20}`;
-            showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1);
+            showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}]);
             broadcastToGM('Flat Check', d20.toString(), detail);
         }
 
@@ -2362,6 +2790,7 @@
             document.getElementById('dice-breakdown').innerText = `1d${sides} = ${roll}`;
             document.getElementById('dice-total').classList.add('roll-total-pop');
             setTimeout(() => document.getElementById('dice-total').classList.remove('roll-total-pop'), 300);
+            showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]);
             broadcastToGM(`Quick Roll: 1d${sides}`, roll.toString(), `1d${sides} = ${roll}`);
         }
 
@@ -2412,24 +2841,81 @@
         }
         window.parseDiceAndRoll = parseDiceAndRoll;
 
-        function rollDamage(weaponName, damageStr) {
-            let result = parseDiceAndRoll(damageStr);
+        function rollDamage(weaponName, damageStr, isCrit) {
+            let result = parseDiceAndRollDetailed(damageStr, isCrit || false);
             if (result) {
-                showRollToast(`Damage: ${weaponName}`, result.total, result.detail, false, false);
-                broadcastToGM(`Damage: ${weaponName}`, result.total.toString(), result.detail);
+                let label = isCrit ? `CRIT Damage: ${weaponName}` : `Damage: ${weaponName}`;
+                showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice);
+                broadcastToGM(label, result.total.toString(), result.detail);
             } else {
                 showRollToast(`Damage: ${weaponName}`, '?', `Could not parse: ${damageStr}`, false, false);
             }
         }
 
+        // Enhanced parser that returns individual dice results for animation
+        function parseDiceAndRollDetailed(input, doubleDice) {
+            input = input.trim();
+            if (!input) return null;
+            
+            const parts = input.split(',').map(s => s.trim()).filter(s => s);
+            let grandTotal = 0;
+            let allDetails = [];
+            let allDice = [];
+            
+            for (const part of parts) {
+                const diceMatch = part.match(/(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
+                if (!diceMatch) continue;
+                
+                let qty = diceMatch[1] ? parseInt(diceMatch[1]) : 1;
+                const sides = parseInt(diceMatch[2]);
+                const modSign = diceMatch[3];
+                const modVal = diceMatch[4] ? parseInt(diceMatch[4]) : 0;
+                if (qty <= 0 || qty > 100 || sides <= 0) continue;
+                
+                const typeLabel = part.replace(diceMatch[0], '').trim();
+                
+                // On crit: double the dice count
+                let displayQty = qty;
+                if (doubleDice) { qty *= 2; displayQty = qty; }
+                
+                let rolls = [], sum = 0;
+                for (let i = 0; i < qty; i++) {
+                    let r = Math.floor(Math.random() * sides) + 1;
+                    rolls.push(r); sum += r;
+                    allDice.push({sides: sides, value: r});
+                }
+                if (modSign === '+') sum += modVal;
+                else if (modSign === '-') sum -= modVal;
+                
+                // On crit: also double the flat modifier
+                if (doubleDice && modVal > 0) {
+                    if (modSign === '+') sum += modVal;
+                    else if (modSign === '-') sum -= modVal;
+                }
+                
+                let expr = doubleDice ? `${displayQty}d${sides}${modSign ? modSign + (modVal*2) : ''}` : `${diceMatch[1]||1}d${sides}${modSign ? modSign + modVal : ''}`;
+                let detail = `${expr}: [${rolls.join(', ')}]`;
+                if (modSign) detail += ` ${modSign} ${doubleDice ? modVal*2 : modVal}`;
+                detail += ` = ${sum}`;
+                if (typeLabel) detail += ` ${typeLabel}`;
+                if (doubleDice) detail += ' (CRIT x2)';
+                
+                grandTotal += sum;
+                allDetails.push(detail);
+            }
+            
+            if (allDetails.length === 0) return null;
+            return { total: grandTotal, detail: allDetails.join(' + '), dice: allDice };
+        }
+
         function customDiceRoll() {
             const input = document.getElementById('custom-dice-input').value;
             if (!input) return;
-            let result = parseDiceAndRoll(input);
+            let result = parseDiceAndRollDetailed(input, false);
             if (result) {
                 document.getElementById('dice-total').innerText = result.total;
                 document.getElementById('dice-breakdown').innerText = result.detail;
-                showRollToast('Custom Roll', result.total, result.detail, false, false);
+                showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice);
                 broadcastToGM(`Custom: ${input}`, result.total.toString(), result.detail);
             } else {
                 document.getElementById('dice-total').innerText = 'ERR';
@@ -2779,7 +3265,12 @@
                             </div>
                         </div>`;
                     } else {
-                        html += `<div class="prep-slot text-[10px] uppercase tracking-widest font-bold" style="color:#8A8279;">Empty</div>`;
+                        html += `<div class="prep-slot text-[10px] uppercase tracking-widest font-bold" style="color:#8A8279;"
+                                      ondragover="onPrepSlotDragOver(event)"
+                                      ondragleave="onPrepSlotDragLeave(event)"
+                                      ondrop="onPrepSlotDrop(event, ${cIdx}, ${lvl.level}, ${i})">
+                                    Drop Spell Here
+                                 </div>`;
                     }
                 }
                 html += `</div></div>`;
@@ -2803,6 +3294,55 @@
                 });
             });
         }
+
+        // ==========================================
+        // DRAG-AND-DROP SPELL PREPARATION  
+        // ==========================================
+        let _dragSpellData = null;
+        
+        function onSpellDragStart(e, spellName, level, casterIdx) {
+            _dragSpellData = { name: spellName, level: level, casterIdx: casterIdx };
+            e.dataTransfer.setData('text/plain', spellName);
+            e.dataTransfer.effectAllowed = 'copy';
+            // Highlight valid drop targets
+            document.querySelectorAll('.prep-slot:not(.filled)').forEach(slot => {
+                slot.classList.add('drop-highlight');
+            });
+        }
+        
+        function onPrepSlotDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            e.currentTarget.classList.add('drop-active');
+        }
+        
+        function onPrepSlotDragLeave(e) {
+            e.currentTarget.classList.remove('drop-active');
+        }
+        
+        function onPrepSlotDrop(e, cIdx, lvlNum, slotIdx) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drop-active');
+            document.querySelectorAll('.drop-highlight').forEach(el => el.classList.remove('drop-highlight'));
+            
+            if (!_dragSpellData) return;
+            
+            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            if (!prepState[lvlNum]) return;
+            
+            // Place the spell in this specific slot
+            prepState[lvlNum][slotIdx] = _dragSpellData.name;
+            localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+            renderPrepUI(cIdx, castersData[cIdx]);
+            _dragSpellData = null;
+        }
+        
+        document.addEventListener('dragend', () => {
+            _dragSpellData = null;
+            document.querySelectorAll('.drop-highlight, .drop-active').forEach(el => {
+                el.classList.remove('drop-highlight', 'drop-active');
+            });
+        });
 
         function prepareSpell(cIdx, lvlNum, spellName) {
             event.preventDefault();
@@ -2852,556 +3392,7 @@
         initDailyPrep();
     </script>
 
-    <!-- 3D Dice Roller System -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
-        #dice-canvas-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 9999;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.15s ease;
-        }
-        #dice-canvas-container.active {
-            pointer-events: auto;
-            opacity: 1;
-        }
-    </style>
-    <div id="dice-canvas-container"></div>
-    <script>
-    (function() {
-        // ========================================
-        // SIMPLE 3D DICE - SMOOTH TUMBLE
-        // ========================================
-        
-        if (typeof THREE === 'undefined') {
-            console.error('🎲 Three.js not loaded');
-            return;
-        }
-        
-        let scene, camera, renderer;
-        let activeDice = [];
-        let isAnimating = false;
-        let rollCallback = null;
-        let animationId = null;
-        let sceneReady = false;
-        
-        const DICE_COLORS = {
-            d4: 0x8B5CF6, d6: 0x3B82F6, d8: 0x10B981,
-            d10: 0xF59E0B, d12: 0xEF4444, d20: 0xEC4899
-        };
-        
-        // Create numbered texture for die face
-        function createFaceTexture(number, bgColor) {
-            const size = 128;
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            
-            // Background with slight gradient
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, size, size);
-            const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-            grad.addColorStop(0, 'rgba(255,255,255,0.15)');
-            grad.addColorStop(1, 'rgba(0,0,0,0.15)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, size, size);
-            
-            // Number
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 72px Cinzel, Georgia, serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = 4;
-            ctx.shadowOffsetY = 2;
-            ctx.fillText(String(number), size/2, size/2 + 4);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.needsUpdate = true;
-            return texture;
-        }
-        
-        // Create a d6 with numbered faces
-        function createD6(color, resultValue) {
-            const geometry = new THREE.BoxGeometry(1.4, 1.4, 1.4);
-            const hexColor = '#' + color.toString(16).padStart(6, '0');
-            
-            // Opposite faces sum to 7: 1-6, 2-5, 3-4
-            // Three.js box face order: +X, -X, +Y, -Y, +Z, -Z
-            const faceNumbers = [1, 6, 2, 5, 3, 4];
-            const materials = faceNumbers.map(n => new THREE.MeshStandardMaterial({
-                map: createFaceTexture(n, hexColor),
-                roughness: 0.4,
-                metalness: 0.1
-            }));
-            
-            const mesh = new THREE.Mesh(geometry, materials);
-            mesh.castShadow = true;
-            
-            // Store which rotation shows the result on top
-            mesh.userData.resultValue = resultValue;
-            mesh.userData.targetRotation = getD6TargetRotation(resultValue);
-            
-            return mesh;
-        }
-        
-        // Get rotation to show specific number on top for d6
-        function getD6TargetRotation(num) {
-            // Rotations to put each number facing up (+Y)
-            const rotations = {
-                1: { x: 0, z: -Math.PI/2 },
-                2: { x: 0, z: 0 },
-                3: { x: Math.PI/2, z: 0 },
-                4: { x: -Math.PI/2, z: 0 },
-                5: { x: Math.PI, z: 0 },
-                6: { x: 0, z: Math.PI/2 }
-            };
-            return rotations[num] || { x: 0, z: 0 };
-        }
-        
-        // Create a d20 (icosahedron with result number shown)
-        function createD20(color, resultValue) {
-            const geometry = new THREE.IcosahedronGeometry(0.9, 0);
-            const material = new THREE.MeshStandardMaterial({
-                color: color,
-                roughness: 0.35,
-                metalness: 0.15,
-                flatShading: true
-            });
-            
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.castShadow = true;
-            
-            // Add result number as sprite
-            const sprite = createNumberSprite(resultValue);
-            sprite.position.y = 1.4;
-            sprite.visible = false;
-            mesh.add(sprite);
-            mesh.userData.resultSprite = sprite;
-            mesh.userData.resultValue = resultValue;
-            
-            return mesh;
-        }
-        
-        // Create other polyhedra
-        function createPolyDie(sides, color, resultValue) {
-            let geometry;
-            switch(sides) {
-                case 4: geometry = new THREE.TetrahedronGeometry(0.9); break;
-                case 8: geometry = new THREE.OctahedronGeometry(0.85); break;
-                case 10: geometry = new THREE.DodecahedronGeometry(0.75); break;
-                case 12: geometry = new THREE.DodecahedronGeometry(0.85); break;
-                default: geometry = new THREE.IcosahedronGeometry(0.85);
-            }
-            
-            const material = new THREE.MeshStandardMaterial({
-                color: color,
-                roughness: 0.35,
-                metalness: 0.15,
-                flatShading: true
-            });
-            
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.castShadow = true;
-            
-            const sprite = createNumberSprite(resultValue);
-            sprite.position.y = 1.3;
-            sprite.visible = false;
-            mesh.add(sprite);
-            mesh.userData.resultSprite = sprite;
-            mesh.userData.resultValue = resultValue;
-            
-            return mesh;
-        }
-        
-        // Create floating number sprite
-        function createNumberSprite(number) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            
-            ctx.fillStyle = '#FCD34D';
-            ctx.font = 'bold 80px Cinzel, Georgia, serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetY = 3;
-            ctx.fillText(String(number), 64, 64);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-            const sprite = new THREE.Sprite(material);
-            sprite.scale.set(1.2, 1.2, 1);
-            return sprite;
-        }
-        
-        // Initialize scene
-        function initScene() {
-            const container = document.getElementById('dice-canvas-container');
-            
-            scene = new THREE.Scene();
-            
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 6, 8);
-            camera.lookAt(0, 0, 0);
-            
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.setClearColor(0x000000, 0);
-            renderer.shadowMap.enabled = true;
-            container.appendChild(renderer.domElement);
-            
-            // Lighting
-            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambient);
-            
-            const key = new THREE.DirectionalLight(0xffffff, 0.9);
-            key.position.set(4, 8, 4);
-            key.castShadow = true;
-            key.shadow.mapSize.width = 512;
-            key.shadow.mapSize.height = 512;
-            scene.add(key);
-            
-            const fill = new THREE.DirectionalLight(0x88CCCC, 0.3);
-            fill.position.set(-4, 4, -2);
-            scene.add(fill);
-            
-            // Shadow-catching ground (invisible but catches shadows)
-            const groundGeo = new THREE.PlaneGeometry(30, 30);
-            const groundMat = new THREE.ShadowMaterial({ opacity: 0.25 });
-            const ground = new THREE.Mesh(groundGeo, groundMat);
-            ground.rotation.x = -Math.PI / 2;
-            ground.position.y = -0.7;
-            ground.receiveShadow = true;
-            scene.add(ground);
-            
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-            
-            sceneReady = true;
-            console.log('🎲 Dice scene ready');
-        }
-        
-        // Easing function for smooth deceleration
-        function easeOutCubic(t) {
-            return 1 - Math.pow(1 - t, 3);
-        }
-        
-        function easeOutQuart(t) {
-            return 1 - Math.pow(1 - t, 4);
-        }
-        
-        // Main roll function
-        function rollDice3D(diceList, label, callback) {
-            if (!sceneReady) {
-                try { initScene(); } catch(e) {
-                    console.error('🎲 Scene init failed:', e);
-                    if (callback) callback();
-                    return;
-                }
-            }
-            
-            // Clear old dice
-            activeDice.forEach(d => scene.remove(d.mesh));
-            activeDice = [];
-            
-            isAnimating = true;
-            rollCallback = callback;
-            
-            // Show container
-            document.getElementById('dice-canvas-container').classList.add('active');
-            
-            // Animation parameters
-            const duration = 1200; // ms
-            const startTime = performance.now();
-            
-            // Create dice with animation data
-            const totalDice = diceList.length;
-            const spacing = 2.2;
-            const startXOffset = -(totalDice - 1) * spacing / 2;
-            
-            diceList.forEach((die, i) => {
-                const color = DICE_COLORS[die.type] || DICE_COLORS.d20;
-                let mesh;
-                
-                if (die.type === 'd6') {
-                    mesh = createD6(color, die.result);
-                } else if (die.type === 'd20') {
-                    mesh = createD20(color, die.result);
-                } else {
-                    mesh = createPolyDie(die.sides, color, die.result);
-                }
-                
-                // Starting position (off-screen left)
-                const endX = startXOffset + i * spacing;
-                const startX = -8 - i * 0.5;
-                
-                mesh.position.set(startX, 1.5, 0);
-                
-                // Random starting rotation
-                mesh.rotation.set(
-                    Math.random() * Math.PI * 2,
-                    Math.random() * Math.PI * 2,
-                    Math.random() * Math.PI * 2
-                );
-                
-                scene.add(mesh);
-                
-                // Store animation data
-                activeDice.push({
-                    mesh,
-                    startX,
-                    endX,
-                    startY: 1.5 + Math.random() * 0.5,
-                    tumbleSpeed: 8 + Math.random() * 4, // rotations during roll
-                    tumbleAxis: new THREE.Vector3(
-                        Math.random() - 0.5,
-                        Math.random() - 0.5,
-                        Math.random() - 0.5
-                    ).normalize(),
-                    delay: i * 80 // stagger the dice
-                });
-            });
-            
-            // Animation loop
-            function animate(now) {
-                const elapsed = now - startTime;
-                let allDone = true;
-                
-                activeDice.forEach(d => {
-                    const diceElapsed = Math.max(0, elapsed - d.delay);
-                    const t = Math.min(1, diceElapsed / duration);
-                    
-                    if (t < 1) allDone = false;
-                    
-                    const eased = easeOutQuart(t);
-                    
-                    // Position: roll from left to center
-                    d.mesh.position.x = d.startX + (d.endX - d.startX) * eased;
-                    
-                    // Height: slight arc then settle
-                    const arc = Math.sin(t * Math.PI) * 0.8 * (1 - t);
-                    d.mesh.position.y = 0 + arc + 0.7;
-                    
-                    // Rotation: tumble that slows down
-                    const rotationProgress = eased * d.tumbleSpeed * Math.PI * 2;
-                    const remainingTumble = (1 - eased) * d.tumbleSpeed;
-                    
-                    if (t < 0.85) {
-                        // Tumbling
-                        d.mesh.rotateOnAxis(d.tumbleAxis, 0.15 * (1 - eased));
-                    } else {
-                        // Settling - for d6, rotate to show result
-                        if (d.mesh.userData.targetRotation) {
-                            const settleT = (t - 0.85) / 0.15;
-                            const target = d.mesh.userData.targetRotation;
-                            d.mesh.rotation.x += (target.x - d.mesh.rotation.x) * 0.15;
-                            d.mesh.rotation.z += (target.z - d.mesh.rotation.z) * 0.15;
-                            d.mesh.rotation.y *= 0.9; // Reduce y rotation
-                        }
-                    }
-                    
-                    // Show result sprite when settled
-                    if (t >= 0.95 && d.mesh.userData.resultSprite) {
-                        d.mesh.userData.resultSprite.visible = true;
-                    }
-                });
-                
-                renderer.render(scene, camera);
-                
-                if (!allDone && isAnimating) {
-                    animationId = requestAnimationFrame(animate);
-                } else {
-                    // Animation complete
-                    setTimeout(finishRoll, 400);
-                }
-            }
-            
-            animationId = requestAnimationFrame(animate);
-        }
-        
-        function finishRoll() {
-            isAnimating = false;
-            if (animationId) cancelAnimationFrame(animationId);
-            
-            document.getElementById('dice-canvas-container').classList.remove('active');
-            
-            if (rollCallback) {
-                rollCallback();
-                rollCallback = null;
-            }
-        }
-        
-        // Click to skip
-        document.getElementById('dice-canvas-container').addEventListener('click', () => {
-            if (isAnimating) finishRoll();
-        });
-        
-        // ========================================
-        // Override roll functions
-        // ========================================
-        
-        function parseDiceForRoll(expr) {
-            const results = [];
-            const regex = /(\d*)d(\d+)/gi;
-            let match;
-            while ((match = regex.exec(expr)) !== null) {
-                const qty = match[1] ? parseInt(match[1]) : 1;
-                const sides = parseInt(match[2]);
-                for (let i = 0; i < qty; i++) {
-                    results.push({
-                        type: `d${sides}`,
-                        sides,
-                        result: Math.floor(Math.random() * sides) + 1
-                    });
-                }
-            }
-            return results;
-        }
-        
-        window.rollSkill = function(skillName, modifier) {
-            if (window.tryPinRoll && tryPinRoll(skillName, modifier)) return;
-            
-            const d20 = Math.floor(Math.random() * 20) + 1;
-            const total = d20 + modifier;
-            const isCrit = d20 === 20, isFumble = d20 === 1;
-            const modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
-            const critStr = isCrit ? " [CRIT SUCCESS]" : isFumble ? " [CRIT FAIL]" : "";
-            const detail = `1d20 (${d20}) ${modStr} = ${total}${critStr}`;
-            
-            rollDice3D([{ type: 'd20', sides: 20, result: d20 }], skillName, () => {
-                showRollToast(skillName, total, detail, isCrit, isFumble);
-                broadcastToGM(skillName, total.toString(), detail);
-            });
-        };
-        
-        window.rollAttack = function(weaponName, modifier, damageStr) {
-            const d20 = Math.floor(Math.random() * 20) + 1;
-            const total = d20 + modifier;
-            const isCrit = d20 === 20, isFumble = d20 === 1;
-            const modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
-            const critStr = isCrit ? " [CRIT]" : isFumble ? " [MISS]" : "";
-            const detail = `Hit: 1d20 (${d20}) ${modStr} = ${total}${critStr} | Dmg: ${damageStr}`;
-            
-            rollDice3D([{ type: 'd20', sides: 20, result: d20 }], `Attack: ${weaponName}`, () => {
-                const container = document.getElementById('roll-toast-container');
-                const toast = document.createElement('div');
-                const borderColor = isCrit ? 'border-amber-500' : isFumble ? 'border-red-500' : 'border-gray-600';
-                const totalColor = isCrit ? 'text-amber-400' : isFumble ? 'text-red-400' : 'text-white';
-                const badge = isCrit ? '<span class="bg-amber-500 text-gray-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 20</span>' 
-                          : isFumble ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 1</span>' : '';
-                
-                const safeDmg = damageStr.replace(/'/g, "\\'");
-                const safeName = weaponName.replace(/'/g, "\\'");
-                toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
-                toast.innerHTML = `
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">Attack: ${weaponName}</span>
-                        <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
-                    </div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
-                        ${badge}
-                    </div>
-                    <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700 mb-2">1d20 (${d20}) ${modStr} = ${total}${critStr}</div>
-                    <button onclick="rollDamage('${safeName}', '${safeDmg}'); this.disabled=true; this.innerText='Rolled!'; this.classList.add('opacity-50');" class="w-full bg-red-900/40 hover:bg-red-800 border border-red-900 text-red-300 px-3 py-1.5 rounded text-xs font-bold transition-colors uppercase tracking-wider">
-                        🎲 Roll Damage: ${damageStr}
-                    </button>
-                    <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
-                `;
-                container.prepend(toast);
-                setTimeout(() => {
-                    toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)';
-                    toast.style.transition = 'all 0.3s ease';
-                    setTimeout(() => toast.remove(), 300);
-                }, 15000);
-                
-                broadcastToGM(`Attack: ${weaponName}`, total.toString(), detail);
-            });
-        };
-        
-        window.rollDamage = function(weaponName, damageStr) {
-            const diceResults = parseDiceForRoll(damageStr);
-            const result = window.parseDiceAndRoll(damageStr);
-            
-            if (diceResults.length > 0) {
-                rollDice3D(diceResults, `Damage: ${weaponName}`, () => {
-                    if (result) {
-                        showRollToast(`Damage: ${weaponName}`, result.total, result.detail, false, false);
-                        broadcastToGM(`Damage: ${weaponName}`, result.total.toString(), result.detail);
-                    }
-                });
-            } else if (result) {
-                showRollToast(`Damage: ${weaponName}`, result.total, result.detail, false, false);
-                broadcastToGM(`Damage: ${weaponName}`, result.total.toString(), result.detail);
-            }
-        };
-        
-        window.logRoll = function(label, valueStr) {
-            const mod = parseInt(valueStr);
-            if (!isNaN(mod)) {
-                const d20 = Math.floor(Math.random() * 20) + 1;
-                const total = d20 + mod;
-                const isCrit = d20 === 20, isFumble = d20 === 1;
-                const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
-                const detail = `1d20 (${d20}) ${modStr} = ${total}`;
-                
-                rollDice3D([{ type: 'd20', sides: 20, result: d20 }], label, () => {
-                    showRollToast(label, total, detail, isCrit, isFumble);
-                    broadcastToGM(label, total.toString(), detail);
-                });
-            } else {
-                const diceResults = parseDiceForRoll(valueStr);
-                const result = window.parseDiceAndRoll(valueStr);
-                if (diceResults.length > 0 && result) {
-                    rollDice3D(diceResults, label, () => {
-                        showRollToast(label, result.total, result.detail, false, false);
-                        broadcastToGM(label, result.total.toString(), result.detail);
-                    });
-                }
-            }
-        };
-        
-        window.rollFlat = function() {
-            const d20 = Math.floor(Math.random() * 20) + 1;
-            rollDice3D([{ type: 'd20', sides: 20, result: d20 }], 'Flat Check', () => {
-                showRollToast('Flat Check', d20, `1d20 = ${d20}`, d20 === 20, d20 === 1);
-                broadcastToGM('Flat Check', d20.toString(), `1d20 = ${d20}`);
-            });
-        };
-        
-        window.rollCustomDice = function() {
-            const expr = document.getElementById('custom-dice').value.trim();
-            if (!expr) return;
-            
-            const diceResults = parseDiceForRoll(expr);
-            const result = window.parseDiceAndRoll(expr);
-            
-            if (diceResults.length > 0 && result) {
-                rollDice3D(diceResults, `Custom: ${expr}`, () => {
-                    showRollToast('Custom Roll', result.total, result.detail, false, false);
-                    broadcastToGM(`Custom: ${expr}`, result.total.toString(), result.detail);
-                });
-            } else if (result) {
-                showRollToast('Custom Roll', result.total, result.detail, false, false);
-                broadcastToGM(`Custom: ${expr}`, result.total.toString(), result.detail);
-            }
-        };
-        
-        console.log('🎲 3D Dice Roller ready');
-    })();
-    </script>
+
+
 </body>
 </html>

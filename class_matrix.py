@@ -776,7 +776,7 @@ base_prog = {
     17: {"ancestry_feat": 1, "skill_increase": 1},
     18: {"class_feat": 1, "skill_feat": 1},
     19: {"general_feat": 1, "skill_increase": 1},
-    20: {"class_feat": 1, "skill_feat": 1, "ability_boosts": 4}
+    20: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4}
 }
 
 # Rogue: skill feat at EVERY level, skill increase at EVERY level starting L2
