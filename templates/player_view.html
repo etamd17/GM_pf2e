@@ -7,151 +7,152 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { colors: {
-            parch: { 950:'#1C1917', 900:'#28241F', 800:'#33302A', 700:'#7A7062', 600:'#8A8279', 500:'#9E968B', 400:'#C2B9AD', 300:'#CFC5B4', 200:'#E8E0D2', 100:'#EDE4D3' },
-            ember: { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878', 700:'#2C5C5C' },
-            blood: { 300:'#FDA4AF', 400:'#FB7185', 500:'#F43F5E', 800:'#6B1525' },
-            verdant: { 400:'#4ADE80', 500:'#22C55E' },
-            frost: { 300:'#93C5FD', 400:'#60A5FA' }
+            base:    { 950:'#0f0f14', 900:'#16161e', 800:'#1e1e2a', 700:'#282838', 600:'#363648', 500:'#50506a', 400:'#8080a0', 300:'#a0a0b8', 200:'#c8c8d8', 100:'#e8e8f0' },
+            accent:  { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878' },
+            gold:    { 300:'#d4a244', 400:'#b8860b' },
+            danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' },
+            success: { 300:'#86efac', 400:'#4ade80', 500:'#22c55e' },
+            info:    { 300:'#93c5fd', 400:'#60a5fa' },
+            spell:   { 300:'#c4b5fd', 400:'#a78bfa' }
         }}}}
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-        body { font-family:'Crimson Text',Georgia,serif; background:#1C1917; color:#E8E0D2; }
-        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,120,120,0.08) 0%,transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(94,120,120,0.05) 0%,transparent 50%),#1C1917; }
-        .fn { font-family:'Cinzel',serif; }
-        .card { background:#2E2B25; border:1px solid rgba(156,139,118,0.18); transition:all .35s cubic-bezier(.4,0,.2,1); position:relative; overflow:hidden; }
-        .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:rgba(94,173,173,0.4); opacity:0; transition:opacity .35s; }
-        .card:hover { border-color:rgba(94,173,173,0.3); transform:translateY(-3px); box-shadow:0 16px 32px rgba(0,0,0,0.5),0 0 24px rgba(94,173,173,0.04); }
-        .card:hover::before { opacity:1; }
-        .hp-ring { width:48px; height:48px; position:relative; display:flex; align-items:center; justify-content:center; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
+        body { font-family:'Inter',system-ui,sans-serif; background:#0f0f14; color:#e8e8f0; }
+        .font-display { font-family:'Cinzel',serif; }
+        ::-webkit-scrollbar { width:5px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
+        .card { background:#1e1e2a; border:1px solid rgba(255,255,255,0.06); border-radius:12px; transition:all .25s; position:relative; overflow:hidden; }
+        .card:hover { border-color:rgba(94,173,173,0.2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+        .hp-ring { width:44px; height:44px; position:relative; display:flex; align-items:center; justify-content:center; }
         .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
-        .erow { transition:all .3s; border-left:3px solid transparent; }
+        .erow { transition:all .2s; border-left:3px solid transparent; }
         .erow.on { border-left-color:#5EADAD; background:rgba(94,173,173,0.04); }
-        .sdiv { display:flex; align-items:center; gap:16px; margin:2.5rem 0 1.5rem; }
-        .sdiv::before,.sdiv::after { content:''; flex:1; height:1px; background:rgba(156,139,118,0.15); }
         @keyframes glow { 0%,100%{opacity:.5} 50%{opacity:1} }
         .glow { animation:glow 2.5s ease-in-out infinite; }
-        .cb { font-family:'Cinzel',serif; font-size:9px; letter-spacing:.08em; padding:2px 7px; border-radius:3px; text-transform:uppercase; }
-        .bp { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:#2C5C5C; border:1px solid rgba(94,173,173,0.3); color:#A8DEDE; padding:8px 20px; border-radius:6px; font-size:12px; transition:all .2s; text-transform:uppercase; }
-        .bp:hover { background:#3A7878; transform:translateY(-1px); box-shadow:0 4px 12px rgba(94,173,173,0.2); }
-        .bg { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:transparent; border:1px solid rgba(156,139,118,0.3); color:#C2B9AD; padding:8px 16px; border-radius:6px; font-size:11px; transition:all .2s; text-transform:uppercase; }
-        .bg:hover { border-color:rgba(156,139,118,0.6); color:#CFC5B4; }
+        .btn-primary { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:#3A7878; border:1px solid rgba(94,173,173,0.3); color:#A8DEDE; padding:8px 20px; border-radius:6px; font-size:12px; transition:all .2s; text-transform:uppercase; }
+        .btn-primary:hover { background:#4A9696; }
+        .btn-ghost { font-size:11px; font-weight:500; background:transparent; border:1px solid rgba(255,255,255,0.08); color:#a0a0b8; padding:8px 16px; border-radius:6px; transition:all .2s; }
+        .btn-ghost:hover { border-color:rgba(255,255,255,0.15); color:#c8c8d8; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 <div class="max-w-5xl mx-auto w-full">
 
-    <!-- HEADER -->
     <div class="text-center mb-8">
-        <h1 class="fn text-3xl md:text-4xl text-ember-300 tracking-wide mb-1" style="text-shadow:0 2px 20px rgba(94,173,173,0.15)">Adventurer's Guild</h1>
-        <p class="text-parch-400 text-xs tracking-[0.25em] uppercase fn">Character Roster</p>
+        <h1 class="font-display text-2xl md:text-3xl text-accent-300 tracking-wide mb-1">Player Hub</h1>
+        <p class="text-base-500 text-xs tracking-widest uppercase">Character Roster</p>
     </div>
 
     <!-- My Character Quick Access -->
-    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:rgba(94,173,173,0.05); border:1px solid rgba(94,173,173,0.2);">
-        <span class="fn text-ember-300 text-sm tracking-wider">Welcome back, <strong id="my-char-name"></strong></span>
-        <a id="my-char-link" href="#" class="ml-3 fn text-xs tracking-wider uppercase px-4 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.15); border:1px solid rgba(94,173,173,0.3); color:#7DC4C4;">Go to My Sheet →</a>
-        <button onclick="clearMyChar()" class="ml-2 text-parch-600 text-xs hover:text-parch-400 transition-colors" title="Forget my character">✕</button>
+    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:rgba(94,173,173,0.05); border:1px solid rgba(94,173,173,0.15);">
+        <span class="text-accent-300 text-sm">Welcome back, <strong id="my-char-name"></strong></span>
+        <a id="my-char-link" href="#" class="ml-3 text-xs font-medium px-4 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">Go to My Sheet</a>
+        <button onclick="clearMyChar()" class="ml-2 text-base-600 text-xs hover:text-base-400 transition-colors" title="Forget my character">&times;</button>
     </div>
 
     <div class="flex justify-center gap-3 mb-8">
-        <a href="/map" class="bg">🗺 Battle Map</a>
-        <button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="bg">📥 Import Pathbuilder</button>
-        <a href="/player/builder" class="bp">+ Forge New Hero</a>
+        <a href="/map" class="btn-ghost">Battle Map</a>
+        <button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="btn-ghost">Import Pathbuilder</button>
+        <a href="/player/builder" class="btn-primary">+ New Character</a>
     </div>
 
     <!-- CHARACTERS -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
         {% for pc in party %}
-        <div class="card rounded-xl p-5 block relative">
+        <div class="card p-5 block relative">
             <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0"></a>
-            <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="color:#5EADAD; opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson }}?1:0.3">⭐</button>
-            <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(107,21,37,0.3); color:#FDA4AF; border:1px solid rgba(251,113,133,0.2); opacity:0.4;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">✕</button>
-            <div class="flex items-start gap-4 relative z-1 pointer-events-none">
+            <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson }}?1:0.3">&#9733;</button>
+            <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.15); opacity:0.3;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3">&times;</button>
+            <div class="flex items-start gap-3 relative z-1 pointer-events-none">
                 <div class="hp-ring shrink-0">
-                    <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(156,139,118,0.15)" stroke-width="2.5"/>
+                    <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
                     {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
-                    <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#5EADAD{% else %}#F43F5E{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
-                    <span class="fn text-ember-300 text-lg font-bold relative z-10">{{ pc.name[0] }}</span>
+                    <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#5EADAD{% else %}#ef4444{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
+                    <span class="font-display text-accent-300 text-base font-bold relative z-10">{{ pc.name[0] }}</span>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <div class="fn text-parch-100 text-lg tracking-wide leading-tight truncate">{{ pc.name }}</div>
-                    <div class="text-parch-500 text-xs tracking-wider mt-0.5">{{ pc.ancestry }} {{ pc.class_name }}</div>
-                    {% if pc.subclass %}<div class="text-parch-600 text-[11px] italic">{{ pc.subclass }}</div>{% endif %}
+                    <div class="text-base-100 font-semibold text-sm truncate">{{ pc.name }}</div>
+                    <div class="text-base-500 text-xs mt-0.5">{{ pc.ancestry }} {{ pc.class_name }}</div>
+                    {% if pc.subclass %}<div class="text-base-600 text-[11px]">{{ pc.subclass }}</div>{% endif %}
                 </div>
                 <div class="shrink-0 text-center">
-                    <div class="w-9 h-9 border border-parch-600/40 rounded flex items-center justify-center" style="background:rgba(30,25,20,0.6); clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)">
-                        <span class="fn text-ember-400 text-sm font-bold">{{ pc.level }}</span>
+                    <div class="w-8 h-8 border border-base-600/40 rounded flex items-center justify-center" style="background:rgba(15,15,20,0.5); clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)">
+                        <span class="font-display text-accent-400 text-xs font-bold">{{ pc.level }}</span>
                     </div>
-                    <div class="text-[7px] text-parch-600 uppercase tracking-[0.15em] mt-1 fn">Level</div>
+                    <div class="text-[7px] text-base-600 uppercase tracking-widest mt-0.5">Lvl</div>
                 </div>
             </div>
-            <div class="flex items-center justify-between mt-4 pt-3 relative z-1 pointer-events-none" style="border-top:1px solid rgba(156,139,118,0.1)">
-                <div class="flex gap-3 text-[10px] text-parch-500 fn tracking-wider">
-                    <span>AC <span class="text-frost-400 font-bold">{{ pc.ac }}</span></span>
-                    <span>Fort <span class="text-verdant-400 font-bold">+{{ pc.fort }}</span></span>
-                    <span>Ref <span class="text-frost-300 font-bold">+{{ pc.ref }}</span></span>
-                    <span>Will <span class="text-purple-300 font-bold">+{{ pc.will }}</span></span>
+            <div class="flex items-center justify-between mt-3 pt-3 relative z-1 pointer-events-none" style="border-top:1px solid rgba(255,255,255,0.04)">
+                <div class="flex gap-3 text-[10px] text-base-500 font-medium">
+                    <span>AC <span class="text-info-400 font-bold">{{ pc.ac }}</span></span>
+                    <span>Fort <span class="text-success-400 font-bold">+{{ pc.fort }}</span></span>
+                    <span>Ref <span class="text-info-300 font-bold">+{{ pc.ref }}</span></span>
+                    <span>Will <span class="text-spell-300 font-bold">+{{ pc.will }}</span></span>
                 </div>
-                <div class="fn"><span class="text-sm font-bold {% if pc.current_hp == 0 %}text-blood-500{% elif pc.current_hp < pc.hp * 0.5 %}text-ember-400{% else %}text-verdant-400{% endif %}">{{ pc.current_hp }}</span><span class="text-parch-600 text-xs">/{{ pc.hp }}</span></div>
+                <div><span class="text-sm font-bold {% if pc.current_hp == 0 %}text-danger-500{% elif pc.current_hp < pc.hp * 0.5 %}text-gold-300{% else %}text-success-400{% endif %}">{{ pc.current_hp }}</span><span class="text-base-600 text-xs">/{{ pc.hp }}</span></div>
             </div>
         </div>
         {% else %}
         <div class="col-span-full text-center py-16">
-            <div class="fn text-parch-600 text-lg tracking-wider mb-2">No Heroes Yet</div>
-            <p class="text-parch-500 text-sm">Create a character or import from Pathbuilder to begin.</p>
+            <div class="text-base-500 font-semibold mb-2">No Characters Yet</div>
+            <p class="text-base-600 text-sm">Create a character or import from Pathbuilder to begin.</p>
         </div>
         {% endfor %}
     </div>
 
     <!-- ENCOUNTER -->
-    <div class="sdiv"><span class="fn text-parch-500 text-xs tracking-[0.2em] uppercase">Active Encounter</span></div>
-    
+    <div class="flex items-center gap-4 my-8">
+        <div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div>
+        <span class="text-base-500 text-xs tracking-widest uppercase font-medium">Active Encounter</span>
+        <div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div>
+    </div>
+
     <div class="flex justify-between items-center mb-4">
-        <div class="flex items-center gap-3"><span class="w-2 h-2 bg-verdant-400 rounded-full animate-pulse"></span><span class="text-parch-500 text-xs tracking-wider uppercase fn">Live</span></div>
-        <div id="round-badge" class="hidden fn text-xs text-parch-400 tracking-wider">Round <span id="round-number" class="text-ember-300 text-lg font-bold ml-1">1</span></div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 bg-success-400 rounded-full animate-pulse"></span><span class="text-base-500 text-xs font-medium uppercase">Live</span></div>
+        <div id="round-badge" class="hidden text-xs text-base-400">Round <span id="round-number" class="text-accent-300 text-lg font-bold ml-1">1</span></div>
     </div>
 
-    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center" style="background:rgba(94,173,173,0.05); border:1px solid rgba(94,173,173,0.15)">
-        <span class="fn text-ember-300 text-lg tracking-wide glow" id="turn-banner-name">---</span>
-        <span class="text-parch-500 text-xs tracking-wider ml-2">is acting</span>
+    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center" style="background:rgba(94,173,173,0.04); border:1px solid rgba(94,173,173,0.1)">
+        <span class="font-display text-accent-300 text-lg tracking-wide glow" id="turn-banner-name">---</span>
+        <span class="text-base-500 text-xs ml-2">is acting</span>
     </div>
 
-    <div class="rounded-xl overflow-hidden" style="background:#252220; border:1px solid rgba(156,139,118,0.12)">
+    <div class="rounded-xl overflow-hidden" style="background:#16161e; border:1px solid rgba(255,255,255,0.06)">
         <table class="w-full text-left border-collapse">
-            <thead><tr style="border-bottom:1px solid rgba(156,139,118,0.12)">
-                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-14 text-center">Init</th>
-                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase">Combatant</th>
-                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-40">Status</th>
-                <th class="px-4 py-3 fn text-parch-500 text-[10px] tracking-[0.15em] uppercase w-1/4">Conditions</th>
+            <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-14 text-center">Init</th>
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase">Combatant</th>
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-40">Status</th>
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-1/4">Conditions</th>
             </tr></thead>
             <tbody id="tracker-body">
-                <tr><td colspan="4" class="p-10 text-center text-parch-600 italic text-sm">The battlefield is still. Awaiting the GM...</td></tr>
+                <tr><td colspan="4" class="p-10 text-center text-base-600 italic text-sm">Awaiting the GM...</td></tr>
             </tbody>
         </table>
     </div>
 </div>
 
 <!-- IMPORT MODAL -->
-<div id="import-modal" class="fixed inset-0 bg-black/85 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="rounded-xl w-full max-w-lg p-6" style="background:#2E2B25; border:1px solid rgba(156,139,118,0.25)">
+<div id="import-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:#1e1e2a; border:1px solid rgba(255,255,255,0.08)">
         <div class="flex justify-between items-center mb-5">
-            <h3 class="fn text-ember-300 text-lg tracking-wide">Import from Pathbuilder</h3>
-            <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-parch-600 hover:text-parch-300 text-xl">&times;</button>
+            <h3 class="font-display text-accent-300 text-lg">Import from Pathbuilder</h3>
+            <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
         </div>
-        <p class="text-parch-400 text-sm mb-5 leading-relaxed">Export your character as JSON, then upload or paste below.</p>
+        <p class="text-base-400 text-sm mb-5">Export your character as JSON from Pathbuilder, then upload or paste below.</p>
         <div class="space-y-4">
-            <div class="rounded-lg p-6 text-center cursor-pointer" style="border:2px dashed rgba(156,139,118,0.25); background:rgba(12,10,8,0.5)" onclick="document.getElementById('pb-file-input').click()">
+            <div class="rounded-lg p-6 text-center cursor-pointer" style="border:2px dashed rgba(255,255,255,0.08); background:rgba(15,15,20,0.5)" onclick="document.getElementById('pb-file-input').click()">
                 <input type="file" id="pb-file-input" accept=".json" class="hidden" onchange="handleFileImport(this)">
-                <div class="text-2xl mb-2 opacity-40">📁</div>
-                <div class="text-parch-400 text-sm">Click to upload JSON file</div>
+                <div class="text-base-500 text-sm">Click to upload JSON file</div>
             </div>
-            <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(156,139,118,0.2)"></div><span class="text-[10px] text-parch-600 uppercase tracking-widest fn">or paste</span><div class="flex-1 h-px" style="background:rgba(156,139,118,0.2)"></div></div>
-            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-parch-200 focus:outline-none resize-none" style="background:#1C1917; border:1px solid rgba(156,139,118,0.2)"></textarea>
-            <div id="import-status" class="hidden text-sm font-bold p-3 rounded-lg"></div>
+            <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div><span class="text-[10px] text-base-600 uppercase tracking-widest">or paste</span><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div></div>
+            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0f0f14; border:1px solid rgba(255,255,255,0.08)"></textarea>
+            <div id="import-status" class="hidden text-sm font-semibold p-3 rounded-lg"></div>
             <div class="flex gap-2 justify-end">
-                <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="bg">Cancel</button>
-                <button onclick="submitPastedImport()" class="bp">Import</button>
+                <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="btn-ghost">Cancel</button>
+                <button onclick="submitPastedImport()" class="btn-primary">Import</button>
             </div>
         </div>
     </div>
@@ -166,15 +167,8 @@
             if (data.success) window.location.reload();
         } catch(e) { alert('Error deleting character.'); }
     }
-
-    function setMyChar(name) {
-        localStorage.setItem('pf2e_my_char', name);
-        loadMyChar();
-    }
-    function clearMyChar() {
-        localStorage.removeItem('pf2e_my_char');
-        document.getElementById('my-char-bar').classList.add('hidden');
-    }
+    function setMyChar(name) { localStorage.setItem('pf2e_my_char', name); loadMyChar(); }
+    function clearMyChar() { localStorage.removeItem('pf2e_my_char'); document.getElementById('my-char-bar').classList.add('hidden'); }
     function loadMyChar() {
         const name = localStorage.getItem('pf2e_my_char');
         if (name) {
@@ -185,6 +179,17 @@
     }
     loadMyChar();
 
+    // SSE for live encounter updates
+    const evtSrc = new EventSource('/api/events');
+    evtSrc.addEventListener('encounter_update', e => {
+        try {
+            const d = JSON.parse(e.data);
+            renderTracker(d.encounter, d.round, d.active_name);
+        } catch(err) {}
+    });
+    evtSrc.onerror = () => { evtSrc.close(); setTimeout(() => location.reload(), 10000); };
+
+    // Fallback polling
     async function fetchPlayerState() {
         try {
             const r = await fetch('/api/player_state'); const d = await r.json();
@@ -193,28 +198,29 @@
     }
     function renderTracker(enc, round, activeName) {
         const tb = document.getElementById('tracker-body');
-        if (!enc||!enc.length) { tb.innerHTML='<tr><td colspan="4" class="p-10 text-center text-parch-600 italic text-sm">The battlefield is still. Awaiting the GM...</td></tr>'; document.getElementById('round-badge').classList.add('hidden'); document.getElementById('turn-banner').classList.add('hidden'); return; }
+        if (!enc||!enc.length) { tb.innerHTML='<tr><td colspan="4" class="p-10 text-center text-base-600 italic text-sm">Awaiting the GM...</td></tr>'; document.getElementById('round-badge').classList.add('hidden'); document.getElementById('turn-banner').classList.add('hidden'); return; }
         if (round) { document.getElementById('round-number').innerText=round; document.getElementById('round-badge').classList.remove('hidden'); }
         if (activeName) { document.getElementById('turn-banner-name').innerText=activeName; document.getElementById('turn-banner').classList.remove('hidden'); }
         let h='';
         enc.forEach(c => {
             let rc=c.is_active?'erow on':'erow';
-            let nc=c.is_pc?(c.is_active?'text-parch-100':'text-parch-300'):(c.is_active?'text-blood-400':'text-blood-400/60');
-            let nm=`<span class="fn tracking-wide ${nc}">${esc(c.name)}</span>`;
-            if(!c.is_pc) nm+=' <span class="text-[8px] text-blood-500 uppercase tracking-widest fn ml-1">Enemy</span>';
+            let nc=c.is_pc?(c.is_active?'text-base-100':'text-base-300'):(c.is_active?'text-danger-400':'text-danger-400/60');
+            let nm=`<span class="font-medium ${nc}">${esc(c.name)}</span>`;
+            if(!c.is_pc) nm+=' <span class="text-[8px] text-danger-400/60 uppercase tracking-widest ml-1">Enemy</span>';
             let st='';
-            if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#5EADAD':'#F43F5E';st=`<span class="fn text-sm ${c.hp_color}">${c.current_hp}<span class="text-parch-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(156,139,118,0.1)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
-            else if(c.hp_status) st=`<span class="fn text-xs uppercase tracking-wider ${c.hp_color||'text-parch-600'}">${esc(c.hp_status)}</span>`;
+            if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#5EADAD':'#ef4444';st=`<span class="text-sm font-bold" style="color:${bc}">${c.current_hp}<span class="text-base-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(255,255,255,0.04)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
+            else if(c.hp_status) st=`<span class="text-xs uppercase tracking-wider font-medium ${c.hp_color||'text-base-600'}">${esc(c.hp_status)}</span>`;
             let cd='<div class="flex flex-wrap gap-1">';
-            if(c.conditions) for(const[k,v] of Object.entries(c.conditions)){if(v===true)cd+=`<span class="cb bg-blood-800/30 text-blood-300 border border-blood-800/30">${esc(k.replace('_','-'))}</span>`;else if(typeof v==='number'&&v>0)cd+=`<span class="cb bg-blood-800/30 text-blood-300 border border-blood-800/30">${esc(k)} ${v}</span>`;}
+            if(c.conditions) for(const[k,v] of Object.entries(c.conditions)){if(v===true)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k.replace('_','-'))}</span>`;else if(typeof v==='number'&&v>0)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k)} ${v}</span>`;}
             cd+='</div>';
-            h+=`<tr class="${rc}" style="border-bottom:1px solid rgba(156,139,118,0.08)"><td class="px-4 py-3 text-center fn text-parch-500 text-sm">${c.initiative}</td><td class="px-4 py-3">${nm}</td><td class="px-4 py-3">${st}</td><td class="px-4 py-3">${cd}</td></tr>`;
+            h+=`<tr class="${rc}" style="border-bottom:1px solid rgba(255,255,255,0.04)"><td class="px-4 py-2.5 text-center text-base-500 text-sm font-mono">${c.initiative}</td><td class="px-4 py-2.5">${nm}</td><td class="px-4 py-2.5">${st}</td><td class="px-4 py-2.5">${cd}</td></tr>`;
         });
         tb.innerHTML=h;
     }
     function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-    setInterval(fetchPlayerState,2000); fetchPlayerState();
-    function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(244,63,94,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#FDA4AF':'#86EFAC';el.style.border=e?'1px solid rgba(244,63,94,0.2)':'1px solid rgba(34,197,94,0.2)';el.innerText=m;}
+    setInterval(fetchPlayerState,5000); fetchPlayerState();
+
+    function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#fca5a5':'#86efac';el.style.border=e?'1px solid rgba(239,68,68,0.15)':'1px solid rgba(34,197,94,0.15)';el.innerText=m;}
     async function handleFileImport(i){if(!i.files||!i.files[0])return;const f=new FormData();f.append('file',i.files[0]);try{const r=await fetch('/api/import_pathbuilder',{method:'POST',body:f});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
     async function submitPastedImport(){const raw=document.getElementById('pb-json-paste').value.trim();if(!raw){showImportStatus('Paste JSON first.',true);return;}let p;try{p=JSON.parse(raw);}catch(e){showImportStatus('Invalid JSON.',true);return;}try{const r=await fetch('/api/import_pathbuilder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
 </script>

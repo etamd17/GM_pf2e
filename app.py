@@ -186,6 +186,28 @@ def _broadcast_pc_state(pc_name):
     if pc_name in PARTY_LIBRARY:
         pc = PARTY_LIBRARY[pc_name]
         pct = pc.current_hp / pc.hp if pc.hp > 0 else 0
+        # Build spell slot summary for GM visibility
+        spell_summary = []
+        for caster in getattr(pc, 'spell_casters', []):
+            caster_data = {'name': caster.get('name', ''), 'tradition': caster.get('tradition', ''), 'levels': []}
+            for lvl in caster.get('levels', []):
+                caster_data['levels'].append({
+                    'level': lvl.get('level', 0),
+                    'label': lvl.get('label', ''),
+                    'slots': lvl.get('slots', 0),
+                    'spells': [{'name': s.get('name', '')} for s in lvl.get('spells', [])]
+                })
+            spell_summary.append(caster_data)
+        # Get expended slots from disk
+        expended_slots = {}
+        try:
+            fp = get_pc_file_path(pc_name)
+            if fp and os.path.exists(fp):
+                with open(fp, 'r', encoding='utf-8') as f:
+                    build = json.load(f).get('build', {})
+                    expended_slots = build.get('expended_slots', {})
+        except Exception:
+            pass
         sse_broadcast('pc_update', {
             'name': pc_name,
             'current_hp': pc.current_hp,
@@ -194,6 +216,8 @@ def _broadcast_pc_state(pc_name):
             'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
             'focus': getattr(pc, 'current_focus', 0),
             'hero_points': getattr(pc, 'hero_points', 1),
+            'spell_casters': spell_summary,
+            'expended_slots': expended_slots,
         })
 
 def _broadcast_encounter_state():
@@ -1538,10 +1562,13 @@ class Character:
             total_hit = stat_mod + prof_bonus + abp_hit - self.get_status_penalty(attack_stat) + self.highest_buff + self.get_rule_mod('attack') - circ_pen
             
             map_penalty = -4 if 'agile' in traits_lower else -5
+            second_hit = total_hit + map_penalty
+            third_hit = total_hit + (map_penalty * 2)
+            fmt = lambda v: f"+{v}" if v >= 0 else str(v)
             strikes = [
-                {'label': f"+{total_hit}" if total_hit >= 0 else str(total_hit), 'mod': total_hit},
-                {'label': f"{map_penalty} ({total_hit + map_penalty})", 'mod': total_hit + map_penalty},
-                {'label': f"{map_penalty * 2} ({total_hit + (map_penalty * 2)})", 'mod': total_hit + (map_penalty * 2)}
+                {'label': fmt(total_hit), 'mod': total_hit},
+                {'label': fmt(second_hit), 'mod': second_hit},
+                {'label': fmt(third_hit), 'mod': third_hit}
             ]
             
             base_dmg = safe_str(w.get('damage', '1d4'))
@@ -2426,8 +2453,17 @@ def load_libraries():
                 w['category'] = cat
     
     MONSTER_LIBRARY.clear()
-    if os.path.exists(MONSTER_DIR):
-        for root, dirs, files in os.walk(MONSTER_DIR):
+    # Load monsters from all available directories:
+    # 1. DATA_DIR/monster_data (persistent volume on Railway — user-added monsters)
+    # 2. BASE_DIR/monster_data (repo-bundled bestiaries — always present)
+    monster_dirs = [MONSTER_DIR]
+    repo_monster_dir = os.path.join(BASE_DIR, 'monster_data')
+    if repo_monster_dir != MONSTER_DIR and os.path.exists(repo_monster_dir):
+        monster_dirs.append(repo_monster_dir)
+    for mdir in monster_dirs:
+        if not os.path.exists(mdir):
+            continue
+        for root, dirs, files in os.walk(mdir):
             for file in files:
                 if file.endswith('.json') and not file.startswith('_'):
                     file_path = os.path.join(root, file)
@@ -2436,11 +2472,13 @@ def load_libraries():
                         print(f"[LOAD ERROR] Monster {file}: {err}")
                         continue
                     try:
-                        if isinstance(data, dict) and ('system' in data or data.get('type') == 'npc'): 
-                            rel_path = os.path.relpath(file_path, MONSTER_DIR)
-                            MONSTER_LIBRARY[rel_path] = Monster(data, rel_path)
+                        if isinstance(data, dict) and ('system' in data or data.get('type') == 'npc'):
+                            rel_path = os.path.relpath(file_path, mdir)
+                            if rel_path not in MONSTER_LIBRARY:  # Don't overwrite user-added monsters
+                                MONSTER_LIBRARY[rel_path] = Monster(data, rel_path)
                     except Exception as e:
                         print(f"[LOAD ERROR] Monster {file}: {e}")
+    print(f"[STARTUP] Loaded {len(MONSTER_LIBRARY)} monsters from {len(monster_dirs)} director{'ies' if len(monster_dirs) > 1 else 'y'}")
     
     PARTY_LIBRARY.clear()
     if not os.path.exists(PARTY_DIR): os.makedirs(PARTY_DIR) 
@@ -2546,28 +2584,33 @@ def gm_login():
             session['gm_authenticated'] = True
             return redirect(request.args.get('next', '/gm'))
         return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-            <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
-            .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
-            h1{font-family:'Cinzel',serif;color:#F43F5E;font-size:18px;margin-bottom:8px;}
-            p{color:#9E968B;font-size:13px;}
-            input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin:16px 0;box-sizing:border-box;}
-            button{width:100%;padding:12px;border-radius:6px;border:none;background:#265050;color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
-            </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
+            <title>GM Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
+            <style>body{font-family:'Inter',system-ui,sans-serif;background:#0f0f14;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+            .box{background:#1e1e2a;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:40px;max-width:340px;width:100%;text-align:center;}
+            h1{font-family:'Cinzel',serif;color:#ef4444;font-size:16px;margin-bottom:8px;}
+            p{color:#8080a0;font-size:13px;}
+            input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0f0f14;color:#e8e8f0;font-size:14px;margin:16px 0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+            input:focus{outline:none;border-color:rgba(94,173,173,0.3);}
+            button{width:100%;padding:10px;border-radius:6px;border:none;background:#3A7878;color:#A8DEDE;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.2s;}
+            button:hover{background:#4A9696;}
+            </style></head>
             <body><div class="box"><h1>Wrong Password</h1><p>Try again.</p>
             <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
-            <button type="submit">Enter the Vault</button></form></div></body></html>'''
+            <button type="submit">Sign In</button></form></div></body></html>'''
     return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-        <title>GM Login</title><style>body{font-family:Georgia,serif;background:#1C1917;color:#EDE5D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
-        .box{background:#2E2B25;border:1px solid rgba(168,156,139,0.25);border-radius:12px;padding:40px;max-width:360px;width:100%;text-align:center;}
-        h1{font-family:'Cinzel',serif;color:#7DC4C4;font-size:22px;margin-bottom:4px;}
-        p{color:#9E968B;font-size:13px;margin-bottom:20px;}
-        input{width:100%;padding:12px;border-radius:6px;border:1px solid rgba(168,156,139,0.2);background:#1C1917;color:#EDE5D8;font-size:14px;margin-bottom:16px;box-sizing:border-box;}
-        button{width:100%;padding:12px;border-radius:6px;border:none;background:#265050;color:#A8DEDE;font-family:'Cinzel',serif;font-size:14px;cursor:pointer;}
-        button:hover{background:#3A7878;}
-        </style><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&display=swap" rel="stylesheet"></head>
+        <title>GM Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
+        <style>body{font-family:'Inter',system-ui,sans-serif;background:#0f0f14;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+        .box{background:#1e1e2a;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:40px;max-width:340px;width:100%;text-align:center;}
+        h1{font-family:'Cinzel',serif;color:#7DC4C4;font-size:18px;margin-bottom:4px;}
+        p{color:#8080a0;font-size:13px;margin-bottom:20px;}
+        input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0f0f14;color:#e8e8f0;font-size:14px;margin-bottom:16px;box-sizing:border-box;font-family:'Inter',sans-serif;}
+        input:focus{outline:none;border-color:rgba(94,173,173,0.3);}
+        button{width:100%;padding:10px;border-radius:6px;border:none;background:#3A7878;color:#A8DEDE;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.2s;}
+        button:hover{background:#4A9696;}
+        </style></head>
         <body><div class="box"><h1>GM Access</h1><p>This area is restricted to the Game Master.</p>
         <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
-        <button type="submit">Enter the Vault</button></form></div></body></html>'''
+        <button type="submit">Sign In</button></form></div></body></html>'''
 
 @app.route('/gm/logout')
 def gm_logout():
@@ -2584,51 +2627,50 @@ def gm_hub():
     return f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>GM Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body {{ font-family:'Crimson Text',Georgia,serif; background:#1C1917; color:#EDE5D8; }}
-        body::before {{ content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 30% 20%,rgba(94,120,120,0.08) 0%,transparent 60%),#1C1917; }}
-        .fn {{ font-family:'Cinzel',serif; }}
-        .gm-card {{ background:#2E2B25; border:1px solid rgba(156,139,118,0.18); border-radius:12px; padding:24px; transition:all 0.3s; }}
-        .gm-card:hover {{ border-color:rgba(94,173,173,0.3); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
+        body {{ font-family:'Inter',system-ui,sans-serif; background:#0f0f14; color:#e8e8f0; }}
+        .font-display {{ font-family:'Cinzel',serif; }}
+        .gm-card {{ background:#1e1e2a; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:20px; transition:all 0.2s; }}
+        .gm-card:hover {{ border-color:rgba(94,173,173,0.2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
     </style></head>
     <body class="min-h-screen flex items-center justify-center p-6">
     <div class="max-w-2xl w-full">
         <div class="text-center mb-10">
-            <h1 class="fn text-3xl text-amber-300 tracking-wide mb-2" style="text-shadow:0 2px 20px rgba(94,173,173,0.15);">Game Master</h1>
-            <p class="text-sm" style="color:#9E968B;">Dashboard &amp; Tools</p>
+            <h1 class="font-display text-2xl tracking-wide mb-2" style="color:#7DC4C4;">Game Master</h1>
+            <p class="text-xs" style="color:#50506a;">Dashboard &amp; Tools</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
             <a href="/party" class="gm-card block">
-                <div class="fn text-lg mb-1" style="color:#7DC4C4;">Party View</div>
-                <p class="text-sm" style="color:#9E968B;">Manage HP, conditions, and party overview</p>
-                <span class="fn text-xs mt-2 block" style="color:#8A8279;">{party_count} characters loaded</span>
+                <div class="font-semibold text-sm mb-1" style="color:#7DC4C4;">Party View</div>
+                <p class="text-xs" style="color:#8080a0;">HP, conditions, spells at a glance</p>
+                <span class="text-[10px] mt-2 block" style="color:#50506a;">{party_count} characters loaded</span>
             </a>
             <a href="/tracker" class="gm-card block">
-                <div class="fn text-lg mb-1" style="color:#D4A574;">Encounter Tracker</div>
-                <p class="text-sm" style="color:#9E968B;">Initiative, turns, HP, and conditions</p>
-                <span class="fn text-xs mt-2 block" style="color:#8A8279;">{encounter_count} combatants active</span>
+                <div class="font-semibold text-sm mb-1" style="color:#d4a244;">Encounter Tracker</div>
+                <p class="text-xs" style="color:#8080a0;">Initiative, turns, HP, and conditions</p>
+                <span class="text-[10px] mt-2 block" style="color:#50506a;">{encounter_count} combatants active</span>
             </a>
             <a href="/encounter_builder" class="gm-card block">
-                <div class="fn text-lg mb-1" style="color:#FBBF24;">Encounter Builder</div>
-                <p class="text-sm" style="color:#9E968B;">Search monsters, build balanced encounters</p>
-                <span class="fn text-xs mt-2 block" style="color:#8A8279;">{monster_count} monsters in library</span>
+                <div class="font-semibold text-sm mb-1" style="color:#FBBF24;">Encounter Builder</div>
+                <p class="text-xs" style="color:#8080a0;">Search monsters, build balanced encounters</p>
+                <span class="text-[10px] mt-2 block" style="color:#50506a;">{monster_count} monsters in library</span>
             </a>
             <a href="/gmscreen" class="gm-card block">
-                <div class="fn text-lg mb-1" style="color:#C4B5FD;">GM Screen</div>
-                <p class="text-sm" style="color:#9E968B;">Quick reference tables and rules</p>
+                <div class="font-semibold text-sm mb-1" style="color:#a78bfa;">GM Screen</div>
+                <p class="text-xs" style="color:#8080a0;">Quick reference tables and rules</p>
             </a>
             <a href="/generator" class="gm-card block">
-                <div class="fn text-lg mb-1" style="color:#86EFAC;">Generator</div>
-                <p class="text-sm" style="color:#9E968B;">NPCs, loot, and encounter ideas</p>
+                <div class="font-semibold text-sm mb-1" style="color:#4ade80;">Generator</div>
+                <p class="text-xs" style="color:#8080a0;">NPCs, loot, and encounter ideas</p>
             </a>
             <a href="/player" class="gm-card block">
-                <div class="fn text-lg mb-1" style="color:#FDA4AF;">Player Hub</div>
-                <p class="text-sm" style="color:#9E968B;">View what your players see</p>
+                <div class="font-semibold text-sm mb-1" style="color:#fca5a5;">Player Hub</div>
+                <p class="text-xs" style="color:#8080a0;">View what your players see</p>
             </a>
         </div>
         <div class="text-center">
-            <a href="/gm/logout" class="fn text-xs tracking-wider uppercase" style="color:#8A8279;">Logout</a>
+            <a href="/gm/logout" class="text-xs font-medium" style="color:#50506a;">Logout</a>
         </div>
     </div></body></html>'''
 
@@ -2641,16 +2683,74 @@ def tracker_view():
     party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
     encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
     diff_label, diff_color = get_difficulty_label(encounter_xp)
-    return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, encounter=ACTIVE_ENCOUNTER, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS)
+    initial_state = _get_tracker_state()
+    return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS)
+
+def _is_ajax():
+    return request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json or request.content_type == 'application/json'
+
+def _tracker_json_response():
+    """Return full tracker state as JSON for AJAX calls."""
+    return jsonify(_get_tracker_state())
+
+def _get_tracker_state():
+    """Build the full tracker state dict."""
+    active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+    combatants = []
+    for i, c in enumerate(ACTIVE_ENCOUNTER):
+        entry = {
+            'instance_id': c.instance_id, 'name': c.name, 'is_pc': c.is_pc,
+            'initiative': c.initiative, 'is_active': (i == TURN_INDEX),
+            'level': c.level, 'ac': c.ac, 'current_hp': c.current_hp, 'max_hp': c.hp,
+            'fort': c.fort, 'ref': c.ref, 'will': c.will,
+            'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
+            'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
+            'persistent_damage': getattr(c, 'persistent_damage', ''),
+            'elite_weak': getattr(c, 'elite_weak', 0),
+            'delaying': getattr(c, 'delaying', False),
+            'base_ac': getattr(c, 'base_ac', c.ac),
+        }
+        hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0
+        entry['hp_pct'] = round(hp_pct)
+        if c.is_pc:
+            entry['strikes'] = [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(c, 'attacks', [])]
+            entry['feats'] = [{'name': f['name'], 'desc': f.get('desc', '')} for f in getattr(c, 'feats', [])]
+        else:
+            entry['strikes'] = [{'name': s['name'], 'hit': f"+{s['bonus']}" if s['bonus'] >= 0 else str(s['bonus']), 'damage': s['damage']} for s in getattr(c, 'strikes', [])]
+            entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
+            entry['immunities'] = getattr(c, 'immunities', [])
+            entry['resistances'] = getattr(c, 'resistances', [])
+            entry['weaknesses'] = getattr(c, 'weaknesses', [])
+        combatants.append(entry)
+    party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
+    encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
+    diff_label, diff_color = get_difficulty_label(encounter_xp)
+    return {
+        'combatants': combatants, 'round': ROUND_NUMBER, 'turn_index': TURN_INDEX,
+        'active_name': active_name, 'encounter_xp': encounter_xp,
+        'diff_label': diff_label, 'diff_color': diff_color, 'party_level': party_level,
+    }
+
+@app.route('/api/tracker_state')
+def api_tracker_state():
+    """GET endpoint for full tracker state (AJAX polling fallback)."""
+    return _tracker_json_response()
 
 @app.route('/api/add_combatant', methods=['POST'])
 def add_combatant():
-    c_type = request.form.get('type')
-    path = request.form.get('path')
-    if c_type == 'monster' and path in MONSTER_LIBRARY: ACTIVE_ENCOUNTER.append(copy.deepcopy(MONSTER_LIBRARY[path]).__setattr__('instance_id', str(uuid.uuid4())) or copy.deepcopy(MONSTER_LIBRARY[path]))
-    elif c_type == 'pc' and path in PARTY_LIBRARY: ACTIVE_ENCOUNTER.append(copy.deepcopy(PARTY_LIBRARY[path]).__setattr__('instance_id', str(uuid.uuid4())) or copy.deepcopy(PARTY_LIBRARY[path]))
-    if ACTIVE_ENCOUNTER: ACTIVE_ENCOUNTER[-1].instance_id = str(uuid.uuid4())
+    c_type = request.form.get('type') or (request.json or {}).get('type')
+    path = request.form.get('path') or (request.json or {}).get('path')
+    if c_type == 'monster' and path in MONSTER_LIBRARY:
+        new_c = copy.deepcopy(MONSTER_LIBRARY[path])
+        new_c.instance_id = str(uuid.uuid4())
+        ACTIVE_ENCOUNTER.append(new_c)
+    elif c_type == 'pc' and path in PARTY_LIBRARY:
+        new_c = copy.deepcopy(PARTY_LIBRARY[path])
+        new_c.instance_id = str(uuid.uuid4())
+        ACTIVE_ENCOUNTER.append(new_c)
     _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/add_party', methods=['POST'])
@@ -2660,6 +2760,8 @@ def add_party():
         new_c.instance_id = str(uuid.uuid4())
         ACTIVE_ENCOUNTER.append(new_c)
     _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/remove_combatant/<instance_id>', methods=['POST'])
@@ -2669,6 +2771,8 @@ def remove_combatant(instance_id):
     if len(ACTIVE_ENCOUNTER) > 0 and TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = len(ACTIVE_ENCOUNTER) - 1
     elif len(ACTIVE_ENCOUNTER) == 0: TURN_INDEX = 0
     _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/clear_encounter', methods=['POST'])
@@ -2679,6 +2783,8 @@ def clear_encounter():
         _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
     ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
     _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/combat_log')
@@ -2724,6 +2830,7 @@ def adjust_hp(instance_id):
                 _broadcast_encounter_state()
                 break
     except ValueError: pass
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/adjust_party_hp/<pc_name>', methods=['POST'])
@@ -3105,42 +3212,52 @@ def toggle_condition(instance_id):
             _persist_encounter_state()
             _broadcast_encounter_state()
             break
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/set_persistent_damage/<instance_id>', methods=['POST'])
 def set_persistent_damage(instance_id):
+    pd_val = request.form.get('persistent_damage', '') or (request.json or {}).get('persistent_damage', '')
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id:
-            c.persistent_damage = request.form.get('persistent_damage', '')
+            c.persistent_damage = pd_val
             if c.is_pc and c.name in PARTY_LIBRARY: PARTY_LIBRARY[c.name].persistent_damage = c.persistent_damage
             _persist_encounter_state()
+            _broadcast_encounter_state()
             break
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/toggle_elite_weak/<instance_id>', methods=['POST'])
 def toggle_elite_weak(instance_id):
-    mode = request.form.get('mode', 'normal')  # 'elite', 'weak', or 'normal'
+    mode = request.form.get('mode', 'normal') or (request.json or {}).get('mode', 'normal')
     mode_val = {'elite': 1, 'weak': -1, 'normal': 0}.get(mode, 0)
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id and not c.is_pc and hasattr(c, 'apply_elite_weak'):
             c.apply_elite_weak(mode_val)
             _persist_encounter_state()
+            _broadcast_encounter_state()
             break
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/update_initiative/<instance_id>', methods=['POST'])
 def update_initiative(instance_id):
-    try: init_val = int(request.form.get('initiative', 0))
+    try: init_val = int(request.form.get('initiative', 0) or (request.json or {}).get('initiative', 0))
     except ValueError: init_val = 0
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id: c.initiative = init_val; break
-    _sort_encounter(); _persist_encounter_state(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
+    return redirect(url_for('tracker_view'))
 
 @app.route('/api/roll_npc_initiative', methods=['POST'])
 def roll_npc_initiative():
     for c in ACTIVE_ENCOUNTER:
         if not c.is_pc: c.initiative = random.randint(1, 20) + getattr(c, 'perception', 0)
-    _sort_encounter(); _persist_encounter_state(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
+    return redirect(url_for('tracker_view'))
 
 @app.route('/api/roll_all_initiative', methods=['POST'])
 def roll_all_initiative():
@@ -3197,7 +3314,9 @@ def roll_all_initiative():
 
 @app.route('/api/sort_initiative', methods=['POST'])
 def sort_initiative():
-    _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state(); return redirect(url_for('tracker_view'))
+    _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
+    return redirect(url_for('tracker_view'))
 
 @app.route('/api/reorder_initiative', methods=['POST'])
 def reorder_initiative():
@@ -3299,6 +3418,7 @@ def cycle_turn(direction):
     _combat_log(f"Round {ROUND_NUMBER}: {current_name}'s turn", 'turn')
     _persist_encounter_state()
     _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 TURN_REMINDERS = []  # List of reminder dicts for active combatant
@@ -3420,40 +3540,40 @@ def delay_turn(instance_id):
                     old_index = TURN_INDEX
                 _generate_turn_reminders()
             _persist_encounter_state()
+            _broadcast_encounter_state()
             break
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/reenter_initiative/<instance_id>', methods=['POST'])
 def reenter_initiative(instance_id):
     """Re-enter a delaying combatant just before the current active combatant."""
     global TURN_INDEX
-    # Find the delaying combatant
     delay_idx = None
     for i, c in enumerate(ACTIVE_ENCOUNTER):
         if c.instance_id == instance_id and getattr(c, 'delaying', False):
             delay_idx = i
             break
     if delay_idx is None:
+        if _is_ajax(): return _tracker_json_response()
         return redirect(url_for('tracker_view'))
-    
+
     combatant = ACTIVE_ENCOUNTER.pop(delay_idx)
     combatant.delaying = False
-    
-    # Adjust TURN_INDEX if we removed someone before the current turn
+
     if delay_idx < TURN_INDEX:
         TURN_INDEX -= 1
-    
-    # Insert just before the current active combatant
-    # Set their initiative to match current position
+
     if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER):
         current_active = ACTIVE_ENCOUNTER[TURN_INDEX]
         combatant.initiative = current_active.initiative
-    
+
     ACTIVE_ENCOUNTER.insert(TURN_INDEX, combatant)
-    # The inserted combatant is now at TURN_INDEX, so it's their turn
     _generate_turn_reminders()
     _persist_encounter_state()
-    
+    _broadcast_encounter_state()
+
+    if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/save_encounter', methods=['POST'])
@@ -4117,6 +4237,54 @@ def player_state():
             safe_c['hp_color'] = "text-red-400" if c.current_hp == 0 else "text-orange-400" if pct <= 0.5 else ""
         state.append(safe_c)
     return jsonify({'encounter': state, 'round': ROUND_NUMBER, 'active_name': active_name})
+
+@app.route('/api/gm_party_state')
+def gm_party_state():
+    """Full party state for GM party view — includes spell slots, conditions, HP, attacks."""
+    party = []
+    for pc_name, pc in PARTY_LIBRARY.items():
+        pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0
+        # Get expended slots from disk
+        expended_slots = {}
+        try:
+            fp = get_pc_file_path(pc_name)
+            if fp and os.path.exists(fp):
+                with open(fp, 'r', encoding='utf-8') as f:
+                    build = json.load(f).get('build', {})
+                    expended_slots = build.get('expended_slots', {})
+        except Exception:
+            pass
+        # Build spell data
+        spell_casters = []
+        for ci, caster in enumerate(getattr(pc, 'spell_casters', [])):
+            cdata = {'name': caster.get('name', ''), 'tradition': caster.get('tradition', ''), 'levels': []}
+            for lvl in caster.get('levels', []):
+                slots = lvl.get('slots', 0)
+                spells_in_level = [{'name': s.get('name', '')} for s in lvl.get('spells', [])]
+                # Count expended
+                expended_count = sum(1 for si in range(max(slots, len(spells_in_level))) if expended_slots.get(f"{ci}-{lvl.get('level',0)}-{si}"))
+                cdata['levels'].append({
+                    'level': lvl.get('level', 0), 'label': lvl.get('label', ''),
+                    'slots': slots, 'expended': expended_count,
+                    'spells': spells_in_level
+                })
+            spell_casters.append(cdata)
+        pc_data = {
+            'name': pc_name, 'class_name': pc.class_name, 'ancestry': pc.ancestry,
+            'subclass': getattr(pc, 'subclass', ''), 'level': pc.level,
+            'current_hp': pc.current_hp, 'max_hp': pc.hp, 'hp_pct': round(pct),
+            'ac': pc.ac, 'fort': pc.fort, 'ref': pc.ref, 'will': pc.will,
+            'perception': pc.perception, 'speed': getattr(pc, 'active_speed', getattr(pc, 'speed', 25)),
+            'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
+            'focus': getattr(pc, 'current_focus', 0), 'focus_max': getattr(pc, 'focus_max', 0),
+            'hero_points': getattr(pc, 'hero_points', 1),
+            'spell_casters': spell_casters,
+            'portrait': getattr(pc, 'portrait', None),
+            'attacks': [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(pc, 'attacks', [])],
+            'mods': getattr(pc, 'mods', {}),
+        }
+        party.append(pc_data)
+    return jsonify({'party': party})
 
 @app.route('/api/events')
 def sse_stream():
@@ -4866,7 +5034,41 @@ def sync_spell_slots(pc_name):
     build = pc_json.get('build', pc_json)
     build['expended_slots'] = data.get('expended_slots', {})
     save_and_reload_character(pc_name, pc_json, file_path)
+    _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
+
+@app.route('/api/cast_spell/<pc_name>', methods=['POST'])
+def cast_spell(pc_name):
+    """Cast a spell: auto-deduct the spell slot and broadcast the change.
+    Body: {caster_idx: int, level: int, slot_idx: int, spell_name: str}
+    """
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"error": "Character not found"}), 404
+    data = request.json or {}
+    caster_idx = int(data.get('caster_idx', 0))
+    spell_level = int(data.get('level', 0))
+    slot_idx = int(data.get('slot_idx', 0))
+    spell_name = data.get('spell_name', 'Unknown')
+
+    file_path = get_pc_file_path(pc_name)
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"error": "Character file not found"}), 404
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        pc_json = json.load(f)
+    build = pc_json.get('build', pc_json)
+    expended = build.get('expended_slots', {})
+
+    # Mark the slot as expended: key is "caster_idx-level-slot_idx"
+    slot_key = f"{caster_idx}-{spell_level}-{slot_idx}"
+    expended[slot_key] = True
+    build['expended_slots'] = expended
+    save_and_reload_character(pc_name, pc_json, file_path)
+
+    # Broadcast to all clients (GM sees updated spell usage)
+    _broadcast_pc_state(pc_name)
+
+    return jsonify({"success": True, "slot_key": slot_key, "spell_name": spell_name})
 
 @app.route('/api/upload_portrait/<pc_name>', methods=['POST'])
 def upload_portrait(pc_name):

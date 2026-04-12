@@ -11,7 +11,7 @@
             theme: {
                 extend: {
                     colors: {
-                        gray: { 950: '#12111a', 900: '#1a1926', 800: '#242336', 700: '#3a3852', 600: '#6b6880', 500: '#9b98b0', 400: '#b8b5c8', 300: '#d0cee0', 200: '#e8e6f0', 100: '#f4f3f8', },
+                        gray: { 950: '#0f0f14', 900: '#16161e', 800: '#1e1e2a', 700: '#282838', 600: '#50506a', 500: '#8080a0', 400: '#a0a0b8', 300: '#c8c8d8', 200: '#e8e8f0', 100: '#f4f3f8', },
                         amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' },
                         red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 800: '#6b1525', 900: '#3D0A13', },
                         green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
@@ -27,20 +27,20 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700;900&display=swap');
 
         :root {
-            --bg-base: #12111a;
-            --bg-surface: #1a1926;
-            --bg-raised: #242336;
-            --bg-hover: #2e2d42;
-            --bg-input: #16152a;
+            --bg-base: #0f0f14;
+            --bg-surface: #16161e;
+            --bg-raised: #1e1e2a;
+            --bg-hover: #282838;
+            --bg-input: #12121a;
 
             --border-subtle: rgba(255,255,255,0.06);
-            --border-default: rgba(255,255,255,0.1);
-            --border-strong: rgba(255,255,255,0.18);
+            --border-default: rgba(255,255,255,0.08);
+            --border-strong: rgba(255,255,255,0.15);
 
-            --text-primary: #e8e6f0;
-            --text-secondary: #9b98b0;
-            --text-muted: #6b6880;
-            --text-faint: #4a475e;
+            --text-primary: #e8e8f0;
+            --text-secondary: #a0a0b8;
+            --text-muted: #50506a;
+            --text-faint: #363648;
 
             --accent-red: #c53131;
             --accent-gold: #b8860b;
@@ -58,11 +58,11 @@
             --color-health: #4ADE80;
 
             /* Legacy aliases for inline styles that reference old var names */
-            --surface-primary: #1a1926;
-            --surface-raised: #242336;
-            --surface-overlay: #2e2d42;
-            --surface-sunken: #16152a;
-            --surface-base: #12111a;
+            --surface-primary: #16161e;
+            --surface-raised: #1e1e2a;
+            --surface-overlay: #282838;
+            --surface-sunken: #12121a;
+            --surface-base: #0f0f14;
             --accent-teal: #60a5fa;
             --accent-teal-dim: rgba(96,165,250,0.15);
             --accent-gold-bright: #d4a244;
@@ -86,8 +86,7 @@
         }
 
         * { box-sizing: border-box; }
-        body { font-family: var(--font-ui); background: var(--bg-base); color: var(--text-primary); }
-        body::before { content:''; position:fixed; inset:0; z-index:-1; background: var(--bg-base); }
+        body { font-family: var(--font-ui); background: #0f0f14; color: var(--text-primary); }
 
         /* Typography */
         .font-display { font-family: var(--font-display); }

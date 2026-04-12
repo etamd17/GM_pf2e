@@ -1,830 +1,1004 @@
 {% extends "base.html" %}
 
-{% block title %}Encounter Tracker - Pathfinder Dashboard{% endblock %}
+{% block title %}Encounter Tracker{% endblock %}
+
+{% block extra_head %}
+/* ── tracker-specific styles ── */
+.tracker-row { transition: background 0.15s, border-color 0.15s; }
+.tracker-row:hover { background: rgba(255,255,255,0.02); }
+.tracker-row.active-turn { background: rgba(94,173,173,0.06); border-left: 3px solid #5EADAD; }
+.tracker-row.delaying { opacity: 0.55; }
+
+.hp-bar-fill { transition: width 0.4s ease, background-color 0.3s ease; }
+.hp-green { background: #4ade80; }
+.hp-yellow { background: #d4a244; }
+.hp-red { background: #f87171; }
+
+.cond-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.18); color: #fca5a5; cursor: default; text-transform: uppercase; letter-spacing: 0.03em; }
+.cond-pill button { opacity: 0.5; transition: opacity 0.15s; font-size: 11px; line-height: 1; cursor: pointer; background: none; border: none; color: inherit; padding: 0; }
+.cond-pill button:hover { opacity: 1; }
+
+.stat-card { background: #16161e; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px; text-align: center; }
+.stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #8080a0; margin-bottom: 2px; }
+.stat-value { font-size: 18px; font-weight: 700; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; white-space: nowrap; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: #5EADAD; color: #0f0f14; border-color: #5EADAD; }
+.btn-primary:hover { background: #7DC4C4; }
+.btn-ghost { background: transparent; color: #a0a0b8; border-color: rgba(255,255,255,0.08); }
+.btn-ghost:hover { background: rgba(255,255,255,0.04); color: #e8e8f0; }
+.btn-danger { background: rgba(248,113,113,0.1); color: #fca5a5; border-color: rgba(248,113,113,0.2); }
+.btn-danger:hover { background: rgba(248,113,113,0.18); color: #f87171; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+
+.inline-input { background: #0f0f14; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 4px 6px; font-size: 12px; text-align: center; outline: none; transition: border-color 0.15s; }
+.inline-input:focus { border-color: #5EADAD; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal-panel { background: #1e1e2a; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; width: 100%; max-width: 640px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; transform: translateY(10px); transition: transform 0.2s; }
+.modal-overlay.open .modal-panel { transform: translateY(0); }
+
+.drag-handle { cursor: grab; user-select: none; color: #50506a; transition: color 0.15s; }
+.drag-handle:hover { color: #7DC4C4; }
+.sortable-ghost { background: rgba(94,173,173,0.08) !important; }
+
+.custom-form-grid input, .custom-form-grid select { background: #0f0f14; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 6px 8px; font-size: 12px; outline: none; width: 100%; }
+.custom-form-grid input:focus { border-color: #5EADAD; }
+.custom-form-grid label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #8080a0; font-weight: 600; margin-bottom: 2px; display: block; }
+
+#combat-log-body { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent; }
+
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+{% endblock %}
 
 {% block content %}
-<div class="flex justify-between items-end mb-6 border-b border-gray-700 pb-2">
-    <div class="flex items-center gap-4">
-        <h1 class="text-3xl font-header text-amber-500">Encounter Tracker</h1>
-        
-        {% if encounter_xp > 0 %}
-        <div class="bg-gray-800 border border-gray-600 px-3 py-1 rounded shadow-inner flex items-center gap-2">
-            <span class="text-xs text-gray-400 uppercase tracking-widest">Party Lvl {{ party_level }}</span>
-            <span class="text-gray-600">|</span>
-            <span class="{{ diff_color }} font-bold text-sm uppercase tracking-wider">{{ diff_label }}</span>
-            <span class="text-gray-400 text-xs font-mono">({{ encounter_xp }} XP)</span>
+
+{# ═══════════════════ TOP TOOLBAR ═══════════════════ #}
+<div class="flex flex-wrap items-center gap-2 mb-3">
+
+    {# Monster Search #}
+    <div class="relative" id="monster-search-wrap">
+        <input type="text" id="monster-search" placeholder="Search monsters..." autocomplete="off"
+               class="inline-input w-52" onfocus="showMonsterDD()" oninput="filterMonsterDD()">
+        <div id="monster-dd" class="hidden absolute top-full left-0 mt-1 w-72 rounded-lg border border-white/[0.08] shadow-2xl z-50 max-h-60 overflow-y-auto" style="background:#1e1e2a;">
+            {% for m in monsters %}
+            <div class="monster-opt px-3 py-2 hover:bg-accent-400/10 cursor-pointer text-sm flex justify-between items-center border-b border-white/[0.04] last:border-0"
+                 data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonster('{{ m.file_path }}')">
+                <span class="text-base-200">{{ m.name }}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-base-800 text-base-400 border border-white/[0.06]">L{{ m.level }}</span>
+            </div>
+            {% endfor %}
+            {% if not monsters %}
+            <div class="px-3 py-4 text-center text-base-500 text-sm italic">No monsters in library</div>
+            {% endif %}
         </div>
+    </div>
+
+    <button onclick="toggleCustomForm()" class="btn btn-ghost btn-sm">+ Custom</button>
+
+    <div class="h-5 border-r border-white/[0.06] mx-1"></div>
+
+    {# PC Dropdown + Add Party #}
+    <select id="pc-select" class="inline-input w-40">
+        {% if party %}
+            {% for p in party %}
+            <option value="{{ p.name }}">{{ p.name }}</option>
+            {% endfor %}
+        {% else %}
+            <option value="" disabled selected>No PCs</option>
         {% endif %}
+    </select>
+    <button onclick="addPC()" class="btn btn-ghost btn-sm">Add PC</button>
+    <button onclick="apiPost('/api/add_party')" class="btn btn-ghost btn-sm">Add Party</button>
+
+    <div class="h-5 border-r border-white/[0.06] mx-1"></div>
+
+    <button onclick="apiPost('/api/roll_npc_initiative')" class="btn btn-ghost btn-sm" title="Roll d20+Perception for all NPCs">Roll Init</button>
+    <button onclick="apiPost('/api/sort_initiative')" class="btn btn-ghost btn-sm">Sort</button>
+
+    <button onclick="apiPost('/api/cycle_turn/next')" class="btn btn-primary" id="btn-next-turn">Next Turn</button>
+    <button onclick="apiPost('/api/cycle_turn/prev')" class="btn btn-ghost btn-sm" title="Previous turn">Prev</button>
+
+    <div class="ml-auto flex items-center gap-2">
+        <span id="round-badge" class="badge bg-base-800 text-base-300 border border-white/[0.06]">Round {{ round_number }}</span>
+        <button onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')" class="btn btn-danger btn-sm">Clear</button>
     </div>
 </div>
 
-<div class="flex flex-col xl:flex-row gap-6 items-start">
-    
+{# ═══════════════════ SAVE / LOAD BAR ═══════════════════ #}
+<div class="flex flex-wrap items-center gap-3 mb-3 px-3 py-2 rounded-lg border border-white/[0.06]" style="background:#16161e;">
+    <label class="text-[10px] text-base-400 uppercase tracking-wider font-semibold">Save</label>
+    <input type="text" id="save-name" placeholder="Encounter name" class="inline-input w-40">
+    <button onclick="saveEncounter()" class="btn btn-ghost btn-sm">Save</button>
+
+    <div class="h-5 border-r border-white/[0.06] mx-1"></div>
+
+    <label class="text-[10px] text-base-400 uppercase tracking-wider font-semibold">Load</label>
+    <select id="load-select" class="inline-input w-44">
+        {% if saved_encounters %}
+        <option value="" disabled selected>Select...</option>
+        {% for enc in saved_encounters %}
+        <option value="{{ enc }}">{{ enc }}</option>
+        {% endfor %}
+        {% else %}
+        <option value="" disabled selected>No saved encounters</option>
+        {% endif %}
+    </select>
+    <button onclick="loadEncounter()" class="btn btn-ghost btn-sm">Load</button>
+    <button onclick="deleteEncounter()" class="btn btn-danger btn-sm" title="Delete selected encounter">Del</button>
+
+    {# XP / Difficulty badge #}
+    <div id="xp-badge" class="ml-auto flex items-center gap-2 text-xs {% if encounter_xp > 0 %}{% else %}hidden{% endif %}">
+        <span class="text-base-400">Party Lvl <strong id="xp-party-level">{{ party_level }}</strong></span>
+        <span id="xp-diff-label" class="font-bold {{ diff_color }}">{{ diff_label }}</span>
+        <span id="xp-value" class="text-base-500 font-mono">({{ encounter_xp }} XP)</span>
+    </div>
+</div>
+
+{# ═══════════════════ CUSTOM MONSTER FORM ═══════════════════ #}
+<div id="custom-monster-form" class="hidden mb-3 rounded-lg border border-white/[0.06] p-4" style="background:#16161e;">
+    <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-accent-300 uppercase tracking-wider">Custom Monster</span>
+        <button onclick="toggleCustomForm()" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
+    </div>
+    <div class="custom-form-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-3">
+        <div class="col-span-2"><label>Name</label><input id="cm-name" placeholder="Goblin Warrior"></div>
+        <div><label>Level</label><input type="number" id="cm-level" value="1"></div>
+        <div><label>HP</label><input type="number" id="cm-hp" value="20"></div>
+        <div><label>AC</label><input type="number" id="cm-ac" value="16"></div>
+        <div><label>Fort</label><input type="number" id="cm-fort" value="5"></div>
+        <div><label>Ref</label><input type="number" id="cm-ref" value="5"></div>
+        <div><label>Will</label><input type="number" id="cm-will" value="3"></div>
+    </div>
+    <div class="custom-form-grid grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        <div><label>Speed</label><input type="number" id="cm-speed" value="25"></div>
+        <div><label>Perception</label><input type="number" id="cm-perc" value="5"></div>
+        <div><label>Attack Name</label><input id="cm-atk-name" value="Strike"></div>
+        <div class="custom-form-grid">
+            <label>Atk Bonus / Damage</label>
+            <div class="flex gap-1">
+                <input type="number" id="cm-atk-mod" value="8" class="w-1/2">
+                <input id="cm-atk-dmg" value="1d6+3" class="w-1/2">
+            </div>
+        </div>
+    </div>
+    <div class="flex gap-2">
+        <button onclick="submitCustomMonster()" class="btn btn-primary btn-sm">Add to Encounter</button>
+        <button onclick="toggleCustomForm()" class="btn btn-ghost btn-sm">Cancel</button>
+    </div>
+</div>
+
+{# ═══════════════════ MAIN LAYOUT ═══════════════════ #}
+<div class="flex flex-col xl:flex-row gap-4 items-start">
+
+    {# ── LEFT: Initiative List ── #}
     <div class="flex-1 min-w-0 w-full">
-        <div class="bg-gray-800 p-4 rounded-t-lg shadow-md border-t border-l border-r border-gray-700 flex flex-wrap gap-4 items-center">
-            
-            <!-- Monster Search Dropdown -->
-            <div class="relative" id="monster-search-container">
-                <input type="text" id="monster-search-input" placeholder="Search Monsters..." autocomplete="off"
-                    class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-3 py-1 text-sm focus:outline-none focus:border-amber-500 w-56"
-                    onfocus="showMonsterDropdown()" oninput="filterMonsters()">
-                <div id="monster-dropdown" class="hidden absolute top-full left-0 mt-1 w-72 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar">
-                    {% for m in monsters %}
-                    <div class="monster-option px-3 py-2 hover:bg-amber-900/30 cursor-pointer text-sm border-b border-gray-800 last:border-0 flex justify-between items-center"
-                         data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonsterFromDropdown('{{ m.file_path }}')">
-                        <span class="text-gray-200">{{ m.name }}</span>
-                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">L{{ m.level }}</span>
-                    </div>
-                    {% endfor %}
-                    {% if not monsters %}
-                    <div class="px-3 py-4 text-center text-gray-500 text-sm italic">No monsters in library</div>
-                    {% endif %}
-                </div>
-            </div>
-            
-            <button onclick="document.getElementById('quick-monster-form').classList.toggle('hidden')" class="bg-amber-900/30 hover:bg-amber-900/50 text-amber-300 px-3 py-1 rounded text-sm font-bold border border-amber-900/50 transition-colors font-header text-[10px] tracking-wider uppercase">+ Custom Monster</button>
+        <div class="rounded-lg border border-white/[0.06] overflow-hidden" style="background:#16161e;">
 
-            <div class="flex items-center gap-2">
-                <form action="/api/add_combatant" method="POST" class="flex gap-2">
-                    <input type="hidden" name="type" value="pc">
-                    <select name="path" required class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-3 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
-                        {% if party %}
-                            {% for p in party %}
-                            <option value="{{ p.name }}">{{ p.name }}</option>
-                            {% endfor %}
-                        {% else %}
-                            <option value="" disabled selected>No PCs Found</option>
-                        {% endif %}
-                    </select>
-                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded text-sm font-bold border border-gray-600 transition-colors">Add PC</button>
-                </form>
-
-                <form action="/api/add_party" method="POST">
-                    <button type="submit" class="bg-blue-900/50 hover:bg-blue-800 text-blue-200 px-3 py-1 rounded text-sm font-bold border border-blue-900 transition-colors ml-2" title="Add all active PCs to the board">Add Full Party</button>
-                </form>
-            </div>
-            
-            <div class="h-8 border-r border-gray-600 mx-2"></div>
-
-            <div class="flex items-center gap-2">
-                <form action="/api/roll_npc_initiative" method="POST">
-                    <button type="submit" class="bg-indigo-900/50 hover:bg-indigo-800 text-indigo-200 px-3 py-1 rounded text-sm font-bold border border-indigo-900 transition-colors" title="Roll 1d20 + Perception for all NPCs and auto-sort">Roll NPC Init</button>
-                </form>
-                
-                <form action="/api/sort_initiative" method="POST">
-                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1 rounded text-sm font-bold border border-gray-600 transition-colors" title="Force a manual sort">Sort</button>
-                </form>
+            {# Header row #}
+            <div class="grid grid-cols-[32px_56px_1fr_48px_160px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.06] text-[10px] font-semibold text-base-500 uppercase tracking-wider" style="background:#0f0f14;">
+                <div></div>
+                <div>Init</div>
+                <div>Name</div>
+                <div>AC</div>
+                <div class="text-center">HP</div>
+                <div>Conditions</div>
+                <div class="text-center">Actions</div>
             </div>
 
-            <form action="/api/cycle_turn/next" method="POST">
-                <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-sm font-bold transition-colors ml-2">Next Turn ➡</button>
-            </form>
-
-            <form action="/api/clear_encounter" method="POST" class="ml-auto">
-                <button type="submit" class="bg-red-900/50 hover:bg-red-800/80 text-red-200 px-3 py-1 rounded text-sm font-bold border border-red-900 transition-colors">Clear Board</button>
-            </form>
-        </div>
-
-        <div class="bg-gray-700 p-3 rounded-b-lg shadow-md border-b border-l border-r border-gray-600 flex flex-wrap gap-6 mb-6 items-center">
-            
-            <form action="/api/save_encounter" method="POST" class="flex gap-2 items-center">
-                <label class="text-gray-300 text-xs font-bold uppercase tracking-wider">Save Roster As:</label>
-                <input type="text" name="encounter_name" placeholder="e.g. Goblin Ambush" required class="bg-gray-900 border border-gray-500 text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-40">
-                <button type="submit" class="bg-blue-900/50 hover:bg-blue-800 text-blue-200 px-3 py-1 rounded text-sm font-bold border border-blue-900 transition-colors">Save</button>
-            </form>
-
-            <div class="h-6 border-r border-gray-500 mx-2"></div>
-
-            <form action="/api/load_encounter" method="POST" class="flex gap-2 items-center">
-                <label class="text-gray-300 text-xs font-bold uppercase tracking-wider">Load Roster:</label>
-                <select name="encounter_name" id="encounter-select" required class="bg-gray-900 border border-gray-500 text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 w-48">
-                    {% if saved_encounters %}
-                        <option value="" disabled selected>Select an encounter...</option>
-                        {% for enc in saved_encounters %}
-                        <option value="{{ enc }}">{{ enc }}</option>
-                        {% endfor %}
-                    {% else %}
-                        <option value="" disabled selected>No saved encounters</option>
-                    {% endif %}
-                </select>
-                <button type="submit" class="bg-purple-900/50 hover:bg-purple-800 text-purple-200 px-3 py-1 rounded text-sm font-bold border border-purple-900 transition-colors">Load</button>
-                <button type="button" onclick="deleteSelectedEncounter()" class="bg-red-900/30 hover:bg-red-900/50 text-red-300 px-2 py-1 rounded text-sm font-bold border border-red-900/50 transition-colors" title="Delete selected encounter">🗑</button>
-            </form>
-
-        </div>
-
-        <!-- Quick Custom Monster Form -->
-        <div id="quick-monster-form" class="hidden bg-gray-900 border border-gray-700 rounded-lg p-4 my-3">
-            <h3 class="font-header text-sm text-amber-400 tracking-wider mb-3">Custom Monster</h3>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-3">
-                <div class="col-span-2">
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Name</label>
-                    <input type="text" id="cm-name" placeholder="Goblin Warrior" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Level</label>
-                    <input type="number" id="cm-level" value="1" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">HP</label>
-                    <input type="number" id="cm-hp" value="20" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">AC</label>
-                    <input type="number" id="cm-ac" value="16" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-green-500 uppercase font-bold block mb-1">Fort</label>
-                    <input type="number" id="cm-fort" value="5" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-blue-400 uppercase font-bold block mb-1">Ref</label>
-                    <input type="number" id="cm-ref" value="5" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-purple-400 uppercase font-bold block mb-1">Will</label>
-                    <input type="number" id="cm-will" value="3" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
+            {# Combatant rows #}
+            <div id="initiative-list">
+                {# Rendered by JS on load #}
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Speed</label>
-                    <input type="number" id="cm-speed" value="25" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Perception</label>
-                    <input type="number" id="cm-perc" value="5" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Attack (name)</label>
-                    <input type="text" id="cm-atk-name" value="Strike" class="w-full bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-[9px] text-gray-500 uppercase font-bold block mb-1">Atk +X / Damage</label>
-                    <div class="flex gap-1">
-                        <input type="number" id="cm-atk-mod" value="8" class="w-1/2 bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                        <input type="text" id="cm-atk-dmg" value="1d6+3" class="w-1/2 bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:border-amber-500">
-                    </div>
-                </div>
+
+            <div id="empty-state" class="hidden px-4 py-10 text-center text-base-500 text-sm italic">
+                No combatants yet. Search for monsters or add your party above.
             </div>
-            <div class="flex gap-2">
-                <button onclick="submitCustomMonster()" class="bg-amber-700 hover:bg-amber-600 text-white px-4 py-1.5 rounded text-sm font-bold transition-colors">Add to Encounter</button>
-                <button onclick="document.getElementById('quick-monster-form').classList.add('hidden')" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded text-sm transition-colors">Cancel</button>
-            </div>
-        </div>
-
-        <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden">
-            <table class="w-full text-left border-collapse">
-                <thead class="bg-gray-900/50">
-                    <tr>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-8"></th>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-24">Init</th>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm">Name</th>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-16">AC</th>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-40 text-center">HP</th>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-56">Status / Conditions</th>
-                        <th class="p-4 border-b border-gray-700 text-amber-500 font-header text-sm w-20 text-center">Act</th>
-                    </tr>
-                </thead>
-                <tbody id="initiative-list">
-                    {% for c in encounter %}
-                    <tr data-id="{{ c.instance_id }}" class="border-b border-gray-700/50 {% if loop.index0 == turn_index %}bg-amber-900/20 border-l-4 border-l-amber-500{% else %}border-l-4 border-l-transparent{% endif %}">
-                        
-                        <td class="p-2 text-center cursor-grab active:cursor-grabbing drag-handle" title="Drag to reorder">
-                            <span class="text-gray-600 hover:text-amber-400 text-lg">⠿</span>
-                        </td>
-                        
-                        <td class="p-3">
-                            <form action="/api/update_initiative/{{ c.instance_id }}" method="POST" class="flex flex-col gap-1">
-                                <input type="number" name="initiative" value="{{ c.initiative }}" class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-1 py-1 text-sm w-16 text-center focus:outline-none focus:border-amber-500">
-                                <button type="submit" class="text-[10px] bg-gray-700 hover:bg-gray-600 rounded text-gray-300 py-0.5 w-16">Set</button>
-                            </form>
-                        </td>
-                        
-                        <td class="p-3 font-bold text-gray-200">
-                            <span class="cursor-pointer hover:text-amber-400 transition-colors" onclick="openStatPopup('{{ c.instance_id }}')">{{ c.name }}</span>
-                            {% if loop.index0 == turn_index %}<span class="text-amber-500 text-[10px] uppercase tracking-wider block mt-1">▶ Active Turn</span>{% endif %}
-                            {% if c.delaying %}<span class="text-blue-400 text-[10px] uppercase tracking-wider block mt-1">⏸ Delaying</span>{% endif %}
-                        </td>
-                        
-                        <td class="p-3 font-mono text-blue-400 font-bold text-lg">
-                            {{ c.ac }}
-                            {% if c.ac < c.base_ac %}
-                                <span class="text-[10px] text-red-400 block -mt-1 tracking-tighter">(Penalty)</span>
-                            {% endif %}
-                        </td>
-                        
-                        <td class="p-3">
-                            <div class="flex flex-col gap-1">
-                                <!-- HP Bar -->
-                                {% set hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0 %}
-                                {% set hp_color = 'bg-green-500' if hp_pct > 50 else ('bg-amber-500' if hp_pct > 25 else 'bg-red-500') %}
-                                <div class="w-full h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
-                                    <div class="{{ hp_color }} h-full transition-all duration-300" style="width: {{ hp_pct }}%;"></div>
-                                </div>
-                                
-                                <div class="flex items-center justify-center gap-2">
-                                    <span class="font-mono {% if c.current_hp == 0 %}text-red-400{% elif hp_pct <= 50 %}text-amber-400{% else %}text-green-400{% endif %} font-bold text-lg w-16 text-right">{{ c.current_hp }} <span class="text-gray-500 text-xs">/ {{ c.hp }}</span></span>
-                                    
-                                    <form action="/api/adjust_hp/{{ c.instance_id }}" method="POST" class="flex items-center gap-1">
-                                        <input type="number" name="amount" value="1" min="1" class="bg-gray-900 border border-gray-600 text-gray-200 rounded px-1 py-1 text-xs w-10 text-center focus:outline-none focus:border-amber-500">
-                                        <button type="submit" name="action" value="damage" title="Damage" class="bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-1 rounded border border-red-900 transition-colors font-bold">-</button>
-                                        <button type="submit" name="action" value="heal" title="Heal" class="bg-green-900/50 hover:bg-green-800 text-green-200 px-2 py-1 rounded border border-green-900 transition-colors font-bold">+</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </td>
-
-                        <td class="p-3">
-                            <div class="flex flex-wrap gap-1 mb-1">
-                                {% for cond, val in c.conditions.items() %}
-                                    {% if val is sameas true %}
-                                        {% set cond_tip = {'prone': 'AC −2 circumstance. Melee attacks take −2. Standing costs 1 action. Ranged attacks take −2 vs you.', 'off_guard': 'AC −2 circumstance (flanked, flat-footed, etc.)', 'concealed': 'DC 5 flat check for attackers to target. Hidden from some senses.', 'hidden': 'DC 11 flat check to target. Attacker must guess square.', 'undetected': 'Must guess square. DC 11 flat check even if correct.'}.get(cond, cond|title) %}
-                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm" title="{{ cond_tip }}">
-                                            {{ cond|replace('_', '-') }}
-                                            <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="inline">
-                                                <input type="hidden" name="condition" value="{{ cond }}">
-                                                <button type="submit" name="action" value="toggle" class="hover:text-white font-bold">&times;</button>
-                                            </form>
-                                        </span>
-                                    {% elif val is number and val > 0 %}
-                                        {% set cond_tip = {'frightened': 'Status penalty −X to all checks, DCs, saves, attacks. Decreases by 1 at end of turn.', 'sickened': 'Status penalty −X to all checks, DCs, saves, attacks. Must Retch (Fortitude) to reduce.', 'enfeebled': '−X status penalty to Str-based rolls and DCs.', 'clumsy': '−X status penalty to Dex-based rolls, DCs, and AC.', 'drained': '−X status penalty to Con-based rolls. Lose X×level max HP.', 'stupefied': '−X status penalty to Int/Wis/Cha-based rolls. DC 5+X flat check to cast spells.', 'wounded': 'When you gain Dying, add Wounded value. Increases by 1 each time you recover from Dying.', 'doomed': 'Die at Dying (4 − Doomed). Cannot reduce below Doomed value.', 'dying': 'Unconscious. At start of turn, roll recovery check (DC 10+dying). Dying 4 = death.'}.get(cond, cond|title) %}
-                                        <span class="bg-red-900/30 text-red-300 text-[10px] px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-red-900/50 shadow-sm" title="{{ cond_tip }}">
-                                            {{ cond }} {{ val }}
-                                            <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="inline flex gap-1 ml-1 border-l border-red-800/50 pl-1">
-                                                <input type="hidden" name="condition" value="{{ cond }}">
-                                                <button type="submit" name="action" value="decrease" class="hover:text-white font-bold">-</button>
-                                                <button type="submit" name="action" value="increase" class="hover:text-white font-bold">+</button>
-                                            </form>
-                                        </span>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                            
-                            <form action="/api/toggle_condition/{{ c.instance_id }}" method="POST" class="flex items-center gap-1 mt-1">
-                                <select name="condition" class="bg-gray-900 border border-gray-600 text-gray-400 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 w-full max-w-[120px]">
-                                    <option value="frightened">Frightened</option>
-                                    <option value="sickened">Sickened</option>
-                                    <option value="off_guard">Off-Guard</option>
-                                    <option value="prone">Prone</option>
-                                    <option value="dying">Dying</option>
-                                    <option value="wounded">Wounded</option>
-                                    <option value="doomed">Doomed</option>
-                                    <option value="concealed">Concealed</option>
-                                    <option value="hidden">Hidden</option>
-                                    <option value="undetected">Undetected</option>
-                                </select>
-                                <button type="submit" name="action" value="add" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-600 transition-colors">+</button>
-                            </form>
-                            
-                            <form action="/api/set_persistent_damage/{{ c.instance_id }}" method="POST" class="flex items-center gap-1 mt-2 border-t border-gray-700 pt-1">
-                                <span class="text-[10px] text-orange-400 font-bold uppercase" title="Persistent Damage">PD:</span>
-                                <input type="text" name="persistent_damage" value="{{ c.persistent_damage }}" placeholder="e.g. 1d6 fire" class="bg-gray-900 border border-gray-600 text-gray-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 w-full max-w-[110px]">
-                                <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-600 transition-colors">Set</button>
-                            </form>
-                        </td>
-
-                        <td class="p-3 text-center">
-                            {% if not c.is_pc %}
-                            <form action="/api/toggle_elite_weak/{{ c.instance_id }}" method="POST" class="inline-flex gap-1 mb-1">
-                                <input type="hidden" name="mode" value="elite">
-                                <button type="submit" class="text-[9px] px-1.5 py-0.5 rounded border transition-colors {% if c.elite_weak == 1 %}bg-amber-900/40 text-amber-400 border-amber-700{% else %}bg-gray-800 text-gray-500 border-gray-700 hover:text-amber-400{% endif %}">Elite</button>
-                            </form>
-                            <form action="/api/toggle_elite_weak/{{ c.instance_id }}" method="POST" class="inline-flex gap-1 mb-1">
-                                <input type="hidden" name="mode" value="normal">
-                                <button type="submit" class="text-[9px] px-1.5 py-0.5 rounded border transition-colors bg-gray-800 text-gray-500 border-gray-700 hover:text-white">Norm</button>
-                            </form>
-                            <form action="/api/toggle_elite_weak/{{ c.instance_id }}" method="POST" class="inline-flex gap-1 mb-1">
-                                <input type="hidden" name="mode" value="weak">
-                                <button type="submit" class="text-[9px] px-1.5 py-0.5 rounded border transition-colors {% if c.elite_weak == -1 %}bg-purple-900/40 text-purple-400 border-purple-700{% else %}bg-gray-800 text-gray-500 border-gray-700 hover:text-purple-400{% endif %}">Weak</button>
-                            </form>
-                            <br>
-                            {% endif %}
-                            
-                            <!-- Delay / Ready buttons -->
-                            <div class="flex gap-1 mb-1">
-                                {% if c.delaying %}
-                                <form action="/api/reenter_initiative/{{ c.instance_id }}" method="POST" class="inline">
-                                    <button type="submit" class="text-[9px] px-2 py-0.5 rounded border transition-colors bg-blue-900/40 text-blue-300 border-blue-700 hover:bg-blue-800" title="Re-enter initiative before current combatant">Ready</button>
-                                </form>
-                                {% elif loop.index0 == turn_index %}
-                                <form action="/api/delay_turn/{{ c.instance_id }}" method="POST" class="inline">
-                                    <button type="submit" class="text-[9px] px-2 py-0.5 rounded border transition-colors bg-gray-800 text-gray-400 border-gray-700 hover:text-blue-400 hover:border-blue-700" title="Delay turn — act later in the round">Delay</button>
-                                </form>
-                                {% endif %}
-                            </div>
-                            
-                            <form action="/api/remove_combatant/{{ c.instance_id }}" method="POST">
-                                <button type="submit" class="text-[10px] bg-red-900/40 hover:bg-red-800 text-red-300 px-2 py-1 rounded border border-red-900 transition-colors uppercase tracking-wider">Remove</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="p-8 text-center text-gray-500 italic">No combatants added to the encounter yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
         </div>
     </div>
 
-    {% if encounter %}
-        {% set active_c = encounter[turn_index] %}
-        <div class="w-full xl:w-[400px] shrink-0">
-            <div class="bg-gray-800 rounded-lg shadow-xl border-2 border-amber-500 flex flex-col sticky top-6">
-                
-                <div class="bg-gray-900 p-4 border-b border-amber-500/50 flex justify-between items-center rounded-t-lg">
-                    <div>
-                        <h2 class="text-2xl font-header text-amber-500">{{ active_c.name }}</h2>
-                        <span class="text-xs text-gray-400 uppercase tracking-widest block">
-                            {% if active_c.is_pc %}
-                                PC - Level {{ active_c.level }}
-                            {% else %}
-                                Monster Level {{ active_c.level }}
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="bg-amber-900/30 border border-amber-500 text-amber-400 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider animate-pulse">
-                        Active Turn
-                    </div>
+    {# ── RIGHT: Active Combatant Panel ── #}
+    <div id="active-panel-wrap" class="w-full xl:w-[380px] shrink-0 hidden">
+        <div class="rounded-lg border border-white/[0.06] sticky top-6 overflow-hidden" style="background:#16161e;">
+            <div class="px-4 py-3 border-b border-white/[0.06] flex justify-between items-center" style="background:#0f0f14;">
+                <div>
+                    <h2 id="ap-name" class="font-display text-accent-300 text-lg font-semibold"></h2>
+                    <span id="ap-subtitle" class="text-[10px] text-base-500 uppercase tracking-wider"></span>
                 </div>
-                
-                <div class="p-5 overflow-y-auto max-h-[75vh] custom-scrollbar">
-                    
-                    {% if active_c.persistent_damage or active_c.conditions.get('frightened', 0) > 0 %}
-                    <div class="bg-orange-900/20 border border-orange-500/50 rounded p-3 mb-6 shadow-inner">
-                        <span class="text-orange-400 font-bold text-sm uppercase mb-2 block text-center flex items-center justify-center gap-2">
-                            <span class="animate-pulse text-lg">🚨</span> End of Turn Reminders
-                        </span>
-                        <ul class="text-xs text-orange-200 space-y-2 list-disc pl-5">
-                            {% if active_c.persistent_damage %}
-                            <li>Take <strong class="text-orange-400 text-sm">{{ active_c.persistent_damage }}</strong> persistent damage, then roll a flat DC 15 flat check to recover.</li>
-                            {% endif %}
-                            {% if active_c.conditions.get('frightened', 0) > 0 %}
-                            <li>The Frightened condition will automatically decrease by 1 when you end this turn.</li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                    {% endif %}
-
-                    <div class="grid grid-cols-6 gap-2 mb-6">
-                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-500 uppercase">AC</div>
-                            <div class="font-bold text-blue-400 text-xl">{{ active_c.ac }}</div>
-                        </div>
-                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-500 uppercase">Fort</div>
-                            <div class="font-bold text-red-400 text-xl">+{{ active_c.fort }}</div>
-                        </div>
-                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-500 uppercase">Ref</div>
-                            <div class="font-bold text-blue-400 text-xl">+{{ active_c.ref }}</div>
-                        </div>
-                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-500 uppercase">Will</div>
-                            <div class="font-bold text-purple-400 text-xl">+{{ active_c.will }}</div>
-                        </div>
-                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-500 uppercase">Spd</div>
-                            <div class="font-bold text-white text-xl">{{ active_c.speed }}</div>
-                        </div>
-                        <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center">
-                            <div class="text-[10px] text-gray-500 uppercase">Perc</div>
-                            <div class="font-bold text-white text-xl">+{{ active_c.perception }}</div>
-                        </div>
-                    </div>
-
-                    <div class="mb-6">
-                        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3 border-b border-gray-700 pb-1">Strikes & Attacks</h3>
-                        <ul class="space-y-3">
-                            {% if active_c.is_pc %}
-                                {% for attack in active_c.attacks %}
-                                <li class="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <span class="font-bold text-gray-200">{{ attack.name }}</span>
-                                        <span class="font-mono text-amber-400 font-bold bg-amber-900/20 px-2 py-0.5 rounded">{{ attack.strikes[0].label if attack.strikes else '+?' }}</span>
-                                    </div>
-                                    <div class="text-xs text-gray-400 bg-gray-950 inline-block px-2 py-1 rounded">Damage: <span class="text-gray-300 font-mono">{{ attack.damage }}</span></div>
-                                </li>
-                                {% endfor %}
-                            {% else %}
-                                {% for strike in active_c.strikes %}
-                                <li class="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <span class="font-bold text-gray-200">{{ strike.name }}</span>
-                                        <span class="font-mono text-amber-400 font-bold bg-amber-900/20 px-2 py-0.5 rounded">
-                                            {% if strike.bonus != 0 %}+{{ strike.bonus }}{% else %}+0{% endif %}
-                                        </span>
-                                    </div>
-                                    <div class="text-xs text-gray-400 bg-gray-950 inline-block px-2 py-1 rounded">Damage: <span class="text-gray-300 font-mono">{{ strike.damage }}</span></div>
-                                </li>
-                                {% endfor %}
-                            {% endif %}
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3 border-b border-gray-700 pb-1">Abilities & Actions</h3>
-                        {% if active_c.is_pc %}
-                            <div class="flex flex-wrap gap-1.5">
-                                {% for feat in active_c.feats %}
-                                <div class="px-2 py-1 bg-gray-700 text-xs rounded border border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-amber-400 hover:border-amber-500 transition-colors relative cursor-pointer inline-block" onclick="toggleTooltip(event, this)">
-                                    {{ feat.name }}
-                                    <div class="tooltip-popup absolute hidden bg-gray-900 border-2 border-amber-500 text-gray-300 text-xs p-4 rounded top-full left-0 mt-2 w-72 max-h-72 overflow-y-auto z-[9999] shadow-2xl foundry-text font-sans text-left cursor-auto" onclick="event.stopPropagation()">
-                                        <strong class="text-amber-500 block mb-2 border-b border-gray-700 pb-1 text-sm font-header">{{ feat.name }}</strong>
-                                        {{ feat.desc | safe }}
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <ul class="space-y-3">
-                                {% for action in active_c.actions %}
-                                <li class="bg-gray-900/50 p-3 rounded border border-gray-700 text-sm">
-                                    <div class="font-bold text-amber-500 mb-2 border-b border-gray-700/50 pb-1">{{ action.name }}</div>
-                                    <div class="text-xs text-gray-300 leading-relaxed foundry-text">{{ action.description | safe }}</div>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                    
-                    {% if active_c.is_pc and active_c.spell_casters %}
-                    <div class="mt-6 pt-4 border-t border-gray-700">
-                        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Spellcasting</h3>
-                        
-                        <div class="space-y-3">
-                            {% for caster in active_c.spell_casters %}
-                            <div class="bg-purple-900/10 border border-purple-900/30 p-2 rounded">
-                                <span class="text-xs font-bold text-purple-400 block mb-2">{{ caster.name }} ({{ caster.tradition }})</span>
-                                
-                                {% for level in caster.levels %}
-                                    <div class="text-[10px] text-gray-400 mb-1 flex flex-wrap items-baseline gap-1">
-                                        <span class="font-bold text-gray-300 w-full">{{ level.label }} <span class="text-purple-500/50">({{ level.slots }} Slots)</span>:</span> 
-                                        
-                                        {% for spell in level.spells %}
-                                            <div class="relative cursor-pointer inline-block mx-1" onclick="toggleTooltip(event, this)">
-                                                <span class="text-purple-300 hover:text-amber-400 underline decoration-purple-900/50">{{ spell.name }}</span>
-                                                <div class="tooltip-popup absolute hidden bg-gray-900 border-2 border-amber-500 text-gray-300 text-xs p-4 rounded bottom-full left-0 mb-2 w-72 max-h-72 overflow-y-auto z-[9999] shadow-2xl foundry-text font-sans text-left cursor-auto" onclick="event.stopPropagation()">
-                                                    <strong class="text-amber-500 block mb-2 border-b border-gray-700 pb-1 text-sm font-header">{{ spell.name }}</strong>
-                                                    {{ spell.desc | safe }}
-                                                </div>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                {% endfor %}
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
-
-                </div>
+                <span class="badge bg-accent-400/10 text-accent-300 border border-accent-400/20 text-[10px] uppercase tracking-wider">Active</span>
+            </div>
+            <div id="ap-body" class="p-4 overflow-y-auto max-h-[75vh]" style="scrollbar-width:thin;">
+                {# Populated by JS #}
             </div>
         </div>
-    {% endif %}
-
+    </div>
 </div>
 
+{# ═══════════════════ COMBAT LOG ═══════════════════ #}
+<div class="mt-4 rounded-lg border border-white/[0.06] overflow-hidden" style="background:#16161e;">
+    <div class="px-4 py-2 flex items-center justify-between border-b border-white/[0.06]" style="background:#0f0f14;">
+        <span class="text-[10px] font-semibold text-base-400 uppercase tracking-wider">Combat Log</span>
+        <div class="flex gap-2">
+            <button onclick="refreshLog()" class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:10px;">Refresh</button>
+            <button onclick="copyLog()" class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:10px;">Copy</button>
+            <button onclick="if(confirm('Clear log?')){apiPostRaw('/api/combat_log/clear').then(()=>refreshLog())}" class="btn btn-danger btn-sm" style="padding:2px 8px; font-size:10px;">Clear</button>
+        </div>
+    </div>
+    <div id="combat-log-body" class="max-h-[200px] overflow-y-auto p-3 space-y-0.5 text-xs font-mono" style="color:#a0a0b8;">
+        <div class="text-center py-4 text-base-500 italic text-xs">Loading log...</div>
+    </div>
+</div>
+
+{# ═══════════════════ STAT POPUP MODAL ═══════════════════ #}
+<div id="stat-modal" class="modal-overlay" onclick="if(event.target===this) closeStatModal()">
+    <div class="modal-panel">
+        <div class="px-5 py-3 flex justify-between items-center border-b border-white/[0.06]" style="background:#0f0f14;">
+            <div>
+                <h3 id="sm-name" class="font-display text-accent-300 text-lg"></h3>
+                <span id="sm-subtitle" class="text-[10px] text-base-500"></span>
+            </div>
+            <button onclick="closeStatModal()" class="text-base-500 hover:text-base-200 text-xl leading-none">&times;</button>
+        </div>
+        <div id="sm-body" class="p-5 overflow-y-auto flex-1" style="scrollbar-width:thin; max-height:70vh;">
+            <div class="text-center py-8 text-base-500">Loading...</div>
+        </div>
+    </div>
+</div>
+
+{# ═══════════════════ SCRIPTS ═══════════════════ #}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
-    function toggleTooltip(event, element) {
-        event.stopPropagation();
-        const tooltip = element.querySelector('.tooltip-popup');
-        const isCurrentlyOpen = !tooltip.classList.contains('hidden');
-        
-        document.querySelectorAll('.tooltip-popup').forEach(el => {
-            el.classList.add('hidden');
+/* ──────────────── State ──────────────── */
+let STATE = {
+    combatants: [],
+    round: {{ round_number }},
+    turn_index: {{ turn_index }},
+    active_name: null,
+    encounter_xp: {{ encounter_xp }},
+    diff_label: "{{ diff_label }}",
+    diff_color: "{{ diff_color }}",
+    party_level: {{ party_level }}
+};
+
+/* Bootstrap initial state from Jinja server render */
+(function() {
+    const initial = {{ initial_state | tojson }};
+    if (initial && initial.combatants) {
+        STATE.combatants = initial.combatants;
+        STATE.round = initial.round || STATE.round;
+        STATE.turn_index = initial.turn_index != null ? initial.turn_index : STATE.turn_index;
+        STATE.active_name = initial.active_name;
+        STATE.encounter_xp = initial.encounter_xp || 0;
+        STATE.diff_label = initial.diff_label || '';
+        STATE.diff_color = initial.diff_color || '';
+        STATE.party_level = initial.party_level || STATE.party_level;
+    }
+    render();
+})();
+
+
+/* ──────────────── AJAX Helpers ──────────────── */
+const AJAX_HEADERS = {'X-Requested-With': 'XMLHttpRequest'};
+const JSON_HEADERS = {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
+
+function toast(msg, type) {
+    const c = document.getElementById('gm-toast-container');
+    if (!c) return;
+    const colors = {success:'border-success-400/30', error:'border-danger-400/30', info:'border-accent-400/30'};
+    const t = document.createElement('div');
+    t.className = `rounded-lg shadow-xl p-3 toast-animate pointer-events-auto border ${colors[type]||colors.info}`;
+    t.style.background = '#1e1e2a';
+    t.innerHTML = `<div class="text-xs text-base-200">${msg}</div>`;
+    c.prepend(t);
+    setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 3500);
+}
+
+async function apiPostRaw(url, body, contentType) {
+    const opts = {method:'POST', headers:{...AJAX_HEADERS}};
+    if (body && contentType === 'json') {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+    } else if (body instanceof FormData) {
+        opts.body = body;
+    } else if (body && contentType === 'form') {
+        opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        opts.body = body;
+    }
+    const res = await fetch(url, opts);
+    return res;
+}
+
+async function apiPost(url, body, contentType) {
+    try {
+        const res = await apiPostRaw(url, body, contentType || (body ? 'json' : undefined));
+        const data = await res.json();
+        if (data.combatants !== undefined) {
+            applyState(data);
+        }
+        return data;
+    } catch(e) {
+        console.error('API error:', url, e);
+        toast('Request failed', 'error');
+    }
+}
+
+async function apiGet(url) {
+    const res = await fetch(url, {headers: AJAX_HEADERS});
+    return res.json();
+}
+
+function applyState(data) {
+    STATE.combatants = data.combatants || [];
+    STATE.round = data.round ?? STATE.round;
+    STATE.turn_index = data.turn_index ?? STATE.turn_index;
+    STATE.active_name = data.active_name ?? null;
+    STATE.encounter_xp = data.encounter_xp ?? 0;
+    STATE.diff_label = data.diff_label ?? '';
+    STATE.diff_color = data.diff_color ?? '';
+    STATE.party_level = data.party_level ?? STATE.party_level;
+    render();
+}
+
+
+/* ──────────────── Render ──────────────── */
+function render() {
+    renderInitList();
+    renderActivePanel();
+    renderMeta();
+}
+
+function hpBarClass(pct) {
+    if (pct > 50) return 'hp-green';
+    if (pct > 25) return 'hp-yellow';
+    return 'hp-red';
+}
+
+function hpTextClass(pct, hp) {
+    if (hp === 0) return 'text-danger-400';
+    if (pct <= 50) return 'text-gold-300';
+    return 'text-success-400';
+}
+
+function condTooltip(cond) {
+    const tips = {
+        prone: 'AC -2 circumstance. Melee -2. Standing costs 1 action.',
+        off_guard: 'AC -2 circumstance (flanked, flat-footed, etc.)',
+        concealed: 'DC 5 flat check for attackers.',
+        hidden: 'DC 11 flat check to target.',
+        undetected: 'Must guess square. DC 11 flat check.',
+        frightened: 'Status penalty to all checks, DCs, saves, attacks. Decreases by 1 at end of turn.',
+        sickened: 'Status penalty to all checks, DCs, saves, attacks. Retch (Fort) to reduce.',
+        enfeebled: 'Status penalty to Str-based rolls and DCs.',
+        clumsy: 'Status penalty to Dex-based rolls, DCs, and AC.',
+        drained: 'Status penalty to Con-based rolls. Lose level x value max HP.',
+        stupefied: 'Status penalty to Int/Wis/Cha-based rolls. DC 5+X flat check to cast.',
+        wounded: 'When you gain Dying, add Wounded value.',
+        doomed: 'Die at Dying (4 - Doomed).',
+        dying: 'Unconscious. Recovery check DC 10+dying. Dying 4 = death.',
+        stunned: 'Lose actions equal to stunned value at start of turn.',
+        slowed: 'Lose actions equal to slowed value.',
+    };
+    return tips[cond] || cond.replace(/_/g,' ');
+}
+
+const CONDITIONS_LIST = ['frightened','sickened','enfeebled','clumsy','drained','stupefied','stunned','slowed','off_guard','prone','dying','wounded','doomed','concealed','hidden','undetected'];
+const VALUED_CONDITIONS = ['frightened','sickened','dying','wounded','doomed','stunned','slowed','enfeebled','clumsy','drained','stupefied'];
+
+function renderInitList() {
+    const list = document.getElementById('initiative-list');
+    const empty = document.getElementById('empty-state');
+
+    if (!STATE.combatants.length) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    list.innerHTML = STATE.combatants.map((c, idx) => {
+        const isActive = idx === STATE.turn_index;
+        const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
+        const rowCls = `tracker-row ${isActive ? 'active-turn' : ''} ${c.delaying ? 'delaying' : ''}`;
+
+        // Conditions HTML
+        let condsHtml = '';
+        if (c.conditions) {
+            for (const [k, v] of Object.entries(c.conditions)) {
+                if (!v || v === 0 || v === false) continue;
+                const isValued = typeof v === 'number' && v > 0;
+                const label = k.replace(/_/g, '-') + (isValued ? ' ' + v : '');
+                condsHtml += `<span class="cond-pill" title="${condTooltip(k)}">${label}`;
+                if (isValued && VALUED_CONDITIONS.includes(k)) {
+                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">-</button>`;
+                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
+                } else {
+                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">&times;</button>`;
+                }
+                condsHtml += `</span>`;
+            }
+        }
+
+        // Elite/Weak buttons (NPC only)
+        let actionsHtml = '';
+        if (!c.is_pc) {
+            const eCls = c.elite_weak === 1 ? 'text-gold-300 border-gold-300/30 bg-gold-300/10' : 'text-base-500 border-white/[0.06]';
+            const wCls = c.elite_weak === -1 ? 'text-spell-400 border-spell-400/30 bg-spell-400/10' : 'text-base-500 border-white/[0.06]';
+            actionsHtml += `<div class="flex gap-1 mb-1 justify-center">
+                <button onclick="eliteWeak('${c.instance_id}','elite')" class="btn btn-sm border ${eCls}" style="padding:1px 6px;font-size:9px;">E</button>
+                <button onclick="eliteWeak('${c.instance_id}','normal')" class="btn btn-sm border text-base-500 border-white/[0.06]" style="padding:1px 6px;font-size:9px;">N</button>
+                <button onclick="eliteWeak('${c.instance_id}','weak')" class="btn btn-sm border ${wCls}" style="padding:1px 6px;font-size:9px;">W</button>
+            </div>`;
+        }
+        // Delay / Ready
+        if (c.delaying) {
+            actionsHtml += `<button onclick="apiPost('/api/reenter_initiative/${c.instance_id}')" class="btn btn-ghost btn-sm w-full mb-1" style="font-size:9px;">Ready</button>`;
+        } else if (isActive) {
+            actionsHtml += `<button onclick="apiPost('/api/delay_turn/${c.instance_id}')" class="btn btn-ghost btn-sm w-full mb-1" style="font-size:9px;">Delay</button>`;
+        }
+        actionsHtml += `<button onclick="removeCombatant('${c.instance_id}')" class="btn btn-danger btn-sm w-full" style="font-size:9px;">Remove</button>`;
+
+        return `<div class="${rowCls} grid grid-cols-[32px_56px_1fr_48px_160px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.04]" data-id="${c.instance_id}" draggable="false">
+            <div class="drag-handle text-center text-base" title="Drag to reorder">&#x2807;</div>
+            <div>
+                <input type="number" class="inline-input w-12 text-center" value="${c.initiative}" onkeydown="if(event.key==='Enter'){updateInit('${c.instance_id}',this.value);this.blur()}" onblur="updateInit('${c.instance_id}',this.value)">
+            </div>
+            <div class="min-w-0">
+                <button class="text-sm font-semibold text-base-200 hover:text-accent-300 transition-colors truncate text-left" onclick="openStatModal('${c.instance_id}')">${c.name}</button>
+                ${isActive ? '<span class="block text-[9px] text-accent-400 uppercase tracking-wider mt-0.5">Active</span>' : ''}
+                ${c.delaying ? '<span class="block text-[9px] text-info-400 uppercase tracking-wider mt-0.5">Delaying</span>' : ''}
+                ${c.persistent_damage ? `<span class="block text-[9px] text-gold-300 mt-0.5">PD: ${c.persistent_damage}</span>` : ''}
+            </div>
+            <div class="font-mono text-info-400 font-bold text-sm text-center">${c.ac}</div>
+            <div>
+                <div class="flex items-center gap-1.5 mb-1">
+                    <span class="font-mono text-xs ${hpTextClass(hpPct, c.current_hp)} font-bold w-14 text-right">${c.current_hp}<span class="text-base-500 text-[10px]">/${c.max_hp}</span></span>
+                    <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#0f0f14;">
+                        <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <input type="number" id="hp-amt-${c.instance_id}" value="1" min="1" class="inline-input w-10 text-center" style="padding:2px 4px;font-size:11px;">
+                    <button onclick="adjustHP('${c.instance_id}','damage')" class="btn btn-sm" style="padding:1px 6px;font-size:10px;background:rgba(248,113,113,0.1);color:#fca5a5;border-color:rgba(248,113,113,0.2);">-</button>
+                    <button onclick="adjustHP('${c.instance_id}','heal')" class="btn btn-sm" style="padding:1px 6px;font-size:10px;background:rgba(74,222,128,0.1);color:#86efac;border-color:rgba(74,222,128,0.2);">+</button>
+                </div>
+            </div>
+            <div class="min-w-0">
+                <div class="flex flex-wrap gap-1 mb-1">${condsHtml}</div>
+                <div class="flex gap-1 items-center">
+                    <select id="cond-sel-${c.instance_id}" class="inline-input text-[10px] flex-1" style="padding:2px 4px;">
+                        ${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}
+                    </select>
+                    <button onclick="addCondition('${c.instance_id}')" class="btn btn-ghost" style="padding:1px 6px;font-size:10px;">+</button>
+                </div>
+                <div class="flex gap-1 items-center mt-1">
+                    <span class="text-[9px] text-gold-300 font-semibold uppercase shrink-0">PD</span>
+                    <input type="text" id="pd-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire" class="inline-input text-[10px] flex-1" style="padding:2px 4px;">
+                    <button onclick="setPD('${c.instance_id}')" class="btn btn-ghost" style="padding:1px 6px;font-size:10px;">Set</button>
+                </div>
+            </div>
+            <div class="text-center">${actionsHtml}</div>
+        </div>`;
+    }).join('');
+
+    // Re-init sortable
+    initSortable();
+}
+
+function renderActivePanel() {
+    const wrap = document.getElementById('active-panel-wrap');
+    if (!STATE.combatants.length) { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+
+    const c = STATE.combatants[STATE.turn_index];
+    if (!c) { wrap.classList.add('hidden'); return; }
+
+    document.getElementById('ap-name').textContent = c.name;
+    document.getElementById('ap-subtitle').textContent = c.is_pc ? `PC - Level ${c.level}` : `Monster Level ${c.level}`;
+
+    const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
+    let html = '';
+
+    // Reminders
+    const hasReminders = c.persistent_damage || (c.conditions && c.conditions.frightened > 0);
+    if (hasReminders) {
+        html += `<div class="rounded-lg p-3 mb-4 border border-gold-300/20" style="background:rgba(212,162,68,0.06);">
+            <div class="text-[10px] font-semibold text-gold-300 uppercase tracking-wider mb-2 text-center">End of Turn Reminders</div>
+            <ul class="text-xs text-base-300 space-y-1 list-disc pl-4">`;
+        if (c.persistent_damage) html += `<li>Take <strong class="text-gold-300">${c.persistent_damage}</strong> persistent damage, then DC 15 flat check.</li>`;
+        if (c.conditions && c.conditions.frightened > 0) html += `<li>Frightened decreases by 1 when you end this turn.</li>`;
+        html += `</ul></div>`;
+    }
+
+    // Stats grid
+    const stats = [
+        {label:'AC', val:c.ac, cls:'text-info-400'},
+        {label:'Fort', val:'+'+c.fort, cls:'text-success-400'},
+        {label:'Ref', val:'+'+c.ref, cls:'text-info-400'},
+        {label:'Will', val:'+'+c.will, cls:'text-spell-400'},
+        {label:'Spd', val:c.speed, cls:'text-base-200'},
+        {label:'Perc', val:'+'+c.perception, cls:'text-base-200'},
+    ];
+    html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
+    stats.forEach(s => {
+        html += `<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value ${s.cls}">${s.val}</div></div>`;
+    });
+    html += `</div>`;
+
+    // HP
+    html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.06]" style="background:#0f0f14;">
+        <div class="flex justify-between items-center mb-1">
+            <span class="text-[9px] text-base-500 uppercase tracking-wider font-semibold">Hit Points</span>
+            <span class="font-bold ${hpTextClass(hpPct, c.current_hp)}">${c.current_hp} / ${c.max_hp}</span>
+        </div>
+        <div class="w-full h-2 rounded-full overflow-hidden" style="background:#16161e;">
+            <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
+        </div>
+    </div>`;
+
+    // Defenses
+    if (!c.is_pc && (c.immunities?.length || c.resistances?.length || c.weaknesses?.length)) {
+        html += `<div class="mb-4 text-xs space-y-1">`;
+        if (c.immunities?.length) html += `<div><span class="text-base-500 uppercase text-[9px] font-semibold">Immunities:</span> <span class="text-base-300">${c.immunities.join(', ')}</span></div>`;
+        if (c.resistances?.length) html += `<div><span class="text-base-500 uppercase text-[9px] font-semibold">Resistances:</span> <span class="text-base-300">${(typeof c.resistances[0] === 'object' ? c.resistances.map(r=>r.type+' '+r.value).join(', ') : c.resistances.join(', '))}</span></div>`;
+        if (c.weaknesses?.length) html += `<div><span class="text-base-500 uppercase text-[9px] font-semibold">Weaknesses:</span> <span class="text-danger-300">${(typeof c.weaknesses[0] === 'object' ? c.weaknesses.map(w=>w.type+' '+w.value).join(', ') : c.weaknesses.join(', '))}</span></div>`;
+        html += `</div>`;
+    }
+
+    // Strikes
+    if (c.strikes && c.strikes.length) {
+        html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Strikes</div>`;
+        c.strikes.forEach(s => {
+            html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+                <span class="text-sm font-semibold text-base-200">${s.name}</span>
+                <div class="flex items-center gap-2">
+                    <span class="font-mono text-sm font-bold text-gold-300">${s.hit}</span>
+                    <span class="text-[10px] text-base-400">${s.damage}</span>
+                </div>
+            </div>`;
         });
-        
-        if (!isCurrentlyOpen) {
-            tooltip.classList.remove('hidden');
+        html += `</div>`;
+    }
+
+    // Actions (monsters)
+    if (!c.is_pc && c.actions && c.actions.length) {
+        html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Abilities</div>`;
+        c.actions.forEach(a => {
+            html += `<div class="p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+                <div class="font-semibold text-sm text-accent-300 mb-1">${a.name}</div>
+                <div class="text-xs text-base-300 leading-relaxed">${a.description || ''}</div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    // Feats (PCs)
+    if (c.is_pc && c.feats && c.feats.length) {
+        html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Feats & Features</div>`;
+        html += `<div class="flex flex-wrap gap-1">`;
+        c.feats.forEach(f => {
+            html += `<span class="text-[10px] px-2 py-1 rounded border border-white/[0.06] text-base-300 hover:text-accent-300 hover:border-accent-400/20 cursor-pointer transition-colors" style="background:#0f0f14;" title="${(f.desc||'').replace(/"/g,'&quot;').replace(/<[^>]*>/g,'').substring(0,200)}">${f.name}</span>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Conditions
+    if (c.conditions && Object.keys(c.conditions).length) {
+        const active = Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false);
+        if (active.length) {
+            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Conditions</div>`;
+            html += `<div class="flex flex-wrap gap-1">`;
+            active.forEach(([k,v]) => {
+                const label = k.replace(/_/g,'-') + (typeof v === 'number' && v > 0 ? ' ' + v : '');
+                html += `<span class="cond-pill">${label}</span>`;
+            });
+            html += `</div></div>`;
         }
     }
 
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.tooltip-popup').forEach(el => {
-            el.classList.add('hidden');
-        });
-    });
-</script>
+    document.getElementById('ap-body').innerHTML = html;
+}
 
-<!-- Combat Log Panel -->
-<div class="mt-6 bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-    <div class="bg-gray-900 px-4 py-3 flex justify-between items-center border-b border-gray-700">
-        <h3 class="font-header text-sm text-amber-500 tracking-wider">Encounter Log</h3>
-        <div class="flex gap-2">
-            <button onclick="refreshLog()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded border border-gray-600">↻ Refresh</button>
-            <button onclick="copyLog()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded border border-gray-600">📋 Copy</button>
-            <button onclick="if(confirm('Clear the combat log?')){fetch('/api/combat_log/clear',{method:'POST'}).then(()=>refreshLog())}" class="text-[10px] bg-red-900/30 hover:bg-red-900/50 text-red-300 px-2 py-1 rounded border border-red-900/50">Clear</button>
-        </div>
-    </div>
-    <div id="combat-log" class="max-h-[250px] overflow-y-auto custom-scrollbar p-3 space-y-1" style="font-family:'Crimson Text',Georgia,serif; font-size:13px;">
-        <div class="text-center py-4" style="color:#8A8279; font-style:italic;">Loading log...</div>
-    </div>
-</div>
-<script>
-    const LOG_COLORS = {
-        'turn': '#FBBF24', 'damage': '#F87171', 'heal': '#4ADE80',
-        'critical': '#F43F5E', 'condition': '#C4B5FD', 'system': '#7DC4C4', 'action': '#C2B9AD'
+function renderMeta() {
+    document.getElementById('round-badge').textContent = `Round ${STATE.round}`;
+    const xpBadge = document.getElementById('xp-badge');
+    if (STATE.encounter_xp > 0) {
+        xpBadge.classList.remove('hidden');
+        document.getElementById('xp-party-level').textContent = STATE.party_level;
+        document.getElementById('xp-diff-label').textContent = STATE.diff_label;
+        document.getElementById('xp-diff-label').className = `font-bold ${STATE.diff_color}`;
+        document.getElementById('xp-value').textContent = `(${STATE.encounter_xp} XP)`;
+    } else {
+        xpBadge.classList.add('hidden');
+    }
+}
+
+
+/* ──────────────── API Actions ──────────────── */
+function addMonster(path) {
+    document.getElementById('monster-dd').classList.add('hidden');
+    document.getElementById('monster-search').value = '';
+    apiPost('/api/add_combatant', {type:'monster', path: path});
+}
+
+function addPC() {
+    const sel = document.getElementById('pc-select');
+    if (!sel.value) return;
+    apiPost('/api/add_combatant', {type:'pc', path: sel.value});
+}
+
+function adjustHP(id, action) {
+    const input = document.getElementById('hp-amt-' + id);
+    const amt = parseInt(input?.value) || 1;
+    const fd = new FormData();
+    fd.append('amount', amt);
+    fd.append('action', action);
+    apiPost('/api/adjust_hp/' + id, fd, null);
+}
+
+async function updateInit(id, val) {
+    const fd = new FormData();
+    fd.append('initiative', parseInt(val) || 0);
+    await apiPost('/api/update_initiative/' + id, fd, null);
+}
+
+function condAction(id, cond, action) {
+    const fd = new FormData();
+    fd.append('condition', cond);
+    fd.append('action', action);
+    apiPost('/api/toggle_condition/' + id, fd, null);
+}
+
+function addCondition(id) {
+    const sel = document.getElementById('cond-sel-' + id);
+    if (!sel) return;
+    const fd = new FormData();
+    fd.append('condition', sel.value);
+    fd.append('action', 'add');
+    apiPost('/api/toggle_condition/' + id, fd, null);
+}
+
+function setPD(id) {
+    const input = document.getElementById('pd-' + id);
+    const fd = new FormData();
+    fd.append('persistent_damage', input?.value || '');
+    apiPost('/api/set_persistent_damage/' + id, fd, null);
+}
+
+function eliteWeak(id, mode) {
+    const fd = new FormData();
+    fd.append('mode', mode);
+    apiPost('/api/toggle_elite_weak/' + id, fd, null);
+}
+
+function removeCombatant(id) {
+    apiPost('/api/remove_combatant/' + id);
+}
+
+function saveEncounter() {
+    const name = document.getElementById('save-name').value.trim();
+    if (!name) { toast('Enter a name first', 'error'); return; }
+    const fd = new FormData();
+    fd.append('encounter_name', name);
+    apiPostRaw('/api/save_encounter', fd).then(r => {
+        toast(`Saved "${name}"`, 'success');
+        // Add to dropdown if not present
+        const sel = document.getElementById('load-select');
+        const exists = Array.from(sel.options).some(o => o.value === name);
+        if (!exists) {
+            const opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            sel.appendChild(opt);
+        }
+        document.getElementById('save-name').value = '';
+    }).catch(() => toast('Save failed', 'error'));
+}
+
+function loadEncounter() {
+    const sel = document.getElementById('load-select');
+    if (!sel.value) { toast('Select an encounter first', 'error'); return; }
+    const fd = new FormData();
+    fd.append('encounter_name', sel.value);
+    apiPostRaw('/api/load_encounter', fd).then(async r => {
+        // Load encounter causes a redirect normally; fetch the new state
+        const data = await apiGet('/api/tracker_state');
+        applyState(data);
+        toast(`Loaded "${sel.value}"`, 'success');
+    }).catch(() => toast('Load failed', 'error'));
+}
+
+async function deleteEncounter() {
+    const sel = document.getElementById('load-select');
+    if (!sel.value) { toast('Select an encounter first', 'error'); return; }
+    if (!confirm(`Delete "${sel.value}"?`)) return;
+    try {
+        const res = await apiPostRaw('/api/delete_encounter', {encounter_name: sel.value}, 'json');
+        const data = await res.json();
+        if (data.success) {
+            sel.querySelector(`option[value="${sel.value}"]`)?.remove();
+            sel.value = '';
+            toast('Deleted', 'success');
+        } else { toast(data.error || 'Delete failed', 'error'); }
+    } catch(e) { toast('Delete failed', 'error'); }
+}
+
+async function submitCustomMonster() {
+    const data = {
+        type: 'custom',
+        name: document.getElementById('cm-name').value.trim() || 'Custom Monster',
+        level: parseInt(document.getElementById('cm-level').value) || 1,
+        hp: parseInt(document.getElementById('cm-hp').value) || 20,
+        ac: parseInt(document.getElementById('cm-ac').value) || 16,
+        fort: parseInt(document.getElementById('cm-fort').value) || 5,
+        ref: parseInt(document.getElementById('cm-ref').value) || 5,
+        will: parseInt(document.getElementById('cm-will').value) || 3,
+        speed: parseInt(document.getElementById('cm-speed').value) || 25,
+        perception: parseInt(document.getElementById('cm-perc').value) || 5,
+        atk_name: document.getElementById('cm-atk-name').value.trim() || 'Strike',
+        atk_mod: parseInt(document.getElementById('cm-atk-mod').value) || 8,
+        atk_dmg: document.getElementById('cm-atk-dmg').value.trim() || '1d6+3',
     };
-    async function refreshLog() {
-        try {
-            const res = await fetch('/api/combat_log');
-            const data = await res.json();
-            const el = document.getElementById('combat-log');
-            if (!data.log || data.log.length === 0) {
-                el.innerHTML = '<div class="text-center py-4" style="color:#8A8279; font-style:italic;">No combat events recorded yet.</div>';
-                return;
-            }
-            el.innerHTML = data.log.map(e => {
-                const color = LOG_COLORS[e.type] || '#C2B9AD';
-                return `<div style="color:${color}; padding:2px 0; border-bottom:1px solid rgba(168,156,139,0.06);"><span style="color:#8A8279; font-size:11px; margin-right:6px;">${e.time}</span>${e.msg}</div>`;
-            }).join('');
-            el.scrollTop = el.scrollHeight;
-        } catch(e) {}
+    try {
+        // Try the dedicated custom endpoint first, fallback to add_combatant
+        let res = await fetch('/api/add_custom_monster', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify(data)});
+        if (!res.ok) {
+            res = await fetch('/api/add_combatant', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify(data)});
+        }
+        // Refresh state regardless
+        const state = await apiGet('/api/tracker_state');
+        applyState(state);
+        document.getElementById('custom-monster-form').classList.add('hidden');
+        toast(`Added ${data.name}`, 'success');
+    } catch(e) {
+        console.error(e);
+        toast('Failed to add custom monster', 'error');
     }
-    async function copyLog() {
-        try {
-            const res = await fetch('/api/combat_log');
-            const data = await res.json();
-            if (!data.log || data.log.length === 0) return;
-            const text = data.log.map(e => `[${e.time}] R${e.round} ${e.msg}`).join('\n');
-            await navigator.clipboard.writeText(text);
-            alert('Combat log copied to clipboard!');
-        } catch(e) { alert('Failed to copy.'); }
-    }
-    refreshLog();
-    setInterval(refreshLog, 5000);
-</script>
+}
 
-<style>
-    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
-    
-    .foundry-text p { margin-bottom: 0.5rem; }
-    .foundry-text p:last-child { margin-bottom: 0; }
-    .foundry-text strong { color: #d1d5db; font-weight: bold; }
-    .foundry-text hr { border-color: #374151; margin: 0.5rem 0; }
-</style>
 
-<!-- Stat Popup Modal -->
-<div id="stat-popup" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" style="background:#2E2B25; border:1px solid rgba(168,156,139,0.25);">
-        <div class="p-4 flex justify-between items-center shrink-0" style="border-bottom:1px solid rgba(168,156,139,0.15);">
-            <div>
-                <h3 id="stat-popup-name" class="font-header text-xl" style="color:#7DC4C4;">Combatant</h3>
-                <span id="stat-popup-subtitle" class="text-xs" style="color:#9E968B;">Loading...</span>
+/* ──────────────── Stat Popup Modal ──────────────── */
+async function openStatModal(instanceId) {
+    const modal = document.getElementById('stat-modal');
+    modal.classList.add('open');
+    document.getElementById('sm-body').innerHTML = '<div class="text-center py-8 text-base-500">Loading...</div>';
+
+    try {
+        const d = await apiGet(`/api/combatant_stats/${instanceId}`);
+        if (d.error) { document.getElementById('sm-body').innerHTML = `<div class="text-danger-400">${d.error}</div>`; return; }
+
+        document.getElementById('sm-name').textContent = d.name;
+        document.getElementById('sm-subtitle').textContent = d.is_pc
+            ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '- ' + d.subclass : ''}`
+            : `Creature Level ${d.level}`;
+
+        let html = '';
+
+        // Stats grid
+        html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
+        [{l:'AC',v:d.ac,c:'text-info-400'},{l:'Fort',v:'+'+d.fort,c:'text-success-400'},{l:'Ref',v:'+'+d.ref,c:'text-info-400'},{l:'Will',v:'+'+d.will,c:'text-spell-400'},{l:'Per',v:'+'+d.perception,c:'text-base-200'},{l:'Spd',v:d.speed,c:'text-base-200'}].forEach(s => {
+            html += `<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value ${s.c}">${s.v}</div></div>`;
+        });
+        html += `</div>`;
+
+        // HP
+        const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
+        html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.04]" style="background:#0f0f14;">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[9px] text-base-500 uppercase font-semibold">Hit Points</span>
+                <span class="font-bold ${hpTextClass(hpPct, d.current_hp)}">${d.current_hp} / ${d.max_hp}</span>
             </div>
-            <button onclick="document.getElementById('stat-popup').classList.add('hidden')" class="text-xl" style="color:#9E968B;">&times;</button>
-        </div>
-        <div id="stat-popup-body" class="p-5 overflow-y-auto flex-1 custom-scrollbar" style="color:#CFC5B4;">
-            <div class="text-center py-8" style="color:#8A8279;">Loading...</div>
-        </div>
-    </div>
-</div>
+            <div class="w-full h-2 rounded-full overflow-hidden" style="background:#16161e;">
+                <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
+            </div>
+        </div>`;
 
-<script>
-    async function openStatPopup(instanceId) {
-        const modal = document.getElementById('stat-popup');
-        modal.classList.remove('hidden');
-        document.getElementById('stat-popup-body').innerHTML = '<div class="text-center py-8" style="color:#8A8279;">Loading...</div>';
-        
-        try {
-            const res = await fetch(`/api/combatant_stats/${instanceId}`);
-            const d = await res.json();
-            if (d.error) { document.getElementById('stat-popup-body').innerHTML = `<div class="text-red-400">${d.error}</div>`; return; }
-            
-            document.getElementById('stat-popup-name').textContent = d.name;
-            document.getElementById('stat-popup-subtitle').textContent = d.is_pc 
-                ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '· ' + d.subclass : ''}` 
-                : `Creature Level ${d.level}`;
-            
-            let html = '';
-            
-            // Stats grid
+        // Conditions
+        if (d.conditions && Object.keys(d.conditions).length) {
+            const active = Object.entries(d.conditions).filter(([k,v]) => v && v !== 0 && v !== false);
+            if (active.length) {
+                html += `<div class="flex flex-wrap gap-1 mb-4">`;
+                active.forEach(([k,v]) => {
+                    const label = k.replace(/_/g,'-') + (typeof v === 'number' && v > 0 ? ' ' + v : '');
+                    html += `<span class="cond-pill">${label}</span>`;
+                });
+                html += `</div>`;
+            }
+        }
+
+        // Ability Scores (PCs)
+        if (d.is_pc && d.abilities) {
             html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
-            const stats = [
-                {label:'AC', val:d.ac, color:'#60A5FA'},
-                {label:'Fort', val:'+'+d.fort, color:'#4ADE80'},
-                {label:'Ref', val:'+'+d.ref, color:'#60A5FA'},
-                {label:'Will', val:'+'+d.will, color:'#C4B5FD'},
-                {label:'Per', val:'+'+d.perception, color:'#CFC5B4'},
-                {label:'Spd', val:d.speed, color:'#CFC5B4'},
-            ];
-            stats.forEach(s => {
-                html += `<div class="rounded p-2 text-center" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
-                    <div class="text-[9px] font-header uppercase tracking-wider" style="color:#9E968B;">${s.label}</div>
-                    <div class="font-bold text-lg font-header" style="color:${s.color};">${s.val}</div>
+            ['str','dex','con','int','wis','cha'].forEach(ab => {
+                const mod = d.abilities[ab] || 0;
+                html += `<div class="stat-card"><div class="stat-label">${ab}</div><div class="stat-value text-sm text-base-200">${mod >= 0 ? '+' : ''}${mod}</div></div>`;
+            });
+            html += `</div>`;
+        }
+
+        // Attacks
+        if (d.attacks && d.attacks.length) {
+            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Attacks</div>`;
+            d.attacks.forEach(a => {
+                const hit = a.hit || (a.strikes && a.strikes[0] ? a.strikes[0].label : '+?');
+                html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+                    <span class="text-sm font-semibold text-base-200">${a.name}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-sm font-bold text-gold-300">${hit}</span>
+                        <span class="text-[10px] text-base-400">${a.damage}</span>
+                    </div>
                 </div>`;
             });
             html += `</div>`;
-            
-            // HP bar
-            const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
-            const hpColor = hpPct > 50 ? '#4ADE80' : hpPct > 25 ? '#FBBF24' : '#F43F5E';
-            html += `<div class="mb-4 p-3 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.1);">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="font-header text-[10px] tracking-wider uppercase" style="color:#9E968B;">Hit Points</span>
-                    <span class="font-bold font-header" style="color:${hpColor};">${d.current_hp} / ${d.max_hp}</span>
-                </div>
-                <div class="w-full h-2 rounded-full" style="background:#1C1917;">
-                    <div class="h-2 rounded-full transition-all" style="width:${hpPct}%; background:${hpColor};"></div>
-                </div>
-            </div>`;
-            
-            // Conditions
-            if (d.conditions && Object.keys(d.conditions).length > 0) {
-                html += `<div class="flex flex-wrap gap-1 mb-4">`;
-                for (const [k, v] of Object.entries(d.conditions)) {
-                    if (v && v !== 0 && v !== false) {
-                        html += `<span class="text-[10px] font-header px-2 py-0.5 rounded" style="background:rgba(251,113,133,0.1); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">${k} ${typeof v === 'number' ? v : ''}</span>`;
-                    }
-                }
-                html += `</div>`;
-            }
-            
-            // Ability scores (PCs only)
-            if (d.is_pc && d.abilities) {
-                html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
-                ['str','dex','con','int','wis','cha'].forEach(ab => {
-                    const mod = d.abilities[ab] || 0;
-                    html += `<div class="rounded p-1.5 text-center" style="background:#1C1917; border:1px solid rgba(168,156,139,0.08);">
-                        <div class="text-[8px] font-header uppercase" style="color:#8A8279;">${ab}</div>
-                        <div class="text-sm font-bold" style="color:#EDE5D8;">${mod >= 0 ? '+' : ''}${mod}</div>
-                    </div>`;
-                });
-                html += `</div>`;
-            }
-            
-            // Attacks/Strikes
-            if (d.attacks && d.attacks.length > 0) {
-                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#7DC4C4;">Attacks</h4>`;
-                d.attacks.forEach(a => {
-                    const hit = a.hit || (a.strikes && a.strikes[0] ? a.strikes[0].label : '+?');
-                    html += `<div class="flex justify-between items-center p-2 rounded mb-1" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
-                        <span class="text-sm font-bold" style="color:#EDE5D8;">${a.name} <span class="text-xs opacity-50" style="color:#7DC4C4;">◆</span></span>
-                        <div class="flex gap-2 items-center">
-                            <span class="font-mono text-sm font-bold" style="color:#FBBF24;">${hit}</span>
-                            <span class="text-xs" style="color:#9E968B;">${a.damage}</span>
-                        </div>
-                    </div>`;
-                });
-                html += `</div>`;
-            }
-            
-            // Monster actions
-            if (!d.is_pc && d.actions && d.actions.length > 0) {
-                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#7DC4C4;">Abilities</h4>`;
-                d.actions.forEach(a => {
-                    html += `<div class="p-2 rounded mb-2" style="background:#252320; border:1px solid rgba(168,156,139,0.08);">
-                        <div class="font-bold text-sm mb-1" style="color:#D4A574;">${a.name}</div>
-                        <div class="text-xs foundry-text" style="color:#D1C9BD;">${a.description || ''}</div>
-                    </div>`;
-                });
-                html += `</div>`;
-            }
-            
-            // PC Skills
-            if (d.is_pc && d.skills) {
-                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#7DC4C4;">Skills</h4>`;
-                html += `<div class="flex flex-wrap gap-1">`;
-                d.skills.forEach(sk => {
-                    if (sk.total > 0) {
-                        html += `<span class="text-[10px] px-2 py-0.5 rounded" style="background:#252320; border:1px solid rgba(168,156,139,0.08); color:#CFC5B4;">${sk.name} <strong style="color:#7DC4C4;">+${sk.total}</strong></span>`;
-                    }
-                });
-                html += `</div></div>`;
-            }
-            
-            // Spells summary
-            if (d.is_pc && d.spell_casters && d.spell_casters.length > 0) {
-                html += `<div class="mb-4"><h4 class="font-header text-[10px] tracking-wider uppercase mb-2" style="color:#C4B5FD;">Spellcasting</h4>`;
-                d.spell_casters.forEach(sc => {
-                    html += `<div class="p-2 rounded mb-2" style="background:rgba(167,139,250,0.05); border:1px solid rgba(167,139,250,0.1);">
-                        <span class="font-header text-[10px]" style="color:#C4B5FD;">${sc.name} (${sc.tradition})</span>`;
-                    (sc.levels || []).forEach(lvl => {
-                        const names = (lvl.spells || []).map(s => s.name).join(', ');
-                        if (names) html += `<div class="text-[10px] mt-1" style="color:#C2B9AD;"><strong style="color:#D1C9BD;">${lvl.label}:</strong> ${names}</div>`;
-                    });
-                    html += `</div>`;
-                });
-                html += `</div>`;
-            }
-            
-            document.getElementById('stat-popup-body').innerHTML = html;
-        } catch(e) { 
-            document.getElementById('stat-popup-body').innerHTML = '<div class="text-red-400">Failed to load stats.</div>'; 
         }
-    }
-</script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-<script>
-    // Custom Monster submission
-    async function submitCustomMonster() {
-        const data = {
-            name: document.getElementById('cm-name').value.trim() || 'Custom Monster',
-            level: parseInt(document.getElementById('cm-level').value) || 1,
-            hp: parseInt(document.getElementById('cm-hp').value) || 20,
-            ac: parseInt(document.getElementById('cm-ac').value) || 16,
-            fort: parseInt(document.getElementById('cm-fort').value) || 5,
-            ref: parseInt(document.getElementById('cm-ref').value) || 5,
-            will: parseInt(document.getElementById('cm-will').value) || 3,
-            speed: parseInt(document.getElementById('cm-speed').value) || 25,
-            perception: parseInt(document.getElementById('cm-perc').value) || 5,
-            atk_name: document.getElementById('cm-atk-name').value.trim() || 'Strike',
-            atk_mod: parseInt(document.getElementById('cm-atk-mod').value) || 8,
-            atk_dmg: document.getElementById('cm-atk-dmg').value.trim() || '1d6+3',
-        };
-        try {
-            await fetch('/api/add_custom_monster', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
-            window.location.reload();
-        } catch(e) { console.error(e); }
-    }
 
-    // Drag-and-drop initiative reordering
-    const initList = document.getElementById('initiative-list');
-    if (initList) {
-        new Sortable(initList, {
-            handle: '.drag-handle',
-            animation: 150,
-            ghostClass: 'bg-amber-900/30',
-            onEnd: async function(evt) {
-                const rows = initList.querySelectorAll('tr[data-id]');
-                const order = Array.from(rows).map(r => r.dataset.id);
-                try {
-                    await fetch('/api/reorder_initiative', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ order: order })
-                    });
-                    window.location.reload();
-                } catch(e) { console.error('Reorder error:', e); }
-            }
-        });
-    }
-
-    // Delete saved encounter
-    async function deleteSelectedEncounter() {
-        const select = document.getElementById('encounter-select');
-        const name = select.value;
-        if (!name) { alert('Select an encounter to delete first.'); return; }
-        if (!confirm(`Delete saved encounter "${name}"? This cannot be undone.`)) return;
-        try {
-            const res = await fetch('/api/delete_encounter', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ encounter_name: name })
+        // Monster actions
+        if (!d.is_pc && d.actions && d.actions.length) {
+            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Abilities</div>`;
+            d.actions.forEach(a => {
+                html += `<div class="p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+                    <div class="font-semibold text-sm text-accent-300 mb-1">${a.name}</div>
+                    <div class="text-xs text-base-300 leading-relaxed">${a.description || ''}</div>
+                </div>`;
             });
-            const data = await res.json();
-            if (data.success) {
-                // Remove from dropdown
-                select.querySelector(`option[value="${name}"]`)?.remove();
-                select.value = '';
-            } else {
-                alert(data.error || 'Failed to delete encounter');
-            }
-        } catch(e) { console.error('Delete error:', e); }
-    }
+            html += `</div>`;
+        }
 
-    // Monster search dropdown
-    function showMonsterDropdown() {
-        document.getElementById('monster-dropdown').classList.remove('hidden');
+        // Immunities / Resistances / Weaknesses
+        if (!d.is_pc) {
+            const irw = [];
+            if (d.immunities?.length) irw.push(`<span class="text-base-500 uppercase text-[9px] font-semibold">Immunities:</span> ${d.immunities.join(', ')}`);
+            if (d.resistances?.length) irw.push(`<span class="text-base-500 uppercase text-[9px] font-semibold">Resistances:</span> ${typeof d.resistances[0]==='object' ? d.resistances.map(r=>r.type+' '+r.value).join(', ') : d.resistances.join(', ')}`);
+            if (d.weaknesses?.length) irw.push(`<span class="text-base-500 uppercase text-[9px] font-semibold">Weaknesses:</span> <span class="text-danger-300">${typeof d.weaknesses[0]==='object' ? d.weaknesses.map(w=>w.type+' '+w.value).join(', ') : d.weaknesses.join(', ')}</span>`);
+            if (irw.length) html += `<div class="mb-4 text-xs space-y-1 text-base-300">${irw.map(x=>`<div>${x}</div>`).join('')}</div>`;
+        }
+
+        // PC Skills
+        if (d.is_pc && d.skills) {
+            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Skills</div><div class="flex flex-wrap gap-1">`;
+            d.skills.forEach(sk => {
+                if (sk.total > 0) html += `<span class="text-[10px] px-2 py-0.5 rounded border border-white/[0.04] text-base-300" style="background:#0f0f14;">${sk.name} <strong class="text-accent-300">+${sk.total}</strong></span>`;
+            });
+            html += `</div></div>`;
+        }
+
+        // Spells
+        if (d.is_pc && d.spell_casters && d.spell_casters.length) {
+            html += `<div class="mb-4"><div class="text-[9px] text-spell-400 uppercase font-semibold mb-2">Spellcasting</div>`;
+            d.spell_casters.forEach(sc => {
+                html += `<div class="p-2 rounded-md mb-1 border border-spell-400/10" style="background:rgba(167,139,250,0.04);">
+                    <span class="text-[10px] font-semibold text-spell-300">${sc.name} (${sc.tradition})</span>`;
+                (sc.levels || []).forEach(lvl => {
+                    const names = (lvl.spells || []).map(s => s.name).join(', ');
+                    if (names) html += `<div class="text-[10px] mt-1 text-base-300"><strong class="text-base-200">${lvl.label}:</strong> ${names}</div>`;
+                });
+                html += `</div>`;
+            });
+            html += `</div>`;
+        }
+
+        document.getElementById('sm-body').innerHTML = html;
+    } catch(e) {
+        document.getElementById('sm-body').innerHTML = '<div class="text-danger-400 text-center py-8">Failed to load stats.</div>';
     }
-    
-    function filterMonsters() {
-        const query = document.getElementById('monster-search-input').value.toLowerCase().trim();
-        const options = document.querySelectorAll('.monster-option');
-        let visibleCount = 0;
-        options.forEach(opt => {
-            const name = opt.dataset.name;
-            const match = !query || name.includes(query);
-            opt.classList.toggle('hidden', !match);
-            if (match) visibleCount++;
-        });
-        // Show dropdown if we have results
-        document.getElementById('monster-dropdown').classList.remove('hidden');
-    }
-    
-    async function addMonsterFromDropdown(path) {
-        const formData = new FormData();
-        formData.append('type', 'monster');
-        formData.append('path', path);
-        try {
-            await fetch('/api/add_combatant', { method: 'POST', body: formData });
-            window.location.reload();
-        } catch(e) { console.error(e); }
-    }
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        const container = document.getElementById('monster-search-container');
-        if (container && !container.contains(e.target)) {
-            document.getElementById('monster-dropdown').classList.add('hidden');
+}
+
+function closeStatModal() {
+    document.getElementById('stat-modal').classList.remove('open');
+}
+
+
+/* ──────────────── Monster Search ──────────────── */
+function showMonsterDD() { document.getElementById('monster-dd').classList.remove('hidden'); }
+function filterMonsterDD() {
+    const q = document.getElementById('monster-search').value.toLowerCase().trim();
+    document.querySelectorAll('.monster-opt').forEach(el => {
+        el.classList.toggle('hidden', q && !el.dataset.name.includes(q));
+    });
+    document.getElementById('monster-dd').classList.remove('hidden');
+}
+document.addEventListener('click', e => {
+    const wrap = document.getElementById('monster-search-wrap');
+    if (wrap && !wrap.contains(e.target)) document.getElementById('monster-dd').classList.add('hidden');
+});
+
+function toggleCustomForm() {
+    document.getElementById('custom-monster-form').classList.toggle('hidden');
+}
+
+
+/* ──────────────── Drag & Drop (SortableJS) ──────────────── */
+let sortableInstance = null;
+function initSortable() {
+    const el = document.getElementById('initiative-list');
+    if (!el) return;
+    if (sortableInstance) sortableInstance.destroy();
+    sortableInstance = new Sortable(el, {
+        handle: '.drag-handle',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        onEnd: async function() {
+            const rows = el.querySelectorAll('[data-id]');
+            const order = Array.from(rows).map(r => r.dataset.id);
+            await apiPost('/api/reorder_initiative', {order});
         }
     });
+}
+
+
+/* ──────────────── Combat Log ──────────────── */
+const LOG_COLORS = {
+    turn: '#5EADAD', damage: '#f87171', heal: '#4ade80',
+    critical: '#f87171', condition: '#a78bfa', system: '#7DC4C4', action: '#a0a0b8'
+};
+
+async function refreshLog() {
+    try {
+        const data = await apiGet('/api/combat_log');
+        const el = document.getElementById('combat-log-body');
+        if (!data.log || !data.log.length) {
+            el.innerHTML = '<div class="text-center py-4 text-base-500 italic text-xs">No combat events yet.</div>';
+            return;
+        }
+        el.innerHTML = data.log.map(e => {
+            const color = LOG_COLORS[e.type] || '#a0a0b8';
+            return `<div style="color:${color};padding:1px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span class="text-base-500 text-[10px] mr-1.5">${e.time}</span>${e.msg}</div>`;
+        }).join('');
+        el.scrollTop = el.scrollHeight;
+    } catch(e) {}
+}
+
+async function copyLog() {
+    try {
+        const data = await apiGet('/api/combat_log');
+        if (!data.log || !data.log.length) return;
+        const text = data.log.map(e => `[${e.time}] R${e.round} ${e.msg}`).join('\n');
+        await navigator.clipboard.writeText(text);
+        toast('Log copied', 'success');
+    } catch(e) { toast('Failed to copy', 'error'); }
+}
+
+refreshLog();
+setInterval(refreshLog, 5000);
+
+
+/* ──────────────── SSE + Polling ──────────────── */
+let evtSource = null;
+function connectSSE() {
+    if (evtSource) { try { evtSource.close(); } catch(e){} }
+    evtSource = new EventSource('/api/events');
+    evtSource.addEventListener('encounter_update', function(e) {
+        // SSE gives a lightweight update; fetch full state for accuracy
+        apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
+    });
+    evtSource.addEventListener('connected', function() {});
+    evtSource.onerror = function() {
+        // Will auto-reconnect after a delay
+    };
+}
+connectSSE();
+
+// Polling fallback every 10s
+setInterval(async () => {
+    try {
+        const data = await apiGet('/api/tracker_state');
+        applyState(data);
+    } catch(e) {}
+}, 10000);
+
+
+/* ──────────────── Keyboard shortcut ──────────────── */
+document.addEventListener('keydown', e => {
+    // N = next turn (when not in an input)
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        apiPost('/api/cycle_turn/next');
+    }
+    if (e.key === 'Escape') {
+        closeStatModal();
+    }
+});
 
 </script>
 {% endblock %}
