@@ -293,8 +293,8 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "monk": {
         # L1 initial: perception=2, fort=4, ref=4, will=4, simple=2, unarmed=4, unarmored=4, class_dc=2
-        3:  {"simple": 4, "unarmed": 4},                                                    # Mystic Strikes (already expert unarmed)
-        5:  {"perception": 4},                                                               # Alertness
+        3:  {},                                                                              # Mystic Strikes (magical unarmed, no proficiency change)
+        5:  {"perception": 4, "simple": 4},                                                  # Alertness + Expert Strikes (simple→expert; unarmed already expert from L1)
         7:  {},                                                                              # Path to Perfection (player choice: one save → master)
         9:  {"class_dc": 4},                                                                 # Monk Expertise
         11: {},                                                                              # Second Path to Perfection (another save → master)
@@ -308,7 +308,7 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "rogue": {
         # L1 initial: perception=4, fort=2, ref=4, will=4, simple=2, martial=2(rapier/sap/shortbow/shortsword), unarmed=2, light=2, unarmored=2, class_dc=2
-        3:  {"perception": 4, "will": 4},                                                   # Already expert, Deny Advantage
+        3:  {},                                                                              # Deny Advantage (no proficiency bumps; perception/will already expert at L1)
         5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Tricks
         7:  {"perception": 6, "reflex": 6},                                                  # Vigilant Senses + Evasion
         9:  {"fortitude": 4, "class_dc": 4},                                                # Great Fortitude + Rogue Expertise
@@ -429,13 +429,13 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "sorcerer": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"fortitude": 4},                                                                # Magical Fortitude
-        5:  {"perception": 4},                                                               # Alertness
+        5:  {"fortitude": 4},                                                                # Magical Fortitude (Expert Fort)
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        11: {"reflex": 4, "simple": 4, "unarmed": 4},                                       # Lightning Reflexes + Weapon Expertise
+        9:  {"reflex": 4},                                                                   # Lightning Reflexes (Expert Ref)
+        11: {"perception": 4, "simple": 4, "unarmed": 4},                                   # Alertness (Expert Perception) + Weapon Expertise
         13: {"unarmored": 4},                                                                # Defensive Robes
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"will": 6, "fortitude": 6},                                                     # Resolve (Will → Master) + Greater Fortitude
+        17: {"will": 6, "fortitude": 6},                                                     # Majestic Will (Will → Master) + Greater Fortitude
         19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
     },
     # -------------------------------------------------------------------------
@@ -579,18 +579,17 @@ CLASS_PROGRESSION = {
         19: {"perception": 6, "will": 8},                                                    # Master Perception + Legendary Will
     },
     # -------------------------------------------------------------------------
-    # WIZARD (Player Core p.190) — AoN verified
+    # WIZARD (Player Core p.190) — Remaster verified
     # -------------------------------------------------------------------------
     "wizard": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"reflex": 4},                                                                  # Expert Reflex (Arcane Resilience area)
-        5:  {"fortitude": 4},                                                                # Expert Fort (Magical Fortitude)
+        5:  {"reflex": 4},                                                                  # Reflex Expertise
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        9:  {"perception": 4, "will": 6},                                                    # Alertness (Expert Perception) + Resolve (Master Will)
-        11: {"simple": 4, "unarmed": 4, "unarmored": 4, "reflex": 4},                         # Weapon Expertise + Defensive Robes + Lightning Reflexes
-        13: {},                                                                              # Weapon Specialization
+        9:  {"fortitude": 4},                                                                # Magical Fortitude (Expert Fort)
+        11: {"simple": 4, "unarmed": 4, "perception": 4},                                   # Weapon Expertise + Alertness (Expert Perception)
+        13: {"unarmored": 4},                                                                # Defensive Robes (Expert Unarmored)
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"will": 8, "fortitude": 6},                                                     # Legendary Will + Greater Fortitude (Master Fort)
+        17: {"will": 6},                                                                     # Prodigious Will (Master Will)
         19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
     },
     # -------------------------------------------------------------------------
@@ -803,27 +802,27 @@ rogue_prog = {
     20: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4}
 }
 
-# Investigator: standard skill feats, but skill increase at EVERY level starting L2
+# Investigator: skill feats at EVERY level (Skillful Lessons at odd levels), skill increase at EVERY level starting L2
 investigator_prog = {
     1: {"class_feat": 1, "ancestry_feat": 1},
     2: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    3: {"general_feat": 1, "skill_increase": 1},
+    3: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
     4: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
     5: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
     6: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    7: {"general_feat": 1, "skill_increase": 1},
+    7: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
     8: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    9: {"ancestry_feat": 1, "skill_increase": 1},
+    9: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1},
     10: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
-    11: {"general_feat": 1, "skill_increase": 1},
+    11: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
     12: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    13: {"ancestry_feat": 1, "skill_increase": 1},
+    13: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1},
     14: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    15: {"general_feat": 1, "skill_increase": 1, "ability_boosts": 4},
+    15: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4},
     16: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    17: {"ancestry_feat": 1, "skill_increase": 1},
+    17: {"ancestry_feat": 1, "skill_feat": 1, "skill_increase": 1},
     18: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1},
-    19: {"general_feat": 1, "skill_increase": 1},
+    19: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
     20: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4}
 }
 
@@ -854,7 +853,7 @@ CLASS_MATRIX = {
     "rogue":        {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": rogue_prog},
     "sorcerer":     {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "summoner":     {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
-    "swashbuckler": {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},
+    "swashbuckler": {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 2, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},
     "thaumaturge":  {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4}, "progression": base_prog},
     "witch":        {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "wizard":       {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog}

@@ -293,6 +293,53 @@
                 </div>
             </div>
 
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
+                <div class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-500">Languages</h3>
+                        <p class="text-xs text-gray-400">Common is granted automatically. Select additional languages based on your INT modifier.</p>
+                    </div>
+                    <div class="text-2xl font-bold text-white" id="lbl-lang-remaining">0 left</div>
+                </div>
+                <div id="ui-languages" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+                <div class="flex gap-2 mt-4">
+                    <input type="text" id="inp-custom-lang" placeholder="Other language..." class="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-amber-500 outline-none" onkeydown="if(event.key==='Enter'){addCustomLanguage(); event.preventDefault();}">
+                    <button onclick="addCustomLanguage()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded text-sm font-bold transition-colors">+ Add</button>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
+                <div class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-500">Starting Equipment</h3>
+                        <p class="text-xs text-gray-400">Select your starting weapon and armor. Starting gold: <span class="text-white font-bold" id="lbl-gold">15 gp</span></p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="bg-gray-950 rounded-lg border border-gray-800 p-4">
+                        <h4 class="text-sm font-bold text-gray-400 uppercase mb-2">Weapon</h4>
+                        <select id="sel-weapon" onchange="updateEquipment()" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-amber-500 outline-none">
+                            <option value="">-- None --</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1" id="lbl-weapon-info"></p>
+                    </div>
+                    <div class="bg-gray-950 rounded-lg border border-gray-800 p-4">
+                        <h4 class="text-sm font-bold text-gray-400 uppercase mb-2">Armor</h4>
+                        <select id="sel-armor" onchange="updateEquipment()" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-amber-500 outline-none">
+                            <option value="">-- Unarmored --</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1" id="lbl-armor-info"></p>
+                    </div>
+                </div>
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="chk-adventurer-pack" onchange="updateEquipment()" class="accent-amber-500" checked>
+                        <span class="text-sm text-gray-300 font-bold">Include Adventurer's Pack</span>
+                        <span class="text-xs text-gray-500">(Backpack, bedroll, rations, rope, torches, waterskin)</span>
+                    </label>
+                </div>
+            </div>
+
             <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl" id="wrap-guided-extras">
                 <h3 class="text-lg font-bold text-amber-500 mb-4 border-b border-gray-700 pb-2">Guided Class & Background Choices</h3>
                 <div id="ui-guided-extras"></div>
@@ -343,16 +390,28 @@
         const dbFeats = {{ feats | tojson | safe }};
         const bData = {{ builder_data | tojson | safe }};
         const subclassDescs = {{ subclass_descriptions | tojson | safe }};
+        const dbWeapons = {{ weapons | tojson | safe }};
+        const dbArmor = {{ armor | tojson | safe }};
 
         let state = {
             name: "", deity: "", sanctification: "Neutral",
             ancestry: null, heritage: null, ancFeat: null, ancBoosts: [],
             background: null, bgBoosts: [], bgSkills: [], bgLores: [], bgNeedsLore: false,
-            cls: null, subclass: null, keyStat: null, clsFeat: null, clsFeats: {}, 
+            cls: null, subclass: null, keyStat: null, clsFeats: {},
             tradition: null, spells: [],
             freeBoosts: [], freeSkills: [], customLores: [],
-            guided: {} 
+            languages: ['Common'], customLanguages: [],
+            selectedWeapon: '', selectedArmor: '', adventurerPack: true,
+            guided: {}
         };
+
+        const PF2E_LANGUAGES = [
+            'Common', 'Draconic', 'Dwarven', 'Elven', 'Gnomish', 'Goblin', 'Halfling', 'Jotun',
+            'Orcish', 'Sylvan', 'Undercommon', 'Abyssal', 'Aklo', 'Aquan', 'Auran', 'Celestial',
+            'Gnoll', 'Ignan', 'Infernal', 'Necril', 'Shadowtongue', 'Terran', 'Sussuran',
+            'Petran', 'Pyric', 'Thalassic', 'Fey', 'Empyrean', 'Diabolic', 'Daemonic',
+            'Protean', 'Requian', 'Wildsong', 'Sakvroth', 'Muan', 'Kholo'
+        ];
         let mCtx = { type: null, data: [], active: null, meta: {}, tab: 'all', activeTabs: false };
 
         function getTempFinalStats() {
@@ -434,7 +493,7 @@
             document.getElementById(`nav-${stepId}`).classList.add('active');
             
             if(stepId === 'abilities') buildAbilitiesUI();
-            if(stepId === 'skills') { buildSkillsUI(); renderGuidedExtras(); }
+            if(stepId === 'skills') { buildSkillsUI(); renderLanguageUI(); populateEquipment(); renderGuidedExtras(); }
             if(stepId === 'review') renderBuilderReview();
             runValidation();
         }
@@ -1214,6 +1273,79 @@
             runValidation();
         }
 
+        function getLanguageSlots() {
+            let intMod = getTempFinalStats().int || 0;
+            // PF2e: you get bonus languages equal to INT modifier (minimum 0)
+            // Plus ancestry languages (typically Common + ancestry-specific)
+            let ancestryLangs = 1; // Common is always granted
+            // Some ancestries grant additional languages
+            let ancKey = (state.ancestry || '').toLowerCase();
+            const ANCESTRY_BONUS_LANGS = {'elf': 1, 'gnome': 1, 'human': 1, 'half-elf': 1, 'half-orc': 1, 'hobgoblin': 1};
+            ancestryLangs += (ANCESTRY_BONUS_LANGS[ancKey] || 0);
+            return Math.max(0, intMod) + ancestryLangs;
+        }
+
+        function renderLanguageUI() {
+            const container = document.getElementById('ui-languages');
+            if (!container) return;
+            let totalSlots = getLanguageSlots();
+            let selected = state.languages.length + state.customLanguages.length;
+            let remaining = Math.max(0, totalSlots - selected);
+            document.getElementById('lbl-lang-remaining').innerText = remaining + ' left';
+
+            let html = '';
+            PF2E_LANGUAGES.forEach(lang => {
+                let isSelected = state.languages.includes(lang);
+                let isCommon = lang === 'Common';
+                let cls = isCommon ? 'bg-green-900/30 border-green-800 text-green-400 cursor-default' :
+                           isSelected ? 'bg-amber-900/30 border-amber-700 text-amber-400 cursor-pointer' :
+                           (remaining > 0 ? 'bg-gray-950 border-gray-700 text-gray-400 hover:border-amber-600 cursor-pointer' : 'bg-gray-950 border-gray-800 text-gray-600 cursor-not-allowed');
+                html += `<div class="px-3 py-2 rounded border text-xs font-bold transition-colors ${cls}" onclick="${isCommon ? '' : `toggleLanguage('${lang}')`}">${lang}${isCommon ? ' (auto)' : ''}</div>`;
+            });
+            // Custom languages
+            state.customLanguages.forEach((lang, idx) => {
+                html += `<div class="px-3 py-2 rounded border bg-purple-900/30 border-purple-800 text-purple-300 text-xs font-bold cursor-pointer group" onclick="removeCustomLanguage(${idx})">${lang} <span class="text-red-500 hidden group-hover:inline ml-1">✖</span></div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function toggleLanguage(lang) {
+            if (lang === 'Common') return;
+            let idx = state.languages.indexOf(lang);
+            if (idx >= 0) {
+                state.languages.splice(idx, 1);
+            } else {
+                let totalSlots = getLanguageSlots();
+                let selected = state.languages.length + state.customLanguages.length;
+                if (selected < totalSlots) state.languages.push(lang);
+            }
+            renderLanguageUI();
+            runValidation();
+        }
+
+        function addCustomLanguage() {
+            const inp = document.getElementById('inp-custom-lang');
+            let val = inp.value.trim();
+            if (!val) return;
+            val = val.charAt(0).toUpperCase() + val.slice(1);
+            if (!state.customLanguages.includes(val) && !state.languages.includes(val)) {
+                let totalSlots = getLanguageSlots();
+                let selected = state.languages.length + state.customLanguages.length;
+                if (selected < totalSlots) {
+                    state.customLanguages.push(val);
+                }
+            }
+            inp.value = '';
+            renderLanguageUI();
+            runValidation();
+        }
+
+        function removeCustomLanguage(idx) {
+            state.customLanguages.splice(idx, 1);
+            renderLanguageUI();
+            runValidation();
+        }
+
         function runValidation() {
             state.name = document.getElementById('inp-name').value;
             
@@ -1304,6 +1436,93 @@
             }
         }
 
+        function populateEquipment() {
+            const selW = document.getElementById('sel-weapon');
+            const selA = document.getElementById('sel-armor');
+            const prevW = state.selectedWeapon;
+            const prevA = state.selectedArmor;
+
+            // Determine weapon proficiencies from class
+            const cData = bData.classes[state.cls] || {};
+            const hasSimple = true; // all classes get simple
+            const hasMartial = (cData.base_proficiencies || {}).martial > 0 || ['fighter','ranger','barbarian','champion','magus','swashbuckler','inventor','gunslinger','thaumaturge'].includes(state.cls);
+            const hasAdvanced = (cData.base_proficiencies || {}).advanced > 0;
+
+            // Determine armor proficiencies
+            const hasLight = true; // most classes
+            const hasMedium = (cData.base_proficiencies || {}).medium > 0 || ['fighter','ranger','barbarian','champion','magus','inventor','swashbuckler','cleric','druid','warpriest'].includes(state.cls);
+            const hasHeavy = (cData.base_proficiencies || {}).heavy > 0 || ['fighter','champion'].includes(state.cls);
+
+            // Populate weapons
+            selW.innerHTML = '<option value="">-- None --</option>';
+            let sortedWeapons = [...dbWeapons].sort((a, b) => a.name.localeCompare(b.name));
+            for (const w of sortedWeapons) {
+                let cat = (w.category || 'simple').toLowerCase();
+                if (cat === 'advanced' && !hasAdvanced) continue;
+                if (cat === 'martial' && !hasMartial) continue;
+                let label = w.name;
+                if (w.damage) label += ` (${w.damage})`;
+                if (cat !== 'simple') label += ` [${cat}]`;
+                let opt = document.createElement('option');
+                opt.value = w.name;
+                opt.textContent = label;
+                selW.appendChild(opt);
+            }
+            if (prevW) selW.value = prevW;
+
+            // Populate armor
+            selA.innerHTML = '<option value="">-- Unarmored --</option>';
+            let sortedArmor = [...dbArmor].sort((a, b) => a.name.localeCompare(b.name));
+            for (const a of sortedArmor) {
+                let cat = (a.category || 'light').toLowerCase();
+                if (cat === 'heavy' && !hasHeavy) continue;
+                if (cat === 'medium' && !hasMedium) continue;
+                let label = a.name;
+                if (a.ac) label += ` (AC +${a.ac})`;
+                if (cat !== 'light') label += ` [${cat}]`;
+                let opt = document.createElement('option');
+                opt.value = a.name;
+                opt.textContent = label;
+                selA.appendChild(opt);
+            }
+            if (prevA) selA.value = prevA;
+
+            document.getElementById('chk-adventurer-pack').checked = state.adventurerPack;
+            updateEquipment();
+        }
+
+        function updateEquipment() {
+            const selW = document.getElementById('sel-weapon');
+            const selA = document.getElementById('sel-armor');
+            state.selectedWeapon = selW.value;
+            state.selectedArmor = selA.value;
+            state.adventurerPack = document.getElementById('chk-adventurer-pack').checked;
+
+            // Show weapon info
+            const wInfo = document.getElementById('lbl-weapon-info');
+            if (state.selectedWeapon) {
+                let w = dbWeapons.find(x => x.name === state.selectedWeapon);
+                if (w) {
+                    let parts = [`Damage: ${w.damage || '1d4'}`];
+                    if (w.traits && w.traits.length) parts.push(`Traits: ${w.traits.join(', ')}`);
+                    wInfo.textContent = parts.join(' | ');
+                } else { wInfo.textContent = ''; }
+            } else { wInfo.textContent = ''; }
+
+            // Show armor info
+            const aInfo = document.getElementById('lbl-armor-info');
+            if (state.selectedArmor) {
+                let a = dbArmor.find(x => x.name === state.selectedArmor);
+                if (a) {
+                    let parts = [`AC +${a.ac || 0}`];
+                    if (a.dex_cap !== undefined && a.dex_cap !== null) parts.push(`Dex Cap +${a.dex_cap}`);
+                    if (a.penalty) parts.push(`Check Penalty ${a.penalty}`);
+                    if (a.str_req) parts.push(`Str ${a.str_req}`);
+                    aInfo.textContent = parts.join(' | ');
+                } else { aInfo.textContent = ''; }
+            } else { aInfo.textContent = ''; }
+        }
+
         function renderBuilderReview() {
             const ui = document.getElementById('ui-builder-review');
             let html = '';
@@ -1343,7 +1562,7 @@
                     ${state.subclass ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-300">${esc(state.subclass)}</span>` : ''}
                     ${state.keyStat ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-400">Key: <span class="text-white font-bold uppercase">${state.keyStat}</span></span>` : ''}
                 </div>
-                ${state.classFeat ? `<div class="mt-2"><span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 text-sm">Class Feat: ${esc(state.classFeat)}</span></div>` : ''}
+                ${Object.values(state.clsFeats).filter(Boolean).length ? `<div class="mt-2 flex flex-wrap gap-2">${Object.values(state.clsFeats).filter(Boolean).map(f => `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 text-sm">Class Feat: ${esc(f.name || f)}</span>`).join('')}</div>` : ''}
             </div>`;
             
             // Ability Scores
@@ -1384,7 +1603,30 @@
                     selectedSpells.map(s => `<span class="bg-blue-900/30 border border-blue-800/50 rounded px-2 py-1 text-blue-300 text-xs font-bold">${esc(s.name || s)}</span>`).join('') +
                 `</div></div>`;
             }
-            
+
+            // Languages
+            let allLangs = [...state.languages, ...state.customLanguages];
+            if (allLangs.length > 0) {
+                html += `<div class="mb-6">
+                    <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Languages</h4>
+                    <div class="flex flex-wrap gap-2">` +
+                    allLangs.map(l => `<span class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-purple-300 text-xs font-bold">${esc(l)}</span>`).join('') +
+                `</div></div>`;
+            }
+
+            // Equipment
+            let eqItems = [];
+            if (state.selectedWeapon) eqItems.push(state.selectedWeapon);
+            if (state.selectedArmor) eqItems.push(state.selectedArmor);
+            if (state.adventurerPack) eqItems.push("Adventurer's Pack");
+            if (eqItems.length > 0) {
+                html += `<div class="mb-6">
+                    <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Equipment</h4>
+                    <div class="flex flex-wrap gap-2">` +
+                    eqItems.map(e => `<span class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-orange-300 text-xs font-bold">${esc(e)}</span>`).join('') +
+                `</div></div>`;
+            }
+
             ui.innerHTML = html || '<div class="text-gray-500 italic text-center py-8">Complete the previous steps to see your review.</div>';
         }
         
@@ -1422,15 +1664,16 @@
                 });
             }
 
-            let finalFeats = [state.ancFeat, state.clsFeat].filter(Boolean);
-            Object.values(state.clsFeats).forEach(f => finalFeats.push(f));
+            let finalFeats = [];
+            if (state.ancFeat) finalFeats.push({...state.ancFeat, type: "Ancestry Feat"});
+            Object.values(state.clsFeats).forEach(f => { if(f) finalFeats.push({...f, type: "Class Feat"}); });
             
-            if (state.guided.versatile_feat) finalFeats.push(state.guided.versatile_feat);
-            if (state.guided.ambition_feat) finalFeats.push(state.guided.ambition_feat);
+            if (state.guided.versatile_feat) finalFeats.push({...state.guided.versatile_feat, type: state.guided.versatile_feat.type || "General Feat"});
+            if (state.guided.ambition_feat) finalFeats.push({...state.guided.ambition_feat, type: state.guided.ambition_feat.type || "Class Feat"});
             if (state.cls === 'kineticist') {
                 if (state.guided.kin_gate) finalFeats.push({name: `Kinetic Gate: ${state.guided.kin_gate}`, desc: "Selected Gate Type", type: "Class Feature"});
                 if (state.guided.kin_elements) finalFeats.push({name: `Elements: ${state.guided.kin_elements}`, desc: "Chosen Elemental Affinities", type: "Class Feature"});
-                if (state.guided.kin_feat && (!state.guided.kin_gate || state.guided.kin_gate === 'Single Gate')) finalFeats.push(state.guided.kin_feat);
+                if (state.guided.kin_feat && (!state.guided.kin_gate || state.guided.kin_gate === 'Single Gate')) finalFeats.push({...state.guided.kin_feat, type: state.guided.kin_feat.type || "Class Feat"});
             }
             if (state.guided.bg_choice) {
                 finalFeats.push({name: "Background Feature", desc: state.guided.bg_choice, type: "Background Choice"});
@@ -1439,10 +1682,27 @@
             let finalMods = {str:0, dex:0, con:0, int:0, wis:0, cha:0};
             for(let s in finalStats) { finalMods[s] = Math.floor((finalStats[s]-10)/2); }
 
+            // Build equipment list
+            let equipmentList = [];
+            if (state.selectedWeapon) {
+                let w = dbWeapons.find(x => x.name === state.selectedWeapon);
+                equipmentList.push({type: 'weapon', name: state.selectedWeapon, damage: w ? w.damage : '1d4', traits: w ? w.traits : [], category: w ? w.category : 'simple'});
+            }
+            if (state.selectedArmor) {
+                let a = dbArmor.find(x => x.name === state.selectedArmor);
+                equipmentList.push({type: 'armor', name: state.selectedArmor, ac: a ? a.ac : 0, dex_cap: a ? a.dex_cap : null, category: a ? a.category : 'light'});
+            }
+            if (state.adventurerPack) {
+                equipmentList.push({type: 'gear', name: "Adventurer's Pack"});
+            }
+
             const payload = {
                 name: state.name, deity: document.getElementById('inp-deity').value, sanctification: state.sanctification,
                 ancestry: state.ancestry, heritage: state.heritage, background: state.background, class_name: state.cls.charAt(0).toUpperCase()+state.cls.slice(1), subclass: state.subclass,
-                abilities: finalStats, skills: [...new Set(allSkills)], feats: finalFeats, spellCasters: spellData
+                abilities: finalStats, skills: [...new Set(allSkills)], feats: finalFeats, spellCasters: spellData,
+                languages: [...state.languages, ...state.customLanguages],
+                customLores: state.customLores.map(l => [l, 2]),
+                equipment: equipmentList
             };
 
             try {

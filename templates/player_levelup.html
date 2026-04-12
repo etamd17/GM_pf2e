@@ -508,12 +508,20 @@
 
         function getTempFinalStats() {
             // Detect format: modifiers (0-7) vs scores (8-24)
-            let rawVals = Object.values(pc.abilities).map(v => typeof v === 'object' ? (v.value || 0) : (v || 0));
-            let isScoreFormat = rawVals.some(v => v >= 8);
+            // Only check the 6 ability score keys, ignoring 'breakdown' and other metadata
+            const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+            let rawVals = ABILITY_KEYS.map(k => {
+                let v = pc.abilities[k];
+                return typeof v === 'object' ? (v.value || 0) : (v || 0);
+            });
+            // Score format: most values are 10+. Modifier format: most are 0-7.
+            // Use median check: if the majority of values are >= 8, it's score format.
+            let isScoreFormat = rawVals.filter(v => v >= 8).length >= 4;
             
             // Work in score format for correct boost math
             let temp = {};
-            for (let s in pc.abilities) {
+            for (let s of ABILITY_KEYS) {
+                if (!(s in pc.abilities)) continue;
                 let raw = typeof pc.abilities[s] === 'object' ? (pc.abilities[s].value || 0) : (pc.abilities[s] || 0);
                 temp[s] = isScoreFormat ? raw : (raw * 2 + 10); // Convert mods to scores
             }
@@ -792,11 +800,11 @@
                 let html = `<div class="bg-gray-800 p-6 rounded-lg border border-blue-900/50 shadow-xl mb-6 relative">
                     <div class="absolute top-0 right-0 bg-blue-900/40 text-blue-400 px-3 py-1 rounded-bl-lg text-[10px] font-bold uppercase tracking-widest border-b border-l border-blue-900/50">${caster.magicTradition || 'Unknown'}</div>
                     <h3 class="text-xl font-bold text-blue-400 mb-1">${caster.name}</h3>
-                    <p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-4 border-b border-gray-700 pb-2">${caster.castingType || caster.type || 'Focus'} Casting</p>
+                    <p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-4 border-b border-gray-700 pb-2">${caster.castingType || caster.spellcastingType || caster.type || 'Focus'} Casting</p>
                 `;
 
                 let oldSlots = [0,0,0,0,0,0,0,0,0,0]; let newSlots = [0,0,0,0,0,0,0,0,0,0];
-                let tLower = (caster.castingType || caster.type || "unknown").toLowerCase();
+                let tLower = (caster.castingType || caster.spellcastingType || caster.type || "unknown").toLowerCase();
                 let cType = null;
                 
                 if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
@@ -920,7 +928,29 @@
         function renderReview() {
             const ui = document.getElementById('ui-review-content');
             let html = "";
-            
+
+            // Show HP gain for this level
+            let classHp = (pc.attributes || {}).classhp || 8;
+            let conMod = (pc.mods || {}).con || 0;
+            // If abilities were boosted this level and con was boosted, recalculate
+            if (state.free_boosts_selected.includes('con')) {
+                let tempStats = getTempFinalStats();
+                conMod = tempStats.con || conMod;
+            }
+            let hpPerLevel = classHp + conMod + ((pc.attributes || {}).bonushpPerLevel || 0);
+            if (hpPerLevel < 1) hpPerLevel = 1;
+            let oldHp = pc.hp || 0;
+            let newHp = oldHp + hpPerLevel;
+            html += `<div class="mb-6 bg-red-950/20 border border-red-900/50 rounded-lg p-4">
+                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Hit Points</h4>
+                <div class="flex items-center gap-4">
+                    <span class="text-2xl font-bold text-red-400">${oldHp}</span>
+                    <span class="text-gray-500">→</span>
+                    <span class="text-2xl font-bold text-green-400">${newHp}</span>
+                    <span class="text-xs text-gray-500 ml-2">(+${hpPerLevel} = ${classHp} class + ${conMod} CON${(pc.attributes || {}).bonushpPerLevel ? ' + ' + (pc.attributes || {}).bonushpPerLevel + ' bonus' : ''})</span>
+                </div>
+            </div>`;
+
             // Show automatic class feature bumps
             let bumpKeys = Object.keys(state.auto_bumps || {});
             if (bumpKeys.length > 0) {
@@ -1155,9 +1185,9 @@
 
             let mValid = true;
             state.spellCasters.forEach((c, idx) => {
-                let tLower = (c.castingType || c.type || "unknown").toLowerCase();
+                let tLower = (c.castingType || c.spellcastingType || c.type || "unknown").toLowerCase();
                 let cType = null;
-                
+
                 if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
                 else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
                 
@@ -1206,13 +1236,24 @@
         async function submitLevelUp() {
             const btn = document.getElementById('btn-finish'); btn.innerText = "Processing Matrix..."; btn.disabled = true;
 
-            let finalFeats = [...(pc.raw_feats || [])]; 
+            let finalFeats = [...(pc.raw_feats || [])];
+            const FEAT_TYPE_LABELS = {
+                'class_feat': 'Class Feat', 'skill_feat': 'Skill Feat',
+                'general_feat': 'General Feat', 'ancestry_feat': 'Ancestry Feat'
+            };
             state.retrained_feats.forEach(rf => {
+                // Determine the type of the old feat being replaced
+                let oldFeat = finalFeats.find(f => Array.isArray(f) ? f[0] === rf.old : (f.name || '') === rf.old);
+                let oldType = oldFeat && Array.isArray(oldFeat) ? (oldFeat[2] || 'Feat') : 'Feat';
                 finalFeats = finalFeats.filter(f => Array.isArray(f) ? f[0] !== rf.old : f.name !== rf.old);
-                finalFeats.push([rf.new.name, "Feat", targetLevel]); 
+                finalFeats.push([rf.new.name, null, oldType, targetLevel]);
             });
-            Object.values(state.feats_selected).forEach(f => {
-                finalFeats.push([f.name, "Feat", targetLevel]);
+            Object.entries(state.feats_selected).forEach(([key, f]) => {
+                // Strip numeric suffix (e.g. class_feat_0 → class_feat) for type lookup
+                let baseKey = key.replace(/_\d+$/, '');
+                let featType = FEAT_TYPE_LABELS[baseKey] || 'Feat';
+                // Use Pathbuilder-compatible format: [name, subselection, type, level]
+                finalFeats.push([f.name, null, featType, targetLevel]);
             });
 
             let finalSkills = {...state.base_profs};
@@ -1222,11 +1263,16 @@
             });
 
             // Detect format and work in scores for correct boost math
-            let rawAbilVals = Object.values(pc.abilities).map(v => typeof v === 'object' ? (v.value || 0) : (v || 0));
-            let isScoreFmt = rawAbilVals.some(v => v >= 8);
+            const ABIL_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+            let rawAbilVals = ABIL_KEYS.map(k => {
+                let v = pc.abilities[k];
+                return typeof v === 'object' ? (v.value || 0) : (v || 0);
+            });
+            let isScoreFmt = rawAbilVals.filter(v => v >= 8).length >= 4;
             
             let finalAbilities = {};
-            for (let s in pc.abilities) {
+            for (let s of ABIL_KEYS) {
+                if (!(s in pc.abilities)) continue;
                 let raw = typeof pc.abilities[s] === 'object' ? (pc.abilities[s].value || 0) : (pc.abilities[s] || 0);
                 finalAbilities[s] = isScoreFmt ? raw : (raw * 2 + 10); // Convert to scores
             }
@@ -1245,7 +1291,7 @@
 
             let finalCasters = JSON.parse(JSON.stringify(state.spellCasters));
             finalCasters.forEach((c, idx) => {
-                let tLower = (c.castingType || c.type || "unknown").toLowerCase();
+                let tLower = (c.castingType || c.spellcastingType || c.type || "unknown").toLowerCase();
                 let cType = null;
                 if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
                 else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";

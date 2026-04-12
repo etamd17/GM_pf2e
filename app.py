@@ -646,8 +646,9 @@ class Character:
         self.ability_display = []
         
         # Detect format: Pathbuilder stores modifiers (0-7 range), our builder stores scores (8-24 range)
+        # Use majority check: if 4+ of the 6 values are >= 8, treat as full scores
         raw_vals = [safe_int(v.get('value', 0) if isinstance(v, dict) else v, 0) for v in [self.abilities.get(k, 0) for k in ['str', 'dex', 'con', 'int', 'wis', 'cha']]]
-        is_score_format = any(v >= 8 for v in raw_vals)  # If any value >= 8, these are full ability scores
+        is_score_format = sum(1 for v in raw_vals if v >= 8) >= 4
         
         for k in ['str', 'dex', 'con', 'int', 'wis', 'cha']:
             v = self.abilities.get(k, 0)
@@ -669,7 +670,19 @@ class Character:
         # --- AUTOMATION: THE RULE ENGINE PARSER ---
         # proficiencies must be initialized before the rule engine since feats can modify them
         self.proficiencies = build.get('proficiencies') or {}
-        
+
+        # Normalize Pathbuilder camelCase proficiency keys to snake_case
+        PB_KEY_MAP = {'classDC': 'class_dc', 'castingArcane': 'spell_attack', 'castingDivine': 'spell_attack',
+                      'castingOccult': 'spell_attack', 'castingPrimal': 'spell_attack'}
+        for pb_key, norm_key in PB_KEY_MAP.items():
+            if pb_key in self.proficiencies:
+                val = safe_int(self.proficiencies[pb_key])
+                if val > 0:
+                    self.proficiencies[norm_key] = max(self.proficiencies.get(norm_key, 0), val)
+                    # Also set spell_dc from casting proficiency if not already set
+                    if pb_key.startswith('casting') and val > 0:
+                        self.proficiencies['spell_dc'] = max(self.proficiencies.get('spell_dc', 0), val)
+
         # Parse Pathbuilder lores array into proficiencies
         for lore_entry in (build.get('lores') or []):
             if isinstance(lore_entry, (list, tuple)) and len(lore_entry) >= 2:
@@ -962,7 +975,7 @@ class Character:
             self.spell_casters.append({'name': 'Formula Book', 'type': 'Alchemical', 'levels': []})
 
         for caster in self.raw_spellCasters:
-            cast_type = safe_str(caster.get('castingType'), 'Prepared')
+            cast_type = safe_str(caster.get('castingType') or caster.get('spellcastingType'), 'Prepared')
             c_info = {'name': safe_str(caster.get('name'), 'Spellcasting'), 'tradition': safe_str(caster.get('magicTradition'), 'Unknown'), 'type': cast_type, 'levels': []}
             slots_per_day = caster.get('perDay') or []
             
@@ -1183,23 +1196,15 @@ class Character:
                 focus_spells.append({'name': f['name'], 'desc': f['desc']})
         
         if focus_spells:
-            # Auto-set focus_max if Pathbuilder didn't export it
-            if self.focus_max == 0:
-                # Check Pathbuilder focusPoints field
-                pb_fp = safe_int(build.get('focusPoints'), 0)
-                if pb_fp > 0:
-                    self.focus_max = pb_fp
-                    self.current_focus = pb_fp
-                else:
-                    # Count: 1 base + 1 per additional focus-granting feat/feature (max 3)
-                    # Specials that grant focus pool
-                    focus_pool_specials = {'devotion spells', 'ki spells', 'composition spells', 'hex spells',
-                                          'conflux spells', 'link spells', 'revelation spells', 'bloodline spells',
-                                          'warden spells', 'druidic order', 'psi cantrips and amps'}
-                    has_focus_special = any(any(fps in s for fps in focus_pool_specials) for s in specials_lower)
-                    
-                    self.focus_max = min(3, max(1, len(focus_spells)))
-                    self.current_focus = self.focus_max
+            # Calculate expected focus pool from feats/features
+            computed_focus = min(3, max(1, len(focus_spells)))
+            # Check Pathbuilder focusPoints field
+            pb_fp = safe_int(build.get('focusPoints'), 0)
+            # Take the best of: stored value, Pathbuilder value, computed value
+            best_focus = max(self.focus_max, pb_fp, computed_focus)
+            if best_focus > self.focus_max:
+                self.focus_max = best_focus
+                self.current_focus = max(self.current_focus, self.focus_max)
             
             # Only add focus caster if we don't already have one from spellCasters
             has_focus_caster = any('focus' in sc.get('type', '').lower() for sc in self.spell_casters)
@@ -1434,7 +1439,7 @@ class Character:
             prof = safe_int(self.proficiencies.get('spell_attack', 0))
             if prof == 0:
                 # Fallback for classes without spell_attack in CLASS_PROGRESSION (multiclass, etc.)
-                c_type = self.spell_casters[0].get("castingType", "").lower() if self.spell_casters else ""
+                c_type = (self.spell_casters[0].get("castingType") or self.spell_casters[0].get("spellcastingType") or "").lower() if self.spell_casters else ""
                 if "alchemical" in c_type: return 0
                 prof = 2  # Trained default
             
@@ -4586,14 +4591,19 @@ def save_notes(pc_name):
 
 @app.route('/player/builder')
 def player_builder():
-    return render_template('player_builder.html', 
-        ancestries=BUILDER_ANCESTRIES, 
-        backgrounds=BUILDER_BACKGROUNDS, 
-        classes=BUILDER_CLASSES, 
-        spells=BUILDER_SPELLS, 
+    # Filter weapons/armor to level 0-1 items for starting gear
+    starting_weapons = [w for w in BUILDER_WEAPONS if w.get('level', 0) <= 1 and w.get('category') in ('simple', 'martial', None)]
+    starting_armor = [a for a in BUILDER_ARMOR if a.get('level', 0) <= 1]
+    return render_template('player_builder.html',
+        ancestries=BUILDER_ANCESTRIES,
+        backgrounds=BUILDER_BACKGROUNDS,
+        classes=BUILDER_CLASSES,
+        spells=BUILDER_SPELLS,
         feats=BUILDER_FEATS,
         builder_data=BUILDER_DATA,
-        subclass_descriptions=SUBCLASS_DESCRIPTIONS
+        subclass_descriptions=SUBCLASS_DESCRIPTIONS,
+        weapons=starting_weapons,
+        armor=starting_armor
     )
 
 @app.route('/api/toggle_feature/<pc_name>/<feature_name>', methods=['POST'])
@@ -5156,6 +5166,67 @@ def save_new_character():
             "traits": ["kineticist", "magical", kin_element]
         })
 
+    # Process equipment from builder payload
+    equipment_list = data.get('equipment', [])
+    armor_arr = []
+    eq_items = []
+    ac_item_bonus = 0
+    ac_dex_cap = 99
+    armor_penalty = 0
+    armor_speed_pen = 0
+    stealth_penalty = 0
+    for eq in equipment_list:
+        eq_type = eq.get('type', 'gear')
+        if eq_type == 'weapon':
+            w_name = eq.get('name', '')
+            w_info = next((w for w in BUILDER_WEAPONS if w['name'] == w_name), None)
+            dmg = eq.get('damage', '1d4')
+            cat = eq.get('category', 'simple')
+            traits = eq.get('traits', [])
+            if w_info:
+                dmg = w_info.get('damage', dmg)
+                cat = w_info.get('category', cat)
+                traits = w_info.get('traits', traits)
+            # Parse damage die from string like "1d8 S"
+            dmg_parts = dmg.split()
+            die = dmg_parts[0] if dmg_parts else '1d4'
+            dmg_type = dmg_parts[1] if len(dmg_parts) > 1 else ''
+            weapons_arr.append({
+                "name": w_name, "qty": 1, "prof": cat, "die": die,
+                "pot": 0, "str": "", "mat": None, "display": w_name,
+                "runes": [], "damageType": dmg_type, "extraDamage": [],
+                "increasedDice": False, "isInventor": False, "grade": ""
+            })
+        elif eq_type == 'armor':
+            a_name = eq.get('name', '')
+            a_info = next((a for a in BUILDER_ARMOR if a['name'] == a_name), None)
+            cat = eq.get('category', 'light')
+            ac_bonus = eq.get('ac', 0)
+            dex_cap = eq.get('dex_cap')
+            if a_info:
+                ac_bonus = a_info.get('ac', ac_bonus)
+                dex_cap = a_info.get('dex_cap', dex_cap)
+                cat = a_info.get('category', cat)
+                armor_penalty = safe_int(a_info.get('penalty', 0))
+                armor_speed_pen = safe_int(a_info.get('speed_penalty', 0))
+                if 'noisy' in str(a_info.get('traits', [])).lower():
+                    stealth_penalty = armor_penalty
+            ac_item_bonus = ac_bonus
+            if dex_cap is not None:
+                ac_dex_cap = dex_cap
+            armor_arr.append({
+                "name": a_name, "qty": 1, "prof": cat,
+                "pot": 0, "res": "", "mat": None, "display": a_name,
+                "worn": True, "runes": [], "grade": ""
+            })
+        elif eq_type == 'gear':
+            gear_name = eq.get('name', '')
+            if gear_name == "Adventurer's Pack":
+                for item, qty in [("Backpack", 1), ("Bedroll", 1), ("Chalk", 10), ("Flint and Steel", 1), ("Rope", 1), ("Rations", 2), ("Torch", 5), ("Waterskin", 1)]:
+                    eq_items.append([item, qty, "Invested"])
+            else:
+                eq_items.append([gear_name, 1, "Invested"])
+
     anc_hp = BUILDER_ANCESTRIES.get(ancestry_name, {}).get('hp', 8)
     cls_hp = BUILDER_CLASSES.get(class_name, {}).get('hp', 8)
     anc_speed = ANCESTRY_SPEEDS.get(ancestry_name.lower(), 25)
@@ -5173,7 +5244,8 @@ def save_new_character():
             "sanctification": data.get('sanctification', 'Neutral'),
             "abilities": abilities,
             "proficiencies": proficiencies, 
-            "ac_item": 0, "ac_dex_cap": 99, "armor_penalty": 0, "stealth_penalty": 0, "armor_speed_pen": 0,
+            "ac_item": ac_item_bonus, "ac_dex_cap": ac_dex_cap, "armor_penalty": armor_penalty, "stealth_penalty": stealth_penalty, "armor_speed_pen": armor_speed_pen,
+            "armor": armor_arr,
             "attributes": {"ancestryhp": anc_hp, "classhp": cls_hp, "bonushp": 0, "bonushpPerLevel": 0, "speed": anc_speed},
             "size": anc_size,
             "feats": feats_arr, 
@@ -5182,7 +5254,7 @@ def save_new_character():
             "current_focus": 1 if focus_spell else 0,
             "focus": {"pool": 1} if focus_spell else {"pool": 0},
             "money": {"pp": 0, "gp": 15, "sp": 0, "cp": 0}, 
-            "equipment": [],
+            "equipment": eq_items,
             "conditions": {},
             "active_effects": {},
             "active_toggles": [],
@@ -5236,7 +5308,18 @@ def submit_levelup(pc_name):
     if 'feats' in data: build['feats'] = data['feats']
     
     if 'proficiencies' not in build: build['proficiencies'] = {}
-    
+
+    # Normalize Pathbuilder camelCase proficiency keys to snake_case
+    PB_KEY_MAP = {'classDC': 'class_dc', 'castingArcane': 'spell_attack', 'castingDivine': 'spell_attack',
+                  'castingOccult': 'spell_attack', 'castingPrimal': 'spell_attack'}
+    for pb_key, norm_key in PB_KEY_MAP.items():
+        if pb_key in build['proficiencies']:
+            val = build['proficiencies'][pb_key]
+            if isinstance(val, int) and val > 0:
+                build['proficiencies'][norm_key] = max(build['proficiencies'].get(norm_key, 0), val)
+                if pb_key.startswith('casting') and val > 0:
+                    build['proficiencies']['spell_dc'] = max(build['proficiencies'].get('spell_dc', 0), val)
+
     # --- SERVER-SIDE AUTO-BUMPS FROM CLASS PROGRESSION ---
     # This is the authoritative source: even if the frontend doesn't send auto_bumps,
     # the server applies the correct proficiency increases from CLASS_PROGRESSION.
@@ -5273,6 +5356,30 @@ def submit_levelup(pc_name):
 
     if 'spellCasters' in data:
         build['spellCasters'] = data['spellCasters']
+
+    # --- SERVER-SIDE SPELL SLOT VALIDATION ---
+    # Ensure perDay values match the correct SPELL_SLOT_TABLES for the new level
+    rich = RICH_CLASS_DATA.get(class_name, {})
+    if rich.get('spellcasting') and build.get('spellCasters'):
+        c_type = rich['spellcasting'].lower()
+        table_key = 'spontaneous'
+        if 'bounded' in c_type:
+            table_key = 'bounded'
+        elif 'prepared' in c_type:
+            table_key = 'prepared'
+        if class_name == 'sorcerer':
+            table_key = 'sorcerer'
+        slot_table = SPELL_SLOT_TABLES.get(table_key, {}).get(new_level)
+        if slot_table:
+            correct_perDay = [5] + list(slot_table)
+            for caster in build['spellCasters']:
+                ct = (caster.get('castingType') or caster.get('spellcastingType') or '').lower()
+                if ct in ('focus', 'innate', 'alchemical') or 'focus' in caster.get('name', '').lower():
+                    continue
+                caster['perDay'] = correct_perDay[:len(caster.get('perDay', correct_perDay))]
+                # Ensure perDay is at least as long as the correct table
+                while len(caster['perDay']) < len(correct_perDay):
+                    caster['perDay'].append(correct_perDay[len(caster['perDay'])])
 
     # --- MONK PATH TO PERFECTION ---
     monk_path_choice = data.get('monk_path_choice')
