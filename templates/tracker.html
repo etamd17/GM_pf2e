@@ -102,8 +102,66 @@
     <button onclick="apiPost('/api/cycle_turn/prev')" class="btn btn-ghost btn-sm" title="Previous turn">Prev</button>
 
     <div class="ml-auto flex items-center gap-2">
+        <button onclick="openSecretRollPanel()" class="btn btn-ghost btn-sm" title="GM Secret Roll (hidden from players)" style="color:#c4b5fd;border-color:rgba(167,139,250,0.2);">🎲 Secret</button>
+        <button onclick="openHandoutPanel()" class="btn btn-ghost btn-sm" title="Send handout to players" style="color:#fbbf24;border-color:rgba(251,191,36,0.2);">📜 Handout</button>
         <span id="round-badge" class="badge bg-base-800 text-base-300 border border-white/[0.06]">Round {{ round_number }}</span>
         <button onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')" class="btn btn-danger btn-sm">Clear</button>
+    </div>
+</div>
+
+{# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
+<div id="secret-roll-panel" class="hidden mb-3 rounded-lg border p-4" style="background:#191920; border-color:rgba(167,139,250,0.15);">
+    <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold uppercase tracking-wider" style="color:#c4b5fd;">🎲 GM Secret Roll</span>
+        <button onclick="document.getElementById('secret-roll-panel').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+        <input type="number" id="secret-dice-count" value="1" min="1" max="20" class="inline-input w-12 text-center" style="font-size:12px;">
+        <span class="text-base-500 text-xs">d</span>
+        <select id="secret-dice-sides" class="inline-input w-16" style="font-size:12px;">
+            <option value="4">d4</option><option value="6">d6</option><option value="8">d8</option>
+            <option value="10">d10</option><option value="12">d12</option><option value="20" selected>d20</option>
+            <option value="100">d100</option>
+        </select>
+        <span class="text-base-500 text-xs">+</span>
+        <input type="number" id="secret-modifier" value="0" class="inline-input w-14 text-center" style="font-size:12px;">
+        <input type="text" id="secret-label" placeholder="Label (e.g. Perception)" class="inline-input flex-1" style="font-size:12px;min-width:120px;">
+        <button onclick="doSecretRoll()" class="btn btn-sm" style="background:rgba(167,139,250,0.15);color:#c4b5fd;border-color:rgba(167,139,250,0.2);">Roll Secret</button>
+    </div>
+    <div id="secret-roll-results" class="mt-3 space-y-1 max-h-40 overflow-y-auto" style="scrollbar-width:thin;"></div>
+</div>
+
+{# ═══════════════════ HANDOUT PANEL ═══════════════════ #}
+<div id="handout-panel" class="hidden mb-3 rounded-lg border p-4" style="background:#191920; border-color:rgba(251,191,36,0.15);">
+    <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold uppercase tracking-wider" style="color:#fbbf24;">📜 Send Handout to Players</span>
+        <button onclick="document.getElementById('handout-panel').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
+    </div>
+    <div class="grid grid-cols-[1fr_1fr] gap-3 mb-3">
+        <div>
+            <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Title</label>
+            <input type="text" id="handout-title" placeholder="Handout title..." class="inline-input w-full" style="font-size:12px;">
+        </div>
+        <div>
+            <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Recipients</label>
+            <select id="handout-recipients" class="inline-input w-full" style="font-size:12px;" multiple>
+                <option value="all" selected>All Players</option>
+                {% for p in party %}
+                <option value="{{ p.name }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Content</label>
+        <textarea id="handout-content" rows="3" placeholder="Handout text..." class="inline-input w-full" style="font-size:12px;resize:vertical;text-align:left;"></textarea>
+    </div>
+    <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 flex-1">
+            <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold shrink-0">Image</label>
+            <input type="file" id="handout-image" accept="image/*" class="text-xs text-base-400" style="font-size:10px;">
+        </div>
+        <button onclick="sendHandout()" class="btn btn-sm" style="background:rgba(251,191,36,0.15);color:#fbbf24;border-color:rgba(251,191,36,0.2);">Send Handout</button>
     </div>
 </div>
 
@@ -178,7 +236,7 @@
         <div class="rounded-lg border border-white/[0.06] overflow-hidden" style="background:#191920;">
 
             {# Header row #}
-            <div class="grid grid-cols-[32px_56px_1fr_48px_160px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.06] text-[10px] font-semibold text-base-500 uppercase tracking-wider" style="background:#0d0d12;">
+            <div class="grid grid-cols-[32px_56px_1fr_48px_220px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.06] text-[10px] font-semibold text-base-500 uppercase tracking-wider" style="background:#0d0d12;">
                 <div></div>
                 <div>Init</div>
                 <div>Name</div>
@@ -250,6 +308,12 @@
 {# ═══════════════════ SCRIPTS ═══════════════════ #}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
+/* ──────────────── Constants (must be before any code that references them) ──────────────── */
+const AJAX_HEADERS = {'X-Requested-With': 'XMLHttpRequest'};
+const JSON_HEADERS = {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
+const CONDITIONS_LIST = ['frightened','sickened','enfeebled','clumsy','drained','stupefied','stunned','slowed','off_guard','prone','dying','wounded','doomed','concealed','hidden','undetected'];
+const VALUED_CONDITIONS = ['frightened','sickened','dying','wounded','doomed','stunned','slowed','enfeebled','clumsy','drained','stupefied'];
+
 /* ──────────────── State ──────────────── */
 let STATE = {
     combatants: [],
@@ -277,11 +341,6 @@ let STATE = {
     }
     render();
 })();
-
-
-/* ──────────────── AJAX Helpers ──────────────── */
-const AJAX_HEADERS = {'X-Requested-With': 'XMLHttpRequest'};
-const JSON_HEADERS = {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
 
 function toast(msg, type) {
     const c = document.getElementById('gm-toast-container');
@@ -383,9 +442,6 @@ function condTooltip(cond) {
     return tips[cond] || cond.replace(/_/g,' ');
 }
 
-const CONDITIONS_LIST = ['frightened','sickened','enfeebled','clumsy','drained','stupefied','stunned','slowed','off_guard','prone','dying','wounded','doomed','concealed','hidden','undetected'];
-const VALUED_CONDITIONS = ['frightened','sickened','dying','wounded','doomed','stunned','slowed','enfeebled','clumsy','drained','stupefied'];
-
 function renderInitList() {
     const list = document.getElementById('initiative-list');
     const empty = document.getElementById('empty-state');
@@ -439,7 +495,7 @@ function renderInitList() {
         }
         actionsHtml += `<button onclick="removeCombatant('${c.instance_id}')" class="btn btn-danger btn-sm w-full" style="font-size:9px;">Remove</button>`;
 
-        return `<div class="${rowCls} grid grid-cols-[32px_56px_1fr_48px_160px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.04]" data-id="${c.instance_id}" draggable="false">
+        return `<div class="${rowCls} grid grid-cols-[32px_56px_1fr_48px_220px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.04]" data-id="${c.instance_id}" draggable="false">
             <div class="drag-handle text-center text-base" title="Drag to reorder">&#x2807;</div>
             <div>
                 <input type="number" class="inline-input w-12 text-center" value="${c.initiative}" onkeydown="if(event.key==='Enter'){updateInit('${c.instance_id}',this.value);this.blur()}" onblur="updateInit('${c.instance_id}',this.value)">
@@ -460,6 +516,15 @@ function renderInitList() {
                 </div>
                 <div class="flex items-center gap-1">
                     <input type="number" id="hp-amt-${c.instance_id}" value="1" min="1" class="inline-input w-10 text-center" style="padding:2px 4px;font-size:11px;">
+                    <select id="dmg-type-${c.instance_id}" class="inline-input text-[9px]" style="padding:1px 2px;width:62px;color:#a0a0b8;" title="Damage type (for W/R/I)">
+                        <option value="untyped">—type—</option>
+                        <option value="bludgeoning">Bludg</option><option value="piercing">Pierce</option><option value="slashing">Slash</option>
+                        <option value="fire">Fire</option><option value="cold">Cold</option><option value="electricity">Elec</option>
+                        <option value="acid">Acid</option><option value="sonic">Sonic</option>
+                        <option value="vitality">Vital</option><option value="void">Void</option>
+                        <option value="force">Force</option><option value="spirit">Spirit</option>
+                        <option value="mental">Mental</option><option value="poison">Poison</option><option value="bleed">Bleed</option>
+                    </select>
                     <button onclick="adjustHP('${c.instance_id}','damage')" class="btn btn-sm" style="padding:1px 6px;font-size:10px;background:rgba(248,113,113,0.1);color:#fca5a5;border-color:rgba(248,113,113,0.2);">-</button>
                     <button onclick="adjustHP('${c.instance_id}','heal')" class="btn btn-sm" style="padding:1px 6px;font-size:10px;background:rgba(74,222,128,0.1);color:#86efac;border-color:rgba(74,222,128,0.2);">+</button>
                 </div>
@@ -558,6 +623,16 @@ function renderActivePanel() {
         html += `</div>`;
     }
 
+    // Recall Knowledge button (monsters only)
+    if (!c.is_pc) {
+        html += `<div class="mb-4 flex items-center gap-2">
+            <button onclick="openRecallKnowledge('${c.instance_id}')" class="btn btn-sm" style="background:rgba(212,162,68,0.1);color:#d4a244;border-color:rgba(212,162,68,0.2);font-size:10px;">
+                📖 Recall Knowledge
+            </button>
+            <span id="rk-info-${c.instance_id}" class="text-[9px] text-base-500"></span>
+        </div>`;
+    }
+
     // Strikes
     if (c.strikes && c.strikes.length) {
         html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Strikes</div>`;
@@ -643,9 +718,12 @@ function addPC() {
 function adjustHP(id, action) {
     const input = document.getElementById('hp-amt-' + id);
     const amt = parseInt(input?.value) || 1;
+    const dmgTypeSelect = document.getElementById('dmg-type-' + id);
+    const dmgType = dmgTypeSelect ? dmgTypeSelect.value : 'untyped';
     const fd = new FormData();
     fd.append('amount', amt);
     fd.append('action', action);
+    fd.append('damage_type', dmgType);
     apiPost('/api/adjust_hp/' + id, fd, null);
 }
 
@@ -1031,8 +1109,247 @@ document.addEventListener('keydown', e => {
     }
     if (e.key === 'Escape') {
         closeStatModal();
+        document.getElementById('rk-modal')?.classList.remove('open');
     }
 });
+
+
+/* ══════════════════════════════════════════════════════════
+   GM SECRET ROLLS
+   ══════════════════════════════════════════════════════════ */
+function openSecretRollPanel() {
+    const panel = document.getElementById('secret-roll-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) loadSecretLog();
+}
+
+async function doSecretRoll() {
+    const count = parseInt(document.getElementById('secret-dice-count').value) || 1;
+    const sides = parseInt(document.getElementById('secret-dice-sides').value) || 20;
+    const mod = parseInt(document.getElementById('secret-modifier').value) || 0;
+    const label = document.getElementById('secret-label').value || 'Secret Roll';
+    try {
+        const data = await apiPostRaw('/api/gm_secret_roll', {dice_count: count, dice_sides: sides, modifier: mod, label: label}, 'json');
+        const result = await data.json();
+        if (result.success && result.roll) {
+            appendSecretResult(result.roll);
+        }
+    } catch(e) { toast('Secret roll failed', 'error'); }
+}
+
+function appendSecretResult(roll) {
+    const container = document.getElementById('secret-roll-results');
+    const div = document.createElement('div');
+    div.className = 'flex justify-between items-center p-2 rounded border border-white/[0.04]';
+    div.style.background = '#0d0d12';
+    div.innerHTML = `
+        <div>
+            <span class="text-[10px] text-base-500">${roll.time}</span>
+            <span class="text-xs text-spell-300 font-semibold ml-1">${roll.label}</span>
+        </div>
+        <div class="text-right">
+            <span class="font-mono font-bold text-lg text-spell-300">${roll.total}</span>
+            <span class="text-[10px] text-base-500 ml-1">${roll.detail}</span>
+        </div>`;
+    container.prepend(div);
+}
+
+async function loadSecretLog() {
+    try {
+        const data = await apiGet('/api/gm_secret_log');
+        const container = document.getElementById('secret-roll-results');
+        container.innerHTML = '';
+        (data.log || []).reverse().forEach(r => appendSecretResult(r));
+    } catch(e) {}
+}
+
+// SSE listener for secret rolls
+if (evtSource) {
+    evtSource.addEventListener('gm_secret_roll', function(e) {
+        try {
+            const roll = JSON.parse(e.data);
+            appendSecretResult(roll);
+        } catch(ex) {}
+    });
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   RECALL KNOWLEDGE
+   ══════════════════════════════════════════════════════════ */
+async function openRecallKnowledge(instanceId) {
+    // Get RK info (skill, DC) first
+    try {
+        const info = await apiGet(`/api/recall_knowledge_info/${instanceId}`);
+        if (info.error) { toast(info.error, 'error'); return; }
+
+        // Build the RK modal
+        const modal = document.getElementById('rk-modal') || createRkModal();
+        document.getElementById('rk-target-name').textContent = info.name;
+        document.getElementById('rk-suggested-skill').textContent = `Suggested: ${info.skill} (${info.creature_type})`;
+        document.getElementById('rk-dc-display').textContent = `DC ${info.dc}`;
+
+        // Populate PC dropdown
+        const pcSelect = document.getElementById('rk-pc-select');
+        pcSelect.innerHTML = '';
+        STATE.combatants.filter(c => c.is_pc).forEach(c => {
+            pcSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+        });
+
+        // Set skill dropdown default
+        const skillSelect = document.getElementById('rk-skill-select');
+        skillSelect.value = info.skill.toLowerCase();
+
+        document.getElementById('rk-instance-id').value = instanceId;
+        document.getElementById('rk-result-area').innerHTML = '';
+        modal.classList.add('open');
+    } catch(e) { toast('Failed to load RK info', 'error'); }
+}
+
+function createRkModal() {
+    const modal = document.createElement('div');
+    modal.id = 'rk-modal';
+    modal.className = 'modal-overlay';
+    modal.onclick = function(e) { if (e.target === this) this.classList.remove('open'); };
+    modal.innerHTML = `
+    <div class="modal-panel" style="max-width:480px;">
+        <div class="px-5 py-3 flex justify-between items-center border-b border-white/[0.06]" style="background:#0d0d12;">
+            <div>
+                <h3 class="font-display text-gold-300 text-lg">📖 Recall Knowledge</h3>
+                <span id="rk-target-name" class="text-[10px] text-base-500"></span>
+            </div>
+            <button onclick="document.getElementById('rk-modal').classList.remove('open')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
+        </div>
+        <div class="p-5">
+            <input type="hidden" id="rk-instance-id" value="">
+            <div class="flex items-center gap-3 mb-3">
+                <span id="rk-suggested-skill" class="text-xs text-base-400"></span>
+                <span id="rk-dc-display" class="text-xs font-mono font-bold text-gold-300"></span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Rolling PC</label>
+                    <select id="rk-pc-select" class="inline-input w-full" style="font-size:12px;"></select>
+                </div>
+                <div>
+                    <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Skill</label>
+                    <select id="rk-skill-select" class="inline-input w-full" style="font-size:12px;">
+                        <option value="">Use Suggested</option>
+                        <option value="arcana">Arcana</option>
+                        <option value="nature">Nature</option>
+                        <option value="occultism">Occultism</option>
+                        <option value="religion">Religion</option>
+                        <option value="society">Society</option>
+                        <option value="crafting">Crafting</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="doRecallKnowledge()" class="btn btn-sm w-full" style="background:rgba(212,162,68,0.15);color:#d4a244;border-color:rgba(212,162,68,0.2);">Roll Recall Knowledge</button>
+            <div id="rk-result-area" class="mt-4"></div>
+        </div>
+    </div>`;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+async function doRecallKnowledge() {
+    const instanceId = document.getElementById('rk-instance-id').value;
+    const pcName = document.getElementById('rk-pc-select').value;
+    const skill = document.getElementById('rk-skill-select').value;
+
+    if (!pcName) { toast('Select a PC', 'error'); return; }
+
+    try {
+        const res = await apiPostRaw(`/api/recall_knowledge/${instanceId}`, {pc_name: pcName, skill: skill}, 'json');
+        const data = await res.json();
+        if (!data.success) { toast(data.error || 'Failed', 'error'); return; }
+
+        const r = data.result;
+        const degreeColors = {
+            critical_success: 'text-success-400', success: 'text-accent-300',
+            failure: 'text-base-400', critical_failure: 'text-danger-400'
+        };
+
+        let html = `
+        <div class="rounded-lg p-3 border border-white/[0.06]" style="background:#0d0d12;">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-semibold text-base-200">${r.pc_name} → ${r.target}</span>
+                <span class="text-xs font-mono font-bold ${degreeColors[r.degree]}">${r.degree_label}</span>
+            </div>
+            <div class="text-[10px] text-base-500 mb-2">
+                ${r.skill} check: d20(${r.d20}) + ${r.modifier} = ${r.total} vs DC ${r.dc}
+            </div>`;
+
+        if (r.revealed_info && r.revealed_info.length) {
+            html += `<div class="space-y-1 mt-2 pt-2 border-t border-white/[0.04]">`;
+            r.revealed_info.forEach(info => {
+                html += `<div class="text-xs text-base-200">• ${info}</div>`;
+            });
+            html += `</div>`;
+        } else if (r.degree === 'failure') {
+            html += `<div class="text-xs text-base-500 italic mt-2">No useful information recalled.</div>`;
+        }
+        html += `</div>`;
+
+        document.getElementById('rk-result-area').innerHTML = html;
+    } catch(e) { toast('Recall Knowledge failed', 'error'); }
+}
+
+// SSE listener for Recall Knowledge results
+if (evtSource) {
+    evtSource.addEventListener('recall_knowledge', function(e) {
+        // Could display a toast or update the active panel
+        try {
+            const r = JSON.parse(e.data);
+            toast(`📖 ${r.pc_name} recalled about ${r.target}: ${r.degree_label}`, 'info');
+        } catch(ex) {}
+    });
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   PLAYER HANDOUTS
+   ══════════════════════════════════════════════════════════ */
+function openHandoutPanel() {
+    document.getElementById('handout-panel').classList.toggle('hidden');
+}
+
+async function sendHandout() {
+    const title = document.getElementById('handout-title').value.trim();
+    const content = document.getElementById('handout-content').value.trim();
+    const recipientSelect = document.getElementById('handout-recipients');
+    const recipients = Array.from(recipientSelect.selectedOptions).map(o => o.value);
+    const imageInput = document.getElementById('handout-image');
+
+    if (!title && !content && !imageInput.files.length) {
+        toast('Add a title, content, or image', 'error'); return;
+    }
+
+    let imageUrl = '';
+    // Upload image first if present
+    if (imageInput.files.length) {
+        try {
+            const fd = new FormData();
+            fd.append('image', imageInput.files[0]);
+            const uploadRes = await fetch('/api/handout_upload', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            const uploadData = await uploadRes.json();
+            if (uploadData.url) imageUrl = uploadData.url;
+        } catch(e) { toast('Image upload failed', 'error'); }
+    }
+
+    try {
+        const res = await apiPostRaw('/api/handouts', {
+            title: title, content: content, image_url: imageUrl, recipients: recipients
+        }, 'json');
+        const data = await res.json();
+        if (data.success) {
+            toast(`Handout "${title}" sent!`, 'success');
+            document.getElementById('handout-title').value = '';
+            document.getElementById('handout-content').value = '';
+            document.getElementById('handout-image').value = '';
+        } else { toast(data.error || 'Failed', 'error'); }
+    } catch(e) { toast('Failed to send handout', 'error'); }
+}
 
 </script>
 {% endblock %}

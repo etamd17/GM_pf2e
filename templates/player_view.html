@@ -187,6 +187,15 @@
             renderTracker(d.encounter, d.round, d.active_name);
         } catch(err) {}
     });
+    // Handout listener
+    evtSrc.addEventListener('handout', e => {
+        try {
+            const h = JSON.parse(e.data);
+            const myName = localStorage.getItem('pf2e_my_char') || '';
+            if (!h.recipients.includes('all') && !h.recipients.includes(myName)) return;
+            showHandoutPopup(h);
+        } catch(err) {}
+    });
     evtSrc.onerror = () => { evtSrc.close(); setTimeout(() => location.reload(), 10000); };
 
     // Fallback polling
@@ -223,6 +232,26 @@
     function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#fca5a5':'#86efac';el.style.border=e?'1px solid rgba(239,68,68,0.15)':'1px solid rgba(34,197,94,0.15)';el.innerText=m;}
     async function handleFileImport(i){if(!i.files||!i.files[0])return;const f=new FormData();f.append('file',i.files[0]);try{const r=await fetch('/api/import_pathbuilder',{method:'POST',body:f});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
     async function submitPastedImport(){const raw=document.getElementById('pb-json-paste').value.trim();if(!raw){showImportStatus('Paste JSON first.',true);return;}let p;try{p=JSON.parse(raw);}catch(e){showImportStatus('Invalid JSON.',true);return;}try{const r=await fetch('/api/import_pathbuilder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
+
+    function showHandoutPopup(h) {
+        const existing = document.getElementById('handout-popup');
+        if (existing) existing.remove();
+        const popup = document.createElement('div');
+        popup.id = 'handout-popup';
+        popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:16px;';
+        popup.onclick = function(e) { if (e.target === this) this.remove(); };
+        let inner = `<div style="background:#24242e;border:1px solid rgba(212,162,68,0.3);border-radius:12px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);background:#0d0d12;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+                <div><div style="font-family:'Cinzel',serif;color:#d4a244;font-size:18px;font-weight:700;">📜 ${esc(h.title||'Handout')}</div>
+                <div style="font-size:10px;color:#8080a0;margin-top:2px;">From the GM • ${h.time||''}</div></div>
+                <button onclick="document.getElementById('handout-popup').remove()" style="color:#8080a0;font-size:22px;background:none;border:none;cursor:pointer;line-height:1;">&times;</button>
+            </div><div style="padding:20px;">`;
+        if (h.image_url) inner += `<img src="${h.image_url}" style="width:100%;border-radius:8px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);" alt="Handout">`;
+        if (h.content) inner += `<div style="color:#c8c8d8;font-size:14px;line-height:1.7;white-space:pre-wrap;">${esc(h.content)}</div>`;
+        inner += `</div></div>`;
+        popup.innerHTML = inner;
+        document.body.appendChild(popup);
+    }
 </script>
 </body>
 </html>

@@ -2320,7 +2320,17 @@
                     }
                 } catch(e) {}
             });
-            
+
+            // HANDOUT listener — show handouts pushed by GM
+            evtSource.addEventListener('handout', (e) => {
+                try {
+                    const h = JSON.parse(e.data);
+                    // Check if this handout is for us
+                    if (!h.recipients.includes('all') && !h.recipients.includes(pcName)) return;
+                    showHandoutPopup(h);
+                } catch(e) {}
+            });
+
             evtSource.onerror = () => {
                 // Auto-reconnect handled by browser EventSource
             };
@@ -4114,6 +4124,63 @@
 
         switchTab('core');
         initDailyPrep();
+
+        // ==========================================
+        // HANDOUT POPUP (received from GM)
+        // ==========================================
+        function showHandoutPopup(h) {
+            // Remove existing popup if any
+            const existing = document.getElementById('handout-popup');
+            if (existing) existing.remove();
+
+            const popup = document.createElement('div');
+            popup.id = 'handout-popup';
+            popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.3s;';
+            popup.onclick = function(e) { if (e.target === this) this.remove(); };
+
+            let inner = `
+            <div style="background:#24242e;border:1px solid rgba(212,162,68,0.3);border-radius:12px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+                <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);background:#0d0d12;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-family:'Cinzel',serif;color:#d4a244;font-size:18px;font-weight:700;">📜 ${h.title || 'Handout'}</div>
+                        <div style="font-size:10px;color:#8080a0;margin-top:2px;">From the GM • ${h.time || ''}</div>
+                    </div>
+                    <button onclick="document.getElementById('handout-popup').remove()" style="color:#8080a0;font-size:22px;background:none;border:none;cursor:pointer;line-height:1;">&times;</button>
+                </div>
+                <div style="padding:20px;">`;
+
+            if (h.image_url) {
+                inner += `<img src="${h.image_url}" style="width:100%;border-radius:8px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);" alt="Handout image">`;
+            }
+            if (h.content) {
+                inner += `<div style="color:#c8c8d8;font-size:14px;line-height:1.7;white-space:pre-wrap;">${h.content}</div>`;
+            }
+            inner += `</div></div>`;
+            popup.innerHTML = inner;
+            document.body.appendChild(popup);
+
+            // Also store in local handouts
+            const stored = JSON.parse(localStorage.getItem('pf2e_handouts') || '[]');
+            stored.push(h);
+            if (stored.length > 20) stored.shift();
+            localStorage.setItem('pf2e_handouts', JSON.stringify(stored));
+        }
+
+        // Load any pending handouts on page load
+        (async function loadHandouts() {
+            try {
+                const res = await fetch(`/api/handouts?player=${encodeURIComponent(pcName)}`);
+                const data = await res.json();
+                const seen = JSON.parse(localStorage.getItem('pf2e_handouts_seen') || '[]');
+                (data.handouts || []).forEach(h => {
+                    if (!seen.includes(h.id)) {
+                        showHandoutPopup(h);
+                        seen.push(h.id);
+                    }
+                });
+                localStorage.setItem('pf2e_handouts_seen', JSON.stringify(seen.slice(-50)));
+            } catch(e) {}
+        })();
     </script>
 
     <!-- Right-Click Context Menu -->

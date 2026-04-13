@@ -2837,26 +2837,452 @@ def clear_combat_log():
     COMBAT_LOGS.clear()
     return jsonify({"success": True})
 
+
+# ──────────────────────────────────────────────────────────
+# GM SECRET ROLLS
+# ──────────────────────────────────────────────────────────
+GM_SECRET_LOG = []  # Rolls only the GM can see
+
+@app.route('/api/gm_secret_roll', methods=['POST'])
+def gm_secret_roll():
+    """Roll dice secretly — result only visible to GM, not broadcast to players."""
+    data = request.json or {}
+    dice_count = max(1, min(20, int(data.get('dice_count', 1))))
+    dice_sides = max(2, min(100, int(data.get('dice_sides', 20))))
+    modifier = int(data.get('modifier', 0))
+    label = data.get('label', 'Secret Roll')
+
+    rolls = [random.randint(1, dice_sides) for _ in range(dice_count)]
+    total = sum(rolls) + modifier
+
+    detail = f"{dice_count}d{dice_sides}"
+    if modifier > 0: detail += f"+{modifier}"
+    elif modifier < 0: detail += str(modifier)
+    detail += f" = [{', '.join(str(r) for r in rolls)}]"
+    if modifier: detail += f" + {modifier}"
+    detail += f" = {total}"
+
+    entry = {
+        'id': str(uuid.uuid4())[:8],
+        'time': time.strftime('%H:%M:%S'),
+        'round': ROUND_NUMBER,
+        'label': label,
+        'detail': detail,
+        'total': total,
+        'rolls': rolls,
+        'type': 'secret'
+    }
+    GM_SECRET_LOG.append(entry)
+    if len(GM_SECRET_LOG) > 100: GM_SECRET_LOG.pop(0)
+
+    # Only broadcast to GM via SSE (with secret flag — player views filter these out)
+    sse_broadcast('gm_secret_roll', entry)
+
+    return jsonify({"success": True, "roll": entry})
+
+@app.route('/api/gm_secret_log')
+def get_gm_secret_log():
+    """Return the GM secret roll log."""
+    return jsonify({"log": GM_SECRET_LOG})
+
+@app.route('/api/gm_secret_log/clear', methods=['POST'])
+def clear_gm_secret_log():
+    GM_SECRET_LOG.clear()
+    return jsonify({"success": True})
+
+
+# ──────────────────────────────────────────────────────────
+# RECALL KNOWLEDGE
+# ──────────────────────────────────────────────────────────
+# PF2e Recall Knowledge: creature identification DCs by level
+# DC = level-based DC from Core Rulebook / GM Core
+RK_DC_BY_LEVEL = {
+    -1: 13, 0: 14, 1: 15, 2: 16, 3: 18, 4: 19, 5: 20, 6: 22, 7: 23, 8: 24,
+    9: 26, 10: 27, 11: 28, 12: 30, 13: 31, 14: 32, 15: 34, 16: 35, 17: 36,
+    18: 38, 19: 39, 20: 40, 21: 42, 22: 44, 23: 46, 24: 48, 25: 50,
+}
+
+# Rarity DC adjustments
+RK_RARITY_ADJ = {'common': 0, 'uncommon': 2, 'rare': 5, 'unique': 10}
+
+# Trait → relevant skill mapping for Recall Knowledge
+RK_TRAIT_SKILLS = {
+    'aberration': 'occultism', 'animal': 'nature', 'astral': 'occultism',
+    'beast': 'arcana', 'celestial': 'religion', 'construct': 'arcana',
+    'dragon': 'arcana', 'dream': 'occultism', 'elemental': 'arcana',
+    'ethereal': 'occultism', 'fey': 'nature', 'fiend': 'religion',
+    'fungus': 'nature', 'giant': 'nature', 'humanoid': 'society',
+    'monitor': 'religion', 'ooze': 'occultism', 'plant': 'nature',
+    'spirit': 'occultism', 'undead': 'religion',
+}
+
+def _get_rk_skill(combatant):
+    """Determine the appropriate Recall Knowledge skill based on creature traits."""
+    traits = [t.lower() for t in getattr(combatant, 'traits', [])]
+    for trait in traits:
+        if trait in RK_TRAIT_SKILLS:
+            return RK_TRAIT_SKILLS[trait], trait
+    # Default fallback
+    return 'nature', 'creature'
+
+def _get_rk_dc(combatant):
+    """Calculate Recall Knowledge DC for a creature."""
+    level = getattr(combatant, 'level', 0)
+    base_dc = RK_DC_BY_LEVEL.get(level, 14 + level)
+
+    # Adjust for rarity
+    traits = [t.lower() for t in getattr(combatant, 'traits', [])]
+    rarity_adj = 0
+    for rarity in ['unique', 'rare', 'uncommon']:
+        if rarity in traits:
+            rarity_adj = RK_RARITY_ADJ[rarity]
+            break
+
+    return base_dc + rarity_adj
+
+def _get_rk_info_tiers(combatant):
+    """Build tiered information for Recall Knowledge results."""
+    info = {'success': [], 'critical': []}
+
+    # SUCCESS tier: basic info a scholar would know
+    name = combatant.name
+    traits = getattr(combatant, 'traits', [])
+    if traits:
+        info['success'].append(f"Creature traits: {', '.join(traits)}")
+
+    # Immunities, resistances, weaknesses — the most tactically useful info
+    immunities = getattr(combatant, 'immunities', [])
+    if immunities:
+        info['success'].append(f"Immunities: {', '.join(immunities)}")
+
+    weaknesses = getattr(combatant, 'weaknesses', [])
+    if weaknesses:
+        info['success'].append(f"Weaknesses: {', '.join(weaknesses)}")
+
+    resistances = getattr(combatant, 'resistances', [])
+    if resistances:
+        info['success'].append(f"Resistances: {', '.join(resistances)}")
+
+    # Highest save
+    saves = {'Fortitude': getattr(combatant, 'fort', 0), 'Reflex': getattr(combatant, 'ref', 0), 'Will': getattr(combatant, 'will', 0)}
+    best_save = max(saves, key=saves.get)
+    worst_save = min(saves, key=saves.get)
+    info['success'].append(f"Strongest save: {best_save}")
+
+    # CRITICAL SUCCESS tier: detailed info
+    info['critical'].append(f"Weakest save: {worst_save} (+{saves[worst_save]})")
+    info['critical'].append(f"AC: {combatant.ac}")
+
+    # Special abilities
+    actions = getattr(combatant, 'actions', [])
+    if actions:
+        ability_names = [a['name'] for a in actions[:3]]
+        info['critical'].append(f"Notable abilities: {', '.join(ability_names)}")
+
+    strikes = getattr(combatant, 'strikes', [])
+    if strikes:
+        best_strike = max(strikes, key=lambda s: s.get('bonus', 0))
+        info['critical'].append(f"Best attack: {best_strike['name']} +{best_strike['bonus']} ({best_strike['damage']})")
+
+    return info
+
+@app.route('/api/recall_knowledge/<instance_id>', methods=['POST'])
+def recall_knowledge(instance_id):
+    """Perform a Recall Knowledge check against a creature in the encounter."""
+    data = request.json or {}
+    pc_name = data.get('pc_name', '')
+    skill_override = data.get('skill', '')  # Optional skill override
+
+    # Find the target creature
+    target = None
+    for c in ACTIVE_ENCOUNTER:
+        if c.instance_id == instance_id and not c.is_pc:
+            target = c
+            break
+
+    if not target:
+        return jsonify({"error": "Target creature not found"}), 404
+
+    # Find the PC
+    pc = PARTY_LIBRARY.get(pc_name)
+    if not pc:
+        # Try to find in encounter
+        for c in ACTIVE_ENCOUNTER:
+            if c.is_pc and c.name == pc_name:
+                pc = c
+                break
+
+    if not pc:
+        return jsonify({"error": "PC not found"}), 404
+
+    # Determine skill and DC
+    suggested_skill, creature_type = _get_rk_skill(target)
+    skill_name = skill_override if skill_override else suggested_skill
+    dc = _get_rk_dc(target)
+
+    # Get PC's skill modifier
+    skill_mod = 0
+    pc_skills = getattr(pc, 'skills', [])
+    if isinstance(pc_skills, list):
+        for sk in pc_skills:
+            if isinstance(sk, dict) and sk.get('name', '').lower() == skill_name.lower():
+                skill_mod = sk.get('total', 0)
+                break
+    elif isinstance(pc_skills, dict):
+        skill_mod = pc_skills.get(skill_name, 0)
+
+    # Roll d20 + skill modifier
+    d20 = random.randint(1, 20)
+    total = d20 + skill_mod
+
+    # Determine degree of success
+    if d20 == 20: total += 10  # Nat 20 upgrades
+    if d20 == 1: total -= 10   # Nat 1 downgrades
+
+    diff = total - dc
+    if diff >= 10:
+        degree = 'critical_success'
+    elif diff >= 0:
+        degree = 'success'
+    elif diff > -10:
+        degree = 'failure'
+    else:
+        degree = 'critical_failure'
+
+    # Get info tiers
+    info_tiers = _get_rk_info_tiers(target)
+    revealed = []
+    if degree == 'critical_success':
+        revealed = info_tiers['success'] + info_tiers['critical']
+    elif degree == 'success':
+        revealed = info_tiers['success']
+    elif degree == 'critical_failure':
+        revealed = ["You recall incorrect information about this creature! (GM: provide false info)"]
+    # failure = no info
+
+    degree_labels = {
+        'critical_success': 'Critical Success',
+        'success': 'Success',
+        'failure': 'Failure',
+        'critical_failure': 'Critical Failure'
+    }
+
+    result = {
+        'pc_name': pc_name,
+        'target': target.name,
+        'skill': skill_name.title(),
+        'creature_type': creature_type,
+        'd20': d20,
+        'modifier': skill_mod,
+        'total': d20 + skill_mod,  # Show raw total before nat 20/1 adjustment
+        'dc': dc,
+        'degree': degree,
+        'degree_label': degree_labels[degree],
+        'revealed_info': revealed,
+        'suggested_skill': suggested_skill.title(),
+    }
+
+    # Log it as a secret GM roll (players see the degree but not the DC)
+    _combat_log(f"📖 {pc_name} Recall Knowledge ({skill_name.title()}) vs {target.name}: {degree_labels[degree]} (d20={d20}, +{skill_mod}={d20+skill_mod} vs DC {dc})", 'action')
+
+    # Broadcast as GM-only info
+    sse_broadcast('recall_knowledge', result)
+
+    return jsonify({"success": True, "result": result})
+
+@app.route('/api/recall_knowledge_info/<instance_id>')
+def recall_knowledge_info(instance_id):
+    """Get Recall Knowledge metadata for a creature (skill, DC) without rolling."""
+    for c in ACTIVE_ENCOUNTER:
+        if c.instance_id == instance_id and not c.is_pc:
+            skill, creature_type = _get_rk_skill(c)
+            dc = _get_rk_dc(c)
+            return jsonify({
+                'name': c.name,
+                'skill': skill.title(),
+                'creature_type': creature_type,
+                'dc': dc,
+                'level': c.level,
+                'traits': getattr(c, 'traits', []),
+            })
+    return jsonify({"error": "Creature not found"}), 404
+
+
+# ──────────────────────────────────────────────────────────
+# PLAYER HANDOUTS
+# ──────────────────────────────────────────────────────────
+HANDOUTS = []  # [{id, title, content, image_url, recipients: ['all' or pc_names], time, from_gm}]
+
+@app.route('/api/handouts', methods=['GET'])
+def get_handouts():
+    """Get handouts. Players only see handouts addressed to them or 'all'."""
+    player_name = request.args.get('player', '').strip()
+    if not player_name:
+        # GM sees all handouts
+        return jsonify({"handouts": HANDOUTS})
+    # Player: filter to their handouts
+    visible = [h for h in HANDOUTS if 'all' in h.get('recipients', []) or player_name in h.get('recipients', [])]
+    return jsonify({"handouts": visible})
+
+@app.route('/api/handouts', methods=['POST'])
+def create_handout():
+    """GM creates a handout to push to players."""
+    data = request.json or {}
+    title = data.get('title', 'Handout').strip()
+    content = data.get('content', '').strip()  # Text/HTML content
+    image_url = data.get('image_url', '').strip()  # Optional image URL
+    recipients = data.get('recipients', ['all'])  # ['all'] or ['PlayerName1', 'PlayerName2']
+
+    if not title and not content and not image_url:
+        return jsonify({"error": "Handout must have title, content, or image"}), 400
+
+    handout = {
+        'id': str(uuid.uuid4())[:8],
+        'title': title,
+        'content': content,
+        'image_url': image_url,
+        'recipients': recipients,
+        'time': time.strftime('%H:%M:%S'),
+        'from_gm': True,
+    }
+    HANDOUTS.append(handout)
+    if len(HANDOUTS) > 50: HANDOUTS.pop(0)
+
+    # Broadcast to all clients (players filter client-side)
+    sse_broadcast('handout', handout)
+
+    return jsonify({"success": True, "handout": handout})
+
+@app.route('/api/handouts/<handout_id>', methods=['DELETE'])
+def delete_handout(handout_id):
+    """GM deletes a handout."""
+    global HANDOUTS
+    HANDOUTS = [h for h in HANDOUTS if h['id'] != handout_id]
+    sse_broadcast('handout_deleted', {'id': handout_id})
+    return jsonify({"success": True})
+
+@app.route('/api/handout_upload', methods=['POST'])
+def upload_handout_image():
+    """Upload an image for a handout."""
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file"}), 400
+
+    f = request.files['image']
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    # Save to static/uploads/handouts/
+    upload_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'handouts')
+    os.makedirs(upload_dir, exist_ok=True)
+
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'):
+        return jsonify({"error": "Invalid image format"}), 400
+
+    filename = f"{uuid.uuid4().hex[:12]}{ext}"
+    filepath = os.path.join(upload_dir, filename)
+    f.save(filepath)
+
+    url = f"/static/uploads/handouts/{filename}"
+    return jsonify({"success": True, "url": url})
+
+
+def _parse_damage_type_value(entry_str):
+    """Parse a resistance/weakness string like 'fire 5' or 'slashing 10 (except adamantine)' into (type, value, exceptions)."""
+    entry_str = entry_str.strip().lower()
+    exceptions = []
+    # Extract exceptions like (except adamantine)
+    exc_match = re.search(r'\(except\s+(.+?)\)', entry_str)
+    if exc_match:
+        exceptions = [e.strip() for e in exc_match.group(1).split(',')]
+        entry_str = entry_str[:exc_match.start()].strip()
+    # Split into type and value
+    parts = entry_str.rsplit(' ', 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return parts[0], int(parts[1]), exceptions
+    return entry_str, 0, exceptions
+
+def _calculate_damage_with_wri(amount, damage_type, combatant):
+    """Apply immunities, resistances, and weaknesses to damage. Returns (final_amount, adjustments_log)."""
+    if not damage_type or damage_type == 'untyped':
+        return amount, []
+
+    dtype = damage_type.lower().strip()
+    adjustments = []
+
+    # Check immunities first — immune means 0 damage of that type
+    immunities = [i.lower().strip() for i in getattr(combatant, 'immunities', [])]
+    if dtype in immunities:
+        adjustments.append(f"IMMUNE to {damage_type}")
+        return 0, adjustments
+    # Check for broader immunity categories (e.g., "all damage" for objects, "physical" for certain creatures)
+    physical_types = {'bludgeoning', 'piercing', 'slashing'}
+    energy_types = {'fire', 'cold', 'electricity', 'acid', 'sonic', 'force', 'vitality', 'void', 'spirit'}
+    if 'physical' in immunities and dtype in physical_types:
+        adjustments.append(f"IMMUNE to physical ({damage_type})")
+        return 0, adjustments
+
+    final = amount
+
+    # Apply resistances (subtract from damage, minimum 0)
+    for r_str in getattr(combatant, 'resistances', []):
+        rtype, rval, exceptions = _parse_damage_type_value(r_str)
+        if rtype == dtype or (rtype == 'physical' and dtype in physical_types) or (rtype == 'all' and dtype):
+            # Check if any exception applies (e.g., "except adamantine" — but we don't track material on incoming damage, so exceptions don't apply here)
+            final = max(0, final - rval)
+            adjustments.append(f"Resist {damage_type} {rval}")
+            break  # Only one resistance applies per damage type
+
+    # Apply weaknesses (add to damage)
+    for w_str in getattr(combatant, 'weaknesses', []):
+        wtype, wval, _ = _parse_damage_type_value(w_str)
+        if wtype == dtype or (wtype == 'physical' and dtype in physical_types):
+            final = final + wval
+            adjustments.append(f"Weak {damage_type} +{wval}")
+            break  # Only one weakness applies per damage type
+
+    return final, adjustments
+
+# Standard PF2e damage types for the UI
+PF2E_DAMAGE_TYPES = [
+    'untyped', 'bludgeoning', 'piercing', 'slashing',
+    'fire', 'cold', 'electricity', 'acid', 'sonic',
+    'vitality', 'void', 'force', 'spirit',
+    'mental', 'poison', 'bleed',
+]
+
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
 def adjust_hp(instance_id):
     try:
         amount = int(request.form.get('amount', 0))
         action = request.form.get('action')
+        damage_type = request.form.get('damage_type', 'untyped').strip()
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
                 old_hp = c.current_hp
                 if action == 'damage':
                     was_above_zero = c.current_hp > 0
-                    c.current_hp = max(0, c.current_hp - amount)
-                    _combat_log(f"{c.name} took {amount} damage ({old_hp}→{c.current_hp})", 'damage')
-                    if c.current_hp == 0: 
+                    # Apply W/R/I calculation for non-PC targets
+                    effective = amount
+                    wri_notes = []
+                    if not c.is_pc and damage_type and damage_type != 'untyped':
+                        effective, wri_notes = _calculate_damage_with_wri(amount, damage_type, c)
+                    c.current_hp = max(0, c.current_hp - effective)
+                    # Build detailed log message
+                    type_label = f" {damage_type}" if damage_type and damage_type != 'untyped' else ''
+                    if wri_notes:
+                        adj_detail = ' | '.join(wri_notes)
+                        _combat_log(f"{c.name} took {effective}{type_label} damage ({old_hp}→{c.current_hp}) [{adj_detail}, raw {amount}]", 'damage')
+                    else:
+                        _combat_log(f"{c.name} took {effective}{type_label} damage ({old_hp}→{c.current_hp})", 'damage')
+                    if c.current_hp == 0:
                         c.conditions['dying'] = 1 + c.conditions.get('wounded', 0) if was_above_zero else c.conditions.get('dying', 0) + 1
                         _combat_log(f"{c.name} is Dying {c.conditions['dying']}!", 'critical')
                 elif action == 'heal':
                     was_dying = c.conditions.get('dying', 0) > 0
                     c.current_hp = min(c.hp, c.current_hp + amount)
                     _combat_log(f"{c.name} healed {amount} HP ({old_hp}→{c.current_hp})", 'heal')
-                    if c.current_hp > 0 and was_dying: 
+                    if c.current_hp > 0 and was_dying:
                         c.conditions['dying'] = 0; c.conditions['wounded'] = c.conditions.get('wounded', 0) + 1
                         _combat_log(f"{c.name} recovered from Dying! (Wounded {c.conditions['wounded']})", 'critical')
                 if c.is_pc and c.name in PARTY_LIBRARY:
