@@ -424,13 +424,14 @@
         ],
         "familiars": [],
         "notes": "",
-        "expended_slots": {
-            "c0_l0": [
-                false,
-                false,
-                false
-            ]
+        "expended_slots": {},
+        "shield_raised": false,
+        "current_hp": 26,
+        "current_focus": 1,
+        "conditions": {
+            "frightened": 0
         },
-        "shield_raised": false
+        "prepared_spells": {},
+        "cast_prep": {}
     }
 }

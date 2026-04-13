@@ -1,15 +1,15 @@
 {
-  "round": 2,
+  "round": 1,
   "turn_index": 0,
   "combatants": [
     {
       "type": "pc",
       "path": "Kyle",
-      "instance_id": "9da043f8-8159-48a6-a772-fe6218b87831",
+      "instance_id": "b249b904-a13f-48e0-ae88-0a15e0fa025c",
       "initiative": 0,
       "current_hp": 26,
       "conditions": {
-        "frightened": 0,
+        "frightened": 1,
         "sickened": 0,
         "enfeebled": 0,
         "clumsy": 0,
@@ -31,10 +31,10 @@
     },
     {
       "type": "monster",
-      "path": "pathfinder-bestiary/aasimar-redeemer.json",
-      "instance_id": "5b6feb15-0547-4462-bffc-c3e35515a6f9",
+      "path": "pathfinder-monster-core/aapoph-serpentfolk.json",
+      "instance_id": "15e6bf17-b651-4488-af1e-0d3054459678",
       "initiative": 0,
-      "current_hp": 73,
+      "current_hp": 60,
       "conditions": {
         "frightened": 0,
         "sickened": 0,

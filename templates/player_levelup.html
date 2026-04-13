@@ -242,6 +242,13 @@
             "bounded_spontaneous": { 1: [1,0,0,0,0,0,0,0,0,0], 2: [2,0,0,0,0,0,0,0,0,0], 3: [1,2,0,0,0,0,0,0,0,0], 4: [0,2,0,0,0,0,0,0,0,0], 5: [0,2,2,0,0,0,0,0,0,0], 6: [0,0,2,0,0,0,0,0,0,0], 7: [0,0,2,2,0,0,0,0,0,0], 8: [0,0,0,2,0,0,0,0,0,0], 9: [0,0,0,2,2,0,0,0,0,0], 10: [0,0,0,0,2,0,0,0,0,0], 11: [0,0,0,0,2,2,0,0,0,0], 12: [0,0,0,0,0,2,0,0,0,0], 13: [0,0,0,0,0,2,2,0,0,0], 14: [0,0,0,0,0,0,2,0,0,0], 15: [0,0,0,0,0,0,2,2,0,0], 16: [0,0,0,0,0,0,0,2,0,0], 17: [0,0,0,0,0,0,0,2,2,0], 18: [0,0,0,0,0,0,0,0,2,0], 19: [0,0,0,0,0,0,0,0,2,0], 20: [0,0,0,0,0,0,0,0,2,0] }
         };
 
+        // Spells known (repertoire) for spontaneous casters — cumulative totals per rank
+        // [cantrips, 1st, 2nd, 3rd, 4th, 5th, 6th, 7th, 8th, 9th]
+        const SPELLS_KNOWN = {
+            "spontaneous": { 1:[5,2,0,0,0,0,0,0,0,0], 2:[5,3,0,0,0,0,0,0,0,0], 3:[5,3,2,0,0,0,0,0,0,0], 4:[5,3,3,0,0,0,0,0,0,0], 5:[5,3,3,2,0,0,0,0,0,0], 6:[5,3,3,3,0,0,0,0,0,0], 7:[5,3,3,3,2,0,0,0,0,0], 8:[5,3,3,3,3,0,0,0,0,0], 9:[5,3,3,3,3,2,0,0,0,0], 10:[5,3,3,3,3,3,0,0,0,0], 11:[5,3,3,3,3,3,2,0,0,0], 12:[5,3,3,3,3,3,3,0,0,0], 13:[5,3,3,3,3,3,3,2,0,0], 14:[5,3,3,3,3,3,3,3,0,0], 15:[5,3,3,3,3,3,3,3,2,0], 16:[5,3,3,3,3,3,3,3,3,0], 17:[5,3,3,3,3,3,3,3,3,2], 18:[5,3,3,3,3,3,3,3,3,3], 19:[5,3,3,3,3,3,3,3,3,3], 20:[5,3,3,3,3,3,3,3,3,3] },
+            "sorcerer": { 1:[5,2,0,0,0,0,0,0,0,0], 2:[5,4,0,0,0,0,0,0,0,0], 3:[5,4,2,0,0,0,0,0,0,0], 4:[5,4,4,0,0,0,0,0,0,0], 5:[5,4,4,2,0,0,0,0,0,0], 6:[5,4,4,4,0,0,0,0,0,0], 7:[5,4,4,4,2,0,0,0,0,0], 8:[5,4,4,4,4,0,0,0,0,0], 9:[5,4,4,4,4,2,0,0,0,0], 10:[5,4,4,4,4,4,0,0,0,0], 11:[5,4,4,4,4,4,2,0,0,0], 12:[5,4,4,4,4,4,4,0,0,0], 13:[5,4,4,4,4,4,4,2,0,0], 14:[5,4,4,4,4,4,4,4,0,0], 15:[5,4,4,4,4,4,4,4,2,0], 16:[5,4,4,4,4,4,4,4,4,0], 17:[5,4,4,4,4,4,4,4,4,2], 18:[5,4,4,4,4,4,4,4,4,4], 19:[5,4,4,4,4,4,4,4,4,4], 20:[5,4,4,4,4,4,4,4,4,4] }
+        };
+
         const stdSkills = ['acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery'];
 
         let reqs = null;
@@ -832,12 +839,28 @@
                     return;
                 }
 
+                // Repertoire capacity for spontaneous casters
+                let knownTable = SPELLS_KNOWN[cType];
+                if (canSwap && knownTable) {
+                    let knownAtLevel = knownTable[targetLevel] || [5,0,0,0,0,0,0,0,0,0];
+                    html += `<div class="bg-gray-950 p-3 rounded border border-purple-900/30 mb-4">
+                        <div class="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-2">Repertoire Capacity at Level ${targetLevel}</div>
+                        <div class="flex flex-wrap gap-2">`;
+                    for (let r = 0; r <= 9; r++) {
+                        if (knownAtLevel[r] > 0) {
+                            let label = r === 0 ? 'Cantrips' : `Rank ${r}`;
+                            html += `<span class="text-[10px] px-2 py-1 rounded border border-purple-900/40 text-gray-300" style="background:rgba(147,51,234,0.08);">${label}: <strong class="text-purple-300">${knownAtLevel[r]}</strong></span>`;
+                        }
+                    }
+                    html += `</div></div>`;
+                }
+
                 if (slotDiff.length > 0) {
                     html += `<div class="grid grid-cols-1 gap-4 mb-6">`;
                     slotDiff.forEach(diff => {
                         let label = diff.lvl === 0 ? "Cantrips" : `Level ${diff.lvl} Spells`;
                         let addedCount = (state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).length;
-                        
+
                         html += `
                         <div class="bg-gray-950 p-4 rounded border border-gray-800">
                             <div class="flex justify-between items-center mb-3">
@@ -845,7 +868,7 @@
                                 <button onclick="openModal('spell', {cIdx: ${idx}, lvl: ${diff.lvl}, req: ${diff.req}})" class="bg-blue-900/40 hover:bg-blue-800 border border-blue-800 text-blue-200 px-3 py-1 rounded text-xs font-bold transition-colors">Browse</button>
                             </div>
                             <div class="flex flex-wrap gap-2" id="ui-new-spells-${idx}-${diff.lvl}">
-                                ${(state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).map(s => 
+                                ${(state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).map(s =>
                                     `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${esc(s.name)}')" class="text-red-500 ml-1 hidden group-hover:inline">✖</button></div>`
                                 ).join('')}
                             </div>
@@ -853,6 +876,57 @@
                     });
                     html += `</div>`;
                 }
+
+                // Spontaneous spell swap (PF2e: swap one known spell per level-up)
+                if (canSwap) {
+                    let existingSpells = [];
+                    (caster.spells || []).forEach(s => {
+                        if (s && s.name) existingSpells.push({name: s.name, lvl: s.level || 0});
+                    });
+                    // Also gather from levels array
+                    (caster.levels || []).forEach(l => {
+                        (l.spells || []).forEach(s => {
+                            if (s && s.name && !existingSpells.find(e => e.name === s.name)) {
+                                existingSpells.push({name: s.name, lvl: l.level || 0});
+                            }
+                        });
+                    });
+
+                    let swapOut = state.spell_swap_out ? state.spell_swap_out[idx] : null;
+                    let swapIn = state.spell_swap_in ? state.spell_swap_in[idx] : null;
+
+                    html += `<div class="bg-gray-950 p-4 rounded border border-amber-900/30 mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <div>
+                                <h4 class="text-sm font-bold text-amber-400">Spell Swap <span class="text-gray-500 font-normal">(Optional)</span></h4>
+                                <p class="text-[10px] text-gray-500">Spontaneous casters may swap one known spell for another of the same rank each level.</p>
+                            </div>
+                        </div>`;
+
+                    if (existingSpells.length > 0) {
+                        html += `<div class="flex items-center gap-3 mt-2">
+                            <div class="flex-1">
+                                <label class="text-[10px] text-gray-500 uppercase font-semibold block mb-1">Remove</label>
+                                <select id="spell-swap-out-${idx}" onchange="setSpellSwap(${idx})" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-300">
+                                    <option value="">— None —</option>
+                                    ${existingSpells.map(s => `<option value="${esc(s.name)}" data-lvl="${s.lvl}" ${swapOut && swapOut.name === s.name ? 'selected' : ''}>${s.name} (Rank ${s.lvl})</option>`).join('')}
+                                </select>
+                            </div>
+                            <span class="text-gray-600 text-lg mt-4">→</span>
+                            <div class="flex-1">
+                                <label class="text-[10px] text-gray-500 uppercase font-semibold block mb-1">Add</label>
+                                ${swapOut
+                                    ? `<button onclick="openModal('spell', {cIdx: ${idx}, lvl: ${swapOut.lvl}, req: 1, swapMode: true})" class="bg-amber-900/30 hover:bg-amber-800/40 border border-amber-800/50 text-amber-300 px-3 py-1.5 rounded text-xs font-bold w-full transition-colors">${swapIn ? swapIn.name : 'Pick Replacement...'}</button>`
+                                    : `<div class="text-gray-600 text-xs italic py-1.5">Select a spell to remove first</div>`
+                                }
+                            </div>
+                        </div>`;
+                    } else {
+                        html += `<div class="text-gray-500 text-xs italic">No existing spells to swap.</div>`;
+                    }
+                    html += `</div>`;
+                }
+
                 html += `</div>`;
                 container.innerHTML += html;
             });
@@ -872,6 +946,22 @@
         }
 
         if(!state.new_spells) state.new_spells = [];
+        if(!state.spell_swap_out) state.spell_swap_out = {};
+        if(!state.spell_swap_in) state.spell_swap_in = {};
+
+        function setSpellSwap(cIdx) {
+            const sel = document.getElementById(`spell-swap-out-${cIdx}`);
+            if (!sel || !sel.value) {
+                delete state.spell_swap_out[cIdx];
+                delete state.spell_swap_in[cIdx];
+            } else {
+                const opt = sel.options[sel.selectedIndex];
+                state.spell_swap_out[cIdx] = {name: sel.value, lvl: parseInt(opt.getAttribute('data-lvl') || 0)};
+                delete state.spell_swap_in[cIdx];
+            }
+            buildMagicUI(); runValidation();
+        }
+
         function removeNewSpell(cIdx, lvl, name) {
             state.new_spells = state.new_spells.filter(s => !(s.cIdx === cIdx && s.lvl === lvl && s.name === name));
             buildMagicUI(); runValidation();
@@ -1137,10 +1227,16 @@
                     state.feats_selected[keyToSave] = a;
                     buildFeatsUI();
                 } else if (mCtx.type === 'spell') {
-                    let currentAdded = state.new_spells.filter(s => s.cIdx === mCtx.meta.cIdx && s.lvl === mCtx.meta.lvl).length;
-                    if(currentAdded >= mCtx.meta.req) { alert(`Maximum limit reached for Level ${mCtx.meta.lvl} spells.`); return; }
-                    state.new_spells.push({cIdx: mCtx.meta.cIdx, lvl: mCtx.meta.lvl, name: a.name});
-                    buildMagicUI();
+                    if (mCtx.meta.swapMode) {
+                        // Spell swap: set the swap-in spell
+                        state.spell_swap_in[mCtx.meta.cIdx] = {name: a.name, lvl: mCtx.meta.lvl};
+                        buildMagicUI();
+                    } else {
+                        let currentAdded = state.new_spells.filter(s => s.cIdx === mCtx.meta.cIdx && s.lvl === mCtx.meta.lvl).length;
+                        if(currentAdded >= mCtx.meta.req) { alert(`Maximum limit reached for Level ${mCtx.meta.lvl} spells.`); return; }
+                        state.new_spells.push({cIdx: mCtx.meta.cIdx, lvl: mCtx.meta.lvl, name: a.name});
+                        buildMagicUI();
+                    }
                 } else if (mCtx.type === 'retrain_feat') {
                     state.retrained_feats.push({ old: mCtx.meta.oldName, new: a });
                     buildRetrainUI();
@@ -1310,6 +1406,20 @@
                         if(!lvlObj.list.includes(ns.name)) lvlObj.list.push(ns.name);
                     }
                 });
+
+                // Apply spell swap (remove old, add new at same rank)
+                let swapOut = state.spell_swap_out[idx];
+                let swapIn = state.spell_swap_in[idx];
+                if (swapOut && swapIn) {
+                    c.spells.forEach(spObj => {
+                        if (spObj.list) {
+                            spObj.list = spObj.list.filter(n => n !== swapOut.name);
+                        }
+                    });
+                    let swapLvlObj = c.spells.find(sp => sp.spellLevel === swapIn.lvl);
+                    if (!swapLvlObj) { swapLvlObj = {spellLevel: swapIn.lvl, list: []}; c.spells.push(swapLvlObj); }
+                    if (!swapLvlObj.list.includes(swapIn.name)) swapLvlObj.list.push(swapIn.name);
+                }
             });
 
             const payload = {

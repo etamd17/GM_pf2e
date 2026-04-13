@@ -4,7 +4,7 @@
 
 {% block extra_head %}
     .pc-card {
-        background: #1e1e2a;
+        background: #24242e;
         border: 1px solid rgba(255,255,255,0.06);
         border-radius: 0.75rem;
         overflow: hidden;
@@ -14,7 +14,7 @@
         border-color: rgba(94,173,173,0.2);
     }
     .pc-head {
-        background: #16161e;
+        background: #191920;
         padding: 1rem 1.25rem;
         border-bottom: 1px solid rgba(255,255,255,0.06);
     }
@@ -36,7 +36,7 @@
         object-fit: cover;
     }
     .stat-chip {
-        background: #16161e;
+        background: #191920;
         border: 1px solid rgba(255,255,255,0.06);
         border-radius: 0.375rem;
         padding: 0.375rem 0;
@@ -105,7 +105,7 @@
         border: 1.5px solid rgba(212,162,68,0.3);
     }
     .section-inner {
-        background: #16161e;
+        background: #191920;
         border: 1px solid rgba(255,255,255,0.04);
         border-radius: 0.375rem;
         padding: 0.625rem 0.75rem;
@@ -133,7 +133,7 @@
         font-family: 'Inter', sans-serif;
         font-weight: 600;
         border-radius: 0.375rem;
-        background: #0f0f14;
+        background: #0d0d12;
         border: 1px solid rgba(255,255,255,0.08);
         color: #e8e8f0;
         outline: none;
@@ -151,7 +151,7 @@
         <p class="text-xs text-base-500 mt-0.5">Real-time character status</p>
     </div>
     <div class="flex gap-2">
-        <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:#16161e;">
+        <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:#191920;">
             Encounter Tracker
         </a>
     </div>
@@ -160,7 +160,7 @@
 {% if not party %}
 <div class="pc-card p-10 text-center">
     <h2 class="font-display text-lg text-base-300 mb-2">No Characters Found</h2>
-    <p class="text-sm text-base-500">Export from Pathbuilder 2e and place JSON files in <code class="text-accent-300 px-1.5 py-0.5 rounded text-xs" style="background:#0f0f14;">party_data/</code></p>
+    <p class="text-sm text-base-500">Export from Pathbuilder 2e and place JSON files in <code class="text-accent-300 px-1.5 py-0.5 rounded text-xs" style="background:#0d0d12;">party_data/</code></p>
 </div>
 {% endif %}
 
@@ -188,7 +188,7 @@
                     </p>
                 </div>
             </div>
-            <div class="text-center px-2.5 py-1 rounded" style="background:#0f0f14; border:1px solid rgba(255,255,255,0.06);">
+            <div class="text-center px-2.5 py-1 rounded" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.06);">
                 <span class="font-display text-[8px] uppercase tracking-widest block text-base-500">Lvl</span>
                 <span class="font-display text-lg font-bold leading-none text-base-100">{{ pc.level }}</span>
             </div>
@@ -254,7 +254,7 @@
             <!-- Ability Mods -->
             <div class="grid grid-cols-6 gap-1.5">
                 {% for stat in pc.ability_display %}
-                <div class="text-center rounded py-1" style="background:#16161e; border:1px solid rgba(255,255,255,0.04);">
+                <div class="text-center rounded py-1" style="background:#191920; border:1px solid rgba(255,255,255,0.04);">
                     <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">{{ stat.label }}</div>
                     <div class="text-sm font-bold text-base-200 leading-none mt-0.5">{{ stat.mod }}</div>
                 </div>

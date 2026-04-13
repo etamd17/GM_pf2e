@@ -240,9 +240,33 @@ def _broadcast_encounter_state():
         combatants.append(entry)
     sse_broadcast('encounter_update', {'encounter': combatants, 'round': ROUND_NUMBER, 'active_name': active_name, 'turn_index': TURN_INDEX})
 
-COMPENDIUM_LIBRARY = {} 
-COMPENDIUM_RULES = {} 
-BUILDER_ANCESTRIES = {}
+COMPENDIUM_LIBRARY = {}
+COMPENDIUM_RULES = {}
+BUILDER_ANCESTRIES = {
+    # Core ancestries (Player Core) — fallback data if no compendium loaded
+    "Human": {"boosts": {"str": True, "dex": True, "con": True, "int": True, "wis": True, "cha": True}, "flaws": [], "hp": 8, "rarity": "common", "description": "Humans are diverse and adaptable, with a wide range of cultures."},
+    "Elf": {"boosts": {"dex": True, "int": True}, "flaws": ["con"], "hp": 6, "rarity": "common", "description": "Elves are long-lived with a deep connection to magic and nature."},
+    "Dwarf": {"boosts": {"con": True, "wis": True}, "flaws": ["cha"], "hp": 10, "rarity": "common", "description": "Dwarves are stout folk with a strong sense of duty and craftsmanship."},
+    "Halfling": {"boosts": {"dex": True, "wis": True}, "flaws": ["str"], "hp": 6, "rarity": "common", "description": "Halflings are small, nimble folk known for their bravery and luck."},
+    "Goblin": {"boosts": {"dex": True, "cha": True}, "flaws": ["wis"], "hp": 6, "rarity": "common", "description": "Goblins are energetic and creative, with a love of fire and songs."},
+    "Gnome": {"boosts": {"con": True, "cha": True}, "flaws": ["str"], "hp": 8, "rarity": "common", "description": "Gnomes are fey-touched beings with vibrant appearances and curious natures."},
+    "Orc": {"boosts": {"str": True, "con": True}, "flaws": [], "hp": 10, "rarity": "common", "description": "Orcs are strong and resilient, with a deep culture of honor and battle."},
+    # Player Core 2 / APG ancestries
+    "Leshy": {"boosts": {"con": True, "wis": True}, "flaws": ["int"], "hp": 8, "rarity": "common", "description": "Leshies are nature spirits given physical form from plant matter."},
+    "Catfolk": {"boosts": {"dex": True, "cha": True}, "flaws": ["wis"], "hp": 8, "rarity": "common", "description": "Catfolk are agile humanoids with feline features and keen senses."},
+    "Kobold": {"boosts": {"dex": True, "cha": True}, "flaws": ["con"], "hp": 6, "rarity": "common", "description": "Kobolds are small draconic humanoids who pride themselves on cunning."},
+    "Tengu": {"boosts": {"dex": True, "con": True}, "flaws": [], "hp": 6, "rarity": "common", "description": "Tengu are avian humanoids who prize swordplay and storytelling."},
+    "Ratfolk": {"boosts": {"dex": True, "int": True}, "flaws": ["str"], "hp": 6, "rarity": "common", "description": "Ratfolk are small, clever humanoids who thrive in tight-knit communities."},
+    "Lizardfolk": {"boosts": {"str": True, "wis": True}, "flaws": ["int"], "hp": 8, "rarity": "common", "description": "Lizardfolk are cold-blooded reptilian humanoids at home in swamps and rivers."},
+    "Kitsune": {"boosts": {"cha": True}, "flaws": [], "hp": 8, "rarity": "common", "description": "Kitsune are shapeshifting fox folk with ties to the First World."},
+    "Android": {"boosts": {"dex": True, "int": True}, "flaws": ["cha"], "hp": 8, "rarity": "uncommon", "description": "Androids are synthetic humanoids with exceptional analytical abilities."},
+    "Fetchling": {"boosts": {"dex": True, "cha": True}, "flaws": ["wis"], "hp": 8, "rarity": "uncommon", "description": "Fetchlings are shadowy humanoids from the Shadow Plane."},
+    "Automaton": {"boosts": {"str": True, "con": True}, "flaws": [], "hp": 8, "rarity": "uncommon", "description": "Automatons are ancient constructs granted sentience."},
+    "Fleshwarp": {"boosts": {"con": True}, "flaws": [], "hp": 10, "rarity": "uncommon", "description": "Fleshwarps are beings whose bodies have been transformed by powerful magic."},
+    "Gnoll": {"boosts": {"str": True, "int": True}, "flaws": ["wis"], "hp": 8, "rarity": "uncommon", "description": "Gnolls are hyena-like humanoids with a deep sense of community."},
+    "Grippli": {"boosts": {"dex": True, "wis": True}, "flaws": ["str"], "hp": 6, "rarity": "uncommon", "description": "Gripplis are small frog-like humanoids native to tropical forests."},
+    "Poppet": {"boosts": {"con": True, "cha": True}, "flaws": ["dex"], "hp": 6, "rarity": "uncommon", "description": "Poppets are small constructs brought to life by magical means."},
+}
 BUILDER_BACKGROUNDS = {}
 BUILDER_CLASSES = {}
 BUILDER_FEATS = { 'class': [], 'skill': [], 'general': [], 'ancestry': [] }
@@ -317,7 +341,7 @@ PF2E_WEAPON_CATEGORIES = {
 pf2e_gen = RobustPF2eGenerator()
 
 # --- SECURITY: Whitelisted generator types to prevent arbitrary method calls ---
-VALID_GENERATOR_TYPES = {'npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter'}
+VALID_GENERATOR_TYPES = {'npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event'}
 
 # --- SECURITY: Allowed image extensions for vault image serving ---
 ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'}
@@ -364,7 +388,21 @@ BUILDER_DATA = {
         "halfling": [{"name": "Gutsy", "desc": "If you roll a success on a saving throw against an emotion effect, you get a critical success instead."}, {"name": "Hillock", "desc": "When you regain Hit Points overnight, add your level to the Hit Points regained."}, {"name": "Nomadic", "desc": "You gain two additional languages and become trained in a Lore skill."}, {"name": "Twilight", "desc": "You gain low-light vision."}, {"name": "Wildwood", "desc": "You ignore difficult terrain from non-magical foliage."}],
         "goblin": [{"name": "Charhide", "desc": "You gain fire resistance equal to half your level (minimum 1)."}, {"name": "Irongut", "desc": "You gain a +2 circumstance bonus against afflictions from food or drink."}, {"name": "Monkey", "desc": "You gain a climb speed of 10 feet."}, {"name": "Snow", "desc": "You gain cold resistance equal to half your level (minimum 1)."}, {"name": "Tailed", "desc": "You have a prehensile tail that can perform simple Interact actions."}],
         "gnome": [{"name": "Chameleon", "desc": "You gain a +2 circumstance bonus to Stealth checks when you are motionless."}, {"name": "Fey-Touched", "desc": "You can cast a single primal cantrip of your choice as an innate spell."}, {"name": "Sensate", "desc": "You gain imprecise scent with a range of 30 feet."}, {"name": "Umbral", "desc": "You gain darkvision."}, {"name": "Wellspring", "desc": "You can cast a single arcane, divine, or occult cantrip of your choice."}],
-        "orc": [{"name": "Badlands", "desc": "You gain fire resistance equal to half your level (minimum 1)."}, {"name": "Deep", "desc": "You gain darkvision."}, {"name": "Hold-Scarred", "desc": "You gain 12 Hit Points from your ancestry instead of 10, and gain the Diehard feat."}, {"name": "Rainfall", "desc": "You gain a +2 circumstance bonus to saving throws against diseases."}, {"name": "Winter", "desc": "You gain cold resistance equal to half your level (minimum 1)."}]
+        "orc": [{"name": "Badlands", "desc": "You gain fire resistance equal to half your level (minimum 1)."}, {"name": "Deep", "desc": "You gain darkvision."}, {"name": "Hold-Scarred", "desc": "You gain 12 Hit Points from your ancestry instead of 10, and gain the Diehard feat."}, {"name": "Rainfall", "desc": "You gain a +2 circumstance bonus to saving throws against diseases."}, {"name": "Winter", "desc": "You gain cold resistance equal to half your level (minimum 1)."}],
+        "leshy": [{"name": "Fungus", "desc": "You gain darkvision."}, {"name": "Gourd", "desc": "Your head is a gourd with a permanent light cantrip. You gain resistance to fire equal to half your level."}, {"name": "Leaf", "desc": "You gain a +2 circumstance bonus to Acrobatics checks to Maneuver in Flight."}, {"name": "Vine", "desc": "You can extend vines, gaining a climb speed of 10 feet."}, {"name": "Cactus", "desc": "You are covered in spines. Grappling creatures take 1d6 piercing damage."}],
+        "catfolk": [{"name": "Clawed", "desc": "Your claws are sharp. You gain a claw unarmed attack that deals 1d6 slashing."}, {"name": "Hunting", "desc": "You gain a +2 circumstance bonus to Survival checks to Track."}, {"name": "Jungle", "desc": "You gain a climb speed of 10 feet."}, {"name": "Nine Lives", "desc": "You gain the Cat's Luck reaction."}, {"name": "Winter", "desc": "You gain cold resistance equal to half your level (minimum 1)."}],
+        "kobold": [{"name": "Caveclimber", "desc": "You gain a climb speed of 10 feet."}, {"name": "Dragonscaled", "desc": "You gain resistance to the damage type of your draconic exemplar (5 + half your level)."}, {"name": "Spellscale", "desc": "You can cast a single arcane cantrip of your choice as an innate spell."}, {"name": "Strongjaw", "desc": "Your jaws are powerful. You gain a jaws unarmed attack that deals 1d6 piercing."}, {"name": "Venomtail", "desc": "You gain a tail attack that can deliver venom."}],
+        "tengu": [{"name": "Dogtooth", "desc": "You gain a beak unarmed attack that deals 1d6 piercing damage."}, {"name": "Jinxed", "desc": "You can cast ill omen as an innate occult cantrip."}, {"name": "Mountainkeeper", "desc": "You gain a +2 circumstance bonus to Athletics checks to Climb."}, {"name": "Skyborn", "desc": "You gain a +2 circumstance bonus to Acrobatics checks to Maneuver in Flight."}, {"name": "Stormtossed", "desc": "You gain electricity resistance equal to half your level (minimum 1)."}],
+        "ratfolk": [{"name": "Deep Rat", "desc": "You gain darkvision."}, {"name": "Desert Rat", "desc": "You gain fire resistance equal to half your level (minimum 1) and environmental heat protection."}, {"name": "Longsnout", "desc": "You gain imprecise scent with a range of 30 feet."}, {"name": "Sewer Rat", "desc": "You gain a +1 circumstance bonus to saving throws against diseases and poisons."}, {"name": "Shadow Rat", "desc": "You gain a +2 circumstance bonus to Stealth checks in dim light."}],
+        "lizardfolk": [{"name": "Cliffscale", "desc": "You gain a climb speed of 15 feet."}, {"name": "Frilled", "desc": "You gain a frilled display Intimidation action."}, {"name": "Sandstrider", "desc": "You ignore difficult terrain from sand and gravel."}, {"name": "Unseen", "desc": "You can change your skin color. You gain a +2 circumstance bonus to Stealth checks in natural environments."}, {"name": "Wetlander", "desc": "You gain a swim speed of 15 feet."}],
+        "kitsune": [{"name": "Celestial Envoy", "desc": "You can cast divine lance as a divine innate cantrip."}, {"name": "Dark Fields", "desc": "You gain darkvision."}, {"name": "Earthly Wilds", "desc": "You can cast know direction as a primal innate cantrip."}, {"name": "Frozen Wind", "desc": "You gain cold resistance equal to half your level (minimum 1)."}, {"name": "Foxfire", "desc": "You can produce foxfire, a magical flame."}],
+        "android": [{"name": "Artisan", "desc": "You become trained in Crafting."}, {"name": "Impersonator", "desc": "You gain a +2 circumstance bonus to Deception checks to Impersonate a specific person."}, {"name": "Laborer", "desc": "You gain a +2 circumstance bonus to Athletics checks to Force Open and Shove."}, {"name": "Polyglot", "desc": "You gain two additional languages."}, {"name": "Warrior", "desc": "You become trained in all martial weapons."}],
+        "fetchling": [{"name": "Bright", "desc": "Your body casts light. You gain the light cantrip as an innate occult spell."}, {"name": "Deep", "desc": "You gain darkvision."}, {"name": "Liminal", "desc": "You can Step into an extradimensional space adjacent to your position, ignoring difficult terrain."}, {"name": "Resolute", "desc": "You gain a +1 circumstance bonus to saving throws against emotion effects."}, {"name": "Wisp", "desc": "You gain a +2 circumstance bonus to Stealth checks in dim light or darkness."}],
+        "automaton": [{"name": "Hunter", "desc": "You gain a +2 circumstance bonus to Survival checks to Track."}, {"name": "Mage", "desc": "You can cast a single arcane cantrip of your choice."}, {"name": "Sharpshooter", "desc": "You gain a +2 circumstance bonus to attacks of opportunity with ranged weapons."}, {"name": "Warrior", "desc": "You gain a +1 circumstance bonus to Athletics checks to Shove and Trip."}],
+        "fleshwarp": [{"name": "Created", "desc": "You were intentionally crafted. You gain a +2 circumstance bonus to saving throws against transmutation effects."}, {"name": "Mutated", "desc": "You gain a claw or jaws unarmed attack dealing 1d6 damage."}, {"name": "Shapewrought", "desc": "You gain a +2 circumstance bonus to Deception checks to Impersonate."}, {"name": "Surgewise", "desc": "You gain a +2 circumstance bonus to Medicine checks."}],
+        "gnoll": [{"name": "Great Gnoll", "desc": "You are Large size."}, {"name": "Sweetbreath", "desc": "You gain a +2 circumstance bonus to Diplomacy checks."}, {"name": "Witch", "desc": "You can cast an occult cantrip of your choice."}, {"name": "Ant", "desc": "You gain a +2 circumstance bonus to Athletics checks to Climb."}],
+        "grippli": [{"name": "Poisonhide", "desc": "You secrete a mild toxin. Creatures that grapple you become sickened 1."}, {"name": "Snatcher", "desc": "Your tongue is prehensile and can grab small objects."}, {"name": "Stickytoe", "desc": "You gain a climb speed of 10 feet."}, {"name": "Windweb", "desc": "You gain a +2 circumstance bonus to Acrobatics checks to Balance."}],
+        "poppet": [{"name": "Ghost", "desc": "You are partially translucent. You gain a +1 circumstance bonus to Stealth."}, {"name": "Stuffed", "desc": "You gain resistance to bludgeoning damage equal to half your level."}, {"name": "Toy", "desc": "You are Tiny instead of Small."}, {"name": "Windup", "desc": "You gain a +2 circumstance bonus to saving throws against effects that would make you fatigued."}]
     },
     "classes": copy.deepcopy(RICH_CLASS_DATA),
     "subclass_matrix": SUBCLASS_MATRIX
@@ -2585,11 +2623,11 @@ def gm_login():
             return redirect(request.args.get('next', '/gm'))
         return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
             <title>GM Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
-            <style>body{font-family:'Inter',system-ui,sans-serif;background:#0f0f14;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
-            .box{background:#1e1e2a;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:40px;max-width:340px;width:100%;text-align:center;}
+            <style>body{font-family:'Inter',system-ui,sans-serif;background:#0d0d12;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+            .box{background:#24242e;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:40px;max-width:340px;width:100%;text-align:center;}
             h1{font-family:'Cinzel',serif;color:#ef4444;font-size:16px;margin-bottom:8px;}
             p{color:#8080a0;font-size:13px;}
-            input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0f0f14;color:#e8e8f0;font-size:14px;margin:16px 0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+            input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0d0d12;color:#e8e8f0;font-size:14px;margin:16px 0;box-sizing:border-box;font-family:'Inter',sans-serif;}
             input:focus{outline:none;border-color:rgba(94,173,173,0.3);}
             button{width:100%;padding:10px;border-radius:6px;border:none;background:#3A7878;color:#A8DEDE;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.2s;}
             button:hover{background:#4A9696;}
@@ -2599,11 +2637,11 @@ def gm_login():
             <button type="submit">Sign In</button></form></div></body></html>'''
     return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <title>GM Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
-        <style>body{font-family:'Inter',system-ui,sans-serif;background:#0f0f14;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
-        .box{background:#1e1e2a;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:40px;max-width:340px;width:100%;text-align:center;}
+        <style>body{font-family:'Inter',system-ui,sans-serif;background:#0d0d12;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+        .box{background:#24242e;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:40px;max-width:340px;width:100%;text-align:center;}
         h1{font-family:'Cinzel',serif;color:#7DC4C4;font-size:18px;margin-bottom:4px;}
         p{color:#8080a0;font-size:13px;margin-bottom:20px;}
-        input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0f0f14;color:#e8e8f0;font-size:14px;margin-bottom:16px;box-sizing:border-box;font-family:'Inter',sans-serif;}
+        input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0d0d12;color:#e8e8f0;font-size:14px;margin-bottom:16px;box-sizing:border-box;font-family:'Inter',sans-serif;}
         input:focus{outline:none;border-color:rgba(94,173,173,0.3);}
         button{width:100%;padding:10px;border-radius:6px;border:none;background:#3A7878;color:#A8DEDE;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.2s;}
         button:hover{background:#4A9696;}
@@ -2629,9 +2667,9 @@ def gm_hub():
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body {{ font-family:'Inter',system-ui,sans-serif; background:#0f0f14; color:#e8e8f0; }}
+        body {{ font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#e8e8f0; }}
         .font-display {{ font-family:'Cinzel',serif; }}
-        .gm-card {{ background:#1e1e2a; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:20px; transition:all 0.2s; }}
+        .gm-card {{ background:#24242e; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:20px; transition:all 0.2s; }}
         .gm-card:hover {{ border-color:rgba(94,173,173,0.2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
     </style></head>
     <body class="min-h-screen flex items-center justify-center p-6">
@@ -2721,6 +2759,7 @@ def _get_tracker_state():
             entry['immunities'] = getattr(c, 'immunities', [])
             entry['resistances'] = getattr(c, 'resistances', [])
             entry['weaknesses'] = getattr(c, 'weaknesses', [])
+            entry['traits'] = getattr(c, 'traits', [])
         combatants.append(entry)
     party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
     encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
@@ -3350,13 +3389,32 @@ def cycle_turn(direction):
     global TURN_INDEX, ACTIVE_ENCOUNTER, ROUND_NUMBER, TURN_REMINDERS
     if not ACTIVE_ENCOUNTER: return redirect(url_for('tracker_view'))
     if direction == 'next':
-        # === END OF CURRENT TURN: auto-tick conditions ===
+        # === END OF CURRENT TURN: auto-tick conditions (PF2E Remaster) ===
         current_c = ACTIVE_ENCOUNTER[TURN_INDEX]
-        # Frightened decreases by 1 at end of turn (PF2E Core)
+
+        # Frightened decreases by 1 at end of turn (PF2E Core p.619)
         if current_c.conditions.get('frightened', 0) > 0:
             current_c.conditions['frightened'] -= 1
             _combat_log(f"{current_c.name}: Frightened reduced to {current_c.conditions['frightened']}", 'condition')
             if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['frightened'] = current_c.conditions['frightened']
+
+        # Stupefied doesn't auto-reduce, but tracked here for completeness (requires Remove Curse / rest)
+        # Enfeebled doesn't auto-reduce (requires specific recovery)
+        # Clumsy doesn't auto-reduce (requires specific recovery)
+        # Drained doesn't auto-reduce (requires long rest, reducing by 1 per long rest)
+        # Sickened doesn't auto-reduce (must retch / Fortitude save)
+        # Slowed: reduces by 1 at end of turn if caused by a non-permanent source (PF2E Core)
+        if current_c.conditions.get('slowed', 0) > 0:
+            # Only auto-reduce slowed if it has a duration (most slowed effects are 1 round)
+            # Tracked via a flag — if no flag, assume it's round-based and auto-decrement
+            if not getattr(current_c, '_slowed_persistent', False):
+                current_c.conditions['slowed'] -= 1
+                _combat_log(f"{current_c.name}: Slowed reduced to {current_c.conditions['slowed']}", 'condition')
+                if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['slowed'] = current_c.conditions['slowed']
+
+        # Sync conditions to PC file if applicable
+        if current_c.is_pc and current_c.name in PARTY_LIBRARY:
+            _persist_pc_combat_state(current_c.name)
         
         # Advance turn index, skipping delaying combatants
         old_index = TURN_INDEX
@@ -3513,7 +3571,57 @@ def _generate_turn_reminders():
         TURN_REMINDERS.append({
             'type': 'warning', 'icon': '💧',
             'title': f'Drained {drained_val}',
-            'detail': f'−{drained_val} to Con-based checks. Max HP reduced by {drained_val} × level.',
+            'detail': f'−{drained_val} to Con-based checks. Max HP reduced by {drained_val} × level. Decreases by 1 per full night rest.',
+            'action': None
+        })
+
+    # Enfeebled
+    enf_val = c.conditions.get('enfeebled', 0)
+    if enf_val > 0:
+        TURN_REMINDERS.append({
+            'type': 'warning', 'icon': '💪',
+            'title': f'Enfeebled {enf_val}',
+            'detail': f'−{enf_val} status penalty to Str-based rolls and DCs (attacks, Athletics, damage).',
+            'action': None
+        })
+
+    # Clumsy
+    clumsy_val = c.conditions.get('clumsy', 0)
+    if clumsy_val > 0:
+        TURN_REMINDERS.append({
+            'type': 'warning', 'icon': '🦶',
+            'title': f'Clumsy {clumsy_val}',
+            'detail': f'−{clumsy_val} status penalty to Dex-based checks and DCs (AC, Reflex, Acrobatics, Stealth, Thievery).',
+            'action': None
+        })
+
+    # Stupefied
+    stup_val = c.conditions.get('stupefied', 0)
+    if stup_val > 0:
+        TURN_REMINDERS.append({
+            'type': 'warning', 'icon': '🧠',
+            'title': f'Stupefied {stup_val}',
+            'detail': f'−{stup_val} penalty to mental checks, spell attacks, DCs. DC 5 + {stup_val} flat check or spell is lost when casting.',
+            'action': None
+        })
+
+    # Doomed
+    doomed_val = c.conditions.get('doomed', 0)
+    if doomed_val > 0:
+        TURN_REMINDERS.append({
+            'type': 'danger', 'icon': '☠',
+            'title': f'Doomed {doomed_val}',
+            'detail': f'Max Dying value reduced to {4 - doomed_val}. Dies at Dying {4 - doomed_val} instead of 4.',
+            'action': None
+        })
+
+    # Wounded
+    wounded_val = c.conditions.get('wounded', 0)
+    if wounded_val > 0:
+        TURN_REMINDERS.append({
+            'type': 'warning', 'icon': '🩹',
+            'title': f'Wounded {wounded_val}',
+            'detail': f'If you gain the dying condition, increase dying value by {wounded_val}. Removed when healed to max HP.',
             'action': None
         })
 
@@ -3765,7 +3873,13 @@ def api_monster_statblock(instance_id):
 @gm_required
 def dm_generator():
     party_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
-    data = {k: getattr(pf2e_gen, f'get_{k}')(level=party_level, biome="City") for k in ['npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter']}
+    gen_types = ['npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event']
+    data = {}
+    for k in gen_types:
+        try:
+            data[k] = getattr(pf2e_gen, f'get_{k}')(level=party_level, biome="City")
+        except AttributeError:
+            data[k] = f"<em>Generator '{k}' not available.</em>"
     return render_template('generator.html', data=data, current_level=party_level)
 
 @app.route('/api/generate/<element_type>', methods=['POST'])
@@ -4346,6 +4460,11 @@ def combatant_stats(instance_id):
             else:
                 data['attacks'] = [{'name': s['name'], 'hit': f"+{s['bonus']}", 'damage': s['damage']} for s in c.strikes]
                 data['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in c.actions]
+                data['immunities'] = getattr(c, 'immunities', [])
+                data['resistances'] = getattr(c, 'resistances', [])
+                data['weaknesses'] = getattr(c, 'weaknesses', [])
+                data['traits'] = getattr(c, 'traits', [])
+                data['elite_weak'] = getattr(c, 'elite_weak', 0)
             return jsonify(data)
     
     # Not in encounter — check party library
@@ -4537,9 +4656,17 @@ def long_rest(pc_name):
             'hidden': False, 'undetected': False
         }
         
-        # Set a flag so the player sheet knows to clear localStorage spell state
+        # Clear server-side spell slot tracking
         pc._spell_slots_refreshed = True
-        
+        file_path = get_pc_file_path(pc_name)
+        if file_path and os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
+            build = pc_json.get('build', pc_json)
+            build['expended_slots'] = {}
+            build['prepared_spells'] = {}
+            build['cast_prep'] = {}
+            save_and_reload_character(pc_name, pc_json, file_path)
+
         # Sync to tracker
         for c in ACTIVE_ENCOUNTER:
             if c.is_pc and c.name == pc_name:
@@ -4621,22 +4748,32 @@ def update_wealth(pc_name):
 
 @app.route('/api/spell_slots/<pc_name>', methods=['GET', 'POST'])
 def spell_slots(pc_name):
-    """Server-side spell slot persistence. GET returns current state, POST saves it."""
+    """Server-side spell slot persistence. GET returns current state, POST saves it.
+    Stores: expended_slots, prepared_spells, cast_prep (all server-side)."""
     file_path = get_pc_file_path(pc_name)
     if not os.path.exists(file_path):
         return jsonify({"error": "Character not found"}), 404
-    
+
     if request.method == 'GET':
         with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
-        return jsonify({"success": True, "expended_slots": build.get('expended_slots', {})})
-    
-    # POST — save slot state
+        return jsonify({
+            "success": True,
+            "expended_slots": build.get('expended_slots', {}),
+            "prepared_spells": build.get('prepared_spells', {}),
+            "cast_prep": build.get('cast_prep', {})
+        })
+
+    # POST — save slot state (accepts any combination of the three keys)
     data = request.json
-    slots = data.get('expended_slots', {})
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
-    build['expended_slots'] = slots
+    if 'expended_slots' in data:
+        build['expended_slots'] = data['expended_slots']
+    if 'prepared_spells' in data:
+        build['prepared_spells'] = data['prepared_spells']
+    if 'cast_prep' in data:
+        build['cast_prep'] = data['cast_prep']
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 

@@ -6,12 +6,13 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>{{ pc.name }} - Player Sheet</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="/static/js/dice-engine.js"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        gray: { 950: '#0f0f14', 900: '#16161e', 800: '#1e1e2a', 700: '#282838', 600: '#50506a', 500: '#8080a0', 400: '#a0a0b8', 300: '#c8c8d8', 200: '#e8e8f0', 100: '#f4f3f8', },
+                        gray: { 950: '#0d0d12', 900: '#191920', 800: '#24242e', 700: '#2e2e3c', 600: '#42425a', 500: '#6b6b8a', 400: '#9494b0', 300: '#b8b8cc', 200: '#d8d8e6', 100: '#ededf4', },
                         amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' },
                         red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 800: '#6b1525', 900: '#3D0A13', },
                         green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
@@ -27,20 +28,20 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700;900&display=swap');
 
         :root {
-            --bg-base: #0f0f14;
-            --bg-surface: #16161e;
-            --bg-raised: #1e1e2a;
-            --bg-hover: #282838;
-            --bg-input: #12121a;
+            --bg-base: #0d0d12;
+            --bg-surface: #191920;
+            --bg-raised: #24242e;
+            --bg-hover: #2e2e3c;
+            --bg-input: #111118;
 
-            --border-subtle: rgba(255,255,255,0.06);
-            --border-default: rgba(255,255,255,0.08);
-            --border-strong: rgba(255,255,255,0.15);
+            --border-subtle: rgba(255,255,255,0.08);
+            --border-default: rgba(255,255,255,0.12);
+            --border-strong: rgba(255,255,255,0.18);
 
-            --text-primary: #e8e8f0;
-            --text-secondary: #a0a0b8;
-            --text-muted: #50506a;
-            --text-faint: #363648;
+            --text-primary: #ededf4;
+            --text-secondary: #b8b8cc;
+            --text-muted: #6b6b8a;
+            --text-faint: #42425a;
 
             --accent-red: #c53131;
             --accent-gold: #b8860b;
@@ -58,11 +59,11 @@
             --color-health: #4ADE80;
 
             /* Legacy aliases for inline styles that reference old var names */
-            --surface-primary: #16161e;
-            --surface-raised: #1e1e2a;
+            --surface-primary: #191920;
+            --surface-raised: #24242e;
             --surface-overlay: #282838;
             --surface-sunken: #12121a;
-            --surface-base: #0f0f14;
+            --surface-base: #0d0d12;
             --accent-teal: #60a5fa;
             --accent-teal-dim: rgba(96,165,250,0.15);
             --accent-gold-bright: #d4a244;
@@ -86,7 +87,7 @@
         }
 
         * { box-sizing: border-box; }
-        body { font-family: var(--font-ui); background: #0f0f14; color: var(--text-primary); }
+        body { font-family: var(--font-ui); background: #0d0d12; color: var(--text-primary); }
 
         /* Typography */
         .font-display { font-family: var(--font-display); }
@@ -442,8 +443,7 @@
         .spell-card-body p { margin-bottom:0.8rem; }
         .spell-card-body strong, .spell-card-body b { color:var(--color-ac); }
         .spell-card-body hr { border:none; border-top:1px solid var(--border-subtle); margin:12px 0; }
-        .spell-card-heightened { background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.15); border-radius:8px; padding:10px 14px; margin-top:10px; }
-        .spell-card-heightened-title { font-family:var(--font-ui); font-size:10px; color:#A78BFA; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; font-weight:600; }
+
         .spell-card-footer { padding:12px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:8px; }
         .action-pips { display:inline-flex; gap:2px; vertical-align:middle; }
         .action-pip { display:inline-block; width:14px; height:14px; background:var(--color-ac); border-radius:3px; }
@@ -1265,10 +1265,12 @@
                             <div class="flex gap-3 items-center text-xs">
                                 <span class="text-gray-500 font-header tracking-wider uppercase">{{ caster.type }} Casting</span>
                                 {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
-                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">Atk +{{ pc.spell_attack }}</span>
+                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>
                                 <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">DC {{ pc.spell_dc }}</span>
                                 {% endif %}
+                                {% if 'impulse' not in c_type_lower %}
                                 <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);">Cantrips = Rank {{ pc.cantrip_rank }}</span>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="flex items-center gap-3">
@@ -1291,7 +1293,120 @@
                         </div>
                     </div>
 
-                    {% if 'spontaneous' in c_type_lower or 'focus' in c_type_lower or 'impulse' in c_type_lower %}
+                    {% if 'impulse' in c_type_lower %}
+                    <!-- === KINETICIST IMPULSE CASTER (grouped by element gate) === -->
+                    <div class="p-5 space-y-2" id="impulse-container-{{ caster_idx }}">
+                        <div class="text-center italic py-4" style="color:var(--text-faint);">Grouping impulses by element...</div>
+                    </div>
+                    <script>
+                    (function() {
+                        var casterIdx = {{ caster_idx }};
+                        var tradition = '{{ caster.tradition }}';
+                        var casterType = '{{ caster.type }}';
+                        var container = document.getElementById('impulse-container-' + casterIdx);
+
+                        /* Collect all impulses from all levels */
+                        var allImpulses = [];
+                        {% for lvl in caster.levels %}
+                        {% for sp in lvl.spells %}
+                        allImpulses.push({
+                            name: {{ sp.name | tojson | safe }},
+                            actions: {{ sp.actions | tojson | safe if sp.actions else 'null' }},
+                            level: {{ lvl.level }},
+                            label: {{ lvl.label | tojson | safe }}
+                        });
+                        {% endfor %}
+                        {% endfor %}
+
+                        /* Element detection by keyword matching */
+                        function detectElement(spellName) {
+                            var n = spellName.toLowerCase();
+                            if (/fire|flame|burn|scorch|ignit|thermal|blaz/.test(n)) return 'Fire';
+                            if (/water|tidal|ocean|aqua|torrent|mist|rain|ice|frost|winter|sleet|cold/.test(n)) return 'Water';
+                            if (/earth|stone|rock|tremor/.test(n)) return 'Earth';
+                            if (/air|wind|gust|aerial|cyclone|breez|lightning|thunder|electr/.test(n)) return 'Air';
+                            if (/wood|timber|vine|thorn|leaf|root|branch|forest|plant/.test(n)) return 'Wood';
+                            if (/metal|iron|steel|ore|alloy|carapace/.test(n)) return 'Metal';
+                            return 'Universal';
+                        }
+
+                        var elementConfig = {
+                            'Fire':      { color: '#ef4444', icon: '\uD83D\uDD25' },
+                            'Water':     { color: '#3b82f6', icon: '\uD83D\uDCA7' },
+                            'Earth':     { color: '#a16207', icon: '\uD83E\uDEA8' },
+                            'Air':       { color: '#a78bfa', icon: '\uD83C\uDF2C\uFE0F' },
+                            'Metal':     { color: '#9ca3af', icon: '\u2699\uFE0F' },
+                            'Wood':      { color: '#22c55e', icon: '\uD83C\uDF3F' },
+                            'Universal': { color: '#8ED4D4', icon: '\u2728' }
+                        };
+
+                        /* Group impulses by detected element */
+                        var groups = {};
+                        allImpulses.forEach(function(sp) {
+                            var el = detectElement(sp.name);
+                            if (!groups[el]) groups[el] = [];
+                            groups[el].push(sp);
+                        });
+
+                        /* Sort each group by level, then alphabetically */
+                        Object.keys(groups).forEach(function(el) {
+                            groups[el].sort(function(a, b) {
+                                if (a.level !== b.level) return a.level - b.level;
+                                return a.name.localeCompare(b.name);
+                            });
+                        });
+
+                        /* Render in canonical element order */
+                        var order = ['Fire', 'Water', 'Earth', 'Air', 'Metal', 'Wood', 'Universal'];
+                        var html = '';
+
+                        order.forEach(function(element) {
+                            var spells = groups[element];
+                            if (!spells || spells.length === 0) return;
+                            var cfg = elementConfig[element];
+
+                            html += '<div style="margin-top:6px;">';
+                            html += '<div style="font-size:10px; font-weight:700; color:' + cfg.color + '; text-transform:uppercase; letter-spacing:0.08em; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:8px;">';
+                            html += cfg.icon + ' ' + element;
+                            html += '</div>';
+                            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">';
+
+                            spells.forEach(function(sp) {
+                                var nameEsc = sp.name.replace(/'/g, "\\'");
+                                var nameAttr = sp.name.toLowerCase().replace(/"/g, '&quot;');
+                                html += '<div class="flex justify-between items-center p-3 rounded cursor-pointer hover:bg-gray-700 transition-colors spell-rank-' + sp.level + ' spell-entry" ';
+                                html += 'data-spell-name="' + nameAttr + '" data-spell-rank="' + sp.level + '" ';
+                                html += 'data-impulse-element="' + element.toLowerCase() + '" ';
+                                html += 'onclick="openSpellCard(\'' + nameEsc + '\', ' + sp.level + ', \'' + tradition + '\', \'' + casterType + '\')" ';
+                                html += 'style="background:var(--bg-raised); border:1px solid var(--border-subtle); border-left:3px solid ' + cfg.color + ';">';
+
+                                html += '<div class="flex items-center gap-2 pr-2 truncate">';
+                                html += '<span class="text-sm font-bold truncate" style="color:var(--text-primary);">' + sp.name + '</span>';
+                                if (sp.actions) {
+                                    html += '<span class="action-pips ml-1">' + sp.actions + '</span>';
+                                }
+                                html += '<span class="text-[9px] font-header uppercase tracking-wider ml-1" style="color:var(--text-muted);">' + sp.label + '</span>';
+                                html += '</div>';
+
+                                html += '<div class="flex items-center gap-2 shrink-0">';
+                                html += '<button onclick="event.stopPropagation(); rollSpell(\'' + nameEsc + '\', event)" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:' + cfg.color + '1a; border:1px solid ' + cfg.color + '33; color:' + cfg.color + ';">Cast</button>';
+                                html += '</div>';
+
+                                html += '</div>';
+                            });
+
+                            html += '</div></div>';
+                        });
+
+                        if (html === '') {
+                            html = '<div class="text-center italic py-4" style="color:var(--text-faint);">No impulses found.</div>';
+                        }
+
+                        container.innerHTML = html;
+                    })();
+                    </script>
+
+                    {% elif 'spontaneous' in c_type_lower or 'focus' in c_type_lower %}
                     <!-- === SPONTANEOUS / FOCUS CASTER === -->
                     <div class="p-5 space-y-5">
                         {% for lvl in caster.levels %}
@@ -1312,7 +1427,7 @@
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {% for sp in lvl.spells %}
-                                <div class="flex justify-between items-center p-3 rounded cursor-pointer hover:bg-gray-700 transition-colors spell-rank-{{ lvl.level }} spell-entry" 
+                                <div class="flex justify-between items-center p-3 rounded cursor-pointer hover:bg-gray-700 transition-colors spell-rank-{{ lvl.level }} spell-entry"
                                      data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}"
                                      onclick="openSpellCard('{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, '{{ caster.tradition }}', '{{ caster.type }}')"
                                      style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
@@ -1810,7 +1925,10 @@
         <div id="dice-panel" class="hidden bg-gray-800 rounded-lg shadow-2xl mb-4 w-80 overflow-hidden flex flex-col transform transition-all origin-bottom-right border border-gray-700">
             <div class="bg-gray-900 p-3 border-b border-gray-700 flex justify-between items-center">
                 <span class="font-header text-amber-500 text-sm">Dice Roller</span>
-                <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                <div class="flex items-center gap-2">
+                    <button id="btn-toggle-3d" onclick="toggle3DDice()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Toggle 3D Physics Dice">3D</button>
+                    <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                </div>
             </div>
             <div class="p-4">
                 <div class="bg-gray-950 rounded border border-gray-700 p-3 mb-4 text-center min-h-[85px] flex flex-col justify-center items-center shadow-inner">
@@ -1852,6 +1970,8 @@
         const pcName = {{ pc.name | tojson | safe }};
         const pcNameEncoded = encodeURIComponent(pcName);
         const pcLevel = parseInt("{{ pc.level }}") || 1;
+        const SPELL_ATTACK = parseInt("{{ pc.spell_attack }}") || 0;
+        const SPELL_DC = parseInt("{{ pc.spell_dc }}") || 0;
 
         // ==========================================
         // PORTRAIT UPLOAD
@@ -2266,8 +2386,16 @@
             if (!expr) return;
             const result = parseDiceAndRollDetailed(expr, false);
             if (result) {
-                showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice);
                 broadcastToGM('Custom Roll', result.total.toString(), expr + ' = ' + result.detail);
+                if (window.diceRoller?.enabled && DiceRoller.isSupported() && result.dice.length <= 12) {
+                    window.diceRoller.roll({
+                        dice: result.dice, modifier: 0, total: result.total,
+                        label: 'Custom Roll: ' + expr, detail: result.detail,
+                        isCrit: false, isFumble: false
+                    }).then(() => showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice));
+                } else {
+                    showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice);
+                }
             }
         }
         document.getElementById('custom-dice').addEventListener('keydown', e => { if (e.key === 'Enter') rollCustomDice(); });
@@ -2458,31 +2586,37 @@
             }
         })();
 
-        // INIT SLOT TRACKERS — server-side persistence
+        // INIT SLOT TRACKERS — full server-side persistence
         document.addEventListener("DOMContentLoaded", async () => {
-            // Load expended slots from server
+            // Load all spell state from server (expended slots, prepared spells, cast-prep)
             window._expendedSlots = {};
+            window._preparedSpells = {};
+            window._castPrep = {};
             try {
                 const res = await fetch(`/api/spell_slots/${pcNameEncoded}`);
                 const data = await res.json();
-                if (data.success) window._expendedSlots = data.expended_slots || {};
+                if (data.success) {
+                    window._expendedSlots = data.expended_slots || {};
+                    window._preparedSpells = data.prepared_spells || {};
+                    window._castPrep = data.cast_prep || {};
+                }
             } catch(e) {}
-            
+
             document.querySelectorAll('.spell-slot-cb').forEach((cb) => {
                 const cIdx = cb.getAttribute('data-caster-idx');
                 const lvl = cb.getAttribute('data-spell-level');
                 const idx = cb.getAttribute('data-slot-idx');
                 const key = `c${cIdx}_l${lvl}`;
-                
+
                 // Restore from server
                 if (window._expendedSlots[key] && window._expendedSlots[key][parseInt(idx)]) cb.checked = true;
-                
+
                 cb.addEventListener('change', async () => {
                     // Update local state
                     if (!window._expendedSlots[key]) window._expendedSlots[key] = [];
                     while (window._expendedSlots[key].length <= parseInt(idx)) window._expendedSlots[key].push(false);
                     window._expendedSlots[key][parseInt(idx)] = cb.checked;
-                    
+
                     // Save to server
                     try {
                         await fetch(`/api/spell_slots/${pcNameEncoded}`, {
@@ -2493,7 +2627,57 @@
                     } catch(e) {}
                 });
             });
+
+            // Migrate any existing localStorage data to server (one-time)
+            _migrateLocalStorageSpellState();
         });
+
+        async function _migrateLocalStorageSpellState() {
+            let migrated = false;
+            // Check for old localStorage prepared spells
+            for (let i = 0; i < 10; i++) {
+                const lsKey = `pf2e_prep_${pcName}_${i}`;
+                const stored = localStorage.getItem(lsKey);
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (Object.keys(parsed).length > 0 && !window._preparedSpells[i]) {
+                            window._preparedSpells[i] = parsed;
+                            migrated = true;
+                        }
+                    } catch(e) {}
+                    localStorage.removeItem(lsKey);
+                }
+            }
+            // Migrate cast-prep keys
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith(`cast_prep_${pcName}_`)) {
+                    const shortKey = key.replace(`cast_prep_${pcName}_`, '');
+                    if (!window._castPrep[shortKey]) {
+                        window._castPrep[shortKey] = localStorage.getItem(key) === 'true';
+                        migrated = true;
+                    }
+                    localStorage.removeItem(key);
+                }
+            });
+            if (migrated) {
+                await _saveSpellState();
+            }
+        }
+
+        async function _saveSpellState() {
+            try {
+                await fetch(`/api/spell_slots/${pcNameEncoded}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        expended_slots: window._expendedSlots,
+                        prepared_spells: window._preparedSpells,
+                        cast_prep: window._castPrep
+                    })
+                });
+            } catch(e) {}
+        }
 
         async function saveWealth() {
             const btn = document.getElementById('btn-wealth');
@@ -2538,19 +2722,10 @@
         async function takeLongRest() {
             if (!confirm("Take a Long Rest (Daily Preparations)?\n\n• Full HP restored\n• Focus Points restored\n• Spell slots refreshed (prepared spells cleared)\n• Conditions cleared (Drained reduces by 1, Doomed persists)\n• Wounded removed")) return;
             try {
-                // Clear spell prep from localStorage (prep UI is still client-side)
-                Object.keys(localStorage).forEach(key => { 
-                    if (key.startsWith(`pf2e_prep_${pcName}_`) || key.startsWith(`cast_prep_${pcName}_`)) {
-                        localStorage.removeItem(key); 
-                    }
-                });
-                
-                // Clear server-side spell slots
-                await fetch(`/api/spell_slots/${pcNameEncoded}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({expended_slots: {}})
-                });
+                // Clear all spell state (server handles clearing via long_rest endpoint)
+                window._expendedSlots = {};
+                window._preparedSpells = {};
+                window._castPrep = {};
                 
                 const res = await fetch(`/api/long_rest/${pcNameEncoded}`, { method: 'POST' });
                 const data = await res.json();
@@ -2875,8 +3050,24 @@
             let critStr = isCrit ? " [CRIT SUCCESS]" : isFumble ? " [CRIT FAIL]" : "";
             let modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
             const detail = `1d20 (${d20}) ${modStr} = ${total}${critStr}`;
-            showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}]);
+            // Broadcast immediately (no delay for GM)
             broadcastToGM(skillName, total.toString(), detail);
+            // 3D dice animation (non-blocking), fallback to toast
+            if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
+                window.diceRoller.roll({
+                    dice: [{sides: 20, value: d20}],
+                    modifier: modifier,
+                    total: total,
+                    label: skillName,
+                    detail: detail,
+                    isCrit: isCrit,
+                    isFumble: isFumble
+                }).then(() => {
+                    showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}]);
+                });
+            } else {
+                showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}]);
+            }
         }
 
         function rollAttack(weaponName, modifier, damageStr) {
@@ -2938,8 +3129,60 @@
 
         function rollSpell(spellName, e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
-            showRollToast(`Cast: ${spellName}`, '✦', `Invoked ${spellName}`, false, false);
-            broadcastToGM(`Cast Spell: ${spellName}`, "Cast", `The player invoked ${spellName}.`);
+
+            // Look up spell description to determine attack vs save
+            const cached = _spellDescCache[spellName.toLowerCase()];
+            const desc = cached ? cached.desc : '';
+            const descLower = desc.toLowerCase();
+
+            // Detect save type from description
+            let saveType = '';
+            if (/basic reflex|reflex save|reflex dc/i.test(desc)) saveType = 'Reflex';
+            else if (/basic fortitude|fortitude save|fortitude dc/i.test(desc)) saveType = 'Fortitude';
+            else if (/basic will|will save|will dc/i.test(desc)) saveType = 'Will';
+            else if (/saving throw/i.test(desc)) saveType = 'Save';
+
+            const isBasicSave = /basic (reflex|fortitude|will|save)/i.test(desc);
+            const isAttackRoll = /spell attack|attack roll|ranged attack|melee attack/i.test(desc);
+
+            // Build detail string
+            let detail = '';
+            let rollResult = '✦';
+
+            if (isAttackRoll && SPELL_ATTACK > 0) {
+                // Roll the spell attack
+                const d20 = Math.floor(Math.random() * 20) + 1;
+                const total = d20 + SPELL_ATTACK;
+                const critClass = d20 === 20 ? ' (NAT 20!)' : d20 === 1 ? ' (NAT 1!)' : '';
+                rollResult = total.toString();
+                detail = `Spell Attack: d20(${d20}) + ${SPELL_ATTACK} = ${total}${critClass}`;
+                broadcastToGM(`Cast ${spellName}`, rollResult, detail);
+                if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
+                    window.diceRoller.roll({
+                        dice: [{sides: 20, value: d20}],
+                        modifier: SPELL_ATTACK, total: total,
+                        label: `${spellName} — Spell Attack`,
+                        detail: detail, isCrit: d20 === 20, isFumble: d20 === 1
+                    }).then(() => showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1));
+                } else {
+                    showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1);
+                }
+            } else if (saveType && SPELL_DC > 0) {
+                const basicLabel = isBasicSave ? 'Basic ' : '';
+                detail = `Target rolls ${basicLabel}${saveType} vs DC ${SPELL_DC}`;
+
+                showRollToast(`${spellName} — DC ${SPELL_DC}`, `DC ${SPELL_DC}`, `${basicLabel}${saveType} Save`, false, false);
+                broadcastToGM(`Cast ${spellName}`, `DC ${SPELL_DC}`, detail);
+            } else {
+                // No attack or save detected — just cast
+                if (SPELL_DC > 0) {
+                    detail = `Cast ${spellName} (Spell DC ${SPELL_DC})`;
+                } else {
+                    detail = `Cast ${spellName}`;
+                }
+                showRollToast(`Cast: ${spellName}`, '✦', detail, false, false);
+                broadcastToGM(`Cast ${spellName}`, "Cast", detail);
+            }
         }
 
         // ==========================================
@@ -2984,20 +3227,26 @@
             const rankColor = rankColors[level] || '#6B7280';
             const rankLabel = level === 0 ? 'Cantrip' : `Rank ${level}`;
             
-            // Parse heightened entries from description
+            // Parse heightened entries from description using regex
             let mainDesc = desc;
             let heightenedHTML = '';
-            const heightenPattern = /<hr[^>]*>[\s\S]*?<strong>Heightened/i;
-            if (heightenPattern.test(desc)) {
-                const parts = desc.split(/<hr[^>]*>/i);
-                mainDesc = parts[0];
-                const heightParts = parts.slice(1).filter(p => /heightened/i.test(p));
-                if (heightParts.length > 0) {
-                    heightenedHTML = `<div class="spell-card-heightened">
-                        <div class="spell-card-heightened-title">Heightened</div>
-                        <div class="text-xs" style="color:#C4B5FD;">${heightParts.join('<hr style="border:none;border-top:1px solid rgba(167,139,250,0.1);margin:6px 0;">')}</div>
-                    </div>`;
-                }
+            const heightenRegex = /(<p>)?<strong>Heightened\s*(\([^)]+\))<\/strong>\s*(.*?)(<\/p>|$)/gi;
+            const heightenedEntries = [];
+            let hMatch;
+            while ((hMatch = heightenRegex.exec(desc)) !== null) {
+                heightenedEntries.push({ level: hMatch[2], text: hMatch[3].trim() });
+                mainDesc = mainDesc.replace(hMatch[0], '');
+            }
+            // Clean up any leftover <hr> that preceded heightened blocks
+            mainDesc = mainDesc.replace(/<hr[^>]*>\s*$/i, '');
+            if (heightenedEntries.length > 0) {
+                const entriesHTML = heightenedEntries.map(e =>
+                    `<div style="margin-bottom: 3px; font-size: 12px; color: #b8b8cc;"><span style="color: #8ED4D4; font-weight: 600;">${e.level}</span> ${e.text}</div>`
+                ).join('');
+                heightenedHTML = `<div style="margin-top: 8px; padding: 8px 10px; background: rgba(142,212,212,0.08); border-left: 3px solid #8ED4D4; border-radius: 0 4px 4px 0;">
+                    <div style="font-size: 10px; color: #8ED4D4; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Heightened</div>
+                    ${entriesHTML}
+                </div>`;
             }
             
             // Build meta tags
@@ -3116,8 +3365,15 @@
         function rollFlat() {
             const d20 = rollD20();
             const detail = `1d20 = ${d20}`;
-            showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}]);
             broadcastToGM('Flat Check', d20.toString(), detail);
+            if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
+                window.diceRoller.roll({
+                    dice: [{sides: 20, value: d20}], modifier: 0, total: d20,
+                    label: 'Flat Check', detail: detail, isCrit: d20 === 20, isFumble: d20 === 1
+                }).then(() => showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}]));
+            } else {
+                showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}]);
+            }
         }
 
         // ==========================================
@@ -3127,14 +3383,39 @@
             document.getElementById('dice-panel').classList.toggle('hidden');
         }
 
+        function toggle3DDice() {
+            if (window.diceRoller) {
+                window.diceRoller.setEnabled(!window.diceRoller.enabled);
+            }
+            update3DButton();
+        }
+        function update3DButton() {
+            const btn = document.getElementById('btn-toggle-3d');
+            if (!btn) return;
+            const on = window.diceRoller?.enabled && (typeof DiceRoller !== 'undefined') && DiceRoller.isSupported();
+            btn.className = on
+                ? 'text-[10px] px-2 py-0.5 rounded border border-accent-500/50 bg-accent-500/20 text-accent-300 transition-colors'
+                : 'text-[10px] px-2 py-0.5 rounded border border-gray-600 bg-gray-800 text-gray-500 transition-colors';
+        }
+        // Init button state after module loads
+        setTimeout(update3DButton, 1000);
+
         function quickDie(sides) {
             let roll = Math.floor(Math.random() * sides) + 1;
             document.getElementById('dice-total').innerText = roll;
             document.getElementById('dice-breakdown').innerText = `1d${sides} = ${roll}`;
             document.getElementById('dice-total').classList.add('roll-total-pop');
             setTimeout(() => document.getElementById('dice-total').classList.remove('roll-total-pop'), 300);
-            showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]);
             broadcastToGM(`Quick Roll: 1d${sides}`, roll.toString(), `1d${sides} = ${roll}`);
+            if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
+                window.diceRoller.roll({
+                    dice: [{sides: sides, value: roll}], modifier: 0, total: roll,
+                    label: `Quick Roll: 1d${sides}`, detail: `1d${sides} = ${roll}`,
+                    isCrit: sides === 20 && roll === 20, isFumble: sides === 20 && roll === 1
+                }).then(() => showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]));
+            } else {
+                showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]);
+            }
         }
 
         function parseDiceAndRoll(input) {
@@ -3188,8 +3469,16 @@
             let result = parseDiceAndRollDetailed(damageStr, isCrit || false);
             if (result) {
                 let label = isCrit ? `CRIT Damage: ${weaponName}` : `Damage: ${weaponName}`;
-                showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice);
                 broadcastToGM(label, result.total.toString(), result.detail);
+                if (window.diceRoller?.enabled && DiceRoller.isSupported() && result.dice.length <= 12) {
+                    window.diceRoller.roll({
+                        dice: result.dice, modifier: 0, total: result.total,
+                        label: label, detail: result.detail,
+                        isCrit: isCrit || false, isFumble: false
+                    }).then(() => showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice));
+                } else {
+                    showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice);
+                }
             } else {
                 showRollToast(`Damage: ${weaponName}`, '?', `Could not parse: ${damageStr}`, false, false);
             }
@@ -3258,8 +3547,16 @@
             if (result) {
                 document.getElementById('dice-total').innerText = result.total;
                 document.getElementById('dice-breakdown').innerText = result.detail;
-                showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice);
                 broadcastToGM(`Custom: ${input}`, result.total.toString(), result.detail);
+                if (window.diceRoller?.enabled && DiceRoller.isSupported() && result.dice.length <= 12) {
+                    window.diceRoller.roll({
+                        dice: result.dice, modifier: 0, total: result.total,
+                        label: 'Custom Roll: ' + input, detail: result.detail,
+                        isCrit: false, isFumble: false
+                    }).then(() => showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice));
+                } else {
+                    showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice);
+                }
             } else {
                 document.getElementById('dice-total').innerText = 'ERR';
                 document.getElementById('dice-breakdown').innerText = 'Use format: 2d6+4';
@@ -3535,13 +3832,16 @@
             });
         }
 
-        function getPrepStorageKey(cIdx) { return `pf2e_prep_${pcName}_${cIdx}`; }
+        function _getPrepState(cIdx) { return window._preparedSpells[cIdx] || {}; }
+        function _setPrepState(cIdx, state) { window._preparedSpells[cIdx] = state; _saveSpellState(); }
+        function _isCastPrep(key) { const short = key.replace(`cast_prep_${pcName}_`, ''); return !!window._castPrep[short]; }
+        function _setCastPrep(key, val) { const short = key.replace(`cast_prep_${pcName}_`, ''); if(val) window._castPrep[short] = true; else delete window._castPrep[short]; _saveSpellState(); }
 
         function renderPrepUI(cIdx, caster) {
             const ui = document.getElementById(`prep-ui-${cIdx}`);
             if(!ui) return;
-            
-            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+
+            let prepState = _getPrepState(cIdx);
             let html = "";
             
             // Build a lookup for spell base levels and action costs
@@ -3590,7 +3890,7 @@
                         let heightenTag = isHeightened ? `<span class="text-[11px] ml-1 px-1 rounded" style="background:rgba(167,139,250,0.15); color:#B8A0FF;">↑${lvl.level}</span>` : '';
                         let actionTag = spellActions[spellName] ? `<span class="text-[9px] ml-1 opacity-50" style="color:var(--color-spell);">${spellActions[spellName]}</span>` : '';
                         let expendKey = `cast_prep_${pcName}_c${cIdx}_l${lvl.level}_i${i}`;
-                        let isExpended = localStorage.getItem(expendKey) === 'true';
+                        let isExpended = _isCastPrep(expendKey);
                         
                         html += `
                         <div class="prep-slot filled group relative ${isExpended ? 'expended' : ''}" data-expend-key="${expendKey}">
@@ -3619,7 +3919,7 @@
                 html += `</div></div>`;
             });
             
-            localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+            _setPrepState(cIdx, prepState);
             ui.innerHTML = html || "<div class='text-xs italic text-center' style='color:var(--text-muted);'>No spell slots available.</div>";
 
             document.querySelectorAll('#prep-ui-'+cIdx+' .spell-slot-cb').forEach((cb) => {
@@ -3670,12 +3970,12 @@
             
             if (!_dragSpellData) return;
             
-            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            let prepState = _getPrepState(cIdx);
             if (!prepState[lvlNum]) return;
-            
+
             // Place the spell in this specific slot
             prepState[lvlNum][slotIdx] = _dragSpellData.name;
-            localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+            _setPrepState(cIdx, prepState);
             renderPrepUI(cIdx, castersData[cIdx]);
             _dragSpellData = null;
         }
@@ -3689,7 +3989,7 @@
 
         function prepareSpell(cIdx, lvlNum, spellName) {
             event.preventDefault();
-            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            let prepState = _getPrepState(cIdx);
             let lvlArr = prepState[lvlNum];
             if(!lvlArr) return;
 
@@ -3697,36 +3997,34 @@
             if(emptyIdx === -1) { alert(`No empty slots left for Level ${lvlNum}. Un-prepare a spell first.`); return; }
 
             lvlArr[emptyIdx] = spellName;
-            localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+            _setPrepState(cIdx, prepState);
             renderPrepUI(cIdx, castersData[cIdx]);
         }
 
         function unprepSpell(cIdx, lvlNum, slotIdx) {
-            let prepState = JSON.parse(localStorage.getItem(getPrepStorageKey(cIdx))) || {};
+            let prepState = _getPrepState(cIdx);
             if(prepState[lvlNum]) {
-                // Also clear expended state
-                localStorage.removeItem(`cast_prep_${pcName}_c${cIdx}_l${lvlNum}_i${slotIdx}`);
+                _setCastPrep(`cast_prep_${pcName}_c${cIdx}_l${lvlNum}_i${slotIdx}`, false);
                 prepState[lvlNum][slotIdx] = null;
-                localStorage.setItem(getPrepStorageKey(cIdx), JSON.stringify(prepState));
+                _setPrepState(cIdx, prepState);
                 renderPrepUI(cIdx, castersData[cIdx]);
             }
         }
 
         function castPrepSpell(spellName, expendKey, cIdx) {
-            // Roll the spell AND mark it as expended
             rollSpell(spellName);
-            localStorage.setItem(expendKey, 'true');
+            _setCastPrep(expendKey, true);
             renderPrepUI(cIdx, castersData[cIdx]);
         }
-        
+
         function uncastSpell(expendKey, cIdx) {
-            localStorage.removeItem(expendKey);
+            _setCastPrep(expendKey, false);
             renderPrepUI(cIdx, castersData[cIdx]);
         }
 
         function clearPrep(cIdx) {
             if(confirm("Clear all prepared spells for this class?")) {
-                localStorage.removeItem(getPrepStorageKey(cIdx));
+                _setPrepState(cIdx, {});
                 renderPrepUI(cIdx, castersData[cIdx]);
             }
         }

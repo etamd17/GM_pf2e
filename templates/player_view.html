@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { colors: {
-            base:    { 950:'#0f0f14', 900:'#16161e', 800:'#1e1e2a', 700:'#282838', 600:'#363648', 500:'#50506a', 400:'#8080a0', 300:'#a0a0b8', 200:'#c8c8d8', 100:'#e8e8f0' },
+            base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#282838', 600:'#363648', 500:'#50506a', 400:'#8080a0', 300:'#a0a0b8', 200:'#c8c8d8', 100:'#e8e8f0' },
             accent:  { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878' },
             gold:    { 300:'#d4a244', 400:'#b8860b' },
             danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' },
@@ -18,12 +18,12 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        body { font-family:'Inter',system-ui,sans-serif; background:#0f0f14; color:#e8e8f0; }
+        body { font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#e8e8f0; }
         .font-display { font-family:'Cinzel',serif; }
         ::-webkit-scrollbar { width:5px; }
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
-        .card { background:#1e1e2a; border:1px solid rgba(255,255,255,0.06); border-radius:12px; transition:all .25s; position:relative; overflow:hidden; }
+        .card { background:#24242e; border:1px solid rgba(255,255,255,0.06); border-radius:12px; transition:all .25s; position:relative; overflow:hidden; }
         .card:hover { border-color:rgba(94,173,173,0.2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }
         .hp-ring { width:44px; height:44px; position:relative; display:flex; align-items:center; justify-content:center; }
         .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
@@ -119,7 +119,7 @@
         <span class="text-base-500 text-xs ml-2">is acting</span>
     </div>
 
-    <div class="rounded-xl overflow-hidden" style="background:#16161e; border:1px solid rgba(255,255,255,0.06)">
+    <div class="rounded-xl overflow-hidden" style="background:#191920; border:1px solid rgba(255,255,255,0.06)">
         <table class="w-full text-left border-collapse">
             <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
                 <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-14 text-center">Init</th>
@@ -136,7 +136,7 @@
 
 <!-- IMPORT MODAL -->
 <div id="import-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="rounded-xl w-full max-w-lg p-6" style="background:#1e1e2a; border:1px solid rgba(255,255,255,0.08)">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:#24242e; border:1px solid rgba(255,255,255,0.08)">
         <div class="flex justify-between items-center mb-5">
             <h3 class="font-display text-accent-300 text-lg">Import from Pathbuilder</h3>
             <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
@@ -148,7 +148,7 @@
                 <div class="text-base-500 text-sm">Click to upload JSON file</div>
             </div>
             <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div><span class="text-[10px] text-base-600 uppercase tracking-widest">or paste</span><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div></div>
-            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0f0f14; border:1px solid rgba(255,255,255,0.08)"></textarea>
+            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.08)"></textarea>
             <div id="import-status" class="hidden text-sm font-semibold p-3 rounded-lg"></div>
             <div class="flex gap-2 justify-end">
                 <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="btn-ghost">Cancel</button>

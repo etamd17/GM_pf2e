@@ -18,13 +18,13 @@
 .cond-pill button { opacity: 0.5; transition: opacity 0.15s; font-size: 11px; line-height: 1; cursor: pointer; background: none; border: none; color: inherit; padding: 0; }
 .cond-pill button:hover { opacity: 1; }
 
-.stat-card { background: #16161e; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px; text-align: center; }
+.stat-card { background: #191920; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px; text-align: center; }
 .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #8080a0; margin-bottom: 2px; }
 .stat-value { font-size: 18px; font-weight: 700; }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; white-space: nowrap; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-primary { background: #5EADAD; color: #0f0f14; border-color: #5EADAD; }
+.btn-primary { background: #5EADAD; color: #0d0d12; border-color: #5EADAD; }
 .btn-primary:hover { background: #7DC4C4; }
 .btn-ghost { background: transparent; color: #a0a0b8; border-color: rgba(255,255,255,0.08); }
 .btn-ghost:hover { background: rgba(255,255,255,0.04); color: #e8e8f0; }
@@ -32,19 +32,19 @@
 .btn-danger:hover { background: rgba(248,113,113,0.18); color: #f87171; }
 .btn-sm { padding: 3px 8px; font-size: 11px; }
 
-.inline-input { background: #0f0f14; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 4px 6px; font-size: 12px; text-align: center; outline: none; transition: border-color 0.15s; }
+.inline-input { background: #0d0d12; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 4px 6px; font-size: 12px; text-align: center; outline: none; transition: border-color 0.15s; }
 .inline-input:focus { border-color: #5EADAD; }
 
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
 .modal-overlay.open { opacity: 1; pointer-events: auto; }
-.modal-panel { background: #1e1e2a; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; width: 100%; max-width: 640px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; transform: translateY(10px); transition: transform 0.2s; }
+.modal-panel { background: #24242e; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; width: 100%; max-width: 640px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; transform: translateY(10px); transition: transform 0.2s; }
 .modal-overlay.open .modal-panel { transform: translateY(0); }
 
 .drag-handle { cursor: grab; user-select: none; color: #50506a; transition: color 0.15s; }
 .drag-handle:hover { color: #7DC4C4; }
 .sortable-ghost { background: rgba(94,173,173,0.08) !important; }
 
-.custom-form-grid input, .custom-form-grid select { background: #0f0f14; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 6px 8px; font-size: 12px; outline: none; width: 100%; }
+.custom-form-grid input, .custom-form-grid select { background: #0d0d12; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 6px 8px; font-size: 12px; outline: none; width: 100%; }
 .custom-form-grid input:focus { border-color: #5EADAD; }
 .custom-form-grid label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #8080a0; font-weight: 600; margin-bottom: 2px; display: block; }
 
@@ -62,7 +62,7 @@
     <div class="relative" id="monster-search-wrap">
         <input type="text" id="monster-search" placeholder="Search monsters..." autocomplete="off"
                class="inline-input w-52" onfocus="showMonsterDD()" oninput="filterMonsterDD()">
-        <div id="monster-dd" class="hidden absolute top-full left-0 mt-1 w-72 rounded-lg border border-white/[0.08] shadow-2xl z-50 max-h-60 overflow-y-auto" style="background:#1e1e2a;">
+        <div id="monster-dd" class="hidden absolute top-full left-0 mt-1 w-72 rounded-lg border border-white/[0.08] shadow-2xl z-50 max-h-60 overflow-y-auto" style="background:#24242e;">
             {% for m in monsters %}
             <div class="monster-opt px-3 py-2 hover:bg-accent-400/10 cursor-pointer text-sm flex justify-between items-center border-b border-white/[0.04] last:border-0"
                  data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonster('{{ m.file_path }}')">
@@ -108,7 +108,7 @@
 </div>
 
 {# ═══════════════════ SAVE / LOAD BAR ═══════════════════ #}
-<div class="flex flex-wrap items-center gap-3 mb-3 px-3 py-2 rounded-lg border border-white/[0.06]" style="background:#16161e;">
+<div class="flex flex-wrap items-center gap-3 mb-3 px-3 py-2 rounded-lg border border-white/[0.06]" style="background:#191920;">
     <label class="text-[10px] text-base-400 uppercase tracking-wider font-semibold">Save</label>
     <input type="text" id="save-name" placeholder="Encounter name" class="inline-input w-40">
     <button onclick="saveEncounter()" class="btn btn-ghost btn-sm">Save</button>
@@ -138,7 +138,7 @@
 </div>
 
 {# ═══════════════════ CUSTOM MONSTER FORM ═══════════════════ #}
-<div id="custom-monster-form" class="hidden mb-3 rounded-lg border border-white/[0.06] p-4" style="background:#16161e;">
+<div id="custom-monster-form" class="hidden mb-3 rounded-lg border border-white/[0.06] p-4" style="background:#191920;">
     <div class="flex items-center justify-between mb-3">
         <span class="text-xs font-semibold text-accent-300 uppercase tracking-wider">Custom Monster</span>
         <button onclick="toggleCustomForm()" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
@@ -175,10 +175,10 @@
 
     {# ── LEFT: Initiative List ── #}
     <div class="flex-1 min-w-0 w-full">
-        <div class="rounded-lg border border-white/[0.06] overflow-hidden" style="background:#16161e;">
+        <div class="rounded-lg border border-white/[0.06] overflow-hidden" style="background:#191920;">
 
             {# Header row #}
-            <div class="grid grid-cols-[32px_56px_1fr_48px_160px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.06] text-[10px] font-semibold text-base-500 uppercase tracking-wider" style="background:#0f0f14;">
+            <div class="grid grid-cols-[32px_56px_1fr_48px_160px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.06] text-[10px] font-semibold text-base-500 uppercase tracking-wider" style="background:#0d0d12;">
                 <div></div>
                 <div>Init</div>
                 <div>Name</div>
@@ -201,8 +201,8 @@
 
     {# ── RIGHT: Active Combatant Panel ── #}
     <div id="active-panel-wrap" class="w-full xl:w-[380px] shrink-0 hidden">
-        <div class="rounded-lg border border-white/[0.06] sticky top-6 overflow-hidden" style="background:#16161e;">
-            <div class="px-4 py-3 border-b border-white/[0.06] flex justify-between items-center" style="background:#0f0f14;">
+        <div class="rounded-lg border border-white/[0.06] sticky top-6 overflow-hidden" style="background:#191920;">
+            <div class="px-4 py-3 border-b border-white/[0.06] flex justify-between items-center" style="background:#0d0d12;">
                 <div>
                     <h2 id="ap-name" class="font-display text-accent-300 text-lg font-semibold"></h2>
                     <span id="ap-subtitle" class="text-[10px] text-base-500 uppercase tracking-wider"></span>
@@ -217,8 +217,8 @@
 </div>
 
 {# ═══════════════════ COMBAT LOG ═══════════════════ #}
-<div class="mt-4 rounded-lg border border-white/[0.06] overflow-hidden" style="background:#16161e;">
-    <div class="px-4 py-2 flex items-center justify-between border-b border-white/[0.06]" style="background:#0f0f14;">
+<div class="mt-4 rounded-lg border border-white/[0.06] overflow-hidden" style="background:#191920;">
+    <div class="px-4 py-2 flex items-center justify-between border-b border-white/[0.06]" style="background:#0d0d12;">
         <span class="text-[10px] font-semibold text-base-400 uppercase tracking-wider">Combat Log</span>
         <div class="flex gap-2">
             <button onclick="refreshLog()" class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:10px;">Refresh</button>
@@ -234,7 +234,7 @@
 {# ═══════════════════ STAT POPUP MODAL ═══════════════════ #}
 <div id="stat-modal" class="modal-overlay" onclick="if(event.target===this) closeStatModal()">
     <div class="modal-panel">
-        <div class="px-5 py-3 flex justify-between items-center border-b border-white/[0.06]" style="background:#0f0f14;">
+        <div class="px-5 py-3 flex justify-between items-center border-b border-white/[0.06]" style="background:#0d0d12;">
             <div>
                 <h3 id="sm-name" class="font-display text-accent-300 text-lg"></h3>
                 <span id="sm-subtitle" class="text-[10px] text-base-500"></span>
@@ -289,7 +289,7 @@ function toast(msg, type) {
     const colors = {success:'border-success-400/30', error:'border-danger-400/30', info:'border-accent-400/30'};
     const t = document.createElement('div');
     t.className = `rounded-lg shadow-xl p-3 toast-animate pointer-events-auto border ${colors[type]||colors.info}`;
-    t.style.background = '#1e1e2a';
+    t.style.background = '#24242e';
     t.innerHTML = `<div class="text-xs text-base-200">${msg}</div>`;
     c.prepend(t);
     setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 3500);
@@ -454,7 +454,7 @@ function renderInitList() {
             <div>
                 <div class="flex items-center gap-1.5 mb-1">
                     <span class="font-mono text-xs ${hpTextClass(hpPct, c.current_hp)} font-bold w-14 text-right">${c.current_hp}<span class="text-base-500 text-[10px]">/${c.max_hp}</span></span>
-                    <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#0f0f14;">
+                    <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#0d0d12;">
                         <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
                     </div>
                 </div>
@@ -494,11 +494,23 @@ function renderActivePanel() {
     const c = STATE.combatants[STATE.turn_index];
     if (!c) { wrap.classList.add('hidden'); return; }
 
-    document.getElementById('ap-name').textContent = c.name;
-    document.getElementById('ap-subtitle').textContent = c.is_pc ? `PC - Level ${c.level}` : `Monster Level ${c.level}`;
+    const eliteTag = c.elite_weak === 1 ? ' (Elite)' : c.elite_weak === -1 ? ' (Weak)' : '';
+    document.getElementById('ap-name').textContent = c.name + eliteTag;
+    document.getElementById('ap-subtitle').textContent = c.is_pc ? `PC - Level ${c.level}` : `Creature ${c.level}`;
 
     const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
     let html = '';
+
+    // Traits (monsters)
+    if (!c.is_pc && c.traits && c.traits.length) {
+        html += `<div class="flex flex-wrap gap-1 mb-3">`;
+        const rc = {uncommon:'#98691E',rare:'#002664',unique:'#54166E'};
+        c.traits.forEach(t => {
+            const bg = rc[t.toLowerCase()] || '#52A8A8';
+            html += `<span class="text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider" style="background:${bg}; color:#fff;">${t}</span>`;
+        });
+        html += `</div>`;
+    }
 
     // Reminders
     const hasReminders = c.persistent_damage || (c.conditions && c.conditions.frightened > 0);
@@ -527,12 +539,12 @@ function renderActivePanel() {
     html += `</div>`;
 
     // HP
-    html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.06]" style="background:#0f0f14;">
+    html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.06]" style="background:#0d0d12;">
         <div class="flex justify-between items-center mb-1">
             <span class="text-[9px] text-base-500 uppercase tracking-wider font-semibold">Hit Points</span>
             <span class="font-bold ${hpTextClass(hpPct, c.current_hp)}">${c.current_hp} / ${c.max_hp}</span>
         </div>
-        <div class="w-full h-2 rounded-full overflow-hidden" style="background:#16161e;">
+        <div class="w-full h-2 rounded-full overflow-hidden" style="background:#191920;">
             <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
         </div>
     </div>`;
@@ -550,7 +562,7 @@ function renderActivePanel() {
     if (c.strikes && c.strikes.length) {
         html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Strikes</div>`;
         c.strikes.forEach(s => {
-            html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+            html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0d0d12;">
                 <span class="text-sm font-semibold text-base-200">${s.name}</span>
                 <div class="flex items-center gap-2">
                     <span class="font-mono text-sm font-bold text-gold-300">${s.hit}</span>
@@ -565,7 +577,7 @@ function renderActivePanel() {
     if (!c.is_pc && c.actions && c.actions.length) {
         html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Abilities</div>`;
         c.actions.forEach(a => {
-            html += `<div class="p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+            html += `<div class="p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0d0d12;">
                 <div class="font-semibold text-sm text-accent-300 mb-1">${a.name}</div>
                 <div class="text-xs text-base-300 leading-relaxed">${a.description || ''}</div>
             </div>`;
@@ -578,7 +590,7 @@ function renderActivePanel() {
         html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Feats & Features</div>`;
         html += `<div class="flex flex-wrap gap-1">`;
         c.feats.forEach(f => {
-            html += `<span class="text-[10px] px-2 py-1 rounded border border-white/[0.06] text-base-300 hover:text-accent-300 hover:border-accent-400/20 cursor-pointer transition-colors" style="background:#0f0f14;" title="${(f.desc||'').replace(/"/g,'&quot;').replace(/<[^>]*>/g,'').substring(0,200)}">${f.name}</span>`;
+            html += `<span class="text-[10px] px-2 py-1 rounded border border-white/[0.06] text-base-300 hover:text-accent-300 hover:border-accent-400/20 cursor-pointer transition-colors" style="background:#0d0d12;" title="${(f.desc||'').replace(/"/g,'&quot;').replace(/<[^>]*>/g,'').substring(0,200)}">${f.name}</span>`;
         });
         html += `</div></div>`;
     }
@@ -767,12 +779,28 @@ async function openStatModal(instanceId) {
         const d = await apiGet(`/api/combatant_stats/${instanceId}`);
         if (d.error) { document.getElementById('sm-body').innerHTML = `<div class="text-danger-400">${d.error}</div>`; return; }
 
-        document.getElementById('sm-name').textContent = d.name;
+        const eliteLabel = d.elite_weak === 1 ? ' (Elite)' : d.elite_weak === -1 ? ' (Weak)' : '';
+        document.getElementById('sm-name').textContent = d.name + eliteLabel;
         document.getElementById('sm-subtitle').textContent = d.is_pc
             ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '- ' + d.subclass : ''}`
-            : `Creature Level ${d.level}`;
+            : `Creature ${d.level}`;
 
         let html = '';
+
+        // Traits (monsters) — PF2e style trait pills
+        if (!d.is_pc && d.traits && d.traits.length) {
+            html += `<div class="flex flex-wrap gap-1 mb-3">`;
+            const rarityColors = {uncommon:'#98691E',rare:'#002664',unique:'#54166E'};
+            const alignColors = {lawful:'#3B82F6',chaotic:'#A855F7',evil:'#EF4444',good:'#22C55E'};
+            d.traits.forEach(t => {
+                const tl = t.toLowerCase();
+                let bg = '#52A8A8'; let textC = '#fff';
+                if (rarityColors[tl]) { bg = rarityColors[tl]; }
+                else if (alignColors[tl]) { bg = alignColors[tl]; }
+                html += `<span class="text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider" style="background:${bg}; color:${textC};">${t}</span>`;
+            });
+            html += `</div>`;
+        }
 
         // Stats grid
         html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
@@ -783,15 +811,30 @@ async function openStatModal(instanceId) {
 
         // HP
         const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
-        html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.04]" style="background:#0f0f14;">
+        html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.04]" style="background:#0d0d12;">
             <div class="flex justify-between items-center mb-1">
                 <span class="text-[9px] text-base-500 uppercase font-semibold">Hit Points</span>
                 <span class="font-bold ${hpTextClass(hpPct, d.current_hp)}">${d.current_hp} / ${d.max_hp}</span>
             </div>
-            <div class="w-full h-2 rounded-full overflow-hidden" style="background:#16161e;">
+            <div class="w-full h-2 rounded-full overflow-hidden" style="background:#191920;">
                 <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
             </div>
         </div>`;
+
+        // Immunities / Resistances / Weaknesses (placed right after HP for quick reference)
+        if (!d.is_pc) {
+            const irw = [];
+            if (d.immunities?.length) irw.push({label:'Immunities', val: d.immunities.join(', '), cls:'text-accent-300'});
+            if (d.resistances?.length) irw.push({label:'Resistances', val: typeof d.resistances[0]==='object' ? d.resistances.map(r=>r.type+' '+r.value).join(', ') : d.resistances.join(', '), cls:'text-info-300'});
+            if (d.weaknesses?.length) irw.push({label:'Weaknesses', val: typeof d.weaknesses[0]==='object' ? d.weaknesses.map(w=>w.type+' '+w.value).join(', ') : d.weaknesses.join(', '), cls:'text-danger-300'});
+            if (irw.length) {
+                html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.04] space-y-1" style="background:#0d0d12;">`;
+                irw.forEach(x => {
+                    html += `<div class="text-xs"><span class="text-base-500 uppercase text-[9px] font-semibold mr-1">${x.label}</span> <span class="${x.cls}">${x.val}</span></div>`;
+                });
+                html += `</div>`;
+            }
+        }
 
         // Conditions
         if (d.conditions && Object.keys(d.conditions).length) {
@@ -816,12 +859,12 @@ async function openStatModal(instanceId) {
             html += `</div>`;
         }
 
-        // Attacks
+        // Attacks / Strikes
         if (d.attacks && d.attacks.length) {
-            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Attacks</div>`;
+            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">${d.is_pc ? 'Attacks' : 'Strikes'}</div>`;
             d.attacks.forEach(a => {
                 const hit = a.hit || (a.strikes && a.strikes[0] ? a.strikes[0].label : '+?');
-                html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+                html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0d0d12;">
                     <span class="text-sm font-semibold text-base-200">${a.name}</span>
                     <div class="flex items-center gap-2">
                         <span class="font-mono text-sm font-bold text-gold-300">${hit}</span>
@@ -832,32 +875,23 @@ async function openStatModal(instanceId) {
             html += `</div>`;
         }
 
-        // Monster actions
+        // Monster actions/abilities
         if (!d.is_pc && d.actions && d.actions.length) {
             html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Abilities</div>`;
             d.actions.forEach(a => {
-                html += `<div class="p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0f0f14;">
+                html += `<div class="p-2 rounded-md mb-2 border border-white/[0.04]" style="background:#0d0d12;">
                     <div class="font-semibold text-sm text-accent-300 mb-1">${a.name}</div>
-                    <div class="text-xs text-base-300 leading-relaxed">${a.description || ''}</div>
+                    ${a.description ? `<div class="text-xs text-base-300 leading-relaxed stat-desc">${a.description}</div>` : ''}
                 </div>`;
             });
             html += `</div>`;
-        }
-
-        // Immunities / Resistances / Weaknesses
-        if (!d.is_pc) {
-            const irw = [];
-            if (d.immunities?.length) irw.push(`<span class="text-base-500 uppercase text-[9px] font-semibold">Immunities:</span> ${d.immunities.join(', ')}`);
-            if (d.resistances?.length) irw.push(`<span class="text-base-500 uppercase text-[9px] font-semibold">Resistances:</span> ${typeof d.resistances[0]==='object' ? d.resistances.map(r=>r.type+' '+r.value).join(', ') : d.resistances.join(', ')}`);
-            if (d.weaknesses?.length) irw.push(`<span class="text-base-500 uppercase text-[9px] font-semibold">Weaknesses:</span> <span class="text-danger-300">${typeof d.weaknesses[0]==='object' ? d.weaknesses.map(w=>w.type+' '+w.value).join(', ') : d.weaknesses.join(', ')}</span>`);
-            if (irw.length) html += `<div class="mb-4 text-xs space-y-1 text-base-300">${irw.map(x=>`<div>${x}</div>`).join('')}</div>`;
         }
 
         // PC Skills
         if (d.is_pc && d.skills) {
             html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Skills</div><div class="flex flex-wrap gap-1">`;
             d.skills.forEach(sk => {
-                if (sk.total > 0) html += `<span class="text-[10px] px-2 py-0.5 rounded border border-white/[0.04] text-base-300" style="background:#0f0f14;">${sk.name} <strong class="text-accent-300">+${sk.total}</strong></span>`;
+                if (sk.total > 0) html += `<span class="text-[10px] px-2 py-0.5 rounded border border-white/[0.04] text-base-300" style="background:#0d0d12;">${sk.name} <strong class="text-accent-300">+${sk.total}</strong></span>`;
             });
             html += `</div></div>`;
         }

@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        // Apply saved theme immediately to prevent flash of wrong theme
+        (function() {
+            var t = localStorage.getItem('pf2e_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PF2E Dashboard{% endblock %}</title>
@@ -11,9 +18,9 @@
             theme: {
                 extend: {
                     colors: {
-                        base:    { 950:'#0f0f14', 900:'#16161e', 800:'#1e1e2a', 700:'#282838', 600:'#363648', 500:'#50506a', 400:'#8080a0', 300:'#a0a0b8', 200:'#c8c8d8', 100:'#e8e8f0' },
-                        accent:  { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878' },
-                        gold:    { 300:'#d4a244', 400:'#b8860b', 500:'#9a7209' },
+                        base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#2e2e3c', 600:'#42425a', 500:'#6b6b8a', 400:'#9494b0', 300:'#b8b8cc', 200:'#d8d8e6', 100:'#ededf4' },
+                        accent:  { 300:'#8ED4D4', 400:'#6BBFBF', 500:'#52A8A8', 600:'#3F8888' },
+                        gold:    { 300:'#e0b050', 400:'#c89620', 500:'#a87e10' },
                         danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' },
                         success: { 300:'#86efac', 400:'#4ade80', 500:'#22c55e' },
                         info:    { 300:'#93c5fd', 400:'#60a5fa' },
@@ -29,12 +36,40 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        body { font-family:'Inter',system-ui,sans-serif; background:#0f0f14; color:#e8e8f0; }
+        :root, [data-theme="dark"] {
+            --bg-body: #0d0d12;
+            --bg-surface: #191920;
+            --bg-raised: #24242e;
+            --bg-hover: #2e2e3c;
+            --text-primary: #ededf4;
+            --text-secondary: #b8b8cc;
+            --text-muted: #6b6b8a;
+            --border-subtle: rgba(255,255,255,0.08);
+            --border-default: rgba(255,255,255,0.12);
+            --accent-primary: #8ED4D4;
+            --accent-secondary: #52A8A8;
+            --nav-bg: #191920;
+        }
+        [data-theme="light"] {
+            --bg-body: #f0f0f5;
+            --bg-surface: #ffffff;
+            --bg-raised: #f5f5fa;
+            --bg-hover: #eaeaf0;
+            --text-primary: #1a1a2e;
+            --text-secondary: #4a4a6a;
+            --text-muted: #8888aa;
+            --border-subtle: rgba(0,0,0,0.08);
+            --border-default: rgba(0,0,0,0.12);
+            --accent-primary: #3d8f8f;
+            --accent-secondary: #2a7070;
+            --nav-bg: #ffffff;
+        }
+        body { font-family:'Inter',system-ui,sans-serif; background:var(--bg-body); color:var(--text-primary); }
         .font-display { font-family:'Cinzel',serif; }
         ::-webkit-scrollbar { width:5px; }
         ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
-        ::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.15); }
+        ::-webkit-scrollbar-thumb { background:var(--border-default); border-radius:10px; }
+        ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
         @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
         .toast-animate { animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
         {% block extra_head %}{% endblock %}
@@ -42,18 +77,22 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <nav class="border-b border-white/[0.06] shrink-0" style="background:#16161e;">
+    <nav class="border-b shrink-0" style="background:var(--nav-bg); border-color:var(--border-subtle);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-12">
                 <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">PF2E</span>
-                <div class="flex gap-1 text-xs font-medium">
-                    <a href="/gm" class="text-accent-400 hover:text-accent-300 px-3 py-1.5 rounded transition-colors">GM Hub</a>
-                    <a href="/party" class="text-base-400 hover:text-base-200 px-3 py-1.5 rounded transition-colors">Party</a>
-                    <a href="/tracker" class="text-base-400 hover:text-base-200 px-3 py-1.5 rounded transition-colors">Tracker</a>
-                    <a href="/gm/map" class="text-base-400 hover:text-base-200 px-3 py-1.5 rounded transition-colors">Map</a>
-                    <a href="/gmscreen" class="text-base-400 hover:text-base-200 px-3 py-1.5 rounded transition-colors">GM Screen</a>
-                    <a href="/encounter_builder" class="text-base-400 hover:text-base-200 px-3 py-1.5 rounded transition-colors">Builder</a>
-                    <a href="/generator" class="text-base-400 hover:text-base-200 px-3 py-1.5 rounded transition-colors">Generators</a>
+                <div class="flex items-center gap-1 text-xs font-medium">
+                    <a href="/gm" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors">GM Hub</a>
+                    <a href="/party" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Party</a>
+                    <a href="/tracker" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Tracker</a>
+                    <a href="/gm/map" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Map</a>
+                    <a href="/gmscreen" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">GM Screen</a>
+                    <a href="/encounter_builder" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Builder</a>
+                    <a href="/generator" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Generators</a>
+                    <span class="mx-1 text-base-600">|</span>
+                    <button onclick="toggleTheme()" class="text-base-400 hover:text-base-100 transition-colors px-2 py-1.5" title="Toggle Theme">
+                        <span id="theme-icon">&#9788;</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -69,37 +108,54 @@
 
     <!-- Dice Roller -->
     <div id="dice-widget" class="fixed bottom-4 right-4 z-[100] flex flex-col items-end">
-        <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden border border-white/[0.08] shadow-2xl" style="background:#1e1e2a;">
-            <div class="px-3 py-2 flex justify-between items-center border-b border-white/[0.06]" style="background:#16161e;">
+        <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-raised); border:1px solid var(--border-default);">
+            <div class="px-3 py-2 flex justify-between items-center" style="background:var(--bg-surface); border-bottom:1px solid var(--border-subtle);">
                 <span class="text-xs font-semibold text-accent-300">Dice Roller</span>
                 <button onclick="toggleDicePanel()" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
             </div>
             <div class="p-3">
-                <div class="rounded border border-white/[0.06] p-3 mb-3 text-center min-h-[70px] flex flex-col justify-center" style="background:#0f0f14;">
+                <div class="rounded p-3 mb-3 text-center min-h-[70px] flex flex-col justify-center" style="background:var(--bg-body); border:1px solid var(--border-default);">
                     <div id="dice-total" class="text-3xl font-bold text-accent-300 leading-none">--</div>
                     <div id="dice-breakdown" class="text-[10px] text-base-500 mt-1.5 font-mono">Roll the bones...</div>
                 </div>
                 <div class="grid grid-cols-4 gap-1.5 mb-3">
-                    <button onclick="quickRoll(4)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:#16161e;">d4</button>
-                    <button onclick="quickRoll(6)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:#16161e;">d6</button>
-                    <button onclick="quickRoll(8)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:#16161e;">d8</button>
-                    <button onclick="quickRoll(10)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:#16161e;">d10</button>
-                    <button onclick="quickRoll(12)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:#16161e;">d12</button>
-                    <button onclick="quickRoll(20)" class="col-span-2 py-1.5 rounded text-xs font-bold border border-accent-500/20 text-accent-300 hover:bg-accent-500/10 transition-colors" style="background:#16161e;">d20</button>
-                    <button onclick="quickRoll(100)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:#16161e;">d100</button>
+                    <button onclick="quickRoll(4)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d4</button>
+                    <button onclick="quickRoll(6)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d6</button>
+                    <button onclick="quickRoll(8)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d8</button>
+                    <button onclick="quickRoll(10)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d10</button>
+                    <button onclick="quickRoll(12)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d12</button>
+                    <button onclick="quickRoll(20)" class="col-span-2 py-1.5 rounded text-xs font-bold border border-accent-500/20 text-accent-300 hover:bg-accent-500/10 transition-colors" style="background:var(--bg-surface);">d20</button>
+                    <button onclick="quickRoll(100)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d100</button>
                 </div>
                 <form id="custom-roll-form" class="flex gap-1.5" onsubmit="event.preventDefault(); customRoll();">
-                    <input type="text" id="custom-roll-input" placeholder="2d6+4" class="flex-1 rounded px-2 py-1.5 text-xs text-center font-mono text-base-200 focus:outline-none focus:border-accent-500/50" style="background:#0f0f14; border:1px solid rgba(255,255,255,0.08);">
-                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:#4A9696;">Roll</button>
+                    <input type="text" id="custom-roll-input" placeholder="2d6+4" class="flex-1 rounded px-2 py-1.5 text-xs text-center font-mono focus:outline-none" style="background:var(--bg-body); border:1px solid var(--border-default); color:var(--text-primary);">
+                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:#52A8A8;">Roll</button>
                 </form>
             </div>
         </div>
-        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:#4A9696;">
+        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:#52A8A8;">
             <span class="font-display text-sm font-bold">d20</span>
         </button>
     </div>
 
     <script>
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme') || 'dark';
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('pf2e_theme', next);
+            document.getElementById('theme-icon').textContent = next === 'dark' ? '\u263C' : '\u263E';
+        }
+        // Apply saved theme on load
+        (function() {
+            const saved = localStorage.getItem('pf2e_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.textContent = saved === 'dark' ? '\u263C' : '\u263E';
+        })();
+
         const dicePanel = document.getElementById('dice-panel');
         const diceTotal = document.getElementById('dice-total');
         const diceBreakdown = document.getElementById('dice-breakdown');
@@ -133,9 +189,10 @@
             function showToast(log) {
                 const c = document.getElementById('gm-toast-container');
                 const t = document.createElement('div');
-                t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto border border-white/[0.08]';
-                t.style.background = '#1e1e2a';
-                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name}</span><span class="text-[10px] text-base-500">Now</span></div><div class="text-base-200 text-xs mb-1">${log.action}</div><div class="text-[10px] font-mono text-base-500 p-1.5 rounded" style="background:#0f0f14;">${log.detail}</div>`;
+                t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
+                t.style.background = 'var(--bg-raised)';
+                t.style.border = '1px solid var(--border-default)';
+                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action}</div><div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail}</div>`;
                 c.prepend(t);
                 setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, 6000);
             }
