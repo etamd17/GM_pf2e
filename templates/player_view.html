@@ -114,10 +114,29 @@
         <div id="round-badge" class="hidden text-xs text-base-400">Round <span id="round-number" class="text-accent-300 text-lg font-bold ml-1">1</span></div>
     </div>
 
-    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center" style="background:rgba(94,173,173,0.04); border:1px solid rgba(94,173,173,0.1)">
+    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center transition-all duration-300"
+         style="background:rgba(94,173,173,0.04); border:1px solid rgba(94,173,173,0.1)">
         <span class="font-display text-accent-300 text-lg tracking-wide glow" id="turn-banner-name">---</span>
-        <span class="text-base-500 text-xs ml-2">is acting</span>
+        <span class="text-base-500 text-xs ml-2" id="turn-banner-suffix">is acting</span>
     </div>
+    <style>
+        /* Own-turn callout: loud banner + pulse. Stops the "wait, it's my turn?"
+           moment — the banner switches to warm gold and doubles in prominence. */
+        #turn-banner.me-turn {
+            background: rgba(212, 162, 68, 0.15) !important;
+            border-color: rgba(212, 162, 68, 0.55) !important;
+            box-shadow: 0 0 24px rgba(212, 162, 68, 0.25);
+            animation: meTurnPulse 1.4s ease-in-out infinite;
+        }
+        #turn-banner.me-turn #turn-banner-name { color: #FCD34D !important; font-size: 1.5rem; letter-spacing:0.05em; }
+        #turn-banner.me-turn #turn-banner-suffix { color: #F59E0B !important; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; }
+        @keyframes meTurnPulse { 0%,100% { transform: scale(1.00);} 50% { transform: scale(1.015);} }
+        /* HP-change flash used on the player's own row when current_hp changes. */
+        @keyframes hpFlashDown { 0% { background:rgba(239,68,68,0.0);} 20% { background:rgba(239,68,68,0.28);} 100% { background:rgba(239,68,68,0.0);} }
+        @keyframes hpFlashUp   { 0% { background:rgba(34,197,94,0.0);}  20% { background:rgba(34,197,94,0.25);} 100% { background:rgba(34,197,94,0.0);} }
+        tr.flash-dmg { animation: hpFlashDown 1s ease-out 1; }
+        tr.flash-heal { animation: hpFlashUp   1s ease-out 1; }
+    </style>
 
     <div class="rounded-xl overflow-hidden" style="background:#191920; border:1px solid rgba(255,255,255,0.06)">
         <table class="w-full text-left border-collapse">
@@ -205,24 +224,63 @@
             renderTracker(d.encounter, d.round, d.active_name);
         } catch(e) {}
     }
+    // Track last-seen HP per PC so we can flash the row when damage/heal lands.
+    const _lastHpByName = {};
     function renderTracker(enc, round, activeName) {
         const tb = document.getElementById('tracker-body');
         if (!enc||!enc.length) { tb.innerHTML='<tr><td colspan="4" class="p-10 text-center text-base-600 italic text-sm">Awaiting the GM...</td></tr>'; document.getElementById('round-badge').classList.add('hidden'); document.getElementById('turn-banner').classList.add('hidden'); return; }
         if (round) { document.getElementById('round-number').innerText=round; document.getElementById('round-badge').classList.remove('hidden'); }
-        if (activeName) { document.getElementById('turn-banner-name').innerText=activeName; document.getElementById('turn-banner').classList.remove('hidden'); }
+        const myChar = localStorage.getItem('pf2e_my_char') || '';
+        const banner = document.getElementById('turn-banner');
+        const bannerName = document.getElementById('turn-banner-name');
+        const bannerSuffix = document.getElementById('turn-banner-suffix');
+        if (activeName) {
+            bannerName.innerText = activeName;
+            banner.classList.remove('hidden');
+            // It's MY turn if the active name matches my pinned character.
+            if (myChar && activeName && activeName.toLowerCase() === myChar.toLowerCase()) {
+                banner.classList.add('me-turn');
+                bannerSuffix.innerText = "— It's your turn!";
+            } else {
+                banner.classList.remove('me-turn');
+                bannerSuffix.innerText = 'is acting';
+            }
+        }
         let h='';
+        // Collect flashes for PCs whose HP changed since the last paint.
+        const flashClasses = {}; // name -> 'dmg' | 'heal'
         enc.forEach(c => {
+            if (c.is_pc && typeof c.current_hp === 'number') {
+                const prev = _lastHpByName[c.name];
+                if (typeof prev === 'number' && prev !== c.current_hp) {
+                    flashClasses[c.name] = c.current_hp < prev ? 'flash-dmg' : 'flash-heal';
+                }
+                _lastHpByName[c.name] = c.current_hp;
+            }
+        });
+        enc.forEach(c => {
+            // Hidden NPC: the server masks name/initiative/conditions and
+            // tags the entry with `hidden: true`. We render a generic
+            // "???" row so the player sees *something* is in the order
+            // without any identifying detail.
+            const isHidden = c.hidden === true;
             let rc=c.is_active?'erow on':'erow';
             let nc=c.is_pc?(c.is_active?'text-base-100':'text-base-300'):(c.is_active?'text-danger-400':'text-danger-400/60');
             let nm=`<span class="font-medium ${nc}">${esc(c.name)}</span>`;
-            if(!c.is_pc) nm+=' <span class="text-[8px] text-danger-400/60 uppercase tracking-widest ml-1">Enemy</span>';
+            if(!c.is_pc && !isHidden) nm+=' <span class="text-[8px] text-danger-400/60 uppercase tracking-widest ml-1">Enemy</span>';
+            if(isHidden) nm+=' <span class="text-[8px] text-base-500 uppercase tracking-widest ml-1">Unknown</span>';
             let st='';
             if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#5EADAD':'#ef4444';st=`<span class="text-sm font-bold" style="color:${bc}">${c.current_hp}<span class="text-base-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(255,255,255,0.04)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
             else if(c.hp_status) st=`<span class="text-xs uppercase tracking-wider font-medium ${c.hp_color||'text-base-600'}">${esc(c.hp_status)}</span>`;
             let cd='<div class="flex flex-wrap gap-1">';
             if(c.conditions) for(const[k,v] of Object.entries(c.conditions)){if(v===true)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k.replace('_','-'))}</span>`;else if(typeof v==='number'&&v>0)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k)} ${v}</span>`;}
             cd+='</div>';
-            h+=`<tr class="${rc}" style="border-bottom:1px solid rgba(255,255,255,0.04)"><td class="px-4 py-2.5 text-center text-base-500 text-sm font-mono">${c.initiative}</td><td class="px-4 py-2.5">${nm}</td><td class="px-4 py-2.5">${st}</td><td class="px-4 py-2.5">${cd}</td></tr>`;
+            // Render '?' for initiative when hidden, both because the server
+            // sent null and because showing the actual number would narrow
+            // down what kind of creature it is.
+            const initCell = (isHidden || c.initiative == null) ? '?' : c.initiative;
+            const flashCls = flashClasses[c.name] ? ' ' + flashClasses[c.name] : '';
+            h+=`<tr class="${rc}${flashCls}" style="border-bottom:1px solid rgba(255,255,255,0.04)"><td class="px-4 py-2.5 text-center text-base-500 text-sm font-mono">${initCell}</td><td class="px-4 py-2.5">${nm}</td><td class="px-4 py-2.5">${st}</td><td class="px-4 py-2.5">${cd}</td></tr>`;
         });
         tb.innerHTML=h;
     }

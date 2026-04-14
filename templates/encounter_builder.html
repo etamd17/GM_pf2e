@@ -21,9 +21,30 @@
     <div class="w-1/3 space-y-4">
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <input type="text" id="monster-search" placeholder="Search monsters by name..." autocomplete="off"
-                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600 mb-3">
+                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600 mb-2">
+            <!-- Level / trait filter strip. Filters alone (with empty name) still
+                 return results so you can browse "Lv 3–5 undead" without typing. -->
+            <div class="grid grid-cols-[1fr_auto_1fr_2fr] gap-2 items-center mb-3">
+                <input type="number" id="monster-min-lvl" placeholder="Min" min="-1" max="25" oninput="triggerMonsterSearch()"
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-amber-500/50" title="Minimum level">
+                <span class="text-gray-500 text-xs">–</span>
+                <input type="number" id="monster-max-lvl" placeholder="Max" min="-1" max="25" oninput="triggerMonsterSearch()"
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-amber-500/50" title="Maximum level">
+                <input type="text" id="monster-trait" placeholder="trait e.g. undead" oninput="triggerMonsterSearch()"
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600" title="Trait filter (substring match)">
+            </div>
+            <!-- Party-level quick-scope buttons: one click auto-fills min/max around
+                 the current party level (PL−4 .. PL+2) — the most useful encounter band. -->
+            <div class="flex items-center gap-1 mb-3 text-[10px]">
+                <span class="text-gray-500 uppercase tracking-wider mr-1">Scope:</span>
+                <button onclick="applyLevelScope('party')" class="bg-gray-900 hover:bg-amber-900/40 text-gray-400 hover:text-amber-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="Filter to PL−4 .. PL+2 (the useful range)">Party ±</button>
+                <button onclick="applyLevelScope('below')" class="bg-gray-900 hover:bg-gray-700 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL−4 .. PL−1 (minions & mooks)">Mooks</button>
+                <button onclick="applyLevelScope('match')" class="bg-gray-900 hover:bg-gray-700 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL−1 .. PL+1 (bread & butter)">Peers</button>
+                <button onclick="applyLevelScope('boss')" class="bg-gray-900 hover:bg-red-900/40 text-gray-400 hover:text-red-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL+1 .. PL+4 (bosses & elites)">Boss</button>
+                <button onclick="applyLevelScope('clear')" class="bg-gray-900 hover:bg-gray-700 text-gray-500 border border-gray-700 px-2 py-0.5 rounded transition-colors ml-auto" title="Clear filters">×</button>
+            </div>
             <div id="monster-results" class="space-y-1 max-h-[40vh] overflow-y-auto custom-scrollbar">
-                <div class="text-center text-gray-600 text-xs italic py-6">Type a monster name to search your library.</div>
+                <div class="text-center text-gray-600 text-xs italic py-6">Type a name, set a level range, or pick a scope above.</div>
             </div>
         </div>
         
@@ -166,47 +187,109 @@
     const xpMap = {'-4':10,'-3':15,'-2':20,'-1':30,'0':40,'1':60,'2':80,'3':120,'4':160};
 
     // --- SEARCH ---
-    document.getElementById('monster-search').addEventListener('input', (e) => {
+    // Shared runner so level/trait inputs can call it without the keyboard event.
+    function triggerMonsterSearch() {
         clearTimeout(searchTimeout);
-        const q = e.target.value.trim();
-        if (q.length < 2) { document.getElementById('monster-results').innerHTML = '<div class="text-center text-gray-600 text-xs italic py-6">Type at least 2 characters...</div>'; return; }
-        searchTimeout = setTimeout(async () => {
-            const res = await fetch(`/api/monster_search?q=${encodeURIComponent(q)}`);
-            const data = await res.json();
-            const container = document.getElementById('monster-results');
-            if (!data.results.length) {
-                container.innerHTML = '<div class="text-center text-gray-600 text-xs italic py-4">No monsters found.</div>';
-                return;
+        searchTimeout = setTimeout(runMonsterSearch, 200);
+    }
+    document.getElementById('monster-search').addEventListener('input', triggerMonsterSearch);
+
+    async function runMonsterSearch() {
+        const q = document.getElementById('monster-search').value.trim();
+        const minL = document.getElementById('monster-min-lvl').value.trim();
+        const maxL = document.getElementById('monster-max-lvl').value.trim();
+        const trait = document.getElementById('monster-trait').value.trim();
+        const hasFilters = minL !== '' || maxL !== '' || trait !== '';
+
+        // Name alone still needs 2 chars; filter-only browsing is allowed.
+        if (!hasFilters && q.length < 2) {
+            document.getElementById('monster-results').innerHTML =
+                '<div class="text-center text-gray-600 text-xs italic py-6">Type a name (≥2 chars), set a level range, or pick a scope.</div>';
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (q) params.set('q', q);
+        if (minL) params.set('min_lvl', minL);
+        if (maxL) params.set('max_lvl', maxL);
+        if (trait) params.set('trait', trait);
+
+        const res = await fetch(`/api/monster_search?${params.toString()}`);
+        const data = await res.json();
+        const container = document.getElementById('monster-results');
+        if (!data.results.length) {
+            container.innerHTML = '<div class="text-center text-gray-600 text-xs italic py-4">No monsters matched those filters.</div>';
+            return;
+        }
+        container.innerHTML = data.results.map(m => {
+            let extras = [];
+            if (m.best_attack != null) {
+                const dmgPart = m.best_damage ? ` · ${esc(String(m.best_damage))}` : '';
+                extras.push(`<span class="text-amber-300">Atk ${esc(String(m.best_attack))}${dmgPart}</span>`);
             }
-            container.innerHTML = data.results.map(m => {
-                let extras = [];
-                if (m.immunities && m.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(m.immunities.join(', '))}</span>`);
-                if (m.resistances && m.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(m.resistances.join(', '))}</span>`);
-                if (m.weaknesses && m.weaknesses.length) extras.push(`<span class="text-red-400">Weak: ${esc(m.weaknesses.join(', '))}</span>`);
-                let extraHtml = extras.length ? `<div class="text-[10px] mt-0.5">${extras.join(' · ')}</div>` : '';
-                return `
-                <button onclick='addToStage(${JSON.stringify(m).replace(/'/g,"&#39;")})' class="w-full text-left bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded p-2.5 transition-colors">
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-gray-200 text-sm">${esc(m.name)}</span>
-                        <div class="flex gap-2 text-[10px]">
-                            <span class="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${m.level}</span>
-                            <span class="text-gray-500">HP ${m.hp}</span>
-                            <span class="text-sky-400">AC ${m.ac}</span>
+            if (m.perception != null) extras.push(`<span class="text-gray-500">Perc +${m.perception}</span>`);
+            if (m.immunities && m.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(m.immunities.join(', '))}</span>`);
+            if (m.resistances && m.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(m.resistances.join(', '))}</span>`);
+            if (m.weaknesses && m.weaknesses.length) extras.push(`<span class="text-red-400">Weak: ${esc(m.weaknesses.join(', '))}</span>`);
+            let extraHtml = extras.length ? `<div class="text-[10px] mt-0.5">${extras.join(' · ')}</div>` : '';
+            let traitsHtml = (m.traits && m.traits.length)
+                ? `<div class="flex flex-wrap gap-1 mt-1">${m.traits.map(t => `<span class=\"text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700\">${esc(t)}</span>`).join('')}</div>`
+                : '';
+            const json = JSON.stringify(m).replace(/'/g, "&#39;");
+            // Click the whole card = add 1. The ×N dropdown on the right adds in bulk
+            // (common case: "3 goblins"). event.stopPropagation keeps those from firing
+            // the card's click.
+            return `
+            <div class="relative bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded p-2.5 transition-colors cursor-pointer"
+                 onclick='addToStage(${json}, 1)'>
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-gray-200 text-sm">${esc(m.name)}</span>
+                    <div class="flex gap-2 text-[10px] items-center">
+                        <span class="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${m.level}</span>
+                        <span class="text-gray-500">HP ${m.hp}</span>
+                        <span class="text-sky-400">AC ${m.ac}</span>
+                        <div class="flex items-center gap-0.5 ml-1" onclick="event.stopPropagation()">
+                            <button type="button" onclick='addToStage(${json}, 2)' class="bg-gray-800 hover:bg-amber-800/40 text-gray-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 2">×2</button>
+                            <button type="button" onclick='addToStage(${json}, 3)' class="bg-gray-800 hover:bg-amber-800/40 text-gray-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 3">×3</button>
+                            <button type="button" onclick='addToStage(${json}, 4)' class="bg-gray-800 hover:bg-amber-800/40 text-gray-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 4">×4</button>
                         </div>
                     </div>
-                    ${extraHtml}
-                </button>`;
-            }).join('');
-        }, 200);
-    });
+                </div>
+                ${extraHtml}
+                ${traitsHtml}
+            </div>`;
+        }).join('');
+    }
+
+    // Quick level-scope presets tied to the current party level input.
+    // Keeps GMs from rederiving "what's PL−4 for a level-6 party" in their head.
+    function applyLevelScope(mode) {
+        const minEl = document.getElementById('monster-min-lvl');
+        const maxEl = document.getElementById('monster-max-lvl');
+        if (mode === 'clear') { minEl.value = ''; maxEl.value = ''; triggerMonsterSearch(); return; }
+        const pl = parseInt(document.getElementById('builder-party-level').value) || 1;
+        const ranges = {
+            'party':  [pl - 4, pl + 2],
+            'below':  [pl - 4, pl - 1],
+            'match':  [pl - 1, pl + 1],
+            'boss':   [pl + 1, pl + 4],
+        };
+        const [lo, hi] = ranges[mode] || [pl - 4, pl + 2];
+        minEl.value = lo;
+        maxEl.value = hi;
+        triggerMonsterSearch();
+    }
 
     // --- STAGING ---
-    function addToStage(monster) {
+    // addQty lets the "4 goblins at once" case be a single click from the search
+    // results modal's quick-add menu instead of four sequential adds.
+    function addToStage(monster, addQty) {
+        const delta = Math.max(1, parseInt(addQty) || 1);
         let existing = staged.find(s => s.path === monster.path && s.elite_weak === 0);
         if (existing) {
-            existing.count++;
+            existing.count += delta;
         } else {
-            staged.push({path: monster.path, name: monster.name, level: monster.level, count: 1, elite_weak: 0, hp: monster.hp, ac: monster.ac,
+            staged.push({path: monster.path, name: monster.name, level: monster.level, count: delta, elite_weak: 0, hp: monster.hp, ac: monster.ac,
                 immunities: monster.immunities || [], resistances: monster.resistances || [], weaknesses: monster.weaknesses || []});
         }
         renderStage();
@@ -276,6 +359,9 @@
         recalcXP();
     }
 
+    // Track last-seen tier so we can toast when it changes — Pathbuilder-style
+    // "you just crossed into Severe" nudge so a GM doesn't miss a difficulty shift.
+    let _lastTier = 'Empty';
     function recalcXP() {
         const partyLevel = parseInt(document.getElementById('builder-party-level').value) || 1;
         let totalXP = 0;
@@ -285,9 +371,9 @@
             let xpPer = xpMap[String(diff)] || (diff > 4 ? 160 : 10);
             totalXP += xpPer * s.count;
         });
-        
+
         document.getElementById('xp-total').innerText = totalXP;
-        
+
         // PF2E GM Core p.74 thresholds (4-player party)
         let label, color, barColor, pct;
         if (totalXP === 0) { label = 'Empty'; color = 'text-gray-400'; barColor = '#64748B'; pct = 0; }
@@ -297,12 +383,51 @@
         else if (totalXP < 120) { label = 'Severe'; color = 'text-orange-500'; barColor = '#F97316'; pct = (totalXP / 200) * 100; }
         else if (totalXP < 160) { label = 'Extreme'; color = 'text-red-500 font-bold'; barColor = '#EF4444'; pct = (totalXP / 200) * 100; }
         else { label = 'Impossible'; color = 'text-red-600 font-bold'; barColor = '#DC2626'; pct = Math.min((totalXP / 200) * 100, 100); }
-        
+
         const diffEl = document.getElementById('xp-difficulty');
         diffEl.innerText = label;
         diffEl.className = `text-sm font-bold uppercase px-2 py-1 rounded bg-gray-900 border border-gray-700 ${color}`;
         document.getElementById('xp-bar').style.width = pct + '%';
         document.getElementById('xp-bar').style.background = barColor;
+
+        if (label !== _lastTier && _lastTier !== 'Empty' && label !== 'Empty') {
+            showTierToast(_lastTier, label, barColor);
+        }
+        _lastTier = label;
+    }
+
+    // One-shot floating toast bar — no library, no dependency.
+    function showTierToast(from, to, color) {
+        let host = document.getElementById('xp-toast-host');
+        if (!host) {
+            host = document.createElement('div');
+            host.id = 'xp-toast-host';
+            host.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+            document.body.appendChild(host);
+        }
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            background:rgba(17,17,24,0.96);
+            border:1px solid ${color};
+            border-left:4px solid ${color};
+            color:#e5e7eb;
+            padding:10px 14px;
+            border-radius:6px;
+            font-size:12px;
+            font-weight:600;
+            box-shadow:0 10px 30px rgba(0,0,0,0.5);
+            opacity:0;
+            transform:translateX(20px);
+            transition:all 0.2s ease-out;`;
+        toast.innerHTML = `<div style="font-family:'Cinzel',serif;letter-spacing:0.08em;text-transform:uppercase;font-size:10px;color:${color};">Difficulty Shift</div>
+            <div style="margin-top:2px;"><span style="opacity:0.6;">${from}</span> → <span style="color:${color};">${to}</span></div>`;
+        host.appendChild(toast);
+        requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(20px)';
+            setTimeout(() => toast.remove(), 250);
+        }, 2500);
     }
 
     async function loadToTracker() {

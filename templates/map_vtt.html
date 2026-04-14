@@ -300,6 +300,23 @@
             max-height: 40%;
             overflow-y: auto;
         }
+
+        .range-btn {
+            padding: 3px 8px;
+            font-size: 11px;
+            background: var(--bg-surface, #252525);
+            color: var(--text-primary, #ddd);
+            border: 1px solid var(--border-default, #444);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .range-btn:hover { background: var(--bg-hover, #333); }
+        .range-btn.active {
+            background: var(--accent-primary, #8ED4D4);
+            color: #111;
+            border-color: var(--accent-primary, #8ED4D4);
+        }
         
         #token-details.hidden { display: none; }
         
@@ -806,6 +823,19 @@
                         </div>
                     </div>
                     <div id="detail-conditions"></div>
+                    <div id="detail-range-panel" style="margin: 8px 0; padding: 8px; background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: 6px;">
+                        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">RANGE RINGS</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            <button class="range-btn" onclick="setActiveRange('Reach', 5, 'rgba(250, 204, 21, 0.75)')">Reach 5</button>
+                            <button class="range-btn" onclick="setActiveRange('Reach 10', 10, 'rgba(250, 204, 21, 0.6)')">Reach 10</button>
+                            <button class="range-btn" onclick="setActiveRange('30 ft', 30, 'rgba(239, 68, 68, 0.6)')">30</button>
+                            <button class="range-btn" onclick="setActiveRange('60 ft', 60, 'rgba(239, 68, 68, 0.6)')">60</button>
+                            <button class="range-btn" onclick="setActiveRange('100 ft', 100, 'rgba(239, 68, 68, 0.6)')">100</button>
+                            <button class="range-btn" onclick="setActiveRange('120 ft', 120, 'rgba(239, 68, 68, 0.6)')">120</button>
+                            <button class="range-btn" onclick="(function(){const v=prompt('Range in feet'); if(v) setActiveRange(v+' ft', parseInt(v), 'rgba(168, 85, 247, 0.7)');})()">+</button>
+                            <button class="range-btn" onclick="clearActiveRanges()" style="background: var(--danger-500); color: #fff;">Clear</button>
+                        </div>
+                    </div>
                     <div id="detail-abilities">
                         <!-- Abilities/attacks listed here -->
                     </div>
@@ -842,11 +872,17 @@
                     <option value="invisible">Invisible</option>
                     <option value="ethereal">Ethereal</option>
                     <option value="door">Door</option>
+                    <option value="secret_door">Secret Door</option>
                 </select>
                 <button class="tool-btn" id="tool-wall" onclick="setTool('wall')">Draw</button>
                 <button class="tool-btn" onclick="borderMap()">Border</button>
             </div>
-            
+
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Notes</span>
+                <button class="tool-btn" id="tool-note" onclick="setTool('note')">Pin</button>
+            </div>
+
             <div class="toolbar-group">
                 <span class="toolbar-group-label">Terrain</span>
                 <button class="tool-btn" id="tool-terrain" onclick="setTool('terrain')">Difficult</button>
@@ -854,13 +890,43 @@
             
             <div class="toolbar-group">
                 <span class="toolbar-group-label">Lighting</span>
-                <select class="tool-select" id="lighting-select" onchange="setLighting(this.value)">
+                <select class="tool-select" id="ambient-select" onchange="setAmbient(this.value)" title="Ambient light level">
                     <option value="bright">Bright</option>
                     <option value="dim">Dim</option>
-                    <option value="darkness">Darkness</option>
+                    <option value="dark">Dark</option>
                 </select>
+                <select class="tool-select" id="light-preset-select" title="Light source to place">
+                    <option value="torch">Torch</option>
+                    <option value="candle">Candle</option>
+                    <option value="lantern">Lantern</option>
+                    <option value="bullseye">Bullseye</option>
+                    <option value="daylight">Daylight</option>
+                </select>
+                <button class="tool-btn" id="tool-light" onclick="setTool('light')" title="Click map to place a light">Place Light</button>
+                <button class="tool-btn" onclick="clearAllLights()" title="Remove every light from the map">Clear</button>
             </div>
             
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Measure</span>
+                <button class="tool-btn" id="tool-ruler" onclick="setTool('ruler')" title="Drag to measure distance (PF2e diagonals)">Ruler</button>
+            </div>
+
+            <div class="toolbar-group">
+                <span class="toolbar-group-label">Templates</span>
+                <select class="tool-select" id="template-type-select" title="AOE template shape" onchange="setTool('template')">
+                    <option value="burst">Burst</option>
+                    <option value="emanation">Emanation</option>
+                    <option value="cone">Cone</option>
+                    <option value="line">Line</option>
+                </select>
+                <input type="number" id="template-size-input" min="1" max="40" value="4" title="Radius/length (squares)"
+                       style="width: 52px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 4px; padding: 2px 6px; font-size: 11px;">
+                <input type="color" id="template-color-input" value="#ef4444" title="Template color"
+                       style="width: 28px; height: 24px; border: 1px solid var(--border-default); border-radius: 4px; padding: 0; background: var(--bg-surface); cursor: pointer;">
+                <button class="tool-btn" id="tool-template" onclick="setTool('template')" title="Click map to place template">Place</button>
+                <button class="tool-btn" onclick="clearAllTemplates()" title="Remove every template">Clear</button>
+            </div>
+
             <div class="toolbar-group">
                 <span class="toolbar-group-label">Map</span>
                 <button class="tool-btn" onclick="showMapModal()">Load</button>
@@ -960,14 +1026,96 @@
         // Wall drawing state
         let wallPoints = [];
         let isDrawingWall = false;
-        
+
+        // Ruler state — while active: start is the drag-origin in map pixels,
+        // end follows the mouse. Nothing persisted; purely visual.
+        let rulerStart = null;    // {x, y}
+        let rulerEnd = null;      // {x, y}
+        let isRulering = false;
+
+        // Template placement state — for cone/line we need an anchor click
+        // then a drag to set direction/length. Burst/emanation are one-click.
+        let templatePreview = null; // {type, x, y, dx, dy, radius, length, color}
+        let isPlacingTemplate = false;
+        let templateAnchor = null; // {x, y}
+        let selectedTemplateId = null;
+
         // Calibration state
         let isCalibrating = false;
         let calibrationStep = 0;
         let calibrationPoints = [];
+
+        // Visibility cache — recomputing per render was the old hot path. We
+        // now rebuild only when a structural input changes (token positions,
+        // walls, lighting mode). _visibilityKey hashes the inputs so we can
+        // detect staleness cheaply.
+        let _visibilityCache = null;
+        let _visibilityKey = '';
+
+        function _computeVisibilityKey() {
+            const tks = (mapState.tokens || []).filter(t => t.is_pc).map(t =>
+                `${t.id}:${t.x},${t.y}:${t.vision_radius || 6}:${t.darkvision ? 1 : 0}:${t.low_light_vision ? 1 : 0}:${t.size || 1}`
+            ).join('|');
+            const wls = (mapState.walls || []).map(w => {
+                const pts = (w.points || []).map(p => `${p[0]|0},${p[1]|0}`).join(',');
+                return `${w.id}:${w.type}:${w.open ? 1 : 0}:${w.closed ? 1 : 0}:${pts}`;
+            }).join('|');
+            // Lights are part of the vision inputs now — moving/toggling a
+            // torch has to rebuild the visible-cells set.
+            const lts = (mapState.lights || []).map(L =>
+                `${L.id}:${L.x|0},${L.y|0}:${L.bright}:${L.dim}:${L.attached_to||''}:${L.enabled === false ? 0 : 1}`
+            ).join('|');
+            const raw = (mapState.ambient_light || mapState.lighting || lightingMode || 'bright');
+            const ambient = raw === 'darkness' ? 'dark' : raw;
+            return `${ambient}|T[${tks}]|W[${wls}]|L[${lts}]`;
+        }
+
+        function _invalidateVisibilityCache() {
+            _visibilityCache = null;
+            _visibilityKey = '';
+        }
+
+        // Token movement tween — when SSE brings a new position, interpolate
+        // from the previous spot to the new one over ~300 ms instead of
+        // snapping. GM still controls authoritative position; this is purely
+        // visual. Keyed by token id so multiple tokens can animate at once.
+        const _tokenAnims = {}; // id -> { fromX, fromY, toX, toY, start, dur }
+        const TOKEN_ANIM_MS = 300;
+
+        function _startTokenAnim(tokenId, fromX, fromY, toX, toY) {
+            if (fromX === toX && fromY === toY) return;
+            _tokenAnims[tokenId] = {
+                fromX, fromY, toX, toY,
+                start: performance.now(),
+                dur: TOKEN_ANIM_MS
+            };
+        }
+
+        function _getAnimatedPosition(token) {
+            // Returns [x, y] in grid coords, applying any active tween.
+            const a = _tokenAnims[token.id];
+            if (!a) return [token.x, token.y];
+            const t = Math.min(1, (performance.now() - a.start) / a.dur);
+            if (t >= 1) {
+                delete _tokenAnims[token.id];
+                return [a.toX, a.toY];
+            }
+            // Linear interpolation — feels more like sliding a counter across
+            // a battlemap than an easing curve would.
+            return [a.fromX + (a.toX - a.fromX) * t, a.fromY + (a.toY - a.fromY) * t];
+        }
+
+        function _anyTokenAnimating() {
+            return Object.keys(_tokenAnims).length > 0;
+        }
         
-        // Lighting state
-        let lightingMode = '{{ current_map.get("lighting", "bright") }}'; // bright, dim, darkness
+        // Lighting state — prefer the new ambient_light field, fall back
+        // through the legacy `lighting` field for older saves. 'darkness'
+        // is normalized to 'dark'.
+        let lightingMode = (function(){
+            const raw = '{{ current_map.get("ambient_light") or current_map.get("lighting") or "bright" }}';
+            return raw === 'darkness' ? 'dark' : raw;
+        })();
         
         // Combat state
         let currentTurnIndex = 0;
@@ -1069,11 +1217,15 @@
             // Setup creature drag and drop
             setupCreatureDragDrop();
             
-            // Sync lighting dropdown to saved state
-            const lightingSelect = document.getElementById('lighting-select');
-            if (lightingSelect && lightingMode) {
-                lightingSelect.value = lightingMode;
-            }
+            // Sync ambient dropdown to server state. `ambient_light` is
+            // the new source of truth; fall back to the legacy `lighting`
+            // field for maps saved before Phase 2.
+            const rawAmbient = mapState.ambient_light || mapState.lighting || 'bright';
+            const ambient = rawAmbient === 'darkness' ? 'dark' : rawAmbient;
+            lightingMode = ambient;
+            mapState.ambient_light = ambient;
+            const ambientSelect = document.getElementById('ambient-select');
+            if (ambientSelect) ambientSelect.value = ambient;
         }
         
         function resizeCanvas() {
@@ -1101,29 +1253,56 @@
             const evtSource = new EventSource('/api/events');
             
             evtSource.addEventListener('map_state', (e) => {
+                // Track old token positions so we can tween into new ones.
+                const prevTokens = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y}]));
                 mapState = JSON.parse(e.data);
+                _invalidateVisibilityCache();
+                for (const t of (mapState.tokens || [])) {
+                    const prev = prevTokens.get(t.id);
+                    if (prev && (prev.x !== t.x || prev.y !== t.y)) {
+                        _startTokenAnim(t.id, prev.x, prev.y, t.x, t.y);
+                    }
+                }
                 if (mapState.image && (!mapImage || !mapImage.src.includes(mapState.image))) {
                     loadMapImage(mapState.image);
                 }
-                // Sync lighting mode from state
-                if (mapState.lighting) {
-                    lightingMode = mapState.lighting;
-                    const ls = document.getElementById('lighting-select');
-                    if (ls) ls.value = lightingMode;
-                }
+                // Sync ambient-light dropdown from the refreshed state.
+                const rawAmbient = mapState.ambient_light || mapState.lighting || 'bright';
+                const ambient = rawAmbient === 'darkness' ? 'dark' : rawAmbient;
+                lightingMode = ambient;
+                mapState.ambient_light = ambient;
+                const as = document.getElementById('ambient-select');
+                if (as) as.value = ambient;
                 updateCombatantList();
                 render();
             });
             
             evtSource.addEventListener('map_tokens', (e) => {
-                mapState.tokens = JSON.parse(e.data).tokens;
+                const incoming = JSON.parse(e.data).tokens || [];
+                const prev = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y}]));
+                for (const t of incoming) {
+                    const p = prev.get(t.id);
+                    if (p && (p.x !== t.x || p.y !== t.y)) {
+                        _startTokenAnim(t.id, p.x, p.y, t.x, t.y);
+                    }
+                }
+                mapState.tokens = incoming;
+                _invalidateVisibilityCache();
                 updateCombatantList();
                 render();
             });
-            
+
             evtSource.addEventListener('map_walls', (e) => {
                 mapState.walls = JSON.parse(e.data).walls;
+                _invalidateVisibilityCache();
                 updateWallList();
+                render();
+            });
+
+            evtSource.addEventListener('map_notes', (e) => {
+                try {
+                    mapState.gm_notes = JSON.parse(e.data).notes || [];
+                } catch (_) { mapState.gm_notes = []; }
                 render();
             });
             
@@ -1213,26 +1392,40 @@
             
             // Draw walls (GM sees all walls)
             drawWalls();
-            
+
             // Draw wall preview if drawing
             drawWallPreview();
-            
+
+            // Draw light sources: bright/dim rings + marker, plus a soft glow
+            // in dim/dark ambient so the GM can preview the player view.
+            drawLights();
+
             // Draw spawn point
             drawSpawnPoint();
-            
+
+            // Draw GM-only note pins (never sent to players)
+            drawGMNotes();
+
             // Draw calibration points if calibrating
             drawCalibrationPoints();
-            
+
+            // Draw AOE templates (under tokens so creatures are visible)
+            drawTemplates();
+
             // Draw tokens
             drawTokens();
-            
+
             // Draw movement range if token selected
             if (selectedToken) {
                 drawMovementRange();
+                drawRangeRings();
             }
-            
+
+            // Draw ruler on top of everything so it's always legible
+            drawRuler();
+
             ctx.restore();
-            
+
             // Update status bar
             document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
         }
@@ -1278,14 +1471,14 @@
         }
         
         function drawExploredFog() {
-            // GM view: unexplored areas get a subtle dim overlay
-            // Also applies dim/darkness visual tint to visible areas based on lighting
-            
+            // GM view: unexplored areas get a subtle dim overlay, visible
+            // cells get an ambient tint to preview the players' fog layer.
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
             const explored = new Set(mapState.explored || []);
-            const lighting = lightingMode || mapState.lighting || 'bright';
+            const raw = (mapState.ambient_light || mapState.lighting || lightingMode || 'bright');
+            const lighting = raw === 'darkness' ? 'dark' : raw;
             
             // Get all grid cells
             const cols = Math.ceil(mapImage.width / gs);
@@ -1310,7 +1503,7 @@
                         // Visible but dim lighting — subtle blue-gray tint
                         ctx.fillStyle = 'rgba(20, 30, 60, 0.25)';
                         ctx.fillRect(px, py, gs, gs);
-                    } else if (isVisible && lighting === 'darkness') {
+                    } else if (isVisible && lighting === 'dark') {
                         // Visible via darkvision in darkness — desaturated purple tint
                         ctx.fillStyle = 'rgba(40, 20, 60, 0.35)';
                         ctx.fillRect(px, py, gs, gs);
@@ -1320,13 +1513,21 @@
         }
         
         function calculateVisibleCells() {
-            // Ray-cast from each PC token to determine visible cells
-            // Now factors in vision_radius and lighting conditions
+            // Ray-cast from each PC token to determine visible cells.
+            // Cached: the computation is O(cols*rows*pcs*walls), which got
+            // expensive on big maps. We rebuild only when _computeVisibilityKey
+            // changes (tokens moved, walls edited, lighting changed).
+            const key = _computeVisibilityKey();
+            if (_visibilityCache && _visibilityKey === key) {
+                return _visibilityCache;
+            }
+            _visibilityKey = key;
+
             const visible = new Set();
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
-            
+
             const pcTokens = (mapState.tokens || []).filter(t => t.is_pc);
             const walls = mapState.walls || [];
             
@@ -1371,10 +1572,11 @@
                     }
                 }
             }
-            
+
+            _visibilityCache = visible;
             return visible;
         }
-        
+
         function isBlockedByWalls(x1, y1, x2, y2, walls) {
             for (const wall of walls) {
                 // Skip open doors
@@ -1433,6 +1635,7 @@
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 
+                const isSecretDoor = wall.type === 'door' && wall.secret;
                 switch (wall.type) {
                     case 'normal':
                         ctx.strokeStyle = '#ef4444';
@@ -1451,32 +1654,53 @@
                         ctx.setLineDash([4/zoom, 4/zoom]);
                         break;
                     case 'door':
-                        ctx.strokeStyle = wall.open ? '#22c55e' : '#f59e0b';
-                        ctx.setLineDash(wall.open ? [8/zoom, 4/zoom] : []);
+                        if (isSecretDoor) {
+                            // Secret doors visible only to GM — purple hatched
+                            ctx.strokeStyle = wall.open ? '#22c55e' : '#a855f7';
+                            ctx.setLineDash([3/zoom, 3/zoom]);
+                        } else {
+                            ctx.strokeStyle = wall.open ? '#22c55e' : '#f59e0b';
+                            ctx.setLineDash(wall.open ? [8/zoom, 4/zoom] : []);
+                        }
                         break;
                     default:
                         ctx.strokeStyle = '#ef4444';
                         ctx.setLineDash([]);
                 }
-                
+
                 ctx.stroke();
                 ctx.setLineDash([]);
-                
+
                 // Draw door icon for doors
                 if (wall.type === 'door' && points.length >= 2) {
                     const mx = (points[0][0] + points[points.length-1][0]) / 2;
                     const my = (points[0][1] + points[points.length-1][1]) / 2;
-                    
-                    ctx.fillStyle = wall.open ? '#22c55e' : '#f59e0b';
+
+                    ctx.fillStyle = isSecretDoor
+                        ? (wall.open ? '#22c55e' : '#a855f7')
+                        : (wall.open ? '#22c55e' : '#f59e0b');
                     ctx.beginPath();
-                    ctx.arc(mx, my, 8/zoom, 0, Math.PI * 2);
+                    ctx.arc(mx, my, 9/zoom, 0, Math.PI * 2);
                     ctx.fill();
-                    
+
                     ctx.fillStyle = '#000';
-                    ctx.font = `${12/zoom}px system-ui`;
+                    ctx.font = `bold ${12/zoom}px system-ui`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(wall.open ? '○' : '●', mx, my);
+                    // '?' tells the GM this is a secret door; players see a plain wall
+                    ctx.fillText(isSecretDoor ? '?' : (wall.open ? '○' : '●'), mx, my);
+
+                    // If any player has discovered the secret, tint a ring
+                    // so the GM knows it's "burned"
+                    if (isSecretDoor && (wall.discovered_by || []).length > 0) {
+                        ctx.beginPath();
+                        ctx.arc(mx, my, 12/zoom, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#fbbf24';
+                        ctx.lineWidth = 2/zoom;
+                        ctx.setLineDash([2/zoom, 2/zoom]);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
                 }
             }
         }
@@ -1533,26 +1757,71 @@
             ctx.fillText('📍', px + gs/2, py + gs/2);
         }
         
+        function drawGMNotes() {
+            // GM-only pins. Stored in pixel coords (map-space) so they
+            // stick to map features regardless of grid size changes.
+            const notes = mapState.gm_notes || [];
+            if (!notes.length) return;
+
+            const fontPx = 18 / zoom;
+            for (const note of notes) {
+                const nx = note.x | 0;
+                const ny = note.y | 0;
+                // Highlight ring so the pin is findable on busy maps
+                ctx.beginPath();
+                ctx.arc(nx, ny, 12/zoom, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fill();
+                ctx.strokeStyle = note.color || '#fbbf24';
+                ctx.lineWidth = 2/zoom;
+                ctx.stroke();
+
+                // Icon (emoji or single char). Fallback to 📌
+                ctx.fillStyle = note.color || '#fbbf24';
+                ctx.font = `${fontPx}px system-ui`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(note.icon || '📌', nx, ny);
+
+                // Short label preview near the pin — full text shows in tooltip
+                if (note.text) {
+                    const txt = note.text.length > 24 ? note.text.slice(0, 22) + '…' : note.text;
+                    ctx.font = `${11/zoom}px system-ui`;
+                    const tw = ctx.measureText(txt).width;
+                    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    ctx.fillRect(nx + 14/zoom, ny - 8/zoom, tw + 8/zoom, 16/zoom);
+                    ctx.fillStyle = '#fde68a';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(txt, nx + 18/zoom, ny);
+                }
+            }
+        }
+
         function drawTokens() {
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
-            
+
             for (const token of (mapState.tokens || [])) {
                 const size = token.size || 1;
-                
-                // Apply drag offset if this token is being dragged
-                let tokenX = token.x;
-                let tokenY = token.y;
+
+                // Apply drag offset if this token is being dragged; otherwise
+                // use the animated position (linear slide tween).
+                let tokenX, tokenY;
                 if (draggingToken && draggingToken.id === token.id) {
                     tokenX = dragStart.tokenX + dragTokenOffset.x;
                     tokenY = dragStart.tokenY + dragTokenOffset.y;
+                } else {
+                    const [ax, ay] = _getAnimatedPosition(token);
+                    tokenX = ax;
+                    tokenY = ay;
                 }
-                
+
                 const cx = tokenX * gs + ox + (gs * size) / 2;
                 const cy = tokenY * gs + oy + (gs * size) / 2;
                 const r = (gs * size) / 2 - 4;
-                
+
+                const hiddenFromPlayers = token.visible_to_players === false;
                 // Check if this is the active combatant
                 const isActive = isActiveCombatant(token);
                 const isSelected = selectedToken === token.id;
@@ -1567,12 +1836,15 @@
                     ctx.stroke();
                 }
                 
-                // Token circle
+                // Token circle — render with reduced opacity when hidden
+                ctx.save();
+                if (hiddenFromPlayers) ctx.globalAlpha = 0.55;
                 ctx.beginPath();
                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                 ctx.fillStyle = token.color || (token.is_pc ? '#22c55e' : '#ef4444');
                 ctx.fill();
-                
+                ctx.restore();
+
                 // Flanking indicator (orange dashed ring for flanked enemies)
                 if (!token.is_pc && token._flanked) {
                     ctx.beginPath();
@@ -1583,11 +1855,20 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
-                
-                // Border
-                ctx.strokeStyle = isSelected ? '#fbbf24' : '#fff';
-                ctx.lineWidth = (isSelected ? 4 : 2) / zoom;
+
+                // Border — dashed purple when hidden-from-players, so the GM
+                // can tell at a glance that this creature is in stealth.
+                if (hiddenFromPlayers) {
+                    ctx.strokeStyle = isSelected ? '#fbbf24' : '#c084fc';
+                    ctx.lineWidth = (isSelected ? 4 : 3) / zoom;
+                    ctx.setLineDash([5/zoom, 4/zoom]);
+                } else {
+                    ctx.strokeStyle = isSelected ? '#fbbf24' : '#fff';
+                    ctx.lineWidth = (isSelected ? 4 : 2) / zoom;
+                    ctx.setLineDash([]);
+                }
                 ctx.stroke();
+                ctx.setLineDash([]);
                 
                 // Initials
                 ctx.fillStyle = '#fff';
@@ -1616,8 +1897,8 @@
                 drawConditionIcons(token, cx, cy, r);
             }
             
-            // Request animation frame for active token pulse
-            if ((mapState.tokens || []).some(t => isActiveCombatant(t))) {
+            // Request animation frame for active token pulse OR active tween.
+            if (_anyTokenAnimating() || (mapState.tokens || []).some(t => isActiveCombatant(t))) {
                 requestAnimationFrame(render);
             }
         }
@@ -1680,18 +1961,18 @@
         function drawMovementRange() {
             const token = (mapState.tokens || []).find(t => t.id === selectedToken);
             if (!token || !token.speed) return;
-            
+
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
             const size = token.size || 1;
             const cx = token.x * gs + ox + (gs * size) / 2;
             const cy = token.y * gs + oy + (gs * size) / 2;
-            
+
             // Speed in feet, 1 square = 5 feet
             const speedSquares = Math.floor(token.speed / 5);
             const radiusPx = speedSquares * gs;
-            
+
             // Draw range circle (1 action)
             ctx.beginPath();
             ctx.arc(cx, cy, radiusPx, 0, Math.PI * 2);
@@ -1700,10 +1981,86 @@
             ctx.setLineDash([8/zoom, 4/zoom]);
             ctx.stroke();
             ctx.setLineDash([]);
-            
+
             // Fill with very subtle color
             ctx.fillStyle = 'rgba(59, 130, 246, 0.05)';
             ctx.fill();
+        }
+
+        // Weapon/spell range rings overlaid when a token is selected so the GM
+        // can see what's in reach at a glance. Reads from `_activeRanges` —
+        // an optional in-memory array the token-details panel can populate
+        // with {label, range_ft, color} entries. If empty we only draw a
+        // subtle melee-reach ring so the UI is never noisy by default.
+        let _activeRanges = [];   // populated by selectRange() in token details
+
+        function drawRangeRings() {
+            const token = (mapState.tokens || []).find(t => t.id === selectedToken);
+            if (!token) return;
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const size = token.size || 1;
+            const cx = token.x * gs + ox + (gs * size) / 2;
+            const cy = token.y * gs + oy + (gs * size) / 2;
+
+            // Default passive display: melee reach (5 ft / 1 square) for any
+            // PC or creature. Keeps the map informative without picking a
+            // specific weapon. If the GM explicitly picks a range from the
+            // token panel, _activeRanges takes over.
+            if (_activeRanges.length === 0) {
+                const reach = (token.reach_ft || 5) / 5 * gs;
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, reach, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+                ctx.lineWidth = 1.5 / zoom;
+                ctx.setLineDash([4 / zoom, 4 / zoom]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+                return;
+            }
+
+            ctx.save();
+            for (const r of _activeRanges) {
+                const px = (r.range_ft / 5) * gs;
+                ctx.beginPath();
+                ctx.arc(cx, cy, px, 0, Math.PI * 2);
+                ctx.strokeStyle = r.color || 'rgba(239, 68, 68, 0.6)';
+                ctx.lineWidth = 2 / zoom;
+                ctx.setLineDash([6 / zoom, 4 / zoom]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                // Label at top of ring
+                ctx.font = `${11 / zoom}px system-ui`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const label = `${r.label} (${r.range_ft}ft)`;
+                const lw = ctx.measureText(label).width;
+                const pad = 4 / zoom, lh = 16 / zoom;
+                ctx.fillStyle = 'rgba(20,20,30,0.85)';
+                ctx.fillRect(cx - lw/2 - pad, cy - px - lh/2, lw + pad*2, lh);
+                ctx.fillStyle = r.color || '#ef4444';
+                ctx.fillText(label, cx, cy - px);
+            }
+            ctx.restore();
+        }
+
+        function setActiveRange(label, range_ft, color) {
+            // Toggle — click the same label twice to turn it off
+            const existing = _activeRanges.find(r => r.label === label);
+            if (existing) {
+                _activeRanges = _activeRanges.filter(r => r.label !== label);
+            } else {
+                _activeRanges.push({ label, range_ft, color });
+            }
+            render();
+        }
+
+        function clearActiveRanges() {
+            _activeRanges = [];
+            render();
         }
         
         function isActiveCombatant(token) {
@@ -1752,6 +2109,35 @@
                     dragTokenOffset = { x: 0, y: 0 }; // Reset offset
                     showTokenDetails(token);
                 } else {
+                    // GM click on empty space in select mode: if they click
+                    // on a secret-door icon, let them Seek with a selected PC.
+                    const hitWall = getDoorIconAtPoint(mapX, mapY);
+                    if (hitWall) {
+                        handleDoorClick(hitWall);
+                        return;
+                    }
+                    // GM click on a note pin: open edit dialog
+                    const hitNote = getNoteAtPoint(mapX, mapY);
+                    if (hitNote) {
+                        editGMNote(hitNote);
+                        return;
+                    }
+                    // GM click on a light marker: offer to remove it. Quick
+                    // edit UI beyond delete can be layered on later — this
+                    // keeps placed lights from feeling stuck.
+                    const hitLight = getLightAtPoint(mapX, mapY);
+                    if (hitLight) {
+                        const label = hitLight.name || hitLight.preset || 'light';
+                        if (confirm(`Remove this ${label}?`)) removeLightById(hitLight.id);
+                        return;
+                    }
+                    // GM click on a template: offer to remove it.
+                    const hitTmpl = getTemplateAtPoint(mapX, mapY);
+                    if (hitTmpl) {
+                        const label = hitTmpl.source || hitTmpl.name || hitTmpl.type;
+                        if (confirm(`Remove ${label}?`)) removeTemplateById(hitTmpl.id);
+                        return;
+                    }
                     selectedToken = null;
                     draggingToken = null;
                     isDragging = true;
@@ -1767,6 +2153,35 @@
             } else if (currentTool === 'spawn') {
                 setSpawnPoint(gridX, gridY);
                 setTool('select'); // Switch back to select after setting spawn
+            } else if (currentTool === 'note') {
+                placeGMNote(mapX, mapY);
+                setTool('select');
+            } else if (currentTool === 'light') {
+                placeLight(mapX, mapY);
+                // Stay in light mode so the GM can drop several torches in a row;
+                // they can click Select to stop placing.
+            } else if (currentTool === 'ruler') {
+                isRulering = true;
+                rulerStart = { x: mapX, y: mapY };
+                rulerEnd = { x: mapX, y: mapY };
+                render();
+            } else if (currentTool === 'template') {
+                // Burst / emanation: single click places.
+                // Cone / line: click-and-drag — anchor at mousedown, size/aim at mouseup.
+                const ttype = document.getElementById('template-type-select').value;
+                if (ttype === 'burst' || ttype === 'emanation') {
+                    placeTemplateAt(mapX, mapY);
+                } else {
+                    isPlacingTemplate = true;
+                    templateAnchor = { x: mapX, y: mapY };
+                    const sz = parseInt(document.getElementById('template-size-input').value) || 4;
+                    const col = document.getElementById('template-color-input').value;
+                    templatePreview = {
+                        type: ttype, x: mapX, y: mapY, dx: mapX, dy: mapY,
+                        length: sz, color: col
+                    };
+                    render();
+                }
             }
         }
         
@@ -1785,22 +2200,29 @@
             const gy = Math.floor((mapY - oy) / gs);
             document.getElementById('cursor-pos').textContent = `${gx}, ${gy}`;
             
-            if (draggingToken) {
+            if (isRulering && rulerStart) {
+                rulerEnd = { x: mapX, y: mapY };
+                render();
+            } else if (isPlacingTemplate && templateAnchor) {
+                templatePreview.dx = mapX;
+                templatePreview.dy = mapY;
+                render();
+            } else if (draggingToken) {
                 // Calculate new grid position based on drag
                 const dx = e.clientX - dragStart.x;
                 const dy = e.clientY - dragStart.y;
                 const newX = dragStart.tokenX + Math.round(dx / zoom / gs);
                 const newY = dragStart.tokenY + Math.round(dy / zoom / gs);
-                
+
                 // Store offset for rendering (don't modify token directly - SSE will reset it)
-                dragTokenOffset = { 
-                    x: newX - dragStart.tokenX, 
-                    y: newY - dragStart.tokenY 
+                dragTokenOffset = {
+                    x: newX - dragStart.tokenX,
+                    y: newY - dragStart.tokenY
                 };
-                
+
                 // Show movement preview
                 showMovementPreview(e.clientX, e.clientY, draggingToken, dragStart.tokenX, dragStart.tokenY, newX, newY);
-                
+
                 render();
             } else if (isDragging) {
                 viewX = dragStart.viewX + (e.clientX - dragStart.x);
@@ -1873,19 +2295,39 @@
         }
         
         function onMouseUp(e) {
+            if (isRulering) {
+                // Snapshot result visible until next ruler action — keep rulerEnd
+                // so the measurement stays drawn.
+                isRulering = false;
+            }
+            if (isPlacingTemplate && templateAnchor && templatePreview) {
+                const gs = mapState.grid_size || 70;
+                const dx = templatePreview.dx - templateAnchor.x;
+                const dy = templatePreview.dy - templateAnchor.y;
+                const distPx = Math.hypot(dx, dy);
+                const lengthSquares = Math.max(1, Math.round(distPx / gs));
+                const direction = Math.atan2(dy, dx) * 180 / Math.PI;
+                placeTemplateAt(templateAnchor.x, templateAnchor.y, {
+                    length: lengthSquares,
+                    direction,
+                });
+                isPlacingTemplate = false;
+                templateAnchor = null;
+                templatePreview = null;
+            }
             if (draggingToken && (dragTokenOffset.x !== 0 || dragTokenOffset.y !== 0)) {
                 // Calculate final position from start + offset
                 const finalX = dragStart.tokenX + dragTokenOffset.x;
                 const finalY = dragStart.tokenY + dragTokenOffset.y;
-                
+
                 // Save token position to server
                 moveToken(draggingToken.id, finalX, finalY);
             }
-            
+
             draggingToken = null;
             dragTokenOffset = { x: 0, y: 0 };
             hideMovementPreview();
-            
+
             isDragging = false;
             document.getElementById('map-area').classList.remove('dragging');
         }
@@ -1928,6 +2370,12 @@
                 if (isDrawingWall) {
                     cancelWall();
                 }
+                // Cancel any in-progress ruler or template placement so the
+                // GM isn't stuck in a tool state.
+                if (isRulering) { isRulering = false; rulerStart = rulerEnd = null; render(); }
+                if (isPlacingTemplate) { isPlacingTemplate = false; templateAnchor = null; templatePreview = null; render(); }
+                // Clear any visible ruler measurement on a second Escape tap.
+                if (!isRulering && rulerStart) { rulerStart = rulerEnd = null; render(); }
                 hideContextMenu();
             } else if (e.key === 'Enter' && isDrawingWall) {
                 finishWall();
@@ -1948,26 +2396,163 @@
                 const cx = token.x * gs + ox + (gs * size) / 2;
                 const cy = token.y * gs + oy + (gs * size) / 2;
                 const r = (gs * size) / 2;
-                
+
                 if (Math.hypot(mapX - cx, mapY - cy) <= r) {
                     return token;
                 }
             }
             return null;
         }
-        
+
+        function getDoorIconAtPoint(mapX, mapY) {
+            // Doors draw an icon at the midpoint of their first and last
+            // point. Match the same midpoint + radius used in drawWalls.
+            const hitR = 12 / zoom;
+            for (const wall of (mapState.walls || [])) {
+                if (wall.type !== 'door') continue;
+                const pts = wall.points || [];
+                if (pts.length < 2) continue;
+                const mx = (pts[0][0] + pts[pts.length-1][0]) / 2;
+                const my = (pts[0][1] + pts[pts.length-1][1]) / 2;
+                if (Math.hypot(mapX - mx, mapY - my) <= hitR) return wall;
+            }
+            return null;
+        }
+
+        function getNoteAtPoint(mapX, mapY) {
+            const hitR = 14 / zoom;
+            const notes = mapState.gm_notes || [];
+            for (let i = notes.length - 1; i >= 0; i--) {
+                const n = notes[i];
+                if (Math.hypot(mapX - n.x, mapY - n.y) <= hitR) return n;
+            }
+            return null;
+        }
+
+        async function handleDoorClick(wall) {
+            // Non-secret doors: simple open/close toggle, as before.
+            // Shift-click promotes a regular door to a secret door (prompts
+            // for DC). Lets the GM retrofit existing doors without redrawing.
+            if (!wall.secret) {
+                if (event && event.shiftKey) {
+                    const dcStr = prompt('Convert to SECRET door. Hidden DC (blank to cancel)?', '20');
+                    if (dcStr === null || dcStr.trim() === '') return;
+                    const dc = parseInt(dcStr, 10);
+                    if (!dc) return;
+                    await fetch('/api/map/wall/set_secret', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: wall.id, secret: true, hidden_dc: dc })
+                    });
+                    return;
+                }
+                await fetch('/api/map/wall/toggle_door', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: wall.id })
+                });
+                return;
+            }
+
+            // Secret door: offer Seek (roll a PC's Perception vs hidden DC),
+            // or simple toggle (already revealed), or reveal-to-everyone.
+            const discovered = (wall.discovered_by || []).join(', ') || '(none yet)';
+            const choice = prompt(
+                `Secret Door\n` +
+                `DC: ${wall.hidden_dc || '?'}\n` +
+                `Discovered by: ${discovered}\n\n` +
+                `Enter a PC name to roll Seek, "open" to toggle, or blank to cancel:`,
+                ''
+            );
+            if (choice === null || !choice.trim()) return;
+            const pick = choice.trim();
+
+            if (pick.toLowerCase() === 'open') {
+                await fetch('/api/map/wall/toggle_door', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: wall.id })
+                });
+                return;
+            }
+
+            // Find a token matching that PC name
+            const match = (mapState.tokens || []).find(t =>
+                t.is_pc && ((t.pc_name === pick) || (t.name === pick) || (t.assigned_player === pick))
+            );
+            if (!match) {
+                alert(`No PC token found for "${pick}".`);
+                return;
+            }
+
+            const res = await fetch('/api/map/wall/seek', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: wall.id, token_id: match.id })
+            }).then(r => r.json()).catch(() => null);
+
+            if (!res || !res.success) {
+                alert('Seek failed: ' + (res?.error || 'unknown error'));
+                return;
+            }
+            const msg = `${res.discoverer}: 1d20 (${res.roll}) + ${res.modifier} = ${res.total} vs DC ${res.dc} — ${res.degree.toUpperCase()}${res.revealed ? ' — REVEALED!' : ''}`;
+            alert(msg);
+        }
+
+        async function placeGMNote(mapX, mapY) {
+            const text = prompt('Note text:');
+            if (text === null) return;
+            await fetch('/api/map/note/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    x: Math.round(mapX),
+                    y: Math.round(mapY),
+                    text: text,
+                    color: '#fbbf24',
+                    icon: '📌',
+                })
+            });
+        }
+
+        async function editGMNote(note) {
+            const text = prompt('Edit note (blank to delete):', note.text || '');
+            if (text === null) return;
+            if (text.trim() === '') {
+                await fetch('/api/map/note/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: note.id })
+                });
+            } else {
+                await fetch('/api/map/note/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: note.id, text: text })
+                });
+            }
+        }
+
         function setTool(tool) {
             currentTool = tool;
             document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
             const btn = document.getElementById(`tool-${tool}`);
             if (btn) btn.classList.add('active');
-            
+
             const area = document.getElementById('map-area');
             area.className = `tool-${tool}`;
-            
+
             // Cancel wall drawing when switching tools
             if (tool !== 'wall' && isDrawingWall) {
                 cancelWall();
+            }
+            // Clear any ruler/template preview when switching tools so they
+            // don't linger.
+            if (tool !== 'ruler') { isRulering = false; }
+            if (tool !== 'template') {
+                isPlacingTemplate = false;
+                templateAnchor = null;
+                templatePreview = null;
             }
         }
         
@@ -2014,17 +2599,34 @@
                 cancelWall();
                 return;
             }
-            
+
+            // "secret_door" is a UX-level label; backend expects type=door +
+            // secret:true + hidden_dc. Ask for the DC once here so the GM
+            // doesn't have to open another dialog after drawing.
+            let apiType = wallType;
+            let secret = false;
+            let hiddenDc = 0;
+            if (wallType === 'secret_door') {
+                apiType = 'door';
+                secret = true;
+                const dcStr = prompt('Hidden DC for this secret door (Perception to find)?', '20');
+                if (dcStr === null) { cancelWall(); return; }
+                hiddenDc = parseInt(dcStr, 10);
+                if (!isFinite(hiddenDc) || hiddenDc < 0) hiddenDc = 20;
+            }
+
             await fetch('/api/map/wall/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     points: wallPoints,
-                    type: wallType,
-                    closed: closed
+                    type: apiType,
+                    closed: closed,
+                    secret: secret,
+                    hidden_dc: hiddenDc,
                 })
             });
-            
+
             cancelWall();
         }
         
@@ -3366,43 +3968,470 @@
         // ===========================================
         // LIGHTING
         // ===========================================
-        function setLighting(mode) {
+        function setAmbient(mode) {
+            // New endpoint (/api/map/ambient) stores on ACTIVE_MAP.ambient_light.
+            // We keep the legacy `lighting` mirror in sync for any still-pending
+            // callers, but `mapState.ambient_light` is the source of truth.
             lightingMode = mode;
-            mapState.lighting = mode;
-            
-            fetch('/api/map/settings', {
+            mapState.ambient_light = mode;
+            mapState.lighting = mode;  // legacy field, kept for back-compat
+            _invalidateVisibilityCache();
+            fetch('/api/map/ambient', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lighting: mode })
-            });
-            
+                body: JSON.stringify({ mode })
+            }).catch(() => {});
             render();
         }
-        
+
+        // Back-compat shim: old code called setLighting(). 'darkness' mapped
+        // to the new 'dark' value. Prefer setAmbient going forward.
+        function setLighting(mode) {
+            const m = mode === 'darkness' ? 'dark' : mode;
+            setAmbient(m);
+        }
+
+        async function placeLight(mapX, mapY) {
+            // Place a light of the currently-selected preset at the map pixel
+            // coords the GM clicked. The server echoes the full light back
+            // (including a generated id) and the map_state SSE broadcast
+            // brings it into every connected client.
+            const presetEl = document.getElementById('light-preset-select');
+            const preset = presetEl ? presetEl.value : 'torch';
+            try {
+                await fetch('/api/map/light/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset, x: mapX, y: mapY })
+                });
+            } catch(_) {}
+        }
+
+        async function removeLightById(id) {
+            try {
+                await fetch('/api/map/light/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+            } catch(_) {}
+        }
+
+        async function clearAllLights() {
+            if (!confirm('Remove every placed light?')) return;
+            try {
+                await fetch('/api/map/light/clear', { method: 'POST' });
+            } catch(_) {}
+        }
+
+        function _activeLightsPxGM() {
+            // Same idea as the player helper but keeps GM-only info (id, preset,
+            // name) for hit-testing. Attached lights follow their token's
+            // animated position so the glow tweens with the token.
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const tokens = mapState.tokens || [];
+            const out = [];
+            for (const L of (mapState.lights || [])) {
+                let lx, ly;
+                if (L.attached_to) {
+                    const tok = tokens.find(t => t.id === L.attached_to);
+                    if (!tok) continue;
+                    const size = tok.size || 1;
+                    const [ax, ay] = _getAnimatedPosition(tok);
+                    lx = ax * gs + ox + (gs * size) / 2;
+                    ly = ay * gs + oy + (gs * size) / 2;
+                } else {
+                    lx = L.x; ly = L.y;
+                }
+                out.push({
+                    id: L.id, preset: L.preset, name: L.name,
+                    attached_to: L.attached_to || null,
+                    x: lx, y: ly,
+                    brightPx: (L.bright || 0) * gs,
+                    dimPx: ((L.bright || 0) + (L.dim || 0)) * gs,
+                    color: L.color || '#ff9c42',
+                    enabled: L.enabled !== false,
+                });
+            }
+            return out;
+        }
+
+        function drawLights() {
+            // GM preview: bright-ring solid, dim-ring dashed, marker dot at
+            // the emitter. Always rendered (even in bright ambient) so the
+            // GM can see where they've placed stuff. Colored glows only kick
+            // in once ambient is dim/dark — otherwise the map already shows
+            // through at full brightness and rings are enough.
+            const lights = _activeLightsPxGM();
+            if (lights.length === 0) return;
+            const ambient = (mapState.ambient_light || mapState.lighting || 'bright');
+            const isDark = ambient === 'dim' || ambient === 'dark' || ambient === 'darkness';
+
+            ctx.save();
+            if (isDark) {
+                // Soft glows for spatial preview of what players can see.
+                ctx.globalCompositeOperation = 'screen';
+                for (const L of lights) {
+                    if (!L.enabled) continue;
+                    const grad = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.dimPx);
+                    grad.addColorStop(0, _rgbaFromHex(L.color, 0.40));
+                    const ratio = L.dimPx > 0 ? L.brightPx / L.dimPx : 1;
+                    grad.addColorStop(Math.min(0.95, ratio), _rgbaFromHex(L.color, 0.18));
+                    grad.addColorStop(1, _rgbaFromHex(L.color, 0));
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(L.x, L.y, L.dimPx, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+                ctx.save();
+            }
+
+            ctx.lineWidth = 2 / zoom;
+            for (const L of lights) {
+                // Bright ring — solid
+                ctx.strokeStyle = _rgbaFromHex(L.color, L.enabled ? 0.9 : 0.35);
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.arc(L.x, L.y, L.brightPx, 0, Math.PI * 2);
+                ctx.stroke();
+                // Dim ring — dashed
+                ctx.strokeStyle = _rgbaFromHex(L.color, L.enabled ? 0.45 : 0.2);
+                ctx.setLineDash([6 / zoom, 6 / zoom]);
+                ctx.beginPath();
+                ctx.arc(L.x, L.y, L.dimPx, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                // Marker
+                ctx.fillStyle = _rgbaFromHex(L.color, L.enabled ? 1 : 0.4);
+                ctx.beginPath();
+                ctx.arc(L.x, L.y, 6 / zoom, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1 / zoom;
+                ctx.stroke();
+                ctx.lineWidth = 2 / zoom;
+            }
+            ctx.restore();
+        }
+
+        function _rgbaFromHex(hex, a) {
+            let h = (hex || '').replace('#', '');
+            if (h.length === 3) h = h.split('').map(c => c + c).join('');
+            if (h.length !== 6) return `rgba(255, 156, 66, ${a})`;
+            const r = parseInt(h.slice(0,2), 16);
+            const g = parseInt(h.slice(2,4), 16);
+            const b = parseInt(h.slice(4,6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
+        }
+
+        function getLightAtPoint(mx, my) {
+            // Hit-test the 6-pixel marker circle so the GM can left-click a
+            // light in select mode for fine editing later. Loose tolerance
+            // (12px / zoom) because zooming in shrinks the marker.
+            const lights = _activeLightsPxGM();
+            const r = 12 / zoom;
+            for (let i = lights.length - 1; i >= 0; i--) {
+                const L = lights[i];
+                if (Math.hypot(mx - L.x, my - L.y) <= r) return L;
+            }
+            return null;
+        }
+
+        // ---------- PF2e distance math ---------------------------------------
+        // PF2e measures diagonals 1,2,1,2,... squares (every second diagonal
+        // counts double). This matches both Roll20's "Pathfinder" setting and
+        // Foundry's pf2e system default.
+        function pf2eDistanceSquares(fromX, fromY, toX, toY) {
+            const ax = Math.abs(toX - fromX);
+            const ay = Math.abs(toY - fromY);
+            const diagonals = Math.min(ax, ay);
+            const straight = Math.abs(ax - ay);
+            // PF2e "1,2,1,2" rule: 1st diag = 1 sq, 2nd = 2, 3rd = 1, 4th = 2...
+            // Each pair of diagonals costs 1 + 2 = 3 squares.
+            const diagCost = Math.floor(diagonals / 2) * 3 + (diagonals % 2);
+            return straight + diagCost;
+        }
+
+        // Pixel → grid-cell helper (floor to cell).
+        function _pxToCell(px, py) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            return [Math.floor((px - ox) / gs), Math.floor((py - oy) / gs)];
+        }
+
+        // ---------- RULER ----------------------------------------------------
+        function drawRuler() {
+            if (!rulerStart || !rulerEnd) return;
+            const gs = mapState.grid_size || 70;
+            const [fx, fy] = _pxToCell(rulerStart.x, rulerStart.y);
+            const [tx, ty] = _pxToCell(rulerEnd.x, rulerEnd.y);
+            const squares = pf2eDistanceSquares(fx, fy, tx, ty);
+            const feet = squares * 5;
+
+            ctx.save();
+            ctx.strokeStyle = '#8ED4D4';
+            ctx.lineWidth = 3 / zoom;
+            ctx.setLineDash([8 / zoom, 6 / zoom]);
+            ctx.beginPath();
+            ctx.moveTo(rulerStart.x, rulerStart.y);
+            ctx.lineTo(rulerEnd.x, rulerEnd.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Endpoints
+            for (const p of [rulerStart, rulerEnd]) {
+                ctx.fillStyle = '#8ED4D4';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5 / zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Label at midpoint
+            const mx = (rulerStart.x + rulerEnd.x) / 2;
+            const my = (rulerStart.y + rulerEnd.y) / 2;
+            const label = `${squares} sq / ${feet} ft`;
+            ctx.font = `bold ${14 / zoom}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const w = ctx.measureText(label).width;
+            const pad = 6 / zoom, h = 20 / zoom;
+            ctx.fillStyle = 'rgba(20, 20, 30, 0.9)';
+            ctx.fillRect(mx - w/2 - pad, my - h/2, w + pad*2, h);
+            ctx.strokeStyle = '#8ED4D4';
+            ctx.lineWidth = 1 / zoom;
+            ctx.strokeRect(mx - w/2 - pad, my - h/2, w + pad*2, h);
+            ctx.fillStyle = '#8ED4D4';
+            ctx.fillText(label, mx, my);
+            ctx.restore();
+        }
+
+        // ---------- TEMPLATES ------------------------------------------------
+        // Client-side polygon rep for hit-testing/rendering. Returns an array
+        // of {x, y} points describing the footprint (closed if it matters).
+        function _templateFootprint(t) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            let cx = t.x, cy = t.y;
+            if (t.attached_to) {
+                const tok = (mapState.tokens || []).find(tt => tt.id === t.attached_to);
+                if (tok) {
+                    const size = tok.size || 1;
+                    const [ax, ay] = _getAnimatedPosition(tok);
+                    cx = ax * gs + ox + (gs * size) / 2;
+                    cy = ay * gs + oy + (gs * size) / 2;
+                }
+            }
+            return { cx, cy };
+        }
+
+        function drawTemplates() {
+            const tmpls = mapState.templates || [];
+            if (tmpls.length === 0 && !templatePreview) return;
+            const gs = mapState.grid_size || 70;
+
+            ctx.save();
+            for (const t of tmpls) {
+                _drawOneTemplate(t, gs, false);
+            }
+            if (templatePreview) {
+                _drawOneTemplate({
+                    type: templatePreview.type,
+                    x: templateAnchor.x,
+                    y: templateAnchor.y,
+                    color: templatePreview.color,
+                    length: Math.max(1, Math.round(Math.hypot(
+                        templatePreview.dx - templateAnchor.x,
+                        templatePreview.dy - templateAnchor.y
+                    ) / gs)),
+                    width: 1,
+                    radius: Math.max(1, Math.round(Math.hypot(
+                        templatePreview.dx - templateAnchor.x,
+                        templatePreview.dy - templateAnchor.y
+                    ) / gs)),
+                    direction: Math.atan2(
+                        templatePreview.dy - templateAnchor.y,
+                        templatePreview.dx - templateAnchor.x
+                    ) * 180 / Math.PI,
+                    angle: 90,
+                    name: '(preview)',
+                }, gs, true);
+            }
+            ctx.restore();
+        }
+
+        function _drawOneTemplate(t, gs, isPreview) {
+            const { cx, cy } = _templateFootprint(t);
+            const color = t.color || '#ef4444';
+            const fill = _rgbaFromHex(color, isPreview ? 0.18 : 0.28);
+            const stroke = _rgbaFromHex(color, isPreview ? 0.7 : 0.9);
+            const selected = !isPreview && selectedTemplateId === t.id;
+            ctx.fillStyle = fill;
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = (selected ? 3 : 2) / zoom;
+            if (isPreview) ctx.setLineDash([8 / zoom, 6 / zoom]);
+
+            if (t.type === 'burst' || t.type === 'emanation') {
+                const r = (t.radius || 2) * gs;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else if (t.type === 'cone') {
+                _drawConePath(cx, cy, (t.length || 4) * gs, t.direction || 0, t.angle || 90);
+                ctx.fill();
+                ctx.stroke();
+            } else if (t.type === 'line') {
+                _drawLinePath(cx, cy, (t.length || 4) * gs, (t.width || 1) * gs, t.direction || 0);
+                ctx.fill();
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Label at origin for placed templates
+            if (!isPreview && (t.name || t.source)) {
+                const label = t.source || t.name;
+                ctx.font = `${11 / zoom}px system-ui`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const lw = ctx.measureText(label).width;
+                const pad = 4 / zoom, lh = 16 / zoom;
+                ctx.fillStyle = 'rgba(20,20,30,0.85)';
+                ctx.fillRect(cx - lw/2 - pad, cy - lh/2, lw + pad*2, lh);
+                ctx.fillStyle = stroke;
+                ctx.fillText(label, cx, cy);
+            }
+        }
+
+        function _drawConePath(cx, cy, length, directionDeg, angleDeg) {
+            const dirRad = directionDeg * Math.PI / 180;
+            const halfRad = (angleDeg / 2) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            // Approximate the cone with an arc from (dir - half) to (dir + half)
+            ctx.arc(cx, cy, length, dirRad - halfRad, dirRad + halfRad);
+            ctx.closePath();
+        }
+
+        function _drawLinePath(cx, cy, length, width, directionDeg) {
+            const dirRad = directionDeg * Math.PI / 180;
+            // Perpendicular offset for width
+            const nx = -Math.sin(dirRad) * width / 2;
+            const ny = Math.cos(dirRad) * width / 2;
+            const ex = cx + Math.cos(dirRad) * length;
+            const ey = cy + Math.sin(dirRad) * length;
+            ctx.beginPath();
+            ctx.moveTo(cx + nx, cy + ny);
+            ctx.lineTo(ex + nx, ey + ny);
+            ctx.lineTo(ex - nx, ey - ny);
+            ctx.lineTo(cx - nx, cy - ny);
+            ctx.closePath();
+        }
+
+        function getTemplateAtPoint(mx, my) {
+            const tmpls = mapState.templates || [];
+            const gs = mapState.grid_size || 70;
+            for (let i = tmpls.length - 1; i >= 0; i--) {
+                const t = tmpls[i];
+                const { cx, cy } = _templateFootprint(t);
+                if (t.type === 'burst' || t.type === 'emanation') {
+                    if (Math.hypot(mx - cx, my - cy) <= (t.radius || 2) * gs) return t;
+                } else if (t.type === 'cone') {
+                    const dist = Math.hypot(mx - cx, my - cy);
+                    if (dist <= (t.length || 4) * gs) {
+                        const ang = Math.atan2(my - cy, mx - cx) * 180 / Math.PI;
+                        const diff = ((ang - (t.direction || 0) + 540) % 360) - 180;
+                        if (Math.abs(diff) <= (t.angle || 90) / 2) return t;
+                    }
+                } else if (t.type === 'line') {
+                    // Project point onto line segment
+                    const dirRad = (t.direction || 0) * Math.PI / 180;
+                    const lx = Math.cos(dirRad), ly = Math.sin(dirRad);
+                    const px = mx - cx, py = my - cy;
+                    const along = px * lx + py * ly;
+                    const perp = Math.abs(-px * ly + py * lx);
+                    if (along >= 0 && along <= (t.length || 4) * gs && perp <= (t.width || 1) * gs / 2) return t;
+                }
+            }
+            return null;
+        }
+
+        async function placeTemplateAt(mapX, mapY, overrides) {
+            const ttype = document.getElementById('template-type-select').value;
+            const size = parseInt(document.getElementById('template-size-input').value) || 4;
+            const color = document.getElementById('template-color-input').value;
+            const payload = {
+                type: ttype,
+                x: mapX, y: mapY,
+                radius: size,
+                length: size,
+                width: 1,
+                angle: 90,
+                color,
+                source: (overrides && overrides.source) || '',
+                name: (overrides && overrides.name) || '',
+            };
+            if (overrides) Object.assign(payload, overrides);
+            // Emanation attaches to selected token if we have one
+            if (ttype === 'emanation' && selectedToken) {
+                payload.attached_to = selectedToken;
+            }
+            try {
+                await fetch('/api/map/template/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch(_) {}
+        }
+
+        async function removeTemplateById(id) {
+            try {
+                await fetch('/api/map/template/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+            } catch(_) {}
+        }
+
+        async function clearAllTemplates() {
+            if (!confirm('Remove every template?')) return;
+            try {
+                await fetch('/api/map/template/clear', { method: 'POST' });
+            } catch(_) {}
+        }
+
         function hasTokenDarkvision(token) {
             return token.darkvision || false;
         }
-        
+
         function hasTokenLowLightVision(token) {
             return token.low_light_vision || token.darkvision || false;
         }
-        
+
         function getEffectiveVisionRadius(token) {
             // PF2E lighting rules:
-            // Bright: full vision_radius for everyone
-            // Dim: halved radius unless low-light or darkvision
-            // Darkness: 0 unless darkvision (then halved)
+            //   bright: full vision_radius for everyone
+            //   dim:    halved unless the viewer has low-light/darkvision
+            //   dark:   0 unless darkvision (then halved)
+            // 'darkness' is the legacy spelling for 'dark'.
             const base = token.vision_radius || 6;
-            const lighting = lightingMode || mapState.lighting || 'bright';
-            
+            const raw = (mapState.ambient_light || mapState.lighting || lightingMode || 'bright');
+            const lighting = raw === 'darkness' ? 'dark' : raw;
+
             if (lighting === 'bright') return base;
             if (lighting === 'dim') {
                 if (hasTokenLowLightVision(token)) return base;
                 return Math.ceil(base / 2);
             }
-            if (lighting === 'darkness') {
+            if (lighting === 'dark') {
                 if (hasTokenDarkvision(token)) return Math.ceil(base / 2);
-                return 0; // Blind in darkness without darkvision
+                return 0; // blind in darkness without darkvision
             }
             return base;
         }

@@ -274,6 +274,11 @@
 .trk .nm-sub .k.pc { color:var(--t-teal); }
 .trk .nm-sub .k.active { color:var(--t-gold); }
 .trk .nm-sub .k.delay { color:var(--t-purple); }
+.trk .nm-sub .k.hidden {
+  color:var(--t-purple); letter-spacing:.6px;
+  padding:1px 5px; border:1px solid rgba(155,126,222,0.35);
+  border-radius:3px; background:rgba(155,126,222,0.08);
+}
 .trk .nm-sub .pd { color:var(--t-gold); font-weight:600; }
 
 .trk .c-ac { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-blue); text-align:center; }
@@ -369,6 +374,11 @@
 .trk .act-btn.delay:hover { background:rgba(155,126,222,0.2); }
 .trk .act-btn.ready { background:rgba(62,186,104,0.1); color:var(--t-green); border-color:rgba(62,186,104,0.3); }
 .trk .act-btn.ready:hover { background:rgba(62,186,104,0.2); }
+/* Hide/Reveal button — subtle until active, then purple (matches HIDDEN badge) */
+.trk .act-btn.vis { background:rgba(155,126,222,0.06); color:var(--t-t2); border-color:rgba(155,126,222,0.2); }
+.trk .act-btn.vis:hover { background:rgba(155,126,222,0.15); color:var(--t-t1); }
+.trk .act-btn.vis.on-hidden { background:rgba(155,126,222,0.2); color:var(--t-purple); border-color:rgba(155,126,222,0.5); font-weight:700; }
+.trk .act-btn.vis.on-hidden:hover { background:rgba(155,126,222,0.3); }
 
 /* empty state */
 .trk .empty-state {
@@ -595,6 +605,111 @@
 .trk .xp-row.hidden { display:none; }
 .trk .xp-row .xp-diff { font-weight:700; letter-spacing:.3px; }
 
+/* ═══ GM CHECKS CHEAT-SHEET MODAL ═══ */
+.checks-modal {
+  position:fixed; inset:0; background:rgba(0,0,0,0.78); backdrop-filter:blur(5px);
+  z-index:200; display:flex; align-items:flex-start; justify-content:center; padding:36px 20px 20px;
+  opacity:0; pointer-events:none; transition: opacity .2s;
+}
+.checks-modal.open { opacity:1; pointer-events:auto; }
+.checks-modal-panel {
+  background:linear-gradient(180deg, var(--t-bg-surface), var(--t-bg-raised));
+  border:1px solid var(--t-border); border-radius:14px;
+  width:100%; max-width:1100px; max-height:calc(100vh - 56px); display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,0.7);
+  position:relative;
+  transform:translateY(-10px); transition: transform .2s;
+}
+.checks-modal.open .checks-modal-panel { transform:translateY(0); }
+.checks-modal-panel::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, transparent, #60a5fa, var(--t-gold), #60a5fa, transparent);
+  opacity:.85;
+}
+.checks-modal-head {
+  padding:14px 18px; display:flex; justify-content:space-between; align-items:center;
+  border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.55); flex-shrink:0;
+}
+.checks-modal-head h3 { font-family:'Cinzel',serif; font-size:18px; font-weight:700; color:var(--t-gold); margin:0; }
+.checks-modal-head .sub { font-size:10px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+.checks-modal-close { background:transparent; border:none; color:var(--t-t3); font-size:22px; cursor:pointer; line-height:1; padding:0 6px; }
+.checks-modal-close:hover { color:var(--t-red-b); }
+.checks-tabs { display:flex; gap:4px; padding:10px 14px 0; background:rgba(19,22,31,0.35); border-bottom:1px solid var(--t-border); flex-shrink:0; }
+.checks-tab {
+  padding:7px 14px; background:transparent; border:1px solid transparent; border-bottom:none;
+  color:var(--t-t3); font-size:11px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; cursor:pointer;
+  border-radius:6px 6px 0 0; transition:all .15s;
+}
+.checks-tab:hover { color:var(--t-t1); background:rgba(255,255,255,0.04); }
+.checks-tab.active { color:var(--t-gold); background:var(--t-bg-raised); border-color:var(--t-border); border-bottom-color:var(--t-bg-raised); margin-bottom:-1px; }
+.checks-body { padding:16px 20px; overflow-y:auto; flex:1; }
+.checks-pane { display:none; }
+.checks-pane.active { display:block; }
+.checks-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+.check-card {
+  background:rgba(26,30,41,0.5); border:1px solid var(--t-border); border-radius:8px; padding:10px 12px;
+}
+.check-card h4 {
+  font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+  color:var(--t-gold); margin:0 0 3px; display:flex; justify-content:space-between; align-items:baseline;
+}
+.check-card h4 .ability-tag { font-size:9px; color:var(--t-t3); font-family:'JetBrains Mono',monospace; font-weight:600; letter-spacing:.5px; }
+.check-card .desc { font-size:11px; color:var(--t-t2); line-height:1.5; margin-bottom:6px; }
+.check-card .actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.check-pill {
+  display:inline-block; font-size:10px; padding:2px 7px; border-radius:9999px;
+  background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.3); color:#93c5fd;
+  font-weight:600; letter-spacing:.3px;
+}
+.check-pill.social { background:rgba(244,114,182,0.12); border-color:rgba(244,114,182,0.3); color:#f9a8d4; }
+.check-pill.athletic { background:rgba(251,146,60,0.12); border-color:rgba(251,146,60,0.3); color:#fdba74; }
+.check-pill.stealth { background:rgba(167,139,250,0.12); border-color:rgba(167,139,250,0.3); color:#c4b5fd; }
+.check-pill.knowledge { background:rgba(94,234,212,0.12); border-color:rgba(94,234,212,0.3); color:#5eead4; }
+
+.check-card.save-fort { border-color:rgba(251,146,60,0.35); }
+.check-card.save-fort h4 { color:#fdba74; }
+.check-card.save-ref { border-color:rgba(96,165,250,0.35); }
+.check-card.save-ref h4 { color:#93c5fd; }
+.check-card.save-will { border-color:rgba(167,139,250,0.35); }
+.check-card.save-will h4 { color:#c4b5fd; }
+
+.situation-table {
+  width:100%; border-collapse:collapse; font-size:12px;
+}
+.situation-table th {
+  text-align:left; padding:8px 10px; color:var(--t-gold); font-family:'Cinzel',serif;
+  font-size:11px; letter-spacing:1px; text-transform:uppercase;
+  border-bottom:2px solid var(--t-border); background:rgba(19,22,31,0.5); position:sticky; top:0;
+}
+.situation-table td {
+  padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--t-t2); vertical-align:top;
+}
+.situation-table td.situation { color:var(--t-t1); font-weight:600; width:38%; }
+.situation-table td.skill { width:32%; }
+.situation-table td.notes { color:var(--t-t3); font-size:11px; font-style:italic; }
+.situation-table tr:hover td { background:rgba(255,255,255,0.02); }
+
+.dc-table {
+  width:100%; border-collapse:collapse; font-size:12px; font-family:'JetBrains Mono',monospace;
+}
+.dc-table th {
+  text-align:center; padding:6px 8px; color:var(--t-gold); font-family:'Cinzel',serif;
+  font-size:10px; letter-spacing:1px; text-transform:uppercase;
+  border-bottom:2px solid var(--t-border); background:rgba(19,22,31,0.5);
+}
+.dc-table td { padding:5px 8px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--t-t2); }
+.dc-table td.lvl { color:var(--t-t3); }
+.dc-table td strong { color:var(--t-t1); }
+
+.dc-card { background:rgba(26,30,41,0.5); border:1px solid var(--t-border); border-radius:8px; padding:12px 14px; margin-bottom:12px; }
+.dc-card h4 { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--t-gold); margin:0 0 8px; }
+.dc-card .dc-row { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dotted rgba(255,255,255,0.05); font-size:12px; }
+.dc-card .dc-row:last-child { border-bottom:none; }
+.dc-card .dc-row .k { color:var(--t-t2); }
+.dc-card .dc-row .v { color:var(--t-t1); font-family:'JetBrains Mono',monospace; font-weight:700; }
+.dc-card .dc-row .v.pos { color:var(--t-red-b); }
+.dc-card .dc-row .v.neg { color:#5eead4; }
+
 /* Utility */
 .trk .hidden { display:none !important; }
 {% endblock %}
@@ -633,6 +748,7 @@
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
         <button class="hb-btn gold" onclick="openSecretRollPanel()" title="GM Secret Roll">🎲 Secret</button>
         <button class="hb-btn purple" onclick="openHandoutPanel()" title="Send handout to players">📜 Handout</button>
+        <button class="hb-btn" onclick="openChecksModal()" title="Reference: what to ask players to roll (C)" style="background:rgba(96,165,250,0.18);color:#93c5fd;border-color:rgba(96,165,250,0.4);">📋 Checks</button>
         <button class="hb-btn danger" onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')">Clear</button>
         {# hidden legacy round badge, kept for renderMeta backward-compat #}
         <span id="round-badge" class="hidden">Round {{ round_number }}</span>
@@ -808,14 +924,14 @@
         {# ═══════════════════ COMBAT LOG (collapsible) ═══════════════════ #}
         <div class="log-wrap">
             <div class="log-head" onclick="toggleLog(event)">
-                <span class="log-ttl">📜 Combat Log <span id="log-toggle-arrow" style="font-size:8px;opacity:.7;">▾</span></span>
+                <span class="log-ttl">📜 Combat Log <span id="log-toggle-arrow" style="font-size:8px;opacity:.7;">▴</span></span>
                 <div class="log-btns">
                     <button class="log-btn" onclick="event.stopPropagation(); refreshLog();">Refresh</button>
                     <button class="log-btn" onclick="event.stopPropagation(); copyLog();">Copy</button>
                     <button class="log-btn danger" onclick="event.stopPropagation(); if(confirm('Clear log?')){apiPostRaw('/api/combat_log/clear').then(()=>refreshLog())}">Clear</button>
                 </div>
             </div>
-            <div id="combat-log-body" class="log-body collapsed">
+            <div id="combat-log-body" class="log-body">
                 <div style="text-align:center;padding:14px;color:var(--t-t3);font-style:italic;">Loading log…</div>
             </div>
         </div>
@@ -843,6 +959,306 @@
         </div>
         <div id="sm-body" class="trk-modal-body">
             <div style="text-align:center;padding:32px;color:var(--t-t3);">Loading…</div>
+        </div>
+    </div>
+</div>
+
+{# ═══════════════════ GM CHECKS CHEAT-SHEET MODAL ═══════════════════ #}
+<div id="checks-modal" class="checks-modal" onclick="if(event.target===this) closeChecksModal()">
+    <div class="checks-modal-panel">
+        <div class="checks-modal-head">
+            <div>
+                <h3>📋 Checks &amp; Saves Reference</h3>
+                <div class="sub">What to ask your players to roll · PF2e Remastered</div>
+            </div>
+            <button class="checks-modal-close" onclick="closeChecksModal()" title="Close (Esc)">&times;</button>
+        </div>
+
+        <div class="checks-tabs">
+            <button class="checks-tab active" data-tab="situation" onclick="switchChecksTab('situation')">By Situation</button>
+            <button class="checks-tab" data-tab="skills" onclick="switchChecksTab('skills')">Skills</button>
+            <button class="checks-tab" data-tab="saves" onclick="switchChecksTab('saves')">Saves</button>
+            <button class="checks-tab" data-tab="dcs" onclick="switchChecksTab('dcs')">DCs &amp; Flat Checks</button>
+            <button class="checks-tab" data-tab="knowledge" onclick="switchChecksTab('knowledge')">Recall Knowledge</button>
+        </div>
+
+        <div class="checks-body">
+            {# ── BY SITUATION: the "what should I call for?" table ── #}
+            <div class="checks-pane active" data-pane="situation">
+                <div style="color:var(--t-t3);font-size:11px;margin-bottom:10px;font-style:italic;">
+                    Player describes an action → find the row → ask for the skill on the right.
+                </div>
+                <table class="situation-table">
+                    <thead>
+                        <tr><th>Player tries to…</th><th>Ask for</th><th>Notes</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="situation">Climb a wall / rope / cliff</td><td class="skill"><span class="check-pill athletic">Athletics</span> <span style="color:var(--t-t3);">(Str)</span></td><td class="notes">Crit fail → fall</td></tr>
+                        <tr><td class="situation">Jump a gap / leap up</td><td class="skill"><span class="check-pill athletic">Athletics</span> <span style="color:var(--t-t3);">(Str)</span></td><td class="notes">High Jump, Long Jump actions</td></tr>
+                        <tr><td class="situation">Swim across water</td><td class="skill"><span class="check-pill athletic">Athletics</span> <span style="color:var(--t-t3);">(Str)</span></td><td class="notes">Fail = no progress, crit fail = 1d6 drown</td></tr>
+                        <tr><td class="situation">Force open a door / break object</td><td class="skill"><span class="check-pill athletic">Athletics</span> <span style="color:var(--t-t3);">(Str)</span></td><td class="notes">Force Open action</td></tr>
+                        <tr><td class="situation">Trip / Shove / Grapple / Disarm</td><td class="skill"><span class="check-pill athletic">Athletics</span> <span style="color:var(--t-t3);">(Str)</span></td><td class="notes">vs. target's Fortitude or Reflex DC</td></tr>
+                        <tr><td class="situation">Balance on a ledge / rope</td><td class="skill"><span class="check-pill">Acrobatics</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">Fail = off-balance, crit fail = fall</td></tr>
+                        <tr><td class="situation">Tumble past an enemy</td><td class="skill"><span class="check-pill">Acrobatics</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">vs. enemy Reflex DC to move through</td></tr>
+                        <tr><td class="situation">Squeeze through a tight space</td><td class="skill"><span class="check-pill">Acrobatics</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">Exploration activity</td></tr>
+                        <tr><td class="situation">Catch a ledge while falling</td><td class="skill"><span class="check-pill">Acrobatics</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">Reaction · Grab an Edge</td></tr>
+                        <tr><td class="situation">Sneak past / hide from enemy</td><td class="skill"><span class="check-pill stealth">Stealth</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">vs. enemy Perception DC</td></tr>
+                        <tr><td class="situation">Pick a lock / disable trap</td><td class="skill"><span class="check-pill stealth">Thievery</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">Needs thieves' tools</td></tr>
+                        <tr><td class="situation">Pick a pocket / palm object</td><td class="skill"><span class="check-pill stealth">Thievery</span> <span style="color:var(--t-t3);">(Dex)</span></td><td class="notes">vs. target Perception DC</td></tr>
+                        <tr><td class="situation">Spot something hidden / scan room</td><td class="skill"><span class="check-pill">Perception</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Seek action (1 action)</td></tr>
+                        <tr><td class="situation">Tell if someone's lying</td><td class="skill"><span class="check-pill">Perception</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Sense Motive</td></tr>
+                        <tr><td class="situation">Listen through a door</td><td class="skill"><span class="check-pill">Perception</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Exploration; secret roll it</td></tr>
+                        <tr><td class="situation">Treat a dying/wounded ally</td><td class="skill"><span class="check-pill knowledge">Medicine</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">10 min · Treat Wounds</td></tr>
+                        <tr><td class="situation">Diagnose poison / disease</td><td class="skill"><span class="check-pill knowledge">Medicine</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Recall Knowledge variant</td></tr>
+                        <tr><td class="situation">Track a creature</td><td class="skill"><span class="check-pill knowledge">Survival</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Exploration activity</td></tr>
+                        <tr><td class="situation">Forage / navigate wilderness</td><td class="skill"><span class="check-pill knowledge">Survival</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Sense Direction, Subsist</td></tr>
+                        <tr><td class="situation">Handle / calm an animal</td><td class="skill"><span class="check-pill knowledge">Nature</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">Command an Animal</td></tr>
+                        <tr><td class="situation">Persuade an NPC / request a favor</td><td class="skill"><span class="check-pill social">Diplomacy</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">Make an Impression, Request</td></tr>
+                        <tr><td class="situation">Gather info from a crowd</td><td class="skill"><span class="check-pill social">Diplomacy</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">1+ hours in town</td></tr>
+                        <tr><td class="situation">Lie / feint / create a diversion</td><td class="skill"><span class="check-pill social">Deception</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">vs. target Perception</td></tr>
+                        <tr><td class="situation">Feint in combat (off-guard)</td><td class="skill"><span class="check-pill social">Deception</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">1 action · vs. Perception</td></tr>
+                        <tr><td class="situation">Impersonate / disguise self</td><td class="skill"><span class="check-pill social">Deception</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">Requires disguise kit for bonus</td></tr>
+                        <tr><td class="situation">Intimidate / threaten</td><td class="skill"><span class="check-pill social">Intimidation</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">Demoralize (1 action) or Coerce (scene)</td></tr>
+                        <tr><td class="situation">Demoralize (inflict frightened 1)</td><td class="skill"><span class="check-pill social">Intimidation</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">vs. Will DC · crit = Frightened 2</td></tr>
+                        <tr><td class="situation">Perform (song, dance, oration)</td><td class="skill"><span class="check-pill social">Performance</span> <span style="color:var(--t-t3);">(Cha)</span></td><td class="notes">Usually downtime or social</td></tr>
+                        <tr><td class="situation">Identify a magic item / spell</td><td class="skill"><span class="check-pill knowledge">Arcana/Nature/Occ/Rel</span></td><td class="notes">Matches the magic tradition trait</td></tr>
+                        <tr><td class="situation">Craft / repair an item</td><td class="skill"><span class="check-pill knowledge">Crafting</span> <span style="color:var(--t-t3);">(Int)</span></td><td class="notes">Downtime or 10-min repair</td></tr>
+                        <tr><td class="situation">Navigate a city / know a noble</td><td class="skill"><span class="check-pill knowledge">Society</span> <span style="color:var(--t-t3);">(Int)</span></td><td class="notes">Subsist in settlement</td></tr>
+                        <tr><td class="situation">Aid an ally's roll</td><td class="skill"><span class="check-pill">Any relevant</span></td><td class="notes">Prep action · DC 15 to grant +1 (or crit for +2)</td></tr>
+                        <tr><td class="situation">Roll initiative</td><td class="skill"><span class="check-pill">Perception</span></td><td class="notes">or Stealth if sneaking · Deception if feinting</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            {# ── SKILLS: by ability ── #}
+            <div class="checks-pane" data-pane="skills">
+                <div style="color:var(--t-t3);font-size:11px;margin-bottom:10px;font-style:italic;">
+                    Every trained skill can Recall Knowledge. Untrained in a skill? They can still try it if it isn't trained-only.
+                </div>
+                <div class="checks-grid">
+                    <div class="check-card"><h4>Acrobatics <span class="ability-tag">DEX</span></h4>
+                        <div class="desc">Agile movement: balance, tumble, squeeze, fly.</div>
+                        <div class="actions"><span class="check-pill">Balance</span><span class="check-pill">Tumble Through</span><span class="check-pill">Grab Edge</span><span class="check-pill">Maneuver in Flight<span style="opacity:.6"> (T)</span></span><span class="check-pill">Squeeze<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Athletics <span class="ability-tag">STR</span></h4>
+                        <div class="desc">Physical feats of strength, combat maneuvers.</div>
+                        <div class="actions"><span class="check-pill athletic">Climb</span><span class="check-pill athletic">Swim</span><span class="check-pill athletic">High Jump</span><span class="check-pill athletic">Long Jump</span><span class="check-pill athletic">Force Open</span><span class="check-pill athletic">Trip</span><span class="check-pill athletic">Shove</span><span class="check-pill athletic">Grapple</span><span class="check-pill athletic">Disarm<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Arcana <span class="ability-tag">INT</span></h4>
+                        <div class="desc">Arcane magic, magical creatures, planes, constructs.</div>
+                        <div class="actions"><span class="check-pill knowledge">Recall Knowledge</span><span class="check-pill knowledge">Identify Magic<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Decipher Writing<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Learn a Spell<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Crafting <span class="ability-tag">INT</span></h4>
+                        <div class="desc">Build, repair, identify alchemy, judge value.</div>
+                        <div class="actions"><span class="check-pill knowledge">Repair</span><span class="check-pill knowledge">Craft<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Earn Income<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Identify Alchemy<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Deception <span class="ability-tag">CHA</span></h4>
+                        <div class="desc">Lie, feint, disguise, mislead. Opposed by Perception.</div>
+                        <div class="actions"><span class="check-pill social">Create Diversion</span><span class="check-pill social">Impersonate</span><span class="check-pill social">Lie</span><span class="check-pill social">Feint<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Diplomacy <span class="ability-tag">CHA</span></h4>
+                        <div class="desc">Persuade, influence, gather rumors.</div>
+                        <div class="actions"><span class="check-pill social">Gather Information</span><span class="check-pill social">Make an Impression</span><span class="check-pill social">Request</span></div>
+                    </div>
+                    <div class="check-card"><h4>Intimidation <span class="ability-tag">CHA</span></h4>
+                        <div class="desc">Threaten, demoralize, coerce.</div>
+                        <div class="actions"><span class="check-pill social">Coerce</span><span class="check-pill social">Demoralize</span></div>
+                    </div>
+                    <div class="check-card"><h4>Medicine <span class="ability-tag">WIS</span></h4>
+                        <div class="desc">Treat wounds, poisons, diseases.</div>
+                        <div class="actions"><span class="check-pill knowledge">Administer First Aid</span><span class="check-pill knowledge">Treat Wounds<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Treat Poison<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Treat Disease<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Nature <span class="ability-tag">WIS</span></h4>
+                        <div class="desc">Animals, plants, weather, primal magic, natural environs.</div>
+                        <div class="actions"><span class="check-pill knowledge">Command Animal</span><span class="check-pill knowledge">Recall Knowledge</span><span class="check-pill knowledge">Identify Magic (primal)<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Occultism <span class="ability-tag">INT</span></h4>
+                        <div class="desc">Mysteries, mental creatures, occult magic, the mind.</div>
+                        <div class="actions"><span class="check-pill knowledge">Recall Knowledge</span><span class="check-pill knowledge">Identify Magic (occult)<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Decipher Writing<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Perception <span class="ability-tag">WIS</span></h4>
+                        <div class="desc">Notice, seek, sense motive, initiative.</div>
+                        <div class="actions"><span class="check-pill">Seek</span><span class="check-pill">Sense Motive</span><span class="check-pill">Initiative (default)</span></div>
+                    </div>
+                    <div class="check-card"><h4>Performance <span class="ability-tag">CHA</span></h4>
+                        <div class="desc">Act, sing, dance, oratory.</div>
+                        <div class="actions"><span class="check-pill social">Perform</span><span class="check-pill social">Earn Income<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Religion <span class="ability-tag">WIS</span></h4>
+                        <div class="desc">Gods, undead, afterlife, divine magic.</div>
+                        <div class="actions"><span class="check-pill knowledge">Recall Knowledge</span><span class="check-pill knowledge">Identify Magic (divine)<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Learn a Spell<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Society <span class="ability-tag">INT</span></h4>
+                        <div class="desc">History, culture, law, languages.</div>
+                        <div class="actions"><span class="check-pill knowledge">Recall Knowledge</span><span class="check-pill knowledge">Decipher Writing<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Subsist</span></div>
+                    </div>
+                    <div class="check-card"><h4>Stealth <span class="ability-tag">DEX</span></h4>
+                        <div class="desc">Hide, sneak. Opposed by Perception.</div>
+                        <div class="actions"><span class="check-pill stealth">Hide</span><span class="check-pill stealth">Sneak</span><span class="check-pill stealth">Conceal Object<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Survival <span class="ability-tag">WIS</span></h4>
+                        <div class="desc">Track, forage, sense direction, wilderness survival.</div>
+                        <div class="actions"><span class="check-pill knowledge">Sense Direction</span><span class="check-pill knowledge">Subsist</span><span class="check-pill knowledge">Track<span style="opacity:.6"> (T)</span></span><span class="check-pill knowledge">Cover Tracks<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                    <div class="check-card"><h4>Thievery <span class="ability-tag">DEX</span></h4>
+                        <div class="desc">Pick locks, disable traps, pickpocket.</div>
+                        <div class="actions"><span class="check-pill stealth">Palm Object</span><span class="check-pill stealth">Steal</span><span class="check-pill stealth">Pick a Lock<span style="opacity:.6"> (T)</span></span><span class="check-pill stealth">Disable Device<span style="opacity:.6"> (T)</span></span></div>
+                    </div>
+                </div>
+                <div style="color:var(--t-t3);font-size:10px;margin-top:10px;font-style:italic;">
+                    (T) = Trained-only action · can only be attempted if at least Trained in the skill.
+                </div>
+            </div>
+
+            {# ── SAVES ── #}
+            <div class="checks-pane" data-pane="saves">
+                <div style="color:var(--t-t3);font-size:11px;margin-bottom:12px;font-style:italic;">
+                    Call a save when the source is explicit (a spell, a trap, a poison). If the PC is proactively resisting something on their own, use a skill check instead.
+                </div>
+                <div class="checks-grid">
+                    <div class="check-card save-fort">
+                        <h4>Fortitude <span class="ability-tag">CON</span></h4>
+                        <div class="desc">Body: endurance against physical punishment, toxins, biology.</div>
+                        <div class="actions">
+                            <span class="check-pill athletic">Poison</span><span class="check-pill athletic">Disease</span><span class="check-pill athletic">Cold / Heat</span><span class="check-pill athletic">Starvation</span><span class="check-pill athletic">Paralysis</span><span class="check-pill athletic">Petrification</span><span class="check-pill athletic">Death effects</span><span class="check-pill athletic">Exhaustion / Sleep</span><span class="check-pill athletic">Sickened-inducing</span>
+                        </div>
+                    </div>
+                    <div class="check-card save-ref">
+                        <h4>Reflex <span class="ability-tag">DEX</span></h4>
+                        <div class="desc">Reaction speed: dodging area effects, falling, traps.</div>
+                        <div class="actions">
+                            <span class="check-pill">AoE spells (fireball)</span><span class="check-pill">Trap trigger</span><span class="check-pill">Falling debris</span><span class="check-pill">Catch falling item</span><span class="check-pill">Stay on mount</span><span class="check-pill">Avoid burning</span><span class="check-pill">Evade pit</span>
+                        </div>
+                    </div>
+                    <div class="check-card save-will">
+                        <h4>Will <span class="ability-tag">WIS</span></h4>
+                        <div class="desc">Mind: resisting mental magic, fear, charm, compulsion.</div>
+                        <div class="actions">
+                            <span class="check-pill stealth">Charm / Compulsion</span><span class="check-pill stealth">Fear / Demoralize</span><span class="check-pill stealth">Illusion</span><span class="check-pill stealth">Emotion effects</span><span class="check-pill stealth">Possession</span><span class="check-pill stealth">Mind reading</span><span class="check-pill stealth">Sleep (mental)</span><span class="check-pill stealth">Divinations vs PC</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="check-card" style="margin-top:14px;">
+                    <h4>Save Result Tiers <span class="ability-tag">±10 rule</span></h4>
+                    <div style="font-size:12px;line-height:1.7;color:var(--t-t2);">
+                        <div><strong style="color:#86efac;">Crit Success</strong> (beat DC by 10+ or nat 20) — no effect, or effect becomes Success.</div>
+                        <div><strong style="color:#a7f3d0;">Success</strong> — usually half damage; rider effects reduced.</div>
+                        <div><strong style="color:#fcd34d;">Failure</strong> — full damage; rider effects apply.</div>
+                        <div><strong style="color:#fca5a5;">Crit Failure</strong> (miss by 10+ or nat 1) — double damage, or worse rider effect.</div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── DCs & Flat Checks ── #}
+            <div class="checks-pane" data-pane="dcs">
+                <div style="color:var(--t-t3);font-size:11px;margin-bottom:12px;font-style:italic;">
+                    Set DC by the task's level (usually the encounter/area level). Simple tasks can use proficiency-based DCs instead.
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;">
+                    <div>
+                        <div class="dc-card">
+                            <h4>DC by Level</h4>
+                            <table class="dc-table">
+                                <tr><th>Lvl</th><th>DC</th><th>Lvl</th><th>DC</th></tr>
+                                <tr><td class="lvl">0</td><td><strong>14</strong></td><td class="lvl">11</td><td><strong>28</strong></td></tr>
+                                <tr><td class="lvl">1</td><td><strong>15</strong></td><td class="lvl">12</td><td><strong>30</strong></td></tr>
+                                <tr><td class="lvl">2</td><td><strong>16</strong></td><td class="lvl">13</td><td><strong>31</strong></td></tr>
+                                <tr><td class="lvl">3</td><td><strong>18</strong></td><td class="lvl">14</td><td><strong>32</strong></td></tr>
+                                <tr><td class="lvl">4</td><td><strong>19</strong></td><td class="lvl">15</td><td><strong>34</strong></td></tr>
+                                <tr><td class="lvl">5</td><td><strong>20</strong></td><td class="lvl">16</td><td><strong>35</strong></td></tr>
+                                <tr><td class="lvl">6</td><td><strong>22</strong></td><td class="lvl">17</td><td><strong>36</strong></td></tr>
+                                <tr><td class="lvl">7</td><td><strong>23</strong></td><td class="lvl">18</td><td><strong>38</strong></td></tr>
+                                <tr><td class="lvl">8</td><td><strong>24</strong></td><td class="lvl">19</td><td><strong>39</strong></td></tr>
+                                <tr><td class="lvl">9</td><td><strong>26</strong></td><td class="lvl">20</td><td><strong>40</strong></td></tr>
+                                <tr><td class="lvl">10</td><td><strong>27</strong></td><td class="lvl">+1</td><td><strong>+1</strong></td></tr>
+                            </table>
+                        </div>
+                        <div class="dc-card">
+                            <h4>Difficulty Adjustments</h4>
+                            <div class="dc-row"><span class="k">Incredibly easy</span><span class="v neg">−10</span></div>
+                            <div class="dc-row"><span class="k">Very easy</span><span class="v neg">−5</span></div>
+                            <div class="dc-row"><span class="k">Easy</span><span class="v neg">−2</span></div>
+                            <div class="dc-row"><span class="k">Baseline</span><span class="v">±0</span></div>
+                            <div class="dc-row"><span class="k">Hard</span><span class="v pos">+2</span></div>
+                            <div class="dc-row"><span class="k">Very hard</span><span class="v pos">+5</span></div>
+                            <div class="dc-row"><span class="k">Incredibly hard</span><span class="v pos">+10</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="dc-card">
+                            <h4>Simple DCs by Proficiency</h4>
+                            <div class="dc-row"><span class="k">Untrained</span><span class="v">DC 10</span></div>
+                            <div class="dc-row"><span class="k">Trained</span><span class="v">DC 15</span></div>
+                            <div class="dc-row"><span class="k">Expert</span><span class="v">DC 20</span></div>
+                            <div class="dc-row"><span class="k">Master</span><span class="v">DC 30</span></div>
+                            <div class="dc-row"><span class="k">Legendary</span><span class="v">DC 40</span></div>
+                        </div>
+                        <div class="dc-card">
+                            <h4>Flat Checks</h4>
+                            <div class="dc-row"><span class="k">Attack target is <strong style="color:#fcd34d;">concealed</strong></span><span class="v">DC 5</span></div>
+                            <div class="dc-row"><span class="k">Attack target is <strong style="color:#fcd34d;">hidden</strong></span><span class="v">DC 11</span></div>
+                            <div class="dc-row"><span class="k">Persistent damage — end</span><span class="v">DC 15</span></div>
+                            <div class="dc-row"><span class="k">Assisted-recovery flat</span><span class="v">DC 10</span></div>
+                            <div class="dc-row"><span class="k">Recover from dying</span><span class="v">DC 10+dying</span></div>
+                            <div class="dc-row"><span class="k">Stabilize (new PF2e variant)</span><span class="v">DC 15</span></div>
+                        </div>
+                        <div class="dc-card">
+                            <h4>Common Combat DCs</h4>
+                            <div class="dc-row"><span class="k">Sustain a spell (avoid wobble)</span><span class="v">—</span></div>
+                            <div class="dc-row"><span class="k">Escape a grapple</span><span class="v">vs Fort/Ref</span></div>
+                            <div class="dc-row"><span class="k">Trip vs huge creature</span><span class="v">+2 size</span></div>
+                            <div class="dc-row"><span class="k">MAP on 2nd strike</span><span class="v pos">−5 / −4 agile</span></div>
+                            <div class="dc-row"><span class="k">MAP on 3rd strike</span><span class="v pos">−10 / −8 agile</span></div>
+                            <div class="dc-row"><span class="k">Crit threshold</span><span class="v">beat AC/DC by 10</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── RECALL KNOWLEDGE TOPICS ── #}
+            <div class="checks-pane" data-pane="knowledge">
+                <div style="color:var(--t-t3);font-size:11px;margin-bottom:10px;font-style:italic;">
+                    Player asks "what do I know about X?" → pick the closest topic → they roll that skill. <strong>Secret roll</strong> it so they don't meta-game from the number.
+                </div>
+                <table class="situation-table">
+                    <thead><tr><th>Topic</th><th>Skill</th><th>Examples</th></tr></thead>
+                    <tbody>
+                        <tr><td class="situation">Aberrations</td><td><span class="check-pill knowledge">Occultism</span></td><td class="notes">Aboleths, otyughs, cloakers</td></tr>
+                        <tr><td class="situation">Animals</td><td><span class="check-pill knowledge">Nature</span></td><td class="notes">Bears, wolves, dinosaurs</td></tr>
+                        <tr><td class="situation">Astral / Ethereal</td><td><span class="check-pill knowledge">Occultism</span></td><td class="notes">Planar travelers, ghosts (mind)</td></tr>
+                        <tr><td class="situation">Beasts (magical)</td><td><span class="check-pill knowledge">Arcana</span></td><td class="notes">Griffons, manticores, owlbears</td></tr>
+                        <tr><td class="situation">Celestials</td><td><span class="check-pill knowledge">Religion</span></td><td class="notes">Angels, archons</td></tr>
+                        <tr><td class="situation">Constructs</td><td><span class="check-pill knowledge">Arcana / Crafting</span></td><td class="notes">Golems, animated armor</td></tr>
+                        <tr><td class="situation">Dragons</td><td><span class="check-pill knowledge">Arcana</span></td><td class="notes">All chromatic / metallic</td></tr>
+                        <tr><td class="situation">Dungeons / cities / history</td><td><span class="check-pill knowledge">Society</span></td><td class="notes">Nations, cultures, languages</td></tr>
+                        <tr><td class="situation">Elementals</td><td><span class="check-pill knowledge">Arcana / Nature</span></td><td class="notes">Fire, water, air, earth</td></tr>
+                        <tr><td class="situation">Fey</td><td><span class="check-pill knowledge">Nature</span></td><td class="notes">Satyrs, pixies, dryads</td></tr>
+                        <tr><td class="situation">Fiends</td><td><span class="check-pill knowledge">Religion</span></td><td class="notes">Demons, devils, daemons</td></tr>
+                        <tr><td class="situation">Geography / survival lore</td><td><span class="check-pill knowledge">Survival</span></td><td class="notes">Climate, tracking, weather</td></tr>
+                        <tr><td class="situation">Humanoids</td><td><span class="check-pill knowledge">Society</span></td><td class="notes">Orcs, goblins, elves, etc.</td></tr>
+                        <tr><td class="situation">Monitors (neutral outsiders)</td><td><span class="check-pill knowledge">Religion</span></td><td class="notes">Psychopomps, aeons</td></tr>
+                        <tr><td class="situation">Oozes</td><td><span class="check-pill knowledge">Occultism</span></td><td class="notes">Slimes, jellies</td></tr>
+                        <tr><td class="situation">Plants / fungi</td><td><span class="check-pill knowledge">Nature</span></td><td class="notes">Shambling mounds, myceloids</td></tr>
+                        <tr><td class="situation">Spirits / ghosts / hauntings</td><td><span class="check-pill knowledge">Occultism / Religion</span></td><td class="notes">Undead ghost = Religion</td></tr>
+                        <tr><td class="situation">Undead</td><td><span class="check-pill knowledge">Religion</span></td><td class="notes">Zombies, vampires, liches</td></tr>
+                        <tr><td class="situation">Vermin (giant insects)</td><td><span class="check-pill knowledge">Nature</span></td><td class="notes">Giant spiders, bees</td></tr>
+                        <tr><td class="situation">Arcane traditions / spells</td><td><span class="check-pill knowledge">Arcana</span></td><td class="notes">Wizards, sorcerers</td></tr>
+                        <tr><td class="situation">Primal traditions</td><td><span class="check-pill knowledge">Nature</span></td><td class="notes">Druids, rangers</td></tr>
+                        <tr><td class="situation">Divine traditions</td><td><span class="check-pill knowledge">Religion</span></td><td class="notes">Clerics, champions</td></tr>
+                        <tr><td class="situation">Occult traditions</td><td><span class="check-pill knowledge">Occultism</span></td><td class="notes">Bards, psychics, witches</td></tr>
+                    </tbody>
+                </table>
+                <div class="check-card" style="margin-top:14px;">
+                    <h4>Recall Knowledge DCs <span class="ability-tag">vs monster level</span></h4>
+                    <div style="font-size:12px;line-height:1.6;color:var(--t-t2);">
+                        <div><strong>Common</strong> creature → use standard DC by level.</div>
+                        <div><strong>Uncommon</strong> → +2 to the DC.</div>
+                        <div><strong>Rare</strong> → +5 to the DC.</div>
+                        <div><strong>Unique</strong> → +10 to the DC.</div>
+                        <div style="margin-top:6px;color:var(--t-t3);font-size:11px;"><em>Success = one piece of accurate info. Crit = two. Fail = nothing. Crit Fail = false info.</em></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1070,9 +1486,15 @@ function renderInitList() {
         else if (c.delaying) roleLabel = `<span class="k delay">DELAYING</span>`;
         else roleLabel = c.is_pc ? `<span class="k pc">PC</span>` : `<span class="k">ENEMY</span>`;
 
+        // Hidden-from-players badge (NPC only). When true, players see '???'
+        // in their encounter viewer and can't read HP/conditions.
+        const isHidden = !c.is_pc && c.visible_to_players === false;
+        let hiddenBadge = '';
+        if (isHidden) hiddenBadge = ' · <span class="k hidden" title="Players see ??? and no HP/conditions">HIDDEN</span>';
+
         let subText = '';
         if (c.is_pc) subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''}`;
-        else subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}`;
+        else subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}${hiddenBadge}`;
         if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span>`;
 
         // Elite/Weak (NPC only)
@@ -1142,6 +1564,7 @@ function renderInitList() {
             <div class="c-act">
                 ${ewHtml}
                 ${delayHtml}
+                ${c.is_pc ? '' : `<button class="act-btn vis ${isHidden ? 'on-hidden' : ''}" onclick="toggleVisibility('${c.instance_id}')" title="${isHidden ? 'Reveal to players' : 'Hide from players (name + HP + conditions masked)'}">${isHidden ? 'Reveal' : 'Hide'}</button>`}
                 <button class="act-btn del" onclick="removeCombatant('${c.instance_id}')">Remove</button>
             </div>
         </div>`;
@@ -1292,14 +1715,31 @@ function renderActivePanel() {
         <button onclick="setPDAP('${c.instance_id}')">Set</button>
     </div>`;
 
-    // Strikes
+    // Strikes — render inline MAP−5 / MAP−10 (and agile variants) alongside
+    // the primary attack so the GM doesn't have to subtract in their head when
+    // the monster takes a second/third swing.
     if (c.strikes && c.strikes.length) {
-        html += `<div class="section-h">Strikes ${!c.is_pc ? `<span class="tk">Round ${STATE.round} · MAP applies</span>` : ''}</div>`;
+        const mapHint = `<span class="tk" title="PF2e Multiple Attack Penalty: 2nd Strike −5 (−4 agile), 3rd Strike −10 (−8 agile). Resets each turn.">Round ${STATE.round} · MAP −5 / −10</span>`;
+        html += `<div class="section-h">Strikes ${mapHint}</div>`;
         html += `<div class="strikes">`;
         c.strikes.forEach(s => {
+            const hitStr = String(s.hit || '');
+            const m = hitStr.match(/([+-]?\d+)/);
+            let mapHtml = '';
+            if (m) {
+                const base = parseInt(m[1]);
+                const fmt = n => (n >= 0 ? '+' + n : '' + n);
+                // We don't always know the agile trait on raw strike dicts, so we
+                // surface both variants; GMs can tell which number applies.
+                mapHtml = `<div class="map-line" style="font-size:10px;color:var(--t-t3);margin-top:2px;letter-spacing:.02em;">
+                    <span title="Second Strike (MAP −5 / −4 agile)">M2 ${fmt(base - 5)}<span style="opacity:.6;"> / ${fmt(base - 4)} agile</span></span>
+                    <span style="margin-left:10px;" title="Third Strike (MAP −10 / −8 agile)">M3 ${fmt(base - 10)}<span style="opacity:.6;"> / ${fmt(base - 8)} agile</span></span>
+                </div>`;
+            }
             html += `<div class="strike">
                 <div class="snm">${s.name}<span class="hit">${s.hit || ''}</span></div>
                 <div class="dmg">${s.damage || ''}</div>
+                ${mapHtml}
             </div>`;
         });
         html += `</div>`;
@@ -1427,6 +1867,9 @@ function addCondition(id) {
     fd.append('condition', sel.value);
     fd.append('action', 'add');
     apiPost('/api/toggle_condition/' + id, fd, null);
+    // Reset the dropdown to its first option so "apply frightened 1 to 4 goblins
+    // in a row" is 4 clicks rather than 4 click-select-reselect-click cycles.
+    try { sel.selectedIndex = 0; } catch(_) {}
 }
 
 function addConditionAP(id) {
@@ -1436,6 +1879,7 @@ function addConditionAP(id) {
     fd.append('condition', sel.value);
     fd.append('action', 'add');
     apiPost('/api/toggle_condition/' + id, fd, null);
+    try { sel.selectedIndex = 0; } catch(_) {}
 }
 
 function setPD(id) {
@@ -1460,6 +1904,28 @@ function eliteWeak(id, mode) {
 
 function removeCombatant(id) {
     apiPost('/api/remove_combatant/' + id);
+}
+
+function toggleVisibility(id) {
+    // Flip hidden/visible server-side. Response is { success, visible_to_players }
+    // but we let the SSE encounter_update push refresh the UI for consistency
+    // with the other action buttons; the tracker state cache is invalidated
+    // server-side, so the next render reflects the change.
+    fetch('/api/toggle_combatant_visibility/' + id, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    }).then(r => {
+        if (!r.ok) {
+            toast('Failed to toggle visibility', 'error');
+            return null;
+        }
+        return r.json();
+    }).then(data => {
+        if (data && data.success) {
+            toast(data.visible_to_players ? 'Revealed to players' : 'Hidden from players', 'success');
+        }
+    }).catch(() => toast('Network error', 'error'));
 }
 
 function saveEncounter() {
@@ -1682,6 +2148,44 @@ async function openStatModal(instanceId) {
 function closeStatModal() {
     document.getElementById('stat-modal').classList.remove('open');
 }
+
+
+/* ──────────────── GM Checks Cheat-Sheet Modal ──────────────── */
+function openChecksModal() {
+    document.getElementById('checks-modal').classList.add('open');
+}
+function closeChecksModal() {
+    document.getElementById('checks-modal').classList.remove('open');
+}
+function switchChecksTab(which) {
+    // Highlight the clicked tab (match via data-tab)
+    document.querySelectorAll('#checks-modal .checks-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === which);
+    });
+    // Show the matching pane
+    document.querySelectorAll('#checks-modal .checks-pane').forEach(p => {
+        p.classList.toggle('active', p.dataset.pane === which);
+    });
+    // Scroll to top of body so the new tab starts at top
+    const body = document.querySelector('#checks-modal .checks-body');
+    if (body) body.scrollTop = 0;
+}
+// Global hotkeys: "c" opens the cheat-sheet, Esc closes it.
+// Ignore when typing in form fields so the letter doesn't get eaten.
+document.addEventListener('keydown', e => {
+    const tag = (e.target?.tagName || '').toLowerCase();
+    const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable;
+    if (e.key === 'Escape') {
+        const m = document.getElementById('checks-modal');
+        if (m && m.classList.contains('open')) { e.preventDefault(); closeChecksModal(); }
+    } else if (!typing && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const m = document.getElementById('checks-modal');
+        if (m) {
+            e.preventDefault();
+            m.classList.contains('open') ? closeChecksModal() : openChecksModal();
+        }
+    }
+});
 
 
 /* ──────────────── Monster Search ──────────────── */

@@ -39,6 +39,16 @@ def gm_required(f):
         return redirect('/gm/login')
     return decorated
 
+def _is_gm():
+    """Return True if the caller is effectively the GM.
+
+    Mirrors gm_required: when GM_PASSWORD is unset we're in local dev, so
+    everyone is treated as GM. Use this instead of session.get('gm_authenticated')
+    in endpoints that also need to distinguish 'player view' (filtered) vs
+    'GM view' (raw). Otherwise local dev shows the GM the filtered player state.
+    """
+    return (not GM_PASSWORD) or session.get('gm_authenticated', False)
+
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
     '/api/add_combatant', '/api/add_party', '/api/remove_combatant', '/api/clear_encounter',
@@ -49,6 +59,15 @@ GM_API_PREFIXES = (
     '/api/save_encounter', '/api/load_encounter',
     '/api/monster_search', '/api/stage_encounter', '/api/party_stats',
     '/api/monster_statblock/', '/api/combatant_stats/',
+    '/api/toggle_combatant_visibility/',
+    # /api/tracker_state returns raw combatant data (AC, HP, strikes, saves,
+    # and visible_to_players). It's only consumed by templates/tracker.html
+    # which is GM-only, so gate it here. /api/player_state is the sanitized
+    # counterpart for player views.
+    '/api/tracker_state',
+    # /api/gm_secret_log holds GM-only secret rolls (stealth/perception/etc.)
+    # — never fetched by player templates. Keep it GM-only.
+    '/api/gm_secret_log',
     '/api/generate/', '/api/vault_',
 )
 
@@ -93,11 +112,38 @@ ACTIVE_MAP = {
     'grid_offset_x': 0,
     'grid_offset_y': 0,
     'tokens': [],  # [{id, name, x, y, size, color, hp, max_hp, ac, speed, is_pc, conditions, assigned_player, visible_to_players, initiative}]
-    'walls': [],  # [{id, points: [[x,y],...], type: 'normal'|'terrain'|'invisible'|'ethereal'|'door', closed: bool, open: bool}]
+    'walls': [],  # [{id, points: [[x,y],...], type: 'normal'|'terrain'|'invisible'|'ethereal'|'door', closed: bool, open: bool, secret: bool, hidden_dc: int, discovered_by: [player_name]}]
     'explored': [],  # List of "x,y" strings for explored grid cells
     'difficult_terrain': [],  # [{x, y}] grid cells with difficult terrain
     'spawn_point': None,  # {x, y} grid position for party spawn
     'player_control': True,  # Can players move their own tokens?
+    'gm_notes': [],  # [{id, x, y, text, color, icon}] GM-only pins/notes (never sent to players)
+    # --- Lighting (Phase 2) --------------------------------------------------
+    # ambient_light drives the client's fog layer. NOTE: we deliberately do not
+    # reuse `vision_mode` here — that field was already taken to describe the
+    # fog-reveal policy (e.g. 'explored' = cells stay seen after the PC leaves).
+    #   'bright' — no darkness; walls still block LOS (outdoors / default)
+    #   'dim'    — everything dim unless a light covers it
+    #   'dark'   — pitch black unless lit or viewer has darkvision
+    'ambient_light': 'bright',
+    # Stand-alone light sources placed by the GM. Tokens with their own
+    # emit_light field carry their own attached torch; lights listed here are
+    # free-standing (braziers, wall sconces, dropped torches).
+    #   {id, x, y, bright, dim, color, enabled, attached_to: token_id|null,
+    #    name}
+    # Radii are in squares (grid units), not pixels.
+    'lights': [],
+    # --- Templates (Phase 3) -------------------------------------------------
+    # AOE templates — burst (circle from point), emanation (circle from token),
+    # cone (PF2e 90° wedge by default), line (rectangle). Radii/lengths are in
+    # squares; pixel coords on the map.
+    #   {id, type: 'burst'|'emanation'|'cone'|'line',
+    #    x, y,                       # origin (pixel coords)
+    #    attached_to: token_id|null, # emanation follows this token
+    #    radius, length, width,      # in squares (type-dependent)
+    #    direction, angle,           # degrees — direction is aim, angle is spread
+    #    color, name, owner, source, temporary}
+    'templates': [],
 }
 MAP_LOCK = threading.Lock()
 
@@ -129,8 +175,69 @@ def _invalidate_tracker_cache():
     _TRACKER_STATE_CACHE = None
     _TRACKER_STATE_CACHE_TIME = 0.0
 
+def _hidden_npc_names():
+    """Snapshot of NPC names the GM has marked hidden.
+
+    Used by both the SSE broadcast filter and the REST endpoints that feed
+    player combat-log history. Kept here so there's one source of truth for
+    "which names must not leak to players."
+    """
+    with ENCOUNTER_LOCK:
+        return [
+            c.name for c in ACTIVE_ENCOUNTER
+            if not c.is_pc and not getattr(c, 'visible_to_players', True) and c.name
+        ]
+
+def _scrub_hidden_names(text, hidden_names=None):
+    """Replace every hidden NPC name occurrence in ``text`` with '???'.
+
+    Case-insensitive. Callers can pre-compute the ``hidden_names`` list to
+    avoid re-locking ENCOUNTER_LOCK on every call (useful inside tight loops
+    like scrubbing a whole combat-log array).
+    """
+    if hidden_names is None:
+        hidden_names = _hidden_npc_names()
+    if not hidden_names or not isinstance(text, str):
+        return text
+    scrubbed = text
+    for name in hidden_names:
+        try:
+            scrubbed = re.sub(re.escape(name), '???', scrubbed, flags=re.IGNORECASE)
+        except Exception:
+            continue
+    return scrubbed
+
+def _scrub_log_entries_for_players(entries):
+    """Return a copy of ``entries`` with hidden NPC names masked in every
+    user-visible string field. Called before returning combat-log JSON to
+    any endpoint that a player might hit."""
+    if _is_gm():
+        return entries
+    hidden = _hidden_npc_names()
+    if not hidden:
+        return entries
+    cleaned = []
+    for e in entries:
+        if not isinstance(e, dict):
+            cleaned.append(e)
+            continue
+        copy_e = dict(e)
+        for key in ('msg', 'detail', 'action', 'result', 'name'):
+            if key in copy_e:
+                copy_e[key] = _scrub_hidden_names(copy_e.get(key), hidden)
+        cleaned.append(copy_e)
+    return cleaned
+
 def _combat_log(msg, log_type='action'):
-    """Append a timestamped entry to the combat log and broadcast via SSE."""
+    """Append a timestamped entry to the combat log and broadcast via SSE.
+
+    Players must never see the literal name of an NPC the GM has hidden. The
+    filter below replaces every hidden NPC's name with '???' in the message
+    before it goes to player subscribers. GM subscribers still see the raw
+    message. This is a best-effort substring scrub — it deliberately runs
+    after ``entry`` is appended to ``COMBAT_LOGS`` (the GM-visible log) so
+    the GM-side history is complete.
+    """
     entry = {
         'id': str(uuid.uuid4())[:8],
         'time': time.strftime('%H:%M:%S'),
@@ -138,13 +245,26 @@ def _combat_log(msg, log_type='action'):
         'msg': msg,
         'type': log_type
     }
+    # Snapshot hidden NPC names under the lock so the filter is deterministic
+    # even if the encounter mutates between append and broadcast.
     with ENCOUNTER_LOCK:
         COMBAT_LOGS.append(entry)
         if len(COMBAT_LOGS) > 200:
             COMBAT_LOGS.pop(0)
+        hidden_names = [
+            c.name for c in ACTIVE_ENCOUNTER
+            if not c.is_pc and not getattr(c, 'visible_to_players', True) and c.name
+        ]
+
+    def _player_filter(p):
+        if not hidden_names:
+            return p
+        p['msg'] = _scrub_hidden_names(p.get('msg'), hidden_names)
+        return p
+
     # Push to any SSE subscribers so clients can react without polling
     try:
-        sse_broadcast('combat_log', entry)
+        sse_broadcast('combat_log', entry, player_filter=_player_filter)
     except Exception:
         pass
 
@@ -182,6 +302,9 @@ def _do_persist_encounter_state():
                 'persistent_damage': getattr(c, 'persistent_damage', ''),
                 'elite_weak': getattr(c, 'elite_weak', 0),
                 'delaying': getattr(c, 'delaying', False),
+                # Preserve hidden/visible state across autosave — otherwise a
+                # crash or reload mid-session would reveal hidden NPCs to players.
+                'visible_to_players': getattr(c, 'visible_to_players', True),
             }
             encounter_data['combatants'].append(entry)
     try:
@@ -232,34 +355,69 @@ def _start_persistence_thread():
     _atexit.register(_flush_pending_persistence)
 
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
-_sse_subscribers = []  # List of queue.Queue objects, one per connected client
+# Each subscriber is a (queue.Queue, is_gm: bool) tuple. We tag the queue at
+# connection time so sse_broadcast() can route GM-only and player-sanitized
+# payloads without peeking at per-request Flask sessions (SSE connections
+# outlive any one request).
+_sse_subscribers = []
 _sse_lock = threading.Lock()
 _sse_last_cleanup = time.time()
 _SSE_MAX_SUBSCRIBERS = 50  # Hard cap to prevent memory leaks
 _SSE_STALE_TIMEOUT = 120  # Seconds before a non-consuming queue is considered stale
 
-def sse_broadcast(event_type, data):
-    """Push an event to all connected SSE clients."""
+def sse_broadcast(event_type, data, *, player_filter=None):
+    """Push an event to all connected SSE clients.
+
+    Parameters
+    ----------
+    event_type : str
+        SSE event name the client listens for.
+    data : dict
+        Payload the GM should see (full, unfiltered).
+    player_filter : Optional[Callable[[dict], Optional[dict]]]
+        If given, called with a deepcopy-safe dict for each player subscriber.
+        Return a dict to send that filtered payload to players, or None/False
+        to drop the message entirely for players (GMs still receive `data`).
+        If omitted, all subscribers receive `data` unchanged.
+    """
     global _sse_last_cleanup
-    msg = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+    gm_msg = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+    # Pre-compute the player-facing payload once; all player subscribers share it.
+    player_msg = None
+    if player_filter is None:
+        player_msg = gm_msg
+    else:
+        try:
+            filtered = player_filter(copy.deepcopy(data))
+        except Exception as e:
+            print(f"[SSE FILTER] {event_type}: {e}")
+            filtered = None
+        if filtered is not None and filtered is not False:
+            player_msg = f"event: {event_type}\ndata: {json.dumps(filtered)}\n\n"
+
     with _sse_lock:
         dead = []
-        for q in _sse_subscribers:
+        for entry in _sse_subscribers:
+            q, is_gm = entry
+            msg = gm_msg if is_gm else player_msg
+            if msg is None:
+                continue  # Player filter dropped this message
             try:
                 q.put_nowait(msg)
             except queue.Full:
-                dead.append(q)
-        for q in dead:
-            _sse_subscribers.remove(q)
-        
+                dead.append(entry)
+        for entry in dead:
+            _sse_subscribers.remove(entry)
+
         # Periodic stale subscriber cleanup (every 60 seconds)
         now = time.time()
         if now - _sse_last_cleanup > 60:
             _sse_last_cleanup = now
             # Remove queues that are nearly full (stale clients)
-            stale = [q for q in _sse_subscribers if q.qsize() > 40]
-            for q in stale:
-                _sse_subscribers.remove(q)
+            stale = [entry for entry in _sse_subscribers if entry[0].qsize() > 40]
+            for entry in stale:
+                _sse_subscribers.remove(entry)
             if _sse_subscribers or stale:
                 print(f"[SSE] Active: {len(_sse_subscribers)}, Cleaned: {len(stale)}")
 
@@ -311,13 +469,31 @@ def _broadcast_pc_state(pc_name):
     sse_broadcast('pc_update', payload)
 
 def _broadcast_encounter_state():
-    """Broadcast the full encounter state to all SSE clients."""
+    """Broadcast the full encounter state to all SSE clients.
+
+    GM subscribers receive the raw payload (every combatant's name, HP, and
+    conditions). Player subscribers receive a filtered payload where any NPC
+    with ``visible_to_players == False`` has its name replaced with '???',
+    initiative hidden, and HP/condition data stripped. The ``active_name``
+    field is also scrubbed when the active combatant is hidden so the turn
+    banner doesn't leak mid-fight.
+    """
     _invalidate_tracker_cache()
     with ENCOUNTER_LOCK:
-        active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+        active_c = ACTIVE_ENCOUNTER[TURN_INDEX] if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+        active_name = active_c.name if active_c else None
         combatants = []
         for i, c in enumerate(ACTIVE_ENCOUNTER):
-            entry = {'name': c.name, 'is_pc': c.is_pc, 'initiative': c.initiative, 'is_active': (i == TURN_INDEX)}
+            entry = {
+                'name': c.name,
+                'is_pc': c.is_pc,
+                'initiative': c.initiative,
+                'is_active': (i == TURN_INDEX),
+                # Include visibility so GM UI can render a hidden-eye indicator.
+                # The player filter below strips this flag along with the rest
+                # of the hidden combatant's data.
+                'visible_to_players': getattr(c, 'visible_to_players', True),
+            }
             if c.is_pc:
                 pct = c.current_hp / c.hp if c.hp > 0 else 0
                 entry['current_hp'] = c.current_hp
@@ -325,13 +501,53 @@ def _broadcast_encounter_state():
                 entry['hp_pct'] = round(pct * 100)
             else:
                 pct = c.current_hp / c.hp if c.hp > 0 else 0
-                if c.current_hp == 0: entry['hp_status'] = 'Dead'
-                elif pct <= 0.5: entry['hp_status'] = 'Wounded'
-                else: entry['hp_status'] = ''
+                if c.current_hp == 0:
+                    entry['hp_status'] = 'Dead'
+                elif pct <= 0.5:
+                    entry['hp_status'] = 'Wounded'
+                else:
+                    entry['hp_status'] = ''
             entry['conditions'] = {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False}
             combatants.append(entry)
-        payload = {'encounter': combatants, 'round': ROUND_NUMBER, 'active_name': active_name, 'turn_index': TURN_INDEX}
-    sse_broadcast('encounter_update', payload)
+        payload = {
+            'encounter': combatants,
+            'round': ROUND_NUMBER,
+            'active_name': active_name,
+            'turn_index': TURN_INDEX,
+            # Flag used by the player filter below — avoids re-reading globals
+            # inside the filter, which runs after ENCOUNTER_LOCK is released.
+            '_active_visible': getattr(active_c, 'visible_to_players', True) if active_c else True,
+        }
+
+    def _player_filter(p):
+        # Strip any GM-only side-channel flags before the payload goes out.
+        active_visible = p.pop('_active_visible', True)
+        filtered_enc = []
+        for entry in p.get('encounter', []):
+            if entry.get('is_pc') or entry.get('visible_to_players', True):
+                # PCs and visible NPCs: pass through unchanged. (PCs should
+                # always be visible; the attribute is kept True at init.)
+                filtered_enc.append(entry)
+                continue
+            # Hidden NPC — mask identity and all stat data. We keep is_active
+            # so the player UI can still show "it's the enemy's turn" without
+            # naming the creature, and we keep a stable index position so the
+            # initiative order doesn't visibly collapse.
+            filtered_enc.append({
+                'name': '???',
+                'is_pc': False,
+                'initiative': None,
+                'is_active': entry.get('is_active', False),
+                'hp_status': '',
+                'conditions': {},
+                'hidden': True,
+            })
+        p['encounter'] = filtered_enc
+        if not active_visible:
+            p['active_name'] = '???'
+        return p
+
+    sse_broadcast('encounter_update', payload, player_filter=_player_filter)
 
 COMPENDIUM_LIBRARY = {}
 COMPENDIUM_RULES = {}
@@ -742,6 +958,9 @@ class Character:
         self.initiative = 0
         self.elite_weak = 0
         self.delaying = False
+        # PCs are always visible to players; only NPCs/monsters get hidden.
+        # Kept on the class for uniform access in the broadcast filter.
+        self.visible_to_players = True
         
         build = data.get('build') or data
         self._build_ref = build
@@ -1797,10 +2016,13 @@ class Character:
 class Monster:
     def __init__(self, data, file_path=""):
         self.file_path = file_path
-        self.instance_id = "" 
+        self.instance_id = ""
         self.is_pc = False
         self.initiative = 0
-        self.persistent_damage = "" 
+        self.persistent_damage = ""
+        # GM-controlled visibility. When False, player SSE feed masks name,
+        # HP, conditions, and scrubs the name from combat-log lines.
+        self.visible_to_players = True
         self.name = safe_str(data.get('name', 'Unknown Monster'))
         system = data.get('system') or {}
         if not isinstance(system, dict): system = {}
@@ -2672,6 +2894,10 @@ def _restore_encounter_autosave():
                 if 'delaying' in item: new_c.delaying = item['delaying']
                 if 'elite_weak' in item and hasattr(new_c, 'apply_elite_weak'):
                     new_c.apply_elite_weak(item['elite_weak'])
+                # Restore hidden/visible state — PCs are always visible; for
+                # NPCs we honor the saved flag (default True for old saves).
+                if 'visible_to_players' in item:
+                    new_c.visible_to_players = bool(item['visible_to_players']) if not new_c.is_pc else True
                 ACTIVE_ENCOUNTER.append(new_c)
         if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
         if ACTIVE_ENCOUNTER:
@@ -2856,6 +3082,9 @@ def _get_tracker_state():
                 'elite_weak': getattr(c, 'elite_weak', 0),
                 'delaying': getattr(c, 'delaying', False),
                 'base_ac': getattr(c, 'base_ac', c.ac),
+                # GM-side flag: when False the player SSE feed masks this
+                # combatant. The tracker UI renders an eye icon off this.
+                'visible_to_players': getattr(c, 'visible_to_players', True),
             }
             hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0
             entry['hp_pct'] = round(hp_pct)
@@ -2926,6 +3155,57 @@ def remove_combatant(instance_id):
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
+@app.route('/api/toggle_combatant_visibility/<instance_id>', methods=['POST'])
+def toggle_combatant_visibility(instance_id):
+    """GM-only: flip whether a combatant is visible to player SSE feeds.
+
+    Also syncs the matching map token (if one exists) so the map and the
+    tracker agree on who the players can see. Returns JSON with the new
+    state for optimistic-UI callers on the tracker page.
+    """
+    data = request.get_json(silent=True) or {}
+    target = None
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id:
+                target = c
+                break
+        if target is None:
+            return jsonify({'success': False, 'error': 'Combatant not found'}), 404
+        # Accept an explicit 'visible' boolean, or flip the current state.
+        if 'visible' in data:
+            new_vis = bool(data['visible'])
+        else:
+            new_vis = not getattr(target, 'visible_to_players', True)
+        # PCs are always visible. Silently no-op rather than error so a
+        # mis-click on a PC row doesn't confuse the GM mid-fight.
+        if target.is_pc:
+            new_vis = True
+        target.visible_to_players = new_vis
+        # Sync the map token so moving a creature onto the map keeps the
+        # same visibility the GM set in the tracker. ACTIVE_MAP is the
+        # shared token dict used by the VTT — we mutate it in place under
+        # the ENCOUNTER_LOCK since callers expect the token visibility flip
+        # to land atomically with the combatant flip.
+        for token in ACTIVE_MAP.get('tokens', []):
+            if token.get('instance_id') == instance_id:
+                token['visible_to_players'] = new_vis
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    # Also broadcast map state so the player map view updates immediately
+    # when a token goes hidden/visible.
+    try:
+        _broadcast_map_state()
+    except Exception:
+        pass
+    _combat_log(
+        f"{target.name} is now {'visible to' if new_vis else 'hidden from'} players",
+        'system'
+    )
+    if _is_ajax() or request.is_json:
+        return jsonify({'success': True, 'instance_id': instance_id, 'visible_to_players': new_vis})
+    return redirect(url_for('tracker_view'))
+
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
     global TURN_INDEX, ROUND_NUMBER
@@ -2940,8 +3220,13 @@ def clear_encounter():
 
 @app.route('/api/combat_log')
 def get_combat_log():
-    """Return combat log entries."""
-    return jsonify({"log": COMBAT_LOGS, "count": len(COMBAT_LOGS)})
+    """Return combat log entries.
+
+    Players get a scrubbed copy where any hidden NPC's name is replaced
+    with '???' across every user-visible field. GMs see the raw log.
+    """
+    entries = _scrub_log_entries_for_players(COMBAT_LOGS)
+    return jsonify({"log": entries, "count": len(entries)})
 
 @app.route('/api/combat_log/clear', methods=['POST'])
 def clear_combat_log():
@@ -3115,6 +3400,13 @@ def recall_knowledge(instance_id):
     if not target:
         return jsonify({"error": "Target creature not found"}), 404
 
+    # A hidden NPC must not be a valid Recall Knowledge target for a player —
+    # that would both reveal its name in the combat log and let players
+    # enumerate instance_ids to brute-force hidden creatures. GM sessions
+    # bypass this check (useful for admin/debug).
+    if not getattr(target, 'visible_to_players', True) and not _is_gm():
+        return jsonify({"error": "Target creature not found"}), 404
+
     # Find the PC
     pc = PARTY_LIBRARY.get(pc_name)
     if not pc:
@@ -3204,9 +3496,16 @@ def recall_knowledge(instance_id):
 
 @app.route('/api/recall_knowledge_info/<instance_id>')
 def recall_knowledge_info(instance_id):
-    """Get Recall Knowledge metadata for a creature (skill, DC) without rolling."""
+    """Get Recall Knowledge metadata for a creature (skill, DC) without rolling.
+
+    Hidden NPCs return 404 to non-GM callers. This stops players from
+    probing instance_ids to pull DC/level/traits on creatures they shouldn't
+    even know exist.
+    """
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id and not c.is_pc:
+            if not getattr(c, 'visible_to_players', True) and not _is_gm():
+                return jsonify({"error": "Target creature not found"}), 404
             skill, creature_type = _get_rk_skill(c)
             dc = _get_rk_dc(c)
             return jsonify({
@@ -4242,37 +4541,47 @@ def save_encounter():
                 'conditions': c.conditions,
                 'persistent_damage': getattr(c, 'persistent_damage', ''),
                 'elite_weak': getattr(c, 'elite_weak', 0),
+                # Persist hidden/visible state so saved encounters reload with
+                # the same player visibility as when they were saved.
+                'visible_to_players': getattr(c, 'visible_to_players', True),
             }
             encounter_data['combatants'].append(entry)
+        # Snapshot the current map alongside the encounter so Load Encounter
+        # restores the world, not just initiative. Stored under 'map' to keep
+        # older saves (no map key) backward-compatible on load.
+        with MAP_LOCK:
+            encounter_data['map'] = copy.deepcopy(ACTIVE_MAP)
         with open(os.path.join(ENCOUNTER_DIR, f"{name}.json"), 'w', encoding='utf-8') as f:
             json.dump(encounter_data, f, indent=2)
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/load_encounter', methods=['POST'])
 def load_encounter():
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP
     name = request.form.get('encounter_name')
     enc_path = os.path.join(ENCOUNTER_DIR, f"{name}.json")
     if name and os.path.exists(enc_path):
         ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
         with open(enc_path, 'r', encoding='utf-8') as f:
             raw = json.load(f)
-        
+
         # Support both old format (list) and new format (dict with metadata)
         if isinstance(raw, list):
             combatants = raw
+            saved_map = None
         else:
             combatants = raw.get('combatants', raw)
             ROUND_NUMBER = raw.get('round', 1)
             TURN_INDEX = raw.get('turn_index', 0)
-        
+            saved_map = raw.get('map')
+
         for item in combatants:
             new_c = None
             if item.get('type') == 'monster' and item.get('path') in MONSTER_LIBRARY:
                 new_c = copy.deepcopy(MONSTER_LIBRARY[item['path']])
             elif item.get('type') == 'pc' and item.get('path') in PARTY_LIBRARY:
                 new_c = copy.deepcopy(PARTY_LIBRARY[item['path']])
-            
+
             if new_c:
                 new_c.instance_id = item.get('instance_id', str(uuid.uuid4()))
                 new_c.initiative = item.get('initiative', 0)
@@ -4281,10 +4590,28 @@ def load_encounter():
                 if 'persistent_damage' in item: new_c.persistent_damage = item['persistent_damage']
                 if 'elite_weak' in item and hasattr(new_c, 'apply_elite_weak'):
                     new_c.apply_elite_weak(item['elite_weak'])
+                # Restore hidden/visible state from saved encounter files.
+                if 'visible_to_players' in item:
+                    new_c.visible_to_players = bool(item['visible_to_players']) if not new_c.is_pc else True
                 ACTIVE_ENCOUNTER.append(new_c)
-        
+
         # Validate turn index
         if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
+
+        # Restore snapshotted map state if present. Older saves skip this.
+        if saved_map and isinstance(saved_map, dict):
+            with MAP_LOCK:
+                ACTIVE_MAP.clear()
+                ACTIVE_MAP.update(copy.deepcopy(saved_map))
+            try:
+                _save_map_state()
+            except Exception:
+                pass
+            try:
+                _broadcast_map_state()
+                _broadcast_map_walls()
+            except Exception:
+                pass
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/delete_encounter', methods=['POST'])
@@ -4319,20 +4646,80 @@ def encounter_builder():
 
 @app.route('/api/monster_search')
 def api_monster_search():
-    """Search monster library by name for the encounter builder."""
+    """Search monster library for the encounter builder.
+
+    Accepts:
+        q       — optional substring match on monster name.
+        min_lvl — optional inclusive lower bound on level.
+        max_lvl — optional inclusive upper bound on level.
+        trait   — optional trait substring (e.g. 'undead', 'caster').
+
+    When level or trait filters are provided we allow an empty `q` so the GM
+    can browse "show me every Level 3–5 undead" without typing a name. Pair
+    with the builder's live preview — we now surface primary-strike info so
+    the GM doesn't need to open the full statblock to gauge threat.
+    """
     query = request.args.get('q', '').strip().lower()
-    if not query or len(query) < 2:
+    trait_q = request.args.get('trait', '').strip().lower()
+    try:
+        min_lvl = int(request.args.get('min_lvl', '')) if request.args.get('min_lvl') else None
+    except (TypeError, ValueError):
+        min_lvl = None
+    try:
+        max_lvl = int(request.args.get('max_lvl', '')) if request.args.get('max_lvl') else None
+    except (TypeError, ValueError):
+        max_lvl = None
+
+    has_any_filter = bool(query) or trait_q or (min_lvl is not None) or (max_lvl is not None)
+    if not has_any_filter:
         return jsonify({"results": []})
+    # Name-only searches still require 2 chars to keep the API cheap,
+    # but filter-only browsing is allowed (no query-length gate).
+    if query and not trait_q and min_lvl is None and max_lvl is None and len(query) < 2:
+        return jsonify({"results": []})
+
     results = []
     for path, m in MONSTER_LIBRARY.items():
-        if query in m.name.lower():
-            results.append({
-                'name': m.name, 'level': m.level, 'path': path,
-                'hp': m.hp, 'ac': m.base_ac,
-                'immunities': m.immunities, 'resistances': m.resistances, 'weaknesses': m.weaknesses
-            })
+        if query and query not in m.name.lower():
+            continue
+        if min_lvl is not None and m.level < min_lvl:
+            continue
+        if max_lvl is not None and m.level > max_lvl:
+            continue
+        if trait_q:
+            traits = [str(t).lower() for t in (getattr(m, 'traits', []) or [])]
+            if not any(trait_q in t for t in traits):
+                continue
+        # Pull the strongest strike (best attack bonus) for a quick preview —
+        # on the Monster class these live in `strikes`, each {'name','bonus','damage'}.
+        best_atk = None
+        best_dmg = None
+        best_name = None
+        try:
+            for s in (getattr(m, 'strikes', []) or []):
+                if not isinstance(s, dict):
+                    continue
+                bonus = safe_int(s.get('bonus'), 0) if 'bonus' in s else None
+                if bonus is None:
+                    continue
+                if best_atk is None or bonus > best_atk:
+                    best_atk = bonus
+                    best_dmg = s.get('damage')
+                    best_name = s.get('name')
+        except Exception:
+            pass
+        results.append({
+            'name': m.name, 'level': m.level, 'path': path,
+            'hp': m.hp, 'ac': m.base_ac,
+            'perception': getattr(m, 'perception', None),
+            'immunities': m.immunities, 'resistances': m.resistances, 'weaknesses': m.weaknesses,
+            'traits': [str(t) for t in (getattr(m, 'traits', []) or [])][:6],
+            'best_attack': best_atk,
+            'best_damage': best_dmg,
+            'best_strike_name': best_name,
+        })
     results.sort(key=lambda r: (r['level'], r['name']))
-    return jsonify({"results": results[:30]})
+    return jsonify({"results": results[:40]})
 
 @app.route('/api/stage_encounter', methods=['POST'])
 def api_stage_encounter():
@@ -4866,10 +5253,36 @@ def player_sheet(pc_name):
 
 @app.route('/api/player_state')
 def player_state():
+    """Polling fallback for the player encounter viewer.
+
+    When a GM marks an NPC hidden (via the tracker's Hide button), this
+    endpoint replaces its name with '???' and strips HP/conditions. The
+    active_name banner is also scrubbed when the active combatant is hidden.
+    GM sessions get the raw data so this endpoint is usable for admin views.
+    """
+    gm_view = _is_gm()
     state = []
-    active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+    active_c = ACTIVE_ENCOUNTER[TURN_INDEX] if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+    active_name = active_c.name if active_c else None
     for i, c in enumerate(ACTIVE_ENCOUNTER):
+        # Legacy skip: creatures with hidden/undetected conditions never
+        # appeared in the old player state either. Keep for back-compat.
         if not c.is_pc and (c.conditions.get('hidden') or c.conditions.get('undetected')): continue
+        is_hidden = (not c.is_pc and not getattr(c, 'visible_to_players', True))
+        if is_hidden and not gm_view:
+            # Emit a placeholder row so players know *something* is in the
+            # order without learning its identity.
+            state.append({
+                'name': '???',
+                'initiative': None,
+                'is_pc': False,
+                'is_active': (i == TURN_INDEX),
+                'conditions': {},
+                'hp_status': '',
+                'hp_color': '',
+                'hidden': True,
+            })
+            continue
         safe_c = { 'name': c.name, 'initiative': c.initiative, 'is_pc': c.is_pc, 'is_active': (i == TURN_INDEX), 'conditions': {k: v for k, v in c.conditions.items() if v} }
         if c.is_pc:
             pct = c.current_hp / c.hp if c.hp > 0 else 0
@@ -4888,6 +5301,9 @@ def player_state():
             else: safe_c['hp_status'] = ""
             safe_c['hp_color'] = "text-red-400" if c.current_hp == 0 else "text-orange-400" if pct <= 0.5 else ""
         state.append(safe_c)
+    # Mask active_name if the active combatant is a hidden NPC (turn banner).
+    if active_c and not gm_view and not active_c.is_pc and not getattr(active_c, 'visible_to_players', True):
+        active_name = '???'
     return jsonify({'encounter': state, 'round': ROUND_NUMBER, 'active_name': active_name})
 
 @app.route('/api/gm_party_state')
@@ -4941,14 +5357,21 @@ def gm_party_state():
 @app.route('/api/events')
 def sse_stream():
     """Server-Sent Events stream for real-time updates to player sheets."""
+    # Resolve GM status from the live Flask session at connect time. SSE
+    # connections are long-lived; the session state captured here is what
+    # sse_broadcast() uses to decide whether this subscriber gets raw GM
+    # data or the player-sanitized view.
+    is_gm = _is_gm()
+
     def generate():
         q = queue.Queue(maxsize=50)
+        entry = (q, is_gm)
         with _sse_lock:
             # Enforce max subscriber cap
             if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
                 # Remove oldest subscriber
                 _sse_subscribers.pop(0)
-            _sse_subscribers.append(q)
+            _sse_subscribers.append(entry)
         try:
             yield "event: connected\ndata: {}\n\n"
             while True:
@@ -4961,9 +5384,9 @@ def sse_stream():
             pass
         finally:
             with _sse_lock:
-                if q in _sse_subscribers:
-                    _sse_subscribers.remove(q)
-    
+                if entry in _sse_subscribers:
+                    _sse_subscribers.remove(entry)
+
     return Response(generate(), mimetype='text/event-stream', headers={
         'Cache-Control': 'no-cache',
         'X-Accel-Buffering': 'no',
@@ -5039,29 +5462,47 @@ def log_roll():
     COMBAT_LOGS.append(log_entry)
     if len(COMBAT_LOGS) > 200: COMBAT_LOGS.pop(0)
     
-    # Broadcast to all connected clients so everyone sees each other's rolls
-    sse_broadcast('player_roll', {
+    # Broadcast to all connected clients so everyone sees each other's rolls.
+    # Hidden-NPC names in the detail/action/result fields (e.g. "vs GhoulPriest")
+    # get scrubbed for player subscribers via the player_filter callback.
+    broadcast_payload = {
         'name': log_entry['name'],
         'action': log_entry['action'],
         'result': log_entry['result'],
         'detail': log_entry['detail'],
         'time': log_entry['time']
-    })
-    
+    }
+
+    def _roll_player_filter(p):
+        hidden = _hidden_npc_names()
+        if not hidden:
+            return p
+        for key in ('name', 'action', 'result', 'detail'):
+            if key in p:
+                p[key] = _scrub_hidden_names(p.get(key), hidden)
+        return p
+
+    sse_broadcast('player_roll', broadcast_payload, player_filter=_roll_player_filter)
+
     return jsonify({"success": True})
 
 @app.route('/api/get_logs')
 def get_logs():
     last_id = request.args.get('last_id')
-    if not last_id: return jsonify({'logs': COMBAT_LOGS[-5:]}) 
+    if not last_id:
+        return jsonify({'logs': _scrub_log_entries_for_players(COMBAT_LOGS[-5:])})
     idx = next((i for i, log in enumerate(COMBAT_LOGS) if log['id'] == last_id), -1)
-    if idx != -1: return jsonify({'logs': COMBAT_LOGS[idx+1:]})
-    return jsonify({'logs': COMBAT_LOGS[-5:]})
+    if idx != -1:
+        return jsonify({'logs': _scrub_log_entries_for_players(COMBAT_LOGS[idx+1:])})
+    return jsonify({'logs': _scrub_log_entries_for_players(COMBAT_LOGS[-5:])})
 
 @app.route('/api/get_full_log')
 def get_full_log():
-    """Return the complete combat log for the history panel."""
-    return jsonify({'logs': list(reversed(COMBAT_LOGS))})
+    """Return the complete combat log for the history panel.
+
+    Hidden-NPC names are scrubbed for player sessions.
+    """
+    return jsonify({'logs': _scrub_log_entries_for_players(list(reversed(COMBAT_LOGS)))})
 
 @app.route('/api/clear_log', methods=['POST'])
 def clear_log():
@@ -6608,7 +7049,14 @@ def create_custom_monster():
 # =============================================================================
 
 def _broadcast_map_state():
-    """Broadcast full map state to all connected clients."""
+    """Broadcast full map state to all connected clients.
+
+    Keep this payload in sync with the ACTIVE_MAP schema — the client does
+    `mapState = JSON.parse(e.data)` on this event, so any key missing here
+    is erased from the browser's view until the next page reload. That's
+    how Phase 2's lights/ambient and Phase 3's templates silently vanished
+    on every refresh before we caught it.
+    """
     with MAP_LOCK:
         state = {
             'id': ACTIVE_MAP['id'],
@@ -6623,6 +7071,10 @@ def _broadcast_map_state():
             'difficult_terrain': ACTIVE_MAP.get('difficult_terrain', []),
             'spawn_point': ACTIVE_MAP.get('spawn_point'),
             'player_control': ACTIVE_MAP['player_control'],
+            'ambient_light': ACTIVE_MAP.get('ambient_light', 'bright'),
+            'lights': ACTIVE_MAP.get('lights', []),
+            'gm_notes': ACTIVE_MAP.get('gm_notes', []),
+            'templates': ACTIVE_MAP.get('templates', []),
         }
     sse_broadcast('map_state', state)
 
@@ -6712,12 +7164,188 @@ def gm_map_view():
                            turn_index=TURN_INDEX,
                            round_number=ROUND_NUMBER)
 
+def _apply_player_map_filter(state, player_name):
+    """Mutate a copy of ACTIVE_MAP to produce the view a non-GM player
+    should see. Consolidates the secret-door / hidden-token / gm-note /
+    token-vision filtering so /map bootstrap and /api/map/state never
+    drift apart.
+
+    Rules (applied in order):
+      1. Drop any token with visible_to_players == False (GM-hidden).
+      2. Mask secret doors → plain walls unless this player has discovered
+         them (via the Seek action — see seek_wall).
+      3. Drop GM notes entirely — pins are GM-only by definition.
+      4. If ambient_light != 'bright' and the player has an assigned token,
+         drop tokens that are NOT in line-of-sight + lit area of any of
+         the player's owned tokens. GM vision always wins.
+
+    Keeping this in one place matters: SSE broadcasts are fan-out, so the
+    /api/map/state refetch that player clients do on every SSE tick is
+    the ONLY scrubber between raw ACTIVE_MAP and the player's browser.
+    """
+    # Step 1 — hidden tokens
+    state['tokens'] = [t for t in state.get('tokens', []) if t.get('visible_to_players', True)]
+
+    # Step 2 — secret door masking
+    walls_out = []
+    for w in state.get('walls', []):
+        if w.get('secret') and w.get('type') == 'door':
+            discovered = w.get('discovered_by') or []
+            if player_name and player_name in discovered:
+                walls_out.append(w)
+            else:
+                masked = dict(w)
+                masked['type'] = 'normal'
+                masked['open'] = False
+                masked.pop('secret', None)
+                masked.pop('hidden_dc', None)
+                masked.pop('discovered_by', None)
+                walls_out.append(masked)
+        else:
+            walls_out.append(w)
+    state['walls'] = walls_out
+
+    # Step 3 — GM notes are never sent to players
+    state.pop('gm_notes', None)
+
+    # Step 4 — token vision filter
+    ambient = state.get('ambient_light', 'bright')
+    if ambient != 'bright' and player_name:
+        owned = [t for t in state['tokens']
+                 if (t.get('assigned_player') == player_name
+                     or t.get('pc_name') == player_name)]
+        if owned:
+            visible_ids = _tokens_visible_to_owners(
+                state['tokens'], owned, state['walls'],
+                state.get('lights', []), ambient,
+                state.get('grid_size', 70),
+            )
+            state['tokens'] = [t for t in state['tokens'] if t['id'] in visible_ids]
+
+    return state
+
+
+def _tokens_visible_to_owners(all_tokens, owners, walls, lights, ambient, grid_size):
+    """Return the set of token ids a player should see, given the tokens
+    they control and the map's lighting state.
+
+    A token is visible if, from ANY owner token:
+      - it lies within light (attached lights on owner count as lights) AND
+      - the straight line between them isn't blocked by a vision-blocking wall.
+
+    'bright' ambient skips this path entirely (see caller).
+    'dim' ambient: everywhere counts as dim light — only darkvision needed for full vision.
+    'dark' ambient: only bright rings of lights illuminate. Owners with darkvision see out to their vision_radius as dim.
+    """
+    visible = set()
+    # Owners are always visible to themselves
+    for o in owners:
+        visible.add(o['id'])
+
+    # Light rings — attached lights move with their token
+    def _light_origin(light):
+        if light.get('attached_to'):
+            tok = next((t for t in all_tokens if t['id'] == light['attached_to']), None)
+            if tok:
+                return (tok['x'] * grid_size + grid_size/2, tok['y'] * grid_size + grid_size/2)
+            return None
+        return (light['x'], light['y'])
+
+    active_lights = []
+    for l in lights:
+        if not l.get('enabled', True):
+            continue
+        origin = _light_origin(l)
+        if origin is None:
+            continue
+        active_lights.append({
+            'x': origin[0], 'y': origin[1],
+            'bright_px': l['bright'] * grid_size,
+            'dim_px': (l['bright'] + l['dim']) * grid_size,
+        })
+
+    for target in all_tokens:
+        if target['id'] in visible:
+            continue
+        tx = target['x'] * grid_size + grid_size/2
+        ty = target['y'] * grid_size + grid_size/2
+
+        for owner in owners:
+            ox = owner['x'] * grid_size + grid_size/2
+            oy = owner['y'] * grid_size + grid_size/2
+            dist = ((tx - ox)**2 + (ty - oy)**2) ** 0.5
+            # LOS first — if walls block, no light matters
+            if _segment_blocked(ox, oy, tx, ty, walls):
+                continue
+            # Is target in any bright light?
+            in_bright = any(((tx - L['x'])**2 + (ty - L['y'])**2) ** 0.5 <= L['bright_px']
+                            for L in active_lights)
+            in_dim = any(((tx - L['x'])**2 + (ty - L['y'])**2) ** 0.5 <= L['dim_px']
+                         for L in active_lights)
+
+            owner_vision_px = (owner.get('vision_radius') or 0) * grid_size
+            in_owner_vision = dist <= owner_vision_px if owner_vision_px > 0 else False
+            has_dv = bool(owner.get('darkvision'))
+            has_ll = bool(owner.get('low_light_vision'))
+
+            if ambient == 'dim':
+                # Whole map is dim light. Everyone sees within vision_radius
+                # as dim; darkvision/lowlight upgrades but result is the same
+                # (we just track visible vs not).
+                if in_owner_vision or in_bright or in_dim:
+                    visible.add(target['id']); break
+            elif ambient == 'dark':
+                # Only lit areas are seen, except darkvision sees up to
+                # vision_radius even in darkness.
+                if in_bright:
+                    visible.add(target['id']); break
+                if in_dim and (has_dv or has_ll):
+                    visible.add(target['id']); break
+                if has_dv and in_owner_vision:
+                    visible.add(target['id']); break
+
+    return visible
+
+
+def _segment_blocked(x1, y1, x2, y2, walls):
+    """True if any LOS-blocking wall segment intersects the line from
+    (x1,y1) to (x2,y2). Doors that are open (open=True) don't block."""
+    for w in walls:
+        wtype = w.get('type', 'normal')
+        if wtype == 'ethereal':
+            continue
+        if wtype == 'door' and w.get('open'):
+            continue
+        pts = w.get('points') or []
+        for i in range(len(pts) - 1):
+            if _segments_cross(x1, y1, x2, y2, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]):
+                return True
+        if w.get('closed') and len(pts) >= 3:
+            if _segments_cross(x1, y1, x2, y2, pts[-1][0], pts[-1][1], pts[0][0], pts[0][1]):
+                return True
+    return False
+
+
+def _segments_cross(ax, ay, bx, by, cx, cy, dx, dy):
+    """Standard 2D segment intersection. Endpoint-touch doesn't count so a
+    wall touching an owner token doesn't block its own vision."""
+    d1x, d1y = bx - ax, by - ay
+    d2x, d2y = dx - cx, dy - cy
+    denom = d1x * d2y - d1y * d2x
+    if abs(denom) < 1e-9:
+        return False
+    s = ((cx - ax) * d2y - (cy - ay) * d2x) / denom
+    t = ((cx - ax) * d1y - (cy - ay) * d1x) / denom
+    return 0.001 < s < 0.999 and 0.001 < t < 0.999
+
+
 @app.route('/map')
 def player_map_view():
     """Player's restricted map view."""
+    player_name = session.get('player_name')
     with MAP_LOCK:
-        current_map = dict(ACTIVE_MAP)
-        # Players don't see fog data - they just see what's revealed
+        current_map = copy.deepcopy(ACTIVE_MAP)
+    _apply_player_map_filter(current_map, player_name)
     return render_template('map_player.html', current_map=current_map)
 
 @app.route('/api/map/upload', methods=['POST'])
@@ -6894,8 +7522,8 @@ def move_map_token():
     new_y = int(data.get('y', 0))
     
     # Check if player is allowed to move tokens
-    is_gm = session.get('gm_authenticated', False)
-    
+    is_gm = _is_gm()
+
     with MAP_LOCK:
         if not is_gm and not ACTIVE_MAP.get('player_control'):
             return jsonify({'success': False, 'error': 'Player movement disabled'}), 403
@@ -7254,18 +7882,30 @@ def border_map():
 # --- EXPLORED FOG (Grid-based) ---
 
 @app.route('/api/map/explored', methods=['POST'])
-@gm_required
 def update_explored():
-    """Update explored grid cells."""
+    """Update explored grid cells.
+
+    Player-facing: player clients auto-accumulate cells their token has seen
+    and POST them here. We UNION into the existing set rather than replacing,
+    so two players walking around in parallel don't clobber each other's
+    memory. GM can replace wholesale by passing `replace: true`.
+    """
     data = request.json or {}
-    explored = data.get('explored', [])
-    
+    # Accept 'cells' (new player contract) and 'explored' (legacy GM contract)
+    cells = data.get('cells') or data.get('explored') or []
+    replace = bool(data.get('replace', False)) and session.get('gm_authenticated', False)
+
     with MAP_LOCK:
-        ACTIVE_MAP['explored'] = explored
-    
+        if replace:
+            ACTIVE_MAP['explored'] = list(cells)
+        else:
+            current = set(ACTIVE_MAP.get('explored') or [])
+            current.update(cells)
+            ACTIVE_MAP['explored'] = list(current)
+
     _save_map_state()
     _broadcast_map_state()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'total': len(ACTIVE_MAP['explored'])})
 
 @app.route('/api/map/explored/clear', methods=['POST'])
 @gm_required
@@ -7492,13 +8132,19 @@ def add_wall():
         'type': data.get('type', 'normal'),  # 'normal', 'terrain', 'invisible', 'ethereal', 'door'
         'open': False,  # For doors
         'closed': data.get('closed', False),  # Whether the wall forms a closed shape
+        # Secret door fields — if secret=True, the door masquerades as a normal
+        # wall to any player not listed in discovered_by. GM always sees it with
+        # the secret styling so they can plan around it.
+        'secret': bool(data.get('secret', False)) and data.get('type') == 'door',
+        'hidden_dc': int(data.get('hidden_dc', 0) or 0),
+        'discovered_by': [],
     }
-    
+
     with MAP_LOCK:
         if 'walls' not in ACTIVE_MAP:
             ACTIVE_MAP['walls'] = []
         ACTIVE_MAP['walls'].append(wall)
-    
+
     _save_map_state()
     _broadcast_map_walls()
     return jsonify({'success': True, 'wall': wall})
@@ -7541,30 +8187,483 @@ def clear_walls():
     """Clear all walls from the map."""
     with MAP_LOCK:
         ACTIVE_MAP['walls'] = []
-    
+
     _save_map_state()
     _broadcast_map_walls()
     return jsonify({'success': True})
 
+@app.route('/api/map/wall/set_secret', methods=['POST'])
+@gm_required
+def set_wall_secret():
+    """GM-only: toggle secret flag and hidden DC on a door wall.
+
+    Doors flipped to secret vanish for any player not in discovered_by — they
+    still block vision, but the player sees only what looks like a normal
+    wall until somebody Seeks and passes the DC.
+    """
+    data = request.json or {}
+    wall_id = data.get('id')
+    secret = bool(data.get('secret', False))
+    hidden_dc = int(data.get('hidden_dc', 0) or 0)
+
+    with MAP_LOCK:
+        for wall in ACTIVE_MAP.get('walls', []):
+            if wall['id'] == wall_id and wall.get('type') == 'door':
+                wall['secret'] = secret
+                wall['hidden_dc'] = hidden_dc
+                # Clear discovered list on any change — re-reveal required
+                wall['discovered_by'] = [] if secret else wall.get('discovered_by', [])
+                break
+
+    _save_map_state()
+    _broadcast_map_walls()
+    # Player views depend on filtered state, so broadcast full state
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/wall/seek', methods=['POST'])
+def seek_wall():
+    """Roll a token's Perception vs a secret door's hidden DC.
+
+    Called when the GM clicks a secret door and picks which PC is seeking,
+    or (future) when a player-side Seek action targets an adjacency. On
+    success the seeking player is added to discovered_by and the door
+    becomes visible to them.
+    """
+    data = request.json or {}
+    wall_id = data.get('id')
+    token_id = data.get('token_id')
+
+    if not wall_id or not token_id:
+        return jsonify({'success': False, 'error': 'wall id and token id required'}), 400
+
+    with MAP_LOCK:
+        wall = next((w for w in ACTIVE_MAP.get('walls', []) if w['id'] == wall_id), None)
+        token = next((t for t in ACTIVE_MAP.get('tokens', []) if t['id'] == token_id), None)
+
+        if not wall:
+            return jsonify({'success': False, 'error': 'wall not found'}), 404
+        if not token:
+            return jsonify({'success': False, 'error': 'token not found'}), 404
+        if not wall.get('secret'):
+            return jsonify({'success': False, 'error': 'not a secret door'}), 400
+
+        # Perception modifier lives on the PC character, not the token; pull
+        # from the live party library so we read the real sheet (with buffs
+        # applied) rather than the map's cached token.
+        pc_name = token.get('pc_name') or token.get('assigned_player') or token.get('name')
+        perception_mod = 0
+        if pc_name:
+            for lib_name, pc in PARTY_LIBRARY.items():
+                if lib_name == pc_name or pc.name == pc_name:
+                    perception_mod = int(getattr(pc, 'perception', 0) or 0)
+                    break
+        # Fallback — use token-level perception if no PC sheet
+        if perception_mod == 0 and isinstance(token.get('perception'), (int, float)):
+            perception_mod = int(token['perception'])
+
+        roll = random.randint(1, 20)
+        total = roll + perception_mod
+        dc = int(wall.get('hidden_dc') or 0)
+
+        # PF2e degrees of success — nat 20 bumps up, nat 1 bumps down
+        diff = total - dc
+        if diff >= 10:
+            degree = 'critical success'
+        elif diff >= 0:
+            degree = 'success'
+        elif diff > -10:
+            degree = 'failure'
+        else:
+            degree = 'critical failure'
+        if roll == 20:
+            degree = {'critical failure': 'failure', 'failure': 'success', 'success': 'critical success'}.get(degree, 'critical success')
+        elif roll == 1:
+            degree = {'critical success': 'success', 'success': 'failure', 'failure': 'critical failure'}.get(degree, 'critical failure')
+
+        revealed = degree in ('success', 'critical success')
+        discoverer = pc_name or token.get('name') or 'someone'
+
+        if revealed:
+            discovered = wall.get('discovered_by') or []
+            if discoverer not in discovered:
+                discovered.append(discoverer)
+            wall['discovered_by'] = discovered
+
+    _combat_log(f"{discoverer} Seeks a hidden door: 1d20 ({roll}) + {perception_mod} = {total} vs DC {dc} — {degree}",
+                log_type='action')
+
+    if revealed:
+        _save_map_state()
+        _broadcast_map_walls()
+        _broadcast_map_state()
+
+    return jsonify({
+        'success': True,
+        'revealed': revealed,
+        'roll': roll,
+        'modifier': perception_mod,
+        'total': total,
+        'dc': dc,
+        'degree': degree,
+        'discoverer': discoverer,
+    })
+
+
+# --- LIGHTING -------------------------------------------------------------
+# Light sources illuminate the map for PC tokens. Each light has a bright
+# radius (full illumination) and a dim radius (extends beyond bright —
+# darkvision treats dim as bright; low-light vision treats dim as bright too
+# but adds half the bright radius). Lights can be attached to a token so
+# they follow it (torch in a backpack). Radii are in squares for sanity —
+# the client multiplies by grid_size when raycasting.
+
+LIGHT_PRESETS = {
+    'candle':     {'bright': 1,  'dim': 1,  'color': '#ffd27a'},
+    'torch':      {'bright': 4,  'dim': 4,  'color': '#ff9c42'},
+    'lantern':    {'bright': 6,  'dim': 6,  'color': '#ffb866'},
+    'bullseye':   {'bright': 12, 'dim': 2,  'color': '#fff1c0'},
+    'daylight':   {'bright': 12, 'dim': 12, 'color': '#fff8e0'},
+}
+
+def _build_light(data):
+    """Normalize a light payload — preset picks defaults, data overrides."""
+    preset_key = (data.get('preset') or '').lower()
+    preset = LIGHT_PRESETS.get(preset_key, {})
+    return {
+        'id': str(uuid.uuid4())[:8],
+        'x': float(data.get('x', 0)),                  # pixel coords
+        'y': float(data.get('y', 0)),
+        'bright': int(data.get('bright', preset.get('bright', 4))),
+        'dim': int(data.get('dim', preset.get('dim', 4))),
+        'color': data.get('color', preset.get('color', '#ff9c42')),
+        'enabled': bool(data.get('enabled', True)),
+        'attached_to': data.get('attached_to'),        # token id or None
+        'name': data.get('name', preset_key or 'Light'),
+        'preset': preset_key or None,
+    }
+
+
+@app.route('/api/map/light/add', methods=['POST'])
+@gm_required
+def add_light():
+    """Place a new light source."""
+    data = request.json or {}
+    light = _build_light(data)
+
+    with MAP_LOCK:
+        ACTIVE_MAP.setdefault('lights', []).append(light)
+
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'light': light})
+
+
+@app.route('/api/map/light/update', methods=['POST'])
+@gm_required
+def update_light():
+    """Patch an existing light — pass only the fields you want to change."""
+    data = request.json or {}
+    light_id = data.get('id')
+    if not light_id:
+        return jsonify({'success': False, 'error': 'light id required'}), 400
+
+    mutable = {'x', 'y', 'bright', 'dim', 'color', 'enabled', 'attached_to', 'name'}
+    with MAP_LOCK:
+        light = next((l for l in ACTIVE_MAP.get('lights', []) if l['id'] == light_id), None)
+        if not light:
+            return jsonify({'success': False, 'error': 'light not found'}), 404
+        for k, v in data.items():
+            if k in mutable:
+                if k in ('bright', 'dim'):
+                    light[k] = int(v)
+                elif k in ('x', 'y'):
+                    light[k] = float(v)
+                elif k == 'enabled':
+                    light[k] = bool(v)
+                else:
+                    light[k] = v
+
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'light': light})
+
+
+@app.route('/api/map/light/remove', methods=['POST'])
+@gm_required
+def remove_light():
+    data = request.json or {}
+    light_id = data.get('id')
+    with MAP_LOCK:
+        ACTIVE_MAP['lights'] = [l for l in ACTIVE_MAP.get('lights', []) if l['id'] != light_id]
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/light/clear', methods=['POST'])
+@gm_required
+def clear_lights():
+    with MAP_LOCK:
+        ACTIVE_MAP['lights'] = []
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/ambient', methods=['POST'])
+@gm_required
+def set_ambient_light():
+    """Switch the map between bright/dim/dark ambient lighting.
+
+    Named `/api/map/ambient` rather than `/api/map/vision_mode` because
+    `vision_mode` already exists on ACTIVE_MAP with different semantics
+    (fog reveal policy, e.g. 'explored'). Keeping the names distinct
+    prevents the two from being confused on the wire.
+    """
+    data = request.json or {}
+    mode = data.get('mode', 'bright')
+    if mode not in ('bright', 'dim', 'dark'):
+        return jsonify({'success': False, 'error': 'invalid mode'}), 400
+    with MAP_LOCK:
+        ACTIVE_MAP['ambient_light'] = mode
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'mode': mode})
+
+
+@app.route('/api/map/light/presets')
+def light_presets():
+    """Advertised presets for the GM's light-placement dropdown."""
+    return jsonify({'presets': LIGHT_PRESETS})
+
+
+# --- TEMPLATES (AOE) ------------------------------------------------------
+# Templates represent spell/ability areas of effect. The client is
+# authoritative about rendering — the server just stores pixel coords,
+# dimensions (in squares), and metadata. Players can create templates too
+# (ability → template flow), but only the creator or a GM can remove them.
+
+TEMPLATE_COLORS = {
+    'fire':     '#ef4444',
+    'cold':     '#60a5fa',
+    'acid':     '#84cc16',
+    'electric': '#fde047',
+    'sonic':    '#c4b5fd',
+    'positive': '#fef3c7',
+    'negative': '#8b5cf6',
+    'force':    '#a78bfa',
+    'generic':  '#8ED4D4',
+}
+
+def _build_template(data):
+    """Normalize a template payload. Fills defaults based on type."""
+    ttype = data.get('type', 'burst')
+    if ttype not in ('burst', 'emanation', 'cone', 'line'):
+        ttype = 'burst'
+    color = data.get('color') or TEMPLATE_COLORS.get(data.get('damage_type', 'generic'), '#8ED4D4')
+    return {
+        'id': str(uuid.uuid4())[:8],
+        'type': ttype,
+        'x': float(data.get('x', 0)),
+        'y': float(data.get('y', 0)),
+        'attached_to': data.get('attached_to'),
+        'radius': int(data.get('radius', 2)),       # squares — burst/emanation
+        'length': int(data.get('length', 4)),       # squares — cone/line
+        'width': int(data.get('width', 1)),         # squares — line (thickness)
+        'direction': float(data.get('direction', 0)),  # deg; 0=east, 90=south
+        'angle': float(data.get('angle', 90)),      # deg; PF2e cones default 90
+        'color': color,
+        'name': data.get('name', ''),
+        'owner': data.get('owner', ''),             # player or 'GM'
+        'source': data.get('source', ''),           # e.g. 'Fireball'
+        'temporary': bool(data.get('temporary', False)),
+        'created_round': ROUND_NUMBER,
+    }
+
+
+@app.route('/api/map/template/add', methods=['POST'])
+def add_template():
+    """Create an AOE template. GM or player (players own their templates)."""
+    data = request.json or {}
+    # Treat no-password local dev as GM (matches gm_required behavior).
+    is_gm = _is_gm()
+    player_name = session.get('player_name')
+    if not is_gm and not player_name:
+        return jsonify({'success': False, 'error': 'login required'}), 401
+    if 'owner' not in data:
+        data['owner'] = 'GM' if is_gm else player_name
+    tmpl = _build_template(data)
+    with MAP_LOCK:
+        ACTIVE_MAP.setdefault('templates', []).append(tmpl)
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'template': tmpl})
+
+
+@app.route('/api/map/template/update', methods=['POST'])
+def update_template():
+    """Patch a template. GM or the owning player only."""
+    data = request.json or {}
+    tid = data.get('id')
+    if not tid:
+        return jsonify({'success': False, 'error': 'template id required'}), 400
+    is_gm = _is_gm()
+    player_name = session.get('player_name')
+    mutable = {'x', 'y', 'attached_to', 'radius', 'length', 'width',
+               'direction', 'angle', 'color', 'name', 'source', 'temporary'}
+    with MAP_LOCK:
+        tmpl = next((t for t in ACTIVE_MAP.get('templates', []) if t['id'] == tid), None)
+        if not tmpl:
+            return jsonify({'success': False, 'error': 'template not found'}), 404
+        if not is_gm and tmpl.get('owner') != player_name:
+            return jsonify({'success': False, 'error': 'not owner'}), 403
+        for k, v in data.items():
+            if k not in mutable:
+                continue
+            if k in ('radius', 'length', 'width'):
+                tmpl[k] = int(v)
+            elif k in ('x', 'y', 'direction', 'angle'):
+                tmpl[k] = float(v)
+            elif k == 'temporary':
+                tmpl[k] = bool(v)
+            else:
+                tmpl[k] = v
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'template': tmpl})
+
+
+@app.route('/api/map/template/remove', methods=['POST'])
+def remove_template():
+    """Remove a template. GM or owner only."""
+    data = request.json or {}
+    tid = data.get('id')
+    is_gm = _is_gm()
+    player_name = session.get('player_name')
+    with MAP_LOCK:
+        tmpl = next((t for t in ACTIVE_MAP.get('templates', []) if t['id'] == tid), None)
+        if not tmpl:
+            return jsonify({'success': True})
+        if not is_gm and tmpl.get('owner') != player_name:
+            return jsonify({'success': False, 'error': 'not owner'}), 403
+        ACTIVE_MAP['templates'] = [t for t in ACTIVE_MAP.get('templates', []) if t['id'] != tid]
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/template/clear', methods=['POST'])
+@gm_required
+def clear_templates():
+    with MAP_LOCK:
+        ACTIVE_MAP['templates'] = []
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True})
+
+
+# --- GM-ONLY PINS / NOTES LAYER -------------------------------------------
+# Notes live in ACTIVE_MAP['gm_notes']. They never leave get_map_state() for
+# non-GM viewers. Kept separate from walls/tokens so rendering order is simple.
+
+@app.route('/api/map/note/add', methods=['POST'])
+@gm_required
+def add_gm_note():
+    data = request.json or {}
+    try:
+        x = int(data.get('x', 0))
+        y = int(data.get('y', 0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'invalid coords'}), 400
+    note = {
+        'id': str(uuid.uuid4())[:8],
+        'x': x,
+        'y': y,
+        'text': str(data.get('text', '') or '')[:500],
+        'color': str(data.get('color', '#fbbf24'))[:16],
+        'icon': str(data.get('icon', '📌'))[:4],
+    }
+    with MAP_LOCK:
+        ACTIVE_MAP.setdefault('gm_notes', []).append(note)
+    _save_map_state()
+    # Notes are GM-only — a dedicated SSE event keeps players from re-rendering
+    try:
+        sse_broadcast('map_notes', {'notes': list(ACTIVE_MAP.get('gm_notes', []))})
+    except Exception:
+        pass
+    return jsonify({'success': True, 'note': note})
+
+
+@app.route('/api/map/note/update', methods=['POST'])
+@gm_required
+def update_gm_note():
+    data = request.json or {}
+    note_id = data.get('id')
+    with MAP_LOCK:
+        for n in ACTIVE_MAP.get('gm_notes', []):
+            if n['id'] == note_id:
+                if 'text' in data: n['text'] = str(data['text'] or '')[:500]
+                if 'color' in data: n['color'] = str(data['color'])[:16]
+                if 'icon' in data: n['icon'] = str(data['icon'])[:4]
+                if 'x' in data:
+                    try: n['x'] = int(data['x'])
+                    except (TypeError, ValueError): pass
+                if 'y' in data:
+                    try: n['y'] = int(data['y'])
+                    except (TypeError, ValueError): pass
+                break
+    _save_map_state()
+    try:
+        sse_broadcast('map_notes', {'notes': list(ACTIVE_MAP.get('gm_notes', []))})
+    except Exception:
+        pass
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/note/remove', methods=['POST'])
+@gm_required
+def remove_gm_note():
+    data = request.json or {}
+    note_id = data.get('id')
+    with MAP_LOCK:
+        ACTIVE_MAP['gm_notes'] = [n for n in ACTIVE_MAP.get('gm_notes', []) if n['id'] != note_id]
+    _save_map_state()
+    try:
+        sse_broadcast('map_notes', {'notes': list(ACTIVE_MAP.get('gm_notes', []))})
+    except Exception:
+        pass
+    return jsonify({'success': True})
+
+
 @app.route('/api/map/state')
 def get_map_state():
-    """Get current map state (filtered for players)."""
-    is_gm = session.get('gm_authenticated', False)
-    
+    """Get current map state (filtered for players).
+
+    Player clients refetch this on every SSE tick, so it's the scrubber
+    between raw ACTIVE_MAP and the wire. Keep all player-side filtering in
+    _apply_player_map_filter so /map bootstrap and this refetch can't drift.
+    """
+    is_gm = _is_gm()
+    player_name = session.get('player_name')
+
     with MAP_LOCK:
-        state = dict(ACTIVE_MAP)
-        
-        if not is_gm:
-            # Filter tokens not visible to players
-            state['tokens'] = [t for t in state['tokens'] if t.get('visible_to_players', True)]
-            # Don't send raw fog data to players - they'll compute visibility client-side
-    
+        if is_gm:
+            state = dict(ACTIVE_MAP)
+        else:
+            # deepcopy so the filter can mutate freely without touching the shared ref
+            state = copy.deepcopy(ACTIVE_MAP)
+            _apply_player_map_filter(state, player_name)
+
     return jsonify(state)
 
 @app.route('/api/map/clear', methods=['POST'])
-@gm_required  
+@gm_required
 def clear_map():
-    """Clear the current map."""
+    """Clear the current map. Keeps schema in sync with the module-level
+    ACTIVE_MAP declaration so downstream code doesn't hit KeyErrors on the
+    fields (gm_notes, lights, explored) that were added later."""
     global ACTIVE_MAP
     with MAP_LOCK:
         ACTIVE_MAP = {
@@ -7575,10 +8674,15 @@ def clear_map():
             'grid_offset_x': 0,
             'grid_offset_y': 0,
             'tokens': [],
-            'fog': [],
             'walls': [],
-            'fog_enabled': True,
-            'player_control': False,
+            'explored': [],
+            'difficult_terrain': [],
+            'spawn_point': None,
+            'player_control': True,
+            'gm_notes': [],
+            'ambient_light': 'bright',
+            'lights': [],
+            'templates': [],
         }
     _broadcast_map_state()
     return jsonify({'success': True})

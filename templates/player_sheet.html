@@ -325,7 +325,7 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            padding: 3px 10px;
+            padding: 3px 4px 3px 10px;
             border-radius: 999px;
             font-size: 10px;
             font-weight: 700;
@@ -336,7 +336,7 @@
             color: #fca5a5;
         }
         .condition-pill button {
-            width: 16px; height: 16px;
+            width: 18px; height: 18px;
             display: flex; align-items: center; justify-content: center;
             border-radius: 50%;
             font-size: 12px; font-weight: 700;
@@ -347,6 +347,27 @@
             transition: background 0.15s;
         }
         .condition-pill button:hover { background: rgba(239,68,68,0.2); }
+        /* Numeric value badge — makes "frightened 2" unambiguously legible
+           by isolating the stack from the label. Matches the visual weight
+           Pathbuilder / Demiplane give valued conditions. */
+        .condition-pill .cond-val {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            font-size: 11px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            background: #ef4444;
+            color: #fff;
+            border-radius: 999px;
+            margin: 0 2px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.3);
+        }
+        .condition-pill.cond-warn .cond-val { background: #F59E0B; }
+        .condition-pill.cond-crit .cond-val { background: #dc2626; box-shadow: 0 0 0 1px rgba(255,255,255,0.25), 0 0 6px rgba(220,38,38,0.7); }
         .condition-toggle {
             padding: 3px 10px;
             border-radius: 999px;
@@ -791,6 +812,31 @@
     {% set accent_color = 'text-red-400' if pc.status_penalty > 0 else 'text-amber-400' %}
     {% set blue_accent = 'text-red-400' if pc.status_penalty > 0 else 'text-blue-400' %}
 
+    {# ──────────────────────────────────────────────────────────────────
+       Action-cost pip macro. PF2e encodes action cost as Unicode in our
+       CLASS_FEATURES data (◆=1, ◆◆=2, ◆◆◆=3, ◈=free, ⟳=reaction, —=none).
+       Render them as proper pips so the glyphs don't look like garbage in
+       fonts that lack the ⬥ glyph, and so scanning "how much does this
+       cost" is instant — same convention Pathbuilder / Demiplane Nexus use.
+       ────────────────────────────────────────────────────────────────── #}
+    {% macro action_pips(actions) -%}
+      {%- if actions and actions not in ('—', '-', '') -%}
+        {%- if '⟳' in actions -%}
+          <span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>
+        {%- elif '◈' in actions -%}
+          <span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>
+        {%- elif '◆◆◆' in actions -%}
+          <span class="action-pips" title="Three Actions"><span class="action-pip"></span><span class="action-pip"></span><span class="action-pip"></span></span>
+        {%- elif '◆◆' in actions -%}
+          <span class="action-pips" title="Two Actions"><span class="action-pip"></span><span class="action-pip"></span></span>
+        {%- elif '◆' in actions -%}
+          <span class="action-pips" title="One Action"><span class="action-pip"></span></span>
+        {%- else -%}
+          <span class="text-xs font-header" style="color:var(--text-muted);">{{ actions }}</span>
+        {%- endif -%}
+      {%- endif -%}
+    {%- endmacro %}
+
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- CHARACTER HEADER — DDB-style sticky header                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -884,11 +930,22 @@
             </div>
 
             <!-- Class DC -->
-            <div class="ss-block" title="Class DC">
+            <div class="ss-block" title="Class DC (used for class features, e.g. an Alchemist's Quick Alchemy)">
                 <div class="ss-lbl">Class DC</div>
                 <div class="ss-val">{{ pc.class_dc }}</div>
-                {% if pc.spell_dc > 0 %}<div class="ss-sub" style="color:var(--purple);">Spell DC {{ pc.spell_dc }}</div>{% endif %}
             </div>
+
+            {# Spell DC gets its own strip block when the character casts — no longer
+               buried as a sub-label under Class DC where casters kept missing it. #}
+            {% if pc.spell_dc > 0 %}
+            <div class="ss-block" title="Spell DC (target DC for enemies saving against your spells)">
+                <div class="ss-lbl">Spell DC</div>
+                <div class="ss-val" style="color:var(--purple);">{{ pc.spell_dc }}</div>
+                {% if pc.spell_attack is defined and pc.spell_attack != 0 %}
+                <div class="ss-sub" style="color:var(--purple);">Spell Atk +{{ pc.spell_attack }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
 
             <!-- Fort/Ref/Will (compact saves in strip) -->
             <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fortitude Save">
@@ -993,11 +1050,16 @@
                 <span style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-right:4px;">Conditions</span>
                 {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed', 'dying'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
-                <div class="condition-pill" id="cond-wrap-{{ cond }}" data-cond-name="{{ cond }}"
-                     style="{% if cval == 0 %}display:none;{% endif %}">
-                    <button onclick="adjustCondition('{{ cond }}', -1)">-</button>
-                    <span style="font-size:11px;">{{ cond|upper }} <span id="cond-val-{{ cond }}">{{ cval }}</span></span>
-                    <button onclick="adjustCondition('{{ cond }}', 1)">+</button>
+                {# Color cues: crit severity at 3+ (or dying 2+), warn at 2, base otherwise.
+                   Pathbuilder flags dying/doomed in red — we match that visual language. #}
+                {% set sev_class = 'cond-crit' if (cval >= 3 or (cond == 'dying' and cval >= 2)) else ('cond-warn' if cval >= 2 else '') %}
+                <div class="condition-pill {{ sev_class }}" id="cond-wrap-{{ cond }}" data-cond-name="{{ cond }}"
+                     style="{% if cval == 0 %}display:none;{% endif %}"
+                     title="{{ cond|replace('_',' ')|title }} {{ cval }}">
+                    <button onclick="adjustCondition('{{ cond }}', -1)" title="Reduce">−</button>
+                    <span style="font-size:11px;">{{ cond|upper }}</span>
+                    <span class="cond-val" id="cond-val-{{ cond }}">{{ cval }}</span>
+                    <button onclick="adjustCondition('{{ cond }}', 1)" title="Increase">+</button>
                 </div>
                 {% endfor %}
                 {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
@@ -1333,6 +1395,18 @@
                                 + Equip Weapon
                             </button>
                         </div>
+
+                        {# PF2e core reminder — new players routinely forget the
+                           ±10 crit rule and the −5 / −10 MAP penalties. Pathbuilder
+                           exposes the same reference on the attacks panel. #}
+                        <div class="mb-3 px-3 py-2 rounded flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px]"
+                             style="background:var(--bg-raised); border:1px dashed var(--border-subtle); color:var(--text-muted);"
+                             title="Critical hit: roll exceeds target DC by 10, OR a nat 20 that hits. Critical miss: roll falls 10 below DC, OR a nat 1 that misses. Multiple Attack Penalty stacks each Strike.">
+                            <span class="font-header tracking-wider uppercase">Rules</span>
+                            <span><span style="color:#FBBF24;">Crit</span> = beat target DC by 10 (or nat 20 on hit)</span>
+                            <span><span style="color:#F87171;">Crit Fail</span> = miss DC by 10 (or nat 1 on miss)</span>
+                            <span><span style="color:var(--accent-gold);">MAP</span> −5 / −10 (−4 / −8 on agile)</span>
+                        </div>
                         
                         <div id="forge-ui" class="hidden bg-gray-900 border border-amber-500/30 rounded p-4 mb-6">
                             <h4 class="text-amber-400 font-bold mb-3">Weapon Forge</h4>
@@ -1396,11 +1470,15 @@
                                     <div class="flex flex-col md:flex-row gap-3 w-full">
                                         <div class="flex flex-1 gap-1">
                                             {% for strike in attack.strikes %}
-                                            <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')" class="flex-1 text-white py-2 rounded text-sm transition-all hover:scale-105 transform" style="background:var(--surface-overlay); border:1px solid var(--border-default); border-left:3px solid {% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};">
+                                            <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')"
+                                                    class="flex-1 text-white py-2 rounded text-sm transition-all hover:scale-105 transform"
+                                                    style="background:var(--surface-overlay); border:1px solid var(--border-default); border-left:3px solid {% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};"
+                                                    title="{% if loop.index0 == 0 %}First Strike — no MAP.{% elif loop.index0 == 1 %}Second Strike — MAP applied.{% else %}Third Strike — full MAP.{% endif %} Crit on roll vs AC + 10 (or nat 20 that hits).">
                                                 <span class="block font-bold uppercase tracking-widest mb-1" style="font-size:var(--text-2xs); color:{% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};">
                                                     {% if loop.index0 == 0 %}1st Strike{% elif loop.index0 == 1 %}2nd (MAP){% else %}3rd (MAP){% endif %}
                                                 </span>
                                                 <span class="block text-lg font-bold leading-none">{{ strike.label }}</span>
+                                                <span class="block text-[9px] mt-0.5 opacity-60" style="color:var(--text-faint);">crit ≥ AC+10</span>
                                             </button>
                                             {% endfor %}
                                         </div>
@@ -1731,7 +1809,7 @@
                 {% for feat in pc.ancestry_features %}
                 <div class="panel-card mb-2" style="padding:var(--space-md);">
                     <div class="flex items-center gap-2 mb-1">
-                        {% if feat.get('actions') %}<span class="font-header text-sm" style="color:rgba(212,165,116,0.5);">{{ feat.actions }}</span>{% endif %}
+                        {{ action_pips(feat.get('actions')) }}
                         <h4 class="font-header text-sm" style="color:var(--accent-gold-light);">{{ feat.name }}</h4>
                         <span class="text-[9px] font-header uppercase tracking-wider" style="color:var(--text-muted);">{{ feat.type|title }}</span>
                     </div>
@@ -1750,7 +1828,7 @@
                 <div class="panel-card mb-3 relative overflow-hidden" style="padding:var(--space-md);" id="feature-{{ feat.name|replace(' ', '-') }}">
                     <!-- Action cost badge -->
                     {% if feat.get('actions') %}
-                    <span class="absolute top-3 right-3 font-header text-lg" style="color: rgba(167,139,250,0.3);" title="{{ feat.type|title }}">{{ feat.actions }}</span>
+                    <span class="absolute top-3 right-3" title="{{ feat.type|title }}">{{ action_pips(feat.actions) }}</span>
                     {% endif %}
                     
                     <div class="flex items-center gap-3 mb-2">
@@ -1844,6 +1922,51 @@
                             <label class="block text-[10px] text-orange-400 font-bold uppercase mb-1">CP</label>
                             <input type="number" id="coin-cp" value="{{ pc.cp }}" class="w-full bg-gray-950 text-orange-300 font-mono text-center rounded border border-orange-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
                         </div>
+                    </div>
+
+                    {# ───────────────────────────────────────────────────
+                       Bulk / Encumbrance meter. PF2e: carrying > (5 + Str)
+                       Bulk = encumbered (clumsy 1, -10 ft Speed). > (10 + Str)
+                       is the hard cap. Raw total_bulk is already the integer
+                       Bulk count; light_bulk_remainder shows partial L items.
+                       Pathbuilder surfaces this so players catch encumbrance
+                       before it bites them mid-encounter — same idea here.
+                       ─────────────────────────────────────────────────── #}
+                    {% set enc_pct = (pc.total_bulk / pc.max_bulk_limit * 100) if pc.max_bulk_limit else 0 %}
+                    {% set enc_pct = enc_pct if enc_pct <= 100 else 100 %}
+                    {% set bulk_tone = 'var(--red)' if pc.total_bulk > pc.max_bulk_limit else ('#F59E0B' if pc.is_encumbered else 'var(--gold)') %}
+                    {% set bulk_label = 'OVERLOADED' if pc.total_bulk > pc.max_bulk_limit else ('ENCUMBERED' if pc.is_encumbered else 'LIGHT LOAD') %}
+                    <div class="mb-6 p-3 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);" title="Encumbered at {{ pc.encumbered_limit }}B (Clumsy 1, −10 ft Speed). Max carry {{ pc.max_bulk_limit }}B.">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <span class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-muted);">Bulk</span>
+                                <span class="font-mono text-sm font-bold" style="color:{{ bulk_tone }};">
+                                    {{ pc.total_bulk }}{% if pc.light_bulk_remainder %} + {{ pc.light_bulk_remainder }}L{% endif %}
+                                    <span class="opacity-60">/ {{ pc.max_bulk_limit }}</span>
+                                </span>
+                            </div>
+                            <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded"
+                                  style="background:{{ bulk_tone }}22; color:{{ bulk_tone }}; border:1px solid {{ bulk_tone }}55;">
+                                {{ bulk_label }}
+                            </span>
+                        </div>
+                        <div class="relative w-full h-2 rounded-full overflow-hidden" style="background:var(--bg-input);">
+                            <div class="h-full transition-all" style="width:{{ enc_pct }}%; background:{{ bulk_tone }};"></div>
+                            {# Encumbered threshold tick #}
+                            {% if pc.max_bulk_limit %}
+                            <div class="absolute top-0 bottom-0 w-px" style="left:{{ (pc.encumbered_limit / pc.max_bulk_limit * 100)|round(0) }}%; background:rgba(255,255,255,0.4);" title="Encumbered threshold ({{ pc.encumbered_limit }}B)"></div>
+                            {% endif %}
+                        </div>
+                        <div class="flex justify-between mt-1 text-[9px]" style="color:var(--text-faint);">
+                            <span>0</span>
+                            <span>Enc {{ pc.encumbered_limit }}B</span>
+                            <span>Max {{ pc.max_bulk_limit }}B</span>
+                        </div>
+                        {% if pc.is_encumbered %}
+                        <div class="mt-2 text-[10px]" style="color:#F59E0B;">
+                            ⚠ Clumsy 1 · −10 ft Speed (drop items to recover)
+                        </div>
+                        {% endif %}
                     </div>
 
                     <div class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
@@ -2115,7 +2238,7 @@
             <div class="bg-gray-900 p-3 border-b border-gray-700 flex justify-between items-center">
                 <span class="font-header text-amber-500 text-sm">Dice Roller</span>
                 <div class="flex items-center gap-2">
-                    <button id="btn-toggle-3d" onclick="toggle3DDice()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Toggle 3D Physics Dice">3D</button>
+                    <button id="btn-toggle-3d" onclick="toggleDiceMode()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Dice animation: 3D physics → 2D animated → Instant (no animation). Click to cycle.">3D</button>
                     <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
                 </div>
             </div>
@@ -2430,7 +2553,14 @@
                     const el = document.getElementById(`cond-val-${c}`);
                     if (el) el.textContent = val;
                     const wrap = document.getElementById(`cond-wrap-${c}`);
-                    if (wrap) wrap.style.display = val > 0 ? '' : 'none';
+                    if (wrap) {
+                        wrap.style.display = val > 0 ? '' : 'none';
+                        // Severity shading: crit at 3+ (or dying 2+), warn at 2, base otherwise.
+                        wrap.classList.remove('cond-warn', 'cond-crit');
+                        if (val >= 3 || (c === 'dying' && val >= 2)) wrap.classList.add('cond-crit');
+                        else if (val >= 2) wrap.classList.add('cond-warn');
+                        wrap.setAttribute('title', `${c.replace('_', ' ').replace(/\b\w/g, m => m.toUpperCase())} ${val}`);
+                    }
                 });
                 
                 // Update boolean condition buttons
@@ -3189,20 +3319,46 @@
         window.broadcastToGM = broadcastToGM;
 
         // ==========================================
+        // DICE ANIMATION MODE — tri-state, localStorage-backed
+        //   'physics'  → 3D physics dice overlay (when supported)
+        //   'animated' → 2D dice faces with staggered bounce in the toast
+        //   'plain'    → no animation, just the total + breakdown line
+        // 3D is the preferred default for capable browsers; we fall back to
+        // 'animated' otherwise. User cycles with the button in the dice panel.
+        // ==========================================
+        function getDiceMode() {
+            try {
+                const m = localStorage.getItem('pf2e_dice_mode');
+                if (m === 'physics' || m === 'animated' || m === 'plain') return m;
+            } catch (e) {}
+            return 'physics';
+        }
+        function setDiceMode(mode) {
+            try { localStorage.setItem('pf2e_dice_mode', mode); } catch (e) {}
+            // Mirror into dice-engine's own flag so its roll() bails early in non-physics modes
+            if (window.diceRoller) window.diceRoller.setEnabled(mode === 'physics');
+        }
+        window.getDiceMode = getDiceMode;
+        window.setDiceMode = setDiceMode;
+
+        // ==========================================
         // INLINE ROLL TOAST SYSTEM (replaces alert())
         // ==========================================
         function showRollToast(title, total, detail, isCrit, isFumble, diceResults) {
             const container = document.getElementById('roll-toast-container');
             const toast = document.createElement('div');
-            
+            const mode = getDiceMode();
+
             let borderColor = isCrit ? 'border-amber-500' : isFumble ? 'border-red-500' : 'border-gray-600';
             let totalColor = isCrit ? 'text-amber-400' : isFumble ? 'text-red-400' : 'text-white';
-            let badge = isCrit ? '<span class="bg-amber-500 text-gray-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 20</span>' 
+            let badge = isCrit ? '<span class="bg-amber-500 text-gray-900 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 20</span>'
                       : isFumble ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">NAT 1</span>' : '';
-            
-            // Build dice faces HTML with staggered bounce animation
+
+            // In 'plain' mode skip the bouncing dice faces entirely — the breakdown
+            // line already shows each die result. Keeps the crit/fumble badge so
+            // players still have a signal for big numbers without the full show.
             let diceHTML = '';
-            if (diceResults && diceResults.length > 0) {
+            if (mode !== 'plain' && diceResults && diceResults.length > 0) {
                 diceHTML = '<div class="flex flex-wrap gap-1 mb-2">';
                 diceResults.forEach((die, i) => {
                     let dieClass = `dice-d${die.sides}`;
@@ -3212,8 +3368,15 @@
                 });
                 diceHTML += '</div>';
             }
-            
-            toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
+
+            // Plain mode also shrinks the toast so a rapid-fire skill check sequence
+            // doesn't flood the corner of the screen.
+            const isPlain = mode === 'plain';
+            const padClass = isPlain ? 'p-2.5' : 'p-4';
+            const totalClass = isPlain ? 'text-2xl' : 'text-3xl';
+            const dismissMs = isPlain ? 4000 : 8000;
+
+            toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl ${padClass} relative overflow-hidden pointer-events-auto`;
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">${title}</span>
@@ -3221,21 +3384,20 @@
                 </div>
                 ${diceHTML}
                 <div class="flex items-center gap-2 mb-1">
-                    <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
+                    <span class="${totalClass} font-header ${totalColor} ${isPlain ? '' : 'roll-total-pop'}">${total}</span>
                     ${badge}
                 </div>
                 <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700">${detail}</div>
                 <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
             `;
             container.prepend(toast);
-            
-            // Auto-remove after 8 seconds
+
             setTimeout(() => {
                 toast.style.opacity = '0';
                 toast.style.transform = 'translateX(100%)';
                 toast.style.transition = 'all 0.3s ease';
                 setTimeout(() => toast.remove(), 300);
-            }, 8000);
+            }, dismissMs);
         }
         window.showRollToast = showRollToast;
 
@@ -3479,12 +3641,94 @@
                         ${heightenedHTML}
                     </div>
                     <div class="spell-card-footer">
+                        ${(meta.area || meta.range) ? `<button onclick="placeSpellTemplate('${spellName.replace(/'/g,"\\'")}', ${JSON.stringify(meta).replace(/"/g,'&quot;')}); this.closest('.spell-card-overlay').remove();" class="px-4 py-2 rounded text-sm font-bold transition-colors" style="background:rgba(142,212,212,0.15); border:1px solid rgba(142,212,212,0.3); color:#8ED4D4;" title="Drop this on the map">Place on Map</button>` : ''}
                         <button onclick="rollSpell('${spellName.replace(/'/g,"\\'")}', event); this.closest('.spell-card-overlay').remove();" class="px-4 py-2 rounded text-sm font-bold transition-colors" style="background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.3); color:var(--color-spell);">Cast ${spellName}</button>
                     </div>
                 </div>
             `;
-            
+
             document.body.appendChild(overlay);
+        }
+
+        // Parse meta.area like "30-ft burst" / "60-ft cone" / "20-ft line" and
+        // convert into a template payload. Ranges live in feet; the map stores
+        // them in squares, so feet/5 → squares.
+        function _parseAreaShape(area) {
+            if (!area) return null;
+            const m = area.match(/(\d+)[- ]*ft\s*(burst|cone|emanation|line|radius)/i);
+            if (!m) return null;
+            const size = Math.max(1, Math.round(parseInt(m[1], 10) / 5));  // squares
+            const kind = m[2].toLowerCase();
+            if (kind === 'burst') return { type: 'burst', radius: size };
+            if (kind === 'radius') return { type: 'burst', radius: size };
+            if (kind === 'emanation') return { type: 'emanation', radius: size };
+            if (kind === 'cone') return { type: 'cone', length: size, angle: 90 };
+            if (kind === 'line') return { type: 'line', length: size, width: 1 };
+            return null;
+        }
+
+        // Ability → template cross-tab flow. This POSTs the template to the
+        // shared /api/map/template/add; the map's SSE broadcast pushes it to
+        // both GM and player views immediately. We pick an anchor heuristic:
+        // emanations attach to the player's own token (if we know its id),
+        // otherwise we place at the token's current position with a prompt.
+        async function placeSpellTemplate(spellName, meta) {
+            const shape = _parseAreaShape(meta.area);
+            if (!shape) {
+                alert(`Couldn't parse area "${meta.area}" — place it manually on the map.`);
+                return;
+            }
+            // Find the player's own token so emanations can attach.
+            let myTokenId = null;
+            let myX = 0, myY = 0;
+            try {
+                const s = await fetch('/api/map/state').then(r => r.json());
+                const playerName = '{{ pc.name }}';
+                const tok = (s.tokens || []).find(t =>
+                    t.assigned_player === playerName || t.pc_name === playerName || t.name === playerName
+                );
+                if (tok) {
+                    myTokenId = tok.id;
+                    const gs = s.grid_size || 70;
+                    const ox = s.grid_offset_x || 0;
+                    const oy = s.grid_offset_y || 0;
+                    const size = tok.size || 1;
+                    myX = tok.x * gs + ox + (gs * size) / 2;
+                    myY = tok.y * gs + oy + (gs * size) / 2;
+                }
+            } catch(_) {}
+
+            const payload = {
+                type: shape.type,
+                source: spellName,
+                x: myX, y: myY,
+                radius: shape.radius || 2,
+                length: shape.length || 4,
+                width: shape.width || 1,
+                angle: shape.angle || 90,
+                color: '#a78bfa',   // spell purple — matches the Cast button
+                temporary: true,
+            };
+            if (shape.type === 'emanation' && myTokenId) {
+                payload.attached_to = myTokenId;
+            }
+            try {
+                const r = await fetch('/api/map/template/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (r.ok) {
+                    // Friendly toast using the existing roll toast helper
+                    if (typeof showRollToast === 'function') {
+                        showRollToast(`${spellName} area placed`, '✨', `Open the map to aim it.`, false, false);
+                    }
+                } else {
+                    alert(`Couldn't place ${spellName}: ${r.status}`);
+                }
+            } catch(e) {
+                alert(`Network error placing ${spellName}`);
+            }
         }
         
         function buildActionPips(actionStr) {
@@ -3582,22 +3826,52 @@
             document.getElementById('dice-panel').classList.toggle('hidden');
         }
 
-        function toggle3DDice() {
-            if (window.diceRoller) {
-                window.diceRoller.setEnabled(!window.diceRoller.enabled);
-            }
+        // Tri-state cycle: physics → animated → plain → physics.
+        // If WebGL is unavailable, skip physics (falls through to animated/plain).
+        function toggleDiceMode() {
+            const order = (typeof DiceRoller !== 'undefined' && DiceRoller.isSupported())
+                ? ['physics', 'animated', 'plain']
+                : ['animated', 'plain'];
+            const cur = getDiceMode();
+            const idx = order.indexOf(cur);
+            const next = order[(idx + 1) % order.length] || order[0];
+            setDiceMode(next);
             update3DButton();
         }
         function update3DButton() {
             const btn = document.getElementById('btn-toggle-3d');
             if (!btn) return;
-            const on = window.diceRoller?.enabled && (typeof DiceRoller !== 'undefined') && DiceRoller.isSupported();
-            btn.className = on
-                ? 'text-[10px] px-2 py-0.5 rounded border border-accent-500/50 bg-accent-500/20 text-accent-300 transition-colors'
-                : 'text-[10px] px-2 py-0.5 rounded border border-gray-600 bg-gray-800 text-gray-500 transition-colors';
+            const mode = getDiceMode();
+            const supports3D = (typeof DiceRoller !== 'undefined') && DiceRoller.isSupported();
+            // Label + color per state; plain greys out, animated amber, physics accent
+            let label, cls;
+            if (mode === 'physics' && supports3D) {
+                label = '3D';
+                cls = 'border-accent-500/50 bg-accent-500/20 text-accent-300';
+            } else if (mode === 'animated' || (mode === 'physics' && !supports3D)) {
+                label = '2D';
+                cls = 'border-amber-500/50 bg-amber-500/15 text-amber-300';
+            } else {
+                // "Instant" reads clearer to players than "Plain" for an opt-out
+                // of the dice animation — they still get the total + breakdown.
+                label = 'Instant';
+                cls = 'border-gray-600 bg-gray-800 text-gray-400';
+            }
+            btn.textContent = label;
+            btn.className = `text-[10px] px-2 py-0.5 rounded border ${cls} transition-colors`;
         }
-        // Init button state after module loads
-        setTimeout(update3DButton, 1000);
+        // Mirror the initial mode into dice-engine once on load so a refresh
+        // preserves the user's last choice across the physics/animated/plain split
+        (function _initDiceMode() {
+            const mode = getDiceMode();
+            // Wait briefly for dice-engine.js to register window.diceRoller
+            setTimeout(() => {
+                if (window.diceRoller) window.diceRoller.setEnabled(mode === 'physics');
+                update3DButton();
+            }, 1000);
+        })();
+        // Back-compat shim in case older inline code calls toggle3DDice
+        window.toggle3DDice = toggleDiceMode;
 
         function quickDie(sides) {
             let roll = Math.floor(Math.random() * sides) + 1;

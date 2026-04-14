@@ -27,7 +27,8 @@
       },
       "persistent_damage": "",
       "elite_weak": 0,
-      "delaying": false
+      "delaying": false,
+      "visible_to_players": true
     },
     {
       "type": "monster",
@@ -55,7 +56,8 @@
       },
       "persistent_damage": "",
       "elite_weak": 0,
-      "delaying": false
+      "delaying": false,
+      "visible_to_players": true
     }
   ]
 }
