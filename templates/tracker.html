@@ -889,7 +889,9 @@ let STATE = {
         STATE.diff_color = initial.diff_color || '';
         STATE.party_level = initial.party_level || STATE.party_level;
     }
-    render();
+    // Initial render runs synchronously so background tabs (where rAF is
+    // throttled) still paint the tracker on first load.
+    _renderNow();
 })();
 
 function toast(msg, type) {
@@ -955,10 +957,22 @@ function applyState(data) {
 
 
 /* ──────────────── Render ──────────────── */
-function render() {
+// Coalesce bursts of state updates into a single paint. SSE often fires
+// encounter_update + pc_update in quick succession; without debouncing each
+// one triggers a full render() and layout thrash.
+let _renderScheduled = false;
+function _renderNow() {
     renderInitList();
     renderActivePanel();
     renderMeta();
+}
+function render() {
+    if (_renderScheduled) return;
+    _renderScheduled = true;
+    requestAnimationFrame(() => {
+        _renderScheduled = false;
+        _renderNow();
+    });
 }
 
 function hpBarClass(pct) {
@@ -1714,20 +1728,38 @@ const LOG_COLORS = {
     critical: 'var(--t-red-b)', condition: 'var(--t-purple)', system: 'var(--t-gold)', action: 'var(--t-t2)'
 };
 
+// Local cache of combat log entries — populated once on load, then appended
+// to via SSE (no more periodic polling).
+let _combatLogCache = [];
+
+function _renderCombatLog() {
+    const el = document.getElementById('combat-log-body');
+    if (!el) return;
+    if (!_combatLogCache.length) {
+        el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--t-t3);font-style:italic;">No combat events yet.</div>';
+        return;
+    }
+    el.innerHTML = _combatLogCache.map(e => {
+        const color = LOG_COLORS[e.type] || 'var(--t-t2)';
+        return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${e.time}</span>${e.msg}</div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+}
+
 async function refreshLog() {
     try {
         const data = await apiGet('/api/combat_log');
-        const el = document.getElementById('combat-log-body');
-        if (!data.log || !data.log.length) {
-            el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--t-t3);font-style:italic;">No combat events yet.</div>';
-            return;
-        }
-        el.innerHTML = data.log.map(e => {
-            const color = LOG_COLORS[e.type] || 'var(--t-t2)';
-            return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${e.time}</span>${e.msg}</div>`;
-        }).join('');
-        el.scrollTop = el.scrollHeight;
+        // Server returns entries with msg/type/time (skip player_roll shape which lacks msg)
+        _combatLogCache = (data.log || []).filter(e => e && e.msg);
+        _renderCombatLog();
     } catch(e) {}
+}
+
+function _appendLogEntry(entry) {
+    if (!entry || !entry.msg) return;
+    _combatLogCache.push(entry);
+    if (_combatLogCache.length > 200) _combatLogCache.shift();
+    _renderCombatLog();
 }
 
 async function copyLog() {
@@ -1747,8 +1779,8 @@ function toggleLog(e) {
     if (arrow) arrow.textContent = body.classList.contains('collapsed') ? '▾' : '▴';
 }
 
+// Initial log fetch on page load; from here on, updates arrive via SSE
 refreshLog();
-setInterval(refreshLog, 5000);
 
 
 /* ──────────────── SSE + Polling ──────────────── */
@@ -1758,6 +1790,10 @@ function connectSSE() {
     evtSource = new EventSource('/api/events');
     evtSource.addEventListener('encounter_update', function(e) {
         apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
+    });
+    // New combat events stream directly into the log panel — replaces 5s polling
+    evtSource.addEventListener('combat_log', function(e) {
+        try { _appendLogEntry(JSON.parse(e.data)); } catch(_) {}
     });
     evtSource.addEventListener('connected', function() {});
     evtSource.onerror = function() {

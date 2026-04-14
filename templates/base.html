@@ -183,27 +183,29 @@
             customInput.value = '';
         }
 
-        // GM toast notifications for player rolls
+        // GM toast notifications for player rolls — SSE-driven (no polling).
+        // Other pages may open their own EventSource for tracker/map/pc updates;
+        // EventSource is cheap, so this connection is dedicated to the toast layer.
         if (!window.location.pathname.startsWith('/player')) {
-            let lastLogId = null;
             function showToast(log) {
                 const c = document.getElementById('gm-toast-container');
+                if (!c) return;
                 const t = document.createElement('div');
                 t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
                 t.style.background = 'var(--bg-raised)';
                 t.style.border = '1px solid var(--border-default)';
-                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action}</div><div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail}</div>`;
+                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action || ''}</div><div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail || ''}</div>`;
                 c.prepend(t);
                 setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, 6000);
             }
-            async function pollCombatLogs() {
-                try {
-                    const url = lastLogId ? `/api/get_logs?last_id=${lastLogId}` : '/api/get_logs';
-                    const r = await fetch(url); const d = await r.json();
-                    if (d.logs && d.logs.length > 0) { if (lastLogId !== null) d.logs.forEach(l => showToast(l)); lastLogId = d.logs[d.logs.length - 1].id; }
-                } catch(e) {}
-            }
-            setInterval(pollCombatLogs, 2000); pollCombatLogs();
+            try {
+                const _toastSSE = new EventSource('/api/events');
+                _toastSSE.addEventListener('player_roll', function(e) {
+                    try { showToast(JSON.parse(e.data)); } catch(_) {}
+                });
+                // Combat_log events exist for tracker log sync but aren't shown as toasts
+                // (they have a different shape — msg/type instead of name/action/detail).
+            } catch(_) {}
         }
     </script>
 </body>

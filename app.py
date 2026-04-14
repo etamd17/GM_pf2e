@@ -101,26 +101,71 @@ ACTIVE_MAP = {
 }
 MAP_LOCK = threading.Lock()
 
+# Reentrant lock for encounter/PC state mutations. Used by internal helpers
+# (_combat_log, _broadcast_*, _get_tracker_state, _do_persist_*) so that
+# multi-step reads/writes are consistent under threaded=True.
+ENCOUNTER_LOCK = threading.RLock()
+
+# --- DEBOUNCED PERSISTENCE ---
+# Rather than writing JSON to disk on every mutation, mark dirty and let a
+# background thread flush every few seconds. Writes become effectively free
+# at the request path; autosave still survives restarts (with at most ~2s lag).
+_PERSIST_DIRTY = False
+_PC_PERSIST_DIRTY = set()
+_PERSIST_INTERVAL_SEC = 2
+_persist_thread_started = False
+
+# --- CACHED TRACKER STATE ---
+# _get_tracker_state() rebuilds the full encounter snapshot on every call;
+# tracker clients hit it frequently. Cache for a short window and invalidate
+# on mutation (via _broadcast_encounter_state).
+_TRACKER_STATE_CACHE = None
+_TRACKER_STATE_CACHE_TIME = 0.0
+_TRACKER_STATE_TTL = 0.5
+
+def _invalidate_tracker_cache():
+    """Drop the cached tracker state. Called on any state mutation."""
+    global _TRACKER_STATE_CACHE, _TRACKER_STATE_CACHE_TIME
+    _TRACKER_STATE_CACHE = None
+    _TRACKER_STATE_CACHE_TIME = 0.0
+
 def _combat_log(msg, log_type='action'):
-    """Append a timestamped entry to the combat log."""
-    COMBAT_LOGS.append({
+    """Append a timestamped entry to the combat log and broadcast via SSE."""
+    entry = {
         'id': str(uuid.uuid4())[:8],
         'time': time.strftime('%H:%M:%S'),
         'round': ROUND_NUMBER,
         'msg': msg,
         'type': log_type
-    })
+    }
+    with ENCOUNTER_LOCK:
+        COMBAT_LOGS.append(entry)
+        if len(COMBAT_LOGS) > 200:
+            COMBAT_LOGS.pop(0)
+    # Push to any SSE subscribers so clients can react without polling
+    try:
+        sse_broadcast('combat_log', entry)
+    except Exception:
+        pass
 
 def _persist_encounter_state():
-    """Auto-save the active encounter to disk so it survives restarts."""
-    if not ACTIVE_ENCOUNTER:
-        # Remove autosave file if encounter is empty
-        autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
-        if os.path.exists(autosave_path):
-            os.remove(autosave_path)
-        return
-    try:
-        os.makedirs(ENCOUNTER_DIR, exist_ok=True)
+    """Mark encounter state dirty. A background thread flushes to disk."""
+    global _PERSIST_DIRTY
+    _PERSIST_DIRTY = True
+
+def _do_persist_encounter_state():
+    """Actually write the active encounter to disk. Called by flush thread."""
+    # Build a snapshot under lock so iteration is consistent, then release
+    # before touching the filesystem (disk writes can be slow).
+    with ENCOUNTER_LOCK:
+        if not ACTIVE_ENCOUNTER:
+            autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
+            try:
+                if os.path.exists(autosave_path):
+                    os.remove(autosave_path)
+            except Exception:
+                pass
+            return
         encounter_data = {
             "round": ROUND_NUMBER,
             "turn_index": TURN_INDEX,
@@ -133,16 +178,58 @@ def _persist_encounter_state():
                 'instance_id': c.instance_id,
                 'initiative': c.initiative,
                 'current_hp': c.current_hp,
-                'conditions': c.conditions,
+                'conditions': dict(c.conditions),
                 'persistent_damage': getattr(c, 'persistent_damage', ''),
                 'elite_weak': getattr(c, 'elite_weak', 0),
                 'delaying': getattr(c, 'delaying', False),
             }
             encounter_data['combatants'].append(entry)
+    try:
+        os.makedirs(ENCOUNTER_DIR, exist_ok=True)
         with open(os.path.join(ENCOUNTER_DIR, '_autosave.json'), 'w', encoding='utf-8') as f:
             json.dump(encounter_data, f, indent=2)
     except Exception as e:
         print(f"[ENCOUNTER PERSIST ERROR] {e}")
+
+def _flush_pending_persistence():
+    """Flush any dirty encounter/PC state to disk. Called by background thread and at exit."""
+    global _PERSIST_DIRTY
+    if _PERSIST_DIRTY:
+        _PERSIST_DIRTY = False  # clear first so concurrent mutations re-mark dirty
+        try:
+            _do_persist_encounter_state()
+        except Exception as e:
+            print(f"[PERSIST FLUSH] encounter: {e}")
+    # Snapshot-and-swap the PC dirty set to avoid skipping additions mid-flush
+    if _PC_PERSIST_DIRTY:
+        pcs = list(_PC_PERSIST_DIRTY)
+        for name in pcs:
+            _PC_PERSIST_DIRTY.discard(name)
+        for name in pcs:
+            try:
+                _do_persist_pc_combat_state(name)
+            except Exception as e:
+                print(f"[PERSIST FLUSH] pc {name}: {e}")
+
+def _persistence_flush_loop():
+    """Background thread: periodically flush dirty state to disk."""
+    while True:
+        time.sleep(_PERSIST_INTERVAL_SEC)
+        try:
+            _flush_pending_persistence()
+        except Exception as e:
+            print(f"[PERSIST LOOP] {e}")
+
+def _start_persistence_thread():
+    """Start the background flush thread exactly once."""
+    global _persist_thread_started
+    if _persist_thread_started:
+        return
+    _persist_thread_started = True
+    t = threading.Thread(target=_persistence_flush_loop, daemon=True, name='persistence-flush')
+    t.start()
+    import atexit as _atexit
+    _atexit.register(_flush_pending_persistence)
 
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
 _sse_subscribers = []  # List of queue.Queue objects, one per connected client
@@ -183,10 +270,12 @@ def sse_subscriber_count():
 
 def _broadcast_pc_state(pc_name):
     """Broadcast a PC's current state to all SSE clients."""
-    if pc_name in PARTY_LIBRARY:
+    if pc_name not in PARTY_LIBRARY:
+        return
+    # Snapshot under lock so HP/conditions read is consistent
+    with ENCOUNTER_LOCK:
         pc = PARTY_LIBRARY[pc_name]
         pct = pc.current_hp / pc.hp if pc.hp > 0 else 0
-        # Build spell slot summary for GM visibility
         spell_summary = []
         for caster in getattr(pc, 'spell_casters', []):
             caster_data = {'name': caster.get('name', ''), 'tradition': caster.get('tradition', ''), 'levels': []}
@@ -198,17 +287,7 @@ def _broadcast_pc_state(pc_name):
                     'spells': [{'name': s.get('name', '')} for s in lvl.get('spells', [])]
                 })
             spell_summary.append(caster_data)
-        # Get expended slots from disk
-        expended_slots = {}
-        try:
-            fp = get_pc_file_path(pc_name)
-            if fp and os.path.exists(fp):
-                with open(fp, 'r', encoding='utf-8') as f:
-                    build = json.load(f).get('build', {})
-                    expended_slots = build.get('expended_slots', {})
-        except Exception:
-            pass
-        sse_broadcast('pc_update', {
+        payload = {
             'name': pc_name,
             'current_hp': pc.current_hp,
             'max_hp': pc.hp,
@@ -217,28 +296,42 @@ def _broadcast_pc_state(pc_name):
             'focus': getattr(pc, 'current_focus', 0),
             'hero_points': getattr(pc, 'hero_points', 1),
             'spell_casters': spell_summary,
-            'expended_slots': expended_slots,
-        })
+        }
+    # Read expended slots from disk outside the lock (file I/O)
+    expended_slots = {}
+    try:
+        fp = get_pc_file_path(pc_name)
+        if fp and os.path.exists(fp):
+            with open(fp, 'r', encoding='utf-8') as f:
+                build = json.load(f).get('build', {})
+                expended_slots = build.get('expended_slots', {})
+    except Exception:
+        pass
+    payload['expended_slots'] = expended_slots
+    sse_broadcast('pc_update', payload)
 
 def _broadcast_encounter_state():
     """Broadcast the full encounter state to all SSE clients."""
-    active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
-    combatants = []
-    for i, c in enumerate(ACTIVE_ENCOUNTER):
-        entry = {'name': c.name, 'is_pc': c.is_pc, 'initiative': c.initiative, 'is_active': (i == TURN_INDEX)}
-        if c.is_pc:
-            pct = c.current_hp / c.hp if c.hp > 0 else 0
-            entry['current_hp'] = c.current_hp
-            entry['max_hp'] = c.hp
-            entry['hp_pct'] = round(pct * 100)
-        else:
-            pct = c.current_hp / c.hp if c.hp > 0 else 0
-            if c.current_hp == 0: entry['hp_status'] = 'Dead'
-            elif pct <= 0.5: entry['hp_status'] = 'Wounded'
-            else: entry['hp_status'] = ''
-        entry['conditions'] = {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False}
-        combatants.append(entry)
-    sse_broadcast('encounter_update', {'encounter': combatants, 'round': ROUND_NUMBER, 'active_name': active_name, 'turn_index': TURN_INDEX})
+    _invalidate_tracker_cache()
+    with ENCOUNTER_LOCK:
+        active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+        combatants = []
+        for i, c in enumerate(ACTIVE_ENCOUNTER):
+            entry = {'name': c.name, 'is_pc': c.is_pc, 'initiative': c.initiative, 'is_active': (i == TURN_INDEX)}
+            if c.is_pc:
+                pct = c.current_hp / c.hp if c.hp > 0 else 0
+                entry['current_hp'] = c.current_hp
+                entry['max_hp'] = c.hp
+                entry['hp_pct'] = round(pct * 100)
+            else:
+                pct = c.current_hp / c.hp if c.hp > 0 else 0
+                if c.current_hp == 0: entry['hp_status'] = 'Dead'
+                elif pct <= 0.5: entry['hp_status'] = 'Wounded'
+                else: entry['hp_status'] = ''
+            entry['conditions'] = {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False}
+            combatants.append(entry)
+        payload = {'encounter': combatants, 'round': ROUND_NUMBER, 'active_name': active_name, 'turn_index': TURN_INDEX}
+    sse_broadcast('encounter_update', payload)
 
 COMPENDIUM_LIBRARY = {}
 COMPENDIUM_RULES = {}
@@ -549,11 +642,20 @@ def save_and_reload_character(pc_name, pc_json, file_path):
         return False, str(e)
 
 def _persist_pc_combat_state(pc_name):
-    """Lightweight persistence of HP, conditions, and focus to disk without full reload.
-    Used by adjust_party_hp and adjust_focus to survive server restarts."""
+    """Mark a PC's combat state dirty. Background thread flushes to disk."""
+    if pc_name in PARTY_LIBRARY:
+        _PC_PERSIST_DIRTY.add(pc_name)
+
+def _do_persist_pc_combat_state(pc_name):
+    """Actually write HP/conditions/focus to disk. Called by flush thread."""
     if pc_name not in PARTY_LIBRARY:
         return
-    pc = PARTY_LIBRARY[pc_name]
+    # Snapshot the values under lock, then do file I/O unlocked
+    with ENCOUNTER_LOCK:
+        pc = PARTY_LIBRARY[pc_name]
+        current_hp = pc.current_hp
+        current_focus = getattr(pc, 'current_focus', 0)
+        conditions = {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False}
     file_path = get_pc_file_path(pc_name)
     if not file_path or not os.path.exists(file_path):
         return
@@ -561,9 +663,9 @@ def _persist_pc_combat_state(pc_name):
         with open(file_path, 'r', encoding='utf-8') as f:
             pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
-        build['current_hp'] = pc.current_hp
-        build['current_focus'] = getattr(pc, 'current_focus', 0)
-        build['conditions'] = {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False}
+        build['current_hp'] = current_hp
+        build['current_focus'] = current_focus
+        build['conditions'] = conditions
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(pc_json, f, indent=2)
     except Exception as e:
@@ -2732,43 +2834,53 @@ def _tracker_json_response():
     return jsonify(_get_tracker_state())
 
 def _get_tracker_state():
-    """Build the full tracker state dict."""
-    active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
-    combatants = []
-    for i, c in enumerate(ACTIVE_ENCOUNTER):
-        entry = {
-            'instance_id': c.instance_id, 'name': c.name, 'is_pc': c.is_pc,
-            'initiative': c.initiative, 'is_active': (i == TURN_INDEX),
-            'level': c.level, 'ac': c.ac, 'current_hp': c.current_hp, 'max_hp': c.hp,
-            'fort': c.fort, 'ref': c.ref, 'will': c.will,
-            'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
-            'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
-            'persistent_damage': getattr(c, 'persistent_damage', ''),
-            'elite_weak': getattr(c, 'elite_weak', 0),
-            'delaying': getattr(c, 'delaying', False),
-            'base_ac': getattr(c, 'base_ac', c.ac),
+    """Build the full tracker state dict.
+    Cached for _TRACKER_STATE_TTL seconds; invalidated by _broadcast_encounter_state."""
+    global _TRACKER_STATE_CACHE, _TRACKER_STATE_CACHE_TIME
+    now = time.time()
+    cached = _TRACKER_STATE_CACHE
+    if cached is not None and (now - _TRACKER_STATE_CACHE_TIME) < _TRACKER_STATE_TTL:
+        return cached
+    with ENCOUNTER_LOCK:
+        active_name = ACTIVE_ENCOUNTER[TURN_INDEX].name if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+        combatants = []
+        for i, c in enumerate(ACTIVE_ENCOUNTER):
+            entry = {
+                'instance_id': c.instance_id, 'name': c.name, 'is_pc': c.is_pc,
+                'initiative': c.initiative, 'is_active': (i == TURN_INDEX),
+                'level': c.level, 'ac': c.ac, 'current_hp': c.current_hp, 'max_hp': c.hp,
+                'fort': c.fort, 'ref': c.ref, 'will': c.will,
+                'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
+                'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
+                'persistent_damage': getattr(c, 'persistent_damage', ''),
+                'elite_weak': getattr(c, 'elite_weak', 0),
+                'delaying': getattr(c, 'delaying', False),
+                'base_ac': getattr(c, 'base_ac', c.ac),
+            }
+            hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0
+            entry['hp_pct'] = round(hp_pct)
+            if c.is_pc:
+                entry['strikes'] = [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(c, 'attacks', [])]
+                entry['feats'] = [{'name': f['name'], 'desc': f.get('desc', '')} for f in getattr(c, 'feats', [])]
+            else:
+                entry['strikes'] = [{'name': s['name'], 'hit': f"+{s['bonus']}" if s['bonus'] >= 0 else str(s['bonus']), 'damage': s['damage']} for s in getattr(c, 'strikes', [])]
+                entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
+                entry['immunities'] = getattr(c, 'immunities', [])
+                entry['resistances'] = getattr(c, 'resistances', [])
+                entry['weaknesses'] = getattr(c, 'weaknesses', [])
+                entry['traits'] = getattr(c, 'traits', [])
+            combatants.append(entry)
+        party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
+        encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
+        diff_label, diff_color = get_difficulty_label(encounter_xp)
+        result = {
+            'combatants': combatants, 'round': ROUND_NUMBER, 'turn_index': TURN_INDEX,
+            'active_name': active_name, 'encounter_xp': encounter_xp,
+            'diff_label': diff_label, 'diff_color': diff_color, 'party_level': party_level,
         }
-        hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0
-        entry['hp_pct'] = round(hp_pct)
-        if c.is_pc:
-            entry['strikes'] = [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(c, 'attacks', [])]
-            entry['feats'] = [{'name': f['name'], 'desc': f.get('desc', '')} for f in getattr(c, 'feats', [])]
-        else:
-            entry['strikes'] = [{'name': s['name'], 'hit': f"+{s['bonus']}" if s['bonus'] >= 0 else str(s['bonus']), 'damage': s['damage']} for s in getattr(c, 'strikes', [])]
-            entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
-            entry['immunities'] = getattr(c, 'immunities', [])
-            entry['resistances'] = getattr(c, 'resistances', [])
-            entry['weaknesses'] = getattr(c, 'weaknesses', [])
-            entry['traits'] = getattr(c, 'traits', [])
-        combatants.append(entry)
-    party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
-    encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
-    diff_label, diff_color = get_difficulty_label(encounter_xp)
-    return {
-        'combatants': combatants, 'round': ROUND_NUMBER, 'turn_index': TURN_INDEX,
-        'active_name': active_name, 'encounter_xp': encounter_xp,
-        'diff_label': diff_label, 'diff_color': diff_color, 'party_level': party_level,
-    }
+    _TRACKER_STATE_CACHE = result
+    _TRACKER_STATE_CACHE_TIME = now
+    return result
 
 @app.route('/api/tracker_state')
 def api_tracker_state():
@@ -4956,6 +5068,25 @@ def clear_log():
     COMBAT_LOGS.clear()
     return jsonify({"success": True})
 
+# --- COMPENDIUM DB CONNECTION POOL ---
+# With threaded=True, each Flask worker thread gets its own sqlite3 connection.
+# We keep it open across requests (thread-local) so we skip the connect/close
+# overhead on every compendium lookup.
+import sqlite3 as _sqlite3
+_compendium_tls = threading.local()
+
+def _get_compendium_db():
+    conn = getattr(_compendium_tls, 'conn', None)
+    if conn is not None:
+        return conn
+    db_path = os.path.join(BASE_DIR, 'pf2e_database.db')
+    if not os.path.exists(db_path):
+        return None
+    conn = _sqlite3.connect(db_path)
+    conn.row_factory = _sqlite3.Row
+    _compendium_tls.conn = conn
+    return conn
+
 @app.route('/api/compendium_search')
 def compendium_search():
     """Search the PF2E compendium database across feats, spells, and equipment."""
@@ -4963,18 +5094,14 @@ def compendium_search():
     category = request.args.get('cat', 'all')  # all, feats, spells, equipment
     if not query or len(query) < 2:
         return jsonify({"results": []})
-    
-    db_path = os.path.join(BASE_DIR, 'pf2e_database.db')
-    if not os.path.exists(db_path):
+
+    conn = _get_compendium_db()
+    if conn is None:
         return jsonify({"results": [], "error": "Database not found"})
-    
-    import sqlite3
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
     c = conn.cursor()
     results = []
     search_term = f"%{query}%"
-    
+
     try:
         if category in ('all', 'spells'):
             c.execute("SELECT name, level, traditions, description FROM spells WHERE name LIKE ? ORDER BY level, name LIMIT 15", (search_term,))
@@ -4989,7 +5116,7 @@ def compendium_search():
                     'meta': row['traditions'] or '',
                     'desc': desc
                 })
-        
+
         if category in ('all', 'feats'):
             c.execute("SELECT name, category, level, traits, description FROM feats WHERE name LIKE ? AND level IS NOT NULL ORDER BY level, name LIMIT 15", (search_term,))
             for row in c.fetchall():
@@ -5002,7 +5129,7 @@ def compendium_search():
                     'meta': row['category'] or '',
                     'desc': desc
                 })
-        
+
         if category in ('all', 'equipment'):
             c.execute("SELECT name, type, level, traits, description FROM equipment WHERE name LIKE ? AND type NOT IN ('effect', 'consumable') ORDER BY level, name LIMIT 15", (search_term,))
             for row in c.fetchall():
@@ -5018,8 +5145,8 @@ def compendium_search():
     except Exception as e:
         return jsonify({"results": [], "error": str(e)})
     finally:
-        conn.close()
-    
+        c.close()
+
     # Sort: exact name matches first, then by level
     q_lower = query.lower()
     results.sort(key=lambda r: (0 if r['name'].lower() == q_lower else 1 if r['name'].lower().startswith(q_lower) else 2, r['level'] or 0))
@@ -5032,16 +5159,12 @@ def compendium_detail():
     entry_type = request.args.get('type', '')
     if not name:
         return jsonify({"error": "No name provided"}), 400
-    
-    db_path = os.path.join(BASE_DIR, 'pf2e_database.db')
-    if not os.path.exists(db_path):
+
+    conn = _get_compendium_db()
+    if conn is None:
         return jsonify({"error": "Database not found"}), 404
-    
-    import sqlite3
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    
+
     try:
         if entry_type == 'spell':
             c.execute("SELECT * FROM spells WHERE name = ?", (name,))
@@ -5051,13 +5174,13 @@ def compendium_detail():
             c.execute("SELECT * FROM equipment WHERE name = ?", (name,))
         else:
             return jsonify({"error": "Invalid type"}), 400
-        
+
         row = c.fetchone()
         if row:
             return jsonify(dict(row))
         return jsonify({"error": "Not found"}), 404
     finally:
-        conn.close()
+        c.close()
 
 @app.route('/api/long_rest/<pc_name>', methods=['POST'])
 def long_rest(pc_name):
@@ -7463,4 +7586,10 @@ def clear_map():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     debug = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    # Launch the debounced persistence flush thread. With Flask debug reloader,
+    # _start_persistence_thread() becomes a no-op in the parent process because
+    # the daemon thread is tied to the child; the WERKZEUG_RUN_MAIN check keeps
+    # us from starting it twice.
+    if not debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        _start_persistence_thread()
+    app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
