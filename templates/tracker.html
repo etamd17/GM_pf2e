@@ -3,85 +3,661 @@
 {% block title %}Encounter Tracker{% endblock %}
 
 {% block extra_head %}
-/* ── tracker-specific styles ── */
-.tracker-row { transition: background 0.15s, border-color 0.15s; }
-.tracker-row:hover { background: rgba(255,255,255,0.02); }
-.tracker-row.active-turn { background: rgba(94,173,173,0.06); border-left: 3px solid #5EADAD; }
-.tracker-row.delaying { opacity: 0.55; }
+/* ═══════════════════════════════════════════════════════════════════
+   TRACKER — Design C (Tactical Grid + Hero Card)
+   ═══════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
-.hp-bar-fill { transition: width 0.4s ease, background-color 0.3s ease; }
-.hp-green { background: #4ade80; }
-.hp-yellow { background: #d4a244; }
-.hp-red { background: #f87171; }
+.trk {
+  --t-bg-base:#0a0c12; --t-bg-surface:#13161f; --t-bg-raised:#1a1e29; --t-bg-higher:#232736;
+  --t-red:#c43c3c; --t-red-b:#e85555; --t-red-d:#8a2929;
+  --t-gold:#c8a84e; --t-gold-b:#e8c866;
+  --t-teal:#4a9696; --t-purple:#9b7ede; --t-blue:#5a8ee8; --t-green:#3eba68;
+  --t-t1:#eaebf0; --t-t2:#9ca0b4; --t-t3:#5e6378; --t-t4:#3d4158;
+  --t-border:#262b3a;
+  --t-row-active: rgba(196,60,60,0.12);
+  color: var(--t-t1);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  position: relative;
+  background-image:
+    radial-gradient(ellipse at 10% -8%, rgba(196,60,60,0.09), transparent 42%),
+    radial-gradient(ellipse at 92% 6%, rgba(200,168,78,0.05), transparent 50%),
+    radial-gradient(ellipse at 85% 110%, rgba(155,126,222,0.06), transparent 55%);
+  padding-bottom: 12px;
+}
+.trk .font-d { font-family:'Cinzel',serif; }
+.trk .font-n { font-family:'Crimson Pro',serif; }
+.trk .mono { font-family:'JetBrains Mono',monospace; }
 
-.cond-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.18); color: #fca5a5; cursor: default; text-transform: uppercase; letter-spacing: 0.03em; }
-.cond-pill button { opacity: 0.5; transition: opacity 0.15s; font-size: 11px; line-height: 1; cursor: pointer; background: none; border: none; color: inherit; padding: 0; }
-.cond-pill button:hover { opacity: 1; }
+/* ═══ HERO BAR ═══ */
+.trk .hero-bar {
+  display:grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap:14px;
+  padding:11px 18px;
+  background:linear-gradient(180deg, rgba(23,27,38,0.85) 0%, rgba(19,22,31,0.9) 100%);
+  border:1px solid var(--t-border);
+  border-radius:12px;
+  align-items:center;
+  position:relative; margin-bottom:12px;
+  overflow:hidden;
+}
+.trk .hero-bar::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--t-red-d), var(--t-red), var(--t-gold), var(--t-red), var(--t-red-d), transparent);
+  opacity:.7;
+}
+.trk .hb-left { display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }
+.trk .hb-left .name { font-family:'Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:.4px; color:var(--t-t1); }
+.trk .hb-left .meta { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:1.1px; }
+.trk .xp-tag {
+  background:linear-gradient(135deg, rgba(200,168,78,0.18), rgba(200,168,78,0.06));
+  border:1px solid rgba(200,168,78,0.4); color:var(--t-gold);
+  padding:3px 10px; border-radius:12px; font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+}
 
-.stat-card { background: #191920; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px; text-align: center; }
-.stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #8080a0; margin-bottom: 2px; }
-.stat-value { font-size: 18px; font-weight: 700; }
+.trk .hb-turn {
+  display:flex; align-items:center; gap:14px;
+  background:linear-gradient(180deg, rgba(38,43,58,0.9), rgba(26,30,41,0.95));
+  border:1px solid var(--t-border); border-radius:14px;
+  padding:8px 16px;
+  box-shadow:0 3px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.trk .round-block {
+  font-family:'Cinzel',serif;
+  display:flex; flex-direction:column; align-items:center; line-height:1;
+  padding-right:12px; border-right:1px solid var(--t-border);
+}
+.trk .round-block .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; margin-bottom:4px; }
+.trk .round-block .v {
+  font-size:26px; font-weight:900;
+  background:linear-gradient(180deg, #f4e8b8 0%, var(--t-gold-b) 50%, var(--t-gold) 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 1px 2px rgba(200,168,78,0.2));
+}
+.trk .turn-now { display:flex; flex-direction:column; padding:0 12px; border-right:1px solid var(--t-border); min-width:110px; }
+.trk .turn-now .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; }
+.trk .turn-now .v { font-family:'Cinzel',serif; font-size:15px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trk .turn-now .v::before { content:"▸ "; color:var(--t-gold); }
+.trk .turn-ctl { display:flex; gap:6px; }
+.trk .next-btn {
+  background:linear-gradient(180deg, var(--t-red) 0%, var(--t-red-d) 100%);
+  color:#fff; font-weight:700; border:none;
+  padding:8px 17px; border-radius:8px; cursor:pointer;
+  font-size:12px; letter-spacing:.6px; text-transform:uppercase;
+  box-shadow:0 3px 12px rgba(196,60,60,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.trk .next-btn:hover { background:linear-gradient(180deg, var(--t-red-b) 0%, var(--t-red) 100%); }
+.trk .prev-btn {
+  background:transparent; color:var(--t-t2); border:1px solid var(--t-border);
+  padding:7px 10px; border-radius:7px; cursor:pointer; font-size:12px;
+}
+.trk .prev-btn:hover { color:var(--t-t1); border-color:var(--t-t4); }
 
-.btn { display: inline-flex; align-items: center; justify-content: center; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; white-space: nowrap; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-primary { background: #5EADAD; color: #0d0d12; border-color: #5EADAD; }
-.btn-primary:hover { background: #7DC4C4; }
-.btn-ghost { background: transparent; color: #a0a0b8; border-color: rgba(255,255,255,0.08); }
-.btn-ghost:hover { background: rgba(255,255,255,0.04); color: #e8e8f0; }
-.btn-danger { background: rgba(248,113,113,0.1); color: #fca5a5; border-color: rgba(248,113,113,0.2); }
-.btn-danger:hover { background: rgba(248,113,113,0.18); color: #f87171; }
-.btn-sm { padding: 3px 8px; font-size: 11px; }
+.trk .hb-right { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+.trk .hb-btn { padding:6px 11px; background:rgba(26,30,41,0.6); border:1px solid var(--t-border); border-radius:7px; color:var(--t-t1); font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.trk .hb-btn:hover { background:var(--t-bg-higher); border-color:var(--t-t4); }
+.trk .hb-btn.gold { color:var(--t-gold); border-color:rgba(200,168,78,0.3); }
+.trk .hb-btn.gold:hover { background:rgba(200,168,78,0.08); }
+.trk .hb-btn.purple { color:var(--t-purple); border-color:rgba(155,126,222,0.3); }
+.trk .hb-btn.purple:hover { background:rgba(155,126,222,0.08); }
+.trk .hb-btn.danger { color:var(--t-red-b); }
+.trk .hb-btn.danger:hover { background:rgba(196,60,60,0.08); border-color:rgba(196,60,60,0.4); }
 
-.inline-input { background: #0d0d12; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 4px 6px; font-size: 12px; text-align: center; outline: none; transition: border-color 0.15s; }
-.inline-input:focus { border-color: #5EADAD; }
+/* ═══ TOOL STRIP ═══ */
+.trk .tool-strip {
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  padding:9px 13px;
+  background:linear-gradient(180deg, rgba(26,30,41,0.8), rgba(19,22,31,0.8));
+  border:1px solid var(--t-border);
+  border-radius:10px; margin-bottom:10px;
+  position:relative;
+}
+.trk .ts-search { position:relative; flex:1; min-width:200px; max-width:300px; }
+.trk .ts-search input {
+  width:100%; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:7px 11px 7px 30px; border-radius:7px; font-size:12px; outline:none;
+}
+.trk .ts-search input:focus { border-color:var(--t-red); box-shadow:0 0 0 3px rgba(196,60,60,0.12); }
+.trk .ts-search::before { content:"🔍"; position:absolute; left:10px; top:50%; transform:translateY(-50%); opacity:.55; font-size:11px; pointer-events:none; }
+.trk .ts-btn {
+  padding:7px 12px; background:var(--t-bg-raised); border:1px solid var(--t-border); border-radius:7px;
+  color:var(--t-t1); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+.trk .ts-btn:hover { background:var(--t-bg-higher); border-color:var(--t-t4); }
+.trk .ts-btn.primary {
+  background:linear-gradient(180deg, var(--t-red) 0%, var(--t-red-d) 100%);
+  border-color:var(--t-red); color:#fff;
+}
+.trk .ts-btn.primary:hover { background:linear-gradient(180deg, var(--t-red-b) 0%, var(--t-red) 100%); }
+.trk .ts-divider { width:1px; height:22px; background:var(--t-border); margin:0 4px; }
+.trk .ts-select {
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:7px 10px; border-radius:7px; font-size:12px; outline:none;
+}
+.trk .ts-select:focus { border-color:var(--t-red); }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-.modal-overlay.open { opacity: 1; pointer-events: auto; }
-.modal-panel { background: #24242e; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; width: 100%; max-width: 640px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; transform: translateY(10px); transition: transform 0.2s; }
-.modal-overlay.open .modal-panel { transform: translateY(0); }
+/* monster dropdown */
+.trk .monster-dd {
+  position:absolute; top:calc(100% + 4px); left:0; width:290px;
+  background:var(--t-bg-raised); border:1px solid var(--t-border); border-radius:8px;
+  box-shadow:0 12px 36px rgba(0,0,0,0.6); z-index:60;
+  max-height:300px; overflow-y:auto;
+}
+.trk .monster-dd.hidden { display:none; }
+.trk .monster-opt {
+  padding:8px 12px; cursor:pointer; font-size:12px; color:var(--t-t1);
+  display:flex; justify-content:space-between; align-items:center;
+  border-bottom:1px solid rgba(255,255,255,0.03);
+}
+.trk .monster-opt:hover { background:rgba(196,60,60,0.08); }
+.trk .monster-opt:last-child { border-bottom:0; }
+.trk .monster-opt .lvl { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--t-bg-higher); color:var(--t-t3); border:1px solid var(--t-border); }
 
-.drag-handle { cursor: grab; user-select: none; color: #50506a; transition: color 0.15s; }
-.drag-handle:hover { color: #7DC4C4; }
-.sortable-ghost { background: rgba(94,173,173,0.08) !important; }
+/* ═══ COLLAPSIBLE PANELS ═══ */
+.trk .panel {
+  margin-bottom:10px; padding:13px; border-radius:10px;
+  background:linear-gradient(180deg, rgba(26,30,41,0.9), rgba(19,22,31,0.9));
+  border:1px solid var(--t-border);
+}
+.trk .panel.hidden { display:none; }
+.trk .panel-head {
+  display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+}
+.trk .panel-ttl {
+  font-family:'Cinzel',serif; font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:var(--t-t2);
+  font-weight:700;
+}
+.trk .panel-close {
+  background:transparent; border:none; color:var(--t-t3); font-size:18px; cursor:pointer; line-height:1;
+}
+.trk .panel-close:hover { color:var(--t-red-b); }
 
-.custom-form-grid input, .custom-form-grid select { background: #0d0d12; border: 1px solid rgba(255,255,255,0.08); color: #e8e8f0; border-radius: 4px; padding: 6px 8px; font-size: 12px; outline: none; width: 100%; }
-.custom-form-grid input:focus { border-color: #5EADAD; }
-.custom-form-grid label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #8080a0; font-weight: 600; margin-bottom: 2px; display: block; }
+.trk .tinput {
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:6px 9px; border-radius:6px; font-size:12px; outline:none;
+}
+.trk .tinput:focus { border-color:var(--t-red); box-shadow:0 0 0 2px rgba(196,60,60,0.15); }
+.trk .tselect { background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1); padding:6px 8px; border-radius:6px; font-size:12px; outline:none; }
+.trk .tselect:focus { border-color:var(--t-red); }
+.trk .tlabel { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--t-t3); font-weight:700; margin-bottom:3px; display:block; }
 
-#combat-log-body { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent; }
+.trk .custom-grid { display:grid; grid-template-columns: repeat(8, 1fr); gap:8px; margin-bottom:10px; }
+.trk .custom-grid label { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--t-t3); font-weight:700; margin-bottom:3px; display:block; }
+.trk .custom-grid input { width:100%; }
 
-.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+/* ═══ LAYOUT ═══ */
+.trk .layout { display:grid; grid-template-columns: 1fr; gap:14px; align-items:start; }
+@media (min-width:1280px) { .trk .layout.has-active { grid-template-columns: 1fr 380px; } }
+
+/* ═══ DATA GRID ═══ */
+.trk .grid-wrap {
+  background:linear-gradient(180deg, rgba(26,30,41,0.8), rgba(19,22,31,0.85));
+  border:1px solid var(--t-border); border-radius:12px; overflow:hidden;
+  position:relative;
+  box-shadow:0 8px 28px rgba(0,0,0,0.25);
+}
+.trk .grid-wrap::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--t-red), var(--t-gold), var(--t-red), transparent);
+  opacity:.5; z-index:1;
+}
+.trk .grid-head {
+  display:grid;
+  grid-template-columns: 28px 56px 1fr 52px 220px 210px 130px;
+  gap:6px; padding:10px 12px;
+  background:rgba(19,22,31,0.6); border-bottom:1px solid var(--t-border);
+  font-size:9px; letter-spacing:1.5px; color:var(--t-t3); text-transform:uppercase; font-weight:700;
+}
+.trk .grid-head > div { display:flex; align-items:center; }
+.trk .grid-head .h-center { justify-content:center; }
+
+.trk .combatant {
+  display:grid;
+  grid-template-columns: 28px 56px 1fr 52px 220px 210px 130px;
+  gap:6px; padding:10px 12px;
+  border-bottom:1px solid var(--t-border);
+  align-items:center;
+  transition: background .15s, box-shadow .15s;
+}
+.trk .combatant:hover { background:rgba(255,255,255,0.02); }
+.trk .combatant.active {
+  background:
+    linear-gradient(90deg, var(--t-row-active) 0%, rgba(196,60,60,0.04) 40%, transparent 75%),
+    linear-gradient(90deg, rgba(200,168,78,0.04) 0%, transparent 40%);
+  box-shadow: inset 3px 0 0 var(--t-red), inset -1px 0 0 rgba(200,168,78,0.12);
+}
+.trk .combatant.active .nm { color:var(--t-red-b); }
+.trk .combatant.delaying { opacity:.55; font-style:italic; }
+.trk .combatant.down { opacity:.5; }
+.trk .combatant.down .nm { text-decoration:line-through; color:var(--t-t3); }
+.trk .combatant:last-child { border-bottom:0; }
+
+.trk .c-drag { cursor:grab; color:var(--t-t4); font-size:14px; user-select:none; text-align:center; }
+.trk .c-drag:hover { color:var(--t-gold); }
+.trk .sortable-ghost { background:rgba(196,60,60,0.08) !important; }
+
+.trk .c-init { text-align:center; }
+.trk .c-init input {
+  width:44px; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:5px 0; text-align:center; border-radius:5px;
+  font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; outline:none;
+}
+.trk .c-init input:focus { border-color:var(--t-red); }
+.trk .combatant.active .c-init input {
+  border-color:var(--t-red); color:var(--t-gold); font-weight:700;
+  background:linear-gradient(180deg, rgba(196,60,60,0.15), rgba(196,60,60,0.05));
+  box-shadow:0 0 0 1px rgba(196,60,60,0.3);
+}
+
+.trk .c-name { display:flex; align-items:center; gap:9px; min-width:0; }
+.trk .port {
+  width:32px; height:32px; border-radius:7px; background:var(--t-bg-higher);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Cinzel',serif; font-weight:700; color:var(--t-t2); flex-shrink:0; font-size:14px;
+  position:relative; overflow:hidden; text-transform:uppercase;
+}
+.trk .port.pc { background:linear-gradient(135deg, rgba(74,150,150,0.2), rgba(74,150,150,0.08)); color:var(--t-teal); border:1px solid rgba(74,150,150,0.45); }
+.trk .port.enemy { background:linear-gradient(135deg, rgba(196,60,60,0.2), rgba(196,60,60,0.08)); color:var(--t-red-b); border:1px solid rgba(196,60,60,0.45); }
+.trk .combatant.active .port { box-shadow:0 0 0 2px rgba(196,60,60,0.3), 0 0 14px rgba(196,60,60,0.2); }
+
+.trk .nm-wrap { min-width:0; }
+.trk .nm {
+  font-weight:600; font-size:13px; line-height:1.15; background:none; border:none; padding:0; color:var(--t-t1);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; text-align:left; display:block;
+  max-width:100%;
+}
+.trk .nm:hover { color:var(--t-gold); }
+.trk .nm-sub { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:.4px; margin-top:1px; }
+.trk .nm-sub .k { color:var(--t-red-b); font-weight:700; }
+.trk .nm-sub .k.pc { color:var(--t-teal); }
+.trk .nm-sub .k.active { color:var(--t-gold); }
+.trk .nm-sub .k.delay { color:var(--t-purple); }
+.trk .nm-sub .pd { color:var(--t-gold); font-weight:600; }
+
+.trk .c-ac { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-blue); text-align:center; }
+
+.trk .c-hp { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.trk .c-hp-top { display:flex; justify-content:space-between; align-items:center; font-size:11px; gap:6px; }
+.trk .c-hp-top .cur { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--t-t1); }
+.trk .c-hp-top .cur.lo { color:var(--t-red-b); }
+.trk .c-hp-top .cur.mi { color:var(--t-gold); }
+.trk .c-hp-top .cur.hi { color:var(--t-green); }
+.trk .c-hp-top .max { color:var(--t-t3); font-family:'JetBrains Mono',monospace; font-weight:500; }
+.trk .c-hp-top .pct { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; margin-left:auto; }
+.trk .c-hp-bar { height:6px; background:var(--t-bg-higher); border-radius:3px; overflow:hidden; }
+.trk .c-hp-fill { height:100%; transition:width .3s ease, background .3s ease; background:linear-gradient(90deg, var(--t-green), #5fd884); }
+.trk .c-hp-fill.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
+.trk .c-hp-fill.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
+.trk .c-hp-ctrl { display:flex; gap:3px; margin-top:2px; }
+.trk .c-hp-ctrl input {
+  flex:1; min-width:0; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:4px 5px; border-radius:4px; font-size:11px; font-family:'JetBrains Mono',monospace; outline:none;
+}
+.trk .c-hp-ctrl input:focus { border-color:var(--t-red); }
+.trk .c-hp-ctrl select {
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
+  padding:4px 3px; border-radius:4px; font-size:10px; max-width:72px; outline:none;
+}
+.trk .c-hp-ctrl button { padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; border:none; cursor:pointer; }
+.trk .c-hp-ctrl .minus { background:rgba(196,60,60,0.15); color:var(--t-red-b); border:1px solid rgba(196,60,60,0.4); }
+.trk .c-hp-ctrl .minus:hover { background:rgba(196,60,60,0.25); }
+.trk .c-hp-ctrl .plus { background:rgba(62,186,104,0.15); color:var(--t-green); border:1px solid rgba(62,186,104,0.4); }
+.trk .c-hp-ctrl .plus:hover { background:rgba(62,186,104,0.25); }
+
+.trk .c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; min-width:0; }
+.trk .cp {
+  font-size:9px; padding:2px 6px; border-radius:9px; font-weight:700;
+  letter-spacing:.5px; text-transform:uppercase;
+  display:inline-flex; gap:4px; align-items:center;
+  background:rgba(155,126,222,0.15); color:var(--t-purple); border:1px solid rgba(155,126,222,0.35);
+}
+.trk .cp.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
+.trk .cp.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
+.trk .cp.teal { background:rgba(74,150,150,0.15); color:var(--t-teal); border-color:rgba(74,150,150,0.35); }
+.trk .cp button {
+  background:none; border:none; padding:0; cursor:pointer; color:inherit; opacity:.65; font-size:11px; line-height:1;
+}
+.trk .cp button:hover { opacity:1; color:var(--t-red-b); }
+.trk .cp-add {
+  display:flex; gap:3px; align-items:center; width:100%; margin-top:3px;
+}
+.trk .cp-add select {
+  flex:1; min-width:0; background:var(--t-bg-higher); border:1px dashed var(--t-t4); color:var(--t-t3);
+  padding:3px 6px; border-radius:9px; font-size:10px; outline:none;
+}
+.trk .cp-add select:focus { border-color:var(--t-purple); color:var(--t-t1); }
+.trk .cp-add button {
+  padding:3px 8px; background:rgba(155,126,222,0.15); color:var(--t-purple);
+  border:1px solid rgba(155,126,222,0.35); border-radius:9px; cursor:pointer;
+  font-size:10px; font-weight:700;
+}
+.trk .cp-add button:hover { background:rgba(155,126,222,0.25); }
+
+.trk .pd-row { display:flex; gap:3px; align-items:center; margin-top:3px; width:100%; }
+.trk .pd-row .pd-lbl { font-size:9px; color:var(--t-gold); font-weight:700; letter-spacing:.8px; flex-shrink:0; }
+.trk .pd-row input {
+  flex:1; min-width:0; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:3px 6px; border-radius:4px; font-size:10px; outline:none;
+}
+.trk .pd-row input:focus { border-color:var(--t-gold); }
+.trk .pd-row button {
+  padding:3px 7px; background:rgba(200,168,78,0.12); color:var(--t-gold);
+  border:1px solid rgba(200,168,78,0.35); border-radius:4px; cursor:pointer;
+  font-size:10px; font-weight:700;
+}
+.trk .pd-row button:hover { background:rgba(200,168,78,0.22); }
+
+.trk .c-act { display:flex; flex-direction:column; gap:3px; align-items:stretch; }
+.trk .ew-row { display:flex; gap:2px; justify-content:center; }
+.trk .ew-btn {
+  flex:1; padding:2px 0; border-radius:4px; font-size:9px; font-weight:700;
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t3); cursor:pointer;
+}
+.trk .ew-btn:hover { border-color:var(--t-t4); }
+.trk .ew-btn.on-elite { background:rgba(200,168,78,0.18); color:var(--t-gold); border-color:rgba(200,168,78,0.45); }
+.trk .ew-btn.on-weak { background:rgba(155,126,222,0.18); color:var(--t-purple); border-color:rgba(155,126,222,0.45); }
+.trk .act-btn {
+  padding:3px 0; border-radius:4px; font-size:9px; font-weight:700; cursor:pointer;
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
+}
+.trk .act-btn:hover { border-color:var(--t-t4); color:var(--t-t1); }
+.trk .act-btn.del { background:rgba(196,60,60,0.1); color:var(--t-red-b); border-color:rgba(196,60,60,0.3); }
+.trk .act-btn.del:hover { background:rgba(196,60,60,0.2); }
+.trk .act-btn.delay { background:rgba(155,126,222,0.1); color:var(--t-purple); border-color:rgba(155,126,222,0.3); }
+.trk .act-btn.delay:hover { background:rgba(155,126,222,0.2); }
+.trk .act-btn.ready { background:rgba(62,186,104,0.1); color:var(--t-green); border-color:rgba(62,186,104,0.3); }
+.trk .act-btn.ready:hover { background:rgba(62,186,104,0.2); }
+
+/* empty state */
+.trk .empty-state {
+  padding:50px 20px; text-align:center; color:var(--t-t3); font-style:italic;
+  font-family:'Crimson Pro',serif; font-size:14px;
+}
+.trk .empty-state.hidden { display:none; }
+
+/* ═══ HERO CARD ═══ */
+.trk .side { min-width:0; }
+@media (min-width:1280px) { .trk .side { position:sticky; top:14px; max-height:calc(100vh - 30px); overflow-y:auto; } }
+
+.trk .hero-card {
+  background:
+    linear-gradient(180deg, rgba(196,60,60,0.12) 0%, rgba(26,30,41,0.4) 35%, var(--t-bg-surface) 100%);
+  border:1px solid var(--t-border); border-radius:14px; padding:16px;
+  position:relative; overflow:hidden;
+  box-shadow:0 10px 34px rgba(0,0,0,0.32);
+}
+.trk .hero-card::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, transparent, var(--t-red), var(--t-gold), var(--t-red), transparent);
+  opacity:.85; z-index:1;
+}
+.trk .hero-card::after {
+  content:""; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
+  background:radial-gradient(circle, rgba(196,60,60,0.12), transparent 65%);
+  pointer-events:none;
+}
+
+.trk .hero-top { display:flex; gap:13px; align-items:flex-start; margin-bottom:12px; position:relative; }
+.trk .hero-port {
+  width:72px; height:72px; border-radius:11px;
+  background:linear-gradient(135deg, var(--t-bg-higher), var(--t-bg-raised));
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Cinzel',serif; font-weight:700; font-size:32px; color:var(--t-t1);
+  border:2.5px solid var(--t-red); flex-shrink:0; text-transform:uppercase;
+  box-shadow:inset 0 0 20px rgba(196,60,60,0.18), 0 0 22px rgba(196,60,60,0.28);
+}
+.trk .hero-port.pc { border-color:var(--t-teal); box-shadow:inset 0 0 20px rgba(74,150,150,0.18), 0 0 22px rgba(74,150,150,0.28); color:var(--t-teal); }
+.trk .hero-ttl { flex:1; min-width:0; }
+.trk .hero-ttl .hnm {
+  font-family:'Cinzel',serif; font-weight:900; font-size:22px; line-height:1.05; letter-spacing:.5px;
+  color:var(--t-t1);
+}
+.trk .hero-ttl .role { font-family:'Crimson Pro',serif; font-style:italic; font-size:12px; color:var(--t-t2); margin-top:4px; line-height:1.3; }
+.trk .hero-ttl .tag-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.trk .tagp { font-size:9px; padding:2px 8px; background:rgba(196,60,60,0.12); border:1px solid rgba(196,60,60,0.35); color:var(--t-red-b); border-radius:4px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; }
+.trk .tagp.gold { background:rgba(200,168,78,0.12); border-color:rgba(200,168,78,0.35); color:var(--t-gold); }
+.trk .tagp.purple { background:rgba(155,126,222,0.12); border-color:rgba(155,126,222,0.35); color:var(--t-purple); }
+.trk .tagp.teal { background:rgba(74,150,150,0.12); border-color:rgba(74,150,150,0.35); color:var(--t-teal); }
+.trk .tagp.blue { background:rgba(90,142,232,0.12); border-color:rgba(90,142,232,0.35); color:var(--t-blue); }
+.trk .tagp.rare { background:#002664; color:#fff; border-color:rgba(255,255,255,0.15); }
+.trk .tagp.uncommon { background:#98691E; color:#fff; border-color:rgba(255,255,255,0.15); }
+.trk .tagp.unique { background:#54166E; color:#fff; border-color:rgba(255,255,255,0.15); }
+
+.trk .hero-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; position:relative; }
+.trk .hs-box {
+  background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.1));
+  border:1px solid var(--t-border); border-radius:7px; padding:6px 8px; text-align:center;
+}
+.trk .hs-box .l { font-size:9px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; font-weight:600; }
+.trk .hs-box .v { font-family:'Cinzel',serif; font-size:16px; font-weight:700; margin-top:1px; color:var(--t-t1); }
+.trk .hs-box.ac .v { color:var(--t-blue); }
+.trk .hs-box.spd .v { color:var(--t-teal); }
+.trk .hs-box.perc .v { color:var(--t-gold); }
+.trk .hs-box.f .v { color:var(--t-green); }
+.trk .hs-box.r .v { color:var(--t-blue); }
+.trk .hs-box.w .v { color:var(--t-purple); }
+
+.trk .hp-ribbon {
+  background:linear-gradient(180deg, rgba(38,43,58,0.6), rgba(26,30,41,0.8));
+  border:1px solid var(--t-border); border-radius:10px; padding:11px 12px; margin-bottom:10px;
+}
+.trk .hp-r-top { display:flex; justify-content:space-between; align-items:baseline; }
+.trk .hp-r-top .l { font-size:9px; color:var(--t-t3); letter-spacing:1.2px; text-transform:uppercase; font-weight:700; }
+.trk .hp-r-top .pct { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; }
+.trk .hp-num { font-family:'Cinzel',serif; font-size:26px; font-weight:900; line-height:1; margin-top:3px; color:var(--t-t1); }
+.trk .hp-num .slash { color:var(--t-t3); }
+.trk .hp-num .mx { color:var(--t-t3); font-size:15px; }
+.trk .hp-bar { height:7px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; margin-top:5px; }
+.trk .hp-bar .f { height:100%; transition:width .3s; background:linear-gradient(90deg, var(--t-green), #5fd884); }
+.trk .hp-bar .f.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
+.trk .hp-bar .f.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
+
+.trk .section-h {
+  font-family:'Cinzel',serif; font-size:10px; letter-spacing:1.6px; text-transform:uppercase; color:var(--t-t2);
+  padding-bottom:4px; border-bottom:1px dashed var(--t-border);
+  margin:11px 0 7px;
+  display:flex; align-items:center; gap:7px; justify-content:space-between;
+}
+.trk .section-h::before { content:"◆"; color:var(--t-gold); font-size:8px; }
+.trk .section-h .tk { font-family:'Inter',sans-serif; font-size:9px; color:var(--t-t3); letter-spacing:.6px; font-weight:600; text-transform:none; margin-left:auto; }
+
+.trk .strikes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.trk .strike {
+  background:linear-gradient(135deg, rgba(200,168,78,0.04), transparent), rgba(26,30,41,0.7);
+  border:1px solid var(--t-border); border-radius:7px; padding:7px 9px;
+}
+.trk .strike .snm { font-weight:700; font-size:11.5px; color:var(--t-t1); display:flex; justify-content:space-between; align-items:center; gap:6px; }
+.trk .strike .snm .hit { font-family:'JetBrains Mono',monospace; color:var(--t-gold); font-size:11px; }
+.trk .strike .dmg { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--t-t2); margin-top:3px; }
+
+.trk .cond-row { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+.trk .cond-chip {
+  padding:3px 9px; border-radius:14px; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  display:inline-flex; gap:5px; align-items:center;
+  background:rgba(155,126,222,0.15); color:var(--t-purple); border:1px solid rgba(155,126,222,0.35);
+}
+.trk .cond-chip.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
+.trk .cond-chip.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
+.trk .cond-chip button { background:none; border:none; color:inherit; opacity:.65; cursor:pointer; font-size:11px; line-height:1; padding:0; }
+.trk .cond-chip button:hover { opacity:1; color:var(--t-red-b); }
+
+.trk .abl-row {
+  background:rgba(26,30,41,0.7); border:1px solid var(--t-border); border-radius:7px;
+  padding:8px 10px; margin-bottom:5px;
+}
+.trk .abl-row .abl-nm { font-weight:700; font-size:12px; color:var(--t-gold); margin-bottom:3px; font-family:'Cinzel',serif; letter-spacing:.3px; }
+.trk .abl-row .abl-dsc { font-size:11px; color:var(--t-t2); line-height:1.4; font-family:'Crimson Pro',serif; }
+
+.trk .reminder {
+  background:linear-gradient(135deg, rgba(200,168,78,0.08), rgba(200,168,78,0.02));
+  border:1px solid rgba(200,168,78,0.3); border-radius:8px;
+  padding:8px 10px; margin-top:9px;
+  font-size:10.5px; color:var(--t-gold); font-family:'Crimson Pro',serif; font-style:italic;
+  line-height:1.5;
+}
+
+.trk .rk-btn {
+  background:rgba(200,168,78,0.12); color:var(--t-gold); border:1px solid rgba(200,168,78,0.35);
+  padding:6px 10px; border-radius:7px; font-size:11px; font-weight:700; cursor:pointer; letter-spacing:.3px;
+  margin-bottom:8px; display:inline-flex; align-items:center; gap:5px;
+}
+.trk .rk-btn:hover { background:rgba(200,168,78,0.22); }
+
+.trk .defense-row {
+  display:grid; grid-template-columns: auto 1fr; gap:6px 10px; align-items:baseline;
+  font-size:11px; margin-bottom:3px;
+}
+.trk .defense-row .dl { font-size:9px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; font-weight:700; }
+.trk .defense-row .dv { color:var(--t-t2); }
+.trk .defense-row .dv.w { color:var(--t-red-b); }
+.trk .defense-row .dv.r { color:var(--t-blue); }
+
+/* ═══ COMBAT LOG (collapsible bottom) ═══ */
+.trk .log-wrap {
+  margin-top:12px; background:linear-gradient(180deg, rgba(26,30,41,0.7), rgba(19,22,31,0.8));
+  border:1px solid var(--t-border); border-radius:10px; overflow:hidden;
+}
+.trk .log-head {
+  padding:8px 12px; display:flex; justify-content:space-between; align-items:center;
+  background:rgba(19,22,31,0.5); border-bottom:1px solid var(--t-border); cursor:pointer;
+}
+.trk .log-ttl { font-family:'Cinzel',serif; font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:var(--t-t2); font-weight:700; }
+.trk .log-body {
+  max-height:200px; overflow-y:auto; padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:var(--t-t2);
+}
+.trk .log-body.collapsed { display:none; }
+.trk .log-body div { padding:1px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+.trk .log-btns { display:flex; gap:5px; }
+.trk .log-btn {
+  padding:3px 9px; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
+  border-radius:5px; font-size:10px; cursor:pointer; font-weight:600;
+}
+.trk .log-btn:hover { color:var(--t-t1); border-color:var(--t-t4); }
+.trk .log-btn.danger { color:var(--t-red-b); border-color:rgba(196,60,60,0.3); }
+
+/* ═══ MODAL ═══ */
+.trk-modal {
+  position:fixed; inset:0; background:rgba(0,0,0,0.72); backdrop-filter:blur(4px);
+  z-index:150; display:flex; align-items:center; justify-content:center; padding:20px;
+  opacity:0; pointer-events:none; transition: opacity .2s;
+}
+.trk-modal.open { opacity:1; pointer-events:auto; }
+.trk-modal-panel {
+  background:linear-gradient(180deg, var(--t-bg-surface), var(--t-bg-raised));
+  border:1px solid var(--t-border); border-radius:14px;
+  width:100%; max-width:680px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,0.6);
+  position:relative;
+  transform:translateY(10px); transition: transform .2s;
+}
+.trk-modal.open .trk-modal-panel { transform:translateY(0); }
+.trk-modal-panel::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, transparent, var(--t-red), var(--t-gold), var(--t-red), transparent);
+  opacity:.85;
+}
+.trk-modal-head {
+  padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start;
+  border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.5);
+}
+.trk-modal-head h3 { font-family:'Cinzel',serif; font-size:17px; font-weight:700; color:var(--t-gold); margin:0; }
+.trk-modal-head .sub { font-size:10px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; margin-top:3px; }
+.trk-modal-close { background:transparent; border:none; color:var(--t-t3); font-size:22px; cursor:pointer; line-height:1; }
+.trk-modal-close:hover { color:var(--t-red-b); }
+.trk-modal-body { padding:18px; overflow-y:auto; flex:1; }
+
+/* round badge (floating under hero bar, sits by xp) */
+.trk .badge {
+  display:inline-flex; align-items:center; padding:4px 11px; border-radius:9999px;
+  font-size:10px; font-weight:700; background:var(--t-bg-raised); border:1px solid var(--t-border);
+  color:var(--t-t2); letter-spacing:.8px; text-transform:uppercase;
+}
+
+/* secret roll result */
+.trk .secret-result {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:7px 10px; border:1px solid var(--t-border); border-radius:6px; margin-top:5px;
+  background:rgba(26,30,41,0.7);
+}
+.trk .secret-result .sr-tot { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:17px; color:var(--t-purple); }
+.trk .secret-result .sr-lbl { font-size:11px; color:var(--t-purple); font-weight:600; }
+.trk .secret-result .sr-time { font-size:9px; color:var(--t-t3); letter-spacing:.8px; }
+.trk .secret-result .sr-det { font-size:9px; color:var(--t-t3); font-family:'JetBrains Mono',monospace; }
+
+/* handout recipients select */
+.trk .handout-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px; }
+
+/* XP area */
+.trk .xp-row { display:flex; align-items:center; gap:8px; font-size:11px; }
+.trk .xp-row.hidden { display:none; }
+.trk .xp-row .xp-diff { font-weight:700; letter-spacing:.3px; }
+
+/* Utility */
+.trk .hidden { display:none !important; }
 {% endblock %}
 
 {% block content %}
 
-{# ═══════════════════ TOP TOOLBAR ═══════════════════ #}
-<div class="flex flex-wrap items-center gap-2 mb-3">
+<div class="trk">
 
-    {# Monster Search #}
-    <div class="relative" id="monster-search-wrap">
-        <input type="text" id="monster-search" placeholder="Search monsters..." autocomplete="off"
-               class="inline-input w-52" onfocus="showMonsterDD()" oninput="filterMonsterDD()">
-        <div id="monster-dd" class="hidden absolute top-full left-0 mt-1 w-72 rounded-lg border border-white/[0.08] shadow-2xl z-50 max-h-60 overflow-y-auto" style="background:#24242e;">
+{# ═══════════════════ HERO BAR ═══════════════════ #}
+<div class="hero-bar">
+    <div class="hb-left">
+        <span class="name">Encounter Tracker</span>
+        <span class="meta">PF2e</span>
+        <div id="xp-badge" class="xp-row {% if encounter_xp <= 0 %}hidden{% endif %}">
+            <span style="color:var(--t-t3);text-transform:uppercase;letter-spacing:.8px;font-size:9px;font-weight:700;">Party Lvl <strong id="xp-party-level" style="color:var(--t-t1);">{{ party_level }}</strong></span>
+            <span id="xp-diff-label" class="xp-diff {{ diff_color }}">{{ diff_label }}</span>
+            <span id="xp-value" class="mono" style="color:var(--t-t3);">({{ encounter_xp }} XP)</span>
+        </div>
+    </div>
+    <div class="hb-turn">
+        <div class="round-block">
+            <span class="l">Round</span>
+            <span class="v" id="round-badge-num">{{ round_number }}</span>
+        </div>
+        <div class="turn-now">
+            <span class="l">Now Acting</span>
+            <span class="v" id="now-acting-name">—</span>
+        </div>
+        <div class="turn-ctl">
+            <button class="prev-btn" onclick="apiPost('/api/cycle_turn/prev')" title="Previous turn">◀</button>
+            <button class="next-btn" id="btn-next-turn" onclick="apiPost('/api/cycle_turn/next')">Next Turn ▶</button>
+        </div>
+    </div>
+    <div class="hb-right">
+        <button class="hb-btn" onclick="apiPost('/api/roll_npc_initiative')" title="Roll d20+Perception for all NPCs">Roll Init</button>
+        <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
+        <button class="hb-btn gold" onclick="openSecretRollPanel()" title="GM Secret Roll">🎲 Secret</button>
+        <button class="hb-btn purple" onclick="openHandoutPanel()" title="Send handout to players">📜 Handout</button>
+        <button class="hb-btn danger" onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')">Clear</button>
+        {# hidden legacy round badge, kept for renderMeta backward-compat #}
+        <span id="round-badge" class="hidden">Round {{ round_number }}</span>
+    </div>
+</div>
+
+{# ═══════════════════ TOOL STRIP ═══════════════════ #}
+<div class="tool-strip">
+    <div class="ts-search" id="monster-search-wrap">
+        <input type="text" id="monster-search" placeholder="Search monsters…" autocomplete="off"
+               onfocus="showMonsterDD()" oninput="filterMonsterDD()">
+        <div id="monster-dd" class="monster-dd hidden">
             {% for m in monsters %}
-            <div class="monster-opt px-3 py-2 hover:bg-accent-400/10 cursor-pointer text-sm flex justify-between items-center border-b border-white/[0.04] last:border-0"
-                 data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonster('{{ m.file_path }}')">
-                <span class="text-base-200">{{ m.name }}</span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded bg-base-800 text-base-400 border border-white/[0.06]">L{{ m.level }}</span>
+            <div class="monster-opt" data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonster('{{ m.file_path }}')">
+                <span>{{ m.name }}</span>
+                <span class="lvl">L{{ m.level }}</span>
             </div>
             {% endfor %}
             {% if not monsters %}
-            <div class="px-3 py-4 text-center text-base-500 text-sm italic">No monsters in library</div>
+            <div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;">No monsters in library</div>
             {% endif %}
         </div>
     </div>
 
-    <button onclick="toggleCustomForm()" class="btn btn-ghost btn-sm">+ Custom</button>
-
-    <div class="h-5 border-r border-white/[0.06] mx-1"></div>
-
-    {# PC Dropdown + Add Party #}
-    <select id="pc-select" class="inline-input w-40">
+    <select id="pc-select" class="ts-select" style="min-width:140px;">
         {% if party %}
             {% for p in party %}
             <option value="{{ p.name }}">{{ p.name }}</option>
@@ -90,93 +666,20 @@
             <option value="" disabled selected>No PCs</option>
         {% endif %}
     </select>
-    <button onclick="addPC()" class="btn btn-ghost btn-sm">Add PC</button>
-    <button onclick="apiPost('/api/add_party')" class="btn btn-ghost btn-sm">Add Party</button>
+    <button class="ts-btn" onclick="addPC()">+ PC</button>
+    <button class="ts-btn primary" onclick="apiPost('/api/add_party')">+ Party</button>
+    <button class="ts-btn" onclick="toggleCustomForm()">+ Custom</button>
 
-    <div class="h-5 border-r border-white/[0.06] mx-1"></div>
+    <div class="ts-divider"></div>
 
-    <button onclick="apiPost('/api/roll_npc_initiative')" class="btn btn-ghost btn-sm" title="Roll d20+Perception for all NPCs">Roll Init</button>
-    <button onclick="apiPost('/api/sort_initiative')" class="btn btn-ghost btn-sm">Sort</button>
+    <label class="tlabel" style="margin-bottom:0;">Save</label>
+    <input type="text" id="save-name" class="tinput" placeholder="Encounter name" style="width:150px;">
+    <button class="ts-btn" onclick="saveEncounter()">Save</button>
 
-    <button onclick="apiPost('/api/cycle_turn/next')" class="btn btn-primary" id="btn-next-turn">Next Turn</button>
-    <button onclick="apiPost('/api/cycle_turn/prev')" class="btn btn-ghost btn-sm" title="Previous turn">Prev</button>
-
-    <div class="ml-auto flex items-center gap-2">
-        <button onclick="openSecretRollPanel()" class="btn btn-ghost btn-sm" title="GM Secret Roll (hidden from players)" style="color:#c4b5fd;border-color:rgba(167,139,250,0.2);">🎲 Secret</button>
-        <button onclick="openHandoutPanel()" class="btn btn-ghost btn-sm" title="Send handout to players" style="color:#fbbf24;border-color:rgba(251,191,36,0.2);">📜 Handout</button>
-        <span id="round-badge" class="badge bg-base-800 text-base-300 border border-white/[0.06]">Round {{ round_number }}</span>
-        <button onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')" class="btn btn-danger btn-sm">Clear</button>
-    </div>
-</div>
-
-{# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
-<div id="secret-roll-panel" class="hidden mb-3 rounded-lg border p-4" style="background:#191920; border-color:rgba(167,139,250,0.15);">
-    <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold uppercase tracking-wider" style="color:#c4b5fd;">🎲 GM Secret Roll</span>
-        <button onclick="document.getElementById('secret-roll-panel').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-        <input type="number" id="secret-dice-count" value="1" min="1" max="20" class="inline-input w-12 text-center" style="font-size:12px;">
-        <span class="text-base-500 text-xs">d</span>
-        <select id="secret-dice-sides" class="inline-input w-16" style="font-size:12px;">
-            <option value="4">d4</option><option value="6">d6</option><option value="8">d8</option>
-            <option value="10">d10</option><option value="12">d12</option><option value="20" selected>d20</option>
-            <option value="100">d100</option>
-        </select>
-        <span class="text-base-500 text-xs">+</span>
-        <input type="number" id="secret-modifier" value="0" class="inline-input w-14 text-center" style="font-size:12px;">
-        <input type="text" id="secret-label" placeholder="Label (e.g. Perception)" class="inline-input flex-1" style="font-size:12px;min-width:120px;">
-        <button onclick="doSecretRoll()" class="btn btn-sm" style="background:rgba(167,139,250,0.15);color:#c4b5fd;border-color:rgba(167,139,250,0.2);">Roll Secret</button>
-    </div>
-    <div id="secret-roll-results" class="mt-3 space-y-1 max-h-40 overflow-y-auto" style="scrollbar-width:thin;"></div>
-</div>
-
-{# ═══════════════════ HANDOUT PANEL ═══════════════════ #}
-<div id="handout-panel" class="hidden mb-3 rounded-lg border p-4" style="background:#191920; border-color:rgba(251,191,36,0.15);">
-    <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold uppercase tracking-wider" style="color:#fbbf24;">📜 Send Handout to Players</span>
-        <button onclick="document.getElementById('handout-panel').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
-    </div>
-    <div class="grid grid-cols-[1fr_1fr] gap-3 mb-3">
-        <div>
-            <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Title</label>
-            <input type="text" id="handout-title" placeholder="Handout title..." class="inline-input w-full" style="font-size:12px;">
-        </div>
-        <div>
-            <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Recipients</label>
-            <select id="handout-recipients" class="inline-input w-full" style="font-size:12px;" multiple>
-                <option value="all" selected>All Players</option>
-                {% for p in party %}
-                <option value="{{ p.name }}">{{ p.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </div>
-    <div class="mb-3">
-        <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Content</label>
-        <textarea id="handout-content" rows="3" placeholder="Handout text..." class="inline-input w-full" style="font-size:12px;resize:vertical;text-align:left;"></textarea>
-    </div>
-    <div class="flex items-center gap-3">
-        <div class="flex items-center gap-2 flex-1">
-            <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold shrink-0">Image</label>
-            <input type="file" id="handout-image" accept="image/*" class="text-xs text-base-400" style="font-size:10px;">
-        </div>
-        <button onclick="sendHandout()" class="btn btn-sm" style="background:rgba(251,191,36,0.15);color:#fbbf24;border-color:rgba(251,191,36,0.2);">Send Handout</button>
-    </div>
-</div>
-
-{# ═══════════════════ SAVE / LOAD BAR ═══════════════════ #}
-<div class="flex flex-wrap items-center gap-3 mb-3 px-3 py-2 rounded-lg border border-white/[0.06]" style="background:#191920;">
-    <label class="text-[10px] text-base-400 uppercase tracking-wider font-semibold">Save</label>
-    <input type="text" id="save-name" placeholder="Encounter name" class="inline-input w-40">
-    <button onclick="saveEncounter()" class="btn btn-ghost btn-sm">Save</button>
-
-    <div class="h-5 border-r border-white/[0.06] mx-1"></div>
-
-    <label class="text-[10px] text-base-400 uppercase tracking-wider font-semibold">Load</label>
-    <select id="load-select" class="inline-input w-44">
+    <label class="tlabel" style="margin-bottom:0;">Load</label>
+    <select id="load-select" class="ts-select" style="min-width:150px;">
         {% if saved_encounters %}
-        <option value="" disabled selected>Select...</option>
+        <option value="" disabled selected>Select…</option>
         {% for enc in saved_encounters %}
         <option value="{{ enc }}">{{ enc }}</option>
         {% endfor %}
@@ -184,126 +687,168 @@
         <option value="" disabled selected>No saved encounters</option>
         {% endif %}
     </select>
-    <button onclick="loadEncounter()" class="btn btn-ghost btn-sm">Load</button>
-    <button onclick="deleteEncounter()" class="btn btn-danger btn-sm" title="Delete selected encounter">Del</button>
+    <button class="ts-btn" onclick="loadEncounter()">Load</button>
+    <button class="ts-btn" onclick="deleteEncounter()" style="color:var(--t-red-b);border-color:rgba(196,60,60,0.25);" title="Delete selected encounter">Del</button>
+</div>
 
-    {# XP / Difficulty badge #}
-    <div id="xp-badge" class="ml-auto flex items-center gap-2 text-xs {% if encounter_xp > 0 %}{% else %}hidden{% endif %}">
-        <span class="text-base-400">Party Lvl <strong id="xp-party-level">{{ party_level }}</strong></span>
-        <span id="xp-diff-label" class="font-bold {{ diff_color }}">{{ diff_label }}</span>
-        <span id="xp-value" class="text-base-500 font-mono">({{ encounter_xp }} XP)</span>
+{# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
+<div id="secret-roll-panel" class="panel hidden" style="border-color:rgba(155,126,222,0.25);">
+    <div class="panel-head">
+        <span class="panel-ttl" style="color:var(--t-purple);">🎲 GM Secret Roll</span>
+        <button class="panel-close" onclick="document.getElementById('secret-roll-panel').classList.add('hidden')">&times;</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="number" id="secret-dice-count" value="1" min="1" max="20" class="tinput" style="width:55px;text-align:center;">
+        <span style="color:var(--t-t3);font-size:12px;">d</span>
+        <select id="secret-dice-sides" class="tselect" style="width:75px;">
+            <option value="4">d4</option><option value="6">d6</option><option value="8">d8</option>
+            <option value="10">d10</option><option value="12">d12</option><option value="20" selected>d20</option>
+            <option value="100">d100</option>
+        </select>
+        <span style="color:var(--t-t3);font-size:12px;">+</span>
+        <input type="number" id="secret-modifier" value="0" class="tinput" style="width:65px;text-align:center;">
+        <input type="text" id="secret-label" placeholder="Label (e.g. Perception)" class="tinput" style="flex:1;min-width:160px;">
+        <button class="ts-btn" onclick="doSecretRoll()" style="background:rgba(155,126,222,0.18);color:var(--t-purple);border-color:rgba(155,126,222,0.4);">Roll Secret</button>
+    </div>
+    <div id="secret-roll-results" style="margin-top:10px;max-height:160px;overflow-y:auto;"></div>
+</div>
+
+{# ═══════════════════ HANDOUT PANEL ═══════════════════ #}
+<div id="handout-panel" class="panel hidden" style="border-color:rgba(200,168,78,0.25);">
+    <div class="panel-head">
+        <span class="panel-ttl" style="color:var(--t-gold);">📜 Send Handout to Players</span>
+        <button class="panel-close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
+    </div>
+    <div class="handout-grid">
+        <div>
+            <label class="tlabel">Title</label>
+            <input type="text" id="handout-title" placeholder="Handout title…" class="tinput" style="width:100%;">
+        </div>
+        <div>
+            <label class="tlabel">Recipients</label>
+            <select id="handout-recipients" class="tselect" style="width:100%;" multiple>
+                <option value="all" selected>All Players</option>
+                {% for p in party %}
+                <option value="{{ p.name }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div style="margin-bottom:10px;">
+        <label class="tlabel">Content</label>
+        <textarea id="handout-content" rows="3" placeholder="Handout text…" class="tinput" style="width:100%;resize:vertical;font-family:'Crimson Pro',serif;"></textarea>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+        <div style="flex:1;display:flex;align-items:center;gap:8px;">
+            <label class="tlabel" style="margin:0;">Image</label>
+            <input type="file" id="handout-image" accept="image/*" style="color:var(--t-t3);font-size:11px;">
+        </div>
+        <button class="ts-btn" onclick="sendHandout()" style="background:rgba(200,168,78,0.18);color:var(--t-gold);border-color:rgba(200,168,78,0.4);">Send Handout</button>
     </div>
 </div>
 
 {# ═══════════════════ CUSTOM MONSTER FORM ═══════════════════ #}
-<div id="custom-monster-form" class="hidden mb-3 rounded-lg border border-white/[0.06] p-4" style="background:#191920;">
-    <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold text-accent-300 uppercase tracking-wider">Custom Monster</span>
-        <button onclick="toggleCustomForm()" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
+<div id="custom-monster-form" class="panel hidden">
+    <div class="panel-head">
+        <span class="panel-ttl" style="color:var(--t-red-b);">Custom Monster</span>
+        <button class="panel-close" onclick="toggleCustomForm()">&times;</button>
     </div>
-    <div class="custom-form-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-3">
-        <div class="col-span-2"><label>Name</label><input id="cm-name" placeholder="Goblin Warrior"></div>
-        <div><label>Level</label><input type="number" id="cm-level" value="1"></div>
-        <div><label>HP</label><input type="number" id="cm-hp" value="20"></div>
-        <div><label>AC</label><input type="number" id="cm-ac" value="16"></div>
-        <div><label>Fort</label><input type="number" id="cm-fort" value="5"></div>
-        <div><label>Ref</label><input type="number" id="cm-ref" value="5"></div>
-        <div><label>Will</label><input type="number" id="cm-will" value="3"></div>
+    <div class="custom-grid">
+        <div style="grid-column:span 2;"><label>Name</label><input id="cm-name" class="tinput" placeholder="Goblin Warrior" style="width:100%;"></div>
+        <div><label>Level</label><input type="number" id="cm-level" class="tinput" value="1" style="width:100%;"></div>
+        <div><label>HP</label><input type="number" id="cm-hp" class="tinput" value="20" style="width:100%;"></div>
+        <div><label>AC</label><input type="number" id="cm-ac" class="tinput" value="16" style="width:100%;"></div>
+        <div><label>Fort</label><input type="number" id="cm-fort" class="tinput" value="5" style="width:100%;"></div>
+        <div><label>Ref</label><input type="number" id="cm-ref" class="tinput" value="5" style="width:100%;"></div>
+        <div><label>Will</label><input type="number" id="cm-will" class="tinput" value="3" style="width:100%;"></div>
     </div>
-    <div class="custom-form-grid grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-        <div><label>Speed</label><input type="number" id="cm-speed" value="25"></div>
-        <div><label>Perception</label><input type="number" id="cm-perc" value="5"></div>
-        <div><label>Attack Name</label><input id="cm-atk-name" value="Strike"></div>
-        <div class="custom-form-grid">
+    <div class="custom-grid" style="grid-template-columns:repeat(4,1fr);">
+        <div><label>Speed</label><input type="number" id="cm-speed" class="tinput" value="25" style="width:100%;"></div>
+        <div><label>Perception</label><input type="number" id="cm-perc" class="tinput" value="5" style="width:100%;"></div>
+        <div><label>Attack Name</label><input id="cm-atk-name" class="tinput" value="Strike" style="width:100%;"></div>
+        <div>
             <label>Atk Bonus / Damage</label>
-            <div class="flex gap-1">
-                <input type="number" id="cm-atk-mod" value="8" class="w-1/2">
-                <input id="cm-atk-dmg" value="1d6+3" class="w-1/2">
+            <div style="display:flex;gap:4px;">
+                <input type="number" id="cm-atk-mod" class="tinput" value="8" style="width:50%;">
+                <input id="cm-atk-dmg" class="tinput" value="1d6+3" style="width:50%;">
             </div>
         </div>
     </div>
-    <div class="flex gap-2">
-        <button onclick="submitCustomMonster()" class="btn btn-primary btn-sm">Add to Encounter</button>
-        <button onclick="toggleCustomForm()" class="btn btn-ghost btn-sm">Cancel</button>
+    <div style="display:flex;gap:8px;">
+        <button class="ts-btn primary" onclick="submitCustomMonster()">Add to Encounter</button>
+        <button class="ts-btn" onclick="toggleCustomForm()">Cancel</button>
     </div>
 </div>
 
 {# ═══════════════════ MAIN LAYOUT ═══════════════════ #}
-<div class="flex flex-col xl:flex-row gap-4 items-start">
+<div id="main-layout" class="layout has-active">
 
-    {# ── LEFT: Initiative List ── #}
-    <div class="flex-1 min-w-0 w-full">
-        <div class="rounded-lg border border-white/[0.06] overflow-hidden" style="background:#191920;">
-
-            {# Header row #}
-            <div class="grid grid-cols-[32px_56px_1fr_48px_220px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.06] text-[10px] font-semibold text-base-500 uppercase tracking-wider" style="background:#0d0d12;">
+    {# ── LEFT: Data Grid ── #}
+    <div style="min-width:0;">
+        <div class="grid-wrap">
+            <div class="grid-head">
                 <div></div>
-                <div>Init</div>
-                <div>Name</div>
-                <div>AC</div>
-                <div class="text-center">HP</div>
+                <div class="h-center">Init</div>
+                <div>Combatant</div>
+                <div class="h-center">AC</div>
+                <div class="h-center">Hit Points</div>
                 <div>Conditions</div>
-                <div class="text-center">Actions</div>
+                <div class="h-center">Actions</div>
             </div>
 
-            {# Combatant rows #}
             <div id="initiative-list">
-                {# Rendered by JS on load #}
+                {# Rendered by JS #}
             </div>
 
-            <div id="empty-state" class="hidden px-4 py-10 text-center text-base-500 text-sm italic">
+            <div id="empty-state" class="empty-state hidden">
                 No combatants yet. Search for monsters or add your party above.
             </div>
         </div>
-    </div>
 
-    {# ── RIGHT: Active Combatant Panel ── #}
-    <div id="active-panel-wrap" class="w-full xl:w-[380px] shrink-0 hidden">
-        <div class="rounded-lg border border-white/[0.06] sticky top-6 overflow-hidden" style="background:#191920;">
-            <div class="px-4 py-3 border-b border-white/[0.06] flex justify-between items-center" style="background:#0d0d12;">
-                <div>
-                    <h2 id="ap-name" class="font-display text-accent-300 text-lg font-semibold"></h2>
-                    <span id="ap-subtitle" class="text-[10px] text-base-500 uppercase tracking-wider"></span>
+        {# ═══════════════════ COMBAT LOG (collapsible) ═══════════════════ #}
+        <div class="log-wrap">
+            <div class="log-head" onclick="toggleLog(event)">
+                <span class="log-ttl">📜 Combat Log <span id="log-toggle-arrow" style="font-size:8px;opacity:.7;">▾</span></span>
+                <div class="log-btns">
+                    <button class="log-btn" onclick="event.stopPropagation(); refreshLog();">Refresh</button>
+                    <button class="log-btn" onclick="event.stopPropagation(); copyLog();">Copy</button>
+                    <button class="log-btn danger" onclick="event.stopPropagation(); if(confirm('Clear log?')){apiPostRaw('/api/combat_log/clear').then(()=>refreshLog())}">Clear</button>
                 </div>
-                <span class="badge bg-accent-400/10 text-accent-300 border border-accent-400/20 text-[10px] uppercase tracking-wider">Active</span>
             </div>
-            <div id="ap-body" class="p-4 overflow-y-auto max-h-[75vh]" style="scrollbar-width:thin;">
-                {# Populated by JS #}
+            <div id="combat-log-body" class="log-body collapsed">
+                <div style="text-align:center;padding:14px;color:var(--t-t3);font-style:italic;">Loading log…</div>
             </div>
         </div>
     </div>
-</div>
 
-{# ═══════════════════ COMBAT LOG ═══════════════════ #}
-<div class="mt-4 rounded-lg border border-white/[0.06] overflow-hidden" style="background:#191920;">
-    <div class="px-4 py-2 flex items-center justify-between border-b border-white/[0.06]" style="background:#0d0d12;">
-        <span class="text-[10px] font-semibold text-base-400 uppercase tracking-wider">Combat Log</span>
-        <div class="flex gap-2">
-            <button onclick="refreshLog()" class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:10px;">Refresh</button>
-            <button onclick="copyLog()" class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:10px;">Copy</button>
-            <button onclick="if(confirm('Clear log?')){apiPostRaw('/api/combat_log/clear').then(()=>refreshLog())}" class="btn btn-danger btn-sm" style="padding:2px 8px; font-size:10px;">Clear</button>
+    {# ── RIGHT: Hero Card Sidebar ── #}
+    <div id="active-panel-wrap" class="side hidden">
+        <div class="hero-card">
+            {# Populated by renderActivePanel #}
+            <div style="display:none;"><span id="ap-name"></span><span id="ap-subtitle"></span></div>
+            <div id="ap-body"></div>
         </div>
-    </div>
-    <div id="combat-log-body" class="max-h-[200px] overflow-y-auto p-3 space-y-0.5 text-xs font-mono" style="color:#a0a0b8;">
-        <div class="text-center py-4 text-base-500 italic text-xs">Loading log...</div>
     </div>
 </div>
 
 {# ═══════════════════ STAT POPUP MODAL ═══════════════════ #}
-<div id="stat-modal" class="modal-overlay" onclick="if(event.target===this) closeStatModal()">
-    <div class="modal-panel">
-        <div class="px-5 py-3 flex justify-between items-center border-b border-white/[0.06]" style="background:#0d0d12;">
+<div id="stat-modal" class="trk-modal" onclick="if(event.target===this) closeStatModal()">
+    <div class="trk-modal-panel">
+        <div class="trk-modal-head">
             <div>
-                <h3 id="sm-name" class="font-display text-accent-300 text-lg"></h3>
-                <span id="sm-subtitle" class="text-[10px] text-base-500"></span>
+                <h3 id="sm-name">—</h3>
+                <div id="sm-subtitle" class="sub"></div>
             </div>
-            <button onclick="closeStatModal()" class="text-base-500 hover:text-base-200 text-xl leading-none">&times;</button>
+            <button class="trk-modal-close" onclick="closeStatModal()">&times;</button>
         </div>
-        <div id="sm-body" class="p-5 overflow-y-auto flex-1" style="scrollbar-width:thin; max-height:70vh;">
-            <div class="text-center py-8 text-base-500">Loading...</div>
+        <div id="sm-body" class="trk-modal-body">
+            <div style="text-align:center;padding:32px;color:var(--t-t3);">Loading…</div>
         </div>
     </div>
 </div>
+
+</div>
+{# /.trk #}
 
 {# ═══════════════════ SCRIPTS ═══════════════════ #}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -313,6 +858,11 @@ const AJAX_HEADERS = {'X-Requested-With': 'XMLHttpRequest'};
 const JSON_HEADERS = {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
 const CONDITIONS_LIST = ['frightened','sickened','enfeebled','clumsy','drained','stupefied','stunned','slowed','off_guard','prone','dying','wounded','doomed','concealed','hidden','undetected'];
 const VALUED_CONDITIONS = ['frightened','sickened','dying','wounded','doomed','stunned','slowed','enfeebled','clumsy','drained','stupefied'];
+const DEADLY_CONDS = new Set(['dying','wounded','doomed']);
+const DAMAGE_TYPES = ['untyped','bludgeoning','piercing','slashing','fire','cold','electricity','acid','sonic','vitality','void','force','spirit','mental','poison','bleed'];
+
+/* ──────────────── Top-level mutable globals (hoisted above bootstrap IIFE to avoid TDZ) ──────────────── */
+let sortableInstance = null;
 
 /* ──────────────── State ──────────────── */
 let STATE = {
@@ -356,11 +906,12 @@ function toast(msg, type) {
 
 async function apiPostRaw(url, body, contentType) {
     const opts = {method:'POST', headers:{...AJAX_HEADERS}};
-    if (body && contentType === 'json') {
+    if (body instanceof FormData) {
+        // FormData wins regardless of contentType hint — browser sets multipart boundary
+        opts.body = body;
+    } else if (body && contentType === 'json') {
         opts.headers['Content-Type'] = 'application/json';
         opts.body = JSON.stringify(body);
-    } else if (body instanceof FormData) {
-        opts.body = body;
     } else if (body && contentType === 'form') {
         opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
         opts.body = body;
@@ -371,7 +922,9 @@ async function apiPostRaw(url, body, contentType) {
 
 async function apiPost(url, body, contentType) {
     try {
-        const res = await apiPostRaw(url, body, contentType || (body ? 'json' : undefined));
+        // Never coerce FormData to JSON — let apiPostRaw handle the dispatch
+        const effectiveCT = contentType || (body instanceof FormData ? null : (body ? 'json' : undefined));
+        const res = await apiPostRaw(url, body, effectiveCT);
         const data = await res.json();
         if (data.combatants !== undefined) {
             applyState(data);
@@ -409,15 +962,19 @@ function render() {
 }
 
 function hpBarClass(pct) {
-    if (pct > 50) return 'hp-green';
-    if (pct > 25) return 'hp-yellow';
-    return 'hp-red';
+    if (pct > 50) return '';
+    if (pct > 25) return 'mid';
+    return 'low';
 }
-
-function hpTextClass(pct, hp) {
-    if (hp === 0) return 'text-danger-400';
-    if (pct <= 50) return 'text-gold-300';
-    return 'text-success-400';
+function hpTextClass(pct) {
+    if (pct > 50) return 'hi';
+    if (pct > 25) return 'mi';
+    return 'lo';
+}
+function hpPctColor(pct) {
+    if (pct > 50) return 'var(--t-green)';
+    if (pct > 25) return 'var(--t-gold)';
+    return 'var(--t-red-b)';
 }
 
 function condTooltip(cond) {
@@ -442,6 +999,19 @@ function condTooltip(cond) {
     return tips[cond] || cond.replace(/_/g,' ');
 }
 
+function condChipClass(cond) {
+    if (DEADLY_CONDS.has(cond)) return 'red';
+    if (cond === 'off_guard' || cond === 'concealed' || cond === 'hidden' || cond === 'undetected') return 'gold';
+    return '';
+}
+
+function initials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0,2).toUpperCase();
+    return (parts[0][0] + (parts[1][0] || '')).toUpperCase();
+}
+
 function renderInitList() {
     const list = document.getElementById('initiative-list');
     const empty = document.getElementById('empty-state');
@@ -453,10 +1023,13 @@ function renderInitList() {
     }
     empty.classList.add('hidden');
 
+    const dmgOpts = DAMAGE_TYPES.map(d => `<option value="${d}">${d === 'untyped' ? '— type —' : d}</option>`).join('');
+
     list.innerHTML = STATE.combatants.map((c, idx) => {
         const isActive = idx === STATE.turn_index;
         const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
-        const rowCls = `tracker-row ${isActive ? 'active-turn' : ''} ${c.delaying ? 'delaying' : ''}`;
+        const isDying = c.conditions && c.conditions.dying > 0;
+        const rowCls = `combatant ${isActive ? 'active' : ''} ${c.delaying ? 'delaying' : ''} ${isDying ? 'down' : ''}`;
 
         // Conditions HTML
         let condsHtml = '';
@@ -464,86 +1037,99 @@ function renderInitList() {
             for (const [k, v] of Object.entries(c.conditions)) {
                 if (!v || v === 0 || v === false) continue;
                 const isValued = typeof v === 'number' && v > 0;
-                const label = k.replace(/_/g, '-') + (isValued ? ' ' + v : '');
-                condsHtml += `<span class="cond-pill" title="${condTooltip(k)}">${label}`;
+                const label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
+                const cls = condChipClass(k);
+                condsHtml += `<span class="cp ${cls}" title="${condTooltip(k)}">${label}`;
                 if (isValued && VALUED_CONDITIONS.includes(k)) {
-                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">-</button>`;
+                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
                     condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
                 } else {
-                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">&times;</button>`;
+                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">✕</button>`;
                 }
                 condsHtml += `</span>`;
             }
         }
 
-        // Elite/Weak buttons (NPC only)
-        let actionsHtml = '';
+        // Role label
+        let roleLabel = '';
+        if (isActive) roleLabel = `<span class="k active">ACTIVE</span>`;
+        else if (c.delaying) roleLabel = `<span class="k delay">DELAYING</span>`;
+        else roleLabel = c.is_pc ? `<span class="k pc">PC</span>` : `<span class="k">ENEMY</span>`;
+
+        let subText = '';
+        if (c.is_pc) subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''}`;
+        else subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}`;
+        if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span>`;
+
+        // Elite/Weak (NPC only)
+        let ewHtml = '';
         if (!c.is_pc) {
-            const eCls = c.elite_weak === 1 ? 'text-gold-300 border-gold-300/30 bg-gold-300/10' : 'text-base-500 border-white/[0.06]';
-            const wCls = c.elite_weak === -1 ? 'text-spell-400 border-spell-400/30 bg-spell-400/10' : 'text-base-500 border-white/[0.06]';
-            actionsHtml += `<div class="flex gap-1 mb-1 justify-center">
-                <button onclick="eliteWeak('${c.instance_id}','elite')" class="btn btn-sm border ${eCls}" style="padding:1px 6px;font-size:9px;">E</button>
-                <button onclick="eliteWeak('${c.instance_id}','normal')" class="btn btn-sm border text-base-500 border-white/[0.06]" style="padding:1px 6px;font-size:9px;">N</button>
-                <button onclick="eliteWeak('${c.instance_id}','weak')" class="btn btn-sm border ${wCls}" style="padding:1px 6px;font-size:9px;">W</button>
+            const eCls = c.elite_weak === 1 ? 'on-elite' : '';
+            const wCls = c.elite_weak === -1 ? 'on-weak' : '';
+            ewHtml = `<div class="ew-row">
+                <button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button>
+                <button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button>
+                <button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button>
             </div>`;
         }
-        // Delay / Ready
-        if (c.delaying) {
-            actionsHtml += `<button onclick="apiPost('/api/reenter_initiative/${c.instance_id}')" class="btn btn-ghost btn-sm w-full mb-1" style="font-size:9px;">Ready</button>`;
-        } else if (isActive) {
-            actionsHtml += `<button onclick="apiPost('/api/delay_turn/${c.instance_id}')" class="btn btn-ghost btn-sm w-full mb-1" style="font-size:9px;">Delay</button>`;
-        }
-        actionsHtml += `<button onclick="removeCombatant('${c.instance_id}')" class="btn btn-danger btn-sm w-full" style="font-size:9px;">Remove</button>`;
 
-        return `<div class="${rowCls} grid grid-cols-[32px_56px_1fr_48px_220px_180px_100px] items-center gap-1 px-3 py-2 border-b border-white/[0.04]" data-id="${c.instance_id}" draggable="false">
-            <div class="drag-handle text-center text-base" title="Drag to reorder">&#x2807;</div>
-            <div>
-                <input type="number" class="inline-input w-12 text-center" value="${c.initiative}" onkeydown="if(event.key==='Enter'){updateInit('${c.instance_id}',this.value);this.blur()}" onblur="updateInit('${c.instance_id}',this.value)">
+        // Delay / Ready
+        let delayHtml = '';
+        if (c.delaying) {
+            delayHtml = `<button class="act-btn ready" onclick="apiPost('/api/reenter_initiative/${c.instance_id}')">Ready</button>`;
+        } else if (isActive) {
+            delayHtml = `<button class="act-btn delay" onclick="apiPost('/api/delay_turn/${c.instance_id}')">Delay</button>`;
+        }
+
+        const portCls = c.is_pc ? 'pc' : 'enemy';
+
+        return `<div class="${rowCls}" data-id="${c.instance_id}">
+            <div class="c-drag" title="Drag to reorder">⠇</div>
+            <div class="c-init">
+                <input type="number" value="${c.initiative}"
+                       onkeydown="if(event.key==='Enter'){updateInit('${c.instance_id}',this.value);this.blur()}"
+                       onblur="updateInit('${c.instance_id}',this.value)">
             </div>
-            <div class="min-w-0">
-                <button class="text-sm font-semibold text-base-200 hover:text-accent-300 transition-colors truncate text-left" onclick="openStatModal('${c.instance_id}')">${c.name}</button>
-                ${isActive ? '<span class="block text-[9px] text-accent-400 uppercase tracking-wider mt-0.5">Active</span>' : ''}
-                ${c.delaying ? '<span class="block text-[9px] text-info-400 uppercase tracking-wider mt-0.5">Delaying</span>' : ''}
-                ${c.persistent_damage ? `<span class="block text-[9px] text-gold-300 mt-0.5">PD: ${c.persistent_damage}</span>` : ''}
-            </div>
-            <div class="font-mono text-info-400 font-bold text-sm text-center">${c.ac}</div>
-            <div>
-                <div class="flex items-center gap-1.5 mb-1">
-                    <span class="font-mono text-xs ${hpTextClass(hpPct, c.current_hp)} font-bold w-14 text-right">${c.current_hp}<span class="text-base-500 text-[10px]">/${c.max_hp}</span></span>
-                    <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#0d0d12;">
-                        <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-1">
-                    <input type="number" id="hp-amt-${c.instance_id}" value="1" min="1" class="inline-input w-10 text-center" style="padding:2px 4px;font-size:11px;">
-                    <select id="dmg-type-${c.instance_id}" class="inline-input text-[9px]" style="padding:1px 2px;width:62px;color:#a0a0b8;" title="Damage type (for W/R/I)">
-                        <option value="untyped">—type—</option>
-                        <option value="bludgeoning">Bludg</option><option value="piercing">Pierce</option><option value="slashing">Slash</option>
-                        <option value="fire">Fire</option><option value="cold">Cold</option><option value="electricity">Elec</option>
-                        <option value="acid">Acid</option><option value="sonic">Sonic</option>
-                        <option value="vitality">Vital</option><option value="void">Void</option>
-                        <option value="force">Force</option><option value="spirit">Spirit</option>
-                        <option value="mental">Mental</option><option value="poison">Poison</option><option value="bleed">Bleed</option>
-                    </select>
-                    <button onclick="adjustHP('${c.instance_id}','damage')" class="btn btn-sm" style="padding:1px 6px;font-size:10px;background:rgba(248,113,113,0.1);color:#fca5a5;border-color:rgba(248,113,113,0.2);">-</button>
-                    <button onclick="adjustHP('${c.instance_id}','heal')" class="btn btn-sm" style="padding:1px 6px;font-size:10px;background:rgba(74,222,128,0.1);color:#86efac;border-color:rgba(74,222,128,0.2);">+</button>
+            <div class="c-name">
+                <div class="port ${portCls}">${initials(c.name)}</div>
+                <div class="nm-wrap">
+                    <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ⚡' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
+                    <div class="nm-sub">${subText}</div>
                 </div>
             </div>
-            <div class="min-w-0">
-                <div class="flex flex-wrap gap-1 mb-1">${condsHtml}</div>
-                <div class="flex gap-1 items-center">
-                    <select id="cond-sel-${c.instance_id}" class="inline-input text-[10px] flex-1" style="padding:2px 4px;">
+            <div class="c-ac">${c.ac}</div>
+            <div class="c-hp">
+                <div class="c-hp-top">
+                    <span class="cur ${hpTextClass(hpPct)}">${c.current_hp}<span class="max">/${c.max_hp}</span></span>
+                    <span class="pct" style="color:${hpPctColor(hpPct)};">${hpPct}%</span>
+                </div>
+                <div class="c-hp-bar"><div class="c-hp-fill ${hpBarClass(hpPct)}" style="width:${hpPct}%"></div></div>
+                <div class="c-hp-ctrl">
+                    <input type="number" id="hp-amt-${c.instance_id}" value="1" min="1" placeholder="amt">
+                    <select id="dmg-type-${c.instance_id}" title="Damage type (for W/R/I)">${dmgOpts}</select>
+                    <button class="minus" onclick="adjustHP('${c.instance_id}','damage')" title="Apply damage">−</button>
+                    <button class="plus" onclick="adjustHP('${c.instance_id}','heal')" title="Heal">+</button>
+                </div>
+            </div>
+            <div class="c-cond">
+                ${condsHtml}
+                <div class="cp-add">
+                    <select id="cond-sel-${c.instance_id}">
                         ${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}
                     </select>
-                    <button onclick="addCondition('${c.instance_id}')" class="btn btn-ghost" style="padding:1px 6px;font-size:10px;">+</button>
+                    <button onclick="addCondition('${c.instance_id}')">+ Add</button>
                 </div>
-                <div class="flex gap-1 items-center mt-1">
-                    <span class="text-[9px] text-gold-300 font-semibold uppercase shrink-0">PD</span>
-                    <input type="text" id="pd-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire" class="inline-input text-[10px] flex-1" style="padding:2px 4px;">
-                    <button onclick="setPD('${c.instance_id}')" class="btn btn-ghost" style="padding:1px 6px;font-size:10px;">Set</button>
+                <div class="pd-row">
+                    <span class="pd-lbl">PD</span>
+                    <input type="text" id="pd-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire">
+                    <button onclick="setPD('${c.instance_id}')">Set</button>
                 </div>
             </div>
-            <div class="text-center">${actionsHtml}</div>
+            <div class="c-act">
+                ${ewHtml}
+                ${delayHtml}
+                <button class="act-btn del" onclick="removeCombatant('${c.instance_id}')">Remove</button>
+            </div>
         </div>`;
     }).join('');
 
@@ -553,148 +1139,215 @@ function renderInitList() {
 
 function renderActivePanel() {
     const wrap = document.getElementById('active-panel-wrap');
-    if (!STATE.combatants.length) { wrap.classList.add('hidden'); return; }
-    wrap.classList.remove('hidden');
-
+    const layout = document.getElementById('main-layout');
+    if (!STATE.combatants.length) {
+        wrap.classList.add('hidden');
+        layout.classList.remove('has-active');
+        return;
+    }
     const c = STATE.combatants[STATE.turn_index];
-    if (!c) { wrap.classList.add('hidden'); return; }
+    if (!c) { wrap.classList.add('hidden'); layout.classList.remove('has-active'); return; }
+    wrap.classList.remove('hidden');
+    layout.classList.add('has-active');
 
     const eliteTag = c.elite_weak === 1 ? ' (Elite)' : c.elite_weak === -1 ? ' (Weak)' : '';
-    document.getElementById('ap-name').textContent = c.name + eliteTag;
-    document.getElementById('ap-subtitle').textContent = c.is_pc ? `PC - Level ${c.level}` : `Creature ${c.level}`;
+    // Hidden helpers for backward compat with any outside reference
+    const apName = document.getElementById('ap-name');
+    const apSub = document.getElementById('ap-subtitle');
+    if (apName) apName.textContent = c.name + eliteTag;
+    if (apSub) apSub.textContent = c.is_pc ? `PC - Level ${c.level}` : `Creature ${c.level}`;
 
     const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
+    const portCls = c.is_pc ? 'pc' : '';
+
+    // Tags
+    let tagHtml = '';
+    if (c.is_pc) {
+        tagHtml += `<span class="tagp teal">PC · LVL ${c.level || '?'}</span>`;
+    } else {
+        tagHtml += `<span class="tagp">LVL ${c.level != null ? c.level : '?'}</span>`;
+    }
+    if (c.elite_weak === 1) tagHtml += `<span class="tagp gold">Elite</span>`;
+    if (c.elite_weak === -1) tagHtml += `<span class="tagp purple">Weak</span>`;
+    if (!c.is_pc && c.traits && c.traits.length) {
+        const rar = {uncommon:'uncommon',rare:'rare',unique:'unique'};
+        c.traits.slice(0, 4).forEach(t => {
+            const tl = (t || '').toLowerCase();
+            const cls = rar[tl] || '';
+            tagHtml += `<span class="tagp ${cls}">${t}</span>`;
+        });
+    }
+
     let html = '';
 
-    // Traits (monsters)
-    if (!c.is_pc && c.traits && c.traits.length) {
-        html += `<div class="flex flex-wrap gap-1 mb-3">`;
-        const rc = {uncommon:'#98691E',rare:'#002664',unique:'#54166E'};
-        c.traits.forEach(t => {
-            const bg = rc[t.toLowerCase()] || '#52A8A8';
-            html += `<span class="text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider" style="background:${bg}; color:#fff;">${t}</span>`;
-        });
-        html += `</div>`;
-    }
-
-    // Reminders
-    const hasReminders = c.persistent_damage || (c.conditions && c.conditions.frightened > 0);
-    if (hasReminders) {
-        html += `<div class="rounded-lg p-3 mb-4 border border-gold-300/20" style="background:rgba(212,162,68,0.06);">
-            <div class="text-[10px] font-semibold text-gold-300 uppercase tracking-wider mb-2 text-center">End of Turn Reminders</div>
-            <ul class="text-xs text-base-300 space-y-1 list-disc pl-4">`;
-        if (c.persistent_damage) html += `<li>Take <strong class="text-gold-300">${c.persistent_damage}</strong> persistent damage, then DC 15 flat check.</li>`;
-        if (c.conditions && c.conditions.frightened > 0) html += `<li>Frightened decreases by 1 when you end this turn.</li>`;
-        html += `</ul></div>`;
-    }
-
-    // Stats grid
-    const stats = [
-        {label:'AC', val:c.ac, cls:'text-info-400'},
-        {label:'Fort', val:'+'+c.fort, cls:'text-success-400'},
-        {label:'Ref', val:'+'+c.ref, cls:'text-info-400'},
-        {label:'Will', val:'+'+c.will, cls:'text-spell-400'},
-        {label:'Spd', val:c.speed, cls:'text-base-200'},
-        {label:'Perc', val:'+'+c.perception, cls:'text-base-200'},
-    ];
-    html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
-    stats.forEach(s => {
-        html += `<div class="stat-card"><div class="stat-label">${s.label}</div><div class="stat-value ${s.cls}">${s.val}</div></div>`;
-    });
-    html += `</div>`;
-
-    // HP
-    html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.06]" style="background:#0d0d12;">
-        <div class="flex justify-between items-center mb-1">
-            <span class="text-[9px] text-base-500 uppercase tracking-wider font-semibold">Hit Points</span>
-            <span class="font-bold ${hpTextClass(hpPct, c.current_hp)}">${c.current_hp} / ${c.max_hp}</span>
-        </div>
-        <div class="w-full h-2 rounded-full overflow-hidden" style="background:#191920;">
-            <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
+    // Top: portrait + title
+    html += `<div class="hero-top">
+        <div class="hero-port ${portCls}">${initials(c.name)}</div>
+        <div class="hero-ttl">
+            <div class="hnm">${c.name}${eliteTag}</div>
+            ${c.is_pc
+                ? `<div class="role">${[c.ancestry, c.class_name, c.subclass].filter(Boolean).join(' · ') || 'A soul at war with the dark.'}</div>`
+                : (c.creature_type ? `<div class="role">${c.creature_type}</div>` : '')}
+            <div class="tag-row">${tagHtml}</div>
         </div>
     </div>`;
 
-    // Defenses
+    // Stat grid (6 boxes)
+    html += `<div class="hero-stats">
+        <div class="hs-box ac"><div class="l">AC</div><div class="v">${c.ac}</div></div>
+        <div class="hs-box spd"><div class="l">Speed</div><div class="v">${c.speed || '—'}</div></div>
+        <div class="hs-box perc"><div class="l">Perc</div><div class="v">+${c.perception}</div></div>
+        <div class="hs-box f"><div class="l">Fort</div><div class="v">+${c.fort}</div></div>
+        <div class="hs-box r"><div class="l">Ref</div><div class="v">+${c.ref}</div></div>
+        <div class="hs-box w"><div class="l">Will</div><div class="v">+${c.will}</div></div>
+    </div>`;
+
+    // HP ribbon with inline damage controls
+    const pctColor = hpPctColor(hpPct);
+    const fillCls = hpBarClass(hpPct);
+    const dmgOpts = DAMAGE_TYPES.map(d => `<option value="${d}">${d === 'untyped' ? '— type —' : d}</option>`).join('');
+    html += `<div class="hp-ribbon">
+        <div class="hp-r-top">
+            <span class="l">Hit Points</span>
+            <span class="pct" style="color:${pctColor};">${hpPct}%</span>
+        </div>
+        <div class="hp-num">${c.current_hp}<span class="slash">/</span><span class="mx">${c.max_hp}</span></div>
+        <div class="hp-bar"><div class="f ${fillCls}" style="width:${hpPct}%"></div></div>
+        <div class="c-hp-ctrl" style="margin-top:8px;">
+            <input type="number" id="hp-amt-ap-${c.instance_id}" value="1" min="1" placeholder="amt">
+            <select id="dmg-type-ap-${c.instance_id}">${dmgOpts}</select>
+            <button class="minus" onclick="adjustHPAP('${c.instance_id}','damage')">−</button>
+            <button class="plus" onclick="adjustHPAP('${c.instance_id}','heal')">+</button>
+        </div>
+    </div>`;
+
+    // Defenses (NPC)
     if (!c.is_pc && (c.immunities?.length || c.resistances?.length || c.weaknesses?.length)) {
-        html += `<div class="mb-4 text-xs space-y-1">`;
-        if (c.immunities?.length) html += `<div><span class="text-base-500 uppercase text-[9px] font-semibold">Immunities:</span> <span class="text-base-300">${c.immunities.join(', ')}</span></div>`;
-        if (c.resistances?.length) html += `<div><span class="text-base-500 uppercase text-[9px] font-semibold">Resistances:</span> <span class="text-base-300">${(typeof c.resistances[0] === 'object' ? c.resistances.map(r=>r.type+' '+r.value).join(', ') : c.resistances.join(', '))}</span></div>`;
-        if (c.weaknesses?.length) html += `<div><span class="text-base-500 uppercase text-[9px] font-semibold">Weaknesses:</span> <span class="text-danger-300">${(typeof c.weaknesses[0] === 'object' ? c.weaknesses.map(w=>w.type+' '+w.value).join(', ') : c.weaknesses.join(', '))}</span></div>`;
+        html += `<div class="section-h">Defenses</div>`;
+        html += `<div style="font-size:11px;line-height:1.5;color:var(--t-t2);margin-bottom:8px;">`;
+        if (c.immunities?.length) html += `<div class="defense-row"><span class="dl">Imm</span><span class="dv">${c.immunities.join(', ')}</span></div>`;
+        if (c.resistances?.length) {
+            const rv = typeof c.resistances[0] === 'object' ? c.resistances.map(r=>r.type+' '+r.value).join(', ') : c.resistances.join(', ');
+            html += `<div class="defense-row"><span class="dl">Res</span><span class="dv r">${rv}</span></div>`;
+        }
+        if (c.weaknesses?.length) {
+            const wv = typeof c.weaknesses[0] === 'object' ? c.weaknesses.map(w=>w.type+' '+w.value).join(', ') : c.weaknesses.join(', ');
+            html += `<div class="defense-row"><span class="dl">Wk</span><span class="dv w">${wv}</span></div>`;
+        }
         html += `</div>`;
     }
 
-    // Recall Knowledge button (monsters only)
+    // Recall Knowledge (NPC only)
     if (!c.is_pc) {
-        html += `<div class="mb-4 flex items-center gap-2">
-            <button onclick="openRecallKnowledge('${c.instance_id}')" class="btn btn-sm" style="background:rgba(212,162,68,0.1);color:#d4a244;border-color:rgba(212,162,68,0.2);font-size:10px;">
-                📖 Recall Knowledge
-            </button>
-            <span id="rk-info-${c.instance_id}" class="text-[9px] text-base-500"></span>
-        </div>`;
-    }
-
-    // Strikes
-    if (c.strikes && c.strikes.length) {
-        html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Strikes</div>`;
-        c.strikes.forEach(s => {
-            html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0d0d12;">
-                <span class="text-sm font-semibold text-base-200">${s.name}</span>
-                <div class="flex items-center gap-2">
-                    <span class="font-mono text-sm font-bold text-gold-300">${s.hit}</span>
-                    <span class="text-[10px] text-base-400">${s.damage}</span>
-                </div>
-            </div>`;
-        });
-        html += `</div>`;
-    }
-
-    // Actions (monsters)
-    if (!c.is_pc && c.actions && c.actions.length) {
-        html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Abilities</div>`;
-        c.actions.forEach(a => {
-            html += `<div class="p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0d0d12;">
-                <div class="font-semibold text-sm text-accent-300 mb-1">${a.name}</div>
-                <div class="text-xs text-base-300 leading-relaxed">${a.description || ''}</div>
-            </div>`;
-        });
-        html += `</div>`;
-    }
-
-    // Feats (PCs)
-    if (c.is_pc && c.feats && c.feats.length) {
-        html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Feats & Features</div>`;
-        html += `<div class="flex flex-wrap gap-1">`;
-        c.feats.forEach(f => {
-            html += `<span class="text-[10px] px-2 py-1 rounded border border-white/[0.06] text-base-300 hover:text-accent-300 hover:border-accent-400/20 cursor-pointer transition-colors" style="background:#0d0d12;" title="${(f.desc||'').replace(/"/g,'&quot;').replace(/<[^>]*>/g,'').substring(0,200)}">${f.name}</span>`;
-        });
-        html += `</div></div>`;
+        html += `<button class="rk-btn" onclick="openRecallKnowledge('${c.instance_id}')">📖 Recall Knowledge</button>
+                 <span id="rk-info-${c.instance_id}" style="font-size:10px;color:var(--t-t3);margin-left:6px;"></span>`;
     }
 
     // Conditions
-    if (c.conditions && Object.keys(c.conditions).length) {
-        const active = Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false);
-        if (active.length) {
-            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase tracking-wider font-semibold mb-2">Conditions</div>`;
-            html += `<div class="flex flex-wrap gap-1">`;
-            active.forEach(([k,v]) => {
-                const label = k.replace(/_/g,'-') + (typeof v === 'number' && v > 0 ? ' ' + v : '');
-                html += `<span class="cond-pill">${label}</span>`;
-            });
-            html += `</div></div>`;
-        }
+    const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false) : [];
+    html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click ✕ to remove</span>' : ''}</div>`;
+    if (activeConds.length) {
+        html += `<div class="cond-row">`;
+        activeConds.forEach(([k,v]) => {
+            const isValued = typeof v === 'number' && v > 0;
+            const label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
+            const cls = condChipClass(k);
+            html += `<span class="cond-chip ${cls}" title="${condTooltip(k)}">${label}`;
+            if (isValued && VALUED_CONDITIONS.includes(k)) {
+                html += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
+                html += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
+            } else {
+                html += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">✕</button>`;
+            }
+            html += `</span>`;
+        });
+        html += `</div>`;
+    } else {
+        html += `<div style="font-size:11px;color:var(--t-t3);font-style:italic;margin-bottom:4px;">No active conditions.</div>`;
+    }
+    // Quick-add condition
+    html += `<div class="cp-add" style="margin-top:5px;">
+        <select id="cond-sel-ap-${c.instance_id}">${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}</select>
+        <button onclick="addConditionAP('${c.instance_id}')">+ Add</button>
+    </div>`;
+
+    // Persistent damage inline
+    html += `<div class="pd-row" style="margin-top:6px;">
+        <span class="pd-lbl">PD</span>
+        <input type="text" id="pd-ap-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire">
+        <button onclick="setPDAP('${c.instance_id}')">Set</button>
+    </div>`;
+
+    // Strikes
+    if (c.strikes && c.strikes.length) {
+        html += `<div class="section-h">Strikes ${!c.is_pc ? `<span class="tk">Round ${STATE.round} · MAP applies</span>` : ''}</div>`;
+        html += `<div class="strikes">`;
+        c.strikes.forEach(s => {
+            html += `<div class="strike">
+                <div class="snm">${s.name}<span class="hit">${s.hit || ''}</span></div>
+                <div class="dmg">${s.damage || ''}</div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    // NPC abilities
+    if (!c.is_pc && c.actions && c.actions.length) {
+        html += `<div class="section-h">Abilities</div>`;
+        c.actions.forEach(a => {
+            const desc = (a.description || '').replace(/<[^>]*>/g, '');
+            html += `<div class="abl-row">
+                <div class="abl-nm">${a.name}</div>
+                ${desc ? `<div class="abl-dsc">${desc}</div>` : ''}
+            </div>`;
+        });
+    }
+
+    // PC Feats / Features pills
+    if (c.is_pc && c.feats && c.feats.length) {
+        html += `<div class="section-h">Feats &amp; Features</div>`;
+        html += `<div class="cond-row">`;
+        c.feats.slice(0, 20).forEach(f => {
+            const tip = (f.desc || '').replace(/"/g,'&quot;').replace(/<[^>]*>/g,'').substring(0,240);
+            html += `<span class="tagp teal" style="cursor:help;text-transform:none;letter-spacing:.3px;font-size:10px;padding:3px 9px;" title="${tip}">${f.name}</span>`;
+        });
+        html += `</div>`;
+    }
+
+    // End-of-turn reminder
+    const reminders = [];
+    if (c.persistent_damage) reminders.push(`Take <b>${c.persistent_damage}</b> persistent damage, then DC 15 flat check.`);
+    if (c.conditions && c.conditions.frightened > 0) reminders.push(`Frightened decreases by 1 at end of turn.`);
+    if (c.conditions && c.conditions.dying > 0) reminders.push(`Dying — Recovery DC ${10 + (c.conditions.dying || 0)} at end of turn.`);
+    if (reminders.length) {
+        html += `<div class="reminder"><b>End-of-turn:</b> ${reminders.join(' · ')}</div>`;
     }
 
     document.getElementById('ap-body').innerHTML = html;
 }
 
 function renderMeta() {
-    document.getElementById('round-badge').textContent = `Round ${STATE.round}`;
+    // Round (hero bar)
+    const r = document.getElementById('round-badge-num');
+    if (r) r.textContent = STATE.round;
+    const rBadge = document.getElementById('round-badge');
+    if (rBadge) rBadge.textContent = `Round ${STATE.round}`;
+
+    // Now-acting name
+    const na = document.getElementById('now-acting-name');
+    if (na) {
+        const c = STATE.combatants[STATE.turn_index];
+        na.textContent = c ? c.name.toUpperCase() : '—';
+    }
+
+    // XP badge
     const xpBadge = document.getElementById('xp-badge');
     if (STATE.encounter_xp > 0) {
         xpBadge.classList.remove('hidden');
         document.getElementById('xp-party-level').textContent = STATE.party_level;
-        document.getElementById('xp-diff-label').textContent = STATE.diff_label;
-        document.getElementById('xp-diff-label').className = `font-bold ${STATE.diff_color}`;
+        const diff = document.getElementById('xp-diff-label');
+        diff.textContent = STATE.diff_label;
+        diff.className = `xp-diff ${STATE.diff_color}`;
         document.getElementById('xp-value').textContent = `(${STATE.encounter_xp} XP)`;
     } else {
         xpBadge.classList.add('hidden');
@@ -727,6 +1380,19 @@ function adjustHP(id, action) {
     apiPost('/api/adjust_hp/' + id, fd, null);
 }
 
+// Active-panel HP adjust (uses separate input IDs so it doesn't collide with grid row)
+function adjustHPAP(id, action) {
+    const input = document.getElementById('hp-amt-ap-' + id);
+    const amt = parseInt(input?.value) || 1;
+    const dmgTypeSelect = document.getElementById('dmg-type-ap-' + id);
+    const dmgType = dmgTypeSelect ? dmgTypeSelect.value : 'untyped';
+    const fd = new FormData();
+    fd.append('amount', amt);
+    fd.append('action', action);
+    fd.append('damage_type', dmgType);
+    apiPost('/api/adjust_hp/' + id, fd, null);
+}
+
 async function updateInit(id, val) {
     const fd = new FormData();
     fd.append('initiative', parseInt(val) || 0);
@@ -749,8 +1415,24 @@ function addCondition(id) {
     apiPost('/api/toggle_condition/' + id, fd, null);
 }
 
+function addConditionAP(id) {
+    const sel = document.getElementById('cond-sel-ap-' + id);
+    if (!sel) return;
+    const fd = new FormData();
+    fd.append('condition', sel.value);
+    fd.append('action', 'add');
+    apiPost('/api/toggle_condition/' + id, fd, null);
+}
+
 function setPD(id) {
     const input = document.getElementById('pd-' + id);
+    const fd = new FormData();
+    fd.append('persistent_damage', input?.value || '');
+    apiPost('/api/set_persistent_damage/' + id, fd, null);
+}
+
+function setPDAP(id) {
+    const input = document.getElementById('pd-ap-' + id);
     const fd = new FormData();
     fd.append('persistent_damage', input?.value || '');
     apiPost('/api/set_persistent_damage/' + id, fd, null);
@@ -773,7 +1455,6 @@ function saveEncounter() {
     fd.append('encounter_name', name);
     apiPostRaw('/api/save_encounter', fd).then(r => {
         toast(`Saved "${name}"`, 'success');
-        // Add to dropdown if not present
         const sel = document.getElementById('load-select');
         const exists = Array.from(sel.options).some(o => o.value === name);
         if (!exists) {
@@ -791,7 +1472,6 @@ function loadEncounter() {
     const fd = new FormData();
     fd.append('encounter_name', sel.value);
     apiPostRaw('/api/load_encounter', fd).then(async r => {
-        // Load encounter causes a redirect normally; fetch the new state
         const data = await apiGet('/api/tracker_state');
         applyState(data);
         toast(`Loaded "${sel.value}"`, 'success');
@@ -830,12 +1510,10 @@ async function submitCustomMonster() {
         atk_dmg: document.getElementById('cm-atk-dmg').value.trim() || '1d6+3',
     };
     try {
-        // Try the dedicated custom endpoint first, fallback to add_combatant
         let res = await fetch('/api/add_custom_monster', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify(data)});
         if (!res.ok) {
             res = await fetch('/api/add_combatant', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify(data)});
         }
-        // Refresh state regardless
         const state = await apiGet('/api/tracker_state');
         applyState(state);
         document.getElementById('custom-monster-form').classList.add('hidden');
@@ -851,11 +1529,11 @@ async function submitCustomMonster() {
 async function openStatModal(instanceId) {
     const modal = document.getElementById('stat-modal');
     modal.classList.add('open');
-    document.getElementById('sm-body').innerHTML = '<div class="text-center py-8 text-base-500">Loading...</div>';
+    document.getElementById('sm-body').innerHTML = '<div style="text-align:center;padding:32px;color:var(--t-t3);">Loading…</div>';
 
     try {
         const d = await apiGet(`/api/combatant_stats/${instanceId}`);
-        if (d.error) { document.getElementById('sm-body').innerHTML = `<div class="text-danger-400">${d.error}</div>`; return; }
+        if (d.error) { document.getElementById('sm-body').innerHTML = `<div style="color:var(--t-red-b);padding:18px;">${d.error}</div>`; return; }
 
         const eliteLabel = d.elite_weak === 1 ? ' (Elite)' : d.elite_weak === -1 ? ' (Weak)' : '';
         document.getElementById('sm-name').textContent = d.name + eliteLabel;
@@ -865,133 +1543,125 @@ async function openStatModal(instanceId) {
 
         let html = '';
 
-        // Traits (monsters) — PF2e style trait pills
+        // Traits (monsters)
         if (!d.is_pc && d.traits && d.traits.length) {
-            html += `<div class="flex flex-wrap gap-1 mb-3">`;
-            const rarityColors = {uncommon:'#98691E',rare:'#002664',unique:'#54166E'};
-            const alignColors = {lawful:'#3B82F6',chaotic:'#A855F7',evil:'#EF4444',good:'#22C55E'};
+            html += `<div class="cond-row" style="margin-bottom:10px;">`;
+            const rar = {uncommon:'uncommon',rare:'rare',unique:'unique'};
             d.traits.forEach(t => {
-                const tl = t.toLowerCase();
-                let bg = '#52A8A8'; let textC = '#fff';
-                if (rarityColors[tl]) { bg = rarityColors[tl]; }
-                else if (alignColors[tl]) { bg = alignColors[tl]; }
-                html += `<span class="text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider" style="background:${bg}; color:${textC};">${t}</span>`;
+                const tl = (t || '').toLowerCase();
+                const cls = rar[tl] || '';
+                html += `<span class="tagp ${cls}">${t}</span>`;
             });
             html += `</div>`;
         }
 
-        // Stats grid
-        html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
-        [{l:'AC',v:d.ac,c:'text-info-400'},{l:'Fort',v:'+'+d.fort,c:'text-success-400'},{l:'Ref',v:'+'+d.ref,c:'text-info-400'},{l:'Will',v:'+'+d.will,c:'text-spell-400'},{l:'Per',v:'+'+d.perception,c:'text-base-200'},{l:'Spd',v:d.speed,c:'text-base-200'}].forEach(s => {
-            html += `<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value ${s.c}">${s.v}</div></div>`;
-        });
-        html += `</div>`;
+        // Stat grid
+        html += `<div class="hero-stats">
+            <div class="hs-box ac"><div class="l">AC</div><div class="v">${d.ac}</div></div>
+            <div class="hs-box spd"><div class="l">Spd</div><div class="v">${d.speed || '—'}</div></div>
+            <div class="hs-box perc"><div class="l">Perc</div><div class="v">+${d.perception}</div></div>
+            <div class="hs-box f"><div class="l">Fort</div><div class="v">+${d.fort}</div></div>
+            <div class="hs-box r"><div class="l">Ref</div><div class="v">+${d.ref}</div></div>
+            <div class="hs-box w"><div class="l">Will</div><div class="v">+${d.will}</div></div>
+        </div>`;
 
         // HP
         const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
-        html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.04]" style="background:#0d0d12;">
-            <div class="flex justify-between items-center mb-1">
-                <span class="text-[9px] text-base-500 uppercase font-semibold">Hit Points</span>
-                <span class="font-bold ${hpTextClass(hpPct, d.current_hp)}">${d.current_hp} / ${d.max_hp}</span>
-            </div>
-            <div class="w-full h-2 rounded-full overflow-hidden" style="background:#191920;">
-                <div class="hp-bar-fill h-full rounded-full ${hpBarClass(hpPct)}" style="width:${hpPct}%;"></div>
-            </div>
+        html += `<div class="hp-ribbon">
+            <div class="hp-r-top"><span class="l">Hit Points</span><span class="pct" style="color:${hpPctColor(hpPct)};">${hpPct}%</span></div>
+            <div class="hp-num">${d.current_hp}<span class="slash">/</span><span class="mx">${d.max_hp}</span></div>
+            <div class="hp-bar"><div class="f ${hpBarClass(hpPct)}" style="width:${hpPct}%"></div></div>
         </div>`;
 
-        // Immunities / Resistances / Weaknesses (placed right after HP for quick reference)
+        // Defenses
         if (!d.is_pc) {
-            const irw = [];
-            if (d.immunities?.length) irw.push({label:'Immunities', val: d.immunities.join(', '), cls:'text-accent-300'});
-            if (d.resistances?.length) irw.push({label:'Resistances', val: typeof d.resistances[0]==='object' ? d.resistances.map(r=>r.type+' '+r.value).join(', ') : d.resistances.join(', '), cls:'text-info-300'});
-            if (d.weaknesses?.length) irw.push({label:'Weaknesses', val: typeof d.weaknesses[0]==='object' ? d.weaknesses.map(w=>w.type+' '+w.value).join(', ') : d.weaknesses.join(', '), cls:'text-danger-300'});
-            if (irw.length) {
-                html += `<div class="rounded-lg p-3 mb-4 border border-white/[0.04] space-y-1" style="background:#0d0d12;">`;
-                irw.forEach(x => {
-                    html += `<div class="text-xs"><span class="text-base-500 uppercase text-[9px] font-semibold mr-1">${x.label}</span> <span class="${x.cls}">${x.val}</span></div>`;
-                });
-                html += `</div>`;
+            const rows = [];
+            if (d.immunities?.length) rows.push(`<div class="defense-row"><span class="dl">Imm</span><span class="dv">${d.immunities.join(', ')}</span></div>`);
+            if (d.resistances?.length) {
+                const rv = typeof d.resistances[0]==='object' ? d.resistances.map(r=>r.type+' '+r.value).join(', ') : d.resistances.join(', ');
+                rows.push(`<div class="defense-row"><span class="dl">Res</span><span class="dv r">${rv}</span></div>`);
             }
+            if (d.weaknesses?.length) {
+                const wv = typeof d.weaknesses[0]==='object' ? d.weaknesses.map(w=>w.type+' '+w.value).join(', ') : d.weaknesses.join(', ');
+                rows.push(`<div class="defense-row"><span class="dl">Wk</span><span class="dv w">${wv}</span></div>`);
+            }
+            if (rows.length) { html += `<div style="margin-bottom:10px;">${rows.join('')}</div>`; }
         }
 
         // Conditions
         if (d.conditions && Object.keys(d.conditions).length) {
             const active = Object.entries(d.conditions).filter(([k,v]) => v && v !== 0 && v !== false);
             if (active.length) {
-                html += `<div class="flex flex-wrap gap-1 mb-4">`;
+                html += `<div class="cond-row" style="margin-bottom:10px;">`;
                 active.forEach(([k,v]) => {
                     const label = k.replace(/_/g,'-') + (typeof v === 'number' && v > 0 ? ' ' + v : '');
-                    html += `<span class="cond-pill">${label}</span>`;
+                    const cls = condChipClass(k);
+                    html += `<span class="cond-chip ${cls}">${label}</span>`;
                 });
                 html += `</div>`;
             }
         }
 
-        // Ability Scores (PCs)
+        // Ability scores (PCs)
         if (d.is_pc && d.abilities) {
-            html += `<div class="grid grid-cols-6 gap-2 mb-4">`;
+            html += `<div class="hero-stats" style="grid-template-columns:repeat(6,1fr);">`;
             ['str','dex','con','int','wis','cha'].forEach(ab => {
                 const mod = d.abilities[ab] || 0;
-                html += `<div class="stat-card"><div class="stat-label">${ab}</div><div class="stat-value text-sm text-base-200">${mod >= 0 ? '+' : ''}${mod}</div></div>`;
+                html += `<div class="hs-box"><div class="l">${ab}</div><div class="v" style="font-size:14px;">${mod >= 0 ? '+' : ''}${mod}</div></div>`;
             });
             html += `</div>`;
         }
 
         // Attacks / Strikes
         if (d.attacks && d.attacks.length) {
-            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">${d.is_pc ? 'Attacks' : 'Strikes'}</div>`;
+            html += `<div class="section-h">${d.is_pc ? 'Attacks' : 'Strikes'}</div>`;
+            html += `<div class="strikes">`;
             d.attacks.forEach(a => {
                 const hit = a.hit || (a.strikes && a.strikes[0] ? a.strikes[0].label : '+?');
-                html += `<div class="flex justify-between items-center p-2 rounded-md mb-1 border border-white/[0.04]" style="background:#0d0d12;">
-                    <span class="text-sm font-semibold text-base-200">${a.name}</span>
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono text-sm font-bold text-gold-300">${hit}</span>
-                        <span class="text-[10px] text-base-400">${a.damage}</span>
-                    </div>
-                </div>`;
+                html += `<div class="strike"><div class="snm">${a.name}<span class="hit">${hit}</span></div><div class="dmg">${a.damage || ''}</div></div>`;
             });
             html += `</div>`;
         }
 
-        // Monster actions/abilities
+        // Monster abilities
         if (!d.is_pc && d.actions && d.actions.length) {
-            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Abilities</div>`;
+            html += `<div class="section-h">Abilities</div>`;
             d.actions.forEach(a => {
-                html += `<div class="p-2 rounded-md mb-2 border border-white/[0.04]" style="background:#0d0d12;">
-                    <div class="font-semibold text-sm text-accent-300 mb-1">${a.name}</div>
-                    ${a.description ? `<div class="text-xs text-base-300 leading-relaxed stat-desc">${a.description}</div>` : ''}
+                const desc = (a.description || '').replace(/<[^>]*>/g, '');
+                html += `<div class="abl-row">
+                    <div class="abl-nm">${a.name}</div>
+                    ${desc ? `<div class="abl-dsc">${desc}</div>` : ''}
                 </div>`;
             });
-            html += `</div>`;
         }
 
         // PC Skills
         if (d.is_pc && d.skills) {
-            html += `<div class="mb-4"><div class="text-[9px] text-base-500 uppercase font-semibold mb-2">Skills</div><div class="flex flex-wrap gap-1">`;
+            html += `<div class="section-h">Skills</div>`;
+            html += `<div class="cond-row">`;
             d.skills.forEach(sk => {
-                if (sk.total > 0) html += `<span class="text-[10px] px-2 py-0.5 rounded border border-white/[0.04] text-base-300" style="background:#0d0d12;">${sk.name} <strong class="text-accent-300">+${sk.total}</strong></span>`;
-            });
-            html += `</div></div>`;
-        }
-
-        // Spells
-        if (d.is_pc && d.spell_casters && d.spell_casters.length) {
-            html += `<div class="mb-4"><div class="text-[9px] text-spell-400 uppercase font-semibold mb-2">Spellcasting</div>`;
-            d.spell_casters.forEach(sc => {
-                html += `<div class="p-2 rounded-md mb-1 border border-spell-400/10" style="background:rgba(167,139,250,0.04);">
-                    <span class="text-[10px] font-semibold text-spell-300">${sc.name} (${sc.tradition})</span>`;
-                (sc.levels || []).forEach(lvl => {
-                    const names = (lvl.spells || []).map(s => s.name).join(', ');
-                    if (names) html += `<div class="text-[10px] mt-1 text-base-300"><strong class="text-base-200">${lvl.label}:</strong> ${names}</div>`;
-                });
-                html += `</div>`;
+                if (sk.total > 0) html += `<span class="tagp teal" style="text-transform:none;letter-spacing:.3px;">${sk.name} <strong style="color:var(--t-gold);">+${sk.total}</strong></span>`;
             });
             html += `</div>`;
         }
 
+        // Spells
+        if (d.is_pc && d.spell_casters && d.spell_casters.length) {
+            html += `<div class="section-h">Spellcasting</div>`;
+            d.spell_casters.forEach(sc => {
+                html += `<div class="abl-row">
+                    <div class="abl-nm" style="color:var(--t-purple);">${sc.name} (${sc.tradition})</div>`;
+                (sc.levels || []).forEach(lvl => {
+                    const names = (lvl.spells || []).map(s => s.name).join(', ');
+                    if (names) html += `<div class="abl-dsc" style="margin-top:3px;"><strong style="color:var(--t-t1);">${lvl.label}:</strong> ${names}</div>`;
+                });
+                html += `</div>`;
+            });
+        }
+
         document.getElementById('sm-body').innerHTML = html;
     } catch(e) {
-        document.getElementById('sm-body').innerHTML = '<div class="text-danger-400 text-center py-8">Failed to load stats.</div>';
+        document.getElementById('sm-body').innerHTML = '<div style="color:var(--t-red-b);text-align:center;padding:32px;">Failed to load stats.</div>';
     }
 }
 
@@ -1005,7 +1675,8 @@ function showMonsterDD() { document.getElementById('monster-dd').classList.remov
 function filterMonsterDD() {
     const q = document.getElementById('monster-search').value.toLowerCase().trim();
     document.querySelectorAll('.monster-opt').forEach(el => {
-        el.classList.toggle('hidden', q && !el.dataset.name.includes(q));
+        if (!el.dataset.name) return;
+        el.style.display = (q && !el.dataset.name.includes(q)) ? 'none' : '';
     });
     document.getElementById('monster-dd').classList.remove('hidden');
 }
@@ -1020,13 +1691,12 @@ function toggleCustomForm() {
 
 
 /* ──────────────── Drag & Drop (SortableJS) ──────────────── */
-let sortableInstance = null;
 function initSortable() {
     const el = document.getElementById('initiative-list');
     if (!el) return;
     if (sortableInstance) sortableInstance.destroy();
     sortableInstance = new Sortable(el, {
-        handle: '.drag-handle',
+        handle: '.c-drag',
         animation: 150,
         ghostClass: 'sortable-ghost',
         onEnd: async function() {
@@ -1040,8 +1710,8 @@ function initSortable() {
 
 /* ──────────────── Combat Log ──────────────── */
 const LOG_COLORS = {
-    turn: '#5EADAD', damage: '#f87171', heal: '#4ade80',
-    critical: '#f87171', condition: '#a78bfa', system: '#7DC4C4', action: '#a0a0b8'
+    turn: 'var(--t-teal)', damage: 'var(--t-red-b)', heal: 'var(--t-green)',
+    critical: 'var(--t-red-b)', condition: 'var(--t-purple)', system: 'var(--t-gold)', action: 'var(--t-t2)'
 };
 
 async function refreshLog() {
@@ -1049,12 +1719,12 @@ async function refreshLog() {
         const data = await apiGet('/api/combat_log');
         const el = document.getElementById('combat-log-body');
         if (!data.log || !data.log.length) {
-            el.innerHTML = '<div class="text-center py-4 text-base-500 italic text-xs">No combat events yet.</div>';
+            el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--t-t3);font-style:italic;">No combat events yet.</div>';
             return;
         }
         el.innerHTML = data.log.map(e => {
-            const color = LOG_COLORS[e.type] || '#a0a0b8';
-            return `<div style="color:${color};padding:1px 0;border-bottom:1px solid rgba(255,255,255,0.03);"><span class="text-base-500 text-[10px] mr-1.5">${e.time}</span>${e.msg}</div>`;
+            const color = LOG_COLORS[e.type] || 'var(--t-t2)';
+            return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${e.time}</span>${e.msg}</div>`;
         }).join('');
         el.scrollTop = el.scrollHeight;
     } catch(e) {}
@@ -1070,6 +1740,13 @@ async function copyLog() {
     } catch(e) { toast('Failed to copy', 'error'); }
 }
 
+function toggleLog(e) {
+    const body = document.getElementById('combat-log-body');
+    const arrow = document.getElementById('log-toggle-arrow');
+    body.classList.toggle('collapsed');
+    if (arrow) arrow.textContent = body.classList.contains('collapsed') ? '▾' : '▴';
+}
+
 refreshLog();
 setInterval(refreshLog, 5000);
 
@@ -1080,7 +1757,6 @@ function connectSSE() {
     if (evtSource) { try { evtSource.close(); } catch(e){} }
     evtSource = new EventSource('/api/events');
     evtSource.addEventListener('encounter_update', function(e) {
-        // SSE gives a lightweight update; fetch full state for accuracy
         apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
     });
     evtSource.addEventListener('connected', function() {});
@@ -1101,7 +1777,6 @@ setInterval(async () => {
 
 /* ──────────────── Keyboard shortcut ──────────────── */
 document.addEventListener('keydown', e => {
-    // N = next turn (when not in an input)
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
@@ -1140,16 +1815,15 @@ async function doSecretRoll() {
 function appendSecretResult(roll) {
     const container = document.getElementById('secret-roll-results');
     const div = document.createElement('div');
-    div.className = 'flex justify-between items-center p-2 rounded border border-white/[0.04]';
-    div.style.background = '#0d0d12';
+    div.className = 'secret-result';
     div.innerHTML = `
         <div>
-            <span class="text-[10px] text-base-500">${roll.time}</span>
-            <span class="text-xs text-spell-300 font-semibold ml-1">${roll.label}</span>
+            <div class="sr-time">${roll.time}</div>
+            <div class="sr-lbl">${roll.label}</div>
         </div>
-        <div class="text-right">
-            <span class="font-mono font-bold text-lg text-spell-300">${roll.total}</span>
-            <span class="text-[10px] text-base-500 ml-1">${roll.detail}</span>
+        <div style="text-align:right;">
+            <div class="sr-tot">${roll.total}</div>
+            <div class="sr-det">${roll.detail}</div>
         </div>`;
     container.prepend(div);
 }
@@ -1163,7 +1837,6 @@ async function loadSecretLog() {
     } catch(e) {}
 }
 
-// SSE listener for secret rolls
 if (evtSource) {
     evtSource.addEventListener('gm_secret_roll', function(e) {
         try {
@@ -1178,25 +1851,21 @@ if (evtSource) {
    RECALL KNOWLEDGE
    ══════════════════════════════════════════════════════════ */
 async function openRecallKnowledge(instanceId) {
-    // Get RK info (skill, DC) first
     try {
         const info = await apiGet(`/api/recall_knowledge_info/${instanceId}`);
         if (info.error) { toast(info.error, 'error'); return; }
 
-        // Build the RK modal
         const modal = document.getElementById('rk-modal') || createRkModal();
         document.getElementById('rk-target-name').textContent = info.name;
         document.getElementById('rk-suggested-skill').textContent = `Suggested: ${info.skill} (${info.creature_type})`;
         document.getElementById('rk-dc-display').textContent = `DC ${info.dc}`;
 
-        // Populate PC dropdown
         const pcSelect = document.getElementById('rk-pc-select');
         pcSelect.innerHTML = '';
         STATE.combatants.filter(c => c.is_pc).forEach(c => {
             pcSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`;
         });
 
-        // Set skill dropdown default
         const skillSelect = document.getElementById('rk-skill-select');
         skillSelect.value = info.skill.toLowerCase();
 
@@ -1209,31 +1878,31 @@ async function openRecallKnowledge(instanceId) {
 function createRkModal() {
     const modal = document.createElement('div');
     modal.id = 'rk-modal';
-    modal.className = 'modal-overlay';
+    modal.className = 'trk-modal';
     modal.onclick = function(e) { if (e.target === this) this.classList.remove('open'); };
     modal.innerHTML = `
-    <div class="modal-panel" style="max-width:480px;">
-        <div class="px-5 py-3 flex justify-between items-center border-b border-white/[0.06]" style="background:#0d0d12;">
+    <div class="trk-modal-panel" style="max-width:500px;">
+        <div class="trk-modal-head">
             <div>
-                <h3 class="font-display text-gold-300 text-lg">📖 Recall Knowledge</h3>
-                <span id="rk-target-name" class="text-[10px] text-base-500"></span>
+                <h3 style="color:var(--t-gold);">📖 Recall Knowledge</h3>
+                <div id="rk-target-name" class="sub"></div>
             </div>
-            <button onclick="document.getElementById('rk-modal').classList.remove('open')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
+            <button class="trk-modal-close" onclick="document.getElementById('rk-modal').classList.remove('open')">&times;</button>
         </div>
-        <div class="p-5">
+        <div class="trk-modal-body">
             <input type="hidden" id="rk-instance-id" value="">
-            <div class="flex items-center gap-3 mb-3">
-                <span id="rk-suggested-skill" class="text-xs text-base-400"></span>
-                <span id="rk-dc-display" class="text-xs font-mono font-bold text-gold-300"></span>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span id="rk-suggested-skill" style="font-size:12px;color:var(--t-t2);"></span>
+                <span id="rk-dc-display" class="mono" style="font-size:13px;font-weight:700;color:var(--t-gold);"></span>
             </div>
-            <div class="grid grid-cols-2 gap-3 mb-4">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                 <div>
-                    <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Rolling PC</label>
-                    <select id="rk-pc-select" class="inline-input w-full" style="font-size:12px;"></select>
+                    <label class="tlabel">Rolling PC</label>
+                    <select id="rk-pc-select" class="tselect" style="width:100%;"></select>
                 </div>
                 <div>
-                    <label class="text-[9px] text-base-400 uppercase tracking-wider font-semibold block mb-1">Skill</label>
-                    <select id="rk-skill-select" class="inline-input w-full" style="font-size:12px;">
+                    <label class="tlabel">Skill</label>
+                    <select id="rk-skill-select" class="tselect" style="width:100%;">
                         <option value="">Use Suggested</option>
                         <option value="arcana">Arcana</option>
                         <option value="nature">Nature</option>
@@ -1244,8 +1913,8 @@ function createRkModal() {
                     </select>
                 </div>
             </div>
-            <button onclick="doRecallKnowledge()" class="btn btn-sm w-full" style="background:rgba(212,162,68,0.15);color:#d4a244;border-color:rgba(212,162,68,0.2);">Roll Recall Knowledge</button>
-            <div id="rk-result-area" class="mt-4"></div>
+            <button class="ts-btn" style="width:100%;background:rgba(200,168,78,0.18);color:var(--t-gold);border-color:rgba(200,168,78,0.4);" onclick="doRecallKnowledge()">Roll Recall Knowledge</button>
+            <div id="rk-result-area" style="margin-top:14px;"></div>
         </div>
     </div>`;
     document.body.appendChild(modal);
@@ -1266,28 +1935,28 @@ async function doRecallKnowledge() {
 
         const r = data.result;
         const degreeColors = {
-            critical_success: 'text-success-400', success: 'text-accent-300',
-            failure: 'text-base-400', critical_failure: 'text-danger-400'
+            critical_success: 'var(--t-green)', success: 'var(--t-teal)',
+            failure: 'var(--t-t3)', critical_failure: 'var(--t-red-b)'
         };
+        const color = degreeColors[r.degree] || 'var(--t-t2)';
 
-        let html = `
-        <div class="rounded-lg p-3 border border-white/[0.06]" style="background:#0d0d12;">
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-xs font-semibold text-base-200">${r.pc_name} → ${r.target}</span>
-                <span class="text-xs font-mono font-bold ${degreeColors[r.degree]}">${r.degree_label}</span>
+        let html = `<div style="background:rgba(26,30,41,0.8);border:1px solid var(--t-border);border-radius:8px;padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:12px;font-weight:700;color:var(--t-t1);">${r.pc_name} → ${r.target}</span>
+                <span class="mono" style="font-size:12px;font-weight:700;color:${color};text-transform:uppercase;">${r.degree_label}</span>
             </div>
-            <div class="text-[10px] text-base-500 mb-2">
+            <div style="font-size:10px;color:var(--t-t3);margin-bottom:8px;font-family:'JetBrains Mono',monospace;">
                 ${r.skill} check: d20(${r.d20}) + ${r.modifier} = ${r.total} vs DC ${r.dc}
             </div>`;
 
         if (r.revealed_info && r.revealed_info.length) {
-            html += `<div class="space-y-1 mt-2 pt-2 border-t border-white/[0.04]">`;
+            html += `<div style="border-top:1px solid var(--t-border);padding-top:8px;margin-top:8px;">`;
             r.revealed_info.forEach(info => {
-                html += `<div class="text-xs text-base-200">• ${info}</div>`;
+                html += `<div style="font-size:11px;color:var(--t-t1);font-family:'Crimson Pro',serif;margin-bottom:4px;line-height:1.4;">• ${info}</div>`;
             });
             html += `</div>`;
         } else if (r.degree === 'failure') {
-            html += `<div class="text-xs text-base-500 italic mt-2">No useful information recalled.</div>`;
+            html += `<div style="font-size:11px;color:var(--t-t3);font-style:italic;">No useful information recalled.</div>`;
         }
         html += `</div>`;
 
@@ -1295,10 +1964,8 @@ async function doRecallKnowledge() {
     } catch(e) { toast('Recall Knowledge failed', 'error'); }
 }
 
-// SSE listener for Recall Knowledge results
 if (evtSource) {
     evtSource.addEventListener('recall_knowledge', function(e) {
-        // Could display a toast or update the active panel
         try {
             const r = JSON.parse(e.data);
             toast(`📖 ${r.pc_name} recalled about ${r.target}: ${r.degree_label}`, 'info');
@@ -1326,7 +1993,6 @@ async function sendHandout() {
     }
 
     let imageUrl = '';
-    // Upload image first if present
     if (imageInput.files.length) {
         try {
             const fd = new FormData();

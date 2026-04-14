@@ -1,437 +1,435 @@
 {
-    "success": true,
-    "build": {
-        "name": "Kyle",
-        "class": "Druid",
-        "dualClass": null,
-        "level": 2,
-        "xp": 100,
-        "ancestry": "Awakened Animal",
-        "heritage": "Climbing Animal",
-        "background": "Stargazer (Nature)",
-        "alignment": "N",
-        "gender": "Not set",
-        "age": "Not set",
-        "deity": "Not set",
-        "size": 0,
-        "sizeName": "Tiny",
-        "keyability": "wis",
-        "languages": [
-            "Common",
-            "Fey",
-            "Azlanti",
-            "Wildsong"
+  "success": true,
+  "build": {
+    "name": "Kyle",
+    "class": "Druid",
+    "dualClass": null,
+    "level": 2,
+    "xp": 100,
+    "ancestry": "Awakened Animal",
+    "heritage": "Climbing Animal",
+    "background": "Stargazer (Nature)",
+    "alignment": "N",
+    "gender": "Not set",
+    "age": "Not set",
+    "deity": "Not set",
+    "size": 0,
+    "sizeName": "Tiny",
+    "keyability": "wis",
+    "languages": [
+      "Common",
+      "Fey",
+      "Azlanti",
+      "Wildsong"
+    ],
+    "rituals": [],
+    "resistances": [],
+    "inventorMods": [],
+    "abilities": {
+      "str": 10,
+      "dex": 16,
+      "con": 14,
+      "int": 10,
+      "wis": 18,
+      "cha": 10,
+      "breakdown": {
+        "ancestryFree": [
+          "Dex"
         ],
-        "rituals": [],
-        "resistances": [],
-        "inventorMods": [],
-        "abilities": {
-            "str": 10,
-            "dex": 16,
-            "con": 14,
-            "int": 10,
-            "wis": 18,
-            "cha": 10,
-            "breakdown": {
-                "ancestryFree": [
-                    "Dex"
-                ],
-                "ancestryBoosts": [
-                    "Con",
-                    "Wis"
-                ],
-                "ancestryFlaws": [
-                    "Int"
-                ],
-                "backgroundBoosts": [
-                    "Wis",
-                    "Dex"
-                ],
-                "classBoosts": [
-                    "Wis"
-                ],
-                "mapLevelledBoosts": {
-                    "1": [
-                        "Wis",
-                        "Con",
-                        "Int",
-                        "Dex"
-                    ]
-                }
-            }
-        },
-        "attributes": {
-            "ancestryhp": 8,
-            "classhp": 8,
-            "bonushp": 0,
-            "bonushpPerLevel": 0,
-            "speed": 20,
-            "speedBonus": 0
-        },
-        "proficiencies": {
-            "classDC": 2,
-            "perception": 2,
-            "fortitude": 2,
-            "reflex": 2,
-            "will": 4,
-            "heavy": 0,
-            "medium": 2,
-            "light": 2,
-            "unarmored": 2,
-            "advanced": 0,
-            "martial": 0,
-            "simple": 2,
-            "unarmed": 2,
-            "castingArcane": 0,
-            "castingDivine": 0,
-            "castingOccult": 0,
-            "castingPrimal": 2,
-            "acrobatics": 2,
-            "arcana": 0,
-            "athletics": 0,
-            "crafting": 0,
-            "deception": 0,
-            "diplomacy": 0,
-            "intimidation": 0,
-            "medicine": 2,
-            "nature": 2,
-            "occultism": 0,
-            "performance": 0,
-            "religion": 2,
-            "society": 0,
-            "stealth": 0,
-            "survival": 0,
-            "thievery": 2,
-            "piloting": 0,
-            "computers": 0
-        },
-        "mods": {},
-        "feats": [
-            [
-                "Storm Born",
-                null,
-                "Awarded Feat",
-                1
-            ],
-            [
-                "Shield Block",
-                null,
-                "Awarded Feat",
-                1
-            ],
-            [
-                "Assurance",
-                "Nature",
-                "Awarded Feat",
-                1
-            ],
-            [
-                "Climbing Animal",
-                null,
-                "Heritage",
-                1,
-                "Heritage Feat",
-                "standardChoice",
-                null
-            ],
-            [
-                "Animal Empathy",
-                null,
-                "Class Feat",
-                1,
-                "Druid voice of nature",
-                "standardChoice",
-                null
-            ],
-            [
-                "Natural Senses",
-                null,
-                "Ancestry Feat",
-                1,
-                "Awakened Animal Feat 1",
-                "standardChoice",
-                null
-            ],
-            [
-                "Battle Medicine",
-                null,
-                "Skill Feat",
-                2,
-                "Skill Feat 2",
-                "standardChoice",
-                null
-            ],
-            [
-                "Beastmaster Dedication",
-                null,
-                "Class Feat",
-                2,
-                "Druid Feat 2",
-                "standardChoice",
-                null
+        "ancestryBoosts": [
+          "Con",
+          "Wis"
+        ],
+        "ancestryFlaws": [
+          "Int"
+        ],
+        "backgroundBoosts": [
+          "Wis",
+          "Dex"
+        ],
+        "classBoosts": [
+          "Wis"
+        ],
+        "mapLevelledBoosts": {
+          "1": [
+            "Wis",
+            "Con",
+            "Int",
+            "Dex"
+          ]
+        }
+      }
+    },
+    "attributes": {
+      "ancestryhp": 8,
+      "classhp": 8,
+      "bonushp": 0,
+      "bonushpPerLevel": 0,
+      "speed": 20,
+      "speedBonus": 0
+    },
+    "proficiencies": {
+      "classDC": 2,
+      "perception": 2,
+      "fortitude": 2,
+      "reflex": 2,
+      "will": 4,
+      "heavy": 0,
+      "medium": 2,
+      "light": 2,
+      "unarmored": 2,
+      "advanced": 0,
+      "martial": 0,
+      "simple": 2,
+      "unarmed": 2,
+      "castingArcane": 0,
+      "castingDivine": 0,
+      "castingOccult": 0,
+      "castingPrimal": 2,
+      "acrobatics": 2,
+      "arcana": 0,
+      "athletics": 0,
+      "crafting": 0,
+      "deception": 0,
+      "diplomacy": 0,
+      "intimidation": 0,
+      "medicine": 2,
+      "nature": 2,
+      "occultism": 0,
+      "performance": 0,
+      "religion": 2,
+      "society": 0,
+      "stealth": 0,
+      "survival": 0,
+      "thievery": 2,
+      "piloting": 0,
+      "computers": 0
+    },
+    "mods": {},
+    "feats": [
+      [
+        "Storm Born",
+        null,
+        "Awarded Feat",
+        1
+      ],
+      [
+        "Shield Block",
+        null,
+        "Awarded Feat",
+        1
+      ],
+      [
+        "Assurance",
+        "Nature",
+        "Awarded Feat",
+        1
+      ],
+      [
+        "Climbing Animal",
+        null,
+        "Heritage",
+        1,
+        "Heritage Feat",
+        "standardChoice",
+        null
+      ],
+      [
+        "Animal Empathy",
+        null,
+        "Class Feat",
+        1,
+        "Druid voice of nature",
+        "standardChoice",
+        null
+      ],
+      [
+        "Natural Senses",
+        null,
+        "Ancestry Feat",
+        1,
+        "Awakened Animal Feat 1",
+        "standardChoice",
+        null
+      ],
+      [
+        "Battle Medicine",
+        null,
+        "Skill Feat",
+        2,
+        "Skill Feat 2",
+        "standardChoice",
+        null
+      ],
+      [
+        "Beastmaster Dedication",
+        null,
+        "Class Feat",
+        2,
+        "Druid Feat 2",
+        "standardChoice",
+        null
+      ]
+    ],
+    "specials": [
+      "Anathema",
+      "Storm Order",
+      "Wildsong",
+      "Voice of Nature",
+      "Tiny",
+      "Darkvision",
+      "Call Companion",
+      "Climbing Animal"
+    ],
+    "lores": [
+      [
+        "Astronomy",
+        2
+      ],
+      [
+        "Azlanti",
+        0
+      ],
+      [
+        "Awakened Animal",
+        0
+      ]
+    ],
+    "equipmentContainers": {
+      "c4f0b620-ac12-4c70-85b6-969ea8705495": {
+        "containerName": "Backpack",
+        "bagOfHolding": false,
+        "backpack": true,
+        "augmentations": false
+      }
+    },
+    "equipment": [
+      [
+        "Rope",
+        1,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Silver Ingot",
+        1,
+        "Invested"
+      ],
+      [
+        "Primal Symbol",
+        1,
+        "Invested"
+      ],
+      [
+        "Rations",
+        2,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Feather Token Tree",
+        1,
+        "Invested"
+      ],
+      [
+        "Clear Voiced Chime",
+        1,
+        "Invested"
+      ],
+      [
+        "Waterskin",
+        1,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Soap",
+        1,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Bedroll",
+        1,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Torch",
+        5,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Flint and Steel",
+        1,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Chalk",
+        10,
+        "c4f0b620-ac12-4c70-85b6-969ea8705495",
+        "Invested"
+      ],
+      [
+        "Backpack",
+        1,
+        "Invested"
+      ],
+      [
+        "Healer's Toolkit",
+        1,
+        "Invested"
+      ]
+    ],
+    "specificProficiencies": {
+      "trained": [],
+      "expert": [],
+      "master": [],
+      "legendary": []
+    },
+    "weapons": [
+      {
+        "name": "Staff",
+        "qty": 1,
+        "prof": "simple",
+        "die": "d4",
+        "pot": 0,
+        "str": "",
+        "mat": null,
+        "display": "Staff",
+        "runes": [],
+        "damageType": "B",
+        "attack": 4,
+        "damageBonus": 0,
+        "extraDamage": [],
+        "increasedDice": false,
+        "isInventor": false,
+        "grade": ""
+      }
+    ],
+    "money": {
+      "cp": 0,
+      "sp": 0,
+      "gp": 108,
+      "pp": 0
+    },
+    "armor": [
+      {
+        "name": "Padded Armor",
+        "qty": 1,
+        "prof": "light",
+        "pot": 0,
+        "res": "",
+        "mat": null,
+        "display": "Padded Armor",
+        "worn": true,
+        "runes": [],
+        "grade": ""
+      },
+      {
+        "name": "Steel Shield",
+        "qty": 1,
+        "prof": "shield",
+        "pot": 0,
+        "res": "",
+        "mat": null,
+        "display": "",
+        "worn": true,
+        "runes": [],
+        "grade": ""
+      }
+    ],
+    "spellCasters": [
+      {
+        "name": "Druid",
+        "magicTradition": "primal",
+        "spellcastingType": "prepared",
+        "ability": "wis",
+        "proficiency": 2,
+        "focusPoints": 0,
+        "innate": false,
+        "perDay": [
+          5,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "spells": [
+          {
+            "spellLevel": 0,
+            "list": [
+              "Vitality Lash",
+              "Live Wire",
+              "Electric Arc",
+              "Frostbite",
+              "Needle Darts"
             ]
-        ],
-        "specials": [
-            "Anathema",
-            "Storm Order",
-            "Wildsong",
-            "Voice of Nature",
-            "Tiny",
-            "Darkvision",
-            "Call Companion",
-            "Climbing Animal"
-        ],
-        "lores": [
-            [
-                "Astronomy",
-                2
-            ],
-            [
-                "Azlanti",
-                0
-            ],
-            [
-                "Awakened Animal",
-                0
+          },
+          {
+            "spellLevel": 1,
+            "list": [
+              "Horizon Thunder Sphere",
+              "Briny Bolt",
+              "Purifying Icicle"
             ]
+          }
         ],
-        "equipmentContainers": {
-            "c4f0b620-ac12-4c70-85b6-969ea8705495": {
-                "containerName": "Backpack",
-                "bagOfHolding": false,
-                "backpack": true,
-                "augmentations": false
-            }
-        },
-        "equipment": [
-            [
-                "Rope",
-                1,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Silver Ingot",
-                1,
-                "Invested"
-            ],
-            [
-                "Primal Symbol",
-                1,
-                "Invested"
-            ],
-            [
-                "Rations",
-                2,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Feather Token Tree",
-                1,
-                "Invested"
-            ],
-            [
-                "Clear Voiced Chime",
-                1,
-                "Invested"
-            ],
-            [
-                "Waterskin",
-                1,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Soap",
-                1,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Bedroll",
-                1,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Torch",
-                5,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Flint and Steel",
-                1,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Chalk",
-                10,
-                "c4f0b620-ac12-4c70-85b6-969ea8705495",
-                "Invested"
-            ],
-            [
-                "Backpack",
-                1,
-                "Invested"
-            ],
-            [
-                "Healer's Toolkit",
-                1,
-                "Invested"
-            ]
-        ],
-        "specificProficiencies": {
-            "trained": [],
-            "expert": [],
-            "master": [],
-            "legendary": []
-        },
-        "weapons": [
-            {
-                "name": "Staff",
-                "qty": 1,
-                "prof": "simple",
-                "die": "d4",
-                "pot": 0,
-                "str": "",
-                "mat": null,
-                "display": "Staff",
-                "runes": [],
-                "damageType": "B",
-                "attack": 4,
-                "damageBonus": 0,
-                "extraDamage": [],
-                "increasedDice": false,
-                "isInventor": false,
-                "grade": ""
-            }
-        ],
-        "money": {
-            "cp": 0,
-            "sp": 0,
-            "gp": 108,
-            "pp": 0
-        },
-        "armor": [
-            {
-                "name": "Padded Armor",
-                "qty": 1,
-                "prof": "light",
-                "pot": 0,
-                "res": "",
-                "mat": null,
-                "display": "Padded Armor",
-                "worn": true,
-                "runes": [],
-                "grade": ""
-            },
-            {
-                "name": "Steel Shield",
-                "qty": 1,
-                "prof": "shield",
-                "pot": 0,
-                "res": "",
-                "mat": null,
-                "display": "",
-                "worn": true,
-                "runes": [],
-                "grade": ""
-            }
-        ],
-        "spellCasters": [
-            {
-                "name": "Druid",
-                "magicTradition": "primal",
-                "spellcastingType": "prepared",
-                "ability": "wis",
-                "proficiency": 2,
-                "focusPoints": 0,
-                "innate": false,
-                "perDay": [
-                    5,
-                    3,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ],
-                "spells": [
-                    {
-                        "spellLevel": 0,
-                        "list": [
-                            "Vitality Lash",
-                            "Live Wire",
-                            "Electric Arc",
-                            "Frostbite",
-                            "Needle Darts"
-                        ]
-                    },
-                    {
-                        "spellLevel": 1,
-                        "list": [
-                            "Horizon Thunder Sphere",
-                            "Briny Bolt",
-                            "Purifying Icicle"
-                        ]
-                    }
-                ],
-                "prepared": [],
-                "blendedSpells": []
-            }
-        ],
-        "focusPoints": 1,
-        "focus": {
-            "primal": {
-                "wis": {
-                    "abilityBonus": 4,
-                    "proficiency": 2,
-                    "itemBonus": 0,
-                    "focusCantrips": [],
-                    "focusSpells": [
-                        "Tempest Surge"
-                    ]
-                }
-            }
-        },
-        "formula": [],
-        "acTotal": {
-            "acProfBonus": 4,
-            "acAbilityBonus": 3,
-            "acItemBonus": 1,
-            "acTotal": 18,
-            "shieldBonus": "2"
-        },
-        "pets": [
-            {
-                "type": "Animal Companion",
-                "name": "Jonathon - Young Wyvern",
-                "equipment": [],
-                "animal": "Wyvern",
-                "mature": false,
-                "incredible": false,
-                "incredibleType": "Nimble",
-                "specializations": [],
-                "armor": "Unarmored"
-            }
-        ],
-        "familiars": [],
-        "notes": "",
-        "expended_slots": {},
-        "shield_raised": false,
-        "current_hp": 26,
-        "current_focus": 1,
-        "conditions": {
-            "frightened": 0
-        },
-        "prepared_spells": {},
-        "cast_prep": {}
-    }
+        "prepared": [],
+        "blendedSpells": []
+      }
+    ],
+    "focusPoints": 1,
+    "focus": {
+      "primal": {
+        "wis": {
+          "abilityBonus": 4,
+          "proficiency": 2,
+          "itemBonus": 0,
+          "focusCantrips": [],
+          "focusSpells": [
+            "Tempest Surge"
+          ]
+        }
+      }
+    },
+    "formula": [],
+    "acTotal": {
+      "acProfBonus": 4,
+      "acAbilityBonus": 3,
+      "acItemBonus": 1,
+      "acTotal": 18,
+      "shieldBonus": "2"
+    },
+    "pets": [
+      {
+        "type": "Animal Companion",
+        "name": "Jonathon - Young Wyvern",
+        "equipment": [],
+        "animal": "Wyvern",
+        "mature": false,
+        "incredible": false,
+        "incredibleType": "Nimble",
+        "specializations": [],
+        "armor": "Unarmored"
+      }
+    ],
+    "familiars": [],
+    "notes": "",
+    "expended_slots": {},
+    "shield_raised": false,
+    "current_hp": 26,
+    "current_focus": 1,
+    "conditions": {},
+    "prepared_spells": {},
+    "cast_prep": {}
+  }
 }

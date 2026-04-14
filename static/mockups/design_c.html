@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PF2e Sheet — Design C (Refined Blend)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-base: #0f1117;
+            --bg-surface: #161921;
+            --bg-raised: #1c2029;
+            --bg-overlay: #242835;
+            --bg-hover: #2a2f40;
+            --border: rgba(255,255,255,0.06);
+            --border-s: rgba(255,255,255,0.10);
+            --red: #c43c3c;
+            --red-b: #e85555;
+            --red-d: #7c2222;
+            --red-glow: rgba(196,60,60,0.12);
+            --gold: #c8a84e;
+            --gold-glow: rgba(200,168,78,0.12);
+            --teal: #4a9696;
+            --teal-glow: rgba(74,150,150,0.10);
+            --purple: #9b7ede;
+            --blue: #5a8ee8;
+            --green: #3eba68;
+            --green-glow: rgba(62,186,104,0.10);
+            --t1: #eaebf0;
+            --t2: #9ca0b4;
+            --t3: #5e6378;
+            --t4: #3d4158;
+        }
+
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-base); color: var(--t1); min-height: 100vh; }
+        .font-d { font-family: 'Cinzel', serif; }
+
+        /* ═══ TOPBAR ═══ */
+        .topbar {
+            display: flex; align-items: center; padding: 10px 20px;
+            background: var(--bg-surface); border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .portrait {
+            width: 52px; height: 52px; border-radius: 50%;
+            border: 2px solid var(--red); background: var(--bg-raised);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Cinzel', serif; font-size: 24px; font-weight: 700;
+            color: var(--red-b); flex-shrink: 0;
+        }
+        .ci { margin-left: 14px; flex: 1; }
+        .cn { font-family: 'Cinzel', serif; font-size: 19px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .lvl { font-family: 'Inter'; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 99px;
+               background: var(--red-glow); color: var(--red-b); border: 1px solid rgba(196,60,60,0.25);
+               text-transform: uppercase; letter-spacing: 0.06em; }
+        .csub { font-size: 12px; color: var(--t3); margin-top: 2px; }
+        .tb-acts { display: flex; gap: 6px; }
+        .tb { padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600;
+              border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2);
+              cursor: pointer; transition: all 0.15s; }
+        .tb:hover { background: var(--bg-overlay); color: var(--t1); }
+
+        /* ═══ ABILITY ROW ═══ */
+        .ability-row {
+            display: flex; justify-content: center; gap: 10px;
+            padding: 14px 20px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .ab {
+            width: 84px; text-align: center;
+            background: var(--bg-raised); border: 1px solid var(--border-s);
+            border-radius: 8px; padding: 8px 6px 6px;
+            position: relative;
+        }
+        .ab::before {
+            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 24px; height: 2px; border-radius: 0 0 2px 2px;
+        }
+        .ab.str::before { background: var(--red); }
+        .ab.dex::before { background: var(--blue); }
+        .ab.con::before { background: var(--green); }
+        .ab.int::before { background: var(--purple); }
+        .ab.wis::before { background: var(--gold); }
+        .ab.cha::before { background: var(--red-b); }
+        .ab-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-bottom: 2px; }
+        .ab-mod { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+        .ab-score {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--bg-base); border: 1.5px solid var(--t4);
+            font-size: 10px; font-weight: 700; color: var(--t3); margin-top: 4px;
+        }
+
+        /* ═══ STATS STRIP (Design A style) ═══ */
+        .stats-strip {
+            display: flex; align-items: stretch;
+            background: var(--bg-surface);
+            border-bottom: 2px solid var(--red-d);
+        }
+        .ss-block {
+            flex: 1; text-align: center; padding: 12px 8px;
+            border-right: 1px solid var(--border);
+            position: relative;
+        }
+        .ss-block:last-child { border-right: none; }
+        .ss-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t3); margin-bottom: 3px; }
+        .ss-val { font-size: 24px; font-weight: 800; color: #fff; }
+        .ss-sub { font-size: 10px; color: var(--t3); margin-top: 2px; }
+
+        /* HP block within stats strip */
+        .hp-strip {
+            flex: 2.5; display: flex; align-items: center; justify-content: center; gap: 14px;
+            padding: 10px 20px;
+        }
+        .hp-btn {
+            width: 38px; height: 38px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: 700; cursor: pointer;
+            border: 1px solid; transition: all 0.15s;
+        }
+        .hp-btn.heal { background: var(--green-glow); color: var(--green); border-color: rgba(62,186,104,0.2); }
+        .hp-btn.heal:hover { background: rgba(62,186,104,0.2); }
+        .hp-btn.dmg { background: var(--red-glow); color: var(--red-b); border-color: rgba(196,60,60,0.2); }
+        .hp-btn.dmg:hover { background: rgba(196,60,60,0.2); }
+        .hp-center { text-align: center; min-width: 100px; }
+        .hp-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t3); margin-bottom: 2px; }
+        .hp-num { font-size: 32px; font-weight: 800; color: var(--green); line-height: 1; }
+        .hp-num span { font-size: 14px; color: var(--t3); font-weight: 600; }
+        .hp-bar { width: 100%; height: 4px; border-radius: 2px; background: var(--bg-base); margin-top: 5px; overflow: hidden; }
+        .hp-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width 0.4s; }
+        .hp-temp { text-align: center; min-width: 44px; }
+        .hp-temp-val { font-size: 18px; font-weight: 700; color: var(--t3); }
+
+        /* ═══ MAIN GRID ═══ */
+        .main { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 230px); }
+
+        /* LEFT */
+        .left {
+            background: var(--bg-surface); border-right: 1px solid var(--border);
+            padding: 12px; overflow-y: auto;
+        }
+        .card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+        .card-h {
+            padding: 7px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--t3); background: var(--bg-base);
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Saves */
+        .sv { display: flex; align-items: center; padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .sv:last-child { border-bottom: none; }
+        .sv-rank {
+            font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+            width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center;
+            justify-content: center; margin-right: 10px; border: 1px solid;
+        }
+        .sv-rank.T { color: var(--teal); border-color: var(--teal); background: var(--teal-glow); }
+        .sv-rank.E { color: var(--green); border-color: var(--green); background: var(--green-glow); }
+        .sv-rank.M { color: var(--purple); border-color: var(--purple); background: rgba(155,126,222,0.10); }
+        .sv-rank.L { color: var(--gold); border-color: var(--gold); background: var(--gold-glow); }
+        .sv-nm { flex: 1; font-size: 13px; font-weight: 500; color: var(--t2); }
+        .sv-val { font-size: 15px; font-weight: 700; }
+
+        /* Skills */
+        .sk { display: flex; align-items: center; padding: 4px 14px; font-size: 12px; transition: background 0.1s; cursor: pointer; }
+        .sk:hover { background: var(--bg-hover); }
+        .sk-dot { width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; border: 1.5px solid var(--t4); }
+        .sk-dot.T { background: var(--teal); border-color: var(--teal); }
+        .sk-dot.E { background: var(--green); border-color: var(--green); }
+        .sk-dot.M { background: var(--purple); border-color: var(--purple); }
+        .sk-dot.L { background: var(--gold); border-color: var(--gold); }
+        .sk-ab { font-size: 8px; color: var(--t4); font-weight: 700; width: 24px; text-transform: uppercase; }
+        .sk-nm { flex: 1; color: var(--t2); font-weight: 500; }
+        .sk-v { font-weight: 700; font-size: 13px; min-width: 24px; text-align: right; }
+
+        /* Info */
+        .info-r { padding: 7px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 12px; }
+        .info-r:last-child { border-bottom: none; }
+        .info-l { font-size: 8px; font-weight: 700; text-transform: uppercase; color: var(--t3); letter-spacing: 0.06em; margin-bottom: 1px; }
+
+        /* ═══ RIGHT ═══ */
+        .right { padding: 16px 20px; overflow-y: auto; }
+
+        /* Defense / Condition row */
+        .dc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .dc-card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+        .dc-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t3); margin-bottom: 8px; }
+        .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px; }
+        .tag.add { background: transparent; border: 1px dashed var(--t4); color: var(--t4); cursor: pointer; }
+        .tag.add:hover { border-color: var(--t3); color: var(--t3); }
+        .tag.cond { background: rgba(239,68,68,0.08); color: #fca5a5; border: 1px solid rgba(239,68,68,0.15); }
+
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 14px; overflow-x: auto; }
+        .tab {
+            padding: 10px 18px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--t3); cursor: pointer; white-space: nowrap;
+            border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s;
+            background: none; border-top: none; border-left: none; border-right: none;
+        }
+        .tab:hover { color: var(--t2); }
+        .tab.on { color: var(--red-b); border-bottom-color: var(--red-b); }
+
+        /* Filters */
+        .flt { display: flex; gap: 5px; margin-bottom: 14px; flex-wrap: wrap; }
+        .fp {
+            padding: 5px 12px; border-radius: 99px; font-size: 10px; font-weight: 600;
+            background: var(--bg-raised); color: var(--t3); border: 1px solid var(--border);
+            cursor: pointer; transition: all 0.12s;
+        }
+        .fp:hover { background: var(--bg-overlay); color: var(--t2); }
+        .fp.on { background: var(--red); color: #fff; border-color: var(--red); }
+
+        /* Section header */
+        .sec-h { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t3); margin-bottom: 8px; }
+        .sec-h span { color: var(--t4); font-weight: 500; }
+
+        /* Strike cards */
+        .stk {
+            background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 16px; margin-bottom: 8px;
+            display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 14px;
+            transition: border-color 0.15s; cursor: pointer;
+        }
+        .stk:hover { border-color: rgba(196,60,60,0.25); }
+        .stk-ico {
+            width: 44px; height: 44px; border-radius: 8px;
+            background: var(--red-glow); border: 1px solid rgba(196,60,60,0.18);
+            display: flex; align-items: center; justify-content: center; font-size: 20px;
+        }
+        .stk-info { min-width: 0; }
+        .stk-name { font-weight: 700; font-size: 14px; color: #fff; }
+        .stk-meta { font-size: 10px; color: var(--t3); margin-top: 1px; }
+        .stk-traits { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+        .stk-traits .tt {
+            font-size: 8px; padding: 2px 7px; border-radius: 3px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.03em;
+            background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(200,168,78,0.18);
+        }
+        .stk-stats { display: flex; gap: 10px; align-items: center; }
+        .stk-hit { text-align: center; }
+        .stk-hit-l { font-size: 8px; font-weight: 700; color: var(--t3); text-transform: uppercase; }
+        .stk-hit-v { font-size: 20px; font-weight: 800; color: var(--gold); }
+        .stk-dmg {
+            background: var(--bg-base); border: 1px solid var(--border-s);
+            padding: 6px 14px; border-radius: 6px; text-align: center;
+        }
+        .stk-dmg-l { font-size: 8px; font-weight: 700; color: var(--t3); text-transform: uppercase; }
+        .stk-dmg-v { font-size: 14px; font-weight: 700; color: var(--t1); }
+
+        /* MAP indicator */
+        .map-row {
+            display: flex; gap: 6px; margin-top: 4px;
+        }
+        .map-pip {
+            font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+            cursor: pointer; transition: all 0.12s;
+        }
+        .map-pip.m1 { background: rgba(62,186,104,0.08); color: var(--green); border: 1px solid rgba(62,186,104,0.15); }
+        .map-pip.m2 { background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(200,168,78,0.15); }
+        .map-pip.m3 { background: var(--red-glow); color: var(--red-b); border: 1px solid rgba(196,60,60,0.15); }
+
+        /* Ability / feat cards */
+        .feat {
+            background: var(--bg-raised); border: 1px solid var(--border);
+            border-radius: 10px; padding: 14px 16px; margin-bottom: 8px;
+        }
+        .feat-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+        .feat-nm { font-weight: 700; font-size: 14px; color: #fff; }
+        .feat-cost {
+            font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+            background: var(--red-glow); color: var(--red-b); border: 1px solid rgba(196,60,60,0.2);
+        }
+        .feat-cost.teal { background: var(--teal-glow); color: var(--teal); border-color: rgba(74,150,150,0.2); }
+        .feat-cost.purple { background: rgba(155,126,222,0.10); color: var(--purple); border-color: rgba(155,126,222,0.2); }
+        .feat-desc { font-size: 12px; color: var(--t2); line-height: 1.65; }
+        .feat-desc strong { color: var(--t1); }
+
+        @media (max-width: 1024px) {
+            .main { grid-template-columns: 1fr; }
+            .left { border-right: none; border-bottom: 1px solid var(--border); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ TOPBAR ═══ -->
+<div class="topbar">
+    <div class="portrait">K</div>
+    <div class="ci">
+        <div class="cn">Kyle Katarn <span class="lvl">Level 5</span></div>
+        <div class="csub">Human Fighter <span style="color:var(--t4);">•</span> Two-Handed</div>
+    </div>
+    <div class="tb-acts">
+        <button class="tb">☀ Daily Prep</button>
+        <button class="tb">🛏 Rest</button>
+        <button class="tb" style="background:var(--red);color:#fff;border-color:var(--red);">🎲 Roll</button>
+    </div>
+</div>
+
+<!-- ═══ ABILITY ROW ═══ -->
+<div class="ability-row">
+    <div class="ab str"><div class="ab-lbl">Strength</div><div class="ab-mod">+4</div><div class="ab-score">18</div></div>
+    <div class="ab dex"><div class="ab-lbl">Dexterity</div><div class="ab-mod">+2</div><div class="ab-score">14</div></div>
+    <div class="ab con"><div class="ab-lbl">Constitution</div><div class="ab-mod">+3</div><div class="ab-score">16</div></div>
+    <div class="ab int"><div class="ab-lbl">Intelligence</div><div class="ab-mod">+0</div><div class="ab-score">10</div></div>
+    <div class="ab wis"><div class="ab-lbl">Wisdom</div><div class="ab-mod">+1</div><div class="ab-score">12</div></div>
+    <div class="ab cha"><div class="ab-lbl">Charisma</div><div class="ab-mod">+1</div><div class="ab-score">12</div></div>
+</div>
+
+<!-- ═══ STATS STRIP (Design A style) ═══ -->
+<div class="stats-strip">
+    <div class="ss-block">
+        <div class="ss-lbl">Armor Class</div>
+        <div class="ss-val" style="color:var(--blue);">21</div>
+        <div class="ss-sub">Half Plate + Shield</div>
+    </div>
+    <div class="ss-block">
+        <div class="ss-lbl">Speed</div>
+        <div class="ss-val" style="color:var(--teal);">25<span style="font-size:11px;color:var(--t3);">ft.</span></div>
+    </div>
+    <div class="ss-block">
+        <div class="ss-lbl">Perception</div>
+        <div class="ss-val" style="color:var(--gold);">+11</div>
+        <div class="ss-sub" style="color:var(--green);">Expert</div>
+    </div>
+    <div class="ss-block">
+        <div class="ss-lbl">Class DC</div>
+        <div class="ss-val">22</div>
+    </div>
+    <div class="hp-strip">
+        <button class="hp-btn heal" title="Heal">+</button>
+        <div class="hp-center">
+            <div class="hp-label">Hit Points</div>
+            <div class="hp-num">68 <span>/ 73</span></div>
+            <div class="hp-bar"><div class="hp-fill" style="width:93%;"></div></div>
+        </div>
+        <button class="hp-btn dmg" title="Damage">−</button>
+        <div class="hp-temp">
+            <div class="hp-label">Temp</div>
+            <div class="hp-temp-val">—</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+    <div class="left">
+        <!-- Saves -->
+        <div class="card">
+            <div class="card-h">🛡 Saving Throws</div>
+            <div class="sv"><span class="sv-rank E">E</span><span class="sv-nm">Fortitude</span><span class="sv-val" style="color:var(--green);">+14</span></div>
+            <div class="sv"><span class="sv-rank T">T</span><span class="sv-nm">Reflex</span><span class="sv-val" style="color:var(--blue);">+10</span></div>
+            <div class="sv"><span class="sv-rank E">E</span><span class="sv-nm">Will</span><span class="sv-val" style="color:var(--purple);">+11</span></div>
+        </div>
+
+        <!-- Skills -->
+        <div class="card">
+            <div class="card-h">📋 Skills</div>
+            <div style="padding:4px 0;">
+                <div class="sk"><div class="sk-dot T"></div><span class="sk-ab">DEX</span><span class="sk-nm">Acrobatics</span><span class="sk-v" style="color:var(--teal);">+8</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">INT</span><span class="sk-nm">Arcana</span><span class="sk-v">+0</span></div>
+                <div class="sk"><div class="sk-dot E"></div><span class="sk-ab">STR</span><span class="sk-nm">Athletics</span><span class="sk-v" style="color:var(--green);">+12</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">INT</span><span class="sk-nm">Crafting</span><span class="sk-v">+0</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">CHA</span><span class="sk-nm">Deception</span><span class="sk-v">+1</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">CHA</span><span class="sk-nm">Diplomacy</span><span class="sk-v">+1</span></div>
+                <div class="sk"><div class="sk-dot T"></div><span class="sk-ab">CHA</span><span class="sk-nm">Intimidation</span><span class="sk-v" style="color:var(--teal);">+7</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">WIS</span><span class="sk-nm">Lore (Warfare)</span><span class="sk-v">+6</span></div>
+                <div class="sk"><div class="sk-dot T"></div><span class="sk-ab">WIS</span><span class="sk-nm">Medicine</span><span class="sk-v" style="color:var(--teal);">+7</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">WIS</span><span class="sk-nm">Nature</span><span class="sk-v">+1</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">INT</span><span class="sk-nm">Occultism</span><span class="sk-v">+0</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">CHA</span><span class="sk-nm">Performance</span><span class="sk-v">+1</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">WIS</span><span class="sk-nm">Religion</span><span class="sk-v">+1</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">INT</span><span class="sk-nm">Society</span><span class="sk-v">+0</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">DEX</span><span class="sk-nm">Stealth</span><span class="sk-v">+2</span></div>
+                <div class="sk"><div class="sk-dot T"></div><span class="sk-ab">WIS</span><span class="sk-nm">Survival</span><span class="sk-v" style="color:var(--teal);">+7</span></div>
+                <div class="sk"><div class="sk-dot"></div><span class="sk-ab">DEX</span><span class="sk-nm">Thievery</span><span class="sk-v">+2</span></div>
+            </div>
+        </div>
+
+        <!-- Details -->
+        <div class="card">
+            <div class="card-h">📖 Details</div>
+            <div class="info-r"><div class="info-l">Senses</div><span style="color:var(--t2);">Darkvision</span></div>
+            <div class="info-r"><div class="info-l">Languages</div><span style="color:var(--t2);">Common, Dwarven</span></div>
+            <div class="info-r"><div class="info-l">Armor</div><span style="color:var(--t2);">Half Plate + Steel Shield (H5, BT10)</span></div>
+            <div class="info-r"><div class="info-l">Hero Points</div><span style="color:var(--gold);">&#9733; 1</span></div>
+        </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+        <div class="dc-row">
+            <div class="dc-card">
+                <div class="dc-title">Defenses</div>
+                <span class="tag add">+ Add Resistance / Immunity</span>
+            </div>
+            <div class="dc-card">
+                <div class="dc-title">Conditions</div>
+                <span class="tag add">+ Add Condition</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab on">Actions</button>
+            <button class="tab">Spells</button>
+            <button class="tab">Inventory</button>
+            <button class="tab">Features & Feats</button>
+            <button class="tab">Background</button>
+            <button class="tab">Notes</button>
+        </div>
+
+        <div class="flt">
+            <span class="fp on">All</span>
+            <span class="fp">⚔ Attack</span>
+            <span class="fp">◆ Action</span>
+            <span class="fp">◆◆ 2-Action</span>
+            <span class="fp">◆◆◆ 3-Action</span>
+            <span class="fp">↺ Reaction</span>
+            <span class="fp">Free</span>
+        </div>
+
+        <div class="sec-h">Strikes <span>• MAP: -5 / -10</span></div>
+
+        <div class="stk">
+            <div class="stk-ico">⚔</div>
+            <div class="stk-info">
+                <div class="stk-name">Longsword +1</div>
+                <div class="stk-meta">Melee Weapon • 5 ft. Reach</div>
+                <div class="stk-traits"><span class="tt">Versatile P</span></div>
+                <div class="map-row">
+                    <span class="map-pip m1">1st +13</span>
+                    <span class="map-pip m2">2nd +8</span>
+                    <span class="map-pip m3">3rd +3</span>
+                </div>
+            </div>
+            <div class="stk-stats">
+                <div class="stk-hit"><div class="stk-hit-l">Hit</div><div class="stk-hit-v">+13</div></div>
+                <div class="stk-dmg"><div class="stk-dmg-l">Damage</div><div class="stk-dmg-v">2d8+4 S</div></div>
+            </div>
+        </div>
+
+        <div class="stk">
+            <div class="stk-ico">🏹</div>
+            <div class="stk-info">
+                <div class="stk-name">Composite Shortbow</div>
+                <div class="stk-meta">Ranged Weapon • 60 ft.</div>
+                <div class="stk-traits">
+                    <span class="tt">Deadly d10</span>
+                    <span class="tt">Propulsive</span>
+                </div>
+                <div class="map-row">
+                    <span class="map-pip m1">1st +10</span>
+                    <span class="map-pip m2">2nd +5</span>
+                    <span class="map-pip m3">3rd +0</span>
+                </div>
+            </div>
+            <div class="stk-stats">
+                <div class="stk-hit"><div class="stk-hit-l">Hit</div><div class="stk-hit-v">+10</div></div>
+                <div class="stk-dmg"><div class="stk-dmg-l">Damage</div><div class="stk-dmg-v">1d6+2 P</div></div>
+            </div>
+        </div>
+
+        <div class="sec-h" style="margin-top:20px;">Actions & Abilities</div>
+
+        <div class="feat">
+            <div class="feat-hd"><span class="feat-nm">Power Attack</span><span class="feat-cost">◆◆ 2 Actions</span></div>
+            <div class="feat-desc">You unleash a particularly powerful attack. Make a melee Strike. This counts as two attacks for MAP. If it hits, you deal an extra die of weapon damage.</div>
+        </div>
+
+        <div class="feat">
+            <div class="feat-hd"><span class="feat-nm">Attack of Opportunity</span><span class="feat-cost">↺ Reaction</span></div>
+            <div class="feat-desc"><strong>Trigger:</strong> A creature within your reach uses a manipulate action, move action, makes a ranged attack, or leaves a square during a move action.<br>Make a melee Strike against the triggering creature.</div>
+        </div>
+
+        <div class="feat">
+            <div class="feat-hd"><span class="feat-nm">Shield Block</span><span class="feat-cost">↺ Reaction</span></div>
+            <div class="feat-desc"><strong>Trigger:</strong> You have your shield raised and would take damage from a physical attack.<br>Your shield prevents damage up to its Hardness (5). Both you and the shield take remaining damage.</div>
+        </div>
+
+        <div class="feat">
+            <div class="feat-hd"><span class="feat-nm">Raise a Shield</span><span class="feat-cost teal">◆ 1 Action</span></div>
+            <div class="feat-desc">You position your shield to protect yourself. You gain its circumstance bonus to AC (+2) until the start of your next turn.</div>
+        </div>
+
+        <div class="feat">
+            <div class="feat-hd"><span class="feat-nm">Battle Medicine</span><span class="feat-cost teal">◆ 1 Action</span><span class="feat-cost purple" style="font-size:9px;">1/target/day</span></div>
+            <div class="feat-desc">You can patch up wounds even in combat. Attempt a Medicine check with the same DC as Treat Wounds. On a success, the target regains Hit Points.</div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

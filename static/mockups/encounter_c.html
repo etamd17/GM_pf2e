@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Encounter Mockup C — Narrative Theater</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base:#0a0c12; --bg-surface:#13161f; --bg-raised:#1a1e29; --bg-higher:#232736;
+  --red:#c43c3c; --red-b:#e85555; --red-d:#8a2929;
+  --gold:#c8a84e; --gold-b:#e8c866;
+  --teal:#4a9696; --purple:#9b7ede; --blue:#5a8ee8; --green:#3eba68;
+  --t1:#eaebf0; --t2:#9ca0b4; --t3:#5e6378; --t4:#3d4158;
+  --border:#262b3a;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; padding:0; background:var(--bg-base); color:var(--t1); font-family:'Inter',system-ui,sans-serif; font-size:13px;
+  background-image:
+    radial-gradient(ellipse at 15% -5%, rgba(196,60,60,0.10), transparent 40%),
+    radial-gradient(ellipse at 85% 105%, rgba(155,126,222,0.06), transparent 50%),
+    linear-gradient(180deg, var(--bg-base) 0%, #08090d 100%);
+  min-height:100vh;
+}
+.font-d { font-family:'Cinzel',serif; }
+.font-n { font-family:'Crimson Pro',serif; }
+
+/* =========== RAIL (top) =========== */
+.rail { position:sticky; top:0; z-index:30; backdrop-filter:blur(14px); background:rgba(13,16,24,0.72); border-bottom:1px solid var(--border); padding:12px 28px; }
+.rail-inner { display:flex; align-items:center; gap:20px; max-width:1400px; margin:0 auto; }
+.rail-title { font-family:'Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:.5px; }
+.rail-title .sep { color:var(--red-b); margin:0 8px; }
+.rail-title .ses { color:var(--t3); font-weight:400; font-size:13px; letter-spacing:1.2px; text-transform:uppercase; }
+.rail-spacer { flex:1; }
+.rail-btn { background:transparent; border:1px solid var(--border); color:var(--t2); padding:6px 11px; border-radius:7px; font-size:11px; font-weight:600; cursor:pointer; letter-spacing:.3px; }
+.rail-btn:hover { border-color:var(--t4); color:var(--t1); }
+.rail-btn.primary { background:var(--red); border-color:var(--red); color:#fff; }
+
+/* =========== ROUND SCROLL (round display w/ fate wheel) =========== */
+.scroll { max-width:1100px; margin:20px auto 10px; text-align:center; padding:14px 0 8px; position:relative; }
+.scroll .l { font-family:'Crimson Pro',serif; font-style:italic; font-size:13px; color:var(--t3); letter-spacing:1px; }
+.scroll .round {
+  font-family:'Cinzel',serif; font-size:48px; font-weight:900;
+  background:linear-gradient(180deg, #f4e8b8 0%, var(--gold-b) 40%, var(--gold) 80%, #8b6f22 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  line-height:1; margin:2px 0 4px;
+  filter:drop-shadow(0 2px 6px rgba(200,168,78,0.2));
+}
+.scroll .flavor { font-family:'Crimson Pro',serif; font-style:italic; font-size:14px; color:var(--t2); }
+.scroll .flavor .hl { color:var(--red-b); font-weight:600; font-style:normal; font-family:'Cinzel',serif; letter-spacing:.5px; }
+
+/* =========== TURN RIBBON (initiative ribbon) =========== */
+.ribbon { max-width:1100px; margin:0 auto 24px; position:relative; padding:0 20px; }
+.ribbon-strip { display:flex; gap:4px; align-items:flex-end; overflow-x:auto; padding:8px 0 14px; }
+.rb {
+  flex:0 0 64px; height:72px; border-radius:9px;
+  background:var(--bg-raised); border:1px solid var(--border);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:4px; cursor:pointer; transition:.2s; position:relative;
+}
+.rb:hover { border-color:var(--t4); transform:translateY(-2px); }
+.rb.active {
+  flex:0 0 120px; height:88px;
+  background:linear-gradient(180deg, rgba(196,60,60,0.22), var(--bg-raised));
+  border:1px solid var(--red);
+  box-shadow:0 0 0 3px rgba(196,60,60,0.2), 0 10px 24px rgba(196,60,60,0.25);
+  transform:translateY(-6px);
+}
+.rb.delayed { opacity:.45; }
+.rb-port { width:26px; height:26px; border-radius:50%; background:var(--bg-higher); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; color:var(--t2); font-size:11px; border:1.5px solid var(--t4); }
+.rb.active .rb-port { width:42px; height:42px; font-size:17px; border-color:var(--red); color:var(--t1); }
+.rb-port.pc { background:rgba(74,150,150,0.18); color:var(--teal); border-color:rgba(74,150,150,0.5); }
+.rb-port.en { background:rgba(196,60,60,0.18); color:var(--red-b); border-color:rgba(196,60,60,0.5); }
+.rb-port.ca { background:rgba(155,126,222,0.18); color:var(--purple); border-color:rgba(155,126,222,0.5); }
+.rb-name { font-size:10px; color:var(--t2); font-weight:600; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+.rb.active .rb-name { font-family:'Cinzel',serif; font-size:12px; color:var(--t1); }
+.rb-init { position:absolute; top:-7px; right:-5px; background:var(--bg-higher); border:1px solid var(--t4); color:var(--t2); border-radius:10px; font-size:10px; font-family:'JetBrains Mono',monospace; font-weight:700; padding:1px 5px; }
+.rb.active .rb-init { background:var(--gold); color:#1a1410; border-color:var(--gold-b); }
+.rb-hp { width:86%; height:3px; background:var(--bg-higher); border-radius:2px; overflow:hidden; margin-top:4px; }
+.rb-hp .f { height:100%; background:var(--green); }
+.rb-hp .f.mid { background:var(--gold); }
+.rb-hp .f.low { background:var(--red-b); }
+
+/* arrow indicator under active */
+.ribbon-pointer { position:absolute; top:-10px; color:var(--gold); font-size:14px; text-shadow:0 0 8px var(--gold); }
+
+/* next-turn control under ribbon */
+.turn-ctl { display:flex; justify-content:center; gap:8px; margin-top:-4px; }
+.tc-btn {
+  background:var(--bg-raised); border:1px solid var(--border); color:var(--t2);
+  padding:6px 12px; border-radius:18px; cursor:pointer; font-size:11px; font-weight:600;
+}
+.tc-btn.next {
+  background:linear-gradient(180deg, var(--red) 0%, var(--red-d) 100%);
+  color:#fff; border-color:var(--red);
+  padding:9px 22px; font-size:13px; font-weight:700; letter-spacing:.5px;
+  box-shadow:0 4px 14px rgba(196,60,60,0.4);
+}
+.tc-btn.next:hover { background:linear-gradient(180deg, var(--red-b) 0%, var(--red) 100%); }
+
+/* =========== STAGE (active combatant hero card + lore) =========== */
+.stage { max-width:1100px; margin:0 auto; padding:0 20px 40px; display:grid; grid-template-columns: 1.1fr 1fr; gap:24px; align-items:start; }
+
+.hero-card {
+  background:linear-gradient(180deg, rgba(196,60,60,0.10) 0%, var(--bg-surface) 50%);
+  border:1px solid var(--border); border-radius:14px; padding:22px;
+  position:relative; overflow:hidden;
+}
+.hero-card::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, transparent, var(--red), var(--gold), var(--red), transparent);
+  opacity:.8;
+}
+.hero-top { display:flex; gap:16px; align-items:flex-start; margin-bottom:18px; }
+.hero-port { width:92px; height:92px; border-radius:12px; background:linear-gradient(135deg, var(--bg-higher), var(--bg-raised)); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; font-size:42px; color:var(--t1); border:3px solid var(--red); flex-shrink:0; box-shadow:inset 0 0 20px rgba(196,60,60,0.15), 0 0 24px rgba(196,60,60,0.25); }
+.hero-ttl { flex:1; min-width:0; }
+.hero-ttl .nm { font-family:'Cinzel',serif; font-weight:900; font-size:28px; line-height:1.05; letter-spacing:.5px; }
+.hero-ttl .role { font-family:'Crimson Pro',serif; font-style:italic; font-size:15px; color:var(--t2); margin-top:4px; }
+.hero-ttl .tag-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:10px; }
+.tagp { font-size:9px; padding:2px 8px; background:rgba(196,60,60,0.12); border:1px solid rgba(196,60,60,0.35); color:var(--red-b); border-radius:4px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; }
+.tagp.gold { background:rgba(200,168,78,0.12); border-color:rgba(200,168,78,0.35); color:var(--gold); }
+.tagp.purple { background:rgba(155,126,222,0.12); border-color:rgba(155,126,222,0.35); color:var(--purple); }
+.tagp.teal { background:rgba(74,150,150,0.12); border-color:rgba(74,150,150,0.35); color:var(--teal); }
+
+.hero-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
+.hs-box { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:8px 10px; text-align:center; }
+.hs-box .l { font-size:9px; color:var(--t3); letter-spacing:1px; text-transform:uppercase; font-weight:600; }
+.hs-box .v { font-family:'Cinzel',serif; font-size:19px; font-weight:700; margin-top:2px; }
+.hs-box.ac .v { color:var(--blue); } .hs-box.spd .v { color:var(--teal); } .hs-box.perc .v { color:var(--gold); }
+.hs-box.f .v { color:var(--green); } .hs-box.r .v { color:var(--blue); } .hs-box.w .v { color:var(--purple); }
+
+.hp-ribbon { background:var(--bg-raised); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:14px; display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center; }
+.hp-num { font-family:'Cinzel',serif; font-size:28px; font-weight:900; line-height:1; }
+.hp-num .slash { color:var(--t3); }
+.hp-num .mx { color:var(--t3); font-size:17px; }
+.hp-bar { height:8px; background:var(--bg-higher); border-radius:4px; overflow:hidden; margin-top:5px; }
+.hp-bar .f { height:100%; background:linear-gradient(90deg, var(--green), #5fd884); }
+.hp-ctl { display:flex; gap:4px; align-items:center; }
+.hp-ctl input { width:58px; background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:6px; border-radius:5px; text-align:center; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; }
+.hp-ctl button { padding:7px 11px; border:none; border-radius:5px; font-weight:700; cursor:pointer; font-size:14px; }
+.hp-ctl .minus { background:rgba(196,60,60,0.2); color:var(--red-b); border:1px solid rgba(196,60,60,0.45); }
+.hp-ctl .plus { background:rgba(62,186,104,0.2); color:var(--green); border:1px solid rgba(62,186,104,0.45); }
+
+.section-h { font-family:'Cinzel',serif; font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:var(--t2); padding-bottom:6px; border-bottom:1px dashed var(--border); margin:14px 0 8px; display:flex; align-items:center; gap:7px; }
+.section-h::before { content:"◆"; color:var(--gold); font-size:9px; }
+
+.strikes { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.strike {
+  background:linear-gradient(135deg, rgba(200,168,78,0.04), transparent), var(--bg-raised);
+  border:1px solid var(--border); border-radius:8px; padding:9px 11px;
+  transition:.15s; cursor:pointer;
+}
+.strike:hover { border-color:var(--gold); }
+.strike .nm { font-weight:700; font-size:12px; display:flex; justify-content:space-between; align-items:center; }
+.strike .nm .ic { color:var(--gold); }
+.strike .dmg { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--t2); margin-top:4px; }
+.strike .hits { display:flex; gap:3px; margin-top:6px; }
+.hit-pip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 6px; border-radius:3px; font-weight:700; }
+.hit-pip.one { background:rgba(62,186,104,0.15); color:var(--green); border:1px solid rgba(62,186,104,0.35); }
+.hit-pip.two { background:rgba(200,168,78,0.15); color:var(--gold); border:1px solid rgba(200,168,78,0.35); }
+.hit-pip.three { background:rgba(196,60,60,0.15); color:var(--red-b); border:1px solid rgba(196,60,60,0.35); }
+.hit-pip.dc { background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.35); }
+
+.cond-row { display:flex; flex-wrap:wrap; gap:5px; }
+.cond-chip {
+  padding:4px 10px; border-radius:14px; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  display:inline-flex; gap:6px; align-items:center;
+  background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.35);
+}
+.cond-chip.red { background:rgba(196,60,60,0.15); color:var(--red-b); border-color:rgba(196,60,60,0.35); }
+.cond-chip .x { cursor:pointer; opacity:.65; }
+.cond-chip.add { background:transparent; border:1px dashed var(--t4); color:var(--t3); cursor:pointer; }
+.cond-chip.add:hover { border-color:var(--purple); color:var(--purple); }
+
+/* =========== NARRATIVE FEED =========== */
+.feed {
+  background:linear-gradient(180deg, rgba(13,16,24,0.4) 0%, var(--bg-surface) 100%);
+  border:1px solid var(--border); border-radius:14px; padding:20px;
+  position:relative;
+}
+.feed::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, transparent, var(--purple), var(--gold), var(--purple), transparent);
+  opacity:.6;
+}
+.feed-title { font-family:'Cinzel',serif; font-size:15px; font-weight:700; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.feed-title .lc { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--red-b); letter-spacing:1.2px; font-weight:700; }
+.feed-title .lc::before { content:"●"; animation:pulse 1.5s infinite; }
+@keyframes pulse { 50% { opacity:.3; } }
+
+.feed-scroll { max-height:540px; overflow-y:auto; padding-right:4px; }
+.narr {
+  padding:9px 12px; margin-bottom:9px;
+  background:rgba(255,255,255,0.02);
+  border-left:2px solid var(--border); border-radius:0 6px 6px 0;
+  font-family:'Crimson Pro',serif; font-size:14px; line-height:1.5; color:var(--t1);
+}
+.narr.turn { border-left-color:var(--red-b); font-family:'Cinzel',serif; font-size:12px; letter-spacing:1.3px; text-transform:uppercase; color:var(--red-b); font-weight:700; padding:7px 12px; background:rgba(196,60,60,0.05); }
+.narr.dmg { border-left-color:var(--red); }
+.narr.heal { border-left-color:var(--green); }
+.narr.crit { border-left-color:var(--gold); background:linear-gradient(90deg, rgba(200,168,78,0.08), rgba(255,255,255,0.02)); font-weight:600; }
+.narr.cond { border-left-color:var(--purple); }
+.narr .t { font-family:'JetBrains Mono',monospace; color:var(--t3); font-size:10px; margin-right:6px; font-style:normal; }
+.narr .who { color:var(--red-b); font-weight:700; }
+.narr .amt { color:var(--red-b); font-weight:700; font-family:'Cinzel',serif; }
+.narr.heal .amt { color:var(--green); }
+.narr.crit .amt { color:var(--gold); }
+.narr em { color:var(--gold); }
+
+/* =========== DOCK (bottom: GM actions) =========== */
+.dock {
+  position:fixed; bottom:0; left:0; right:0;
+  background:linear-gradient(180deg, rgba(13,16,24,0.9) 0%, rgba(13,16,24,0.98) 100%);
+  backdrop-filter:blur(14px);
+  border-top:1px solid var(--border);
+  padding:10px 20px;
+  z-index:25;
+}
+.dock-inner { display:flex; gap:10px; max-width:1400px; margin:0 auto; align-items:center; }
+.dk-grp { display:flex; gap:6px; padding:3px 10px; background:var(--bg-raised); border:1px solid var(--border); border-radius:10px; }
+.dk-grp + .dk-grp { }
+.dk-lbl { font-size:9px; color:var(--t3); letter-spacing:1.3px; text-transform:uppercase; font-weight:700; align-self:center; margin-right:5px; }
+.dk-btn { padding:6px 10px; background:transparent; border:1px solid var(--border); color:var(--t1); border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.dk-btn:hover { background:var(--bg-higher); }
+.dk-btn.gold { color:var(--gold); border-color:rgba(200,168,78,0.3); }
+.dk-btn.red { color:var(--red-b); border-color:rgba(196,60,60,0.3); }
+.dk-btn.purple { color:var(--purple); border-color:rgba(155,126,222,0.3); }
+.dk-btn.primary { background:var(--red); border-color:var(--red); color:#fff; }
+.dock-sp { flex:1; }
+
+body { padding-bottom:70px; }
+
+/* =========== FLOATING dice orb =========== */
+.dice-orb {
+  position:fixed; bottom:80px; right:28px;
+  width:58px; height:58px; border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, var(--red-b), var(--red-d));
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Cinzel',serif; font-weight:700; color:#fff; font-size:16px;
+  cursor:pointer;
+  box-shadow:0 8px 24px rgba(196,60,60,0.5), inset 0 2px 6px rgba(255,255,255,0.15);
+  z-index:28;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg-base); }
+::-webkit-scrollbar-thumb { background:var(--t4); border-radius:3px; }
+
+.stamp { position:fixed; bottom:60px; left:12px; font-size:10px; color:var(--t4); font-family:monospace; letter-spacing:1px; z-index:5; }
+</style>
+</head>
+<body>
+
+<!-- RAIL -->
+<div class="rail">
+  <div class="rail-inner">
+    <div class="rail-title">
+      <span>Sepulcher of the Serpent Queen</span>
+      <span class="sep">·</span>
+      <span class="ses">Session 4</span>
+    </div>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn">Handout</button>
+    <button class="rail-btn">Save</button>
+    <button class="rail-btn">Load</button>
+    <button class="rail-btn">Clear</button>
+  </div>
+</div>
+
+<!-- ROUND SCROLL -->
+<div class="scroll">
+  <div class="l">— Round —</div>
+  <div class="round">III</div>
+  <div class="flavor">The <span class="hl">Serpent Guard</span> hisses, poisoned fangs bared. <span class="hl">Kyle</span> steels himself.</div>
+</div>
+
+<!-- TURN RIBBON -->
+<div class="ribbon">
+  <div class="ribbon-strip">
+    <div class="rb active" style="margin-left:80px;">
+      <span class="rb-init">22</span>
+      <div class="rb-port pc">K</div>
+      <div class="rb-name">Kyle</div>
+      <div class="rb-hp"><div class="f" style="width:88%"></div></div>
+    </div>
+    <div class="rb">
+      <span class="rb-init">19</span>
+      <div class="rb-port en">S</div>
+      <div class="rb-name">Guard A</div>
+      <div class="rb-hp"><div class="f mid" style="width:55%"></div></div>
+    </div>
+    <div class="rb">
+      <span class="rb-init">17</span>
+      <div class="rb-port pc">V</div>
+      <div class="rb-name">Vera</div>
+      <div class="rb-hp"><div class="f" style="width:100%"></div></div>
+    </div>
+    <div class="rb">
+      <span class="rb-init">15</span>
+      <div class="rb-port en">S</div>
+      <div class="rb-name">Guard B</div>
+      <div class="rb-hp"><div class="f low" style="width:18%"></div></div>
+    </div>
+    <div class="rb">
+      <span class="rb-init">12</span>
+      <div class="rb-port pc">T</div>
+      <div class="rb-name">Thorn</div>
+      <div class="rb-hp"><div class="f mid" style="width:62%"></div></div>
+    </div>
+    <div class="rb delayed">
+      <span class="rb-init">8</span>
+      <div class="rb-port pc">R</div>
+      <div class="rb-name">Rook*</div>
+      <div class="rb-hp"><div class="f" style="width:92%"></div></div>
+    </div>
+    <div class="rb">
+      <span class="rb-init">5</span>
+      <div class="rb-port ca">A</div>
+      <div class="rb-name">Chanter</div>
+      <div class="rb-hp"><div class="f" style="width:100%"></div></div>
+    </div>
+  </div>
+  <div class="turn-ctl">
+    <button class="tc-btn">◀ Prev</button>
+    <button class="tc-btn next">⏵  End Kyle's Turn</button>
+    <button class="tc-btn">Skip</button>
+    <button class="tc-btn">Delay</button>
+  </div>
+</div>
+
+<!-- STAGE -->
+<div class="stage">
+
+  <!-- HERO CARD -->
+  <div class="hero-card">
+    <div class="hero-top">
+      <div class="hero-port">K</div>
+      <div class="hero-ttl">
+        <div class="nm">Kyle</div>
+        <div class="role">A Druid of the Storm — Awakened Animal, sworn to the tempest.</div>
+        <div class="tag-row">
+          <span class="tagp teal">PC · Level 4</span>
+          <span class="tagp">Good</span>
+          <span class="tagp">Chaotic</span>
+          <span class="tagp gold">Focus 2/2</span>
+          <span class="tagp purple">Hero 1</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-stats">
+      <div class="hs-box ac"><div class="l">AC</div><div class="v">21</div></div>
+      <div class="hs-box spd"><div class="l">Speed</div><div class="v">25</div></div>
+      <div class="hs-box perc"><div class="l">Perc</div><div class="v">+10</div></div>
+      <div class="hs-box f"><div class="l">Fort</div><div class="v">+8</div></div>
+      <div class="hs-box r"><div class="l">Ref</div><div class="v">+9</div></div>
+      <div class="hs-box w"><div class="l">Will</div><div class="v">+12</div></div>
+    </div>
+
+    <div class="hp-ribbon">
+      <div>
+        <div style="font-size:10px; color:var(--t3); letter-spacing:1.2px; text-transform:uppercase; font-weight:700;">Hit Points</div>
+        <div class="hp-num">42<span class="slash">/</span><span class="mx">48</span></div>
+        <div class="hp-bar"><div class="f" style="width:88%"></div></div>
+      </div>
+      <div class="hp-ctl">
+        <input type="number" placeholder="amt" value="12">
+        <button class="minus">−</button>
+        <button class="plus">+</button>
+      </div>
+    </div>
+
+    <div class="section-h">Conditions</div>
+    <div class="cond-row">
+      <span class="cond-chip">Frightened 1 <span class="x">✕</span></span>
+      <span class="cond-chip red">Raising Shield <span class="x">✕</span></span>
+      <span class="cond-chip add">+ Add</span>
+    </div>
+
+    <div class="section-h">Strikes &amp; Spells</div>
+    <div class="strikes">
+      <div class="strike">
+        <div class="nm">Scimitar +1 <span class="ic">◆</span></div>
+        <div class="dmg">2d6+4 slashing · forceful, sweep</div>
+        <div class="hits">
+          <span class="hit-pip one">+14</span>
+          <span class="hit-pip two">+9</span>
+          <span class="hit-pip three">+4</span>
+        </div>
+      </div>
+      <div class="strike">
+        <div class="nm">Electric Arc <span class="ic">◆◆</span></div>
+        <div class="dmg">3d4+4 electricity · basic Ref</div>
+        <div class="hits">
+          <span class="hit-pip dc">DC 20</span>
+        </div>
+      </div>
+      <div class="strike">
+        <div class="nm">Tempest Surge <span class="ic" style="color:var(--purple);">◆</span></div>
+        <div class="dmg">3d12 elec · 1/1 focus</div>
+        <div class="hits">
+          <span class="hit-pip dc">DC 20</span>
+        </div>
+      </div>
+      <div class="strike">
+        <div class="nm">Heal (1 action) <span class="ic" style="color:var(--green);">◆</span></div>
+        <div class="dmg">1d8+8 vitality · touch</div>
+        <div class="hits">
+          <span class="hit-pip one" style="color:var(--green); background:rgba(62,186,104,0.15); border-color:rgba(62,186,104,0.35);">Cast</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEED -->
+  <div class="feed">
+    <div class="feed-title">
+      <span>Chronicle</span>
+      <span class="lc">LIVE</span>
+    </div>
+    <div class="feed-scroll">
+      <div class="narr turn"><span class="t">14:03</span>Kyle begins their turn</div>
+      <div class="narr cond"><span class="t">14:02</span><span class="who">Kyle</span> is struck with supernatural dread — <em>Frightened 1</em>.</div>
+      <div class="narr dmg"><span class="t">14:02</span>Blood trickles from the Serpent Guard — <span class="amt">3</span> bleed damage stains the floor.</div>
+      <div class="narr turn"><span class="t">14:01</span>Serpent Guard B ends turn</div>
+      <div class="narr crit"><span class="t">14:00</span><span class="who">Vera</span> cleaves with blinding speed — a <em>critical hit</em> for <span class="amt">32</span> slashing! The guard crumples but still stands.</div>
+      <div class="narr heal"><span class="t">13:59</span><span class="who">Thorn</span> calls down divine vigor — Kyle regains <span class="amt">+8</span> HP.</div>
+      <div class="narr turn"><span class="t">13:58</span>Round 3 begins</div>
+      <div class="narr dmg"><span class="t">13:57</span>A blade finds its mark — Kyle takes <span class="amt">6</span> piercing damage.</div>
+      <div class="narr cond"><span class="t">13:57</span><span class="who">Serpent Guard A</span> is caught flat-footed by Vera's feint — <em>Off-Guard</em>.</div>
+      <div class="narr turn"><span class="t">13:55</span>Round 2 begins</div>
+      <div class="narr"><span class="t">13:54</span>The chamber echoes with hissing prayers. The air grows thick, charged.</div>
+    </div>
+  </div>
+</div>
+
+<!-- DOCK -->
+<div class="dock">
+  <div class="dock-inner">
+    <div class="dk-grp">
+      <span class="dk-lbl">Add</span>
+      <button class="dk-btn">+ Monster</button>
+      <button class="dk-btn">+ Party</button>
+      <button class="dk-btn">+ Custom</button>
+    </div>
+    <div class="dk-grp">
+      <span class="dk-lbl">Init</span>
+      <button class="dk-btn">Roll NPCs</button>
+      <button class="dk-btn">Sort</button>
+    </div>
+    <div class="dk-grp">
+      <span class="dk-lbl">GM</span>
+      <button class="dk-btn gold">Recall Know.</button>
+      <button class="dk-btn gold">Secret Roll</button>
+      <button class="dk-btn purple">Handout</button>
+    </div>
+    <div class="dock-sp"></div>
+    <div class="dk-grp">
+      <span class="dk-lbl">Scene</span>
+      <button class="dk-btn">Save</button>
+      <button class="dk-btn">Load</button>
+      <button class="dk-btn red">End Combat</button>
+    </div>
+  </div>
+</div>
+
+<!-- Floating dice -->
+<div class="dice-orb">d20</div>
+
+<div class="stamp">MOCKUP C — NARRATIVE THEATER</div>
+
+</body>
+</html>

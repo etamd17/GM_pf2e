@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Encounter Mockup A — Command Bridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base:#0f1117; --bg-surface:#161921; --bg-raised:#1c2029; --bg-higher:#232736;
+  --red:#c43c3c; --red-b:#e85555; --red-d:#8a2929;
+  --gold:#c8a84e; --teal:#4a9696; --purple:#9b7ede; --blue:#5a8ee8; --green:#3eba68;
+  --t1:#eaebf0; --t2:#9ca0b4; --t3:#5e6378; --t4:#3d4158;
+  --border:#262b3a;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; padding:0; background:var(--bg-base); color:var(--t1); font-family:'Inter',system-ui,sans-serif; font-size:13px; }
+.font-d { font-family:'Cinzel',serif; }
+body { min-height:100vh; }
+
+/* ============ TOPBAR ============ */
+.topbar { display:flex; align-items:center; gap:14px; padding:10px 20px; background:var(--bg-surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:20; }
+.topbar-title { display:flex; align-items:baseline; gap:10px; }
+.topbar-title .name { font-family:'Cinzel',serif; font-size:18px; font-weight:700; letter-spacing:.5px; }
+.topbar-title .sub { font-size:11px; color:var(--t3); text-transform:uppercase; letter-spacing:1px; }
+.round-badge { padding:4px 12px; background:linear-gradient(180deg, var(--red) 0%, var(--red-d) 100%); border-radius:14px; font-weight:700; font-size:12px; letter-spacing:.5px; color:#fff; box-shadow:0 2px 8px rgba(196,60,60,0.3); }
+.xp-badge { padding:3px 9px; background:rgba(200,168,78,0.12); border:1px solid rgba(200,168,78,0.35); border-radius:10px; color:var(--gold); font-size:11px; font-weight:600; letter-spacing:.3px; }
+.spacer { flex:1; }
+.tb-btn { padding:7px 12px; background:var(--bg-raised); border:1px solid var(--border); border-radius:7px; color:var(--t1); font-size:12px; font-weight:500; cursor:pointer; transition:.15s; }
+.tb-btn:hover { background:var(--bg-higher); border-color:var(--t4); }
+.tb-btn.primary { background:var(--red); border-color:var(--red); color:#fff; font-weight:700; }
+.tb-btn.primary:hover { background:var(--red-b); }
+.tb-btn.gold { background:rgba(200,168,78,0.1); border-color:rgba(200,168,78,0.4); color:var(--gold); }
+.tb-btn.danger { color:var(--red-b); }
+.kbd { font-family:monospace; font-size:10px; padding:1px 5px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:3px; margin-left:4px; }
+
+/* ============ INITIATIVE STRIP ============ */
+.init-strip { padding:14px 20px 10px; background:var(--bg-surface); border-bottom:1px solid var(--border); overflow-x:auto; }
+.init-strip-inner { display:flex; gap:10px; align-items:stretch; }
+.init-card { flex:0 0 140px; background:var(--bg-raised); border:1px solid var(--border); border-radius:10px; padding:10px 10px 8px; position:relative; cursor:pointer; transition:.2s; }
+.init-card:hover { border-color:var(--t4); }
+.init-card.active { flex:0 0 220px; border-color:var(--red); background:linear-gradient(180deg, rgba(196,60,60,0.15) 0%, var(--bg-raised) 60%); box-shadow:0 0 0 2px rgba(196,60,60,0.25), 0 6px 20px rgba(196,60,60,0.2); }
+.init-card.delayed { opacity:.5; }
+.init-card .init-val { position:absolute; top:-8px; left:10px; background:var(--bg-higher); border:1px solid var(--t4); border-radius:6px; padding:1px 7px; font-family:monospace; font-size:11px; font-weight:700; color:var(--t2); }
+.init-card.active .init-val { background:var(--red); border-color:var(--red-b); color:#fff; }
+.init-card .kind { position:absolute; top:-8px; right:10px; padding:1px 7px; border-radius:5px; font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+.kind-pc { background:rgba(74,150,150,0.2); color:var(--teal); border:1px solid rgba(74,150,150,0.4); }
+.kind-enemy { background:rgba(196,60,60,0.2); color:var(--red-b); border:1px solid rgba(196,60,60,0.4); }
+.kind-ally { background:rgba(62,186,104,0.2); color:var(--green); border:1px solid rgba(62,186,104,0.4); }
+.init-row1 { display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:4px; }
+.port { width:28px; height:28px; border-radius:50%; background:var(--bg-higher); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; font-size:13px; color:var(--t2); border:2px solid var(--t4); flex-shrink:0; }
+.init-card.active .port { width:36px; height:36px; font-size:15px; border-color:var(--red-b); color:var(--t1); }
+.init-card .nm { font-weight:600; font-size:12px; line-height:1.1; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.init-card.active .nm { font-size:14px; font-weight:700; font-family:'Cinzel',serif; }
+.hp-bar-wrap { height:6px; background:var(--bg-higher); border-radius:3px; overflow:hidden; margin:4px 0 4px; position:relative; }
+.hp-bar { height:100%; background:linear-gradient(90deg, var(--green), var(--green)); }
+.hp-bar.mid { background:linear-gradient(90deg, var(--gold), #e0b858); }
+.hp-bar.low { background:linear-gradient(90deg, var(--red), var(--red-b)); }
+.init-meta { display:flex; justify-content:space-between; font-size:10px; color:var(--t2); font-family:monospace; }
+.init-meta .ac { color:var(--blue); }
+.cond-mini { display:flex; flex-wrap:wrap; gap:3px; margin-top:6px; }
+.cond-mini .cp { font-size:9px; padding:1px 5px; background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.3); border-radius:8px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; }
+
+/* ============ MAIN GRID ============ */
+.main { display:grid; grid-template-columns: 380px 1fr 380px; gap:14px; padding:14px 20px; }
+.col { min-width:0; }
+
+/* card */
+.card { background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px; }
+.card-h { display:flex; justify-content:space-between; align-items:center; font-family:'Cinzel',serif; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--t2); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:10px; }
+.card-h .acc { color:var(--red-b); font-weight:700; }
+
+/* ===== LEFT: active combatant stat block ===== */
+.active-header { display:flex; gap:12px; align-items:flex-start; margin-bottom:14px; }
+.active-port { width:72px; height:72px; border-radius:10px; background:linear-gradient(135deg, var(--bg-higher), var(--bg-raised)); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; font-size:32px; color:var(--t1); border:2px solid var(--red); flex-shrink:0; box-shadow:0 0 20px rgba(196,60,60,0.2); }
+.active-title { flex:1; min-width:0; }
+.active-title .nm { font-family:'Cinzel',serif; font-size:22px; font-weight:700; line-height:1.1; }
+.active-title .sub { font-size:11px; color:var(--t3); text-transform:uppercase; letter-spacing:1px; margin-top:3px; }
+.active-title .traits { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.trait { font-size:9px; padding:2px 7px; background:rgba(196,60,60,0.12); border:1px solid rgba(196,60,60,0.3); color:var(--red-b); border-radius:3px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+.trait.rare { color:var(--purple); background:rgba(155,126,222,0.12); border-color:rgba(155,126,222,0.3); }
+
+.stat-row { display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-bottom:10px; }
+.stat-box { background:var(--bg-raised); border:1px solid var(--border); border-radius:7px; padding:7px 8px; text-align:center; }
+.stat-box .l { font-size:9px; color:var(--t3); text-transform:uppercase; letter-spacing:.8px; font-weight:600; }
+.stat-box .v { font-family:'Cinzel',serif; font-size:17px; font-weight:700; margin-top:1px; }
+.stat-box.ac .v { color:var(--blue); }
+.stat-box.perc .v { color:var(--gold); }
+.stat-box.spd .v { color:var(--teal); }
+.stat-box.fort .v { color:var(--green); }
+.stat-box.ref .v { color:var(--blue); }
+.stat-box.will .v { color:var(--purple); }
+
+.hp-big { background:var(--bg-raised); border:1px solid var(--border); border-radius:9px; padding:10px 12px; margin-bottom:12px; }
+.hp-big .hp-title { font-size:10px; letter-spacing:1px; color:var(--t3); text-transform:uppercase; font-weight:600; margin-bottom:5px; display:flex; justify-content:space-between; }
+.hp-big .hp-num { font-family:'Cinzel',serif; font-size:26px; font-weight:700; }
+.hp-big .hp-num .max { color:var(--t3); font-size:16px; }
+.hp-big .hp-gbar { height:10px; background:var(--bg-higher); border-radius:5px; overflow:hidden; margin-top:6px; }
+.hp-big .hp-gfill { height:100%; background:linear-gradient(90deg, var(--green), #5fd884); }
+
+.strike-list { display:flex; flex-direction:column; gap:7px; }
+.strike { background:var(--bg-raised); border:1px solid var(--border); border-radius:8px; padding:9px 11px; }
+.strike-top { display:flex; justify-content:space-between; align-items:center; }
+.strike-nm { font-weight:600; font-size:13px; }
+.strike-hit { display:flex; gap:4px; }
+.map-pip { font-family:monospace; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:700; cursor:pointer; }
+.map-1 { background:rgba(62,186,104,0.15); color:var(--green); border:1px solid rgba(62,186,104,0.3); }
+.map-2 { background:rgba(200,168,78,0.15); color:var(--gold); border:1px solid rgba(200,168,78,0.3); }
+.map-3 { background:rgba(196,60,60,0.15); color:var(--red-b); border:1px solid rgba(196,60,60,0.3); }
+.strike-dmg { margin-top:4px; font-family:monospace; font-size:11px; color:var(--t2); }
+.strike-traits { display:flex; gap:3px; margin-top:4px; }
+.strike-traits .tp { font-size:8px; padding:1px 5px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:3px; color:var(--t3); text-transform:uppercase; letter-spacing:.3px; }
+
+/* ===== CENTER: turn action console ===== */
+.turn-banner { text-align:center; padding:14px 0 12px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+.turn-banner .label { font-size:10px; color:var(--t3); letter-spacing:1.5px; text-transform:uppercase; }
+.turn-banner .who { font-family:'Cinzel',serif; font-size:26px; font-weight:700; margin:2px 0 8px; color:var(--red-b); }
+.turn-banner .progress { display:flex; justify-content:center; gap:8px; align-items:center; }
+.turn-prev, .turn-next { padding:8px 18px; border-radius:7px; font-weight:700; border:none; cursor:pointer; font-size:13px; }
+.turn-prev { background:var(--bg-raised); color:var(--t2); border:1px solid var(--border); }
+.turn-next { background:var(--red); color:#fff; box-shadow:0 2px 10px rgba(196,60,60,0.35); }
+.turn-next:hover { background:var(--red-b); }
+.turn-progress-bar { flex:1; height:4px; background:var(--bg-raised); border-radius:2px; overflow:hidden; max-width:200px; }
+.turn-progress-fill { height:100%; background:linear-gradient(90deg, var(--red), var(--red-b)); width:40%; }
+
+.console-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.console-section { background:var(--bg-raised); border:1px solid var(--border); border-radius:9px; padding:11px 12px; }
+.cs-title { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--t3); font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+.cs-title .ico { font-size:12px; }
+
+/* damage applicator */
+.dmg-row { display:flex; gap:6px; margin-bottom:7px; }
+.dmg-row input, .dmg-row select { flex:1; background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:6px 8px; border-radius:5px; font-size:12px; }
+.dmg-btns { display:flex; gap:5px; }
+.dmg-btns button { flex:1; padding:7px 0; border-radius:5px; font-weight:700; font-size:12px; border:none; cursor:pointer; }
+.dmg-btns .heal { background:rgba(62,186,104,0.15); color:var(--green); border:1px solid rgba(62,186,104,0.4); }
+.dmg-btns .harm { background:rgba(196,60,60,0.15); color:var(--red-b); border:1px solid rgba(196,60,60,0.4); }
+
+.cond-row { display:flex; gap:5px; }
+.cond-row select { flex:1; background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:6px 8px; border-radius:5px; font-size:12px; }
+.cond-row button { padding:6px 10px; background:var(--purple); color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:700; }
+.cond-active { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+.cond-active .cp { font-size:10px; padding:3px 9px 3px 10px; border-radius:10px; background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.3); display:inline-flex; gap:6px; align-items:center; font-weight:600; }
+.cond-active .cp .x { cursor:pointer; opacity:.6; }
+.cond-active .cp .x:hover { opacity:1; color:var(--red-b); }
+
+.qroll-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:5px; }
+.qr-btn { background:var(--bg-higher); border:1px solid var(--border); border-radius:6px; padding:8px 6px; text-align:center; color:var(--t1); cursor:pointer; font-size:11px; font-weight:600; }
+.qr-btn:hover { border-color:var(--gold); background:rgba(200,168,78,0.08); }
+.qr-btn .mod { display:block; font-family:monospace; font-size:13px; color:var(--gold); margin-top:2px; }
+
+/* secret roll */
+.secret-roll { grid-column:1 / -1; background:linear-gradient(135deg, rgba(200,168,78,0.08), transparent), var(--bg-raised); border:1px solid rgba(200,168,78,0.3); border-radius:9px; padding:11px 12px; }
+.sr-inline { display:grid; grid-template-columns: 60px 60px 60px 1fr auto; gap:6px; align-items:center; }
+.sr-inline input { background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:6px 8px; border-radius:5px; font-size:12px; }
+.sr-inline .sr-go { background:var(--gold); color:#1a1410; border:none; padding:7px 14px; border-radius:5px; font-weight:700; cursor:pointer; }
+
+/* ===== RIGHT: combat log ===== */
+.log-panel { position:sticky; top:80px; height:calc(100vh - 100px); display:flex; flex-direction:column; }
+.log-filters { display:flex; gap:5px; margin-bottom:10px; flex-wrap:wrap; }
+.log-filt { font-size:10px; padding:3px 9px; background:var(--bg-raised); border:1px solid var(--border); border-radius:10px; color:var(--t2); cursor:pointer; font-weight:600; letter-spacing:.3px; text-transform:uppercase; }
+.log-filt.on { background:var(--red); color:#fff; border-color:var(--red); }
+.log-feed { flex:1; overflow-y:auto; padding-right:4px; }
+.log-entry { padding:8px 10px; border-left:2px solid var(--border); margin-bottom:7px; background:var(--bg-raised); border-radius:0 6px 6px 0; font-size:11px; line-height:1.4; }
+.log-entry .t { font-family:monospace; color:var(--t3); font-size:10px; margin-right:6px; }
+.log-entry.turn { border-left-color:var(--red-b); }
+.log-entry.damage { border-left-color:var(--red); }
+.log-entry.heal { border-left-color:var(--green); }
+.log-entry.crit { border-left-color:var(--gold); background:linear-gradient(90deg, rgba(200,168,78,0.1), var(--bg-raised)); }
+.log-entry.cond { border-left-color:var(--purple); }
+.log-entry .who { color:var(--red-b); font-weight:700; }
+.log-entry .amt { color:var(--red-b); font-weight:700; }
+.log-entry.heal .amt { color:var(--green); }
+.log-entry.crit .amt { color:var(--gold); font-weight:700; }
+
+.handout-mini { margin-top:10px; background:var(--bg-raised); border:1px dashed var(--border); border-radius:8px; padding:10px; }
+.handout-mini .ht { font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--t3); font-weight:700; margin-bottom:6px; }
+.handout-mini button { width:100%; padding:7px; background:var(--bg-higher); border:1px solid var(--border); border-radius:5px; color:var(--t1); font-weight:600; cursor:pointer; font-size:12px; }
+.handout-mini button:hover { border-color:var(--gold); color:var(--gold); }
+
+/* scrollbar */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg-base); }
+::-webkit-scrollbar-thumb { background:var(--t4); border-radius:3px; }
+
+/* floating dice launcher */
+.dice-fab { position:fixed; bottom:20px; right:20px; width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, var(--red), var(--red-d)); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; color:#fff; cursor:pointer; box-shadow:0 6px 18px rgba(196,60,60,0.4); font-size:18px; z-index:30; }
+
+/* label notes */
+.stamp { position:fixed; bottom:10px; left:12px; font-size:10px; color:var(--t4); font-family:monospace; letter-spacing:1px; z-index:5; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-title">
+    <span class="name">Sepulcher of the Serpent Queen</span>
+    <span class="sub">Session 4</span>
+  </div>
+  <span class="round-badge">Round 3</span>
+  <span class="xp-badge">PL 4 • SEVERE • 120 XP</span>
+  <div class="spacer"></div>
+  <button class="tb-btn">+ Monster</button>
+  <button class="tb-btn">+ Party</button>
+  <button class="tb-btn">Roll Init</button>
+  <button class="tb-btn gold">Recall Know.</button>
+  <button class="tb-btn gold">Secret Roll</button>
+  <button class="tb-btn">Handout</button>
+  <button class="tb-btn">Save</button>
+  <button class="tb-btn">Load</button>
+  <button class="tb-btn danger">Clear</button>
+</div>
+
+<!-- INITIATIVE STRIP -->
+<div class="init-strip">
+  <div class="init-strip-inner">
+
+    <!-- Active combatant -->
+    <div class="init-card active">
+      <span class="init-val">22</span>
+      <span class="kind kind-pc">PC</span>
+      <div class="init-row1">
+        <div class="port">K</div>
+        <div>
+          <div class="nm">Kyle</div>
+          <div style="font-size:10px; color:var(--t3); text-transform:uppercase; letter-spacing:.5px;">Druid 4</div>
+        </div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar" style="width:88%"></div></div>
+      <div class="init-meta"><span class="ac">AC 21</span><span>HP 42/48</span></div>
+      <div class="cond-mini"><span class="cp">Frightened 1</span></div>
+    </div>
+
+    <div class="init-card">
+      <span class="init-val">19</span>
+      <span class="kind kind-enemy">Enemy</span>
+      <div class="init-row1">
+        <div class="port" style="background:rgba(196,60,60,0.15); color:var(--red-b); border-color:rgba(196,60,60,0.4);">S</div>
+        <div class="nm">Serpent Guard A</div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar mid" style="width:54%"></div></div>
+      <div class="init-meta"><span class="ac">AC 20</span><span>HP 22/40</span></div>
+    </div>
+
+    <div class="init-card">
+      <span class="init-val">17</span>
+      <span class="kind kind-pc">PC</span>
+      <div class="init-row1">
+        <div class="port">V</div>
+        <div class="nm">Vera</div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar" style="width:100%"></div></div>
+      <div class="init-meta"><span class="ac">AC 22</span><span>HP 58/58</span></div>
+    </div>
+
+    <div class="init-card">
+      <span class="init-val">15</span>
+      <span class="kind kind-enemy">Enemy</span>
+      <div class="init-row1">
+        <div class="port" style="background:rgba(196,60,60,0.15); color:var(--red-b); border-color:rgba(196,60,60,0.4);">S</div>
+        <div class="nm">Serpent Guard B</div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar low" style="width:18%"></div></div>
+      <div class="init-meta"><span class="ac">AC 20</span><span>HP 7/40</span></div>
+      <div class="cond-mini"><span class="cp" style="background:rgba(196,60,60,0.15); color:var(--red-b); border-color:rgba(196,60,60,0.3);">Bleed 1d4</span></div>
+    </div>
+
+    <div class="init-card">
+      <span class="init-val">12</span>
+      <span class="kind kind-pc">PC</span>
+      <div class="init-row1">
+        <div class="port">T</div>
+        <div class="nm">Thorn</div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar mid" style="width:62%"></div></div>
+      <div class="init-meta"><span class="ac">AC 20</span><span>HP 31/50</span></div>
+    </div>
+
+    <div class="init-card delayed">
+      <span class="init-val">8</span>
+      <span class="kind kind-pc">PC</span>
+      <div class="init-row1">
+        <div class="port">R</div>
+        <div class="nm">Rook</div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar" style="width:92%"></div></div>
+      <div class="init-meta"><span class="ac">AC 19</span><span style="color:var(--gold);">DELAYING</span></div>
+    </div>
+
+    <div class="init-card">
+      <span class="init-val">5</span>
+      <span class="kind kind-enemy">Enemy</span>
+      <div class="init-row1">
+        <div class="port" style="background:rgba(155,126,222,0.15); color:var(--purple); border-color:rgba(155,126,222,0.4);">A</div>
+        <div class="nm">Aapoph Chanter</div>
+      </div>
+      <div class="hp-bar-wrap"><div class="hp-bar" style="width:100%"></div></div>
+      <div class="init-meta"><span class="ac">AC 22</span><span>HP 65/65</span></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- LEFT: active combatant stat block -->
+  <div class="col">
+    <div class="card">
+      <div class="active-header">
+        <div class="active-port">K</div>
+        <div class="active-title">
+          <div class="nm">Kyle</div>
+          <div class="sub">Druid 4 • Awakened Animal • Storm Order</div>
+          <div class="traits">
+            <span class="trait">Good</span>
+            <span class="trait">Chaotic</span>
+            <span class="trait">Beast</span>
+            <span class="trait rare">Uncommon</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-box ac"><div class="l">AC</div><div class="v">21</div></div>
+        <div class="stat-box perc"><div class="l">Perception</div><div class="v">+10</div></div>
+        <div class="stat-box spd"><div class="l">Speed</div><div class="v">25</div></div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-box fort"><div class="l">Fort</div><div class="v">+8</div></div>
+        <div class="stat-box ref"><div class="l">Reflex</div><div class="v">+9</div></div>
+        <div class="stat-box will"><div class="l">Will</div><div class="v">+12</div></div>
+      </div>
+
+      <div class="hp-big">
+        <div class="hp-title"><span>Hit Points</span><span style="color:var(--green);">-6 HP</span></div>
+        <div class="hp-num">42<span class="max">/48</span></div>
+        <div class="hp-gbar"><div class="hp-gfill" style="width:88%"></div></div>
+      </div>
+
+      <div class="card-h" style="margin-top:6px; padding-bottom:6px;">Strikes <span class="acc">4 available</span></div>
+      <div class="strike-list">
+        <div class="strike">
+          <div class="strike-top">
+            <span class="strike-nm">Scimitar (+1 striking)</span>
+            <span class="strike-hit">
+              <span class="map-pip map-1">+14</span>
+              <span class="map-pip map-2">+9</span>
+              <span class="map-pip map-3">+4</span>
+            </span>
+          </div>
+          <div class="strike-dmg">2d6+4 slashing • forceful, sweep</div>
+          <div class="strike-traits"><span class="tp">Melee</span><span class="tp">Agile</span></div>
+        </div>
+        <div class="strike">
+          <div class="strike-top">
+            <span class="strike-nm">Electric Arc (focus)</span>
+            <span class="strike-hit">
+              <span class="map-pip" style="background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.3);">DC 20</span>
+            </span>
+          </div>
+          <div class="strike-dmg">3d4+4 electricity • basic Ref save</div>
+          <div class="strike-traits"><span class="tp">Cantrip</span><span class="tp">Primal</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: turn action console -->
+  <div class="col">
+    <div class="card">
+      <div class="turn-banner">
+        <div class="label">Active Turn</div>
+        <div class="who">KYLE</div>
+        <div class="progress">
+          <button class="turn-prev">◀ Prev</button>
+          <div class="turn-progress-bar"><div class="turn-progress-fill"></div></div>
+          <button class="turn-next">Next Turn ▶ <span class="kbd">N</span></button>
+        </div>
+      </div>
+
+      <div class="console-grid">
+        <!-- DAMAGE APPLICATOR -->
+        <div class="console-section">
+          <div class="cs-title">Apply Damage / Heal <span class="ico">🗡</span></div>
+          <div class="dmg-row">
+            <input type="number" placeholder="Amount" value="12">
+            <select>
+              <option>slashing</option>
+              <option>piercing</option>
+              <option>fire</option>
+              <option>cold</option>
+              <option>electricity</option>
+              <option>void</option>
+            </select>
+          </div>
+          <div class="dmg-btns">
+            <button class="harm">− Damage</button>
+            <button class="heal">+ Heal</button>
+          </div>
+        </div>
+
+        <!-- CONDITIONS -->
+        <div class="console-section">
+          <div class="cs-title">Conditions <span class="ico">⚡</span></div>
+          <div class="cond-row">
+            <select>
+              <option>frightened</option><option>sickened</option><option>clumsy</option><option>drained</option><option>stunned</option><option>slowed</option><option>off-guard</option>
+            </select>
+            <button>+</button>
+          </div>
+          <div class="cond-active">
+            <span class="cp">Frightened 1 <span class="x">✕</span></span>
+            <span class="cp">Raising Shield <span class="x">✕</span></span>
+          </div>
+        </div>
+
+        <!-- QUICK ROLLS -->
+        <div class="console-section" style="grid-column: 1 / -1;">
+          <div class="cs-title">Quick Rolls for Kyle <span class="ico">🎲</span></div>
+          <div class="qroll-grid">
+            <div class="qr-btn">Perception <span class="mod">+10</span></div>
+            <div class="qr-btn">Fort <span class="mod">+8</span></div>
+            <div class="qr-btn">Reflex <span class="mod">+9</span></div>
+            <div class="qr-btn">Will <span class="mod">+12</span></div>
+            <div class="qr-btn">Athletics <span class="mod">+6</span></div>
+            <div class="qr-btn">Nature <span class="mod">+13</span></div>
+          </div>
+        </div>
+
+        <!-- SECRET ROLL -->
+        <div class="secret-roll">
+          <div class="cs-title" style="color:var(--gold);">Secret GM Roll <span class="ico">🎲</span></div>
+          <div class="sr-inline">
+            <input type="number" value="1" placeholder="#">
+            <input type="number" value="20" placeholder="d">
+            <input type="number" value="0" placeholder="+">
+            <input type="text" placeholder="Label (Perception, Stealth, …)" value="Kyle Stealth">
+            <button class="sr-go">Roll</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: combat log -->
+  <div class="col">
+    <div class="log-panel">
+      <div class="card-h">Combat Log <span class="acc">LIVE</span></div>
+      <div class="log-filters">
+        <span class="log-filt on">All</span>
+        <span class="log-filt">Turns</span>
+        <span class="log-filt">Damage</span>
+        <span class="log-filt">Crits</span>
+        <span class="log-filt">Conditions</span>
+      </div>
+      <div class="log-feed">
+        <div class="log-entry turn"><span class="t">14:03</span><span class="who">Kyle</span>'s turn begins.</div>
+        <div class="log-entry cond"><span class="t">14:02</span><span class="who">Kyle</span> becomes Frightened 1 from Aapoph Chanter's Fear.</div>
+        <div class="log-entry"><span class="t">14:02</span>Serpent Guard B takes <span class="amt">1d4</span> persistent bleed: <b>3</b>.</div>
+        <div class="log-entry turn"><span class="t">14:01</span><span class="who">Serpent Guard B</span>'s turn ends.</div>
+        <div class="log-entry damage"><span class="t">14:01</span>Vera strikes Serpent Guard B: <span class="amt">18</span> slashing.</div>
+        <div class="log-entry crit"><span class="t">14:00</span><span class="who">Vera</span> critically hits! <span class="amt">32</span> damage to Serpent Guard B.</div>
+        <div class="log-entry heal"><span class="t">13:59</span>Thorn heals Kyle for <span class="amt">+8</span> HP.</div>
+        <div class="log-entry turn"><span class="t">13:58</span>Round 3 begins.</div>
+        <div class="log-entry"><span class="t">13:58</span>Initiative order rolled.</div>
+        <div class="log-entry damage"><span class="t">13:57</span>Serpent Guard A strikes Kyle: <span class="amt">6</span> piercing.</div>
+        <div class="log-entry cond"><span class="t">13:57</span><span class="who">Serpent Guard A</span> becomes Off-Guard.</div>
+      </div>
+
+      <div class="handout-mini">
+        <div class="ht">Send to Players</div>
+        <button>📜 Current Room Map</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- floating dice -->
+<div class="dice-fab">d20</div>
+
+<div class="stamp">MOCKUP A — COMMAND BRIDGE</div>
+
+</body>
+</html>

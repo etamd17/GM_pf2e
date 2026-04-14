@@ -25,48 +25,71 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
 
         :root {
-            --bg-base: #0d0d12;
-            --bg-surface: #191920;
-            --bg-raised: #24242e;
-            --bg-hover: #2e2e3c;
-            --bg-input: #111118;
+            /* === Design C palette === */
+            --bg-base: #0f1117;
+            --bg-surface: #161921;
+            --bg-raised: #1c2029;
+            --bg-overlay: #242835;
+            --bg-hover: #2a2f40;
+            --bg-input: #0b0d13;
 
-            --border-subtle: rgba(255,255,255,0.08);
-            --border-default: rgba(255,255,255,0.12);
-            --border-strong: rgba(255,255,255,0.18);
+            --border: rgba(255,255,255,0.06);
+            --border-subtle: rgba(255,255,255,0.06);
+            --border-default: rgba(255,255,255,0.10);
+            --border-s: rgba(255,255,255,0.10);
+            --border-strong: rgba(255,255,255,0.16);
 
-            --text-primary: #ededf4;
-            --text-secondary: #b8b8cc;
-            --text-muted: #6b6b8a;
-            --text-faint: #42425a;
+            --red: #c43c3c;
+            --red-b: #e85555;
+            --red-d: #7c2222;
+            --red-glow: rgba(196,60,60,0.12);
+            --gold: #c8a84e;
+            --gold-glow: rgba(200,168,78,0.12);
+            --teal: #4a9696;
+            --teal-glow: rgba(74,150,150,0.10);
+            --purple: #9b7ede;
+            --blue: #5a8ee8;
+            --green: #3eba68;
+            --green-glow: rgba(62,186,104,0.10);
 
-            --accent-red: #c53131;
-            --accent-gold: #b8860b;
-            --accent-gold-light: #d4a244;
+            --t1: #eaebf0;
+            --t2: #9ca0b4;
+            --t3: #5e6378;
+            --t4: #3d4158;
 
-            --color-hp: #22c55e;
+            /* === Legacy token aliases (JS + inline styles reference these) === */
+            --text-primary: var(--t1);
+            --text-secondary: var(--t2);
+            --text-muted: var(--t3);
+            --text-faint: var(--t4);
+
+            --accent-red: var(--red);
+            --accent-gold: var(--gold);
+            --accent-gold-light: #dcb966;
+            --accent-gold-bright: #dcb966;
+            --accent-teal: var(--blue);
+            --accent-teal-dim: rgba(90,142,232,0.15);
+
+            --color-hp: var(--green);
             --color-hp-mid: #eab308;
             --color-hp-low: #ef4444;
-            --color-ac: #60a5fa;
-            --color-fort: #4ade80;
-            --color-ref: #60a5fa;
-            --color-will: #c084fc;
-            --color-spell: #a78bfa;
+            --color-ac: var(--blue);
+            --color-fort: var(--green);
+            --color-ref: var(--blue);
+            --color-will: var(--purple);
+            --color-spell: var(--purple);
             --color-danger: #f87171;
-            --color-health: #4ADE80;
+            --color-health: var(--green);
 
-            /* Legacy aliases for inline styles that reference old var names */
-            --surface-primary: #191920;
-            --surface-raised: #24242e;
-            --surface-overlay: #282838;
-            --surface-sunken: #12121a;
-            --surface-base: #0d0d12;
-            --accent-teal: #60a5fa;
-            --accent-teal-dim: rgba(96,165,250,0.15);
-            --accent-gold-bright: #d4a244;
+            --surface-primary: var(--bg-surface);
+            --surface-raised: var(--bg-raised);
+            --surface-overlay: var(--bg-overlay);
+            --surface-sunken: var(--bg-base);
+            --surface-base: var(--bg-base);
+
             --space-xs: 4px;
             --space-sm: 8px;
             --space-md: 16px;
@@ -87,18 +110,19 @@
         }
 
         * { box-sizing: border-box; }
-        body { font-family: var(--font-ui); background: #0d0d12; color: var(--text-primary); }
+        body { font-family: var(--font-ui); background: var(--bg-base); color: var(--text-primary); }
 
         /* Typography */
         .font-display { font-family: var(--font-display); }
         .font-header { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.02em; }
         .font-body { font-family: var(--font-ui); }
+        .font-d { font-family: var(--font-display); }
 
         /* Scrollbars */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
@@ -110,98 +134,133 @@
 
         /* Design System Components (legacy compat) */
         .ds-surface { background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
-        .ds-surface-sunken { background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
-        .ds-label { font-family: var(--font-ui); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+        .ds-surface-sunken { background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+        .ds-label { font-family: var(--font-ui); font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--t3); }
         .ds-value { font-family: var(--font-ui); font-weight: 700; color: var(--text-primary); }
         .ds-divider { border: none; border-top: 1px solid var(--border-subtle); margin: 16px 0; }
 
-        /* === HEADER === */
+        /* === HEADER (Design C topbar) === */
         .char-header {
             background: var(--bg-surface);
-            border-bottom: 1px solid var(--border-default);
+            border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
             z-index: 50;
         }
         .char-name {
             font-family: var(--font-display);
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
-            color: var(--text-primary);
+            color: #fff;
             line-height: 1.1;
         }
         .char-subtitle {
             font-family: var(--font-ui);
-            font-size: 13px;
-            color: var(--text-secondary);
+            font-size: 12px;
+            color: var(--t3);
             margin-top: 2px;
         }
+        .char-level-badge {
+            display: inline-flex; align-items: center;
+            font-family: var(--font-ui);
+            font-size: 10px; font-weight: 700;
+            padding: 3px 10px; border-radius: 99px;
+            background: var(--red-glow); color: var(--red-b);
+            border: 1px solid rgba(196,60,60,0.25);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin-left: 8px;
+        }
 
-        /* === STAT BLOCK (ability scores) === */
+        /* === Ability row (Design C boxed cards with colored accent) === */
+        .ability-row-wrap {
+            display: flex; justify-content: center; gap: 10px;
+            padding: 12px 16px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
         .ability-block {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 8px 6px;
-            min-width: 52px;
+            display: flex; flex-direction: column; align-items: center;
+            width: 84px; min-width: 72px;
+            padding: 10px 6px 8px;
             background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
+            border: 1px solid var(--border-s);
+            border-radius: 8px;
+            position: relative;
             cursor: pointer;
             transition: border-color 0.15s, background 0.15s;
             user-select: none;
         }
-        .ability-block:hover { border-color: var(--accent-gold); background: var(--bg-hover); }
-        .ability-block .mod { font-family: var(--font-ui); font-size: 20px; font-weight: 700; color: var(--text-primary); line-height: 1; }
-        .ability-block .label { font-family: var(--font-ui); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-top: 2px; }
+        .ability-block::before {
+            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 24px; height: 2px; border-radius: 0 0 2px 2px;
+            background: var(--t4);
+        }
+        .ability-block[data-ab="str"]::before { background: var(--red); }
+        .ability-block[data-ab="dex"]::before { background: var(--blue); }
+        .ability-block[data-ab="con"]::before { background: var(--green); }
+        .ability-block[data-ab="int"]::before { background: var(--purple); }
+        .ability-block[data-ab="wis"]::before { background: var(--gold); }
+        .ability-block[data-ab="cha"]::before { background: var(--red-b); }
+        .ability-block:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
+        .ability-block .mod {
+            font-family: var(--font-ui);
+            font-size: 24px; font-weight: 800;
+            color: #fff; line-height: 1;
+        }
+        .ability-block .label {
+            font-family: var(--font-ui);
+            font-size: 9px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--t3);
+            margin-top: 4px;
+        }
 
-        /* === Stat Box (legacy compat for ability/save/AC boxes) === */
+        /* === Stat Box (saves/PER etc. legacy) === */
         .stat-box {
             display: flex; flex-direction: column; align-items: center; gap: 2px;
-            padding: 8px 6px;
+            padding: 8px 10px;
             background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid var(--border-s);
             border-radius: var(--radius-md);
-            min-width: 52px;
+            min-width: 56px;
             transition: border-color 0.15s, background 0.15s;
             cursor: pointer;
         }
-        .stat-box:hover { border-color: var(--accent-gold); background: var(--bg-hover); }
-        .stat-box .stat-value { font-family: var(--font-ui); font-size: 20px; font-weight: 700; color: var(--text-primary); line-height: 1; }
-        .stat-box .stat-label { font-family: var(--font-ui); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+        .stat-box:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
+        .stat-box .stat-value { font-family: var(--font-ui); font-size: 20px; font-weight: 800; color: #fff; line-height: 1; }
+        .stat-box .stat-label { font-family: var(--font-ui); font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t3); margin-top: 2px; }
 
         /* === DEFENSE STAT === */
         .defense-stat {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            display: flex; flex-direction: column; align-items: center;
             padding: 6px 10px;
             background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid var(--border-s);
             border-radius: var(--radius-md);
             cursor: pointer;
             transition: border-color 0.15s;
             min-width: 48px;
         }
         .defense-stat:hover { border-color: rgba(255,255,255,0.2); }
-        .defense-stat .val { font-size: 18px; font-weight: 700; line-height: 1; }
-        .defense-stat .lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-top: 2px; }
+        .defense-stat .val { font-size: 18px; font-weight: 800; line-height: 1; }
+        .defense-stat .lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-top: 2px; }
 
         /* === HP BAR === */
         .hp-section {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
+            gap: 10px;
+            padding: 8px 14px;
             background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid var(--border-s);
             border-radius: var(--radius-md);
         }
-        .hp-current { font-size: 24px; font-weight: 700; line-height: 1; }
-        .hp-max { font-size: 13px; color: var(--text-muted); }
+        .hp-current { font-size: 24px; font-weight: 800; line-height: 1; color: var(--green); }
+        .hp-max { font-size: 13px; color: var(--t3); }
         .hp-input {
             width: 60px;
-            background: var(--bg-input);
+            background: var(--bg-base);
             border: 1px solid var(--border-default);
             border-radius: var(--radius-sm);
             color: var(--text-primary);
@@ -212,31 +271,48 @@
             font-family: var(--font-ui);
             outline: none;
         }
-        .hp-input:focus { border-color: var(--accent-gold); }
-        .hp-input::placeholder { color: var(--text-faint); }
+        .hp-input:focus { border-color: var(--red-b); }
+        .hp-input::placeholder { color: var(--t4); }
         .hp-btn {
             padding: 4px 12px;
             border-radius: var(--radius-sm);
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             border: 1px solid transparent;
             cursor: pointer;
             transition: all 0.15s;
         }
-        .hp-btn.damage { background: rgba(239,68,68,0.15); color: #f87171; border-color: rgba(239,68,68,0.25); }
-        .hp-btn.damage:hover { background: rgba(239,68,68,0.25); }
-        .hp-btn.heal { background: rgba(34,197,94,0.15); color: #4ade80; border-color: rgba(34,197,94,0.25); }
-        .hp-btn.heal:hover { background: rgba(34,197,94,0.25); }
+        .hp-btn.damage { background: var(--red-glow); color: var(--red-b); border-color: rgba(196,60,60,0.2); }
+        .hp-btn.damage:hover { background: rgba(196,60,60,0.2); }
+        .hp-btn.heal { background: var(--green-glow); color: var(--green); border-color: rgba(62,186,104,0.2); }
+        .hp-btn.heal:hover { background: rgba(62,186,104,0.2); }
 
         /* === HP Gauge === */
-        .hp-gauge { position:relative; height:8px; border-radius:4px; background:var(--bg-input); overflow:hidden; }
-        .hp-gauge-fill { height:100%; border-radius:4px; transition:width 0.4s ease, background 0.4s ease; }
-        .hp-gauge-fill.high { background:linear-gradient(90deg,#22C55E,#4ADE80); }
+        .hp-gauge, .hp-gauge-bar { position:relative; height:6px; border-radius:3px; background:var(--bg-base); overflow:hidden; }
+        .hp-gauge-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
+        .hp-gauge-fill.high { background:linear-gradient(90deg,#22C55E,var(--green)); }
         .hp-gauge-fill.mid { background:linear-gradient(90deg,#D97706,#FBBF24); }
         .hp-gauge-fill.low { background:linear-gradient(90deg,#DC2626,#F87171); }
         .hp-gauge-fill.dead { background:#7F1D1D; }
+
+        /* === Stats strip (Design C horizontal cards) === */
+        .stats-strip {
+            display: flex; align-items: stretch;
+            background: var(--bg-surface);
+            border-bottom: 2px solid var(--red-d);
+            flex-wrap: wrap;
+        }
+        .ss-block {
+            flex: 1 1 0; min-width: 96px;
+            text-align: center; padding: 10px 8px;
+            border-right: 1px solid var(--border);
+        }
+        .ss-block:last-child { border-right: none; }
+        .ss-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--t3); margin-bottom: 3px; }
+        .ss-val { font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
+        .ss-sub { font-size: 10px; color: var(--t3); margin-top: 2px; }
 
         /* === CONDITION BAR === */
         .condition-bar {
@@ -250,12 +326,12 @@
             gap: 4px;
             padding: 3px 10px;
             border-radius: 999px;
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.25);
+            background: rgba(239,68,68,0.08);
+            border: 1px solid rgba(239,68,68,0.18);
             color: #fca5a5;
         }
         .condition-pill button {
@@ -273,8 +349,8 @@
         .condition-toggle {
             padding: 3px 10px;
             border-radius: 999px;
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             border: 1px solid var(--border-subtle);
@@ -284,7 +360,7 @@
             transition: all 0.15s;
         }
         .condition-toggle.active {
-            background: rgba(239,68,68,0.1);
+            background: rgba(239,68,68,0.08);
             border-color: rgba(239,68,68,0.25);
             color: #fca5a5;
         }
@@ -293,65 +369,127 @@
         .cond-strip { display:none; padding:0; }
         .cond-strip.active { display:block; padding:8px 0; }
 
-        /* === TAB BAR === */
+        /* === TAB BAR (Design C) === */
         .tab-bar {
             display: flex;
             gap: 0;
-            border-bottom: 2px solid var(--border-default);
+            border-bottom: 2px solid var(--border);
             background: var(--bg-surface);
         }
         .tab-btn {
-            padding: 10px 20px;
+            padding: 10px 18px;
             font-family: var(--font-ui);
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--t3);
             background: transparent;
             border: none;
             border-bottom: 2px solid transparent;
             margin-bottom: -2px;
             cursor: pointer;
             transition: color 0.15s, border-color 0.15s;
-            text-transform: none;
-            letter-spacing: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
         }
-        .tab-btn.active { color: var(--accent-red); border-bottom-color: var(--accent-red); }
-        .tab-btn:not(.active):hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--red-b); border-bottom-color: var(--red-b); }
+        .tab-btn:not(.active):hover { color: var(--t2); }
         .tab-content { display: none; animation: fadeIn 0.2s ease-out; }
         .tab-content.active { display: block; }
+
+        /* Filter pills (Design C) */
+        .flt { display: flex; gap: 5px; margin-bottom: 14px; flex-wrap: wrap; }
+        .fp {
+            padding: 5px 12px; border-radius: 99px; font-size: 10px; font-weight: 600;
+            background: var(--bg-raised); color: var(--t3); border: 1px solid var(--border);
+            cursor: pointer; transition: all 0.12s;
+        }
+        .fp:hover { background: var(--bg-overlay); color: var(--t2); }
+        .fp.on, .fp.active { background: var(--red); color: #fff; border-color: var(--red); }
+
+        /* Action cost badges (Design C) */
+        .action-badge-1, .action-badge-2, .action-badge-3, .action-badge-reaction, .action-badge-free {
+            display: inline-flex; align-items: center;
+            font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 4px;
+            text-transform: uppercase; letter-spacing: 0.03em;
+            border: 1px solid;
+        }
+        .action-badge-1 { background: var(--teal-glow); color: var(--teal); border-color: rgba(74,150,150,0.2); }
+        .action-badge-2 { background: var(--red-glow); color: var(--red-b); border-color: rgba(196,60,60,0.2); }
+        .action-badge-3 { background: rgba(155,126,222,0.10); color: var(--purple); border-color: rgba(155,126,222,0.2); }
+        .action-badge-reaction { background: var(--gold-glow); color: var(--gold); border-color: rgba(200,168,78,0.2); }
+        .action-badge-free { background: rgba(90,142,232,0.10); color: var(--blue); border-color: rgba(90,142,232,0.2); }
+
+        /* Button variants (Design C) */
+        .btn { display:inline-flex; align-items:center; gap:4px; padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2); cursor: pointer; transition: all 0.15s; font-family: var(--font-ui); }
+        .btn:hover { background: var(--bg-overlay); color: var(--t1); }
+        .btn-primary { background: var(--red); color: #fff; border-color: var(--red); }
+        .btn-primary:hover { background: var(--red-b); border-color: var(--red-b); }
+        .btn-red { background: var(--red-glow); color: var(--red-b); border-color: rgba(196,60,60,0.3); }
+        .btn-red:hover { background: rgba(196,60,60,0.2); }
+        .btn-ghost { background: transparent; border-color: var(--border-s); color: var(--t3); }
+        .btn-ghost:hover { background: var(--bg-raised); color: var(--t1); }
+        .btn-sm { padding: 4px 10px; font-size: 10px; }
+
+        /* Design C card helpers */
+        .dc-card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+        .dc-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t3); margin-bottom: 8px; }
+        .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px; }
+        .tag.add { background: transparent; border: 1px dashed var(--t4); color: var(--t4); cursor: pointer; }
+        .tag.add:hover { border-color: var(--t3); color: var(--t3); }
+        .tag.cond { background: rgba(239,68,68,0.08); color: #fca5a5; border: 1px solid rgba(239,68,68,0.15); }
+
+        /* MAP indicator pips for strikes */
+        .map-row { display: flex; gap: 6px; margin-top: 4px; }
+        .map-pip { font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px; cursor: pointer; transition: all 0.12s; }
+        .map-pip.m1 { background: rgba(62,186,104,0.08); color: var(--green); border: 1px solid rgba(62,186,104,0.15); }
+        .map-pip.m2 { background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(200,168,78,0.15); }
+        .map-pip.m3 { background: var(--red-glow); color: var(--red-b); border: 1px solid rgba(196,60,60,0.15); }
 
         /* === SHEET PAGE (tab content panel) === */
         .sheet-page {
             background: var(--bg-surface);
-            border: 1px solid var(--border-default);
+            border: 1px solid var(--border);
             border-top: none;
             border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-            padding: 24px;
+            padding: 20px;
             position: relative;
         }
         .sheet-page .bg-gray-800 { background: var(--bg-raised) !important; border-color: var(--border-subtle) !important; }
-        .sheet-page .bg-gray-900 { background: var(--bg-input) !important; }
+        .sheet-page .bg-gray-900 { background: var(--bg-base) !important; }
         .sheet-page .bg-gray-950 { background: var(--bg-base) !important; }
+        .sheet-page .bg-gray-700 { background: var(--bg-overlay) !important; }
 
         /* === SECTION HEADER === */
         .section-header {
             font-family: var(--font-ui);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: var(--accent-gold-light);
+            color: var(--gold);
             padding-bottom: 8px;
-            border-bottom: 1px solid var(--border-default);
+            border-bottom: 1px solid var(--border);
             margin-bottom: 16px;
         }
+        .sec-h { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t3); margin-bottom: 8px; }
+        .sec-h span { color: var(--t4); font-weight: 500; }
 
-        /* === PANEL CARD === */
+        /* === PANEL CARD (Design C) === */
         .panel-card {
             background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid var(--border);
             border-radius: var(--radius-lg);
-            padding: 20px;
+            padding: 16px;
+        }
+
+        /* Saves/Skills card look (Design C) */
+        .card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+        .card-h {
+            padding: 7px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--t3); background: var(--bg-base);
+            border-bottom: 1px solid var(--border);
         }
 
         /* === SKILL ROW === */
@@ -359,26 +497,26 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 12px;
+            padding: 6px 10px;
             border-radius: var(--radius-sm);
             transition: background 0.1s;
             cursor: pointer;
         }
         .skill-row:hover { background: var(--bg-hover); }
-        .skill-row .skill-name { font-size: 14px; font-weight: 500; color: var(--text-primary); }
-        .skill-row .skill-stat { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
-        .skill-row .skill-mod { font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .skill-row .skill-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+        .skill-row .skill-stat { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+        .skill-row .skill-mod { font-size: 15px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
         /* === ACTION BUTTON === */
         .action-btn {
             font-family: var(--font-ui);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
-            padding: 6px 14px;
+            padding: 6px 12px;
             border-radius: var(--radius-sm);
-            border: 1px solid var(--border-default);
+            border: 1px solid var(--border-s);
             background: var(--bg-raised);
-            color: var(--text-secondary);
+            color: var(--t2);
             cursor: pointer;
             transition: all 0.15s;
             text-decoration: none;
@@ -386,34 +524,45 @@
             align-items: center;
             gap: 4px;
         }
-        .action-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text-primary); background: var(--bg-hover); }
-        .action-btn.primary { background: var(--accent-red); border-color: var(--accent-red); color: white; }
-        .action-btn.primary:hover { background: #d43b3b; }
+        .action-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text-primary); background: var(--bg-overlay); }
+        .action-btn.primary { background: var(--red); border-color: var(--red); color: white; }
+        .action-btn.primary:hover { background: var(--red-b); border-color: var(--red-b); }
+
+        /* Topbar small-button (Design C) */
+        .tb { padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+              border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2);
+              cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+        .tb:hover { background: var(--bg-overlay); color: var(--t1); }
+        .tb.primary { background: var(--red); color: #fff; border-color: var(--red); }
+        .tb.primary:hover { background: var(--red-b); border-color: var(--red-b); }
 
         /* Resource Counter (legacy compat) */
         .resource-counter {
             display: flex; align-items: center; gap: 8px;
-            padding: 8px 16px;
+            padding: 6px 12px;
             background: var(--bg-raised);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid var(--border-s);
             border-radius: var(--radius-md);
         }
-        .resource-counter .resource-label { font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
-        .resource-counter .resource-value { font-family: var(--font-ui); font-size: 20px; font-weight: 700; line-height: 1; }
+        .resource-counter .resource-label { font-family: var(--font-ui); font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t3); }
+        .resource-counter .resource-value { font-family: var(--font-ui); font-size: 18px; font-weight: 800; line-height: 1; }
 
         /* === TRAIT PILLS === */
-        .trait-pill { display:inline-block; font-size: 11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; padding:2px 8px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); margin-right:4px; margin-bottom:2px; }
+        .trait-pill { display:inline-block; font-size: 9px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; padding:2px 8px; border-radius:var(--radius-sm); background:var(--gold-glow); border:1px solid rgba(200,168,78,0.18); color:var(--gold); margin-right:4px; margin-bottom:2px; }
         .trait-pill.agile { background:rgba(74,222,128,0.08); border-color:rgba(74,222,128,0.2); color:#86EFAC; }
         .trait-pill.finesse { background:rgba(96,165,250,0.08); border-color:rgba(96,165,250,0.2); color:#93C5FD; }
-        .trait-pill.deadly, .trait-pill.fatal { background:rgba(251,113,133,0.08); border-color:rgba(251,113,133,0.2); color:#FDA4AF; }
-        .trait-pill.magical, .trait-pill.arcane, .trait-pill.divine, .trait-pill.occult, .trait-pill.primal { background:rgba(167,139,250,0.08); border-color:rgba(167,139,250,0.2); color:#C4B5FD; }
-        .trait-pill.ranged, .trait-pill.thrown, .trait-pill.propulsive { background:rgba(251,191,36,0.08); border-color:rgba(251,191,36,0.2); color:#FDE68A; }
+        .trait-pill.deadly, .trait-pill.fatal { background:rgba(196,60,60,0.08); border-color:rgba(196,60,60,0.2); color:var(--red-b); }
+        .trait-pill.magical, .trait-pill.arcane, .trait-pill.divine, .trait-pill.occult, .trait-pill.primal { background:rgba(155,126,222,0.08); border-color:rgba(155,126,222,0.2); color:var(--purple); }
+        .trait-pill.ranged, .trait-pill.thrown, .trait-pill.propulsive { background:rgba(251,191,36,0.08); border-color:rgba(251,191,36,0.2); color:var(--gold); }
 
-        /* === PORTRAIT === */
-        .portrait-circle { width:52px; height:52px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid var(--border-strong); background:var(--bg-raised); transition:border-color 0.2s; }
-        .portrait-circle:hover { border-color: var(--accent-gold); }
+        /* === PORTRAIT (Design C red border) === */
+        .portrait-circle { width:52px; height:52px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid var(--red); background:var(--bg-raised); transition:border-color 0.2s; }
+        .portrait-circle:hover { border-color: var(--red-b); }
         .portrait-circle img { width:100%; height:100%; object-fit:cover; }
-        .portrait-badge { position:absolute; bottom:-2px; right:-2px; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; border:2px solid var(--bg-base); background: var(--bg-raised); }
+        .portrait-badge { position:absolute; bottom:-2px; right:-2px; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; border:2px solid var(--bg-surface); background: var(--bg-raised); }
+
+        /* Portrait placeholder letter color */
+        .portrait-circle .font-header { color: var(--red-b) !important; }
 
         /* Spell Rank Borders */
         .spell-rank-0 { border-left:3px solid #6B7280; }
@@ -455,21 +604,37 @@
         @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
         @keyframes turnBannerOut { from { transform:translateY(0); opacity:1; } to { transform:translateY(-100%); opacity:0; } }
 
-        /* Proficiency Badges */
-        .prof-t { background:rgba(167,139,250,0.15); color:var(--color-spell); border:1px solid rgba(167,139,250,0.3); }
-        .prof-e { background:rgba(96,165,250,0.15); color:#60A5FA; border:1px solid rgba(96,165,250,0.3); }
-        .prof-m { background:rgba(251,191,36,0.15); color:#FBBF24; border:1px solid rgba(251,191,36,0.3); }
-        .prof-l { background:rgba(239,68,68,0.15); color:#EF4444; border:1px solid rgba(239,68,68,0.3); }
+        /* Proficiency Badges (Design C: T=teal E=green M=purple L=gold) */
+        .prof-t { background:var(--teal-glow); color:var(--teal); border:1px solid rgba(74,150,150,0.3); }
+        .prof-e { background:var(--green-glow); color:var(--green); border:1px solid rgba(62,186,104,0.3); }
+        .prof-m { background:rgba(155,126,222,0.12); color:var(--purple); border:1px solid rgba(155,126,222,0.3); }
+        .prof-l { background:var(--gold-glow); color:var(--gold); border:1px solid rgba(200,168,78,0.3); }
 
-        .prof-U { color: var(--text-muted); }
-        .prof-T { color: #5CE6A0; font-weight: bold; }
-        .prof-E { color: #6CB4FF; font-weight: bold; }
-        .prof-M { color: #B8A0FF; font-weight: bold; }
-        .prof-L { color: #80D4D4; font-weight: bold; }
+        .prof-U { color: var(--t3); }
+        .prof-T { color: var(--teal); font-weight: bold; }
+        .prof-E { color: var(--green); font-weight: bold; }
+        .prof-M { color: var(--purple); font-weight: bold; }
+        .prof-L { color: var(--gold); font-weight: bold; }
 
-        /* Focus Pips */
-        .focus-pip { display:inline-block; width:12px; height:12px; border-radius:50%; border:2px solid var(--color-ac); margin:0 2px; vertical-align:middle; }
-        .focus-pip.filled { background:var(--color-ac); box-shadow:0 0 6px rgba(96,165,250,0.4); }
+        /* Save/Skill rank mini-badge (Design C, inline with rows) */
+        .sv-rank {
+            font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+            width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center;
+            justify-content: center; border: 1px solid; vertical-align: middle;
+        }
+        .sv-rank.T { color: var(--teal); border-color: var(--teal); background: var(--teal-glow); }
+        .sv-rank.E { color: var(--green); border-color: var(--green); background: var(--green-glow); }
+        .sv-rank.M { color: var(--purple); border-color: var(--purple); background: rgba(155,126,222,0.10); }
+        .sv-rank.L { color: var(--gold); border-color: var(--gold); background: var(--gold-glow); }
+        .sk-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 8px; border: 1.5px solid var(--t4); vertical-align: middle; }
+        .sk-dot.T { background: var(--teal); border-color: var(--teal); }
+        .sk-dot.E { background: var(--green); border-color: var(--green); }
+        .sk-dot.M { background: var(--purple); border-color: var(--purple); }
+        .sk-dot.L { background: var(--gold); border-color: var(--gold); }
+
+        /* Focus Pips (blue accent) */
+        .focus-pip { display:inline-block; width:12px; height:12px; border-radius:50%; border:2px solid var(--blue); margin:0 2px; vertical-align:middle; }
+        .focus-pip.filled { background:var(--blue); box-shadow:0 0 6px rgba(90,142,232,0.4); }
         .focus-pip.empty { background:transparent; }
 
         /* Prep Slots */
@@ -520,10 +685,20 @@
         .foundry-content p { margin-bottom: 0.5rem; }
         .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; }
 
-        .penalty-tag { font-size: 11px; color: #f87171; margin-left: 4px; }
+        .penalty-tag { font-size: 11px; color: var(--red-b); margin-left: 4px; }
         .pin-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 0; }
-        .pin-btn { font-size: 12px; padding: 5px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; border: 1px solid var(--border-default); background: var(--bg-raised); color: var(--text-secondary); font-weight: 600; }
-        .pin-btn:hover { border-color: var(--accent-gold); color: var(--accent-gold-light); }
+        .pin-btn { font-size: 11px; padding: 4px 12px; border-radius: 99px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2); font-weight: 600; }
+        .pin-btn:hover { border-color: rgba(196,60,60,0.35); color: var(--red-b); }
+
+        /* Rollable elements (cursor hint) */
+        .rollable-element { cursor: pointer; }
+
+        /* Encounter my-turn banner */
+        body.encounter-my-turn::before { content: ''; position: fixed; inset: 0; pointer-events: none; border: 3px solid var(--gold); box-shadow: inset 0 0 60px rgba(200,168,78,0.15); z-index: 99; }
+
+        /* Modal backdrop class (for JS-driven modals) */
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .modal-content { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 12px; max-height: 85vh; overflow-y: auto; }
 
         /* === RIGHT-CLICK CONTEXT MENU === */
         .roll-context-menu {
@@ -620,140 +795,153 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div class="char-header w-full">
 
-        <!-- ROW 1 — Identity + Actions -->
+        <!-- ROW 1 — Identity + Actions (Design C topbar) -->
         <div class="max-w-6xl mx-auto px-4 md:px-6 pt-3 pb-2">
             <div class="flex flex-wrap justify-between items-center gap-3">
-                <div class="flex items-center gap-3">
-                    <a href="/player" class="text-gray-500 hover:text-gray-300 transition-colors" style="font-size:16px; line-height:1;">&#8592;</a>
-                    <!-- Portrait -->
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <a href="/player" class="transition-colors" style="color:var(--t3); font-size:18px; line-height:1;" title="Back to roster">&#8592;</a>
+                    <!-- Portrait (Design C red circle) -->
                     <div class="portrait-circle" onclick="document.getElementById('portrait-upload').click()" title="Click to upload portrait">
                         {% if pc.portrait %}
                         <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
                         {% else %}
-                        <span class="font-header text-xl" style="color:var(--accent-gold-light);">{{ pc.name[0] }}</span>
+                        <span class="font-header" style="font-size:22px; color:var(--red-b);">{{ pc.name[0] }}</span>
                         {% endif %}
                         <input type="file" id="portrait-upload" class="hidden" accept="image/*" onchange="uploadPortrait(this)">
-                        <div class="portrait-badge" style="background:var(--bg-raised);">
+                        <div class="portrait-badge">
                             {% if pc.class_name == 'Fighter' %}⚔{% elif pc.class_name == 'Cleric' %}✝{% elif pc.class_name == 'Wizard' %}🔮{% elif pc.class_name == 'Rogue' %}🗡{% elif pc.class_name == 'Druid' %}🌿{% elif pc.class_name == 'Champion' %}🛡{% elif pc.class_name == 'Monk' %}👊{% elif pc.class_name == 'Barbarian' %}🪓{% elif pc.class_name == 'Bard' %}🎵{% elif pc.class_name == 'Ranger' %}🏹{% elif pc.class_name == 'Sorcerer' %}✨{% elif pc.class_name == 'Kineticist' %}🔥{% elif pc.class_name == 'Oracle' %}👁{% elif pc.class_name == 'Witch' %}🌙{% elif pc.class_name == 'Magus' %}⚡{% else %}📜{% endif %}
                         </div>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <h1 class="char-name font-header text-2xl md:text-3xl leading-none">{{ pc.name }}</h1>
-                        <p class="char-subtitle">Level {{ pc.level }} {{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} &middot; {{ pc.subclass }}{% endif %} &middot; {{ pc.size }}</p>
+                        <h1 class="char-name font-header flex items-center gap-2 flex-wrap">
+                            {{ pc.name }}
+                            <span class="char-level-badge">Level {{ pc.level }}</span>
+                        </h1>
+                        <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span style="color:var(--t4);">•</span> {{ pc.subclass }}{% endif %} <span style="color:var(--t4);">•</span> {{ pc.size }}</p>
                     </div>
-                    {% if pc.status_penalty > 0 %}<span class="px-2 py-0.5 rounded" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#f87171; font-size:11px; font-weight:600;">Debuffed -{{ pc.status_penalty }}</span>{% endif %}
-                    {% if pc.active_toggles %}<span class="px-2 py-0.5 rounded" style="background:rgba(96,165,250,0.1); border:1px solid rgba(96,165,250,0.2); color:#60a5fa; font-size:11px; font-weight:600;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
+                    {% if pc.status_penalty > 0 %}<span class="px-2 py-0.5 rounded" style="background:rgba(196,60,60,0.1); border:1px solid rgba(196,60,60,0.2); color:var(--red-b); font-size:11px; font-weight:600;">Debuffed -{{ pc.status_penalty }}</span>{% endif %}
+                    {% if pc.active_toggles %}<span class="px-2 py-0.5 rounded" style="background:rgba(90,142,232,0.1); border:1px solid rgba(90,142,232,0.2); color:var(--blue); font-size:11px; font-weight:600;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
                 </div>
                 <!-- Action Toolbar -->
                 <div class="flex gap-2 flex-wrap mobile-actions">
-                    <a href="/map" class="action-btn">Map</a>
-                    <button onclick="takeLongRest()" class="action-btn">Rest</button>
-                    {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="action-btn">Undo Level</button>{% endif %}
-                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="action-btn primary">Level Up</a>
-                    <button onclick="window.print()" class="no-print action-btn">Print</button>
-                    <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print action-btn" title="Download character sheet PDF">PDF</a>
+                    <a href="/map" class="tb">🗺 Map</a>
+                    <button onclick="takeLongRest()" class="tb">🛏 Rest</button>
+                    {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb">↶ Undo Level</button>{% endif %}
+                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary">★ Level Up</a>
+                    <button onclick="window.print()" class="no-print tb">🖨 Print</button>
+                    <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print tb" title="Download character sheet PDF">📄 PDF</a>
                 </div>
             </div>
         </div>
 
-        <!-- ROW 2 — Ability Scores -->
-        <div class="max-w-6xl mx-auto px-4 md:px-6 pb-2">
-            <div class="flex gap-2 md:gap-3 flex-wrap">
-                {% for stat in pc.ability_display %}
-                <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
-                     class="ability-block group rollable-element" data-roll-name="{{ stat.label }} Check" data-roll-mod="{{ stat.mod|replace('+', '')|replace(' (½)', '') }}" title="Click to roll {{ stat.label }} check">
-                    <span class="mod group-hover:text-amber-300 transition-colors">{{ stat.mod|safe }}</span>
-                    <span class="label">{{ stat.label }}</span>
-                </div>
-                {% endfor %}
+        <!-- ROW 2 — Ability Scores (Design C accented cards) -->
+        <div class="ability-row-wrap">
+            {% set ab_keys = ['str','dex','con','int','wis','cha'] %}
+            {% for stat in pc.ability_display %}
+            {% set ab_key = ab_keys[loop.index0] if loop.index0 < 6 else '' %}
+            <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
+                 class="ability-block group rollable-element"
+                 data-ab="{{ ab_key }}"
+                 data-roll-name="{{ stat.label }} Check"
+                 data-roll-mod="{{ stat.mod|replace('+', '')|replace(' (½)', '') }}"
+                 title="Click to roll {{ stat.label }} check">
+                <span class="label">{{ stat.label }}</span>
+                <span class="mod">{{ stat.mod|safe }}</span>
             </div>
+            {% endfor %}
         </div>
 
-        <!-- ROW 3 — Combat Dashboard -->
-        <div class="max-w-6xl mx-auto px-4 md:px-6 pb-3">
-            <div class="flex flex-wrap items-center gap-2 md:gap-3">
-                <!-- Perception -->
-                {% set perc_val = pc.proficiencies.get('perception', 2) %}
-                <div onclick="rollSkill('Perception', {{ pc.perception }})" class="stat-box group rollable-element" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" title="Roll Perception">
-                    <span class="stat-value group-hover:text-amber-300 transition-colors">+{{ pc.perception }}</span>
-                    <span class="stat-label">PER</span>
-                </div>
-
-                <!-- Separator -->
-                <div style="width:1px; height:32px; background:var(--border-default);"></div>
-
-                <!-- AC -->
-                <div class="stat-box" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}" style="border-color:rgba(96,165,250,0.25);">
-                    <span class="stat-value" style="color:var(--color-ac);">{{ pc.ac }}</span>
-                    <span class="stat-label" style="color:rgba(96,165,250,0.6);">AC</span>
-                </div>
-                <!-- Shield buttons -->
-                <div class="flex flex-col gap-1 no-print">
-                    <button onclick="toggleShield()" class="flex items-center justify-center rounded transition-all" style="width:26px; height:26px; font-size:12px; {% if pc.shield_raised %}background:rgba(96,165,250,0.2); border:1px solid rgba(96,165,250,0.4); color:#93C5FD;{% else %}background:var(--bg-input); border:1px solid var(--border-subtle); color:var(--text-muted);{% endif %}" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC)">
-                        🛡
+        <!-- ROW 3 — Stats strip (AC / Speed / Perception / Class DC / HP) -->
+        <div class="stats-strip">
+            <!-- AC -->
+            <div class="ss-block" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
+                <div class="ss-lbl">Armor Class</div>
+                <div class="ss-val" style="color:var(--blue);">{{ pc.ac }}</div>
+                <div class="ss-sub">
+                    <button onclick="toggleShield()" class="no-print" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC)"
+                            style="padding:2px 8px; font-size:10px; margin-right:2px; border-radius:4px; cursor:pointer; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
+                        🛡 {% if pc.shield_raised %}Raised{% else %}Raise{% endif %}
                     </button>
-                    <button onclick="useShieldBlock()" class="flex items-center justify-center rounded transition-all" style="width:26px; height:26px; font-size:12px; background:var(--bg-input); border:1px solid var(--border-subtle); color:#d97706;" title="Shield Block">
-                        ⟳
+                    <button onclick="useShieldBlock()" class="no-print" title="Shield Block"
+                            style="padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold);">
+                        ⟳ Block
                     </button>
                 </div>
+            </div>
 
-                <!-- Separator -->
-                <div style="width:1px; height:32px; background:var(--border-default);"></div>
+            <!-- Speed -->
+            <div class="ss-block" title="Speed">
+                <div class="ss-lbl">Speed</div>
+                <div class="ss-val" style="color:var(--teal);">{{ pc.active_speed }}<span style="font-size:11px; color:var(--t3);">ft</span></div>
+                {% if pc.active_speed != pc.base_speed %}<div class="ss-sub" style="color:var(--red-b);">Base {{ pc.base_speed }}</div>{% endif %}
+            </div>
 
-                <!-- Saves -->
-                <div onclick="rollSkill('Fortitude Save', {{ pc.fort }})" class="stat-box group rollable-element" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fort Save" style="border-left:3px solid var(--color-fort);">
-                    <span class="stat-value" style="color:#86EFAC;">+{{ pc.fort }}</span>
-                    <span class="stat-label" style="color:rgba(74,222,128,0.6);">FORT</span>
-                </div>
-                <div onclick="rollSkill('Reflex Save', {{ pc.ref }})" class="stat-box group rollable-element" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" title="Roll Ref Save" style="border-left:3px solid var(--color-ref);">
-                    <span class="stat-value" style="color:#93C5FD;">+{{ pc.ref }}</span>
-                    <span class="stat-label" style="color:rgba(96,165,250,0.6);">REF</span>
-                </div>
-                <div onclick="rollSkill('Will Save', {{ pc.will }})" class="stat-box group rollable-element" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" title="Roll Will Save" style="border-left:3px solid var(--color-will);">
-                    <span class="stat-value" style="color:#C4B5FD;">+{{ pc.will }}</span>
-                    <span class="stat-label" style="color:rgba(192,132,252,0.6);">WILL</span>
-                </div>
+            <!-- Perception -->
+            <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" title="Roll Perception">
+                <div class="ss-lbl">Perception</div>
+                <div class="ss-val" style="color:var(--gold);">+{{ pc.perception }}</div>
+            </div>
 
-                <!-- Separator -->
-                <div style="width:1px; height:32px; background:var(--border-default);"></div>
+            <!-- Class DC -->
+            <div class="ss-block" title="Class DC">
+                <div class="ss-lbl">Class DC</div>
+                <div class="ss-val">{{ pc.class_dc }}</div>
+                {% if pc.spell_dc > 0 %}<div class="ss-sub" style="color:var(--purple);">Spell DC {{ pc.spell_dc }}</div>{% endif %}
+            </div>
 
-                <!-- Focus (if applicable) -->
-                {% if pc.focus_max > 0 %}
-                <div class="resource-counter">
-                    <span class="resource-label">Focus</span>
-                    <button onclick="modifyFocus('decrease')" class="w-6 h-6 rounded text-xs font-bold transition-colors" style="background:var(--bg-hover); border:1px solid var(--border-subtle); color:var(--text-secondary);">-</button>
-                    <span id="header-focus-pips">
-                        {% for i in range(pc.focus_max) %}
-                        <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
-                        {% endfor %}
-                    </span>
-                    <button onclick="modifyFocus('increase')" class="w-6 h-6 rounded text-xs font-bold transition-colors" style="background:var(--bg-hover); border:1px solid var(--border-subtle); color:var(--text-secondary);">+</button>
-                </div>
-                {% endif %}
+            <!-- Fort/Ref/Will (compact saves in strip) -->
+            <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fortitude Save">
+                <div class="ss-lbl">Fort</div>
+                <div class="ss-val" style="color:var(--green); font-size:20px;">+{{ pc.fort }}</div>
+            </div>
+            <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" title="Roll Reflex Save">
+                <div class="ss-lbl">Reflex</div>
+                <div class="ss-val" style="color:var(--blue); font-size:20px;">+{{ pc.ref }}</div>
+            </div>
+            <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" title="Roll Will Save">
+                <div class="ss-lbl">Will</div>
+                <div class="ss-val" style="color:var(--purple); font-size:20px;">+{{ pc.will }}</div>
+            </div>
 
-                <!-- Hero Points -->
-                <div class="resource-counter">
-                    <span class="resource-label" style="color:var(--accent-gold-light);">Hero</span>
-                    <button onclick="modifyHero('decrease')" class="w-6 h-6 rounded text-xs font-bold transition-colors" style="background:var(--bg-hover); border:1px solid var(--border-subtle); color:var(--text-secondary);">-</button>
-                    <span id="current-hero" class="resource-value text-white w-6 text-center">{{ pc.hero_points }}</span>
-                    <button onclick="modifyHero('increase')" class="w-6 h-6 rounded text-xs font-bold transition-colors" style="background:var(--bg-hover); border:1px solid var(--border-subtle); color:var(--text-secondary);">+</button>
-                </div>
-
-                <!-- HP with Input Field -->
-                <div class="hp-section hp-area" title="{{ pc.hp_breakdown }}">
-                    <span class="resource-label">HP</span>
-                    <div class="text-center" style="min-width:70px;">
-                        <span id="current-hp" class="hp-current {% if pc.current_hp == 0 %}text-red-500{% elif pc.current_hp < pc.hp * 0.5 %}text-amber-400{% else %}text-green-400{% endif %}" style="transition:transform 0.2s">{{ pc.current_hp }}</span>
-                        <span style="color:var(--text-faint); font-size:13px;">/ {{ pc.hp }}</span>
-                        {% if pc.temp_hp > 0 %}<span style="color:var(--color-ac); font-size:12px; font-weight:600; margin-left:4px;">+{{ pc.temp_hp }}</span>{% endif %}
+            <!-- HP block -->
+            <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}" style="flex:2.2; min-width:240px;">
+                <div class="ss-lbl">Hit Points</div>
+                <div class="flex items-center justify-center gap-2">
+                    <button class="hp-btn heal" onclick="applyHPChange('heal')" title="Heal" style="width:28px; height:28px; padding:0; font-size:14px;">+</button>
+                    <div style="text-align:center; min-width:90px;">
+                        <div>
+                            <span id="current-hp" class="hp-current" style="font-size:24px; font-weight:800; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
+                            <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
+                            {% if pc.temp_hp > 0 %}<span style="color:var(--blue); font-size:11px; font-weight:600; margin-left:4px;">+{{ pc.temp_hp }}</span>{% endif %}
+                        </div>
                         {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
-                        <div class="hp-gauge mt-1">
+                        <div class="hp-gauge hp-gauge-bar" style="margin-top:4px;">
                             <div class="hp-gauge-fill {% if pc.current_hp == 0 %}dead{% elif hp_pct <= 25 %}low{% elif hp_pct <= 50 %}mid{% else %}high{% endif %}" style="width:{{ hp_pct|int }}%"></div>
                         </div>
                     </div>
-                    <input type="number" class="hp-input" id="hp-change-input" placeholder="0" min="0">
-                    <button class="hp-btn damage" onclick="applyHPChange('damage')">Dmg</button>
-                    <button class="hp-btn heal" onclick="applyHPChange('heal')">Heal</button>
+                    <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:28px; height:28px; padding:0; font-size:14px;">−</button>
+                </div>
+                <div class="flex items-center justify-center gap-1 no-print" style="margin-top:6px;">
+                    <input type="number" class="hp-input" id="hp-change-input" placeholder="0" min="0" style="width:56px;">
+                    <!-- Resources inline: Hero + Focus -->
+                    <span class="resource-counter" style="padding:3px 8px;">
+                        <span class="resource-label" style="color:var(--gold);">★</span>
+                        <button onclick="modifyHero('decrease')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">-</button>
+                        <span id="current-hero" class="resource-value" style="color:var(--gold); font-size:14px; width:16px; text-align:center;">{{ pc.hero_points }}</span>
+                        <button onclick="modifyHero('increase')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">+</button>
+                    </span>
+                    {% if pc.focus_max > 0 %}
+                    <span class="resource-counter" style="padding:3px 8px;">
+                        <span class="resource-label" style="color:var(--blue);">◈</span>
+                        <button onclick="modifyFocus('decrease')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">-</button>
+                        <span id="header-focus-pips">
+                            {% for i in range(pc.focus_max) %}
+                            <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
+                            {% endfor %}
+                        </span>
+                        <button onclick="modifyFocus('increase')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">+</button>
+                    </span>
+                    {% endif %}
                 </div>
             </div>
         </div>
