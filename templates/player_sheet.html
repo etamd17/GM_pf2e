@@ -3184,11 +3184,18 @@
             }
         }
         
-        // SSE connection with auto-reconnect
+        // SSE connection with auto-reconnect + liveness tracking so the
+        // poll below can stay quiet while the live stream is healthy.
+        let _sheetSseLastMsg = 0;
+        function _sheetMarkSseAlive() { _sheetSseLastMsg = Date.now(); }
+
         function connectSSE() {
             const evtSource = new EventSource('/api/events');
-            
+            evtSource.onopen = _sheetMarkSseAlive;
+            evtSource.addEventListener('connected', _sheetMarkSseAlive);
+
             evtSource.addEventListener('pc_update', (e) => {
+                _sheetMarkSseAlive();
                 try {
                     const data = JSON.parse(e.data);
                     if (data.name !== pcName) return;
@@ -3209,8 +3216,9 @@
                     }
                 } catch(err) { console.error('SSE pc_update error:', err); }
             });
-            
+
             evtSource.addEventListener('encounter_update', (e) => {
+                _sheetMarkSseAlive();
                 try {
                     const data = JSON.parse(e.data);
                     const wrapper = document.getElementById('encounter-bar-wrapper');
@@ -3220,8 +3228,8 @@
                         let html = '';
                         data.encounter.forEach(c => {
                             const isMe = c.name === pcName;
-                            const style = c.is_active 
-                                ? 'background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.25);' 
+                            const style = c.is_active
+                                ? 'background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.25);'
                                 : 'border:1px solid var(--border-subtle);';
                             html += `<span class="text-[10px] px-2 py-0.5 rounded font-header" style="${style} color:${c.is_active ? '#FBBF24' : isMe ? 'var(--color-spell)' : 'var(--text-faint)'}; ${isMe ? 'font-weight:700;' : ''}">${c.is_pc ? c.name : '???'}${c.is_active ? ' ▶' : ''}</span>`;
                         });
@@ -3232,15 +3240,18 @@
                     }
                 } catch(err) { console.error('SSE encounter_update error:', err); }
             });
-            
+
             evtSource.onerror = () => {
                 evtSource.close();
                 setTimeout(connectSSE, 5000); // Reconnect after 5s
             };
         }
         connectSSE();
-        
-        // Fallback polling (in case SSE fails)
+
+        // Adaptive polling: only fire /api/player_state when the SSE
+        // stream has been silent for >45s. With 4 players this cuts the
+        // per-player poll rate from 4/min to ~0 while SSE is delivering,
+        // and recovers smoothly if SSE dies.
         async function syncFromGM() {
             try {
                 const res = await fetch('/api/player_state');
@@ -3252,7 +3263,10 @@
                 if (myState.conditions) applyConditionUpdate(myState.conditions);
             } catch(e) {}
         }
-        setInterval(syncFromGM, 15000); // Slow fallback every 15s
+        setInterval(() => {
+            const silent = Date.now() - _sheetSseLastMsg;
+            if (!_sheetSseLastMsg || silent > 45_000) syncFromGM();
+        }, 15_000);
 
         async function saveNotes() {
             const btn = document.getElementById('btn-notes');

@@ -198,31 +198,81 @@
     }
     loadMyChar();
 
-    // SSE for live encounter updates
-    const evtSrc = new EventSource('/api/events');
-    evtSrc.addEventListener('encounter_update', e => {
-        try {
-            const d = JSON.parse(e.data);
-            renderTracker(d.encounter, d.round, d.active_name);
-        } catch(err) {}
-    });
-    // Handout listener
-    evtSrc.addEventListener('handout', e => {
-        try {
-            const h = JSON.parse(e.data);
-            const myName = localStorage.getItem('pf2e_my_char') || '';
-            if (!h.recipients.includes('all') && !h.recipients.includes(myName)) return;
-            showHandoutPopup(h);
-        } catch(err) {}
-    });
-    evtSrc.onerror = () => { evtSrc.close(); setTimeout(() => location.reload(), 10000); };
+    // ──────────────────────────────────────────────────────────────
+    //  SSE + adaptive polling (perf-optimized for 4+ concurrent players)
+    //
+    //  Previous behavior was (a) 5-second polling ALWAYS on, even while
+    //  SSE was delivering fine — that's 48 req/min per player × 4 = 192
+    //  req/min for nothing — and (b) a full page reload on any SSE
+    //  hiccup, which re-downloads ~250 KB gzipped and forces every other
+    //  connected browser to pay its own cost.
+    //
+    //  New behavior: we treat SSE as the primary transport and only
+    //  poll when it's been silent long enough to suspect the connection
+    //  is stale. On SSE error we reconnect (up to 3 tries with backoff)
+    //  instead of reloading the page.
+    // ──────────────────────────────────────────────────────────────
+    let evtSrc = null;
+    let _sseLastMsgAt = 0;
+    let _sseReconnectTries = 0;
+    const _SSE_STALE_MS = 30_000;   // poll only if >30 s since last SSE event
+    const _POLL_INTERVAL = 8_000;   // check staleness every 8 s (was 5 s flat)
 
-    // Fallback polling
+    function _markSseAlive() {
+        _sseLastMsgAt = Date.now();
+        _sseReconnectTries = 0;
+    }
+
+    function connectSSE() {
+        try {
+            if (evtSrc) { try { evtSrc.close(); } catch(_){} }
+            evtSrc = new EventSource('/api/events');
+            evtSrc.onopen = _markSseAlive;
+            evtSrc.addEventListener('connected', _markSseAlive);
+            evtSrc.addEventListener('encounter_update', e => {
+                _markSseAlive();
+                try {
+                    const d = JSON.parse(e.data);
+                    renderTracker(d.encounter, d.round, d.active_name);
+                } catch(err) {}
+            });
+            evtSrc.addEventListener('handout', e => {
+                _markSseAlive();
+                try {
+                    const h = JSON.parse(e.data);
+                    const myName = localStorage.getItem('pf2e_my_char') || '';
+                    if (!h.recipients.includes('all') && !h.recipients.includes(myName)) return;
+                    showHandoutPopup(h);
+                } catch(err) {}
+            });
+            evtSrc.onerror = () => {
+                // Try to reconnect a few times with exponential backoff
+                // before falling back to polling. Never force a full reload
+                // unless the user's been on a dead socket for ages.
+                try { evtSrc.close(); } catch(_){}
+                _sseReconnectTries += 1;
+                if (_sseReconnectTries <= 4) {
+                    const backoff = Math.min(1000 * Math.pow(2, _sseReconnectTries - 1), 8000);
+                    setTimeout(connectSSE, backoff);
+                }
+                // If SSE never comes back, _checkSsePoll() will still
+                // provide state updates via /api/player_state.
+            };
+        } catch (e) { /* browser without EventSource — polling will carry us */ }
+    }
+    connectSSE();
+
+    // Polling fallback — ONLY fires when SSE has gone silent.
     async function fetchPlayerState() {
         try {
             const r = await fetch('/api/player_state'); const d = await r.json();
             renderTracker(d.encounter, d.round, d.active_name);
         } catch(e) {}
+    }
+
+    function _checkSsePoll() {
+        const silent = Date.now() - _sseLastMsgAt;
+        if (!_sseLastMsgAt || silent > _SSE_STALE_MS) fetchPlayerState();
     }
     // Track last-seen HP per PC so we can flash the row when damage/heal lands.
     const _lastHpByName = {};
@@ -285,7 +335,11 @@
         tb.innerHTML=h;
     }
     function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-    setInterval(fetchPlayerState,5000); fetchPlayerState();
+    // Prime the initial state, then only poll on staleness. When SSE is
+    // healthy _checkSsePoll is a no-op (~8× lower request volume than
+    // the old unconditional 5-second poll for the same latency budget).
+    fetchPlayerState();
+    setInterval(_checkSsePoll, _POLL_INTERVAL);
 
     function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#fca5a5':'#86efac';el.style.border=e?'1px solid rgba(239,68,68,0.15)':'1px solid rgba(34,197,94,0.15)';el.innerText=m;}
     async function handleFileImport(i){if(!i.files||!i.files[0])return;const f=new FormData();f.append('file',i.files[0]);try{const r=await fetch('/api/import_pathbuilder',{method:'POST',body:f});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}

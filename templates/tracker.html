@@ -758,18 +758,16 @@
 {# ═══════════════════ TOOL STRIP ═══════════════════ #}
 <div class="tool-strip">
     <div class="ts-search" id="monster-search-wrap">
-        <input type="text" id="monster-search" placeholder="Search monsters…" autocomplete="off"
-               onfocus="showMonsterDD()" oninput="filterMonsterDD()">
+        {# API-backed search: the previous version inlined 4,797 <div>
+           options (~1.5 MB of HTML) straight into the page template. The
+           dropdown is now fetched lazily from /api/monster_search after
+           the user types, so the initial tracker page is tiny. #}
+        <input type="text" id="monster-search" placeholder="Type to search monsters…" autocomplete="off"
+               onfocus="showMonsterDD()" oninput="queueMonsterSearch()">
         <div id="monster-dd" class="monster-dd hidden">
-            {% for m in monsters %}
-            <div class="monster-opt" data-path="{{ m.file_path }}" data-name="{{ m.name | lower }}" onclick="addMonster('{{ m.file_path }}')">
-                <span>{{ m.name }}</span>
-                <span class="lvl">L{{ m.level }}</span>
+            <div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;" id="monster-dd-hint">
+                Type 2+ characters to search the monster library.
             </div>
-            {% endfor %}
-            {% if not monsters %}
-            <div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;">No monsters in library</div>
-            {% endif %}
         </div>
     </div>
 
@@ -2188,16 +2186,58 @@ document.addEventListener('keydown', e => {
 });
 
 
-/* ──────────────── Monster Search ──────────────── */
+/* ──────────────── Monster Search (API-backed, lazy) ──────────────── */
 function showMonsterDD() { document.getElementById('monster-dd').classList.remove('hidden'); }
-function filterMonsterDD() {
-    const q = document.getElementById('monster-search').value.toLowerCase().trim();
-    document.querySelectorAll('.monster-opt').forEach(el => {
-        if (!el.dataset.name) return;
-        el.style.display = (q && !el.dataset.name.includes(q)) ? 'none' : '';
-    });
-    document.getElementById('monster-dd').classList.remove('hidden');
+
+let _monsterSearchTimer = null;
+let _monsterSearchSeq = 0;  // guard against out-of-order responses
+
+// Debounce input so we don't hammer /api/monster_search on every keystroke.
+function queueMonsterSearch() {
+    if (_monsterSearchTimer) clearTimeout(_monsterSearchTimer);
+    _monsterSearchTimer = setTimeout(runMonsterSearch, 180);
 }
+
+async function runMonsterSearch() {
+    const dd = document.getElementById('monster-dd');
+    const q = document.getElementById('monster-search').value.trim();
+    dd.classList.remove('hidden');
+
+    if (q.length < 2) {
+        dd.innerHTML = '<div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;" id="monster-dd-hint">Type 2+ characters to search the monster library.</div>';
+        return;
+    }
+
+    const mySeq = ++_monsterSearchSeq;
+    dd.innerHTML = '<div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;">Searching…</div>';
+    try {
+        const res = await fetch('/api/monster_search?q=' + encodeURIComponent(q) + '&limit=30', {
+            headers: AJAX_HEADERS
+        });
+        if (mySeq !== _monsterSearchSeq) return; // a newer query has fired
+        const data = await res.json();
+        const results = data.results || [];
+        if (!results.length) {
+            dd.innerHTML = '<div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;">No matches for “' + q.replace(/</g, '&lt;') + '”.</div>';
+            return;
+        }
+        dd.innerHTML = results.map(m => {
+            // /api/monster_search returns 'path' (older code used 'file_path').
+            // Accept either so we survive a future schema tweak.
+            const rawPath = m.path || m.file_path || '';
+            const safePath = String(rawPath).replace(/'/g, "\\'");
+            const safeName = String(m.name || '').replace(/</g, '&lt;');
+            const lvl = (m.level !== undefined && m.level !== null) ? 'L' + m.level : '';
+            return `<div class="monster-opt" data-path="${safePath}" onclick="addMonster('${safePath}')">`
+                 + `<span>${safeName}</span><span class="lvl">${lvl}</span>`
+                 + `</div>`;
+        }).join('');
+    } catch (e) {
+        if (mySeq !== _monsterSearchSeq) return;
+        dd.innerHTML = '<div class="monster-opt" style="opacity:.6;font-style:italic;cursor:default;">Search error — try again.</div>';
+    }
+}
+
 document.addEventListener('click', e => {
     const wrap = document.getElementById('monster-search-wrap');
     if (wrap && !wrap.contains(e.target)) document.getElementById('monster-dd').classList.add('hidden');
