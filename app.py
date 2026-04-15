@@ -1131,6 +1131,13 @@ class Character:
         self.half_boosts = build.get('half_boosts') or []
         
         self.abilities = build.get('abilities') or {}
+        # Pathbuilder exports per-skill typed bonuses in a top-level `mods`
+        # dict, e.g. {"Arcana": {"Item Bonus": 1}} for a Farlight Stone.
+        # `self.mods` is about to be repurposed as the ability-modifier dict,
+        # so stash the raw PB data here and fold it into self.rule_modifiers
+        # after the rule engine is initialized. Without this, every skill
+        # item/status/circumstance bonus encoded by Pathbuilder is dropped.
+        _pb_skill_mods = build.get('mods') if isinstance(build.get('mods'), dict) else {}
         self.mods = {}
         self.ability_display = []
         
@@ -1230,14 +1237,30 @@ class Character:
         # has light/medium/heavy = 0, so a Warpriest who is trained in light armor
         # via their doctrine would otherwise end up with AC prof = 0 here, which
         # knocks level+2 off their AC. Same for Sorcerers with Bloodline armor, etc.
-        armor_name = build.get('armor_name', '')
+        # Pathbuilder-format fallback: PB never populates build['armor_name']
+        # or build['armor_str_req']. The worn armor lives in build['armor']
+        # as a list of {name, prof, worn, ...}. Derive both here so AC prof,
+        # armor check penalty, and speed penalty all work for PB imports —
+        # without this the AC cat stays "unarmored" (missing level+2 from
+        # the worn armor's proficiency) and str_req stays 0 (making the
+        # "meets str req" comparison always true).
+        armor_name = build.get('armor_name', '') or ''
         armor_cat = 'unarmored'
-        if armor_name:
+        if not armor_name:
+            for a in (build.get('armor') or []):
+                if isinstance(a, dict) and a.get('worn') and a.get('prof', '').lower() != 'shield':
+                    armor_name = safe_str(a.get('name'), '')
+                    pf = str(a.get('prof', '')).lower()
+                    if pf in ('light', 'medium', 'heavy'): armor_cat = pf
+                    break
+        if armor_name and armor_cat == 'unarmored':
             for a in BUILDER_ARMOR:
                 if a.get('name', '').lower() == armor_name.lower():
                     cat = a.get('category', 'unarmored').lower()
                     if cat in ('light', 'medium', 'heavy'): armor_cat = cat
                     break
+        self._derived_armor_name = armor_name
+        self._derived_armor_cat = armor_cat
         cat_prof = safe_int(self.proficiencies.get(armor_cat, 0))
         class_cat_prof = self._class_profs.get(armor_cat, 0)
         self.proficiencies['ac'] = max(
@@ -1260,6 +1283,11 @@ class Character:
                 v_low = v.lower().replace(' ', '')
                 if v_low == '@actor.level': return self.level
                 if 'floor(@actor.level/2)' in v_low: return max(1, math.floor(self.level / 2))
+                # ternary(gte(@actor.level,N),T,F) — used by e.g. Armor Proficiency
+                # to upgrade past level 13. Left narrow on purpose; extend as needed.
+                _t = re.match(r'ternary\(gte\(@actor\.level,(-?\d+)\),(-?\d+),(-?\d+)\)', v_low)
+                if _t:
+                    return int(_t.group(2)) if self.level >= int(_t.group(1)) else int(_t.group(3))
                 try: return int(v)
                 except: return 0
             if isinstance(v, dict) and 'brackets' in v:
@@ -1309,15 +1337,49 @@ class Character:
         #      the choice in the name.
         item_choices = {}  # {'orc warmask': {'tradition': 'arcana'}}
 
+        def _camel_flag(name):
+            """Foundry's implicit flag when a ChoiceSet omits `flag`: take
+            the item slug and camelCase it. "Armor Proficiency" →
+            "armorProficiency" — matches what the sibling ActiveEffectLike
+            references via `flags.pf2e.rulesSelections.armorProficiency`."""
+            parts = re.split(r'[\s\-_]+', str(name).strip())
+            if not parts: return ''
+            return parts[0].lower() + ''.join(p[:1].upper() + p[1:].lower() for p in parts[1:] if p)
+
         def _iter_choicesets(base_name):
             """Yield (rule, flag) pairs for each ChoiceSet rule on base_name."""
             r_list = COMPENDIUM_RULES.get(base_name.lower()) or []
+            implicit = _camel_flag(base_name)
             for rule in r_list:
                 if not isinstance(rule, dict): continue
                 if rule.get('key') != 'ChoiceSet': continue
-                flag = rule.get('flag')
+                flag = rule.get('flag') or implicit
                 if flag:
                     yield rule, str(flag)
+
+        def _eval_predicate(pred, profs):
+            """Evaluate a Foundry rule predicate against current proficiencies.
+
+            Supports "defense:<cat>:rank:<N>" atoms (Foundry rank 0/1/2/3/4
+            mapped to app rank 0/2/4/6/8) plus {"not": p}, {"nor": [...]},
+            {"and": [...]}, {"or": [...]}, and bare lists (implicit AND).
+            Unknown atoms return False — conservative so we don't
+            accidentally auto-select a choice we don't understand."""
+            if isinstance(pred, str):
+                m = re.match(r'defense:(\w+):rank:(\d+)$', pred, re.IGNORECASE)
+                if m:
+                    cat, n = m.group(1).lower(), int(m.group(2))
+                    return safe_int(profs.get(cat, 0)) == n * 2
+                return False
+            if isinstance(pred, dict):
+                if 'not' in pred: return not _eval_predicate(pred['not'], profs)
+                if 'nor' in pred: return not any(_eval_predicate(p, profs) for p in pred.get('nor') or [])
+                if 'and' in pred: return all(_eval_predicate(p, profs) for p in pred.get('and') or [])
+                if 'or'  in pred: return any(_eval_predicate(p, profs) for p in pred.get('or')  or [])
+                return False
+            if isinstance(pred, list):
+                return all(_eval_predicate(p, profs) for p in pred)
+            return False
 
         # Sub-pass A — hinted resolution.
         for base_name, hint in source_items:
@@ -1331,6 +1393,26 @@ class Character:
                     last_seg = label.rsplit('.', 1)[-1].strip().lower()
                     hint_l = hint.lower()
                     if hint_l == last_seg or (last_seg and last_seg in hint_l) or (hint_l and hint_l in last_seg):
+                        val = c.get('value')
+                        if val is not None:
+                            item_choices.setdefault(src_lower, {})[flag] = str(val).lower()
+                            break
+
+        # Sub-pass A.5 — predicate-driven resolution. Some ChoiceSet rules
+        # attach a `predicate` to each choice (e.g. Armor Proficiency's
+        # "pick light if rank 0, medium if already light, heavy if already
+        # medium") — the first choice whose predicate evaluates True is the
+        # intended selection. Only fires when Sub-pass A didn't already
+        # resolve the flag, so explicit Pathbuilder hints still win.
+        for base_name, _ in source_items:
+            src_lower = base_name.lower()
+            for rule, flag in _iter_choicesets(base_name):
+                if item_choices.get(src_lower, {}).get(flag): continue
+                for c in rule.get('choices', []) or []:
+                    if not isinstance(c, dict): continue
+                    pred = c.get('predicate')
+                    if pred is None: continue
+                    if _eval_predicate(pred, self.proficiencies):
                         val = c.get('value')
                         if val is not None:
                             item_choices.setdefault(src_lower, {})[flag] = str(val).lower()
@@ -1420,8 +1502,55 @@ class Character:
                                 self.proficiencies[sk_name] = max(current, pf2_rank)
                             elif mode == 'add':
                                 self.proficiencies[sk_name] = current + pf2_rank
+                    elif key == 'ActiveEffectLike' and 'system.proficiencies.defenses.' in str(rule.get('path', '')):
+                        # e.g. Armor Proficiency feat:
+                        #   path = "system.proficiencies.defenses.{item|flags.pf2e.rulesSelections.armorProficiency}.rank"
+                        #   value = "ternary(gte(@actor.level,13),2,1)"
+                        # The templated category is resolved via the ChoiceSet
+                        # selection gathered in pass 1; literal paths
+                        # (defenses.heavy.rank etc.) are also supported.
+                        path = rule.get('path', '')
+                        def_match = re.search(
+                            r'system\.proficiencies\.defenses\.(?:\{item\|flags\.pf2e\.rulesSelections\.(\w+)\}|(\w+))\.rank',
+                            path,
+                        )
+                        if def_match:
+                            flag_name, literal = def_match.group(1), def_match.group(2)
+                            if flag_name:
+                                cat = item_choices.get(src_lower, {}).get(flag_name)
+                            else:
+                                cat = (literal or '').lower()
+                            if cat:
+                                rank_val = resolve_val(rule.get('value', 1))
+                                pf2_rank = rank_val * 2 if rank_val <= 4 else rank_val
+                                mode = rule.get('mode', 'upgrade')
+                                current = safe_int(self.proficiencies.get(cat, 0))
+                                if mode == 'upgrade':
+                                    self.proficiencies[cat] = max(current, pf2_rank)
+                                elif mode == 'add':
+                                    self.proficiencies[cat] = current + pf2_rank
+                                else:
+                                    self.proficiencies[cat] = pf2_rank
                 except Exception:
                     pass  # Don't let any single rule crash the entire character init
+
+        # Apply Pathbuilder per-skill bonuses captured from build["mods"].
+        # Keys are skill names (title-case), values are {bonus_type: amount}.
+        # Route through add_mod so PF2e stacking rules are honored by
+        # get_rule_mod (max per typed bucket, sum for untyped).
+        _PB_MOD_TYPES = {
+            'item bonus': 'item',
+            'status bonus': 'status',
+            'circumstance bonus': 'circumstance',
+        }
+        for _sk_name, _bonus_dict in (_pb_skill_mods or {}).items():
+            if not isinstance(_bonus_dict, dict): continue
+            _sel = str(_sk_name).strip().lower()
+            if not _sel: continue
+            for _btype, _amt in _bonus_dict.items():
+                _mtype = _PB_MOD_TYPES.get(str(_btype).strip().lower(), 'untyped')
+                _val = safe_int(_amt, 0)
+                if _val: add_mod(_sel, _mtype, _val)
 
         self.feats = []
         self.immunities = []
@@ -1480,7 +1609,10 @@ class Character:
             elif isinstance(eq, dict): 
                 self.equipment.append({'name': safe_str(eq.get('name'), 'Item'), 'qty': safe_int(eq.get('qty'), 1), 'bulk': safe_str(eq.get('bulk', '0'))})
 
-        self.armor_name = safe_str(build.get('armor_name'), '')
+        # Fall back to the PB-derived armor_name so bulk, AC item bonus,
+        # and check/speed-penalty comparisons all operate on the worn
+        # armor (not unarmored) for Pathbuilder-imported PCs.
+        self.armor_name = safe_str(build.get('armor_name'), '') or getattr(self, '_derived_armor_name', '') or ''
         total_b = 0
         light_b = 0
         
@@ -1507,16 +1639,47 @@ class Character:
         self.ac_item = safe_int(build.get('ac_item'), safe_int(ac_data.get('acItemBonus'), 0))
         self.ac_dex_cap = safe_int(build.get('ac_dex_cap'), 99)
         self.armor_str_req = safe_int(build.get('armor_str_req'), 0)
-        
         base_armor_penalty = abs(safe_int(build.get('armor_penalty'), abs(safe_int(ac_data.get('armorCheckPenalty'), 0))))
         base_speed_penalty = abs(safe_int(build.get('armor_speed_pen'), 0))
         self.armor_traits = build.get('armor_traits') or []
+
+        # Pathbuilder doesn't export armor_str_req / armor_penalty /
+        # armor_speed_pen — only the armor's name and prof category. Look
+        # the worn armor up in BUILDER_ARMOR so that:
+        #   - the str-req comparison below actually matters (was always
+        #     True against 0, hiding check/speed penalties for underweight
+        #     PCs in heavy armor)
+        #   - ac_item, check penalty, and speed penalty are populated from
+        #     the table when PB didn't provide them explicitly.
+        if self.armor_name:
+            _a_info = next((a for a in BUILDER_ARMOR if a.get('name', '').lower() == self.armor_name.lower()), None)
+            if _a_info:
+                if self.armor_str_req == 0:
+                    self.armor_str_req = safe_int(_a_info.get('str_req'), 0)
+                if self.ac_item == 0:
+                    self.ac_item = safe_int(_a_info.get('ac'), 0)
+                if base_armor_penalty == 0:
+                    base_armor_penalty = abs(safe_int(_a_info.get('penalty'), 0))
+                if base_speed_penalty == 0:
+                    base_speed_penalty = abs(safe_int(_a_info.get('speed_penalty'), 0))
+                if not self.armor_traits:
+                    self.armor_traits = _a_info.get('traits') or []
         
-        if self.mods.get('str', 0) >= self.armor_str_req:
+        # BUILDER_ARMOR's str_req is stored as a *score* (e.g. chain mail
+        # is 14). Pathbuilder-exported armor_str_req, when present, is
+        # also a score. The comparison here is against the str *modifier*
+        # — normalize by converting a score (anything >= 8) to a mod.
+        # Without this, Chain Mail (str_req=14) vs Amadeus's str mod +4
+        # evaluates as 4 >= 14 = False and penalties always apply, even
+        # when the PC exceeds the actual Str 14 requirement.
+        _str_req_mod = self.armor_str_req
+        if _str_req_mod >= 8:
+            _str_req_mod = math.floor((_str_req_mod - 10) / 2)
+        if self.mods.get('str', 0) >= _str_req_mod:
             self.active_armor_penalty = 0
             self.active_speed_penalty = 0
             if 'noisy' in [str(t).lower() for t in self.armor_traits]:
-                self.stealth_penalty = base_armor_penalty 
+                self.stealth_penalty = base_armor_penalty
             else:
                 self.stealth_penalty = 0
         else:
