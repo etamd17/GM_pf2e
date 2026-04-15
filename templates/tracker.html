@@ -71,14 +71,14 @@
 }
 .trk .round-block .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; margin-bottom:4px; }
 .trk .round-block .v {
-  font-size:26px; font-weight:900;
+  font-size:20px; font-weight:900;
   background:linear-gradient(180deg, #f4e8b8 0%, var(--t-gold-b) 50%, var(--t-gold) 100%);
   -webkit-background-clip:text; background-clip:text; color:transparent;
   filter:drop-shadow(0 1px 2px rgba(200,168,78,0.2));
 }
 .trk .turn-now { display:flex; flex-direction:column; padding:0 12px; border-right:1px solid var(--t-border); min-width:110px; }
 .trk .turn-now .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; }
-.trk .turn-now .v { font-family:'Cinzel',serif; font-size:15px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trk .turn-now .v { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .trk .turn-now .v::before { content:"▸ "; color:var(--t-gold); }
 .trk .turn-ctl { display:flex; gap:6px; }
 .trk .next-btn {
@@ -100,8 +100,8 @@
 .trk .hb-btn:hover { background:var(--t-bg-higher); border-color:var(--t-t4); }
 .trk .hb-btn.gold { color:var(--t-gold); border-color:rgba(200,168,78,0.3); }
 .trk .hb-btn.gold:hover { background:rgba(200,168,78,0.08); }
-.trk .hb-btn.purple { color:var(--t-purple); border-color:rgba(155,126,222,0.3); }
-.trk .hb-btn.purple:hover { background:rgba(155,126,222,0.08); }
+.trk .hb-btn.purple { color:var(--t-t1); border-color:var(--t-border); }
+.trk .hb-btn.purple:hover { background:var(--t-bg-higher); }
 .trk .hb-btn.danger { color:var(--t-red-b); }
 .trk .hb-btn.danger:hover { background:rgba(196,60,60,0.08); border-color:rgba(196,60,60,0.4); }
 
@@ -198,11 +198,6 @@
   position:relative;
   box-shadow:0 8px 28px rgba(0,0,0,0.25);
 }
-.trk .grid-wrap::before {
-  content:""; position:absolute; top:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg, transparent, var(--t-red), var(--t-gold), var(--t-red), transparent);
-  opacity:.5; z-index:1;
-}
 .trk .grid-head {
   display:grid;
   grid-template-columns: 28px 56px 1fr 52px 220px 210px 130px;
@@ -273,15 +268,15 @@
 .trk .nm-sub .k { color:var(--t-red-b); font-weight:700; }
 .trk .nm-sub .k.pc { color:var(--t-teal); }
 .trk .nm-sub .k.active { color:var(--t-gold); }
-.trk .nm-sub .k.delay { color:var(--t-purple); }
+.trk .nm-sub .k.delay { color:var(--t-t2); }
 .trk .nm-sub .k.hidden {
-  color:var(--t-purple); letter-spacing:.6px;
-  padding:1px 5px; border:1px solid rgba(155,126,222,0.35);
-  border-radius:3px; background:rgba(155,126,222,0.08);
+  color:var(--t-gold); letter-spacing:.6px;
+  padding:1px 5px; border:1px solid rgba(200,168,78,0.35);
+  border-radius:3px; background:rgba(200,168,78,0.08);
 }
 .trk .nm-sub .pd { color:var(--t-gold); font-weight:600; }
 
-.trk .c-ac { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-blue); text-align:center; }
+.trk .c-ac { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-t1); text-align:center; }
 
 .trk .c-hp { display:flex; flex-direction:column; gap:4px; min-width:0; }
 .trk .c-hp-top { display:flex; justify-content:space-between; align-items:center; font-size:11px; gap:6px; }
@@ -316,11 +311,10 @@
   font-size:9px; padding:2px 6px; border-radius:9px; font-weight:700;
   letter-spacing:.5px; text-transform:uppercase;
   display:inline-flex; gap:4px; align-items:center;
-  background:rgba(155,126,222,0.15); color:var(--t-purple); border:1px solid rgba(155,126,222,0.35);
+  background:rgba(255,255,255,0.06); color:var(--t-t2); border:1px solid rgba(255,255,255,0.12);
 }
 .trk .cp.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
 .trk .cp.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
-.trk .cp.teal { background:rgba(74,150,150,0.15); color:var(--t-teal); border-color:rgba(74,150,150,0.35); }
 .trk .cp button {
   background:none; border:none; padding:0; cursor:pointer; color:inherit; opacity:.65; font-size:11px; line-height:1;
 }
@@ -332,13 +326,13 @@
   flex:1; min-width:0; background:var(--t-bg-higher); border:1px dashed var(--t-t4); color:var(--t-t3);
   padding:3px 6px; border-radius:9px; font-size:10px; outline:none;
 }
-.trk .cp-add select:focus { border-color:var(--t-purple); color:var(--t-t1); }
+.trk .cp-add select:focus { border-color:var(--t-t4); color:var(--t-t1); }
 .trk .cp-add button {
-  padding:3px 8px; background:rgba(155,126,222,0.15); color:var(--t-purple);
-  border:1px solid rgba(155,126,222,0.35); border-radius:9px; cursor:pointer;
+  padding:3px 8px; background:rgba(255,255,255,0.06); color:var(--t-t2);
+  border:1px solid rgba(255,255,255,0.12); border-radius:9px; cursor:pointer;
   font-size:10px; font-weight:700;
 }
-.trk .cp-add button:hover { background:rgba(155,126,222,0.25); }
+.trk .cp-add button:hover { background:rgba(255,255,255,0.1); }
 
 .trk .pd-row { display:flex; gap:3px; align-items:center; margin-top:3px; width:100%; }
 .trk .pd-row .pd-lbl { font-size:9px; color:var(--t-gold); font-weight:700; letter-spacing:.8px; flex-shrink:0; }
@@ -362,7 +356,7 @@
 }
 .trk .ew-btn:hover { border-color:var(--t-t4); }
 .trk .ew-btn.on-elite { background:rgba(200,168,78,0.18); color:var(--t-gold); border-color:rgba(200,168,78,0.45); }
-.trk .ew-btn.on-weak { background:rgba(155,126,222,0.18); color:var(--t-purple); border-color:rgba(155,126,222,0.45); }
+.trk .ew-btn.on-weak { background:rgba(255,255,255,0.08); color:var(--t-t2); border-color:rgba(255,255,255,0.2); }
 .trk .act-btn {
   padding:3px 0; border-radius:4px; font-size:9px; font-weight:700; cursor:pointer;
   background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
@@ -370,15 +364,15 @@
 .trk .act-btn:hover { border-color:var(--t-t4); color:var(--t-t1); }
 .trk .act-btn.del { background:rgba(196,60,60,0.1); color:var(--t-red-b); border-color:rgba(196,60,60,0.3); }
 .trk .act-btn.del:hover { background:rgba(196,60,60,0.2); }
-.trk .act-btn.delay { background:rgba(155,126,222,0.1); color:var(--t-purple); border-color:rgba(155,126,222,0.3); }
-.trk .act-btn.delay:hover { background:rgba(155,126,222,0.2); }
+.trk .act-btn.delay { background:rgba(255,255,255,0.06); color:var(--t-t2); border-color:rgba(255,255,255,0.15); }
+.trk .act-btn.delay:hover { background:rgba(255,255,255,0.1); }
 .trk .act-btn.ready { background:rgba(62,186,104,0.1); color:var(--t-green); border-color:rgba(62,186,104,0.3); }
 .trk .act-btn.ready:hover { background:rgba(62,186,104,0.2); }
-/* Hide/Reveal button — subtle until active, then purple (matches HIDDEN badge) */
-.trk .act-btn.vis { background:rgba(155,126,222,0.06); color:var(--t-t2); border-color:rgba(155,126,222,0.2); }
-.trk .act-btn.vis:hover { background:rgba(155,126,222,0.15); color:var(--t-t1); }
-.trk .act-btn.vis.on-hidden { background:rgba(155,126,222,0.2); color:var(--t-purple); border-color:rgba(155,126,222,0.5); font-weight:700; }
-.trk .act-btn.vis.on-hidden:hover { background:rgba(155,126,222,0.3); }
+/* Hide/Reveal button — subtle until active, then gold (matches HIDDEN badge) */
+.trk .act-btn.vis { background:rgba(255,255,255,0.04); color:var(--t-t2); border-color:rgba(255,255,255,0.1); }
+.trk .act-btn.vis:hover { background:rgba(255,255,255,0.08); color:var(--t-t1); }
+.trk .act-btn.vis.on-hidden { background:rgba(200,168,78,0.12); color:var(--t-gold); border-color:rgba(200,168,78,0.35); font-weight:700; }
+.trk .act-btn.vis.on-hidden:hover { background:rgba(200,168,78,0.2); }
 
 /* empty state */
 .trk .empty-state {
@@ -397,16 +391,6 @@
   border:1px solid var(--t-border); border-radius:14px; padding:16px;
   position:relative; overflow:hidden;
   box-shadow:0 10px 34px rgba(0,0,0,0.32);
-}
-.trk .hero-card::before {
-  content:""; position:absolute; top:0; left:0; right:0; height:3px;
-  background:linear-gradient(90deg, transparent, var(--t-red), var(--t-gold), var(--t-red), transparent);
-  opacity:.85; z-index:1;
-}
-.trk .hero-card::after {
-  content:""; position:absolute; top:-60px; right:-60px; width:200px; height:200px;
-  background:radial-gradient(circle, rgba(196,60,60,0.12), transparent 65%);
-  pointer-events:none;
 }
 
 .trk .hero-top { display:flex; gap:13px; align-items:flex-start; margin-bottom:12px; position:relative; }
@@ -428,9 +412,7 @@
 .trk .hero-ttl .tag-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
 .trk .tagp { font-size:9px; padding:2px 8px; background:rgba(196,60,60,0.12); border:1px solid rgba(196,60,60,0.35); color:var(--t-red-b); border-radius:4px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; }
 .trk .tagp.gold { background:rgba(200,168,78,0.12); border-color:rgba(200,168,78,0.35); color:var(--t-gold); }
-.trk .tagp.purple { background:rgba(155,126,222,0.12); border-color:rgba(155,126,222,0.35); color:var(--t-purple); }
-.trk .tagp.teal { background:rgba(74,150,150,0.12); border-color:rgba(74,150,150,0.35); color:var(--t-teal); }
-.trk .tagp.blue { background:rgba(90,142,232,0.12); border-color:rgba(90,142,232,0.35); color:var(--t-blue); }
+.trk .tagp.pc { background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.15); color:var(--t-t2); }
 .trk .tagp.rare { background:#002664; color:#fff; border-color:rgba(255,255,255,0.15); }
 .trk .tagp.uncommon { background:#98691E; color:#fff; border-color:rgba(255,255,255,0.15); }
 .trk .tagp.unique { background:#54166E; color:#fff; border-color:rgba(255,255,255,0.15); }
@@ -442,12 +424,6 @@
 }
 .trk .hs-box .l { font-size:9px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; font-weight:600; }
 .trk .hs-box .v { font-family:'Cinzel',serif; font-size:16px; font-weight:700; margin-top:1px; color:var(--t-t1); }
-.trk .hs-box.ac .v { color:var(--t-blue); }
-.trk .hs-box.spd .v { color:var(--t-teal); }
-.trk .hs-box.perc .v { color:var(--t-gold); }
-.trk .hs-box.f .v { color:var(--t-green); }
-.trk .hs-box.r .v { color:var(--t-blue); }
-.trk .hs-box.w .v { color:var(--t-purple); }
 
 .trk .hp-ribbon {
   background:linear-gradient(180deg, rgba(38,43,58,0.6), rgba(26,30,41,0.8));
@@ -486,7 +462,7 @@
 .trk .cond-chip {
   padding:3px 9px; border-radius:14px; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
   display:inline-flex; gap:5px; align-items:center;
-  background:rgba(155,126,222,0.15); color:var(--t-purple); border:1px solid rgba(155,126,222,0.35);
+  background:rgba(255,255,255,0.06); color:var(--t-t2); border:1px solid rgba(255,255,255,0.12);
 }
 .trk .cond-chip.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
 .trk .cond-chip.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
@@ -522,7 +498,7 @@
 .trk .defense-row .dl { font-size:9px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; font-weight:700; }
 .trk .defense-row .dv { color:var(--t-t2); }
 .trk .defense-row .dv.w { color:var(--t-red-b); }
-.trk .defense-row .dv.r { color:var(--t-blue); }
+.trk .defense-row .dv.r { color:var(--t-t2); }
 
 /* ═══ COMBAT LOG (collapsible bottom) ═══ */
 .trk .log-wrap {
@@ -564,11 +540,6 @@
   transform:translateY(10px); transition: transform .2s;
 }
 .trk-modal.open .trk-modal-panel { transform:translateY(0); }
-.trk-modal-panel::before {
-  content:""; position:absolute; top:0; left:0; right:0; height:3px;
-  background:linear-gradient(90deg, transparent, var(--t-red), var(--t-gold), var(--t-red), transparent);
-  opacity:.85;
-}
 .trk-modal-head {
   padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start;
   border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.5);
@@ -592,8 +563,8 @@
   padding:7px 10px; border:1px solid var(--t-border); border-radius:6px; margin-top:5px;
   background:rgba(26,30,41,0.7);
 }
-.trk .secret-result .sr-tot { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:17px; color:var(--t-purple); }
-.trk .secret-result .sr-lbl { font-size:11px; color:var(--t-purple); font-weight:600; }
+.trk .secret-result .sr-tot { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:17px; color:var(--t-t1); }
+.trk .secret-result .sr-lbl { font-size:11px; color:var(--t-gold); font-weight:600; }
 .trk .secret-result .sr-time { font-size:9px; color:var(--t-t3); letter-spacing:.8px; }
 .trk .secret-result .sr-det { font-size:9px; color:var(--t-t3); font-family:'JetBrains Mono',monospace; }
 
@@ -682,30 +653,40 @@
     <button class="ts-btn" onclick="toggleCustomForm()">+ Custom</button>
 
     <div class="ts-divider"></div>
+    <button class="ts-btn" onclick="toggleSaveLoadPanel()" title="Save & Load Encounters">💾 Encounters</button>
+</div>
 
-    <label class="tlabel" style="margin-bottom:0;">Save</label>
-    <input type="text" id="save-name" class="tinput" placeholder="Encounter name" style="width:150px;">
-    <button class="ts-btn" onclick="saveEncounter()">Save</button>
-
-    <label class="tlabel" style="margin-bottom:0;">Load</label>
-    <select id="load-select" class="ts-select" style="min-width:150px;">
-        {% if saved_encounters %}
-        <option value="" disabled selected>Select…</option>
-        {% for enc in saved_encounters %}
-        <option value="{{ enc }}">{{ enc }}</option>
-        {% endfor %}
-        {% else %}
-        <option value="" disabled selected>No saved encounters</option>
-        {% endif %}
-    </select>
-    <button class="ts-btn" onclick="loadEncounter()">Load</button>
-    <button class="ts-btn" onclick="deleteEncounter()" style="color:var(--t-red-b);border-color:rgba(196,60,60,0.25);" title="Delete selected encounter">Del</button>
+{# ═══════════════════ SAVE/LOAD PANEL ═══════════════════ #}
+<div id="save-load-panel" class="panel hidden">
+    <div class="panel-head">
+        <span class="panel-ttl">💾 Save &amp; Load Encounters</span>
+        <button class="panel-close" onclick="document.getElementById('save-load-panel').classList.add('hidden')">&times;</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <label class="tlabel" style="margin:0;">Save</label>
+        <input type="text" id="save-name" class="tinput" placeholder="Encounter name" style="width:180px;">
+        <button class="ts-btn" onclick="saveEncounter()">Save</button>
+        <div class="ts-divider"></div>
+        <label class="tlabel" style="margin:0;">Load</label>
+        <select id="load-select" class="ts-select" style="min-width:180px;">
+            {% if saved_encounters %}
+            <option value="" disabled selected>Select…</option>
+            {% for enc in saved_encounters %}
+            <option value="{{ enc }}">{{ enc }}</option>
+            {% endfor %}
+            {% else %}
+            <option value="" disabled selected>No saved encounters</option>
+            {% endif %}
+        </select>
+        <button class="ts-btn" onclick="loadEncounter()">Load</button>
+        <button class="ts-btn" onclick="deleteEncounter()" style="color:var(--t-red-b);border-color:rgba(196,60,60,0.25);" title="Delete selected encounter">Del</button>
+    </div>
 </div>
 
 {# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
-<div id="secret-roll-panel" class="panel hidden" style="border-color:rgba(155,126,222,0.25);">
+<div id="secret-roll-panel" class="panel hidden">
     <div class="panel-head">
-        <span class="panel-ttl" style="color:var(--t-purple);">🎲 GM Secret Roll</span>
+        <span class="panel-ttl">🎲 GM Secret Roll</span>
         <button class="panel-close" onclick="document.getElementById('secret-roll-panel').classList.add('hidden')">&times;</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -719,13 +700,13 @@
         <span style="color:var(--t-t3);font-size:12px;">+</span>
         <input type="number" id="secret-modifier" value="0" class="tinput" style="width:65px;text-align:center;">
         <input type="text" id="secret-label" placeholder="Label (e.g. Perception)" class="tinput" style="flex:1;min-width:160px;">
-        <button class="ts-btn" onclick="doSecretRoll()" style="background:rgba(155,126,222,0.18);color:var(--t-purple);border-color:rgba(155,126,222,0.4);">Roll Secret</button>
+        <button class="ts-btn" onclick="doSecretRoll()" style="background:rgba(255,255,255,0.06);color:var(--t-t1);border-color:rgba(255,255,255,0.15);">Roll Secret</button>
     </div>
     <div id="secret-roll-results" style="margin-top:10px;max-height:160px;overflow-y:auto;"></div>
 </div>
 
 {# ═══════════════════ HANDOUT PANEL ═══════════════════ #}
-<div id="handout-panel" class="panel hidden" style="border-color:rgba(200,168,78,0.25);">
+<div id="handout-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);">📜 Send Handout to Players</span>
         <button class="panel-close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
@@ -754,7 +735,7 @@
             <label class="tlabel" style="margin:0;">Image</label>
             <input type="file" id="handout-image" accept="image/*" style="color:var(--t-t3);font-size:11px;">
         </div>
-        <button class="ts-btn" onclick="sendHandout()" style="background:rgba(200,168,78,0.18);color:var(--t-gold);border-color:rgba(200,168,78,0.4);">Send Handout</button>
+        <button class="ts-btn primary" onclick="sendHandout()">Send Handout</button>
     </div>
 </div>
 
@@ -826,7 +807,7 @@
                     <button class="log-btn danger" onclick="event.stopPropagation(); if(confirm('Clear log?')){apiPostRaw('/api/combat_log/clear').then(()=>refreshLog())}">Clear</button>
                 </div>
             </div>
-            <div id="combat-log-body" class="log-body">
+            <div id="combat-log-body" class="log-body collapsed">
                 <div style="text-align:center;padding:14px;color:var(--t-t3);font-style:italic;">Loading log…</div>
             </div>
         </div>
@@ -904,6 +885,10 @@ let STATE = {
     // throttled) still paint the tracker on first load.
     _renderNow();
 })();
+
+function toggleSaveLoadPanel() {
+    document.getElementById('save-load-panel').classList.toggle('hidden');
+}
 
 function toast(msg, type) {
     const c = document.getElementById('gm-toast-container');
@@ -1025,7 +1010,7 @@ function condTooltip(cond) {
 }
 
 function condChipClass(cond) {
-    if (DEADLY_CONDS.has(cond)) return 'red';
+    if (DEADLY_CONDS.has(cond) || cond === 'frightened' || cond === 'sickened') return 'red';
     if (cond === 'off_guard' || cond === 'concealed' || cond === 'hidden' || cond === 'undetected') return 'gold';
     return '';
 }
@@ -1048,15 +1033,13 @@ function renderInitList() {
     }
     empty.classList.add('hidden');
 
-    const dmgOpts = DAMAGE_TYPES.map(d => `<option value="${d}">${d === 'untyped' ? '— type —' : d}</option>`).join('');
-
     list.innerHTML = STATE.combatants.map((c, idx) => {
         const isActive = idx === STATE.turn_index;
         const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
         const isDying = c.conditions && c.conditions.dying > 0;
         const rowCls = `combatant ${isActive ? 'active' : ''} ${c.delaying ? 'delaying' : ''} ${isDying ? 'down' : ''}`;
 
-        // Conditions HTML
+        // Conditions HTML (read-only in grid; full controls in hero card)
         let condsHtml = '';
         if (c.conditions) {
             for (const [k, v] of Object.entries(c.conditions)) {
@@ -1064,14 +1047,7 @@ function renderInitList() {
                 const isValued = typeof v === 'number' && v > 0;
                 const label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
                 const cls = condChipClass(k);
-                condsHtml += `<span class="cp ${cls}" title="${condTooltip(k)}">${label}`;
-                if (isValued && VALUED_CONDITIONS.includes(k)) {
-                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
-                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
-                } else {
-                    condsHtml += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">✕</button>`;
-                }
-                condsHtml += `</span>`;
+                condsHtml += `<span class="cp ${cls}" title="${condTooltip(k)}">${label}</span>`;
             }
         }
 
@@ -1135,26 +1111,9 @@ function renderInitList() {
                     <span class="pct" style="color:${hpPctColor(hpPct)};">${hpPct}%</span>
                 </div>
                 <div class="c-hp-bar"><div class="c-hp-fill ${hpBarClass(hpPct)}" style="width:${hpPct}%"></div></div>
-                <div class="c-hp-ctrl">
-                    <input type="number" id="hp-amt-${c.instance_id}" value="1" min="1" placeholder="amt">
-                    <select id="dmg-type-${c.instance_id}" title="Damage type (for W/R/I)">${dmgOpts}</select>
-                    <button class="minus" onclick="adjustHP('${c.instance_id}','damage')" title="Apply damage">−</button>
-                    <button class="plus" onclick="adjustHP('${c.instance_id}','heal')" title="Heal">+</button>
-                </div>
             </div>
             <div class="c-cond">
                 ${condsHtml}
-                <div class="cp-add">
-                    <select id="cond-sel-${c.instance_id}">
-                        ${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}
-                    </select>
-                    <button onclick="addCondition('${c.instance_id}')">+ Add</button>
-                </div>
-                <div class="pd-row">
-                    <span class="pd-lbl">PD</span>
-                    <input type="text" id="pd-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire">
-                    <button onclick="setPD('${c.instance_id}')">Set</button>
-                </div>
             </div>
             <div class="c-act">
                 ${ewHtml}
@@ -1195,12 +1154,12 @@ function renderActivePanel() {
     // Tags
     let tagHtml = '';
     if (c.is_pc) {
-        tagHtml += `<span class="tagp teal">PC · LVL ${c.level || '?'}</span>`;
+        tagHtml += `<span class="tagp pc">PC · LVL ${c.level || '?'}</span>`;
     } else {
         tagHtml += `<span class="tagp">LVL ${c.level != null ? c.level : '?'}</span>`;
     }
     if (c.elite_weak === 1) tagHtml += `<span class="tagp gold">Elite</span>`;
-    if (c.elite_weak === -1) tagHtml += `<span class="tagp purple">Weak</span>`;
+    if (c.elite_weak === -1) tagHtml += `<span class="tagp">Weak</span>`;
     if (!c.is_pc && c.traits && c.traits.length) {
         const rar = {uncommon:'uncommon',rare:'rare',unique:'unique'};
         c.traits.slice(0, 4).forEach(t => {
@@ -1358,7 +1317,7 @@ function renderActivePanel() {
         html += `<div class="cond-row">`;
         c.feats.slice(0, 20).forEach(f => {
             const tip = (f.desc || '').replace(/"/g,'&quot;').replace(/<[^>]*>/g,'').substring(0,240);
-            html += `<span class="tagp teal" style="cursor:help;text-transform:none;letter-spacing:.3px;font-size:10px;padding:3px 9px;" title="${tip}">${f.name}</span>`;
+            html += `<span class="tagp pc" style="cursor:help;text-transform:none;letter-spacing:.3px;font-size:10px;padding:3px 9px;" title="${tip}">${f.name}</span>`;
         });
         html += `</div>`;
     }
@@ -1725,7 +1684,7 @@ async function openStatModal(instanceId) {
             html += `<div class="section-h">Spellcasting</div>`;
             d.spell_casters.forEach(sc => {
                 html += `<div class="abl-row">
-                    <div class="abl-nm" style="color:var(--t-purple);">${sc.name} (${sc.tradition})</div>`;
+                    <div class="abl-nm">${sc.name} (${sc.tradition})</div>`;
                 (sc.levels || []).forEach(lvl => {
                     const names = (lvl.spells || []).map(s => s.name).join(', ');
                     if (names) html += `<div class="abl-dsc" style="margin-top:3px;"><strong style="color:var(--t-t1);">${lvl.label}:</strong> ${names}</div>`;
@@ -1828,7 +1787,7 @@ function initSortable() {
 /* ──────────────── Combat Log ──────────────── */
 const LOG_COLORS = {
     turn: 'var(--t-teal)', damage: 'var(--t-red-b)', heal: 'var(--t-green)',
-    critical: 'var(--t-red-b)', condition: 'var(--t-purple)', system: 'var(--t-gold)', action: 'var(--t-t2)'
+    critical: 'var(--t-red-b)', condition: 'var(--t-t2)', system: 'var(--t-gold)', action: 'var(--t-t2)'
 };
 
 // Local cache of combat log entries — populated once on load, then appended
