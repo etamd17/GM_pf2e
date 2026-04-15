@@ -200,12 +200,6 @@
             width: 24px; height: 2px; border-radius: 0 0 2px 2px;
             background: var(--t4);
         }
-        .ability-block[data-ab="str"]::before { background: var(--red); }
-        .ability-block[data-ab="dex"]::before { background: var(--blue); }
-        .ability-block[data-ab="con"]::before { background: var(--green); }
-        .ability-block[data-ab="int"]::before { background: var(--purple); }
-        .ability-block[data-ab="wis"]::before { background: var(--gold); }
-        .ability-block[data-ab="cha"]::before { background: var(--red-b); }
         .ability-block:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
         .ability-block .mod {
             font-family: var(--font-ui);
@@ -578,11 +572,6 @@
 
         /* === TRAIT PILLS === */
         .trait-pill { display:inline-block; font-size: 9px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; padding:2px 8px; border-radius:var(--radius-sm); background:var(--gold-glow); border:1px solid rgba(200,168,78,0.18); color:var(--gold); margin-right:4px; margin-bottom:2px; }
-        .trait-pill.agile { background:rgba(74,222,128,0.08); border-color:rgba(74,222,128,0.2); color:#86EFAC; }
-        .trait-pill.finesse { background:rgba(96,165,250,0.08); border-color:rgba(96,165,250,0.2); color:#93C5FD; }
-        .trait-pill.deadly, .trait-pill.fatal { background:rgba(196,60,60,0.08); border-color:rgba(196,60,60,0.2); color:var(--red-b); }
-        .trait-pill.magical, .trait-pill.arcane, .trait-pill.divine, .trait-pill.occult, .trait-pill.primal { background:rgba(155,126,222,0.08); border-color:rgba(155,126,222,0.2); color:var(--purple); }
-        .trait-pill.ranged, .trait-pill.thrown, .trait-pill.propulsive { background:rgba(251,191,36,0.08); border-color:rgba(251,191,36,0.2); color:var(--gold); }
 
         /* === PORTRAIT (Design C red border) === */
         .portrait-circle { width:52px; height:52px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid var(--red); background:var(--bg-raised); transition:border-color 0.2s; }
@@ -633,16 +622,16 @@
         @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
         @keyframes turnBannerOut { from { transform:translateY(0); opacity:1; } to { transform:translateY(-100%); opacity:0; } }
 
-        /* Proficiency Badges (Design C: T=teal E=green M=purple L=gold) */
-        .prof-t { background:var(--teal-glow); color:var(--teal); border:1px solid rgba(74,150,150,0.3); }
-        .prof-e { background:var(--green-glow); color:var(--green); border:1px solid rgba(62,186,104,0.3); }
-        .prof-m { background:rgba(155,126,222,0.12); color:var(--purple); border:1px solid rgba(155,126,222,0.3); }
-        .prof-l { background:var(--gold-glow); color:var(--gold); border:1px solid rgba(200,168,78,0.3); }
+        /* Proficiency Badges (monochrome T/E, gold M/L) */
+        .prof-t { background:rgba(255,255,255,0.06); color:var(--t2); border:1px solid rgba(255,255,255,0.1); }
+        .prof-e { background:rgba(255,255,255,0.08); color:#e2e2e8; border:1px solid rgba(255,255,255,0.15); }
+        .prof-m { background:var(--gold-glow); color:var(--gold); border:1px solid rgba(200,168,78,0.3); }
+        .prof-l { background:var(--gold-glow); color:var(--gold); border:1px solid rgba(200,168,78,0.4); font-weight:800; }
 
         .prof-U { color: var(--t3); }
-        .prof-T { color: var(--teal); font-weight: bold; }
-        .prof-E { color: var(--green); font-weight: bold; }
-        .prof-M { color: var(--purple); font-weight: bold; }
+        .prof-T { color: var(--t2); font-weight: bold; }
+        .prof-E { color: #e2e2e8; font-weight: bold; }
+        .prof-M { color: var(--gold); font-weight: bold; }
         .prof-L { color: var(--gold); font-weight: bold; }
 
         /* Save/Skill rank mini-badge (Design C, inline with rows) */
@@ -651,14 +640,14 @@
             width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center;
             justify-content: center; border: 1px solid; vertical-align: middle;
         }
-        .sv-rank.T { color: var(--teal); border-color: var(--teal); background: var(--teal-glow); }
-        .sv-rank.E { color: var(--green); border-color: var(--green); background: var(--green-glow); }
-        .sv-rank.M { color: var(--purple); border-color: var(--purple); background: rgba(155,126,222,0.10); }
+        .sv-rank.T { color: var(--t2); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); }
+        .sv-rank.E { color: #e2e2e8; border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); }
+        .sv-rank.M { color: var(--gold); border-color: var(--gold); background: var(--gold-glow); }
         .sv-rank.L { color: var(--gold); border-color: var(--gold); background: var(--gold-glow); }
         .sk-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 8px; border: 1.5px solid var(--t4); vertical-align: middle; }
-        .sk-dot.T { background: var(--teal); border-color: var(--teal); }
-        .sk-dot.E { background: var(--green); border-color: var(--green); }
-        .sk-dot.M { background: var(--purple); border-color: var(--purple); }
+        .sk-dot.T { background: var(--t2); border-color: var(--t2); }
+        .sk-dot.E { background: #e2e2e8; border-color: #e2e2e8; }
+        .sk-dot.M { background: var(--gold); border-color: var(--gold); }
         .sk-dot.L { background: var(--gold); border-color: var(--gold); }
 
         /* Focus Pips (blue accent) */
@@ -860,7 +849,7 @@
 
     {% set stat_color = 'text-red-400' if pc.status_penalty > 0 else 'text-white' %}
     {% set accent_color = 'text-red-400' if pc.status_penalty > 0 else 'text-amber-400' %}
-    {% set blue_accent = 'text-red-400' if pc.status_penalty > 0 else 'text-blue-400' %}
+    {% set blue_accent = 'text-red-400' if pc.status_penalty > 0 else 'text-white' %}
 
     {# ──────────────────────────────────────────────────────────────────
        Action-cost pip macro. PF2e encodes action cost as Unicode in our
@@ -959,7 +948,7 @@
             <!-- AC -->
             <div class="ss-block" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
                 <div class="ss-lbl">Armor Class</div>
-                <div class="ss-val" style="color:var(--blue);">{{ pc.ac }}</div>
+                <div class="ss-val">{{ pc.ac }}</div>
                 <div class="ss-sub">
                     <button onclick="toggleShield()" class="no-print" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC)"
                             style="padding:2px 8px; font-size:10px; margin-right:2px; border-radius:4px; cursor:pointer; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
@@ -975,17 +964,17 @@
             <!-- Speed -->
             <div class="ss-block" title="Speed">
                 <div class="ss-lbl">Speed</div>
-                <div class="ss-val" style="color:var(--teal);">{{ pc.active_speed }}<span style="font-size:11px; color:var(--t3);">ft</span></div>
+                <div class="ss-val">{{ pc.active_speed }}<span style="font-size:11px; color:var(--t3);">ft</span></div>
                 {% if pc.active_speed != pc.base_speed %}<div class="ss-sub" style="color:var(--red-b);">Base {{ pc.base_speed }}</div>{% endif %}
             </div>
 
             <!-- Perception (Proposal 4: rank dot) -->
             {% set perc_rank = pc.proficiencies.get('perception', 2) %}
             {% set perc_rank_label = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_rank, 'T') %}
-            {% set perc_rank_color = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(perc_rank, '#4a9696') %}
+            {% set perc_rank_color = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(perc_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" title="Roll Perception ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(perc_rank, 'Trained') }})">
                 <div class="ss-lbl">Perception</div>
-                <div class="ss-val" style="color:var(--gold);">+{{ pc.perception }}</div>
+                <div class="ss-val">+{{ pc.perception }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
             </div>
 
@@ -1000,9 +989,9 @@
             {% if pc.spell_dc > 0 %}
             <div class="ss-block" title="Spell DC (target DC for enemies saving against your spells)">
                 <div class="ss-lbl">Spell DC</div>
-                <div class="ss-val" style="color:var(--purple);">{{ pc.spell_dc }}</div>
+                <div class="ss-val">{{ pc.spell_dc }}</div>
                 {% if pc.spell_attack is defined and pc.spell_attack != 0 %}
-                <div class="ss-sub" style="color:var(--purple);">Spell Atk +{{ pc.spell_attack }}</div>
+                <div class="ss-sub">Spell Atk +{{ pc.spell_attack }}</div>
                 {% endif %}
             </div>
             {% endif %}
@@ -1010,26 +999,26 @@
             <!-- Fort/Ref/Will (compact saves in strip — Proposal 4: rank dots) -->
             {% set fort_rank = pc.proficiencies.get('fortitude', 2) %}
             {% set fort_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(fort_rank, 'T') %}
-            {% set fort_rc = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(fort_rank, '#4a9696') %}
+            {% set fort_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(fort_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fortitude Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(fort_rank, 'Trained') }})">
                 <div class="ss-lbl">Fort</div>
-                <div class="ss-val" style="color:var(--green);">+{{ pc.fort }}</div>
+                <div class="ss-val">+{{ pc.fort }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ fort_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ fort_rc }};">{{ fort_rl }}</span></div>
             </div>
             {% set ref_rank = pc.proficiencies.get('reflex', 2) %}
             {% set ref_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ref_rank, 'T') %}
-            {% set ref_rc = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(ref_rank, '#4a9696') %}
+            {% set ref_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(ref_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" title="Roll Reflex Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(ref_rank, 'Trained') }})">
                 <div class="ss-lbl">Reflex</div>
-                <div class="ss-val" style="color:var(--blue);">+{{ pc.ref }}</div>
+                <div class="ss-val">+{{ pc.ref }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ ref_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ ref_rc }};">{{ ref_rl }}</span></div>
             </div>
             {% set will_rank = pc.proficiencies.get('will', 2) %}
             {% set will_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(will_rank, 'T') %}
-            {% set will_rc = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(will_rank, '#4a9696') %}
+            {% set will_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(will_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" title="Roll Will Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(will_rank, 'Trained') }})">
                 <div class="ss-lbl">Will</div>
-                <div class="ss-val" style="color:var(--purple);">+{{ pc.will }}</div>
+                <div class="ss-val">+{{ pc.will }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ will_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ will_rc }};">{{ will_rl }}</span></div>
             </div>
 
@@ -1175,46 +1164,24 @@
                 <div class="xl:col-span-1 space-y-6">
                     <div class="panel-card">
                         <h3 class="section-header">Character Details</h3>
-                        <div class="space-y-2">
-                            <!-- DCs Row -->
-                            <div class="grid grid-cols-{% if pc.spell_dc > 0 %}3{% else %}1{% endif %} gap-2">
-                                <div class="ds-surface-sunken px-3 py-3 text-center">
-                                    <span class="ds-label block">Class DC</span>
-                                    <span class="ds-value text-lg">{{ pc.class_dc }}</span>
-                                </div>
-                                {% if pc.spell_dc > 0 %}
-                                <div class="ds-surface-sunken px-3 py-3 text-center" style="border-color:rgba(167,139,250,0.15);">
-                                    <span class="ds-label block" style="color:#7B6BA0;">Spell DC</span>
-                                    <span class="ds-value text-lg" style="color:#C4B5FD;">{{ pc.spell_dc }}</span>
-                                </div>
-                                <div class="ds-surface-sunken px-3 py-3 text-center" style="border-color:rgba(167,139,250,0.15);">
-                                    <span class="ds-label block" style="color:#7B6BA0;">Spell Atk</span>
-                                    <span class="ds-value text-lg" style="color:#C4B5FD;">+{{ pc.spell_attack }}</span>
-                                </div>
-                                {% endif %}
-                            </div>
-
-                            <div class="skill-row">
-                                <span class="ds-label">Speed</span>
-                                <span class="text-sm font-bold {% if pc.active_speed < pc.base_speed %}text-red-400{% else %}text-white{% endif %}" title="Base Speed: {{ pc.base_speed }}ft">{{ pc.active_speed }} ft</span>
-                            </div>
+                        <div class="space-y-1">
                             {% if pc.deity != 'None' and pc.deity != 'Not set' %}
-                            <div class="skill-row">
+                            <div class="skill-row" style="padding:4px 8px;">
                                 <span class="ds-label">Deity</span>
-                                <span class="text-sm font-bold" style="color:var(--text-primary);">{{ pc.deity }}{% if pc.sanctification != 'Neutral' %} <span style="color:var(--text-muted); font-size:var(--text-2xs);">({{ pc.sanctification }})</span>{% endif %}</span>
+                                <span class="text-sm font-bold text-white">{{ pc.deity }}{% if pc.sanctification != 'Neutral' %} <span class="text-gray-500 text-[10px]">({{ pc.sanctification }})</span>{% endif %}</span>
                             </div>
                             {% endif %}
                             {% if pc.senses %}
-                            <div class="skill-row">
-                                <span class="ds-label" style="color:var(--accent-teal);">Senses</span>
-                                <span class="text-sm" style="color:var(--color-spell);">{{ pc.senses | join(', ') }}</span>
+                            <div class="skill-row" style="padding:4px 8px;">
+                                <span class="ds-label">Senses</span>
+                                <span class="text-sm text-gray-300">{{ pc.senses | join(', ') }}</span>
                             </div>
                             {% endif %}
-                            <div class="ds-surface-sunken px-3 py-3">
+                            <div class="ds-surface-sunken px-3 py-2">
                                 <span class="ds-label block mb-1">Languages</span>
-                                <span class="text-sm leading-tight" style="color:var(--text-secondary);">{{ pc.languages | join(', ') }}</span>
+                                <span class="text-xs leading-tight text-gray-400">{{ pc.languages | join(', ') }}</span>
                             </div>
-                            
+
                             {% set active_mods = [] %}
                             {% for sel, type_dict in pc.rule_modifiers.items() %}
                                 {% for m_type, val_list in type_dict.items() %}
@@ -1224,9 +1191,9 @@
                                 {% endfor %}
                             {% endfor %}
                             {% if active_mods %}
-                            <div class="bg-green-900/20 border border-green-900/50 px-3 py-2 rounded flex justify-between items-center" title="Feats and Features automatically modifying stats.">
-                                <span class="text-[10px] text-green-500/80 uppercase font-bold tracking-widest">Rule Engine</span>
-                                <span class="text-xs font-bold text-green-400">{{ active_mods|length }} Active</span>
+                            <div class="bg-gray-800/50 border border-gray-700 px-3 py-2 rounded flex justify-between items-center" title="Feats and Features automatically modifying stats.">
+                                <span class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Rule Engine</span>
+                                <span class="text-xs font-bold text-gray-400">{{ active_mods|length }} Active</span>
                             </div>
                             {% endif %}
                         </div>
@@ -1390,7 +1357,7 @@
 
                         <div class="skill-row mt-4">
                             <span class="ds-label">Class DC</span>
-                            <span class="text-sm font-bold" style="color:var(--accent-gold);">{{ pc.class_dc }}</span>
+                            <span class="text-sm font-bold text-white">{{ pc.class_dc }}</span>
                         </div>
                     </div>
 
