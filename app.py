@@ -620,6 +620,43 @@ def _broadcast_encounter_state():
 
 COMPENDIUM_LIBRARY = {}
 COMPENDIUM_RULES = {}
+
+def _merge_rules(name, new_rules):
+    """Register rules for a compendium entry by merging (not replacing).
+
+    Some entries share names across different folders. The classic case is
+    'Orc Warmask': there's a feats/ancestry entry (GrantItem rules — grants
+    the equipment) and an equipment/ entry (ChoiceSet + FlatModifier — gives
+    the actual +1 item bonus). A plain dict assignment let whichever loader
+    ran last silently clobber the other, so the resolver never saw the
+    ChoiceSet rule that drives the tradition-picker. Merging preserves both
+    rule sets so `Character.__init__` applies the full picture.
+
+    Dedup by serialized form: some files are loaded through more than one
+    walker (e.g. the `equipment/` loader and an archetype loader both catch
+    the same path), which without dedup would stack identical rules and
+    double-apply item bonuses.
+    """
+    if not name:
+        return
+    key = name.lower()
+    rules = list(new_rules) if new_rules else []
+    existing = COMPENDIUM_RULES.get(key) or []
+    seen = set()
+    merged = []
+    for r in list(existing) + rules:
+        # Only dict rules need dedup; non-dicts are passed through verbatim.
+        if isinstance(r, dict):
+            try:
+                sig = json.dumps(r, sort_keys=True, default=str)
+            except Exception:
+                sig = id(r)  # fall back to identity if unserializable
+            if sig in seen:
+                continue
+            seen.add(sig)
+        merged.append(r)
+    COMPENDIUM_RULES[key] = merged
+
 BUILDER_ANCESTRIES = {
     # Core ancestries (Player Core) — fallback data if no compendium loaded
     "Human": {"boosts": {"str": True, "dex": True, "con": True, "int": True, "wis": True, "cha": True}, "flaws": [], "hp": 8, "rarity": "common", "description": "Humans are diverse and adaptable, with a wide range of cultures."},
@@ -1231,21 +1268,115 @@ class Character:
                         return resolve_val(b.get('value', 0))
             return 0
 
-        sources = [self.ancestry, self.heritage, self.class_name, self.subclass, self.background]
-        for f in self.raw_feats:
-            if isinstance(f, list) and len(f) > 0: sources.append(f[0])
-            elif isinstance(f, dict): sources.append(f.get('name', ''))
-        for eq in (build.get('equipment') or []):
-            if isinstance(eq, dict): sources.append(eq.get('name', ''))
-            elif isinstance(eq, list) and len(eq) > 0: sources.append(eq[0])
-        for w in (build.get('weapons') or []):
-            if isinstance(w, dict): sources.append(w.get('name', ''))
-        sources.append(build.get('armor_name', ''))
+        # Build the source list as (base_name, hint) tuples. Pathbuilder
+        # encodes ChoiceSet selections in the equipment name via a colon
+        # suffix — e.g. "Orc Warmask: Magic" means the user picked the
+        # "Magic" choice (which maps to Arcana). Splitting here lets pass 1
+        # honor that explicit choice instead of falling back to a heuristic.
+        source_items = []
+        def _add_src(n):
+            if not n: return
+            n_str = str(n).strip()
+            if not n_str: return
+            if ':' in n_str:
+                base, _, after = n_str.partition(':')
+                source_items.append((base.strip(), after.strip().lower()))
+            else:
+                source_items.append((n_str, None))
 
-        for src in sources:
-            if not src: continue
-            r_list = COMPENDIUM_RULES.get(str(src).lower()) or []
+        for n in [self.ancestry, self.heritage, self.class_name, self.subclass, self.background]:
+            _add_src(n)
+        for f in self.raw_feats:
+            if isinstance(f, list) and len(f) > 0: _add_src(f[0])
+            elif isinstance(f, dict): _add_src(f.get('name', ''))
+        for eq in (build.get('equipment') or []):
+            if isinstance(eq, dict): _add_src(eq.get('name', ''))
+            elif isinstance(eq, list) and len(eq) > 0: _add_src(eq[0])
+        for w in (build.get('weapons') or []):
+            if isinstance(w, dict): _add_src(w.get('name', ''))
+        _add_src(build.get('armor_name', ''))
+
+        # PASS 1 — ChoiceSet resolution, two sub-passes:
+        #   A) Hinted sources first. If a source name carries a colon suffix
+        #      (e.g. "Orc Warmask: Magic"), try to match that suffix against
+        #      each choice's label — the last dotted segment of the label is
+        #      what Pathbuilder displays ("PF2E.…OrcWarmask.Magic" → "Magic").
+        #      This is how we route Orc Warmask's +1 to arcana specifically,
+        #      not to whatever tradition the PC happens to be best at.
+        #   B) Highest-trained fallback. For any flag still unresolved, pick
+        #      the choice whose value matches the PC's highest proficiency
+        #      rank — useful for older exports where Pathbuilder didn't put
+        #      the choice in the name.
+        item_choices = {}  # {'orc warmask': {'tradition': 'arcana'}}
+
+        def _iter_choicesets(base_name):
+            """Yield (rule, flag) pairs for each ChoiceSet rule on base_name."""
+            r_list = COMPENDIUM_RULES.get(base_name.lower()) or []
             for rule in r_list:
+                if not isinstance(rule, dict): continue
+                if rule.get('key') != 'ChoiceSet': continue
+                flag = rule.get('flag')
+                if flag:
+                    yield rule, str(flag)
+
+        # Sub-pass A — hinted resolution.
+        for base_name, hint in source_items:
+            if not hint: continue
+            src_lower = base_name.lower()
+            for rule, flag in _iter_choicesets(base_name):
+                if item_choices.get(src_lower, {}).get(flag): continue
+                for c in rule.get('choices', []) or []:
+                    if not isinstance(c, dict): continue
+                    label = str(c.get('label', ''))
+                    last_seg = label.rsplit('.', 1)[-1].strip().lower()
+                    hint_l = hint.lower()
+                    if hint_l == last_seg or (last_seg and last_seg in hint_l) or (hint_l and hint_l in last_seg):
+                        val = c.get('value')
+                        if val is not None:
+                            item_choices.setdefault(src_lower, {})[flag] = str(val).lower()
+                            break
+
+        # Sub-pass B — highest-trained fallback for anything still unresolved.
+        for base_name, _ in source_items:
+            src_lower = base_name.lower()
+            for rule, flag in _iter_choicesets(base_name):
+                if item_choices.get(src_lower, {}).get(flag): continue
+                choice_values = []
+                for c in rule.get('choices', []) or []:
+                    if isinstance(c, dict) and c.get('value') is not None:
+                        choice_values.append(str(c.get('value')).lower())
+                    elif isinstance(c, str):
+                        choice_values.append(c.lower())
+                if not choice_values: continue
+                best, best_rank = choice_values[0], -1
+                for cv in choice_values:
+                    r = safe_int(self.proficiencies.get(cv, 0))
+                    if r > best_rank:
+                        best, best_rank = cv, r
+                item_choices.setdefault(src_lower, {})[flag] = best
+
+        _tpl_sel_re = re.compile(r'\{item\|flags\.pf2e\.rulesSelections\.(\w+)\}', re.IGNORECASE)
+
+        # PASS 2 — apply FlatModifier / Sense / ActiveEffectLike rules. We
+        # iterate by base_name (stripping the ": suffix") so rules attached
+        # to "Orc Warmask" are applied even when the only source entry is
+        # the colon-variant equipment name "Orc Warmask: Magic". Dedup by
+        # (base_name, id(rule)) so a rule doesn't fire twice if the same
+        # base was reached via both feat and equipment entries.
+        _seen_rule_firings = set()
+        for src, _ in source_items:
+            if not src: continue
+            src_lower = str(src).lower()
+            r_list = COMPENDIUM_RULES.get(src_lower) or []
+            for rule in r_list:
+                # Skip if we've already fired this exact rule object for
+                # this base name — covers the case where both "Orc Warmask"
+                # (from feats) and "Orc Warmask: Magic" (from equipment)
+                # land on the same base lookup key.
+                rule_sig = (src_lower, id(rule))
+                if rule_sig in _seen_rule_firings:
+                    continue
+                _seen_rule_firings.add(rule_sig)
                 try:
                     if not isinstance(rule, dict): continue
                     key = rule.get('key', '')
@@ -1254,8 +1385,19 @@ class Character:
                         if isinstance(selectors, str): selectors = [selectors]
                         val = resolve_val(rule.get('value', 0))
                         m_type = rule.get('type', 'untyped').lower()
-                        for s in selectors: 
-                            if s: add_mod(str(s).lower(), m_type, val)
+                        for s in selectors:
+                            if not s: continue
+                            s_str = str(s)
+                            # Resolve {item|flags.pf2e.rulesSelections.X} using
+                            # the selections we gathered in pass 1.
+                            m = _tpl_sel_re.match(s_str)
+                            if m:
+                                flag = m.group(1)
+                                resolved = item_choices.get(src_lower, {}).get(flag)
+                                if resolved:
+                                    add_mod(resolved, m_type, val)
+                            else:
+                                add_mod(s_str.lower(), m_type, val)
                     elif key == 'Sense':
                         s_type = rule.get('selector', rule.get('sense', {}).get('type', ''))
                         if s_type and s_type.title() not in self.senses: self.senses.append(s_type.title())
@@ -2316,7 +2458,7 @@ def load_compendium():
                         name = get_col(r, 'name', 'Unknown')
                         BUILDER_ANCESTRIES[name] = {'boosts': boosts, 'flaws': flaws, 'hp': hp, 'rarity': rarity, 'description': clean_foundry_text(desc)}
                         COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                        COMPENDIUM_RULES[name.lower()] = safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or []
+                        _merge_rules(name, safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or [])
                     except: pass
             except: pass
             
@@ -2382,7 +2524,7 @@ def load_compendium():
                             BUILDER_DATA["heritages"][anc_key].append({"name": name, "desc": clean_foundry_text(desc), "rarity": rarity})
 
                         COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                        COMPENDIUM_RULES[name.lower()] = safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or []
+                        _merge_rules(name, safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or [])
                     except Exception as e: pass
             except: pass
         
@@ -2451,7 +2593,7 @@ def load_compendium():
 
                         BUILDER_BACKGROUNDS[name] = {'boosts': boosts, 'skills': clean_skills, 'feat': bg_feat, 'description': clean_foundry_text(desc), 'category': bg_cat}
                         COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                        COMPENDIUM_RULES[name.lower()] = safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or []
+                        _merge_rules(name, safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or [])
                     except Exception as e: pass
             except: pass
         
@@ -2485,7 +2627,7 @@ def load_compendium():
                         
                         BUILDER_CLASSES[name] = {'keyAbility': key_ab, 'hp': hp, 'rarity': rarity, 'category': c_cat, 'description': clean_foundry_text(desc)}
                         COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                        COMPENDIUM_RULES[name.lower()] = safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or []
+                        _merge_rules(name, safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or [])
                         
                         if c_lower not in BUILDER_DATA['classes']:
                             BUILDER_DATA['classes'][c_lower] = {
@@ -2552,7 +2694,7 @@ def load_compendium():
                         feat_rules = safe_json_load(r, 'rule_elements', [])
                         if not feat_rules and isinstance(sys_data, dict):
                             feat_rules = sys_data.get('rules') or []
-                        COMPENDIUM_RULES[name.lower()] = feat_rules
+                        _merge_rules(name, feat_rules)
                     except: pass
             except: pass
         
@@ -2611,7 +2753,7 @@ def load_compendium():
                             desc = d_obj.get('value', '') if isinstance(d_obj, dict) else (d_obj if isinstance(d_obj, str) else '')
 
                         COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                        COMPENDIUM_RULES[name.lower()] = safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or []
+                        _merge_rules(name, safe_json_load(r, 'rule_elements', []) or sys_data.get('rules') or [])
                         
                         item_type = get_col(r, 'type', '').lower()
                         if not item_type and 'type' in cols: item_type = str(r['type']).lower()
@@ -2712,7 +2854,7 @@ def load_compendium():
                                 traits = extract_traits(sys.get('traits', {}))
                                 rarity = get_rarity(sys, {}, traits)
                                 BUILDER_ANCESTRIES[name] = {'boosts': sys.get('boosts', {}), 'flaws': sys.get('flaws', []), 'hp': sys.get('hp', 8), 'rarity': rarity, 'description': clean_foundry_text(desc)}
-                                COMPENDIUM_RULES[name.lower()] = sys.get('rules') or []
+                                _merge_rules(name, sys.get('rules') or [])
                         except: pass
 
         p_her = os.path.join(COMPENDIUM_DATA_DIR, 'heritages')
@@ -2755,7 +2897,7 @@ def load_compendium():
                             existing = [h['name'] for h in BUILDER_DATA["heritages"][anc_key]]
                             if name not in existing:
                                 BUILDER_DATA["heritages"][anc_key].append({"name": name, "desc": clean_foundry_text(desc), "rarity": rarity})
-                            COMPENDIUM_RULES[name.lower()] = sys.get('rules') or []
+                            _merge_rules(name, sys.get('rules') or [])
                         except: pass
 
         p_bg = os.path.join(COMPENDIUM_DATA_DIR, 'backgrounds')
@@ -2781,7 +2923,7 @@ def load_compendium():
                                 elif rarity in ['uncommon', 'rare', 'unique']: bg_cat = 'campaign'
                                 
                                 BUILDER_BACKGROUNDS[name] = {'boosts': sys.get('boosts', {}), 'skills': sys.get('skills', {}).get('value', []), 'feat': '', 'description': clean_foundry_text(desc), 'category': bg_cat}
-                                COMPENDIUM_RULES[name.lower()] = sys.get('rules') or []
+                                _merge_rules(name, sys.get('rules') or [])
                         except: pass
 
         p_cls = os.path.join(COMPENDIUM_DATA_DIR, 'classes')
@@ -2808,7 +2950,7 @@ def load_compendium():
                                 else: c_cat = 'expanded'
                                 
                                 BUILDER_CLASSES[name] = {'keyAbility': sys.get('key_ability', []), 'hp': sys.get('hp', 8), 'rarity': rarity, 'category': c_cat, 'description': clean_foundry_text(desc)}
-                                COMPENDIUM_RULES[name.lower()] = sys.get('rules') or []
+                                _merge_rules(name, sys.get('rules') or [])
                                 
                                 if c_lower not in BUILDER_DATA['classes']:
                                     BUILDER_DATA['classes'][c_lower] = {
@@ -2835,7 +2977,7 @@ def load_compendium():
                                 sys = data.get('system', {})
                                 desc = sys.get('description', {}).get('value', '')
                                 COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                                COMPENDIUM_RULES[name.lower()] = sys.get('rules') or []
+                                _merge_rules(name, sys.get('rules') or [])
                                 
                                 item_type = data.get('type', '').lower()
                                 if item_type == 'weapon' or 'weapon' in folder.lower():
@@ -2877,7 +3019,7 @@ def load_compendium():
                                 desc = sys.get('description', {}).get('value', '')
                                 if name and desc:
                                     COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
-                                    COMPENDIUM_RULES[name.lower()] = sys.get('rules') or []
+                                    _merge_rules(name, sys.get('rules') or [])
                             except: pass
 
     for c_key, c_data in BUILDER_DATA['classes'].items():
@@ -6086,8 +6228,67 @@ def learn_spell(pc_name):
     
     caster['spells'] = spells
     save_and_reload_character(pc_name, pc_json, file_path)
-    
+
     return jsonify({"success": True, "spell": spell_name, "level": spell_level})
+
+@app.route('/api/forget_spell/<pc_name>', methods=['POST'])
+def forget_spell(pc_name):
+    """Remove a spell from a character's spellbook/repertoire.
+
+    Strips the spell from the caster's `spells[].list` at the given level.
+    Also clears any prepared-slot instances so a stale reference doesn't
+    leave a ghost "Cast" button pointing at a spell the character no longer
+    knows.
+    """
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"error": "Character not found"}), 404
+
+    data = request.json or {}
+    spell_name = data.get('name', '')
+    spell_level = safe_int(data.get('level'), 0)
+    caster_idx = safe_int(data.get('caster_idx'), 0)
+
+    if not spell_name:
+        return jsonify({"error": "No spell name provided"}), 400
+
+    file_path = get_pc_file_path(pc_name)
+    if not file_path:
+        return jsonify({"error": "File not found"}), 404
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        pc_json = json.load(f)
+    build = pc_json.get('build', pc_json)
+
+    spell_casters = build.get('spellCasters', [])
+    if caster_idx >= len(spell_casters):
+        return jsonify({"error": "Invalid caster index"}), 400
+
+    caster = spell_casters[caster_idx]
+    removed = False
+    for lvl_entry in caster.get('spells', []) or []:
+        if lvl_entry.get('spellLevel') == spell_level and spell_name in (lvl_entry.get('list') or []):
+            lvl_entry['list'] = [s for s in lvl_entry['list'] if s != spell_name]
+            removed = True
+
+    # Scrub any prepared slots that reference this spell — the prepared UI
+    # lives in build.prepared_spells[caster_idx][level] = [name|null, ...]
+    prepped = build.get('prepared_spells') or {}
+    caster_prep = prepped.get(str(caster_idx)) or prepped.get(caster_idx) or {}
+    for lvl_key, slot_arr in list(caster_prep.items()):
+        if isinstance(slot_arr, list):
+            caster_prep[lvl_key] = [None if s == spell_name else s for s in slot_arr]
+    if caster_prep:
+        # Normalize key to str so reloads match what we wrote
+        prepped[str(caster_idx)] = caster_prep
+        build['prepared_spells'] = prepped
+
+    # Signature spells (spontaneous casters) — drop the entry if present
+    sigs = build.get('signature_spells') or []
+    if spell_name in sigs:
+        build['signature_spells'] = [s for s in sigs if s != spell_name]
+
+    save_and_reload_character(pc_name, pc_json, file_path)
+    return jsonify({"success": True, "removed": removed, "spell": spell_name, "level": spell_level})
 
 @app.route('/api/set_signature_spells/<pc_name>', methods=['POST'])
 def set_signature_spells(pc_name):

@@ -172,9 +172,13 @@
         }
 
         /* === Ability row (Design C boxed cards with colored accent) === */
+        /* Tightened vertical padding + margins on 2025-04 at user request —
+           the top bar was eating ~230px combined and pushing skills below
+           the fold on smaller laptop screens. Cards still read clearly at
+           arm's length, just less wasted vertical whitespace. */
         .ability-row-wrap {
             display: flex; justify-content: center; gap: 10px;
-            padding: 12px 16px;
+            padding: 7px 16px;
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border);
             flex-wrap: wrap;
@@ -182,7 +186,7 @@
         .ability-block {
             display: flex; flex-direction: column; align-items: center;
             width: 84px; min-width: 72px;
-            padding: 10px 6px 8px;
+            padding: 6px 6px 5px;
             background: var(--bg-raised);
             border: 1px solid var(--border-s);
             border-radius: 8px;
@@ -205,15 +209,15 @@
         .ability-block:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
         .ability-block .mod {
             font-family: var(--font-ui);
-            font-size: 24px; font-weight: 800;
+            font-size: 22px; font-weight: 800;
             color: #fff; line-height: 1;
         }
         .ability-block .label {
             font-family: var(--font-ui);
-            font-size: 11px; font-weight: 700;
+            font-size: 10px; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.08em;
             color: var(--t3);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         /* === Stat Box (saves/PER etc. legacy) === */
@@ -298,6 +302,11 @@
         .hp-gauge-fill.dead { background:#7F1D1D; }
 
         /* === Stats strip (Design C horizontal cards) === */
+        /* Tightened on 2025-04 per user request: the AC/Speed/Saves/HP row
+           previously ran ~78px tall per block (30px stat + padding + gap).
+           Shrinking the stat number to 24px and trimming padding brings the
+           strip to ~58px, ~25% shorter. HP block overrides stat font below
+           to match. */
         .stats-strip {
             display: flex; align-items: stretch;
             background: var(--bg-surface);
@@ -306,14 +315,14 @@
         }
         .ss-block {
             flex: 1 1 0; min-width: 96px;
-            text-align: center; padding: 8px 8px 10px;
+            text-align: center; padding: 5px 8px 6px;
             border-right: 1px solid var(--border);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .ss-block:last-child { border-right: none; }
-        .ss-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-bottom: 4px; }
-        .ss-val { font-size: 30px; font-weight: 800; color: #fff; line-height: 1; }
-        .ss-sub { font-size: 11px; color: var(--t3); margin-top: 4px; }
+        .ss-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-bottom: 2px; }
+        .ss-val { font-size: 24px; font-weight: 800; color: #fff; line-height: 1; }
+        .ss-sub { font-size: 10px; color: var(--t3); margin-top: 2px; }
 
         /* === CONDITION BAR === */
         .condition-bar {
@@ -965,21 +974,21 @@
             <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}" style="flex:2.2; min-width:240px;">
                 <div class="ss-lbl">Hit Points</div>
                 <div class="flex items-center justify-center gap-2">
-                    <button class="hp-btn heal" onclick="applyHPChange('heal')" title="Heal" style="width:28px; height:28px; padding:0; font-size:14px;">+</button>
+                    <button class="hp-btn heal" onclick="applyHPChange('heal')" title="Heal" style="width:24px; height:24px; padding:0; font-size:13px;">+</button>
                     <div style="text-align:center; min-width:90px;">
                         <div>
-                            <span id="current-hp" class="hp-current" style="font-size:30px; font-weight:800; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
-                            <span style="color:var(--t3); font-size:14px; font-weight:600;">/ {{ pc.hp }}</span>
+                            <span id="current-hp" class="hp-current" style="font-size:24px; font-weight:800; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
+                            <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
                             {% if pc.temp_hp > 0 %}<span style="color:var(--blue); font-size:11px; font-weight:600; margin-left:4px;">+{{ pc.temp_hp }}</span>{% endif %}
                         </div>
                         {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
-                        <div class="hp-gauge hp-gauge-bar" style="margin-top:4px;">
+                        <div class="hp-gauge hp-gauge-bar" style="margin-top:3px;">
                             <div class="hp-gauge-fill {% if pc.current_hp == 0 %}dead{% elif hp_pct <= 25 %}low{% elif hp_pct <= 50 %}mid{% else %}high{% endif %}" style="width:{{ hp_pct|int }}%"></div>
                         </div>
                     </div>
-                    <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:28px; height:28px; padding:0; font-size:14px;">−</button>
+                    <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:24px; height:24px; padding:0; font-size:13px;">−</button>
                 </div>
-                <div class="flex items-center justify-center gap-1 no-print" style="margin-top:6px;">
+                <div class="flex items-center justify-center gap-1 no-print" style="margin-top:4px;">
                     <input type="number" class="hp-input" id="hp-change-input" placeholder="0" min="0" style="width:56px;">
                     <!-- Resources inline: Hero + Focus -->
                     <span class="resource-counter" style="padding:3px 8px;">
@@ -1741,9 +1750,12 @@
                                                 <span class="text-xs font-bold truncate" style="color:var(--text-primary);">{{ sp.name }}</span>
                                                 {% if sp.actions %}<span class="text-[10px] ml-1 opacity-60" style="color:var(--color-spell);">{{ sp.actions }}</span>{% endif %}
                                             </div>
-                                            <button onclick="event.stopPropagation(); prepareSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="px-2 py-1 rounded text-[10px] font-bold transition-colors shrink-0" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">
-                                                + Prep
-                                            </button>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button onclick="event.stopPropagation(); prepareSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="px-2 py-1 rounded text-[10px] font-bold transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">
+                                                    + Prep
+                                                </button>
+                                                <button onclick="event.stopPropagation(); forgetSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="no-print px-1.5 py-1 rounded text-[10px] text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Forget this spell">&times;</button>
+                                            </div>
                                         </div>
                                         {% endfor %}
                                     </div>
@@ -2240,9 +2252,15 @@
         <div id="dice-panel" class="hidden bg-gray-800 rounded-lg shadow-2xl mb-4 w-80 overflow-hidden flex flex-col transform transition-all origin-bottom-right border border-gray-700">
             <div class="bg-gray-900 p-3 border-b border-gray-700 flex justify-between items-center">
                 <span class="font-header text-amber-500 text-sm">Dice Roller</span>
-                <div class="flex items-center gap-2">
-                    <button id="btn-toggle-3d" onclick="toggleDiceMode()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Dice animation: 3D physics → 2D animated → Instant (no animation). Click to cycle.">3D</button>
-                    <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] text-gray-500 uppercase tracking-wide mr-0.5">Render</span>
+                    <!-- Primary toggle: ON = animate the dice, OFF = just show total + breakdown -->
+                    <button id="btn-dice-render-toggle" onclick="toggleDiceRender()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Toggle dice animation. OFF skips the bouncing/3D roll and just shows the total + breakdown, like it worked before.">ON</button>
+                    <!-- Secondary style picker: 3D physics vs 2D sprite. Disabled when render is OFF. -->
+                    <button id="btn-dice-render-style" onclick="toggleDiceStyle()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Animation style — 3D physics or 2D sprite. Only applies when render is ON.">2D</button>
+                    <!-- Legacy back-compat shim for any inline code still calling the old id -->
+                    <button id="btn-toggle-3d" onclick="toggleDiceMode()" class="hidden" aria-hidden="true" tabindex="-1">3D</button>
+                    <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none ml-1">&times;</button>
                 </div>
             </div>
             <div class="p-4">
@@ -2857,6 +2875,18 @@
                 if (data.success) { window.location.reload(); }
             } catch(e) { console.error(e); }
         }
+
+        async function forgetSpell(casterIdx, level, name) {
+            if (!confirm(`Remove "${name}" from your spellbook? Any prepared slots holding it will be cleared.`)) return;
+            try {
+                const res = await fetch('/api/forget_spell/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, level, caster_idx: casterIdx})
+                });
+                const data = await res.json();
+                if (data.success) { window.location.reload(); }
+            } catch(e) { console.error(e); }
+        }
         
         // SIGNATURE SPELLS
         async function toggleSignature(spellName) {
@@ -3338,27 +3368,92 @@
         window.broadcastToGM = broadcastToGM;
 
         // ==========================================
-        // DICE ANIMATION MODE — tri-state, localStorage-backed
-        //   'physics'  → 3D physics dice overlay (when supported)
-        //   'animated' → 2D dice faces with staggered bounce in the toast
-        //   'plain'    → no animation, just the total + breakdown line
-        // 3D is the preferred default for capable browsers; we fall back to
-        // 'animated' otherwise. User cycles with the button in the dice panel.
+        // DICE ANIMATION MODE — split into two localStorage keys:
+        //   pf2e_dice_render  ('on' | 'off')        → primary toggle
+        //   pf2e_dice_style   ('physics'|'animated')→ which render to use when ON
+        // Derived "mode" (physics | animated | plain) kept for back-compat with
+        // the rest of the sheet, which was already written against a tri-state.
+        //
+        // Default: render ON, style 'animated' (2D is lightweight, works
+        // everywhere, doesn't need WebGL). If the player turns render OFF,
+        // rolls behave "like they worked previously" — instant total + breakdown,
+        // no bouncing dice, same underlying RNG and broadcast to GM.
+        //
+        // On first load we migrate the old single-key pf2e_dice_mode into the
+        // new pair so nobody has to re-pick their preference.
         // ==========================================
-        function getDiceMode() {
+        function getDiceRenderEnabled() {
+            try {
+                const v = localStorage.getItem('pf2e_dice_render');
+                if (v === 'on') return true;
+                if (v === 'off') return false;
+            } catch (e) {}
+            // Legacy fallback: derive from old pf2e_dice_mode if present
             try {
                 const m = localStorage.getItem('pf2e_dice_mode');
-                if (m === 'physics' || m === 'animated' || m === 'plain') return m;
+                if (m === 'plain') return false;
+                if (m === 'animated' || m === 'physics') return true;
             } catch (e) {}
-            return 'physics';
+            return true;
+        }
+        function getDiceRenderStyle() {
+            try {
+                const s = localStorage.getItem('pf2e_dice_style');
+                if (s === 'physics' || s === 'animated') return s;
+            } catch (e) {}
+            // Legacy fallback
+            try {
+                const m = localStorage.getItem('pf2e_dice_mode');
+                if (m === 'physics') return 'physics';
+            } catch (e) {}
+            return 'animated';
+        }
+        function _syncDiceEngine() {
+            // dice-engine only fires its 3D physics overlay when enabled=true.
+            // Anything else (style=animated or render off) → dice-engine stays quiet
+            // and the 2D toast / plain toast owns the UX.
+            if (window.diceRoller) {
+                const shouldRun3D = getDiceRenderEnabled() && getDiceRenderStyle() === 'physics';
+                window.diceRoller.setEnabled(shouldRun3D);
+            }
+        }
+        function _writeLegacyMode() {
+            // Keep pf2e_dice_mode in sync so any code still reading it works.
+            try {
+                const on = getDiceRenderEnabled();
+                const style = getDiceRenderStyle();
+                localStorage.setItem('pf2e_dice_mode', on ? style : 'plain');
+            } catch (e) {}
+        }
+        function setDiceRenderEnabled(on) {
+            try { localStorage.setItem('pf2e_dice_render', on ? 'on' : 'off'); } catch (e) {}
+            _writeLegacyMode();
+            _syncDiceEngine();
+        }
+        function setDiceRenderStyle(style) {
+            if (style !== 'physics' && style !== 'animated') return;
+            try { localStorage.setItem('pf2e_dice_style', style); } catch (e) {}
+            _writeLegacyMode();
+            _syncDiceEngine();
+        }
+        // Back-compat: derived getter/setter that the rest of the sheet calls.
+        function getDiceMode() {
+            return getDiceRenderEnabled() ? getDiceRenderStyle() : 'plain';
         }
         function setDiceMode(mode) {
-            try { localStorage.setItem('pf2e_dice_mode', mode); } catch (e) {}
-            // Mirror into dice-engine's own flag so its roll() bails early in non-physics modes
-            if (window.diceRoller) window.diceRoller.setEnabled(mode === 'physics');
+            if (mode === 'plain') {
+                setDiceRenderEnabled(false);
+            } else if (mode === 'animated' || mode === 'physics') {
+                setDiceRenderStyle(mode);
+                setDiceRenderEnabled(true);
+            }
         }
         window.getDiceMode = getDiceMode;
         window.setDiceMode = setDiceMode;
+        window.getDiceRenderEnabled = getDiceRenderEnabled;
+        window.setDiceRenderEnabled = setDiceRenderEnabled;
+        window.getDiceRenderStyle = getDiceRenderStyle;
+        window.setDiceRenderStyle = setDiceRenderStyle;
 
         // ==========================================
         // INLINE ROLL TOAST SYSTEM (replaces alert())
@@ -3845,52 +3940,86 @@
             document.getElementById('dice-panel').classList.toggle('hidden');
         }
 
-        // Tri-state cycle: physics → animated → plain → physics.
-        // If WebGL is unavailable, skip physics (falls through to animated/plain).
-        function toggleDiceMode() {
-            const order = (typeof DiceRoller !== 'undefined' && DiceRoller.isSupported())
-                ? ['physics', 'animated', 'plain']
-                : ['animated', 'plain'];
-            const cur = getDiceMode();
-            const idx = order.indexOf(cur);
-            const next = order[(idx + 1) % order.length] || order[0];
-            setDiceMode(next);
-            update3DButton();
+        // Primary toggle — flip render on/off. This is the "just roll the numbers,
+        // don't animate" switch the player asked for.
+        function toggleDiceRender() {
+            setDiceRenderEnabled(!getDiceRenderEnabled());
+            updateDiceButtons();
         }
-        function update3DButton() {
-            const btn = document.getElementById('btn-toggle-3d');
-            if (!btn) return;
-            const mode = getDiceMode();
+        // Secondary — flip 3D ↔ 2D. Only meaningful when render is ON and WebGL is there.
+        function toggleDiceStyle() {
             const supports3D = (typeof DiceRoller !== 'undefined') && DiceRoller.isSupported();
-            // Label + color per state; plain greys out, animated amber, physics accent
-            let label, cls;
-            if (mode === 'physics' && supports3D) {
-                label = '3D';
-                cls = 'border-accent-500/50 bg-accent-500/20 text-accent-300';
-            } else if (mode === 'animated' || (mode === 'physics' && !supports3D)) {
-                label = '2D';
-                cls = 'border-amber-500/50 bg-amber-500/15 text-amber-300';
-            } else {
-                // "Instant" reads clearer to players than "Plain" for an opt-out
-                // of the dice animation — they still get the total + breakdown.
-                label = 'Instant';
-                cls = 'border-gray-600 bg-gray-800 text-gray-400';
+            if (!supports3D) {
+                // Can't cycle — give a brief red flash so the user knows it's capped at 2D
+                const b = document.getElementById('btn-dice-render-style');
+                if (b) { b.classList.add('ring-1', 'ring-red-500'); setTimeout(() => b.classList.remove('ring-1', 'ring-red-500'), 500); }
+                return;
             }
-            btn.textContent = label;
-            btn.className = `text-[10px] px-2 py-0.5 rounded border ${cls} transition-colors`;
+            setDiceRenderStyle(getDiceRenderStyle() === 'physics' ? 'animated' : 'physics');
+            updateDiceButtons();
         }
-        // Mirror the initial mode into dice-engine once on load so a refresh
-        // preserves the user's last choice across the physics/animated/plain split
+        // Back-compat: old cycle still works if anything calls it. Order: ON+2D → ON+3D → OFF → …
+        function toggleDiceMode() {
+            const supports3D = (typeof DiceRoller !== 'undefined') && DiceRoller.isSupported();
+            const on = getDiceRenderEnabled();
+            const style = getDiceRenderStyle();
+            if (!on) {
+                setDiceRenderStyle(supports3D ? 'physics' : 'animated');
+                setDiceRenderEnabled(true);
+            } else if (style === 'animated' && supports3D) {
+                setDiceRenderStyle('physics');
+            } else {
+                setDiceRenderEnabled(false);
+                if (!supports3D) setDiceRenderStyle('animated');
+            }
+            updateDiceButtons();
+        }
+        function updateDiceButtons() {
+            const onBtn = document.getElementById('btn-dice-render-toggle');
+            const styleBtn = document.getElementById('btn-dice-render-style');
+            const on = getDiceRenderEnabled();
+            const style = getDiceRenderStyle();
+            const supports3D = (typeof DiceRoller !== 'undefined') && DiceRoller.isSupported();
+
+            if (onBtn) {
+                onBtn.textContent = on ? 'ON' : 'OFF';
+                onBtn.className = 'text-[10px] px-2 py-0.5 rounded border transition-colors ' + (
+                    on ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-300'
+                       : 'border-gray-600 bg-gray-800 text-gray-400'
+                );
+            }
+            if (styleBtn) {
+                const effective = supports3D ? style : 'animated';
+                styleBtn.textContent = effective === 'physics' ? '3D' : '2D';
+                const interactive = on && supports3D;
+                styleBtn.disabled = !interactive;
+                let cls;
+                if (!on) cls = 'border-gray-700 bg-gray-800 text-gray-600 opacity-50 cursor-not-allowed';
+                else if (!supports3D) cls = 'border-gray-700 bg-gray-800 text-gray-500 opacity-70 cursor-not-allowed';
+                else if (effective === 'physics') cls = 'border-accent-500/50 bg-accent-500/20 text-accent-300';
+                else cls = 'border-amber-500/50 bg-amber-500/15 text-amber-300';
+                styleBtn.className = 'text-[10px] px-2 py-0.5 rounded border transition-colors ' + cls;
+                styleBtn.title = !supports3D
+                    ? 'This device does not support 3D dice (no WebGL). 2D sprite animation only.'
+                    : (on ? 'Click to toggle between 3D physics and 2D sprite animation.'
+                           : 'Render is OFF — turn it ON to pick an animation style.');
+            }
+        }
+        // Kept for anything still calling the old function name
+        function update3DButton() { updateDiceButtons(); }
+
+        // Init: wait briefly for dice-engine.js to register window.diceRoller,
+        // then sync the 3D engine's enabled flag and paint the button state.
         (function _initDiceMode() {
-            const mode = getDiceMode();
-            // Wait briefly for dice-engine.js to register window.diceRoller
             setTimeout(() => {
-                if (window.diceRoller) window.diceRoller.setEnabled(mode === 'physics');
-                update3DButton();
+                _syncDiceEngine();
+                updateDiceButtons();
             }, 1000);
         })();
-        // Back-compat shim in case older inline code calls toggle3DDice
         window.toggle3DDice = toggleDiceMode;
+        window.toggleDiceRender = toggleDiceRender;
+        window.toggleDiceStyle = toggleDiceStyle;
+        window.updateDiceButtons = updateDiceButtons;
 
         function quickDie(sides) {
             let roll = Math.floor(Math.random() * sides) + 1;
