@@ -1135,13 +1135,28 @@ class Character:
                     if pb_key.startswith('casting') and val > 0:
                         self.proficiencies['spell_dc'] = max(self.proficiencies.get('spell_dc', 0), val)
 
-        # Parse Pathbuilder lores array into proficiencies
+        # Parse Pathbuilder lores array into proficiencies.
+        #
+        # Two bugs fixed here:
+        #  (1) Empty lore names (e.g. a placeholder "Not Selected" slot that
+        #      Pathbuilder exports as ["", 2]) used to become "lore:" and render
+        #      as a ghost "Lore: Not Selected" Trained entry on the sheet.
+        #  (2) `if key not in self.proficiencies` skipped overwrite when a prior
+        #      source had already set the lore (typically to 0). The lores array
+        #      is authoritative for lore ranks, so we now TAKE THE MAX — that
+        #      way Pathbuilder's Expert-level lores aren't clobbered back down
+        #      to Untrained by stale zeros.
         for lore_entry in (build.get('lores') or []):
             if isinstance(lore_entry, (list, tuple)) and len(lore_entry) >= 2:
                 lore_name = str(lore_entry[0]).lower().strip()
-                lore_rank = safe_int(lore_entry[1], 2)
+                if not lore_name:
+                    continue  # ignore empty / "Not Selected" placeholders
+                lore_rank = safe_int(lore_entry[1], 0)
+                if lore_rank <= 0:
+                    continue  # untrained lores are implicit; skip to avoid noise
                 key = f"lore:{lore_name}"
-                if key not in self.proficiencies:
+                existing = safe_int(self.proficiencies.get(key, 0))
+                if lore_rank > existing:
                     self.proficiencies[key] = lore_rank
         
         # --- AUTO PROFICIENCY BUMPS ---
@@ -1170,19 +1185,29 @@ class Character:
                 current = safe_int(self.proficiencies.get(key, 0))
                 self.proficiencies[key] = max(current, computed)
         
-        # Compute AC proficiency from best armor proficiency the character actually uses
+        # Compute AC proficiency from best armor proficiency the character actually uses.
+        #
+        # IMPORTANT: read from the MERGED self.proficiencies (which already contains
+        # Pathbuilder import + class progression), not from self._class_profs alone.
+        # The class matrix only carries the *base* class proficiencies — e.g. cleric
+        # has light/medium/heavy = 0, so a Warpriest who is trained in light armor
+        # via their doctrine would otherwise end up with AC prof = 0 here, which
+        # knocks level+2 off their AC. Same for Sorcerers with Bloodline armor, etc.
         armor_name = build.get('armor_name', '')
+        armor_cat = 'unarmored'
         if armor_name:
-            # Determine which armor category is equipped
-            armor_cat = 'unarmored'
             for a in BUILDER_ARMOR:
                 if a.get('name', '').lower() == armor_name.lower():
                     cat = a.get('category', 'unarmored').lower()
                     if cat in ('light', 'medium', 'heavy'): armor_cat = cat
                     break
-            self.proficiencies['ac'] = max(safe_int(self.proficiencies.get('ac', 0)), self._class_profs.get(armor_cat, 2))
-        else:
-            self.proficiencies['ac'] = max(safe_int(self.proficiencies.get('ac', 0)), self._class_profs.get('unarmored', 2))
+        cat_prof = safe_int(self.proficiencies.get(armor_cat, 0))
+        class_cat_prof = self._class_profs.get(armor_cat, 0)
+        self.proficiencies['ac'] = max(
+            safe_int(self.proficiencies.get('ac', 0)),
+            cat_prof,
+            class_cat_prof,
+        )
         
         self.rule_modifiers = {}
         self.senses = []

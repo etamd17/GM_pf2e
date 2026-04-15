@@ -1134,9 +1134,16 @@
                     if(mCtx.data.length === 0) mCtx.data = raw.filter(f => f.level <= targetLevel); 
                 }
                 else if (type === 'spell') {
-                    title = `Select Level ${meta.lvl} Spell`;
+                    title = `Select Level ${meta.lvl} Spell (lower ranks shown too — prepared casters can heighten)`;
                     let trad = (state.spellCasters[meta.cIdx].magicTradition || "unknown").toLowerCase();
-                    mCtx.data = (dbSpells || []).filter(s => s.level === meta.lvl && s.traditions.some(t => t.toLowerCase() === trad));
+                    // Prepared casters may prepare any spell they know at a slot of
+                    // rank >= the spell's base rank (heightening). Before this was
+                    // `s.level === meta.lvl`, which blocked a druid from picking
+                    // Heal (rank 1) into a rank-2 slot even though the rules allow it.
+                    mCtx.data = (dbSpells || []).filter(s => s.level <= meta.lvl && s.traditions.some(t => t.toLowerCase() === trad));
+                    // Sort so exact-rank matches appear first, lower ranks after —
+                    // that keeps the most common selection at the top of the list.
+                    mCtx.data.sort((a, b) => (b.level - a.level) || a.name.localeCompare(b.name));
                 }
 
                 document.getElementById('mod-title').innerText = title;

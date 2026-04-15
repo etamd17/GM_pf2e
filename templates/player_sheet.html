@@ -1782,7 +1782,10 @@
                         <button onclick="document.getElementById('spell-browse-modal').classList.add('hidden')" class="text-xl" style="color:var(--text-muted);">&times;</button>
                     </div>
                     <div class="p-4 flex gap-2 flex-wrap" style="border-bottom:1px solid var(--border-subtle);">
-                        <input type="text" id="spell-search" oninput="filterBrowseSpells()" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-primary); min-width:150px;">
+                        {# Must not be id="spell-search" — that ID is already used by the main spell list filter
+                           above, and getElementById returns the FIRST match. When this browse modal's input used
+                           the same ID, typing here silently read from the other input, so results never updated. #}
+                        <input type="text" id="spell-browse-search" oninput="filterBrowseSpells()" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-primary); min-width:150px;">
                         <select id="spell-level-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-secondary);">
                             <option value="">All Levels</option>
                             {% for i in range(11) %}<option value="{{ i }}">{% if i == 0 %}Cantrips{% else %}Level {{ i }}{% endif %}</option>{% endfor %}
@@ -2814,7 +2817,9 @@
         }
         
         function filterBrowseSpells() {
-            const q = (document.getElementById('spell-search').value || '').toLowerCase();
+            // Use the browse modal's dedicated input; the main list has its own
+            // "spell-search" input, so reading by that ID would return the wrong one.
+            const q = (document.getElementById('spell-browse-search').value || '').toLowerCase();
             const lvl = document.getElementById('spell-level-filter').value;
             const trad = document.getElementById('spell-trad-filter').value;
             
@@ -4518,19 +4523,31 @@
 
         // ==========================================
         // HP INPUT FIELD — Damage/Heal by typed amount
+        //
+        // Players were reporting they "couldn't change HP at all". Root cause:
+        // clicking +/- with an empty input silently returned (amount <= 0 guard).
+        // Fix: if the input is empty, prompt for an amount so the button always
+        // does something visible. If prompt is cancelled, we still do nothing,
+        // but at least the user sees feedback explaining how it works.
         // ==========================================
         function applyHPChange(type) {
             const input = document.getElementById('hp-change-input');
-            const amount = parseInt(input.value) || 0;
-            if (amount <= 0) return;
+            let amount = parseInt(input.value);
+            if (!amount || amount <= 0) {
+                const verb = type === 'damage' ? 'take in damage' : 'heal';
+                const raw = window.prompt(`How much HP to ${verb}?`, '');
+                if (raw === null) return;              // user cancelled
+                amount = parseInt(raw);
+                if (!amount || amount <= 0) return;    // bad input
+            }
             modifyHP(type === 'damage' ? 'damage' : 'heal', amount);
             input.value = '';
         }
-        // Allow Enter key to apply damage by default
+        // Allow Enter key to apply damage by default (heal with Shift+Enter).
         document.getElementById('hp-change-input')?.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                applyHPChange('damage');
+                applyHPChange(e.shiftKey ? 'heal' : 'damage');
             }
         });
 
