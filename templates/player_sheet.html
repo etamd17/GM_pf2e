@@ -396,9 +396,7 @@
             color: #fca5a5;
         }
 
-        /* Condition Strip (legacy) */
-        .cond-strip { display:none; padding:0; }
-        .cond-strip.active { display:block; padding:8px 0; }
+        /* Condition Strip — now controlled via inline display style (Proposal 1) */
 
         /* === TAB BAR (Design C) === */
         .tab-bar {
@@ -731,6 +729,50 @@
         .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
         .modal-content { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 12px; max-height: 85vh; overflow-y: auto; }
 
+        /* === LEVEL-UP DRAWER OVERLAY (Proposal 6) === */
+        .levelup-drawer-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 600;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .levelup-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+        .levelup-drawer {
+            position: fixed; top: 0; right: 0; bottom: 0;
+            width: 520px; max-width: 100vw;
+            z-index: 601;
+            background: var(--bg-base);
+            border-left: 1px solid var(--border-strong);
+            box-shadow: -8px 0 40px rgba(0,0,0,0.5);
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex; flex-direction: column;
+        }
+        .levelup-drawer.open { transform: translateX(0); }
+        .levelup-drawer-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .levelup-drawer-header h3 {
+            font-family: var(--font-display); font-size: 16px; font-weight: 700; color: #fff; margin: 0;
+        }
+        .levelup-drawer-close {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--bg-raised); border: 1px solid var(--border-s);
+            color: var(--t3); cursor: pointer; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .levelup-drawer-close:hover { background: var(--bg-overlay); color: var(--t1); }
+        .levelup-drawer iframe {
+            flex: 1; width: 100%; border: none; background: var(--bg-base);
+        }
+
         /* === RIGHT-CLICK CONTEXT MENU === */
         .roll-context-menu {
             position: fixed;
@@ -786,8 +828,7 @@
             .sheet-page .grid.grid-cols-1.lg\\:grid-cols-3 { grid-template-columns:1fr !important; }
             .sheet-page .grid.gap-x-6.gap-y-2 { grid-template-columns:1fr !important; }
             .sheet-page .flex.flex-col.md\\:flex-row { flex-direction:column !important; }
-            #pinned-bar .flex { flex-wrap:wrap; }
-            #pinned-bar input { width:60px !important; }
+            .levelup-drawer { width: 100vw; }
             .focus-pip { width:10px; height:10px; }
             h1.font-header { font-size:20px !important; }
             .tab-bar-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
@@ -878,12 +919,18 @@
                     {% if pc.status_penalty > 0 %}<span class="px-2 py-0.5 rounded" style="background:rgba(196,60,60,0.1); border:1px solid rgba(196,60,60,0.2); color:var(--red-b); font-size:11px; font-weight:600;">Debuffed -{{ pc.status_penalty }}</span>{% endif %}
                     {% if pc.active_toggles %}<span class="px-2 py-0.5 rounded" style="background:rgba(90,142,232,0.1); border:1px solid rgba(90,142,232,0.2); color:var(--blue); font-size:11px; font-weight:600;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
                 </div>
-                <!-- Action Toolbar -->
-                <div class="flex gap-2 flex-wrap mobile-actions">
+                <!-- Action Toolbar (Proposal 3: custom dice moved here from removed Quick Rolls bar) -->
+                <div class="flex gap-2 flex-wrap mobile-actions items-center">
+                    <div class="flex items-center gap-1 no-print" style="margin-right:4px;">
+                        <input type="text" id="custom-dice" placeholder="2d6+4" class="hp-input" style="width:72px; font-size:11px; padding:4px 6px;">
+                        <button onclick="rollCustomDice()" class="tb" style="padding:4px 8px;">🎲</button>
+                        <button onclick="rollInitiativeFromSheet()" class="tb" style="padding:4px 8px; color:#c084fc;" title="Roll Initiative">Init</button>
+                    </div>
                     <a href="/map" class="tb">🗺 Map</a>
                     <button onclick="takeLongRest()" class="tb">🛏 Rest</button>
                     {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb">↶ Undo Level</button>{% endif %}
-                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary">★ Level Up</a>
+                    <button onclick="openLevelUpDrawer()" class="tb primary no-print">★ Level Up</button>
+                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary print-only" style="display:none;">★ Level Up</a>
                     <button onclick="window.print()" class="no-print tb">🖨 Print</button>
                     <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print tb" title="Download character sheet PDF">📄 PDF</a>
                 </div>
@@ -932,10 +979,14 @@
                 {% if pc.active_speed != pc.base_speed %}<div class="ss-sub" style="color:var(--red-b);">Base {{ pc.base_speed }}</div>{% endif %}
             </div>
 
-            <!-- Perception -->
-            <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" title="Roll Perception">
+            <!-- Perception (Proposal 4: rank dot) -->
+            {% set perc_rank = pc.proficiencies.get('perception', 2) %}
+            {% set perc_rank_label = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_rank, 'T') %}
+            {% set perc_rank_color = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(perc_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" title="Roll Perception ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(perc_rank, 'Trained') }})">
                 <div class="ss-lbl">Perception</div>
                 <div class="ss-val" style="color:var(--gold);">+{{ pc.perception }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
             </div>
 
             <!-- Class DC -->
@@ -956,18 +1007,30 @@
             </div>
             {% endif %}
 
-            <!-- Fort/Ref/Will (compact saves in strip) -->
-            <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fortitude Save">
+            <!-- Fort/Ref/Will (compact saves in strip — Proposal 4: rank dots) -->
+            {% set fort_rank = pc.proficiencies.get('fortitude', 2) %}
+            {% set fort_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(fort_rank, 'T') %}
+            {% set fort_rc = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(fort_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fortitude Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(fort_rank, 'Trained') }})">
                 <div class="ss-lbl">Fort</div>
                 <div class="ss-val" style="color:var(--green);">+{{ pc.fort }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ fort_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ fort_rc }};">{{ fort_rl }}</span></div>
             </div>
-            <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" title="Roll Reflex Save">
+            {% set ref_rank = pc.proficiencies.get('reflex', 2) %}
+            {% set ref_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ref_rank, 'T') %}
+            {% set ref_rc = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(ref_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" title="Roll Reflex Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(ref_rank, 'Trained') }})">
                 <div class="ss-lbl">Reflex</div>
                 <div class="ss-val" style="color:var(--blue);">+{{ pc.ref }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ ref_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ ref_rc }};">{{ ref_rl }}</span></div>
             </div>
-            <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" title="Roll Will Save">
+            {% set will_rank = pc.proficiencies.get('will', 2) %}
+            {% set will_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(will_rank, 'T') %}
+            {% set will_rc = {0:'#6b6b8a', 2:'#4a9696', 4:'#3eba68', 6:'#9b7ede', 8:'#c8a84e'}.get(will_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" title="Roll Will Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(will_rank, 'Trained') }})">
                 <div class="ss-lbl">Will</div>
                 <div class="ss-val" style="color:var(--purple);">+{{ pc.will }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ will_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ will_rc }};">{{ will_rl }}</span></div>
             </div>
 
             <!-- HP block -->
@@ -1015,52 +1078,31 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- STATUS PENALTY BAR -->
-    {% if pc.status_penalty > 0 %}
-    <div class="w-full no-print" style="background:rgba(239,68,68,0.06); border-bottom:1px solid rgba(239,68,68,0.15);">
-        <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-3">
-            <span style="color:#f87171; font-size:13px; font-weight:600;">
-                Status Penalty -{{ pc.status_penalty }} active
-                ({% if pc.conditions.get('frightened', 0) > 0 %}Frightened {{ pc.conditions.frightened }}{% endif %}{% if pc.conditions.get('sickened', 0) > 0 %}{% if pc.conditions.get('frightened', 0) > 0 %}, {% endif %}Sickened {{ pc.conditions.sickened }}{% endif %})
-                -- applies to all checks, DCs, saves, and attacks
-            </span>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- SHEET BODY — Parchment panels with tabs                       -->
+    <!-- UNIFIED CONDITION & PENALTY BAR (Proposal 1)                   -->
+    <!-- Consolidates old status penalty bar + condition strip into one  -->
+    <!-- prominent, always-visible banner. Penalty breakdowns inline.    -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 py-5 pb-20">
-        
-        <!-- Pinned Rolls Quick Bar -->
-        <div class="no-print mb-3" id="pinned-bar">
-            <div class="flex items-center gap-2">
-                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted);" class="shrink-0">Quick Rolls</span>
-                <div class="pin-bar flex-1" id="pinned-rolls"></div>
-                <input type="text" id="custom-dice" placeholder="2d6+4" class="hp-input" style="width:80px; font-size:12px;">
-                <button onclick="rollCustomDice()" class="action-btn" style="font-size:11px; padding:4px 10px;">Roll</button>
-                <button onclick="rollInitiativeFromSheet()" class="action-btn" style="font-size:11px; padding:4px 10px; border-color:rgba(167,139,250,0.2); color:#c084fc;">Init</button>
-                <button onclick="togglePinMode()" id="btn-pin-mode" class="action-btn" style="font-size:11px; padding:4px 10px;" title="Click skills/saves to pin them">Edit Pins</button>
+    {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('stunned', 0) > 0 or pc.conditions.get('slowed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
+    <div class="no-print" id="condition-strip"
+         style="{% if has_any_condition %}background:var(--red-d); border-bottom:2px solid var(--red);{% else %}background:transparent;{% endif %} transition:background 0.3s, border-color 0.3s; {% if not has_any_condition %}display:none;{% endif %}">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-2">
+            {# Penalty breakdown line — shows per-stat penalty summary #}
+            {% if pc.status_penalty > 0 %}
+            <div style="font-size:12px; font-weight:600; color:#fca5a5; margin-bottom:4px; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center;">
+                <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#f87171; margin-right:2px;">⚠ Penalties Active</span>
+                <span>All checks &minus;{{ pc.status_penalty }}
+                    ({% if pc.conditions.get('frightened', 0) > 0 %}Frightened {{ pc.conditions.frightened }}{% endif %}{% if pc.conditions.get('sickened', 0) > 0 %}{% if pc.conditions.get('frightened', 0) > 0 %}, {% endif %}Sickened {{ pc.conditions.sickened }}{% endif %})</span>
+                {% if pc.conditions.get('enfeebled', 0) > 0 %}<span style="color:#fca5a5;">· STR checks &minus;{{ pc.conditions.enfeebled }} (Enfeebled)</span>{% endif %}
+                {% if pc.conditions.get('clumsy', 0) > 0 %}<span style="color:#fca5a5;">· DEX/AC &minus;{{ pc.conditions.clumsy }} (Clumsy)</span>{% endif %}
+                {% if pc.conditions.get('drained', 0) > 0 %}<span style="color:#fca5a5;">· CON checks &minus;{{ pc.conditions.drained }}, HP &minus;{{ pc.conditions.drained * pc.level }} (Drained)</span>{% endif %}
+                {% if pc.conditions.get('stupefied', 0) > 0 %}<span style="color:#fca5a5;">· INT/WIS/CHA &minus;{{ pc.conditions.stupefied }} (Stupefied)</span>{% endif %}
+                {% if pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) %}<span style="color:#fca5a5;">· AC &minus;2 ({% if pc.conditions.get('off_guard', false) %}Off-Guard{% endif %}{% if pc.conditions.get('prone', false) %}{% if pc.conditions.get('off_guard', false) %}, {% endif %}Prone{% endif %})</span>{% endif %}
             </div>
-        </div>
-        
-        <!-- Encounter Initiative Bar (populated live via SSE) -->
-        <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
-            <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2">
-                <span class="font-header text-[11px] tracking-widest uppercase" style="color:var(--text-muted);">⚔ Combat</span>
-                <div id="encounter-initiative-bar" class="flex flex-wrap gap-1 flex-1"></div>
-            </div>
-        </div>
-
-        <!-- Condition Strip — ALWAYS visible when any condition is active (no collapse) -->
-        {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('stunned', 0) > 0 or pc.conditions.get('slowed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
-        <div class="no-print cond-strip {% if has_any_condition %}active{% endif %}" id="condition-strip" style="border-bottom:1px solid rgba(239,68,68,0.1); background:{% if has_any_condition %}rgba(239,68,68,0.04){% else %}transparent{% endif %};">
-            <div class="max-w-6xl mx-auto px-4 md:px-6 flex flex-wrap gap-2 items-center">
-                <span style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-right:4px;">Conditions</span>
+            {% endif %}
+            {# Condition pills row — interactive +/- and toggles #}
+            <div class="flex flex-wrap gap-2 items-center">
                 {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed', 'dying'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
-                {# Color cues: crit severity at 3+ (or dying 2+), warn at 2, base otherwise.
-                   Pathbuilder flags dying/doomed in red — we match that visual language. #}
                 {% set sev_class = 'cond-crit' if (cval >= 3 or (cond == 'dying' and cval >= 2)) else ('cond-warn' if cval >= 2 else '') %}
                 <div class="condition-pill {{ sev_class }}" id="cond-wrap-{{ cond }}" data-cond-name="{{ cond }}"
                      style="{% if cval == 0 %}display:none;{% endif %}"
@@ -1077,7 +1119,20 @@
                     {{ cond|replace('_','-')|upper }}
                 </button>
                 {% endfor %}
-                <button onclick="openConditionAdder()" class="action-btn ml-auto" style="font-size:11px; padding:3px 10px;" title="Add/manage conditions">+ Condition</button>
+                <button onclick="openConditionAdder()" class="action-btn ml-auto" style="font-size:11px; padding:3px 10px; {% if has_any_condition %}color:#fca5a5; border-color:rgba(252,165,165,0.3);{% endif %}" title="Add/manage conditions">+ Condition</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHEET BODY                                                     -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 py-5 pb-20">
+
+        <!-- Encounter Initiative Bar (populated live via SSE) -->
+        <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
+            <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2">
+                <span class="font-header text-[11px] tracking-widest uppercase" style="color:var(--text-muted);">⚔ Combat</span>
+                <div id="encounter-initiative-bar" class="flex flex-wrap gap-1 flex-1"></div>
             </div>
         </div>
         
@@ -2321,50 +2376,11 @@
         }
 
         // ==========================================
-        // PINNED ROLLS QUICK BAR
+        // PIN ROLL STUB (Quick Rolls bar removed — Proposal 3)
+        // Kept as stub so rollSkill's tryPinRoll() call doesn't error.
         // ==========================================
-        let pinMode = false;
-        const PIN_KEY = `pinned_rolls_${pcName}`;
-        
-        function getPinnedRolls() {
-            try { return JSON.parse(localStorage.getItem(PIN_KEY)) || []; } catch(e) { return []; }
-        }
-        function savePinnedRolls(pins) { localStorage.setItem(PIN_KEY, JSON.stringify(pins)); }
-        
-        function renderPinnedBar() {
-            const pins = getPinnedRolls();
-            const container = document.getElementById('pinned-rolls');
-            if (pins.length === 0) {
-                container.innerHTML = '<span class="text-gray-600 text-xs italic">Click 📌 Edit, then click skills or saves to pin them here</span>';
-                return;
-            }
-            container.innerHTML = pins.map(p => 
-                `<button class="pin-btn" onclick="rollSkill('${p.name}', ${p.mod})">${p.name} <span style="opacity:0.7">${p.mod >= 0 ? '+' : ''}${p.mod}</span></button>`
-            ).join('');
-        }
-        
-        function togglePinMode() {
-            pinMode = !pinMode;
-            const btn = document.getElementById('btn-pin-mode');
-            btn.style.borderColor = pinMode ? 'rgba(167,139,250,0.4)' : '';
-            btn.style.color = pinMode ? 'var(--color-spell)' : '';
-            btn.innerText = pinMode ? '📌 Done' : '📌 Edit';
-            // When in pin mode, clicking a skill row toggles its pinned state
-        }
-        
-        function tryPinRoll(name, mod) {
-            if (!pinMode) return false;
-            let pins = getPinnedRolls();
-            const idx = pins.findIndex(p => p.name === name);
-            if (idx >= 0) { pins.splice(idx, 1); } 
-            else { pins.push({ name: name, mod: parseInt(mod) }); }
-            savePinnedRolls(pins);
-            renderPinnedBar();
-            return true; // consumed the click
-        }
+        function tryPinRoll() { return false; }
         window.tryPinRoll = tryPinRoll;
-
-        renderPinnedBar();
 
         // ==========================================
         // RAISE SHIELD TOGGLE
@@ -2594,10 +2610,23 @@
                     }
                 });
                 
-                // Show/hide the condition strip
+                // Show/hide the unified condition bar
                 const hasAny = Object.entries(conds).some(([k,v]) => v && v !== 0 && v !== false);
                 const strip = document.getElementById('condition-strip');
-                if (strip) strip.classList.toggle('active', hasAny);
+                if (strip) {
+                    strip.style.display = hasAny ? '' : 'none';
+                    if (hasAny) {
+                        strip.style.background = 'var(--red-d)';
+                        strip.style.borderBottom = '2px solid var(--red)';
+                    } else {
+                        strip.style.background = 'transparent';
+                        strip.style.borderBottom = 'none';
+                    }
+                }
+                // Update PC_CONDITIONS for inline penalty annotations
+                if (typeof PC_CONDITIONS !== 'undefined') {
+                    Object.assign(PC_CONDITIONS, conds);
+                }
             } catch(e) {
                 // Fallback: reload if AJAX update fails
                 window.location.reload();
@@ -3483,6 +3512,15 @@
                 diceHTML += '</div>';
             }
 
+            // Proposal 2: Inline penalty annotation — show condition breakdown beneath roll
+            let penaltyHTML = '';
+            if (typeof getPenaltyBreakdown === 'function') {
+                const breakdown = getPenaltyBreakdown(title);
+                if (breakdown) {
+                    penaltyHTML = `<div class="text-[10px] mt-1 px-2 py-1 rounded" style="background:rgba(196,60,60,0.08); border:1px solid rgba(196,60,60,0.15); color:#fca5a5;">⚠ Includes: ${breakdown}</div>`;
+                }
+            }
+
             // Plain mode also shrinks the toast so a rapid-fire skill check sequence
             // doesn't flood the corner of the screen.
             const isPlain = mode === 'plain';
@@ -3502,6 +3540,7 @@
                     ${badge}
                 </div>
                 <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700">${detail}</div>
+                ${penaltyHTML}
                 <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
             `;
             container.prepend(toast);
@@ -3917,6 +3956,89 @@
                     broadcastToGM(label, result.total.toString(), result.detail);
                 }
             }
+        }
+
+        // ==========================================
+        // LEVEL-UP DRAWER (Proposal 6)
+        // ==========================================
+        function openLevelUpDrawer() {
+            const backdrop = document.getElementById('levelup-backdrop');
+            const drawer = document.getElementById('levelup-drawer');
+            const iframe = document.getElementById('levelup-iframe');
+            // Load the level-up page with ?drawer=1 param so it renders in compact mode
+            iframe.src = `/player/levelup/${pcNameEncoded}?drawer=1`;
+            requestAnimationFrame(() => {
+                backdrop.classList.add('open');
+                drawer.classList.add('open');
+            });
+        }
+        function closeLevelUpDrawer() {
+            const backdrop = document.getElementById('levelup-backdrop');
+            const drawer = document.getElementById('levelup-drawer');
+            const iframe = document.getElementById('levelup-iframe');
+            backdrop.classList.remove('open');
+            drawer.classList.remove('open');
+            // Clear iframe after animation
+            setTimeout(() => { iframe.src = 'about:blank'; }, 350);
+        }
+        // Listen for postMessage from level-up iframe on successful submit
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.type === 'levelup_complete') {
+                closeLevelUpDrawer();
+                // Reload the page to show updated character data
+                setTimeout(() => window.location.reload(), 400);
+            }
+        });
+
+        // ==========================================
+        // PENALTY BREAKDOWN HELPER (Proposal 2)
+        // ==========================================
+        const PC_CONDITIONS = {{ pc.conditions | tojson | safe }};
+        function getPenaltyBreakdown(rollName) {
+            // Compute which condition penalties apply to this specific roll type.
+            // Returns a string like "−2 Frightened, −1 Enfeebled" or empty.
+            const parts = [];
+            const rn = (rollName || '').toLowerCase();
+
+            // Frightened / Sickened apply to ALL checks, saves, DCs, attacks
+            const frightened = PC_CONDITIONS.frightened || 0;
+            const sickened = PC_CONDITIONS.sickened || 0;
+            const statusPen = Math.max(frightened, sickened);
+            if (statusPen > 0) {
+                if (frightened >= sickened && frightened > 0) parts.push(`−${frightened} Frightened`);
+                else if (sickened > 0) parts.push(`−${sickened} Sickened`);
+            }
+
+            // Enfeebled: STR-based checks (Athletics, melee attacks)
+            const enfeebled = PC_CONDITIONS.enfeebled || 0;
+            if (enfeebled > 0) {
+                if (rn.includes('athletics') || rn.includes('attack') || rn.includes('str'))
+                    parts.push(`−${enfeebled} Enfeebled`);
+            }
+
+            // Clumsy: DEX-based checks (Acrobatics, Stealth, Thievery, Reflex)
+            const clumsy = PC_CONDITIONS.clumsy || 0;
+            if (clumsy > 0) {
+                if (rn.includes('acrobatics') || rn.includes('stealth') || rn.includes('thievery') || rn.includes('reflex') || rn.includes('dex'))
+                    parts.push(`−${clumsy} Clumsy`);
+            }
+
+            // Drained: CON-based checks (Fortitude)
+            const drained = PC_CONDITIONS.drained || 0;
+            if (drained > 0) {
+                if (rn.includes('fortitude') || rn.includes('con'))
+                    parts.push(`−${drained} Drained`);
+            }
+
+            // Stupefied: INT/WIS/CHA-based (Arcana, Nature, Occultism, Religion, Society, Medicine, Survival, Will, Perception, spell checks, Deception, Diplomacy, Intimidation, Performance)
+            const stupefied = PC_CONDITIONS.stupefied || 0;
+            if (stupefied > 0) {
+                const mentalSkills = ['arcana','nature','occultism','religion','society','medicine','survival','perception','will','deception','diplomacy','intimidation','performance','crafting','spell','int','wis','cha'];
+                if (mentalSkills.some(sk => rn.includes(sk)))
+                    parts.push(`−${stupefied} Stupefied`);
+            }
+
+            return parts.join(', ');
         }
 
         function rollFlat() {
@@ -4812,6 +4934,19 @@
         <button onclick="contextRoll('normal')">Normal Roll</button>
         <button onclick="contextRoll('fortune')">Fortune (best of 2)</button>
         <button onclick="contextRoll('misfortune')">Misfortune (worst of 2)</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- LEVEL-UP DRAWER OVERLAY (Proposal 6)                          -->
+    <!-- Slides in from the right. Loads level-up page in an iframe.   -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="levelup-drawer-backdrop" id="levelup-backdrop" onclick="closeLevelUpDrawer()"></div>
+    <div class="levelup-drawer" id="levelup-drawer">
+        <div class="levelup-drawer-header">
+            <h3>★ Level Up — {{ pc.name }}</h3>
+            <button class="levelup-drawer-close" onclick="closeLevelUpDrawer()" title="Close">✕</button>
+        </div>
+        <iframe id="levelup-iframe" src="about:blank"></iframe>
     </div>
 
 </body>

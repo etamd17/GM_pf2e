@@ -7,51 +7,130 @@
     <title>Level Up Forge</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#7A7062', 600: '#8A8279', 500: '#9E968B', 400: '#C2B9AD', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 50: '#F0FAFA', 100: '#D4F0F0', 200: '#A8DEDE', 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
+        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#0d0d12', 900: '#191920', 800: '#24242e', 700: '#2e2e3c', 600: '#42425a', 500: '#6b6b8a', 400: '#9494b0', 300: '#b8b8cc', 200: '#d8d8e6', 100: '#ededf4' }, amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' }, red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 600: '#c43c3c', 800: '#6b1525', 900: '#3D0A13' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Inter', 'system-ui', 'sans-serif'] } } } }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-        body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }
-        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(92,75,60,0.06) 0%,transparent 55%),#1C1917; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
+        body { margin: 0; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(90,142,232,0.04) 0%,transparent 55%),#0f1117; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3228; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
         .foundry-content p { margin-bottom: 0.75rem; }
         
         .nav-item { display: none; font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.06em; } 
-        .nav-item.active { background: linear-gradient(90deg, rgba(58,120,120,0.15), transparent); border-left: 3px solid #5EADAD; color: #7DC4C4; }
+        .nav-item.active { background: linear-gradient(90deg, rgba(196,60,60,0.12), transparent); border-left: 3px solid #c43c3c; color: #e85555; }
         .step-panel { display: none; animation: fadeIn 0.25s ease-out; }
         .step-panel.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        .choice-card { background: linear-gradient(135deg, #33302A, #252320); border: 1px solid rgba(139,115,85,0.18); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
-        .choice-card:hover { border-color: rgba(94,173,173,0.35); background: linear-gradient(135deg, #7A7062, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
-        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #7DC4C4; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
-        .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+        .choice-card { background: linear-gradient(135deg, #1c2029, #161921); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
+        .choice-card:hover { border-color: rgba(196,60,60,0.3); background: linear-gradient(135deg, #242835, #1c2029); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
+        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #e85555; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
+        .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #5e6378; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
         
-        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #1C1917; border: 1px solid rgba(139,115,85,0.2); color: #D4C4A8; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
-        .stat-pill:hover:not(.locked) { border-color: rgba(139,115,85,0.5); }
-        .stat-pill.selected { background: rgba(4,120,87,0.3); border-color: #4ADE80; color: #A7F3D0; }
-        .stat-pill.locked { background: rgba(6,95,70,0.25); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
+        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #0d0d12; border: 1px solid rgba(255,255,255,0.10); color: #b8b8cc; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
+        .stat-pill:hover:not(.locked) { border-color: rgba(255,255,255,0.25); }
+        .stat-pill.selected { background: rgba(90,142,232,0.2); border-color: #5a8ee8; color: #93C5FD; }
+        .stat-pill.locked { background: rgba(62,186,104,0.2); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
         
-        .rank-box { width: 12px; height: 12px; border: 1px solid rgba(139,115,85,0.3); display: inline-block; margin-right: 2px; border-radius: 2px; }
-        .rank-box.fill { background-color: #5EADAD; border-color: #5EADAD; }
+        .rank-box { width: 12px; height: 12px; border: 1px solid rgba(255,255,255,0.10); display: inline-block; margin-right: 2px; border-radius: 2px; }
+        .rank-box.fill { background-color: #5a8ee8; border-color: #5a8ee8; }
         .rank-box.fill-new { background-color: #4ADE80; border-color: #4ADE80; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
         .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; }
-        .mod-tab-btn.active { color: #7DC4C4; background: rgba(58,120,120,0.15); border-color: rgba(94,173,173,0.3); }
+        .mod-tab-btn.active { color: #e85555; background: rgba(196,60,60,0.12); border-color: rgba(196,60,60,0.25); }
         
         h2, h3, h4, label { font-family: 'Cinzel', serif; }
-        input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
+        input, select, textarea { font-family: 'Inter', system-ui, sans-serif; }
+
+        /* === DRAWER MODE (compact stepper replaces sidebar) === */
+        .drawer-mode #sidebar-nav { display: none !important; }
+        .drawer-mode .main-content { margin-left: 0 !important; }
+        .drawer-mode { overflow: auto !important; }
+        .drawer-mode > .flex.h-screen { flex-direction: column; height: auto; min-height: 100vh; }
+        .drawer-mode .flex-1.bg-gray-900 { overflow: visible; }
+        .drawer-mode .step-panel { padding: 24px 20px !important; }
+        .drawer-mode .step-panel h2 { font-size: 1.5rem; }
+
+        .compact-stepper {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding: 12px 16px;
+            background: #161921;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            flex-wrap: wrap;
+        }
+        .drawer-mode .compact-stepper { display: flex; }
+
+        .step-dot {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px; font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid rgba(255,255,255,0.10);
+            background: transparent;
+            color: #6b6b8a;
+            flex-shrink: 0;
+        }
+        .step-dot.active {
+            border-color: #c43c3c;
+            background: rgba(196,60,60,0.15);
+            color: #e85555;
+            animation: stepPulse 2s ease-in-out infinite;
+        }
+        .step-dot.done {
+            border-color: #22C55E;
+            background: rgba(62,186,104,0.15);
+            color: #4ADE80;
+        }
+        .step-dot:hover:not(.active) { border-color: rgba(255,255,255,0.25); color: #9494b0; }
+        @keyframes stepPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(196,60,60,0.3); } 50% { box-shadow: 0 0 0 4px rgba(196,60,60,0); } }
+
+        .step-line {
+            width: 20px; height: 2px;
+            background: rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .step-line.done { background: rgba(62,186,104,0.4); }
+
+        .drawer-submit-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            padding: 12px 20px;
+            background: #161921;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            z-index: 30;
+        }
+        .drawer-mode .drawer-submit-bar { display: block !important; }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-200 font-body flex h-screen">
 
-    <div class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
+    <!-- Compact stepper (visible only in drawer mode) -->
+    <div class="compact-stepper" id="compact-stepper">
+        <!-- Populated by JS based on which steps are visible -->
+    </div>
+
+    <!-- Fixed bottom submit bar (drawer mode only) -->
+    <div class="drawer-submit-bar" id="drawer-submit-bar" style="display:none;">
+        <button id="btn-finish-drawer" onclick="submitLevelUp()" class="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-bold transition-colors cursor-not-allowed text-sm" disabled>
+            Incomplete
+        </button>
+    </div>
+
+    <div id="sidebar-nav" class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
         <div class="p-6 border-b border-gray-800">
             <a id="btn-back-sheet" href="/player" class="text-xs text-gray-500 hover:text-white transition-colors mb-2 block uppercase tracking-wider font-bold">← Back to Sheet</a>
-            <h1 class="text-2xl font-header text-amber-500 leading-none">Level Up</h1>
+            <h1 class="text-2xl font-header text-red-500 leading-none">Level Up</h1>
             <p class="text-xs text-gray-400 mt-1">Advancing to Level <span id="lbl-target-level" class="text-white font-bold"></span></p>
         </div>
         <div class="flex-1 overflow-y-auto py-4 space-y-1" id="nav-container">
@@ -89,6 +168,22 @@
         <div id="step-classfeatures" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
             <h2 class="text-3xl font-bold text-white mb-2">Automatic Class Features</h2>
             <p class="text-gray-400 mb-8">These proficiency increases are applied automatically by your class at this level. No choices needed.</p>
+            <!-- HP preview — always visible so the player knows the
+                 per-level gain upfront, like Pathbuilder's stat sidebar -->
+            <div id="hp-preview-banner" class="mb-6 bg-red-950/20 border border-red-900/40 rounded-lg px-5 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-lg">❤️</span>
+                    <div>
+                        <span class="text-sm font-bold text-gray-300">Hit Points</span>
+                        <span id="hp-preview-detail" class="text-xs text-gray-500 ml-2"></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="hp-preview-old" class="text-lg font-bold text-red-400"></span>
+                    <span class="text-gray-500">→</span>
+                    <span id="hp-preview-new" class="text-lg font-bold text-green-400"></span>
+                </div>
+            </div>
             <div id="ui-classfeatures" class="space-y-3"></div>
             <div id="ui-classfeatures-none" class="hidden bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
                 <p class="text-gray-500 italic">No automatic proficiency changes at this level. Your class may still grant feats, skill increases, or other features.</p>
@@ -207,7 +302,15 @@
         const currentLevel = parseInt(pc.level);
         const targetLevel = currentLevel + 1;
         const pcClass = pc.class_name.toLowerCase();
-        
+
+        // Drawer mode detection
+        const isDrawerMode = new URLSearchParams(window.location.search).has('drawer') || window.parent !== window;
+        if (isDrawerMode) {
+            document.body.classList.add('drawer-mode');
+            const backBtn = document.getElementById('btn-back-sheet');
+            if (backBtn) backBtn.style.display = 'none';
+        }
+
         document.getElementById('btn-back-sheet').href = `/player/sheet/${encodeURIComponent(pc.name)}`;
         
         const dbFeats = {{ feats | tojson | safe }};
@@ -304,6 +407,7 @@
             
             // Build the class features display
             buildClassFeaturesUI(bumpsAtThisLevel);
+            updateHpPreview();
 
             if (reqs.ability_boosts) document.getElementById('nav-abilities').style.display = 'flex';
             if (reqs.skill_increase) document.getElementById('nav-skills').style.display = 'flex';
@@ -323,6 +427,27 @@
             navTo('classfeatures');
         }
         
+        function updateHpPreview() {
+            // Compute HP gain for the level-up, mirroring the Review step logic.
+            // Recalculated whenever CON boost state changes.
+            let classHp = (pc.attributes || {}).classhp || 8;
+            let conMod = (pc.mods || {}).con || 0;
+            if (state.free_boosts_selected.includes('con')) {
+                let tempStats = typeof getTempFinalStats === 'function' ? getTempFinalStats() : {};
+                conMod = tempStats.con !== undefined ? tempStats.con : conMod;
+            }
+            let bonusPerLevel = (pc.attributes || {}).bonushpPerLevel || 0;
+            let hpPerLevel = classHp + conMod + bonusPerLevel;
+            if (hpPerLevel < 1) hpPerLevel = 1;
+            let oldHp = pc.hp || 0;
+            let newHp = oldHp + hpPerLevel;
+            document.getElementById('hp-preview-old').textContent = oldHp;
+            document.getElementById('hp-preview-new').textContent = newHp;
+            let detail = `+${hpPerLevel} = ${classHp} class + ${conMod} CON`;
+            if (bonusPerLevel) detail += ` + ${bonusPerLevel} bonus`;
+            document.getElementById('hp-preview-detail').textContent = `(${detail})`;
+        }
+
         function buildClassFeaturesUI(bumps) {
             const ui = document.getElementById('ui-classfeatures');
             const noneMsg = document.getElementById('ui-classfeatures-none');
@@ -511,6 +636,34 @@
             document.getElementById(`nav-${stepId}`).classList.add('active');
             if(stepId === 'review') renderReview();
             runValidation();
+            buildCompactStepper();
+        }
+
+        function buildCompactStepper() {
+            if (!isDrawerMode) return;
+            const stepper = document.getElementById('compact-stepper');
+            const navItems = document.querySelectorAll('.nav-item');
+            const steps = [];
+            navItems.forEach((item, i) => {
+                if (item.style.display !== 'none' && item.style.display !== '') {
+                    const stepId = item.id.replace('nav-', '');
+                    const checkEl = document.getElementById(`chk-${stepId}`);
+                    const isDone = checkEl && checkEl.textContent.includes('\u2713');
+                    const isActive = item.classList.contains('active');
+                    const label = item.querySelector('span:first-child').textContent.replace(/^\d+\.\s*/, '');
+                    steps.push({ id: stepId, label, isDone, isActive, num: steps.length + 1 });
+                }
+            });
+
+            let html = '';
+            steps.forEach((s, i) => {
+                if (i > 0) html += `<div class="step-line ${s.isDone ? 'done' : ''}"></div>`;
+                html += `<div class="step-dot ${s.isActive ? 'active' : ''} ${s.isDone ? 'done' : ''}"
+                              onclick="navTo('${s.id}')" title="${s.label}">
+                             ${s.isDone ? '\u2713' : s.num}
+                         </div>`;
+            });
+            stepper.innerHTML = html;
         }
 
         function getTempFinalStats() {
@@ -615,7 +768,8 @@
             if(state.free_boosts_selected.length === 4) document.getElementById('msg-abilities-done').classList.remove('hidden');
             else document.getElementById('msg-abilities-done').classList.add('hidden');
             renderAbilityMath();
-            buildSkillsUI(); 
+            buildSkillsUI();
+            updateHpPreview();  // CON boost changes HP per level
             runValidation();
         }
 
@@ -668,11 +822,14 @@
             const ui = document.getElementById('ui-skills');
             const cap = getSkillCap();
             
+            const RANK_LABELS = {0: 'Untrained', 2: 'Trained', 4: 'Expert', 6: 'Master', 8: 'Legendary'};
+            const RANK_COLORS = {0: 'text-gray-500', 2: 'text-gray-300', 4: 'text-blue-400', 6: 'text-amber-400', 8: 'text-red-400'};
+
             ui.innerHTML = stdSkills.map(sk => {
                 let baseProf = state.base_profs[sk] || 0;
                 let added = state.skill_increases_selected.filter(x => x === sk).length * 2;
                 let totalProf = baseProf + added;
-                
+
                 let boxes = "";
                 for(let i=2; i<=8; i+=2) {
                     if(i <= baseProf) boxes += `<div class="rank-box fill"></div>`;
@@ -680,15 +837,22 @@
                     else boxes += `<div class="rank-box"></div>`;
                 }
 
+                let rankLabel = RANK_LABELS[totalProf] || 'Untrained';
+                let rankColor = RANK_COLORS[totalProf] || 'text-gray-500';
+                let arrow = added > 0 ? ` <span class="text-green-400 text-xs">← ${RANK_LABELS[baseProf] || 'U'}</span>` : '';
+
                 let btnClass = "bg-gray-950 border-gray-700 text-gray-300";
                 if(added > 0) btnClass = "bg-amber-900/20 border-amber-500 text-white";
-                
+
                 let isCapped = totalProf >= cap.val || totalProf >= 8;
                 let disabledAttr = isCapped ? `opacity-50 cursor-not-allowed` : `cursor-pointer hover:border-amber-500`;
 
                 return `
                 <div class="flex items-center justify-between p-3 border rounded transition-colors ${btnClass} ${disabledAttr}" onclick="${isCapped ? '' : `incrementSkill('${sk}', ${totalIncreases})`}">
-                    <span class="text-sm font-bold capitalize">${sk}</span>
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold capitalize">${sk}</span>
+                        <span class="text-xs ${rankColor}">${rankLabel}${arrow}</span>
+                    </div>
                     <div class="flex items-center space-x-1">${boxes}</div>
                 </div>`;
             }).join('');
@@ -701,22 +865,27 @@
                 let baseProf = state.base_profs[sk] || 0;
                 let added = state.skill_increases_selected.filter(x => x === sk).length * 2;
                 let totalProf = baseProf + added;
-                
+
                 let boxes = "";
                 for(let i=2; i<=8; i+=2) {
                     if(i <= baseProf) boxes += `<div class="rank-box fill"></div>`;
                     else if(i <= totalProf) boxes += `<div class="rank-box fill-new"></div>`;
                     else boxes += `<div class="rank-box"></div>`;
                 }
-                
+
                 let btnClass = added > 0 ? "bg-amber-900/20 border-amber-500 text-white" : "bg-gray-950 border-gray-700 text-gray-300";
                 let isCapped = totalProf >= cap.val || totalProf >= 8;
                 let disabledAttr = isCapped ? `opacity-50 cursor-not-allowed` : `cursor-pointer hover:border-amber-500`;
                 let niceName = sk.replace('lore:', '').trim().replace(/\b\w/g, l => l.toUpperCase()) + " Lore";
+                let rankLabel = RANK_LABELS[totalProf] || 'Untrained';
+                let rankColor = RANK_COLORS[totalProf] || 'text-gray-500';
 
                 return `
                 <div class="flex items-center justify-between p-2 border rounded text-xs transition-colors ${btnClass} ${disabledAttr}" onclick="${isCapped ? '' : `incrementSkill('${sk}', ${totalIncreases})`}">
-                    <span class="font-bold">${niceName}</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold">${niceName}</span>
+                        <span class="${rankColor}" style="font-size:0.65rem">${rankLabel}</span>
+                    </div>
                     <div class="flex items-center space-x-1">${boxes}</div>
                 </div>`;
             }).join('');
@@ -1326,17 +1495,29 @@
             if(globalValid) {
                 btnF.disabled = false; btnF.innerText = "Lock In Level";
                 btnF.classList.remove('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
-                btnF.classList.add('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
-                document.getElementById('chk-review').innerText = "✓"; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none"; 
+                btnF.classList.add('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-lg', 'shadow-red-900/50');
+                document.getElementById('chk-review').innerText = "✓"; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none";
             } else {
                 btnF.disabled = true; btnF.innerText = "Incomplete Form";
                 btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
-                btnF.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
-                document.getElementById('chk-review').innerText = ""; 
+                btnF.classList.remove('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-lg', 'shadow-red-900/50');
+                document.getElementById('chk-review').innerText = "";
             }
+
+            // Sync drawer submit button
+            const btnDrawer = document.getElementById('btn-finish-drawer');
+            if (btnDrawer) {
+                btnDrawer.disabled = btnF.disabled;
+                btnDrawer.innerText = btnF.innerText;
+                btnDrawer.className = btnF.className;
+            }
+
+            buildCompactStepper();
         }
 
         async function submitLevelUp() {
+            // Confirmation dialog — prevent accidental one-click submit
+            if (!confirm(`Level up ${pc.name} to Level ${targetLevel}? This cannot be easily undone.`)) return;
             const btn = document.getElementById('btn-finish'); btn.innerText = "Processing Matrix..."; btn.disabled = true;
 
             let finalFeats = [...(pc.raw_feats || [])];
@@ -1443,7 +1624,13 @@
             try {
                 const res = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 const data = await res.json();
-                if(data.success) window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                if(data.success) {
+                    if (isDrawerMode && window.parent !== window) {
+                        window.parent.postMessage({ type: 'levelup_complete', name: pc.name }, '*');
+                        return;
+                    }
+                    window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                }
             } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
         }
 

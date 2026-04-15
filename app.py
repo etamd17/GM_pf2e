@@ -7127,19 +7127,25 @@ def submit_levelup(pc_name):
                 w['prof_val'] = max(w.get('prof_val', 2), b_val)
 
     # --- SKILL RANK VALIDATION ---
-    for sk in ['acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery']:
-        if sk in build['proficiencies'] and sk not in data.get('skills', {}):
-            del build['proficiencies'][sk]
-    
+    # The frontend sends ALL proficiencies (skills + saves + armor + etc.)
+    # under the `skills` key. Only touch the 16 standard skills and any
+    # lore skills here — saves, AC, and armor profs are handled by
+    # CLASS_PROGRESSION auto_bumps above.
+    STANDARD_SKILLS = {'acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery'}
     for sk, rank in data.get('skills', {}).items():
-        # Enforce skill rank gating
+        sk_lower = sk.lower()
+        # Only write standard skills and lore skills; skip saves/AC/armor
+        if sk_lower not in STANDARD_SKILLS and not sk_lower.startswith('lore'):
+            continue
+        rank = safe_int(rank, 0)
+        # Enforce PF2e skill rank gating
         if validate_skill_rank(rank, new_level):
-            build['proficiencies'][sk.lower()] = rank
+            build['proficiencies'][sk_lower] = rank
         else:
             # Cap to the highest valid rank for this level
             if new_level < 7 and rank > 4: rank = 4
             elif new_level < 15 and rank > 6: rank = 6
-            build['proficiencies'][sk.lower()] = rank
+            build['proficiencies'][sk_lower] = rank
 
     if 'spellCasters' in data:
         build['spellCasters'] = data['spellCasters']
@@ -7196,6 +7202,12 @@ def submit_levelup(pc_name):
                 build['monk_paths'][str(new_level)] = save_key
 
     save_and_reload_character(pc_name, pc_json, file_path)
+    # Push updated HP / conditions / level to all connected clients so the
+    # GM tracker and party view reflect the level-up immediately without
+    # a manual refresh. The levelling player's own sheet redirects via JS,
+    # but everyone else (GM, other players viewing party) receives this SSE.
+    _broadcast_pc_state(pc_name)
+    _broadcast_encounter_state()
     return jsonify({"success": True})
 
 @app.route('/api/revert_level/<pc_name>', methods=['POST'])
@@ -7257,6 +7269,8 @@ def revert_level(pc_name):
                     build['proficiencies'][reverted_save] = base_rank
             
             save_and_reload_character(pc_name, pc_json, file_path)
+            _broadcast_pc_state(pc_name)
+            _broadcast_encounter_state()
             return jsonify({"success": True})
     return jsonify({"success": False, "error": "Character not found or already at Level 1."})
 
