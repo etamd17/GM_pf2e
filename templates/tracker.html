@@ -605,35 +605,74 @@
 .trk .xp-row.hidden { display:none; }
 .trk .xp-row .xp-diff { font-weight:700; letter-spacing:.3px; }
 
-/* ═══ GM CHECKS CHEAT-SHEET MODAL ═══ */
-.checks-modal {
-  position:fixed; inset:0; background:rgba(0,0,0,0.78); backdrop-filter:blur(5px);
-  z-index:200; display:flex; align-items:flex-start; justify-content:center; padding:36px 20px 20px;
-  opacity:0; pointer-events:none; transition: opacity .2s;
+/* ═══ GM CHECKS CHEAT-SHEET DRAWER ═══ */
+/* Right-edge slide-out. Closed state: 32px gold "📋 CHECKS" tab sticks out;
+   click the tab (or hit C) to slide the full panel into view. Non-modal —
+   the tracker stays interactive underneath so the GM can glance at the
+   reference without losing their place. */
+.checks-drawer {
+  position:fixed; top:76px; right:0; bottom:12px;
+  width:500px; max-width:96vw;
+  /* Below tracker modals (.trk-modal is z:150) so handout / secret-roll
+     dialogs correctly cover the drawer when they open. Above regular
+     page content (z:60) and tooltips. */
+  z-index:120;
+  display:flex;
+  pointer-events:none;  /* container is a passthrough; handle + panel catch clicks */
+  transform:translateX(calc(100% - 32px));
+  transition: transform .22s cubic-bezier(.4,0,.2,1);
 }
-.checks-modal.open { opacity:1; pointer-events:auto; }
-.checks-modal-panel {
-  background:linear-gradient(180deg, var(--t-bg-surface), var(--t-bg-raised));
-  border:1px solid var(--t-border); border-radius:14px;
-  width:100%; max-width:1100px; max-height:calc(100vh - 56px); display:flex; flex-direction:column; overflow:hidden;
-  box-shadow:0 20px 60px rgba(0,0,0,0.7);
+.checks-drawer.open { transform:translateX(0); }
+.checks-drawer-handle {
+  width:32px; flex-shrink:0;
+  background:linear-gradient(180deg, rgba(23,27,38,0.96), rgba(19,22,31,0.96));
+  border:1px solid var(--t-border); border-right:none;
+  border-radius:8px 0 0 8px;
+  cursor:pointer;
+  pointer-events:auto;
+  display:flex; align-items:center; justify-content:center;
   position:relative;
-  transform:translateY(-10px); transition: transform .2s;
+  transition: background .15s;
+  box-shadow:-4px 0 14px rgba(0,0,0,0.35);
 }
-.checks-modal.open .checks-modal-panel { transform:translateY(0); }
-.checks-modal-panel::before {
+.checks-drawer-handle:hover {
+  background:linear-gradient(180deg, rgba(40,45,60,0.96), rgba(30,34,46,0.96));
+}
+.checks-drawer-handle::before {
+  content:""; position:absolute; top:0; bottom:0; left:0; width:2px;
+  background:linear-gradient(180deg, transparent, var(--t-gold) 20%, #60a5fa 50%, var(--t-gold) 80%, transparent);
+  opacity:.9;
+}
+.checks-drawer-handle-label {
+  writing-mode: vertical-rl; text-orientation: mixed;
+  transform: rotate(180deg);  /* reads bottom-to-top */
+  font-family:'Cinzel',serif;
+  font-size:12px; font-weight:700; letter-spacing:3px;
+  color:var(--t-gold); text-transform:uppercase;
+  user-select:none; white-space:nowrap;
+}
+.checks-drawer-panel {
+  flex:1; min-width:0;
+  background:linear-gradient(180deg, var(--t-bg-surface), var(--t-bg-raised));
+  border:1px solid var(--t-border); border-right:none;
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:-8px 0 32px rgba(0,0,0,0.5);
+  pointer-events:auto;
+  position:relative;
+}
+.checks-drawer-panel::before {
   content:""; position:absolute; top:0; left:0; right:0; height:3px;
   background:linear-gradient(90deg, transparent, #60a5fa, var(--t-gold), #60a5fa, transparent);
   opacity:.85;
 }
-.checks-modal-head {
+.checks-drawer-head {
   padding:14px 18px; display:flex; justify-content:space-between; align-items:center;
   border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.55); flex-shrink:0;
 }
-.checks-modal-head h3 { font-family:'Cinzel',serif; font-size:18px; font-weight:700; color:var(--t-gold); margin:0; }
-.checks-modal-head .sub { font-size:10px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
-.checks-modal-close { background:transparent; border:none; color:var(--t-t3); font-size:22px; cursor:pointer; line-height:1; padding:0 6px; }
-.checks-modal-close:hover { color:var(--t-red-b); }
+.checks-drawer-head h3 { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--t-gold); margin:0; }
+.checks-drawer-head .sub { font-size:10px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+.checks-drawer-close { background:transparent; border:none; color:var(--t-t3); font-size:22px; cursor:pointer; line-height:1; padding:0 6px; }
+.checks-drawer-close:hover { color:var(--t-red-b); }
 .checks-tabs { display:flex; gap:4px; padding:10px 14px 0; background:rgba(19,22,31,0.35); border-bottom:1px solid var(--t-border); flex-shrink:0; }
 .checks-tab {
   padding:7px 14px; background:transparent; border:1px solid transparent; border-bottom:none;
@@ -748,7 +787,7 @@
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
         <button class="hb-btn gold" onclick="openSecretRollPanel()" title="GM Secret Roll">🎲 Secret</button>
         <button class="hb-btn purple" onclick="openHandoutPanel()" title="Send handout to players">📜 Handout</button>
-        <button class="hb-btn" onclick="openChecksModal()" title="Reference: what to ask players to roll (C)" style="background:rgba(96,165,250,0.18);color:#93c5fd;border-color:rgba(96,165,250,0.4);">📋 Checks</button>
+        <button class="hb-btn" onclick="toggleChecksDrawer()" title="Open/close checks reference (C)" style="background:rgba(96,165,250,0.18);color:#93c5fd;border-color:rgba(96,165,250,0.4);">📋 Checks</button>
         <button class="hb-btn danger" onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')">Clear</button>
         {# hidden legacy round badge, kept for renderMeta backward-compat #}
         <span id="round-badge" class="hidden">Round {{ round_number }}</span>
@@ -961,15 +1000,20 @@
     </div>
 </div>
 
-{# ═══════════════════ GM CHECKS CHEAT-SHEET MODAL ═══════════════════ #}
-<div id="checks-modal" class="checks-modal" onclick="if(event.target===this) closeChecksModal()">
-    <div class="checks-modal-panel">
-        <div class="checks-modal-head">
+{# ═══════════════════ GM CHECKS CHEAT-SHEET DRAWER ═══════════════════ #}
+{# Always-visible 32px tab on the right edge; click it (or press C) to slide
+   the full panel out. Non-modal, so you can still see the tracker behind it. #}
+<div id="checks-drawer" class="checks-drawer">
+    <div class="checks-drawer-handle" onclick="toggleChecksDrawer()" title="Open/close checks reference (C)">
+        <span class="checks-drawer-handle-label">📋 Checks</span>
+    </div>
+    <div class="checks-drawer-panel">
+        <div class="checks-drawer-head">
             <div>
                 <h3>📋 Checks &amp; Saves Reference</h3>
                 <div class="sub">What to ask your players to roll · PF2e Remastered</div>
             </div>
-            <button class="checks-modal-close" onclick="closeChecksModal()" title="Close (Esc)">&times;</button>
+            <button class="checks-drawer-close" onclick="closeChecksDrawer()" title="Close (Esc)">&times;</button>
         </div>
 
         <div class="checks-tabs">
@@ -2148,39 +2192,42 @@ function closeStatModal() {
 }
 
 
-/* ──────────────── GM Checks Cheat-Sheet Modal ──────────────── */
-function openChecksModal() {
-    document.getElementById('checks-modal').classList.add('open');
+/* ──────────────── GM Checks Cheat-Sheet Drawer ──────────────── */
+function openChecksDrawer() {
+    document.getElementById('checks-drawer').classList.add('open');
 }
-function closeChecksModal() {
-    document.getElementById('checks-modal').classList.remove('open');
+function closeChecksDrawer() {
+    document.getElementById('checks-drawer').classList.remove('open');
+}
+function toggleChecksDrawer() {
+    document.getElementById('checks-drawer').classList.toggle('open');
 }
 function switchChecksTab(which) {
     // Highlight the clicked tab (match via data-tab)
-    document.querySelectorAll('#checks-modal .checks-tab').forEach(btn => {
+    document.querySelectorAll('#checks-drawer .checks-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === which);
     });
     // Show the matching pane
-    document.querySelectorAll('#checks-modal .checks-pane').forEach(p => {
+    document.querySelectorAll('#checks-drawer .checks-pane').forEach(p => {
         p.classList.toggle('active', p.dataset.pane === which);
     });
     // Scroll to top of body so the new tab starts at top
-    const body = document.querySelector('#checks-modal .checks-body');
+    const body = document.querySelector('#checks-drawer .checks-body');
     if (body) body.scrollTop = 0;
 }
-// Global hotkeys: "c" opens the cheat-sheet, Esc closes it.
+// Global hotkeys: "c" toggles the drawer, Esc closes it.
 // Ignore when typing in form fields so the letter doesn't get eaten.
 document.addEventListener('keydown', e => {
     const tag = (e.target?.tagName || '').toLowerCase();
     const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable;
     if (e.key === 'Escape') {
-        const m = document.getElementById('checks-modal');
-        if (m && m.classList.contains('open')) { e.preventDefault(); closeChecksModal(); }
+        const d = document.getElementById('checks-drawer');
+        if (d && d.classList.contains('open')) { e.preventDefault(); closeChecksDrawer(); }
     } else if (!typing && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const m = document.getElementById('checks-modal');
-        if (m) {
+        const d = document.getElementById('checks-drawer');
+        if (d) {
             e.preventDefault();
-            m.classList.contains('open') ? closeChecksModal() : openChecksModal();
+            toggleChecksDrawer();
         }
     }
 });
