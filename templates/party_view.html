@@ -3,122 +3,145 @@
 {% block title %}Party View - PF2E Dashboard{% endblock %}
 
 {% block extra_head %}
+    /* -------- Card shell -------- */
     .pc-card {
-        background: #24242e;
-        border: 1px solid rgba(255,255,255,0.06);
+        background: #1e1e27;
+        border: 1px solid rgba(255,255,255,0.05);
         border-radius: 0.75rem;
         overflow: hidden;
         transition: border-color 0.2s;
     }
-    .pc-card:hover {
-        border-color: rgba(94,173,173,0.2);
-    }
+    .pc-card:hover { border-color: rgba(125,196,196,0.18); }
+
     .pc-head {
-        background: #191920;
-        padding: 1rem 1.25rem;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 0.9rem 1.1rem;
+        background: linear-gradient(180deg, #1e1e27 0%, #191920 100%);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
     }
     .portrait-ring {
-        width: 48px;
-        height: 48px;
+        width: 52px; height: 52px;
         border-radius: 50%;
-        border: 2px solid rgba(125,196,196,0.3);
+        border: 1px solid rgba(125,196,196,0.25);
         overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: flex; align-items: center; justify-content: center;
         background: #282838;
         flex-shrink: 0;
     }
-    .portrait-ring img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    .stat-chip {
-        background: #191920;
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 0.375rem;
-        padding: 0.375rem 0;
+    .portrait-ring img { width: 100%; height: 100%; object-fit: cover; }
+
+    .lvl-badge {
         text-align: center;
-        flex: 1;
-        min-width: 0;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: rgba(224,176,80,0.08);
+        border: 1px solid rgba(224,176,80,0.25);
+        line-height: 1;
     }
+    .lvl-badge .lvl-lbl {
+        font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #b89860; font-weight: 600;
+    }
+    .lvl-badge .lvl-val {
+        font-family: 'Cinzel', serif; font-size: 1.25rem; font-weight: 700;
+        color: #e0b050; line-height: 1;
+    }
+
+    /* -------- Body rows -------- */
+    .pc-body { padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .hp-row { }
     .hp-bar-track {
-        height: 6px;
-        border-radius: 3px;
-        background: rgba(255,255,255,0.06);
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.05);
         overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.04);
     }
     .hp-bar-fill {
         height: 100%;
-        border-radius: 3px;
+        border-radius: 4px;
         transition: width 0.4s ease, background-color 0.4s ease;
     }
-    .condition-pill {
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        padding: 2px 8px;
-        border-radius: 9999px;
-        background: rgba(248,113,113,0.12);
-        border: 1px solid rgba(248,113,113,0.2);
-        color: #fca5a5;
-        text-transform: capitalize;
+
+    .stat-strip {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 4px;
     }
+    .stat-chip {
+        background: #16161d;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 6px;
+        padding: 6px 4px 5px;
+        text-align: center;
+    }
+    .stat-chip .stat-lbl {
+        font-size: 8px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #7a7a90;
+    }
+    .stat-chip .stat-val {
+        font-size: 13px; font-weight: 700; color: #e8e8f0; line-height: 1.2;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .ability-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 3px;
+    }
+    .ability-chip {
+        background: #16161d;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 5px;
+        padding: 5px 0 4px;
+        text-align: center;
+    }
+    .ability-chip .ab-lbl {
+        font-size: 7px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #7a7a90;
+    }
+    .ability-chip .ab-val {
+        font-size: 12px; font-weight: 700; color: #d8d8e0; line-height: 1.2;
+    }
+
+    /* -------- Hero pts / slot pips -------- */
+    .hero-pip {
+        display: inline-block;
+        width: 11px; height: 11px;
+        border-radius: 50%;
+    }
+    .hero-pip.active   { background: #e0b050; border: 1.5px solid #e0b050; }
+    .hero-pip.inactive { background: transparent; border: 1.5px solid rgba(224,176,80,0.3); }
+
     .slot-pip {
         display: inline-block;
-        width: 10px;
-        height: 10px;
+        width: 10px; height: 10px;
         border-radius: 50%;
         border: 1.5px solid;
         transition: background-color 0.3s, border-color 0.3s;
     }
-    .slot-pip.available {
-        background: #a78bfa;
-        border-color: #a78bfa;
+    .slot-pip.available      { background: #e0b050; border-color: #e0b050; }
+    .slot-pip.used           { background: transparent; border-color: rgba(224,176,80,0.3); }
+    .slot-pip.focus-available{ background: #8ED4D4; border-color: #8ED4D4; }
+    .slot-pip.focus-used     { background: transparent; border-color: rgba(142,212,212,0.3); }
+
+    /* -------- Conditions -------- */
+    .condition-pill {
+        font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background: rgba(248,113,113,0.12);
+        border: 1px solid rgba(248,113,113,0.22);
+        color: #fca5a5;
+        text-transform: capitalize;
     }
-    .slot-pip.used {
-        background: transparent;
-        border-color: rgba(167,139,250,0.3);
-    }
-    .slot-pip.focus-available {
-        background: #60a5fa;
-        border-color: #60a5fa;
-    }
-    .slot-pip.focus-used {
-        background: transparent;
-        border-color: rgba(96,165,250,0.3);
-    }
-    .hero-pip {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-    }
-    .hero-pip.active {
-        background: #d4a244;
-        border: 1.5px solid #d4a244;
-    }
-    .hero-pip.inactive {
-        background: transparent;
-        border: 1.5px solid rgba(212,162,68,0.3);
-    }
-    .section-inner {
-        background: #191920;
-        border: 1px solid rgba(255,255,255,0.04);
-        border-radius: 0.375rem;
-        padding: 0.625rem 0.75rem;
-    }
+
+    /* -------- HP controls -------- */
     .hp-adjust-btn {
-        width: 28px;
-        height: 28px;
-        border-radius: 0.375rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        font-weight: 700;
+        width: 26px; height: 26px;
+        border-radius: 5px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 700;
         cursor: pointer;
         transition: opacity 0.15s;
         border: none;
@@ -126,21 +149,190 @@
     }
     .hp-adjust-btn:hover { opacity: 0.85; }
     .hp-input {
-        width: 40px;
-        height: 28px;
+        width: 38px; height: 26px;
         text-align: center;
-        font-size: 12px;
+        font-size: 12px; font-weight: 600;
         font-family: 'Inter', sans-serif;
-        font-weight: 600;
-        border-radius: 0.375rem;
+        border-radius: 5px;
         background: #0d0d12;
         border: 1px solid rgba(255,255,255,0.08);
         color: #e8e8f0;
         outline: none;
     }
-    .hp-input:focus {
-        border-color: rgba(94,173,173,0.4);
+    .hp-input:focus { border-color: rgba(125,196,196,0.4); }
+
+    /* -------- Collapsible sections -------- */
+    .pc-tabs {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        padding-top: 6px;
+        border-top: 1px solid rgba(255,255,255,0.04);
     }
+    .pc-tab {
+        flex: 1;
+        min-width: 60px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        text-align: center;
+        background: #16161d;
+        border: 1px solid rgba(255,255,255,0.05);
+        color: #8a8aa0;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .pc-tab:hover { color: #e8e8f0; border-color: rgba(125,196,196,0.2); }
+    .pc-tab.active {
+        background: rgba(125,196,196,0.1);
+        border-color: rgba(125,196,196,0.35);
+        color: #8ED4D4;
+    }
+    .pc-tab .tab-count {
+        display: inline-block;
+        margin-left: 3px;
+        font-size: 9px;
+        opacity: 0.7;
+        font-weight: 500;
+    }
+
+    .pc-tab-panel {
+        display: none;
+        background: #16161d;
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 12px;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .pc-tab-panel.active { display: block; }
+    .pc-tab-panel::-webkit-scrollbar { width: 6px; }
+    .pc-tab-panel::-webkit-scrollbar-thumb { background: rgba(125,196,196,0.2); border-radius: 3px; }
+    .pc-tab-panel::-webkit-scrollbar-track { background: transparent; }
+
+    /* -------- Clickable entries -------- */
+    .detail-link {
+        cursor: pointer;
+        transition: background-color 0.12s, color 0.12s;
+        border-radius: 4px;
+        padding: 3px 6px;
+        margin: 0 -6px;
+        display: block;
+    }
+    .detail-link:hover {
+        background: rgba(125,196,196,0.08);
+        color: #8ED4D4;
+    }
+    .detail-link .meta {
+        font-size: 10px; color: #7a7a90;
+        margin-left: 6px;
+    }
+    .spell-line {
+        display: flex; flex-wrap: wrap; gap: 4px 8px;
+        align-items: center;
+    }
+    .spell-line-tag {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+        color: #b89860;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+    .spell-line .detail-link {
+        display: inline;
+        padding: 2px 6px; margin: 0;
+        font-size: 11px;
+        color: #c8c8d4;
+    }
+    .attack-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .attack-row .attack-bonus {
+        font-weight: 700; color: #8ED4D4; font-size: 11px;
+    }
+    .attack-row .attack-dmg {
+        font-size: 10px; color: #8a8aa0; font-family: 'Inter', sans-serif;
+    }
+
+    /* -------- Detail modal -------- */
+    .detail-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(4px);
+        z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+    }
+    .detail-card {
+        background: #1e1e27;
+        border: 1px solid rgba(125,196,196,0.25);
+        border-radius: 10px;
+        max-width: 620px;
+        width: 100%;
+        max-height: 88vh;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+    }
+    .detail-card-head {
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        background: #191920;
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 12px;
+    }
+    .detail-card-head h3 {
+        font-family: 'Cinzel', serif;
+        font-size: 1.1rem; font-weight: 700;
+        color: #e8e8f0;
+        margin: 0;
+    }
+    .detail-card-head .meta-row {
+        display: flex; flex-wrap: wrap; gap: 5px;
+        margin-top: 5px;
+    }
+    .detail-meta-tag {
+        font-size: 9px; font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 9999px;
+        letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .detail-meta-tag.type {
+        background: rgba(125,196,196,0.1);
+        border: 1px solid rgba(125,196,196,0.25);
+        color: #8ED4D4;
+    }
+    .detail-meta-tag.rank {
+        background: rgba(224,176,80,0.1);
+        border: 1px solid rgba(224,176,80,0.25);
+        color: #e0b050;
+    }
+    .detail-close {
+        background: transparent; border: none;
+        font-size: 20px; line-height: 1;
+        color: #8a8aa0; cursor: pointer;
+        padding: 2px 6px; border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+    .detail-close:hover { color: #e8e8f0; background: rgba(255,255,255,0.06); }
+    .detail-card-body {
+        padding: 16px 18px;
+        overflow-y: auto;
+        font-size: 13px;
+        color: #c8c8d4;
+        line-height: 1.55;
+    }
+    .detail-card-body p { margin: 0 0 8px; }
+    .detail-card-body strong { color: #e8e8f0; }
+    .detail-card-body em { color: #b0b0c0; }
+    .detail-card-body hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 0; }
+    .detail-card-body ul, .detail-card-body ol { margin: 0 0 8px 20px; }
+    .detail-card-body::-webkit-scrollbar { width: 8px; }
+    .detail-card-body::-webkit-scrollbar-thumb { background: rgba(125,196,196,0.22); border-radius: 4px; }
+    .detail-card-body::-webkit-scrollbar-track { background: transparent; }
 {% endblock %}
 
 {% block content %}
@@ -148,7 +340,7 @@
 <div class="flex items-center justify-between mb-6">
     <div>
         <h1 class="font-display text-xl text-accent-300 tracking-wide">Party Overview</h1>
-        <p class="text-xs text-base-500 mt-0.5">Real-time character status</p>
+        <p class="text-xs text-base-500 mt-0.5">Real-time character status &mdash; click a spell, feat, attack, or feature for details</p>
     </div>
     <div class="flex gap-2">
         <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:#191920;">
@@ -167,140 +359,191 @@
 <!-- Party Grid -->
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-5" id="party-grid">
     {% for pc in party %}
+    {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+    {% set attacks_count = pc.attacks|length if pc.attacks else 0 %}
+    {% set feats_count = pc.feats|length if pc.feats else 0 %}
+    {% set features_count = pc.class_features|length if pc.class_features else 0 %}
+    {% set spells_count = namespace(n=0) %}
+    {% if pc.spell_casters %}
+        {% for caster in pc.spell_casters %}
+            {% for lvl in caster.levels %}{% set spells_count.n = spells_count.n + (lvl.spells|length) %}{% endfor %}
+        {% endfor %}
+    {% endif %}
+
     <div class="pc-card" data-pc-name="{{ pc.name }}">
-        <!-- Card Header -->
+        <!-- Header -->
         <div class="pc-head flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="portrait-ring">
                     {% if pc.portrait %}
-                    <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
                     {% else %}
-                    <span class="font-display text-lg text-accent-300">{{ pc.name[0] }}</span>
+                        <span class="font-display text-lg text-accent-300">{{ pc.name[0] }}</span>
                     {% endif %}
                 </div>
-                <div>
+                <div class="min-w-0">
                     <a href="/player/sheet/{{ pc.name | urlencode }}" target="_blank"
-                       class="font-display text-base text-base-100 hover:text-accent-300 transition-colors leading-tight">
+                       class="font-display text-base text-base-100 hover:text-accent-300 transition-colors leading-tight truncate block">
                         {{ pc.name }} <span class="text-[10px] text-base-500">&#8599;</span>
                     </a>
-                    <p class="text-xs text-accent-400 mt-0.5">
+                    <p class="text-xs text-base-400 mt-0.5 truncate">
                         {{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} &middot; {{ pc.subclass }}{% endif %}
                     </p>
                 </div>
             </div>
-            <div class="text-center px-2.5 py-1 rounded" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.06);">
-                <span class="font-display text-[8px] uppercase tracking-widest block text-base-500">Lvl</span>
-                <span class="font-display text-lg font-bold leading-none text-base-100">{{ pc.level }}</span>
+            <div class="lvl-badge">
+                <div class="lvl-lbl">Lvl</div>
+                <div class="lvl-val">{{ pc.level }}</div>
             </div>
         </div>
 
-        <!-- Card Body -->
-        <div class="p-4 space-y-4">
-            <!-- HP Section -->
-            {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
-            <div class="hp-section" data-max-hp="{{ pc.hp }}">
+        <!-- Body -->
+        <div class="pc-body">
+            <!-- HP -->
+            <div class="hp-row" data-max-hp="{{ pc.hp }}">
                 <div class="flex items-center justify-between mb-1.5">
                     <div class="flex items-center gap-2">
                         <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">HP</span>
-                        <span class="hp-display text-sm font-bold {% if hp_pct > 50 %}text-success-400{% elif hp_pct > 25 %}text-gold-300{% else %}text-danger-400{% endif %}">
+                        <span class="hp-display text-sm font-bold {% if hp_pct > 50 %}text-base-100{% elif hp_pct > 25 %}text-gold-300{% else %}text-danger-400{% endif %}">
                             {{ pc.current_hp }}<span class="text-base-500 font-normal text-xs"> / {{ pc.hp }}</span>
                         </span>
                     </div>
                     <div class="flex items-center gap-1">
                         <input type="number" class="hp-input hp-amount" value="1" min="1">
-                        <button class="hp-adjust-btn hp-damage-btn" style="background:rgba(248,113,113,0.15); color:#f87171;" title="Damage">&minus;</button>
-                        <button class="hp-adjust-btn hp-heal-btn" style="background:rgba(74,222,128,0.15); color:#4ade80;" title="Heal">+</button>
+                        <button class="hp-adjust-btn hp-damage-btn" style="background:rgba(248,113,113,0.14); color:#f87171;" title="Damage">&minus;</button>
+                        <button class="hp-adjust-btn hp-heal-btn" style="background:rgba(74,222,128,0.14); color:#4ade80;" title="Heal">+</button>
                     </div>
                 </div>
                 <div class="hp-bar-track">
-                    <div class="hp-bar-fill" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}#4ade80{% elif hp_pct > 25 %}#d4a244{% else %}#f87171{% endif %};"></div>
+                    <div class="hp-bar-fill" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}#4ade80{% elif hp_pct > 25 %}#e0b050{% else %}#f87171{% endif %};"></div>
                 </div>
             </div>
 
-            <!-- Hero Points -->
-            <div class="flex items-center gap-3">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Hero</span>
-                <span class="hero-pips flex gap-1">
-                    {% for i in range(3) %}
-                    <span class="hero-pip {% if i < pc.hero_points %}active{% else %}inactive{% endif %}"></span>
+            <!-- Hero pts + conditions in a compact row -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Hero</span>
+                    <span class="hero-pips flex gap-1">
+                        {% for i in range(3) %}
+                        <span class="hero-pip {% if i < pc.hero_points %}active{% else %}inactive{% endif %}"></span>
+                        {% endfor %}
+                    </span>
+                </div>
+                <div class="conditions-row flex flex-wrap gap-1 ml-auto" {% if not pc.conditions %}style="display:none;"{% endif %}>
+                    {% for cond, val in pc.conditions.items() %}
+                        {% if val and val != 0 and val is not false %}
+                        <span class="condition-pill">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
+                        {% endif %}
                     {% endfor %}
-                </span>
-            </div>
-
-            <!-- Stats Row -->
-            <div class="flex gap-1.5">
-                <div class="stat-chip">
-                    <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">AC</div>
-                    <div class="text-sm font-bold text-info-400">{{ pc.ac }}</div>
-                </div>
-                <div class="stat-chip">
-                    <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">Fort</div>
-                    <div class="text-sm font-bold text-success-400">+{{ pc.fort }}</div>
-                </div>
-                <div class="stat-chip">
-                    <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">Ref</div>
-                    <div class="text-sm font-bold text-info-300">+{{ pc.ref }}</div>
-                </div>
-                <div class="stat-chip">
-                    <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">Will</div>
-                    <div class="text-sm font-bold text-spell-300">+{{ pc.will }}</div>
-                </div>
-                <div class="stat-chip">
-                    <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">Perc</div>
-                    <div class="text-sm font-bold text-base-200">+{{ pc.perception }}</div>
                 </div>
             </div>
 
-            <!-- Ability Mods -->
-            <div class="grid grid-cols-6 gap-1.5">
+            <!-- Defenses -->
+            <div class="stat-strip">
+                <div class="stat-chip"><div class="stat-lbl">AC</div><div class="stat-val">{{ pc.ac }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Fort</div><div class="stat-val">+{{ pc.fort }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Ref</div><div class="stat-val">+{{ pc.ref }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Will</div><div class="stat-val">+{{ pc.will }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Perc</div><div class="stat-val">+{{ pc.perception }}</div></div>
+            </div>
+
+            <!-- Abilities -->
+            <div class="ability-grid">
                 {% for stat in pc.ability_display %}
-                <div class="text-center rounded py-1" style="background:#191920; border:1px solid rgba(255,255,255,0.04);">
-                    <div class="text-[8px] font-semibold uppercase tracking-widest text-base-500">{{ stat.label }}</div>
-                    <div class="text-sm font-bold text-base-200 leading-none mt-0.5">{{ stat.mod }}</div>
+                <div class="ability-chip">
+                    <div class="ab-lbl">{{ stat.label }}</div>
+                    <div class="ab-val">{{ stat.mod }}</div>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- Conditions -->
-            <div class="conditions-row flex flex-wrap gap-1" {% if not pc.conditions %}style="display:none;"{% endif %}>
-                {% for cond, val in pc.conditions.items() %}
-                {% if val and val != 0 and val is not false %}
-                <span class="condition-pill">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
+            <!-- Section tabs -->
+            {% if attacks_count or spells_count.n or feats_count or features_count %}
+            <div class="pc-tabs" role="tablist">
+                {% if attacks_count %}
+                <button type="button" class="pc-tab active" data-tab="attacks">
+                    Attacks<span class="tab-count">{{ attacks_count }}</span>
+                </button>
                 {% endif %}
-                {% endfor %}
+                {% if spells_count.n %}
+                <button type="button" class="pc-tab {% if not attacks_count %}active{% endif %}" data-tab="spells">
+                    Spells<span class="tab-count">{{ spells_count.n }}</span>
+                </button>
+                {% endif %}
+                {% if feats_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n %}active{% endif %}" data-tab="feats">
+                    Feats<span class="tab-count">{{ feats_count }}</span>
+                </button>
+                {% endif %}
+                {% if features_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n and not feats_count %}active{% endif %}" data-tab="features">
+                    Features<span class="tab-count">{{ features_count }}</span>
+                </button>
+                {% endif %}
             </div>
 
-            <!-- Spell Slots -->
-            {% if pc.spell_casters %}
-            <div class="spell-section space-y-2">
+            <!-- Attacks panel -->
+            {% if attacks_count %}
+            <div class="pc-tab-panel active" data-panel="attacks">
+                {% for attack in pc.attacks %}
+                <div class="attack-row {% if not loop.last %}mb-1.5 pb-1.5{% endif %}" {% if not loop.last %}style="border-bottom:1px solid rgba(255,255,255,0.04);"{% endif %}>
+                    <span class="detail-link flex-1 min-w-0 truncate text-base-200"
+                          data-detail-type="item"
+                          data-detail-name="{{ attack.name|e }}"
+                          data-detail-desc="{{ ('<p><strong>Strike bonuses:</strong> ' ~ (attack.strikes | map(attribute='label') | join(' / ')) ~ '</p><p><strong>Damage:</strong> ' ~ attack.damage ~ '</p>' ~ ('<p><strong>Traits:</strong> ' ~ (attack.traits | join(', ')) ~ '</p>' if attack.traits else '') ~ ('<p><strong>Crit:</strong> ' ~ attack.crit_effects ~ '</p>' if attack.crit_effects else '')) | e }}"
+                          data-detail-subtitle="Strike">
+                        {{ attack.name }}
+                    </span>
+                    <span class="flex items-center gap-2 shrink-0">
+                        <span class="attack-bonus">{{ attack.strikes[0].label }}</span>
+                        <span class="attack-dmg">{{ attack.damage }}</span>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Spells panel -->
+            {% if spells_count.n %}
+            <div class="pc-tab-panel {% if not attacks_count %}active{% endif %}" data-panel="spells">
                 {% for caster in pc.spell_casters %}
                 {% set caster_idx = loop.index0 %}
-                <div class="section-inner" data-caster-idx="{{ caster_idx }}">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-[10px] font-semibold uppercase tracking-widest text-spell-400">{{ caster.name }}</span>
+                <div class="{% if not loop.first %}mt-2 pt-2{% endif %}" {% if not loop.first %}style="border-top:1px solid rgba(255,255,255,0.04);"{% endif %} data-caster-idx="{{ caster_idx }}">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-gold-300">{{ caster.name }}</span>
                         <span class="text-[10px] text-base-500">{{ caster.tradition }}</span>
                     </div>
                     {% for level in caster.levels %}
-                    <div class="flex items-start gap-2 mb-1.5 last:mb-0 spell-level-row" data-spell-level="{{ level.level }}">
-                        <span class="text-[10px] font-semibold text-base-400 w-8 shrink-0 pt-px">{{ level.label[:3] if level.level > 0 else 'Can' }}</span>
-                        <div class="flex-1 min-w-0">
-                            <div class="slot-pips flex gap-1 mb-0.5">
+                    {% if level.slots > 0 or level.spells %}
+                    <div class="spell-level-row mb-1.5" data-spell-level="{{ level.level }}">
+                        <div class="spell-line">
+                            <span class="spell-line-tag">{{ 'Cant' if level.level == 0 else level.label[:3] }}</span>
+                            {% if level.slots > 0 %}
+                            <span class="slot-pips flex gap-1">
                                 {% for i in range(level.slots) %}
                                 <span class="slot-pip available" data-slot-key="{{ caster_idx }}-{{ level.level }}-{{ i }}"></span>
                                 {% endfor %}
-                                {% if level.slots == 0 and level.spells %}
-                                <span class="text-[9px] text-base-500 italic">at will</span>
-                                {% endif %}
-                            </div>
-                            <div class="spell-names text-[10px] text-base-500 leading-snug truncate">
-                                {{ level.spells | map(attribute='name') | join(', ') }}
-                            </div>
+                            </span>
+                            {% elif level.spells %}
+                            <span class="text-[9px] text-base-500 italic">at will</span>
+                            {% endif %}
+                        </div>
+                        <div class="spell-line mt-1" style="padding-left: 6px;">
+                            {% for sp in level.spells %}
+                            <span class="detail-link"
+                                  data-detail-type="spell"
+                                  data-detail-name="{{ sp.name|e }}"
+                                  data-detail-rank="{{ level.level }}"
+                                  data-detail-tradition="{{ caster.tradition }}"
+                                  data-detail-desc="{{ sp.desc|e }}">{{ sp.name }}</span>
+                            {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
                     {% endfor %}
                     {% if pc.focus_max > 0 and loop.first %}
-                    <div class="flex items-center gap-2 mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.04);">
-                        <span class="text-[10px] font-semibold text-info-400 w-8 shrink-0">Foc</span>
+                    <div class="flex items-center gap-2 mt-1.5 pt-1.5" style="border-top:1px solid rgba(255,255,255,0.04);">
+                        <span class="spell-line-tag" style="color:#8ED4D4;">Focus</span>
                         <div class="focus-pips flex gap-1">
                             {% for i in range(pc.focus_max) %}
                             <span class="slot-pip {% if i < pc.focus_points %}focus-available{% else %}focus-used{% endif %}"></span>
@@ -313,28 +556,163 @@
             </div>
             {% endif %}
 
-            <!-- Attacks -->
-            {% if pc.attacks %}
-            <div class="section-inner">
-                <div class="text-[10px] font-semibold uppercase tracking-widest text-base-500 mb-1.5">Attacks</div>
-                {% for attack in pc.attacks %}
-                <div class="flex items-center justify-between text-xs {% if not loop.last %}mb-1{% endif %}">
-                    <span class="text-base-300 truncate mr-2">{{ attack.name }}</span>
-                    <span class="shrink-0">
-                        <span class="font-semibold text-accent-300">{{ attack.strikes[0].label }}</span>
-                        <span class="text-base-500 ml-1">({{ attack.damage }})</span>
-                    </span>
-                </div>
+            <!-- Feats panel -->
+            {% if feats_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n %}active{% endif %}" data-panel="feats">
+                {% for feat in pc.feats|sort(attribute='level') %}
+                <span class="detail-link"
+                      data-detail-type="feat"
+                      data-detail-name="{{ feat.name|e }}"
+                      data-detail-desc="{{ feat.desc|e }}"
+                      data-detail-subtitle="{{ feat.type }}">
+                    {{ feat.name }}<span class="meta">L{{ feat.level }}{% if feat.type %} &middot; {{ feat.type }}{% endif %}</span>
+                </span>
                 {% endfor %}
             </div>
+            {% endif %}
+
+            <!-- Class Features panel -->
+            {% if features_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n and not feats_count %}active{% endif %}" data-panel="features">
+                {% for feature in pc.class_features %}
+                <span class="detail-link"
+                      data-detail-type="feature"
+                      data-detail-name="{{ feature.name|e }}"
+                      data-detail-desc="{{ feature.desc|e if feature.desc else '' }}"
+                      data-detail-subtitle="{{ feature.type }}">
+                    {{ feature.name }}<span class="meta">L{{ feature.level }}{% if feature.type %} &middot; {{ feature.type }}{% endif %}</span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% endif %}
         </div>
     </div>
     {% endfor %}
 </div>
 
+<!-- Shared detail modal -->
+<div id="detail-modal" class="detail-overlay" style="display:none;">
+    <div class="detail-card" onclick="event.stopPropagation()">
+        <div class="detail-card-head">
+            <div class="min-w-0 flex-1">
+                <h3 id="detail-title">&nbsp;</h3>
+                <div id="detail-meta" class="meta-row"></div>
+            </div>
+            <button class="detail-close" id="detail-close" title="Close">&times;</button>
+        </div>
+        <div id="detail-body" class="detail-card-body">&nbsp;</div>
+    </div>
+</div>
+
 <script>
 (function() {
+    // ---------- Detail modal ----------
+    const modal = document.getElementById('detail-modal');
+    const modalTitle = document.getElementById('detail-title');
+    const modalMeta = document.getElementById('detail-meta');
+    const modalBody = document.getElementById('detail-body');
+    const modalClose = document.getElementById('detail-close');
+
+    function escHTML(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+    modalClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display !== 'none') closeModal();
+    });
+
+    async function openDetail(el) {
+        const type = el.dataset.detailType || '';
+        const name = el.dataset.detailName || '';
+        const desc = el.dataset.detailDesc || '';
+        const rank = el.dataset.detailRank;
+        const tradition = el.dataset.detailTradition;
+        const subtitle = el.dataset.detailSubtitle;
+
+        modalTitle.textContent = name;
+        let metaHTML = '';
+        if (type) metaHTML += `<span class="detail-meta-tag type">${escHTML(type)}</span>`;
+        if (rank !== undefined && rank !== '') {
+            metaHTML += `<span class="detail-meta-tag rank">${rank === '0' ? 'Cantrip' : 'Rank ' + rank}</span>`;
+        }
+        if (tradition) metaHTML += `<span class="detail-meta-tag">${escHTML(tradition)}</span>`;
+        if (subtitle) metaHTML += `<span class="detail-meta-tag">${escHTML(subtitle)}</span>`;
+        modalMeta.innerHTML = metaHTML;
+
+        // Prefer inline desc; otherwise fetch compendium.
+        const looksMissing = !desc
+            || desc.includes('Description not found')
+            || desc.includes('No description')
+            || desc.length < 40;
+        if (!looksMissing) {
+            modalBody.innerHTML = desc;
+        } else {
+            modalBody.innerHTML = '<em>Loading...</em>';
+            if (type === 'spell' || type === 'feat' || type === 'item') {
+                try {
+                    const r = await fetch('/api/compendium_detail?name=' + encodeURIComponent(name) + '&type=' + encodeURIComponent(type));
+                    if (r.ok) {
+                        const data = await r.json();
+                        // Most compendium rows expose a `description` field.
+                        let html = data.description || data.desc || desc || '';
+                        if (!html && data.text) html = data.text;
+                        if (!html) html = '<em>No description available.</em>';
+                        modalBody.innerHTML = html;
+                        // Fill in missing tags from compendium row
+                        if (data.traits && !modalMeta.querySelector('[data-from=compendium]')) {
+                            const extra = (Array.isArray(data.traits) ? data.traits : String(data.traits).split(',')).slice(0, 6);
+                            extra.forEach(t => {
+                                const s = document.createElement('span');
+                                s.className = 'detail-meta-tag';
+                                s.dataset.from = 'compendium';
+                                s.textContent = String(t).trim();
+                                modalMeta.appendChild(s);
+                            });
+                        }
+                    } else {
+                        modalBody.innerHTML = desc || '<em>No description available.</em>';
+                    }
+                } catch (_) {
+                    modalBody.innerHTML = desc || '<em>No description available.</em>';
+                }
+            } else {
+                modalBody.innerHTML = desc || '<em>No description available.</em>';
+            }
+        }
+
+        modal.style.display = 'flex';
+        modalBody.scrollTop = 0;
+    }
+
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('.detail-link');
+        if (link) {
+            e.preventDefault();
+            openDetail(link);
+        }
+    });
+
+    // ---------- Card tab switching ----------
+    document.addEventListener('click', (e) => {
+        const tab = e.target.closest('.pc-tab');
+        if (!tab) return;
+        const card = tab.closest('.pc-card');
+        if (!card) return;
+        const target = tab.dataset.tab;
+        card.querySelectorAll('.pc-tab').forEach(t => t.classList.toggle('active', t === tab));
+        card.querySelectorAll('.pc-tab-panel').forEach(p => {
+            p.classList.toggle('active', p.dataset.panel === target);
+        });
+    });
+
     // ---------- HP Adjustment via AJAX ----------
     document.querySelectorAll('.pc-card').forEach(card => {
         const pcName = card.dataset.pcName;
@@ -355,7 +733,7 @@
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    const maxHP = parseInt(card.querySelector('.hp-section').dataset.maxHp);
+                    const maxHP = parseInt(card.querySelector('.hp-row').dataset.maxHp);
                     updateCardHP(card, data.current_hp, maxHP, data.conditions);
                 }
             })
@@ -363,18 +741,17 @@
         }
 
         if (damageBtn) damageBtn.addEventListener('click', () => adjustHP('damage'));
-        if (healBtn) healBtn.addEventListener('click', () => adjustHP('heal'));
+        if (healBtn)   healBtn.addEventListener('click',   () => adjustHP('heal'));
     });
 
-    // ---------- Update Functions ----------
+    // ---------- Live-update helpers ----------
     function getHPColor(pct) {
         if (pct > 50) return '#4ade80';
-        if (pct > 25) return '#d4a244';
+        if (pct > 25) return '#e0b050';
         return '#f87171';
     }
-
     function getHPClass(pct) {
-        if (pct > 50) return 'text-success-400';
+        if (pct > 50) return 'text-base-100';
         if (pct > 25) return 'text-gold-300';
         return 'text-danger-400';
     }
@@ -429,11 +806,8 @@
         if (!expended) return;
         card.querySelectorAll('.slot-pip[data-slot-key]').forEach(pip => {
             const key = pip.dataset.slotKey;
-            if (expended[key]) {
-                pip.className = 'slot-pip used';
-            } else {
-                pip.className = 'slot-pip available';
-            }
+            if (expended[key]) pip.className = 'slot-pip used';
+            else               pip.className = 'slot-pip available';
         });
     }
 
@@ -454,17 +828,11 @@
         });
     }
 
-    function escHTML(s) {
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
-
     function findCard(name) {
         return document.querySelector('.pc-card[data-pc-name="' + CSS.escape(name) + '"]');
     }
 
-    // ---------- SSE Listener ----------
+    // ---------- SSE ----------
     let evtSource = null;
     function connectSSE() {
         if (evtSource) { try { evtSource.close(); } catch(e) {} }
@@ -479,21 +847,11 @@
                 if (data.current_hp !== undefined && data.max_hp !== undefined) {
                     updateCardHP(card, data.current_hp, data.max_hp, data.conditions);
                 }
-                if (data.conditions !== undefined) {
-                    updateConditions(card, data.conditions);
-                }
-                if (data.focus !== undefined) {
-                    updateFocus(card, data.focus);
-                }
-                if (data.hero_points !== undefined) {
-                    updateHeroPoints(card, data.hero_points);
-                }
-                if (data.expended_slots) {
-                    updateSpellSlots(card, data.expended_slots);
-                }
-                if (data.spell_casters) {
-                    updateSpellCastersFromAPI(card, data.spell_casters);
-                }
+                if (data.conditions !== undefined)  updateConditions(card, data.conditions);
+                if (data.focus !== undefined)       updateFocus(card, data.focus);
+                if (data.hero_points !== undefined) updateHeroPoints(card, data.hero_points);
+                if (data.expended_slots)            updateSpellSlots(card, data.expended_slots);
+                if (data.spell_casters)             updateSpellCastersFromAPI(card, data.spell_casters);
             } catch(err) {}
         });
 
@@ -504,7 +862,7 @@
     }
     connectSSE();
 
-    // ---------- Polling Fallback ----------
+    // ---------- Polling fallback ----------
     function pollPartyState() {
         fetch('/api/gm_party_state')
         .then(r => r.json())
