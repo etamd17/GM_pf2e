@@ -1052,6 +1052,11 @@
         let _visibilityCache = null;
         let _visibilityKey = '';
 
+        // Tracks the most recent encounter turn so we can reset per-token
+        // movement budgets (token.movement_used_this_turn) when the turn
+        // advances. Stored as "round:turn_index".
+        let _lastTurnKey = '';
+
         function _computeVisibilityKey() {
             const tks = (mapState.tokens || []).filter(t => t.is_pc).map(t =>
                 `${t.id}:${t.x},${t.y}:${t.vision_radius || 6}:${t.darkvision ? 1 : 0}:${t.low_light_vision ? 1 : 0}:${t.size || 1}`
@@ -1254,13 +1259,17 @@
             
             evtSource.addEventListener('map_state', (e) => {
                 // Track old token positions so we can tween into new ones.
-                const prevTokens = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y}]));
+                const prevTokens = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y, mu: t.movement_used_this_turn || 0}]));
                 mapState = JSON.parse(e.data);
                 _invalidateVisibilityCache();
                 for (const t of (mapState.tokens || [])) {
                     const prev = prevTokens.get(t.id);
-                    if (prev && (prev.x !== t.x || prev.y !== t.y)) {
-                        _startTokenAnim(t.id, prev.x, prev.y, t.x, t.y);
+                    if (prev) {
+                        // Preserve client-only per-turn movement budget.
+                        if (prev.mu) t.movement_used_this_turn = prev.mu;
+                        if (prev.x !== t.x || prev.y !== t.y) {
+                            _startTokenAnim(t.id, prev.x, prev.y, t.x, t.y);
+                        }
                     }
                 }
                 if (mapState.image && (!mapImage || !mapImage.src.includes(mapState.image))) {
@@ -1279,11 +1288,14 @@
             
             evtSource.addEventListener('map_tokens', (e) => {
                 const incoming = JSON.parse(e.data).tokens || [];
-                const prev = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y}]));
+                const prev = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y, mu: t.movement_used_this_turn || 0}]));
                 for (const t of incoming) {
                     const p = prev.get(t.id);
-                    if (p && (p.x !== t.x || p.y !== t.y)) {
-                        _startTokenAnim(t.id, p.x, p.y, t.x, t.y);
+                    if (p) {
+                        if (p.mu) t.movement_used_this_turn = p.mu;
+                        if (p.x !== t.x || p.y !== t.y) {
+                            _startTokenAnim(t.id, p.x, p.y, t.x, t.y);
+                        }
                     }
                 }
                 mapState.tokens = incoming;
@@ -1307,7 +1319,21 @@
             });
             
             evtSource.addEventListener('encounter_update', (e) => {
-                // Sync HP/conditions from encounter
+                // Sync HP/conditions from encounter; also watch turn_index
+                // to reset per-turn movement budgets on all tokens.
+                try {
+                    const payload = JSON.parse(e.data);
+                    const newTurn = payload.turn_index;
+                    const newRound = payload.round;
+                    const key = `${newRound}:${newTurn}`;
+                    if (typeof newTurn === 'number' && _lastTurnKey !== key) {
+                        _lastTurnKey = key;
+                        for (const t of (mapState.tokens || [])) {
+                            if (t.movement_used_this_turn) t.movement_used_this_turn = 0;
+                        }
+                        render();
+                    }
+                } catch(_) {}
             });
             
             evtSource.addEventListener('dice_roll', (e) => {
@@ -1486,26 +1512,31 @@
             
             // First, calculate what PCs can currently see
             const visible = calculateVisibleCells();
-            
+            const brightSet = visible.bright || visible;
+            const dimSet = visible.dim || new Set();
+
             for (let gx = 0; gx < cols; gx++) {
                 for (let gy = 0; gy < rows; gy++) {
                     const key = `${gx},${gy}`;
                     const isExplored = explored.has(key);
                     const isVisible = visible.has(key);
+                    const isBright = brightSet.has && brightSet.has(key);
+                    const isDim = dimSet.has && dimSet.has(key);
                     const px = gx * gs + ox;
                     const py = gy * gs + oy;
-                    
+
                     if (!isExplored && !isVisible) {
                         // Never seen - dim overlay for GM
                         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
                         ctx.fillRect(px, py, gs, gs);
-                    } else if (isVisible && lighting === 'dim') {
-                        // Visible but dim lighting — subtle blue-gray tint
+                    } else if (isVisible && isDim && !isBright) {
+                        // Cell in dim/shadow for players — blue-gray tint
                         ctx.fillStyle = 'rgba(20, 30, 60, 0.25)';
                         ctx.fillRect(px, py, gs, gs);
-                    } else if (isVisible && lighting === 'dark') {
-                        // Visible via darkvision in darkness — desaturated purple tint
-                        ctx.fillStyle = 'rgba(40, 20, 60, 0.35)';
+                    } else if (isExplored && !isVisible && lighting !== 'bright') {
+                        // Previously explored but currently out of sight
+                        // in dim/dark ambient — show as memory.
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
                         ctx.fillRect(px, py, gs, gs);
                     }
                 }
@@ -1513,68 +1544,152 @@
         }
         
         function calculateVisibleCells() {
-            // Ray-cast from each PC token to determine visible cells.
-            // Cached: the computation is O(cols*rows*pcs*walls), which got
-            // expensive on big maps. We rebuild only when _computeVisibilityKey
-            // changes (tokens moved, walls edited, lighting changed).
+            // Ray-cast from each PC token plus sample nearby lights so the
+            // GM preview matches what players actually see. Returns
+            // {bright, dim, all} sets of "x,y" keys. `all` is kept as the
+            // union for callers that just need "is this cell visible".
+            //
+            // PF2e lighting rules applied per-cell:
+            //   bright ambient: LOS alone makes the cell bright.
+            //   dim ambient: torch bright-ring -> bright; viewer radius ->
+            //     bright if darkvision/low-light, else dim; torch dim-ring or
+            //     viewer radius -> dim.
+            //   dark ambient: only lit cells are visible. Torch bright -> bright;
+            //     torch dim + darkvision/low-light -> bright; torch dim -> dim;
+            //     darkvision inside viewer radius -> dim.
             const key = _computeVisibilityKey();
             if (_visibilityCache && _visibilityKey === key) {
                 return _visibilityCache;
             }
             _visibilityKey = key;
 
-            const visible = new Set();
+            const bright = new Set();
+            const dim = new Set();
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
 
             const pcTokens = (mapState.tokens || []).filter(t => t.is_pc);
             const walls = mapState.walls || [];
-            
+            const lights = (_activeLightsPxGM() || []).filter(L => L.enabled);
+            const rawAmb = (mapState.ambient_light || mapState.lighting || lightingMode || 'bright');
+            const ambient = rawAmb === 'darkness' ? 'dark' : rawAmb;
+
             const cols = Math.ceil(mapImage.width / gs);
             const rows = Math.ceil(mapImage.height / gs);
-            
+
             for (const pc of pcTokens) {
                 const size = pc.size || 1;
                 const cx = pc.x * gs + ox + (gs * size) / 2;
                 const cy = pc.y * gs + oy + (gs * size) / 2;
-                
-                // Get effective vision radius based on lighting
-                const visionRadius = getEffectiveVisionRadius(pc);
-                if (visionRadius <= 0) continue; // Blind — can't see anything
-                
+
+                const visionRadius = pc.vision_radius || 6;
                 const visionPx = visionRadius * gs;
-                
+                const hasDV = !!pc.darkvision;
+                const hasLL = !!pc.low_light_vision;
+
+                // Scan bound: viewer's radius OR reach of the furthest light
+                // they could see from their position. Keeps the inner loop
+                // from sweeping the whole map when torches are far away.
+                let maxRangePx = visionPx;
+                for (const L of lights) {
+                    const d = Math.hypot(L.x - cx, L.y - cy);
+                    maxRangePx = Math.max(maxRangePx, d + L.dimPx);
+                }
+
                 for (let gx = 0; gx < cols; gx++) {
                     for (let gy = 0; gy < rows; gy++) {
+                        const k = `${gx},${gy}`;
+                        if (bright.has(k)) continue; // already top-graded
+
                         const cellCenterX = gx * gs + ox + gs / 2;
                         const cellCenterY = gy * gs + oy + gs / 2;
-                        
-                        // Range check — skip cells beyond vision radius
+
                         const dist = Math.hypot(cellCenterX - cx, cellCenterY - cy);
-                        if (dist > visionPx) continue;
-                        
-                        // Check corners too for partial visibility
-                        const corners = [
-                            [gx * gs + ox, gy * gs + oy],
-                            [gx * gs + ox + gs, gy * gs + oy],
-                            [gx * gs + ox, gy * gs + oy + gs],
-                            [gx * gs + ox + gs, gy * gs + oy + gs],
-                            [cellCenterX, cellCenterY]
-                        ];
-                        
-                        for (const [px, py] of corners) {
-                            if (!isBlockedByWalls(cx, cy, px, py, walls)) {
-                                visible.add(`${gx},${gy}`);
-                                break;
+                        if (dist > maxRangePx + gs) continue;
+
+                        // LOS — center first, then corners so grazing walls
+                        // don't blank the cell.
+                        let seen = !isBlockedByWalls(cx, cy, cellCenterX, cellCenterY, walls);
+                        if (!seen) {
+                            const corners = [
+                                [gx * gs + ox,      gy * gs + oy],
+                                [gx * gs + ox + gs, gy * gs + oy],
+                                [gx * gs + ox,      gy * gs + oy + gs],
+                                [gx * gs + ox + gs, gy * gs + oy + gs],
+                            ];
+                            for (const [px, py] of corners) {
+                                if (!isBlockedByWalls(cx, cy, px, py, walls)) { seen = true; break; }
                             }
                         }
+                        if (!seen) continue;
+
+                        // Sample lights at cell center.
+                        let inLightBright = false, inLightDim = false;
+                        for (const L of lights) {
+                            const ld = Math.hypot(cellCenterX - L.x, cellCenterY - L.y);
+                            if (ld <= L.brightPx) { inLightBright = true; inLightDim = true; break; }
+                            if (ld <= L.dimPx) inLightDim = true;
+                        }
+                        const inOwnerRange = dist <= visionPx;
+
+                        let grade = null; // 'bright' | 'dim' | null
+                        if (ambient === 'bright') {
+                            grade = 'bright';
+                        } else if (ambient === 'dim') {
+                            if (inLightBright) grade = 'bright';
+                            else if (inOwnerRange && (hasDV || hasLL)) grade = 'bright';
+                            else if (inLightDim || inOwnerRange) grade = 'dim';
+                        } else if (ambient === 'dark') {
+                            if (inLightBright) grade = 'bright';
+                            else if (inLightDim && (hasDV || hasLL)) grade = 'bright';
+                            else if (inLightDim) grade = 'dim';
+                            else if (hasDV && inOwnerRange) grade = 'dim';
+                        }
+
+                        if (grade === 'bright') { bright.add(k); dim.delete(k); }
+                        else if (grade === 'dim' && !bright.has(k)) dim.add(k);
                     }
                 }
             }
 
-            _visibilityCache = visible;
-            return visible;
+            const all = new Set(bright);
+            for (const k of dim) all.add(k);
+            // Keep .has / for..of iteration working for legacy callers by
+            // copying Set semantics onto `all`; attach grade sets as props.
+            all.bright = bright;
+            all.dim = dim;
+            all.all = all;
+            _visibilityCache = all;
+            return all;
+        }
+
+        function isMovementBlocked(x1, y1, x2, y2, walls) {
+            // Like isBlockedByWalls but includes invisible walls (those are
+            // movement-only barriers). Open doors are still walkable.
+            for (const wall of walls) {
+                if (wall.type === 'door' && wall.open) continue;
+                // terrain walls in some VTTs only slow movement; here we
+                // treat them as non-blocking for movement (tokens can step
+                // through difficult terrain). Skip.
+                if (wall.type === 'terrain') continue;
+
+                const points = wall.points || [];
+                if (points.length < 2) continue;
+
+                for (let i = 0; i < points.length - 1; i++) {
+                    if (lineIntersects(x1, y1, x2, y2, points[i][0], points[i][1], points[i+1][0], points[i+1][1])) {
+                        return true;
+                    }
+                }
+                if (wall.closed && points.length > 2) {
+                    const last = points.length - 1;
+                    if (lineIntersects(x1, y1, x2, y2, points[last][0], points[last][1], points[0][0], points[0][1])) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         function isBlockedByWalls(x1, y1, x2, y2, walls) {
@@ -2239,39 +2354,65 @@
         
         function showMovementPreview(screenX, screenY, token, fromX, fromY, toX, toY) {
             const preview = document.getElementById('movement-preview');
-            
+
             // Calculate distance (diagonal = 1.5 for first, then 1)
             const dx = Math.abs(toX - fromX);
             const dy = Math.abs(toY - fromY);
             const diag = Math.min(dx, dy);
             const straight = Math.abs(dx - dy);
-            
+
             // PF2E diagonal movement: 5ft, 10ft, 5ft, 10ft...
             let totalFeet = straight * 5;
             for (let i = 0; i < diag; i++) {
                 totalFeet += (i % 2 === 0) ? 5 : 10;
             }
-            
+
             // Check for difficult terrain
             const difficultCells = countDifficultTerrainCells(fromX, fromY, toX, toY);
             totalFeet += difficultCells * 5; // Each difficult terrain cell costs extra 5ft
-            
-            // Calculate actions needed based on speed
+
+            // Wall collision check — ray from token center (from) to proposed
+            // destination center. Sets a flag on the preview element so
+            // onMouseUp can reject illegal moves. Shift overrides.
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const size = token.size || 1;
+            const fcx = fromX * gs + ox + (gs * size) / 2;
+            const fcy = fromY * gs + oy + (gs * size) / 2;
+            const tcx = toX   * gs + ox + (gs * size) / 2;
+            const tcy = toY   * gs + oy + (gs * size) / 2;
+            const blocked = isMovementBlocked(fcx, fcy, tcx, tcy, mapState.walls || []);
+            preview.dataset.blocked = blocked ? '1' : '0';
+
+            // Movement budget — if this token has spent movement this turn,
+            // fold it into the action count display.
+            const usedFt = token.movement_used_this_turn || 0;
+            const totalWithUsed = usedFt + totalFeet;
             const speed = token.speed || 25;
-            const actions = Math.ceil(totalFeet / speed);
-            
+            const actions = Math.ceil(totalWithUsed / speed);
+
             // Position and show preview
             preview.style.left = (screenX + 15) + 'px';
             preview.style.top = (screenY + 15) + 'px';
-            
+
             let actionsClass = 'actions';
             if (actions > 3) actionsClass = 'error';
             else if (actions > 2) actionsClass = 'warning';
-            
+
+            const usedNote = usedFt > 0
+                ? `<span class="warning">• used ${usedFt}ft (${totalWithUsed}ft total)</span>`
+                : '';
+            const blockedNote = blocked
+                ? '<span class="error">⛔ wall — hold Shift to override</span>'
+                : '';
+
             preview.innerHTML = `
                 <span>${totalFeet} ft</span>
                 <span class="${actionsClass}">(${actions} action${actions !== 1 ? 's' : ''})</span>
                 ${difficultCells > 0 ? '<span class="warning">⚠ difficult terrain</span>' : ''}
+                ${usedNote}
+                ${blockedNote}
             `;
             preview.classList.add('active');
         }
@@ -2320,8 +2461,37 @@
                 const finalX = dragStart.tokenX + dragTokenOffset.x;
                 const finalY = dragStart.tokenY + dragTokenOffset.y;
 
-                // Save token position to server
-                moveToken(draggingToken.id, finalX, finalY);
+                // Wall collision gate — reject the move unless Shift was
+                // held. The preview already warned the GM.
+                const gs = mapState.grid_size || 70;
+                const ox = mapState.grid_offset_x || 0;
+                const oy = mapState.grid_offset_y || 0;
+                const size = draggingToken.size || 1;
+                const fcx = dragStart.tokenX * gs + ox + (gs * size) / 2;
+                const fcy = dragStart.tokenY * gs + oy + (gs * size) / 2;
+                const tcx = finalX           * gs + ox + (gs * size) / 2;
+                const tcy = finalY           * gs + oy + (gs * size) / 2;
+                const blocked = isMovementBlocked(fcx, fcy, tcx, tcy, mapState.walls || []);
+
+                if (blocked && !e.shiftKey) {
+                    // Snap back visually — no server call.
+                    dragTokenOffset = { x: 0, y: 0 };
+                    render();
+                } else {
+                    // Accumulate spent feet into the token's turn budget so
+                    // the next preview shows how much is left.
+                    const dxg = Math.abs(finalX - dragStart.tokenX);
+                    const dyg = Math.abs(finalY - dragStart.tokenY);
+                    const diag = Math.min(dxg, dyg);
+                    const straight = Math.abs(dxg - dyg);
+                    let ft = straight * 5;
+                    for (let i = 0; i < diag; i++) ft += (i % 2 === 0) ? 5 : 10;
+                    ft += countDifficultTerrainCells(dragStart.tokenX, dragStart.tokenY, finalX, finalY) * 5;
+                    draggingToken.movement_used_this_turn = (draggingToken.movement_used_this_turn || 0) + ft;
+
+                    // Save token position to server
+                    moveToken(draggingToken.id, finalX, finalY);
+                }
             }
 
             draggingToken = null;
@@ -4053,6 +4223,25 @@
                     dimPx: ((L.bright || 0) + (L.dim || 0)) * gs,
                     color: L.color || '#ff9c42',
                     enabled: L.enabled !== false,
+                });
+            }
+            // Per-token emit_light (PC carrying a torch etc.). Mirrors the
+            // player-view logic so the GM preview matches what players see.
+            for (const t of tokens) {
+                const el = t.emit_light;
+                if (!el || el.enabled === false) continue;
+                if (!el.bright && !el.dim) continue;
+                const size = t.size || 1;
+                const [ax, ay] = _getAnimatedPosition(t);
+                out.push({
+                    id: 'emit_' + t.id, preset: null, name: null,
+                    attached_to: t.id,
+                    x: ax * gs + ox + (gs * size) / 2,
+                    y: ay * gs + oy + (gs * size) / 2,
+                    brightPx: (el.bright || 0) * gs,
+                    dimPx: ((el.bright || 0) + (el.dim || 0)) * gs,
+                    color: el.color || '#ff9c42',
+                    enabled: true,
                 });
             }
             return out;
