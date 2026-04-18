@@ -438,6 +438,12 @@
                 </div>
             </div>
 
+            <!-- Exploration activity (GM visibility) -->
+            <div class="exploration-row" data-pc="{{ pc.name|e }}" {% if not pc.exploration_activity %}style="display:none;"{% endif %} style="margin-top:4px;">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Exploration:</span>
+                <span class="exploration-pill" style="display:inline-block;padding:2px 8px;margin-left:6px;border-radius:999px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);color:#c7d2fe;font-size:11px;">{{ pc.exploration_activity or '' }}</span>
+            </div>
+
             <!-- Defenses -->
             <div class="stat-strip">
                 <div class="stat-chip"><div class="stat-lbl">AC</div><div class="stat-val">{{ pc.ac }}</div></div>
@@ -828,17 +834,38 @@
         });
     }
 
+    function updateExploration(card, activity) {
+        const row = card.querySelector('.exploration-row');
+        if (!row) return;
+        const pill = row.querySelector('.exploration-pill');
+        const label = (activity || '').toString();
+        if (label) {
+            if (pill) pill.textContent = label;
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    }
+
     function findCard(name) {
         return document.querySelector('.pc-card[data-pc-name="' + CSS.escape(name) + '"]');
     }
 
     // ---------- SSE ----------
+    // Track the last time we heard from the stream. If it's been >30s, the
+    // fallback poller wakes up; otherwise polling stays silent so we don't
+    // burn a GET every 15s for no reason.
     let evtSource = null;
+    let _sseLastMsg = 0;
+    function _sseAlive() { _sseLastMsg = Date.now(); }
     function connectSSE() {
         if (evtSource) { try { evtSource.close(); } catch(e) {} }
         evtSource = new EventSource('/api/events');
+        evtSource.onopen = _sseAlive;
+        evtSource.addEventListener('connected', _sseAlive);
 
         evtSource.addEventListener('pc_update', function(e) {
+            _sseAlive();
             try {
                 const data = JSON.parse(e.data);
                 const card = findCard(data.name);
@@ -852,6 +879,7 @@
                 if (data.hero_points !== undefined) updateHeroPoints(card, data.hero_points);
                 if (data.expended_slots)            updateSpellSlots(card, data.expended_slots);
                 if (data.spell_casters)             updateSpellCastersFromAPI(card, data.spell_casters);
+                if (data.exploration_activity !== undefined) updateExploration(card, data.exploration_activity);
             } catch(err) {}
         });
 
@@ -862,8 +890,10 @@
     }
     connectSSE();
 
-    // ---------- Polling fallback ----------
+    // ---------- Polling fallback (only if SSE is silent) ----------
     function pollPartyState() {
+        // SSE healthy? Skip the poll. 30s allows for natural quiet stretches.
+        if (Date.now() - _sseLastMsg < 30000) return;
         fetch('/api/gm_party_state')
         .then(r => r.json())
         .then(data => {

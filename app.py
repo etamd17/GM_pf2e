@@ -368,7 +368,13 @@ def _do_persist_encounter_state():
                 'initiative': c.initiative,
                 'current_hp': c.current_hp,
                 'conditions': dict(c.conditions),
-                'persistent_damage': getattr(c, 'persistent_damage', ''),
+                # Preserve the native shape per combatant type so restore
+                # round-trips cleanly: PCs = list[dict], monsters = str.
+                'persistent_damage': (
+                    [e for e in getattr(c, 'persistent_damage', []) if isinstance(e, dict)]
+                    if c.is_pc else
+                    getattr(c, 'persistent_damage', '')
+                ),
                 'elite_weak': getattr(c, 'elite_weak', 0),
                 'delaying': getattr(c, 'delaying', False),
                 # Preserve hidden/visible state across autosave — otherwise a
@@ -495,8 +501,45 @@ def sse_subscriber_count():
     with _sse_lock:
         return len(_sse_subscribers)
 
+# ---- SSE broadcast coalescing ----
+# Every state-mutation endpoint calls _broadcast_pc_state. A single compound
+# action (Shield Block → drain temp, drop HP, tick wounded, repaint shield)
+# used to emit 3-4 SSE frames. We coalesce everything hit within a 50ms window
+# into one broadcast — amortizes deepcopy + json.dumps + fanout, and keeps the
+# client from flashing through intermediate states.
+_PC_BROADCAST_PENDING = set()
+_PC_BROADCAST_LOCK = threading.Lock()
+_PC_BROADCAST_TIMER = None
+_PC_BROADCAST_DELAY = 0.05
+
+def _flush_pc_broadcasts():
+    global _PC_BROADCAST_TIMER
+    with _PC_BROADCAST_LOCK:
+        pending = list(_PC_BROADCAST_PENDING)
+        _PC_BROADCAST_PENDING.clear()
+        _PC_BROADCAST_TIMER = None
+    for name in pending:
+        try:
+            _do_broadcast_pc_state(name)
+        except Exception as e:
+            print(f"[SSE FLUSH] pc {name}: {e}")
+
 def _broadcast_pc_state(pc_name):
-    """Broadcast a PC's current state to all SSE clients."""
+    """Queue a PC-state broadcast. Coalesced inside a {_PC_BROADCAST_DELAY}s
+    window so multiple mutations in the same request collapse to one frame."""
+    global _PC_BROADCAST_TIMER
+    if pc_name not in PARTY_LIBRARY:
+        return
+    with _PC_BROADCAST_LOCK:
+        _PC_BROADCAST_PENDING.add(pc_name)
+        if _PC_BROADCAST_TIMER is None:
+            t = threading.Timer(_PC_BROADCAST_DELAY, _flush_pc_broadcasts)
+            t.daemon = True
+            _PC_BROADCAST_TIMER = t
+            t.start()
+
+def _do_broadcast_pc_state(pc_name):
+    """Actually compute and emit the PC-state SSE frame."""
     if pc_name not in PARTY_LIBRARY:
         return
     # Snapshot under lock so HP/conditions read is consistent
@@ -519,6 +562,21 @@ def _broadcast_pc_state(pc_name):
             'current_hp': pc.current_hp,
             'max_hp': pc.hp,
             'hp_pct': round(pct * 100),
+            'temp_hp': int(getattr(pc, 'temp_hp', 0) or 0),
+            'temp_hp_manual': int(getattr(pc, 'temp_hp_manual', 0) or 0),
+            'shield': {
+                'raised': bool(getattr(pc, 'shield_raised', False)),
+                'hp': int(getattr(pc, 'shield_hp', 0) or 0),
+                'max_hp': int(getattr(pc, 'shield_max_hp', 0) or 0),
+                'hardness': int(getattr(pc, 'shield_hardness', 0) or 0),
+                'bt': int(getattr(pc, 'shield_bt', 0) or 0),
+                'broken': bool(getattr(pc, 'shield_broken', False)),
+                'destroyed': bool(getattr(pc, 'shield_destroyed', False)),
+            },
+            'reaction_used': bool(getattr(pc, 'reaction_used', False)),
+            'ac': int(getattr(pc, 'ac', 0) or 0),
+            'persistent_damage': list(getattr(pc, 'persistent_damage', []) or []),
+            'exploration_activity': str(getattr(pc, 'exploration_activity', '') or ''),
             'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
             'focus': getattr(pc, 'current_focus', 0),
             'hero_points': getattr(pc, 'hero_points', 1),
@@ -688,6 +746,48 @@ BUILDER_FEATS = { 'class': [], 'skill': [], 'general': [], 'ancestry': [] }
 BUILDER_SPELLS = []
 BUILDER_WEAPONS = []
 BUILDER_ARMOR = []
+
+# PF2e standard shield stats (Core Rulebook + Secrets of Magic basics).
+# Keys are lowercased for lookup; BT is always max_hp // 2.
+# Pathbuilder stores shields as entries in build['armor'] with prof='shield';
+# the `name` string is what we match against this table.
+SHIELD_TYPES = {
+    # Core Rulebook
+    "buckler":          {"ac_bonus": 1, "hardness": 3,  "max_hp": 6},
+    "wooden shield":    {"ac_bonus": 2, "hardness": 3,  "max_hp": 12},
+    "steel shield":     {"ac_bonus": 2, "hardness": 5,  "max_hp": 20},
+    "tower shield":     {"ac_bonus": 2, "hardness": 5,  "max_hp": 20},  # +2 raise, +4 Take Cover
+    # Advanced / specialty
+    "spiked shield":    {"ac_bonus": 2, "hardness": 5,  "max_hp": 20},
+    "boss shield":      {"ac_bonus": 2, "hardness": 5,  "max_hp": 20},
+    "meteor shield":    {"ac_bonus": 2, "hardness": 6,  "max_hp": 24},
+    "dart shield":      {"ac_bonus": 2, "hardness": 6,  "max_hp": 24},
+    "reinforcing rune wooden":  {"ac_bonus": 2, "hardness": 5,  "max_hp": 20},
+    "reinforcing rune steel":   {"ac_bonus": 2, "hardness": 7,  "max_hp": 28},
+    # Generic fallbacks if name doesn't match
+    "shield":           {"ac_bonus": 2, "hardness": 5,  "max_hp": 20},
+}
+
+def _shield_stats_for(name: str):
+    """Return (ac_bonus, hardness, max_hp, bt) for a shield by name, or None.
+    Matches by normalized lowercase and substring — so 'Sturdy Shield (minor)'
+    falls back to the generic steel-shield profile."""
+    if not name:
+        return None
+    n = str(name).strip().lower()
+    if n in SHIELD_TYPES:
+        s = SHIELD_TYPES[n]
+        return s['ac_bonus'], s['hardness'], s['max_hp'], s['max_hp'] // 2
+    # Substring fallback: pick the longest matching key so 'spiked shield'
+    # beats 'shield'.
+    best = None
+    for key in SHIELD_TYPES:
+        if key in n and (best is None or len(key) > len(best)):
+            best = key
+    if best:
+        s = SHIELD_TYPES[best]
+        return s['ac_bonus'], s['hardness'], s['max_hp'], s['max_hp'] // 2
+    return None
 
 # PF2E standard weapon damage — used to correct DB entries that default to 1d4
 PF2E_WEAPON_DAMAGE = {
@@ -977,7 +1077,20 @@ def _do_persist_pc_combat_state(pc_name):
         pc = PARTY_LIBRARY[pc_name]
         current_hp = pc.current_hp
         current_focus = getattr(pc, 'current_focus', 0)
+        hero_points = int(getattr(pc, 'hero_points', 1) or 0)
+        temp_hp_manual = max(0, int(getattr(pc, 'temp_hp_manual', 0) or 0))
         conditions = {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False}
+        # Shield durability and raised state — both persist-worthy now that the
+        # sheet + encounter tracker both read them.
+        shield_raised = bool(getattr(pc, 'shield_raised', False))
+        shield_hp = int(getattr(pc, 'shield_hp', 0) or 0)
+        # Reaction-budget bookkeeping (Phase 3) — survives a server restart
+        # mid-combat so players don't get their reaction back unfairly.
+        reaction_used = bool(getattr(pc, 'reaction_used', False))
+        # Persistent damage dicts (Phase 5)
+        persistent_damage = list(getattr(pc, 'persistent_damage', []) or [])
+        # Exploration activity (Phase 10)
+        exploration_activity = str(getattr(pc, 'exploration_activity', '') or '')
     file_path = get_pc_file_path(pc_name)
     if not file_path or not os.path.exists(file_path):
         return
@@ -987,11 +1100,83 @@ def _do_persist_pc_combat_state(pc_name):
         build = pc_json.get('build', pc_json)
         build['current_hp'] = current_hp
         build['current_focus'] = current_focus
+        build['hero_points'] = hero_points
+        build['temp_hp'] = temp_hp_manual
         build['conditions'] = conditions
+        build['shield_raised'] = shield_raised
+        build['shield_hp'] = shield_hp
+        build['reaction_used'] = reaction_used
+        build['persistent_damage'] = persistent_damage
+        build['exploration_activity'] = exploration_activity
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(pc_json, f, indent=2)
     except Exception as e:
         print(f"[PERSIST ERROR] {pc_name}: {e}")
+
+# ---- UNIFIED PC STATE MUTATION ----
+# Historically every endpoint hand-rolled the four-step dance:
+#   mutate pc → sync encounter tracker → persist → broadcast.
+# Result: drift (focus wasn't broadcast, temp_hp wasn't tracker-synced, etc.)
+# and bugs where one endpoint forgot a step. `apply_pc_delta` centralizes it.
+#
+# Fields mirrored on the encounter tracker so initiative HUD stays fresh:
+_TRACKER_MIRRORED_FIELDS = (
+    'current_hp', 'current_focus', 'hero_points', 'temp_hp',
+)
+
+def _sync_tracker_from_pc(pc_name, *, conditions=True):
+    """Copy mirrored fields + conditions from the PARTY_LIBRARY PC onto the
+    matching combatant in ACTIVE_ENCOUNTER. Caller holds ENCOUNTER_LOCK."""
+    if pc_name not in PARTY_LIBRARY:
+        return
+    pc = PARTY_LIBRARY[pc_name]
+    for c in ACTIVE_ENCOUNTER:
+        if not (c.is_pc and c.name == pc_name):
+            continue
+        for f in _TRACKER_MIRRORED_FIELDS:
+            if hasattr(pc, f):
+                try:
+                    setattr(c, f, getattr(pc, f))
+                except Exception:
+                    pass
+        if conditions:
+            # Only the fields the tracker already cares about — don't invent
+            # new keys that nothing else reads.
+            for cond_key in ('dying', 'wounded', 'doomed', 'frightened',
+                             'sickened', 'stunned', 'slowed', 'enfeebled',
+                             'clumsy', 'drained', 'stupefied'):
+                if cond_key in pc.conditions:
+                    c.conditions[cond_key] = pc.conditions[cond_key]
+            for bool_key in ('prone', 'off_guard', 'concealed', 'hidden'):
+                if bool_key in pc.conditions:
+                    c.conditions[bool_key] = pc.conditions[bool_key]
+        break
+
+def apply_pc_delta(pc_name, mutator, *, sync_conditions=True,
+                   persist=True, broadcast=True):
+    """One-stop state mutation. `mutator(pc)` runs under ENCOUNTER_LOCK and
+    can return a value which we propagate back to the caller.
+
+    After the mutation: tracker sync → persistence dirty-mark → SSE broadcast
+    (coalesced). Callers no longer need to remember any of these steps.
+
+    Returns (result, pc) or (None, None) if the PC doesn't exist.
+    """
+    if pc_name not in PARTY_LIBRARY:
+        return None, None
+    with ENCOUNTER_LOCK:
+        pc = PARTY_LIBRARY[pc_name]
+        try:
+            result = mutator(pc)
+        except Exception as e:
+            print(f"[apply_pc_delta] {pc_name}: {e}")
+            raise
+        _sync_tracker_from_pc(pc_name, conditions=sync_conditions)
+    if persist:
+        _persist_pc_combat_state(pc_name)
+    if broadcast:
+        _broadcast_pc_state(pc_name)
+    return result, pc
 
 # --- REQUEST VALIDATION HELPERS ---
 def require_pc(pc_name):
@@ -1120,7 +1305,61 @@ class Character:
         self.portrait = safe_str(build.get('portrait'), '')
         self.active_toggles = build.get('active_toggles') or []
         self.shield_raised = build.get('shield_raised', False)
-        self.shield_ac_bonus = safe_int(build.get('shield_ac_bonus'), 2)  # Most shields = +2
+        # Phase 11: Auto-populate shield stats from Pathbuilder equipment.
+        # PB stores shields as entries in build['armor'] with prof='shield' —
+        # the stats (hardness/HP/BT/AC bonus) are NOT carried over, so we
+        # derive them from SHIELD_TYPES by name. Explicit shield_* fields on
+        # the build always win (so GM edits via set_shield_stats survive).
+        pb_shield_name = None
+        for _a in (build.get('armor') or []):
+            if isinstance(_a, dict) and _a.get('worn') and str(_a.get('prof', '')).lower() == 'shield':
+                pb_shield_name = safe_str(_a.get('name'), '')
+                break
+        pb_stats = _shield_stats_for(pb_shield_name) if pb_shield_name else None
+        self.shield_name = pb_shield_name or safe_str(build.get('shield_name'), '')
+        if pb_stats:
+            pb_ac, pb_hard, pb_mhp, pb_bt = pb_stats
+        else:
+            pb_ac, pb_hard, pb_mhp, pb_bt = 2, 5, 20, 10
+        self.shield_ac_bonus = safe_int(build.get('shield_ac_bonus'), pb_ac)
+        # Shield durability — exposed so the sheet can render the gauge and
+        # the inline Shield-Block prompt on damage can decide whether it's
+        # even usable (broken/destroyed shields can't block).
+        self.shield_max_hp = safe_int(build.get('shield_max_hp'), pb_mhp)
+        self.shield_hp = safe_int(build.get('shield_hp'), self.shield_max_hp)
+        self.shield_hardness = safe_int(build.get('shield_hardness'), pb_hard)
+        self.shield_bt = safe_int(build.get('shield_bt'), max(1, self.shield_max_hp // 2))
+        self.shield_broken = self.shield_hp <= self.shield_bt
+        self.shield_destroyed = self.shield_hp <= 0
+        # Reaction budget — reset at the start of each of the PC's turns.
+        # Persists across server restarts so mid-combat reloads don't hand
+        # the player a free reaction back.
+        self.reaction_used = bool(build.get('reaction_used', False))
+        # Per-turn persistent damage list (Phase 5).
+        # Each entry: {'damage': '1d6', 'type': 'fire', 'source': 'Shocking Grasp'}
+        # Defensive: older builds may have stored this as a string (legacy
+        # monster format) or even the literal "[]". list("[]") yields
+        # ['[',']'] — we coerce those cases back to an empty list here.
+        _pd_raw_build = build.get('persistent_damage') or []
+        if isinstance(_pd_raw_build, list):
+            self.persistent_damage = [e for e in _pd_raw_build if isinstance(e, dict)]
+        elif isinstance(_pd_raw_build, str):
+            s = _pd_raw_build.strip()
+            if s and s not in ('[]', '{}'):
+                # Parse a free-form "1d6 fire" into a single-entry list so
+                # no in-flight damage is silently dropped on migration.
+                _parts = s.split(None, 1)
+                dmg = _parts[0]
+                typ = _parts[1] if len(_parts) > 1 else ''
+                self.persistent_damage = [{'damage': dmg, 'type': typ, 'source': ''}]
+            else:
+                self.persistent_damage = []
+        else:
+            self.persistent_damage = []
+        # Phase 10: Exploration activity (PF2e Core p.479). Stored as a short
+        # string key — the UI maps it to a label + tooltip. Empty string means
+        # the PC is not doing anything in particular (default: "Walk").
+        self.exploration_activity = str(build.get('exploration_activity') or '')
         self.signature_spells = build.get('signature_spells') or []
         self.session_notes = build.get('session_notes') or []
         self.expended_slots = build.get('expended_slots') or {}
@@ -1531,26 +1770,93 @@ class Character:
                                     self.proficiencies[cat] = current + pf2_rank
                                 else:
                                     self.proficiencies[cat] = pf2_rank
+                    elif key == 'ActiveEffectLike':
+                        # Catch-all for other proficiency-upgrade rules that the
+                        # earlier branches don't handle. Covers:
+                        #   - system.saves.{fortitude,reflex,will}.rank
+                        #     (Stalwart, Resolve, Juggernaut, etc.)
+                        #   - system.attributes.{perception,classDC,ac}.rank
+                        #   - system.attributes.spellDC.rank
+                        # Without these, feats that upgrade saves/perception/AC
+                        # proficiency silently fail to apply, and saves come out
+                        # 2+ points low at level-ups.
+                        path = str(rule.get('path', ''))
+                        prof_key = None
+                        # Saves — map to short keys used by _calc_save.
+                        m = re.search(r'system\.saves\.(\w+)\.rank', path)
+                        if m:
+                            prof_key = m.group(1).lower()
+                        else:
+                            m = re.search(r'system\.attributes\.(\w+)\.rank', path)
+                            if m:
+                                attr = m.group(1).lower()
+                                # classDC / spellDC / perception / ac are stored
+                                # under those keys in self.proficiencies.
+                                if attr in ('perception', 'classdc', 'class_dc',
+                                            'spelldc', 'spell_dc', 'ac',
+                                            'spellattack', 'spell_attack'):
+                                    prof_key = {
+                                        'classdc': 'class_dc',
+                                        'spelldc': 'spell_dc',
+                                        'spellattack': 'spell_attack',
+                                    }.get(attr, attr)
+                        if prof_key:
+                            rank_val = resolve_val(rule.get('value', 1))
+                            pf2_rank = rank_val * 2 if rank_val <= 4 else rank_val
+                            mode = rule.get('mode', 'upgrade')
+                            current = safe_int(self.proficiencies.get(prof_key, 0))
+                            if mode == 'upgrade':
+                                self.proficiencies[prof_key] = max(current, pf2_rank)
+                            elif mode == 'add':
+                                self.proficiencies[prof_key] = current + pf2_rank
+                            else:
+                                self.proficiencies[prof_key] = pf2_rank
                 except Exception:
                     pass  # Don't let any single rule crash the entire character init
 
-        # Apply Pathbuilder per-skill bonuses captured from build["mods"].
-        # Keys are skill names (title-case), values are {bonus_type: amount}.
-        # Route through add_mod so PF2e stacking rules are honored by
-        # get_rule_mod (max per typed bucket, sum for untyped).
+        # Apply Pathbuilder bonuses captured from build["mods"].
+        #
+        # PB exports several shapes in the wild — we need to accept them all:
+        #   {"Arcana": {"Item Bonus": 1}}   ← per-skill typed bonuses
+        #   {"Arcana": 1}                   ← bare numeric (assume untyped)
+        #   {"AC": {"Status Bonus": 1}}     ← non-skill selectors (AC, Perception,
+        #                                      Fortitude, "Attack Rolls", etc.)
+        #   {"Perception": 1}               ← bare numeric on a non-skill selector
+        #
+        # Previously only the nested {skill: {type: val}} form was picked up,
+        # and every bare-numeric / non-skill entry was dropped on the floor —
+        # hence the "PB mods item bonuses dropped" report.
         _PB_MOD_TYPES = {
-            'item bonus': 'item',
-            'status bonus': 'status',
-            'circumstance bonus': 'circumstance',
+            'item bonus': 'item', 'item': 'item',
+            'status bonus': 'status', 'status': 'status',
+            'circumstance bonus': 'circumstance', 'circumstance': 'circumstance',
+            'untyped': 'untyped', '': 'untyped',
         }
-        for _sk_name, _bonus_dict in (_pb_skill_mods or {}).items():
-            if not isinstance(_bonus_dict, dict): continue
+        # Normalize selector names so "Attack Rolls", "Spell DC", "Fortitude"
+        # map onto keys we already use elsewhere (rule_modifiers / proficiencies).
+        _PB_SELECTOR_ALIASES = {
+            'attack rolls': 'attack', 'attack': 'attack',
+            'saving throws': 'saving-throw', 'saving throw': 'saving-throw',
+            'fortitude': 'fortitude', 'reflex': 'reflex', 'will': 'will',
+            'perception': 'perception', 'ac': 'ac',
+            'class dc': 'class_dc', 'spell dc': 'spell_dc',
+            'spell attack': 'spell_attack', 'initiative': 'initiative',
+        }
+        def _coerce_pb_mod_type(raw):
+            return _PB_MOD_TYPES.get(str(raw or '').strip().lower(), 'untyped')
+        for _sk_name, _bonus in (_pb_skill_mods or {}).items():
             _sel = str(_sk_name).strip().lower()
             if not _sel: continue
-            for _btype, _amt in _bonus_dict.items():
-                _mtype = _PB_MOD_TYPES.get(str(_btype).strip().lower(), 'untyped')
-                _val = safe_int(_amt, 0)
-                if _val: add_mod(_sel, _mtype, _val)
+            _sel = _PB_SELECTOR_ALIASES.get(_sel, _sel)
+            if isinstance(_bonus, dict):
+                for _btype, _amt in _bonus.items():
+                    _val = safe_int(_amt, 0)
+                    if _val:
+                        add_mod(_sel, _coerce_pb_mod_type(_btype), _val)
+            elif isinstance(_bonus, (int, float, str)):
+                _val = safe_int(_bonus, 0)
+                if _val:
+                    add_mod(_sel, 'untyped', _val)
 
         self.feats = []
         self.immunities = []
@@ -1654,14 +1960,25 @@ class Character:
         if self.armor_name:
             _a_info = next((a for a in BUILDER_ARMOR if a.get('name', '').lower() == self.armor_name.lower()), None)
             if _a_info:
-                if self.armor_str_req == 0:
-                    self.armor_str_req = safe_int(_a_info.get('str_req'), 0)
-                if self.ac_item == 0:
-                    self.ac_item = safe_int(_a_info.get('ac'), 0)
-                if base_armor_penalty == 0:
-                    base_armor_penalty = abs(safe_int(_a_info.get('penalty'), 0))
-                if base_speed_penalty == 0:
-                    base_speed_penalty = abs(safe_int(_a_info.get('speed_penalty'), 0))
+                # `str_req` in our armor table is the canonical PF2e value;
+                # Pathbuilder routinely omits or zeros it. Trust the table
+                # unless PB explicitly set a *non-zero* value.
+                table_str_req = safe_int(_a_info.get('str_req'), 0)
+                if self.armor_str_req == 0 and table_str_req > 0:
+                    self.armor_str_req = table_str_req
+                # For ac_item, penalty, and speed penalty: take the max of
+                # what PB claimed and what the table says. Stale acTotal
+                # values from PB (e.g. PC swapped armor in-game but acTotal
+                # wasn't recomputed) used to silently win here.
+                table_ac = safe_int(_a_info.get('ac'), 0)
+                if table_ac > self.ac_item:
+                    self.ac_item = table_ac
+                table_penalty = abs(safe_int(_a_info.get('penalty'), 0))
+                if table_penalty > base_armor_penalty:
+                    base_armor_penalty = table_penalty
+                table_speed_penalty = abs(safe_int(_a_info.get('speed_penalty'), 0))
+                if table_speed_penalty > base_speed_penalty:
+                    base_speed_penalty = table_speed_penalty
                 if not self.armor_traits:
                     self.armor_traits = _a_info.get('traits') or []
         
@@ -1744,13 +2061,25 @@ class Character:
         if 'fleet' in [f['name'].lower() for f in self.feats]: self.base_speed += 5
         toggle_speed = self.toggle_effects_summary.get('speed', 0)
         self.active_speed = max(5, self.base_speed - self.active_speed_penalty - (10 if self.is_encumbered else 0) + toggle_speed)
-        self.temp_hp = self.toggle_effects_summary.get('temp_hp', 0)
+        # Temp HP has two sources: a manual pool (granted by spells/items like
+        # False Life, Heroism) which drains when the PC takes damage, and a
+        # passive pool from class toggles (shield raised, rage, etc.) which
+        # resets with the toggle. `temp_hp_manual` persists to disk; the
+        # aggregate `temp_hp` is what the UI displays and what damage drains.
+        self.temp_hp_manual = max(0, safe_int(build.get('temp_hp'), 0))
+        self.temp_hp = self.temp_hp_manual + self.toggle_effects_summary.get('temp_hp', 0)
         
         # Tracker-compatibility aliases (tracker.html uses these on both PCs and Monsters)
         self.speed = self.active_speed
         self.strikes = []   # PCs use the 'attacks' property; strikes stays empty for template compat
         self.actions = []   # PCs don't have monster-style actions
-        self.persistent_damage = safe_str(build.get('persistent_damage'), '')
+        # NOTE: DO NOT reassign self.persistent_damage here. The Phase-5 loader
+        # above (see "Per-turn persistent damage list") already set it to a
+        # list[dict]. safe_str(list, '') would clobber that with the repr
+        # string like "[{'damage': '1d6', ...}]", and list() of that repr
+        # then produces a list of characters — blowing up the SSE payload
+        # and the turn-reminder output. The tracker-JSON path stringifies
+        # the list itself when it needs a display value.
 
         self.spell_casters = []
         if self.class_name.lower() in ['alchemist', 'inventor']:
@@ -2323,10 +2652,13 @@ class Character:
             second_hit = total_hit + map_penalty
             third_hit = total_hit + (map_penalty * 2)
             fmt = lambda v: f"+{v}" if v >= 0 else str(v)
+            # MAP helper (user item #8): show the exact number to put on the d20
+            # for the 2nd/3rd attack, plus the per-attack MAP delta (−4 agile /
+            # −5 otherwise) so there's no mental math at the table.
             strikes = [
-                {'label': fmt(total_hit), 'mod': total_hit},
-                {'label': fmt(second_hit), 'mod': second_hit},
-                {'label': fmt(third_hit), 'mod': third_hit}
+                {'label': fmt(total_hit),  'mod': total_hit,  'map': 0,                  'map_label': ''},
+                {'label': fmt(second_hit), 'mod': second_hit, 'map': map_penalty,        'map_label': f"{map_penalty}{' agile' if 'agile' in traits_lower else ''}"},
+                {'label': fmt(third_hit),  'mod': third_hit,  'map': map_penalty * 2,    'map_label': f"{map_penalty * 2}{' agile' if 'agile' in traits_lower else ''}"},
             ]
             
             base_dmg = safe_str(w.get('damage', '1d4'))
@@ -3289,7 +3621,23 @@ def _restore_encounter_autosave():
                 new_c.initiative = item.get('initiative', 0)
                 if 'current_hp' in item: new_c.current_hp = item['current_hp']
                 if 'conditions' in item: new_c.conditions = item['conditions']
-                if 'persistent_damage' in item: new_c.persistent_damage = item['persistent_damage']
+                if 'persistent_damage' in item:
+                    _pd_in = item['persistent_damage']
+                    # Heal corrupt stale values: historical saves may contain the
+                    # literal string "[]" (which becomes ['[',']'] if later fed
+                    # through list()). PCs use list-of-dicts; monsters use the
+                    # legacy string format.
+                    if new_c.is_pc:
+                        if isinstance(_pd_in, list):
+                            new_c.persistent_damage = [e for e in _pd_in if isinstance(e, dict)]
+                        else:
+                            new_c.persistent_damage = []
+                    else:
+                        if isinstance(_pd_in, str):
+                            s = _pd_in.strip()
+                            new_c.persistent_damage = '' if s in ('[]', '{}') else _pd_in
+                        else:
+                            new_c.persistent_damage = _pd_in or ''
                 if 'delaying' in item: new_c.delaying = item['delaying']
                 if 'elite_weak' in item and hasattr(new_c, 'apply_elite_weak'):
                     new_c.apply_elite_weak(item['elite_weak'])
@@ -3477,7 +3825,17 @@ def _get_tracker_state():
                 'fort': c.fort, 'ref': c.ref, 'will': c.will,
                 'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
                 'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
-                'persistent_damage': getattr(c, 'persistent_damage', ''),
+                # Render the tracker-display string. PCs store a list[dict];
+                # monsters keep the legacy "1d6 fire" string.
+                'persistent_damage': (
+                    ', '.join(
+                        f"{e.get('damage','?')} {e.get('type','')}".strip()
+                        for e in getattr(c, 'persistent_damage', [])
+                        if isinstance(e, dict)
+                    )
+                    if c.is_pc else
+                    getattr(c, 'persistent_damage', '')
+                ),
                 'elite_weak': getattr(c, 'elite_weak', 0),
                 'delaying': getattr(c, 'delaying', False),
                 'base_ac': getattr(c, 'base_ac', c.ac),
@@ -4113,59 +4471,110 @@ def adjust_party_hp(pc_name):
     try:
         amount = int(request.form.get('amount', 0))
         action = request.form.get('action')
-        if pc_name in PARTY_LIBRARY:
-            pc = PARTY_LIBRARY[pc_name]
+        if pc_name not in PARTY_LIBRARY:
+            return redirect(url_for('party_view'))
+
+        def _mutate(pc):
             if action == 'damage':
                 was_above_zero = pc.current_hp > 0
-                pc.current_hp = max(0, pc.current_hp - amount)
+                remaining = amount
+                # PF2e: temporary HP is lost first, then real HP. Drain the
+                # manual pool (the toggle pool is passive and not drained).
+                thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+                if thp > 0 and remaining > 0:
+                    used = min(thp, remaining)
+                    pc.temp_hp_manual = thp - used
+                    try:
+                        pc.temp_hp = pc.temp_hp_manual + pc.toggle_effects_summary.get('temp_hp', 0)
+                    except Exception:
+                        pc.temp_hp = pc.temp_hp_manual
+                    remaining -= used
+                pc.current_hp = max(0, pc.current_hp - remaining)
                 if pc.current_hp == 0 and was_above_zero:
-                    # Dropping to 0: gain dying 1 + wounded value
                     pc.conditions['dying'] = 1 + pc.conditions.get('wounded', 0)
                 elif pc.current_hp == 0 and not was_above_zero:
-                    # Already at 0, taking more damage: increase dying
                     pc.conditions['dying'] = pc.conditions.get('dying', 0) + 1
-                # Check for death at dying 4
                 if pc.conditions.get('dying', 0) >= 4:
-                    pc.conditions['dying'] = 4  # Cap at 4 (dead)
+                    pc.conditions['dying'] = 4
             elif action == 'heal':
                 was_dying = pc.conditions.get('dying', 0) > 0
                 pc.current_hp = min(pc.hp, pc.current_hp + amount)
                 if pc.current_hp > 0 and was_dying:
-                    # Healed from dying: remove dying, gain wounded
                     pc.conditions['dying'] = 0
                     pc.conditions['wounded'] = pc.conditions.get('wounded', 0) + 1
-            # Sync to encounter tracker
-            for c in ACTIVE_ENCOUNTER:
-                if c.is_pc and c.name == pc_name:
-                    c.current_hp = pc.current_hp
-                    c.conditions['dying'] = pc.conditions['dying']
-                    c.conditions['wounded'] = pc.conditions['wounded']
-            # Persist HP and conditions to disk
-            _persist_pc_combat_state(pc_name)
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json: 
-                _broadcast_pc_state(pc_name)
-                return jsonify({
-                    "success": True, "current_hp": pc.current_hp,
-                    "conditions": {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
-                    "dying": pc.conditions.get('dying', 0),
-                    "wounded": pc.conditions.get('wounded', 0),
-                    "dead": pc.conditions.get('dying', 0) >= 4
-                })
+            return True
+
+        _, pc = apply_pc_delta(pc_name, _mutate)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            return jsonify({
+                "success": True, "current_hp": pc.current_hp,
+                "temp_hp": int(getattr(pc, 'temp_hp', 0) or 0),
+                "temp_hp_manual": int(getattr(pc, 'temp_hp_manual', 0) or 0),
+                "conditions": {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
+                "dying": pc.conditions.get('dying', 0),
+                "wounded": pc.conditions.get('wounded', 0),
+                "dead": pc.conditions.get('dying', 0) >= 4
+            })
     except ValueError: pass
     return redirect(url_for('party_view'))
+
+@app.route('/api/adjust_temp_hp/<pc_name>', methods=['POST'])
+def adjust_temp_hp(pc_name):
+    """Set / add to / clear a PC's manual temporary HP pool.
+
+    action='set'   -> PF2e stacking rule: take max(current, amount)
+    action='add'   -> add to the current pool (for stacking effects the
+                      player explicitly wants to combine — we let the player
+                      decide rather than silently swallowing the smaller value)
+    action='clear' -> zero the pool (effect expired, dawn, etc.)
+    """
+    try:
+        # Accept both JSON body (fetch) and form body (legacy callers).
+        payload = request.get_json(silent=True) or {}
+        amount = max(0, int(payload.get('amount', request.form.get('amount', 0)) or 0))
+        action = (payload.get('action') or request.form.get('action') or 'set').lower()
+        if pc_name not in PARTY_LIBRARY:
+            return jsonify({"success": False, "error": "Unknown PC"}), 404
+        if action not in ('set', 'add', 'clear'):
+            return jsonify({"success": False, "error": "Bad action"}), 400
+
+        def _mutate(pc):
+            current = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+            if action == 'set':
+                pc.temp_hp_manual = max(current, amount)
+            elif action == 'add':
+                pc.temp_hp_manual = current + amount
+            elif action == 'clear':
+                pc.temp_hp_manual = 0
+            try:
+                pc.temp_hp = pc.temp_hp_manual + pc.toggle_effects_summary.get('temp_hp', 0)
+            except Exception:
+                pc.temp_hp = pc.temp_hp_manual
+            return True
+
+        _, pc = apply_pc_delta(pc_name, _mutate)
+        return jsonify({
+            "success": True,
+            "temp_hp": int(pc.temp_hp),
+            "temp_hp_manual": int(pc.temp_hp_manual),
+        })
+    except ValueError:
+        return jsonify({"success": False, "error": "Bad amount"}), 400
 
 @app.route('/api/adjust_focus/<pc_name>', methods=['POST'])
 def adjust_focus(pc_name):
     try:
         action = request.form.get('action')
-        if pc_name in PARTY_LIBRARY:
-            pc = PARTY_LIBRARY[pc_name]
-            if action == 'increase' and pc.current_focus < pc.focus_max: pc.current_focus += 1
-            elif action == 'decrease' and pc.current_focus > 0: pc.current_focus -= 1
-            for c in ACTIVE_ENCOUNTER:
-                if c.is_pc and c.name == pc_name: c.current_focus = pc.current_focus
-            _persist_pc_combat_state(pc_name)
-            return jsonify({"success": True, "current_focus": pc.current_focus})
+        if pc_name not in PARTY_LIBRARY:
+            return jsonify({"success": False})
+        def _mutate(pc):
+            if action == 'increase' and pc.current_focus < pc.focus_max:
+                pc.current_focus += 1
+            elif action == 'decrease' and pc.current_focus > 0:
+                pc.current_focus -= 1
+            return True
+        _, pc = apply_pc_delta(pc_name, _mutate)
+        return jsonify({"success": True, "current_focus": pc.current_focus})
     except ValueError: pass
     return jsonify({"success": False})
 
@@ -4173,19 +4582,16 @@ def adjust_focus(pc_name):
 def adjust_hero(pc_name):
     try:
         action = request.form.get('action')
-        if pc_name in PARTY_LIBRARY:
-            pc = PARTY_LIBRARY[pc_name]
-            if action == 'increase' and pc.hero_points < 3: pc.hero_points += 1
-            elif action == 'decrease' and pc.hero_points > 0: pc.hero_points -= 1
-            
-            file_path = get_pc_file_path(pc_name)
-            if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
-                build = pc_json.get('build', pc_json)
-                build['hero_points'] = pc.hero_points
-                with open(file_path, 'w', encoding='utf-8') as f: json.dump(pc_json, f, indent=4)
-                
-            return jsonify({"success": True, "current_hero": pc.hero_points})
+        if pc_name not in PARTY_LIBRARY:
+            return jsonify({"success": False})
+        def _mutate(pc):
+            if action == 'increase' and pc.hero_points < 3:
+                pc.hero_points += 1
+            elif action == 'decrease' and pc.hero_points > 0:
+                pc.hero_points -= 1
+            return True
+        _, pc = apply_pc_delta(pc_name, _mutate)
+        return jsonify({"success": True, "current_hero": pc.hero_points})
     except ValueError: pass
     return jsonify({"success": False})
 
@@ -4216,17 +4622,32 @@ def daily_preparations(pc_name):
     if 'conditions' not in build: build['conditions'] = {}
     for cond in conditions_to_clear:
         build['conditions'][cond] = False if cond in ['off_guard', 'concealed', 'hidden', 'prone'] else 0
-    
-    # Clear persistent damage
-    build['persistent_damage'] = ''
-    
+
+    # Conditions that *tick down* rather than clear: PF2e CRB.
+    #   Wounded & Doomed: reduce by 1 per long rest.
+    #   Drained: reduce by 1 per long rest.
+    for tick_cond in ('wounded', 'doomed', 'drained'):
+        cur = safe_int(build['conditions'].get(tick_cond, 0), 0)
+        if cur > 0:
+            build['conditions'][tick_cond] = cur - 1
+
+    # Clear persistent damage (list or legacy string)
+    build['persistent_damage'] = []
+
+    # Reset reaction + lower shield (fresh day, shield not actively raised)
+    build['reaction_used'] = False
+    build['shield_raised'] = False
+
+    # Temp HP pool resets overnight in PF2e.
+    build['temp_hp'] = 0
+
     # Reset hero points to 1
     build['hero_points'] = 1
-    
+
     # Heal to full HP if requested
     if heal_full:
         build.pop('current_hp', None)  # Removing it makes Character.__init__ default to max
-    
+
     save_and_reload_character(pc_name, pc_json, file_path)
     _broadcast_pc_state(pc_name)
     
@@ -4249,7 +4670,14 @@ def daily_preparations_all():
             if 'conditions' not in build: build['conditions'] = {}
             for cond in ['frightened', 'sickened', 'stunned', 'slowed', 'dying', 'off_guard', 'concealed', 'hidden', 'prone']:
                 build['conditions'][cond] = False if cond in ['off_guard', 'concealed', 'hidden', 'prone'] else 0
-            build['persistent_damage'] = ''
+            for tick_cond in ('wounded', 'doomed', 'drained'):
+                cur = safe_int(build['conditions'].get(tick_cond, 0), 0)
+                if cur > 0:
+                    build['conditions'][tick_cond] = cur - 1
+            build['persistent_damage'] = []
+            build['reaction_used'] = False
+            build['shield_raised'] = False
+            build['temp_hp'] = 0
             build['hero_points'] = 1
             if heal_full:
                 build.pop('current_hp', None)
@@ -4266,59 +4694,91 @@ def daily_preparations_all():
 @app.route('/api/shield_block/<pc_name>', methods=['POST'])
 def shield_block(pc_name):
     """Use Shield Block reaction: reduce damage by hardness, shield takes remaining."""
-    pc, file_path, err = require_pc(pc_name)
+    pc, _, err = require_pc(pc_name)
     if err: return err
-    
+
     data = request.json or {}
     damage = safe_int(data.get('damage', 0))
-    
-    pc_json, file_path, err = require_pc_json(pc_name)
-    if err: return err
-    build = pc_json.get('build', pc_json)
-    
-    # Get shield stats from build or defaults
-    shield_hp = safe_int(build.get('shield_hp'), 20)
-    shield_max_hp = safe_int(build.get('shield_max_hp'), 20)
-    shield_hardness = safe_int(build.get('shield_hardness'), 5)
-    shield_bt = safe_int(build.get('shield_bt'), shield_max_hp // 2)  # Broken threshold = half max HP
-    
-    if shield_hp <= 0:
-        return jsonify({"success": False, "error": "Shield is broken/destroyed"})
-    if shield_hp <= shield_bt:
-        return jsonify({"success": False, "error": "Shield is broken (below BT)"})
-    
-    # Shield Block: reduce damage by hardness, shield takes the rest
+
+    # Eligibility checks up-front (pc-state, not build JSON — source of truth
+    # is the in-memory PC). If the shield can't block, bail before mutation.
+    shield_hp0 = int(getattr(pc, 'shield_hp', 0) or 0)
+    shield_max_hp = int(getattr(pc, 'shield_max_hp', 0) or 0)
+    shield_hardness = int(getattr(pc, 'shield_hardness', 0) or 0)
+    shield_bt = int(getattr(pc, 'shield_bt', 0) or (shield_max_hp // 2))
+    if shield_max_hp <= 0:
+        return jsonify({"success": False, "error": "No shield equipped"})
+    if shield_hp0 <= 0:
+        return jsonify({"success": False, "error": "Shield is destroyed"})
+    if shield_hp0 <= shield_bt:
+        return jsonify({"success": False, "error": "Shield is broken — repair it before blocking"})
+    # Reaction-budget check (Phase 3). Shield Block consumes the reaction.
+    if getattr(pc, 'reaction_used', False):
+        return jsonify({"success": False, "error": "Reaction already spent this round"})
+
+    # Shield Block (PF2e CRB): the shield prevents damage equal to its
+    # Hardness. You and the shield each take any leftover damage.
     blocked = min(damage, shield_hardness)
-    damage_to_char = max(0, damage - shield_hardness)
-    damage_to_shield = max(0, damage - shield_hardness)
-    
-    shield_hp = max(0, shield_hp - damage_to_shield)
-    shield_broken = shield_hp <= shield_bt
-    shield_destroyed = shield_hp <= 0
-    
-    # Apply reduced damage to character
-    pc.current_hp = max(0, pc.current_hp - damage_to_char)
-    
-    # Save shield state
-    build['shield_hp'] = shield_hp
-    build['current_hp'] = pc.current_hp
-    
-    save_and_reload_character(pc_name, pc_json, file_path)
-    _broadcast_pc_state(pc_name)
-    
-    status = "destroyed" if shield_destroyed else "broken" if shield_broken else "intact"
-    _combat_log(f"{pc_name}: Shield Block! Blocked {blocked} dmg (Hardness {shield_hardness}). Shield took {damage_to_shield} ({status}). {damage_to_char} dmg to HP.", 'action')
-    
+    leftover = max(0, damage - shield_hardness)
+
+    result = {}
+
+    def _mutate(pc):
+        new_shield_hp = max(0, shield_hp0 - leftover)
+        pc.shield_hp = new_shield_hp
+        pc.shield_broken = new_shield_hp <= shield_bt
+        pc.shield_destroyed = new_shield_hp <= 0
+        # Reaction is gone for the round.
+        pc.reaction_used = True
+
+        # Full damage pipeline for the leftover that hits the PC.
+        was_above_zero = pc.current_hp > 0
+        remaining = leftover
+        thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+        if thp > 0 and remaining > 0:
+            used = min(thp, remaining)
+            pc.temp_hp_manual = thp - used
+            try:
+                pc.temp_hp = pc.temp_hp_manual + pc.toggle_effects_summary.get('temp_hp', 0)
+            except Exception:
+                pc.temp_hp = pc.temp_hp_manual
+            remaining -= used
+        pc.current_hp = max(0, pc.current_hp - remaining)
+        if pc.current_hp == 0 and was_above_zero:
+            pc.conditions['dying'] = 1 + pc.conditions.get('wounded', 0)
+        elif pc.current_hp == 0 and not was_above_zero:
+            pc.conditions['dying'] = pc.conditions.get('dying', 0) + 1
+        if pc.conditions.get('dying', 0) >= 4:
+            pc.conditions['dying'] = 4
+
+        result['shield_hp'] = new_shield_hp
+        result['shield_broken'] = pc.shield_broken
+        result['shield_destroyed'] = pc.shield_destroyed
+        return True
+
+    _, pc = apply_pc_delta(pc_name, _mutate)
+
+    status = "destroyed" if result['shield_destroyed'] else "broken" if result['shield_broken'] else "intact"
+    _combat_log(f"{pc_name}: Shield Block! Blocked {blocked} dmg (Hardness {shield_hardness}). Shield took {leftover} ({status}). {leftover} dmg to HP.", 'action')
+
     return jsonify({
         "success": True,
         "blocked": blocked,
-        "damage_to_char": damage_to_char,
-        "damage_to_shield": damage_to_shield,
-        "shield_hp": shield_hp,
+        "damage_to_char": leftover,
+        "damage_to_shield": leftover,
+        "shield_hp": result['shield_hp'],
         "shield_max_hp": shield_max_hp,
-        "shield_broken": shield_broken,
-        "shield_destroyed": shield_destroyed,
-        "current_hp": pc.current_hp
+        "shield_hardness": shield_hardness,
+        "shield_bt": shield_bt,
+        "shield_broken": result['shield_broken'],
+        "shield_destroyed": result['shield_destroyed'],
+        "current_hp": pc.current_hp,
+        "temp_hp": int(getattr(pc, 'temp_hp', 0) or 0),
+        "reaction_used": bool(getattr(pc, 'reaction_used', False)),
+        "dying": pc.conditions.get('dying', 0),
+        "wounded": pc.conditions.get('wounded', 0),
+        "dead": pc.conditions.get('dying', 0) >= 4,
+        "conditions": {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
     })
 
 @app.route('/api/repair_shield/<pc_name>', methods=['POST'])
@@ -4437,10 +4897,20 @@ def update_pc_condition(pc_name):
     
     file_path = get_pc_file_path(pc_name)
     if os.path.exists(file_path):
+        # Before reading disk, flush any dirty in-memory combat state so we
+        # don't clobber unflushed writes (persistent_damage, shield_hp,
+        # reaction_used, exploration_activity, current_hp). Without this the
+        # read-modify-write cycle here reverts changes that haven't made it
+        # through the debounced persistence thread yet.
+        try:
+            if pc_name in _PC_PERSIST_DIRTY:
+                _do_persist_pc_combat_state(pc_name)
+                _PC_PERSIST_DIRTY.discard(pc_name)
+        except Exception: pass
         with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
         if 'conditions' not in build: build['conditions'] = {}
-        
+
         if toggle:
             # Boolean conditions (prone, off_guard)
             current = build['conditions'].get(cond, False)
@@ -4454,8 +4924,26 @@ def update_pc_condition(pc_name):
             # Absolute value (legacy/GM usage)
             if isinstance(val, int): val = max(0, min(4, val))
             build['conditions'][cond] = val
-        
+
         save_and_reload_character(pc_name, pc_json, file_path)
+        # Mirror the change onto the live encounter row so end-of-turn
+        # auto-decrement (frightened, slowed, stunned) actually sees the
+        # condition the player just applied. Without this the tracker row
+        # and PARTY_LIBRARY drift — the player sees frightened 2 on the
+        # sheet but the GM clicks "Next Turn" and nothing decrements.
+        try:
+            if ACTIVE_ENCOUNTER:
+                for _c in ACTIVE_ENCOUNTER:
+                    if _c.is_pc and _c.name == pc_name:
+                        if not isinstance(_c.conditions, dict):
+                            _c.conditions = {}
+                        # Copy the freshly-saved condition map onto the tracker
+                        # row. Using build['conditions'] (not the in-memory PC)
+                        # avoids a window where save_and_reload hasn't rebuilt
+                        # the PC yet.
+                        _c.conditions = dict(build.get('conditions') or {})
+                        break
+        except Exception: pass
         _broadcast_pc_state(pc_name)
         return jsonify({"success": True})
     return jsonify({"success": False})
@@ -4495,8 +4983,14 @@ def set_persistent_damage(instance_id):
     pd_val = request.form.get('persistent_damage', '') or (request.json or {}).get('persistent_damage', '')
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id:
-            c.persistent_damage = pd_val
-            if c.is_pc and c.name in PARTY_LIBRARY: PARTY_LIBRARY[c.name].persistent_damage = c.persistent_damage
+            # Monsters keep the legacy string format ('1d6 fire'); PCs use
+            # the list-of-dicts format. Don't splat a string onto a PC's
+            # persistent_damage — it corrupts the list (list("[]") -> ['[',']']).
+            # GM edits for PCs go through /api/persistent_damage/<name>/... instead.
+            if c.is_pc and c.name in PARTY_LIBRARY:
+                c.persistent_damage = pd_val  # update the tracker row only
+            else:
+                c.persistent_damage = pd_val
             _persist_encounter_state()
             _broadcast_encounter_state()
             break
@@ -4663,7 +5157,20 @@ def cycle_turn(direction):
         
         # === START OF NEW TURN: auto-apply start-of-turn mechanics ===
         new_c = ACTIVE_ENCOUNTER[TURN_INDEX]
-        
+
+        # PC turn refresh: (1) get your reaction back, (2) Raise a Shield
+        # expires (PF2e CRB: "until the start of your next turn"). We do this
+        # before applying new start-of-turn effects so conditions that hit
+        # you at turn-start can't accidentally be blocked by a stale shield.
+        if new_c.is_pc and new_c.name in PARTY_LIBRARY:
+            _pc = PARTY_LIBRARY[new_c.name]
+            _pc.reaction_used = False
+            if getattr(_pc, 'shield_raised', False):
+                _pc.shield_raised = False
+                _combat_log(f"{_pc.name}: Raise a Shield expired (start of turn)", 'condition')
+            _persist_pc_combat_state(new_c.name)
+            _broadcast_pc_state(new_c.name)
+
         # Stunned: lose actions, then reduce stunned by the number lost (PF2E Core p.448)
         stunned_val = new_c.conditions.get('stunned', 0)
         if stunned_val > 0:
@@ -4672,30 +5179,42 @@ def cycle_turn(direction):
             _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
             if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
         
-        # Persistent damage auto-roll (start of turn, PF2E Core p.451)
+        # Persistent damage (start of turn, PF2e Core p.451).
+        # Two representations coexist:
+        #   - Monsters / old tracker rows: `persistent_damage` is a dice string
+        #     like "2d6 fire". We still auto-roll for the GM's convenience.
+        #   - PCs: `persistent_damage` is a list of dicts (see Character.__init__).
+        #     The player asked to NOT auto-roll; we just surface a reminder and
+        #     let them click "Take N damage" + "Roll DC 15 Flat Check" on the sheet.
         pd = getattr(new_c, 'persistent_damage', '')
-        if pd:
-            import re as _re
-            pd_match = _re.search(r'(\d+)d(\d+)(?:\s*\+\s*(\d+))?', pd)
-            if pd_match:
-                pd_qty = int(pd_match.group(1))
-                pd_sides = int(pd_match.group(2))
-                pd_bonus = int(pd_match.group(3)) if pd_match.group(3) else 0
-                pd_total = sum(random.randint(1, pd_sides) for _ in range(pd_qty)) + pd_bonus
-                old_hp = new_c.current_hp
-                new_c.current_hp = max(0, new_c.current_hp - pd_total)
-                _combat_log(f"{new_c.name}: Persistent {pd} dealt {pd_total} ({old_hp}→{new_c.current_hp})", 'damage')
-                if new_c.is_pc and new_c.name in PARTY_LIBRARY:
-                    PARTY_LIBRARY[new_c.name].current_hp = new_c.current_hp
-                    _broadcast_pc_state(new_c.name)
-                # Auto-roll DC 15 flat check to end persistent damage
-                flat_roll = random.randint(1, 20)
-                if flat_roll >= 15:
-                    new_c.persistent_damage = ''
-                    if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].persistent_damage = ''
-                    _combat_log(f"{new_c.name}: Flat check {flat_roll} >= 15 — persistent damage ends!", 'heal')
-                else:
-                    _combat_log(f"{new_c.name}: Flat check {flat_roll} < 15 — persistent damage continues", 'damage')
+        if pd and not (new_c.is_pc and new_c.name in PARTY_LIBRARY):
+            # Monster path: keep the old auto-roll behavior.
+            if isinstance(pd, str):
+                import re as _re
+                pd_match = _re.search(r'(\d+)d(\d+)(?:\s*\+\s*(\d+))?', pd)
+                if pd_match:
+                    pd_qty = int(pd_match.group(1))
+                    pd_sides = int(pd_match.group(2))
+                    pd_bonus = int(pd_match.group(3)) if pd_match.group(3) else 0
+                    pd_total = sum(random.randint(1, pd_sides) for _ in range(pd_qty)) + pd_bonus
+                    old_hp = new_c.current_hp
+                    new_c.current_hp = max(0, new_c.current_hp - pd_total)
+                    _combat_log(f"{new_c.name}: Persistent {pd} dealt {pd_total} ({old_hp}→{new_c.current_hp})", 'damage')
+                    flat_roll = random.randint(1, 20)
+                    if flat_roll >= 15:
+                        new_c.persistent_damage = ''
+                        _combat_log(f"{new_c.name}: Flat check {flat_roll} >= 15 — persistent damage ends!", 'heal')
+                    else:
+                        _combat_log(f"{new_c.name}: Flat check {flat_roll} < 15 — persistent damage continues", 'damage')
+        elif new_c.is_pc and new_c.name in PARTY_LIBRARY:
+            # PC path: just log that it's pending. The reminder (and buttons on
+            # the sheet) drive resolution — the player rolls the DC 15 flat
+            # check themselves.
+            _pc = PARTY_LIBRARY[new_c.name]
+            pd_list = list(getattr(_pc, 'persistent_damage', []) or [])
+            if pd_list:
+                parts = [f"{e.get('damage','?')} {e.get('type','')}".strip() for e in pd_list]
+                _combat_log(f"{_pc.name}: Persistent damage pending — {', '.join(parts)} (player rolls)", 'condition')
         
         _generate_turn_reminders()
         
@@ -4724,11 +5243,31 @@ def _generate_turn_reminders():
     if not ACTIVE_ENCOUNTER or TURN_INDEX >= len(ACTIVE_ENCOUNTER): return
     c = ACTIVE_ENCOUNTER[TURN_INDEX]
     
-    # Persistent damage (happens at start of turn)
-    if getattr(c, 'persistent_damage', ''):
+    # Persistent damage (happens at start of turn).
+    # PCs now store this as a list of entries; render one reminder per entry
+    # so each damage type is called out individually.
+    _pd_raw = getattr(c, 'persistent_damage', '')
+    if c.is_pc and c.name in PARTY_LIBRARY:
+        _pd_raw = list(getattr(PARTY_LIBRARY[c.name], 'persistent_damage', []) or [])
+    if isinstance(_pd_raw, list):
+        for entry in _pd_raw:
+            dmg = entry.get('damage', '?')
+            ptype = entry.get('type', '')
+            src = entry.get('source', '')
+            title = f'Persistent {dmg}{" " + ptype if ptype else ""}'.strip()
+            detail = 'Roll that damage, apply it, then roll a DC 15 flat check to end.'
+            if src:
+                detail = f'From {src}. ' + detail
+            TURN_REMINDERS.append({
+                'type': 'danger', 'icon': '🔥',
+                'title': title,
+                'detail': detail,
+                'action': 'roll_pd'
+            })
+    elif _pd_raw:
         TURN_REMINDERS.append({
             'type': 'danger', 'icon': '🔥',
-            'title': f'Persistent Damage: {c.persistent_damage}',
+            'title': f'Persistent Damage: {_pd_raw}',
             'detail': 'Roll damage, apply it, then roll a DC 15 flat check to end.',
             'action': 'roll_pd'
         })
@@ -4986,7 +5525,23 @@ def load_encounter():
                 new_c.initiative = item.get('initiative', 0)
                 if 'current_hp' in item: new_c.current_hp = item['current_hp']
                 if 'conditions' in item: new_c.conditions = item['conditions']
-                if 'persistent_damage' in item: new_c.persistent_damage = item['persistent_damage']
+                if 'persistent_damage' in item:
+                    _pd_in = item['persistent_damage']
+                    # Heal corrupt stale values: historical saves may contain the
+                    # literal string "[]" (which becomes ['[',']'] if later fed
+                    # through list()). PCs use list-of-dicts; monsters use the
+                    # legacy string format.
+                    if new_c.is_pc:
+                        if isinstance(_pd_in, list):
+                            new_c.persistent_damage = [e for e in _pd_in if isinstance(e, dict)]
+                        else:
+                            new_c.persistent_damage = []
+                    else:
+                        if isinstance(_pd_in, str):
+                            s = _pd_in.strip()
+                            new_c.persistent_damage = '' if s in ('[]', '{}') else _pd_in
+                        else:
+                            new_c.persistent_damage = _pd_in or ''
                 if 'elite_weak' in item and hasattr(new_c, 'apply_elite_weak'):
                     new_c.apply_elite_weak(item['elite_weak'])
                 # Restore hidden/visible state from saved encounter files.
@@ -5749,6 +6304,15 @@ def gm_party_state():
             'portrait': getattr(pc, 'portrait', None),
             'attacks': [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(pc, 'attacks', [])],
             'mods': getattr(pc, 'mods', {}),
+            # Phase 10: GM party view shows each PC's current exploration activity.
+            'exploration_activity': str(getattr(pc, 'exploration_activity', '') or ''),
+            # Phase 11: shield details for the GM party card.
+            'shield_name': getattr(pc, 'shield_name', '') or '',
+            'shield_hp': int(getattr(pc, 'shield_hp', 0) or 0),
+            'shield_max_hp': int(getattr(pc, 'shield_max_hp', 0) or 0),
+            'shield_hardness': int(getattr(pc, 'shield_hardness', 0) or 0),
+            'shield_broken': bool(getattr(pc, 'shield_broken', False)),
+            'shield_destroyed': bool(getattr(pc, 'shield_destroyed', False)),
         }
         party.append(pc_data)
     return jsonify({'party': party})
@@ -5849,18 +6413,26 @@ def combatant_stats(instance_id):
 def log_roll():
     data = request.json
     from datetime import datetime
+    # Phase 7: clients may supply a precomputed PF2e degree of success
+    # ('crit_success'|'success'|'failure'|'crit_failure') for known-DC rolls.
+    # We just forward it through to the log + broadcast so GM toasts + combat
+    # log can render a degree banner without re-deriving the math server-side.
+    degree = data.get('degree')
+    if degree not in ('crit_success', 'success', 'failure', 'crit_failure'):
+        degree = None
     log_entry = {
-        'id': str(uuid.uuid4()), 
-        'name': data.get('name', 'Player'), 
-        'action': data.get('action', 'Action'), 
-        'result': data.get('result', ''), 
+        'id': str(uuid.uuid4()),
+        'name': data.get('name', 'Player'),
+        'action': data.get('action', 'Action'),
+        'result': data.get('result', ''),
         'detail': data.get('detail', ''),
+        'degree': degree,
         'time': datetime.now().strftime('%H:%M:%S'),
         'round': ROUND_NUMBER
     }
     COMBAT_LOGS.append(log_entry)
     if len(COMBAT_LOGS) > 200: COMBAT_LOGS.pop(0)
-    
+
     # Broadcast to all connected clients so everyone sees each other's rolls.
     # Hidden-NPC names in the detail/action/result fields (e.g. "vs GhoulPriest")
     # get scrubbed for player subscribers via the player_filter callback.
@@ -5869,6 +6441,7 @@ def log_roll():
         'action': log_entry['action'],
         'result': log_entry['result'],
         'detail': log_entry['detail'],
+        'degree': log_entry['degree'],
         'time': log_entry['time']
     }
 
@@ -6028,6 +6601,14 @@ def long_rest(pc_name):
         pc = PARTY_LIBRARY[pc_name]
         pc.current_hp = pc.hp
         pc.current_focus = pc.focus_max
+        # Temp HP always fades after a rest — clear the manual pool so it
+        # doesn't linger across days. Toggle-based temp HP refreshes with
+        # the toggle (no action needed here).
+        pc.temp_hp_manual = 0
+        try:
+            pc.temp_hp = pc.toggle_effects_summary.get('temp_hp', 0)
+        except Exception:
+            pc.temp_hp = 0
         
         # PF2E Rest Rules:
         # - Wounded: clears entirely after full night's rest
@@ -6331,25 +6912,201 @@ def toggle_feature(pc_name, feature_name):
     
     return jsonify({"success": True, "active": active, "feature": feature_name, "effects": effects})
 
+@app.route('/api/set_reaction/<pc_name>', methods=['POST'])
+def set_reaction(pc_name):
+    """Mark / clear a PC's per-round reaction. Auto-reset at the start of the
+    PC's turn by cycle_turn; this endpoint is the manual toggle for players
+    (Attack of Opportunity, Shield Warden, etc.) or a GM override."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Unknown PC"}), 404
+    data = request.get_json(silent=True) or {}
+    used = bool(data.get('used', True))
+    def _mutate(pc):
+        pc.reaction_used = used
+        return True
+    _, pc = apply_pc_delta(pc_name, _mutate)
+    return jsonify({"success": True, "reaction_used": bool(pc.reaction_used)})
+
+# Phase 10: PF2e exploration activities (Core p.479). The canonical list lives
+# here so the player sheet dropdown and GM banner agree on keys + labels.
+# GMs only need to SEE what each PC is doing; no mechanical effects are applied.
+EXPLORATION_ACTIVITIES = [
+    ('',                  'None (Walking)',      'No special activity — just traveling.'),
+    ('search',            'Search',              'Look for hidden things. Half speed. Perception vs Stealth DC.'),
+    ('detect_magic',      'Detect Magic',        'Cast Detect Magic periodically while moving.'),
+    ('follow_expert',     'Follow the Expert',   'Gain +2/+3/+4 circumstance to match a trained ally.'),
+    ('scout',             'Scout',               '+1 circumstance bonus to party initiative.'),
+    ('avoid_notice',      'Avoid Notice',        'Stealth for initiative; gain Undetected status on entry.'),
+    ('hustle',            'Hustle',              'Double speed for (CON mod × 10) minutes.'),
+    ('defend',            'Defend',              'Walk with shield raised. Starts combat with shield raised.'),
+    ('repeat_spell',      'Repeat a Spell',      'Cast the same cantrip each round of exploration.'),
+    ('track',             'Track',               'Follow tracks using Survival. Half speed.'),
+    ('investigate',       'Investigate',         'Use Recall Knowledge repeatedly while moving.'),
+    ('cover_tracks',      'Cover Tracks',        'Hide party trail. Half speed. Survival to obscure.'),
+    ('sense_direction',   'Sense Direction',     'Survival check to avoid getting lost.'),
+    ('decipher_writing',  'Decipher Writing',    'Work through a written puzzle/inscription.'),
+    ('treat_wounds',      'Treat Wounds',        'Medicine check to heal a target (10 min).'),
+    ('other',             'Other (custom)',      'A custom activity — note it in the dropdown label.'),
+]
+
+@app.route('/api/exploration_activities')
+def api_exploration_activities():
+    """Return the canonical list of exploration activities + labels + tooltips.
+    Cached indefinitely on the client side — the list is effectively constant."""
+    return jsonify({
+        'activities': [{'key': k, 'label': lbl, 'tooltip': tip} for (k, lbl, tip) in EXPLORATION_ACTIVITIES]
+    })
+
+@app.route('/api/set_exploration_activity/<pc_name>', methods=['POST'])
+def set_exploration_activity(pc_name):
+    """Set a PC's current exploration activity. Broadcasts via pc_update so
+    the party view / GM screen can render a per-PC banner without polling."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Unknown PC"}), 404
+    data = request.get_json(silent=True) or request.form or {}
+    key = (data.get('activity') or '').strip()
+    valid_keys = {k for (k, _, _) in EXPLORATION_ACTIVITIES}
+    if key not in valid_keys:
+        return jsonify({"success": False, "error": f"Unknown activity '{key}'"}), 400
+    def _mutate(pc):
+        pc.exploration_activity = key
+        return True
+    _, pc = apply_pc_delta(pc_name, _mutate, sync_conditions=False)
+    # Surface on the combat log so GM sees the change in the roll feed too.
+    label = next((lbl for (k, lbl, _) in EXPLORATION_ACTIVITIES if k == key), key)
+    _combat_log(f"{pc_name}: Exploration → {label}", 'system')
+    return jsonify({"success": True, "exploration_activity": pc.exploration_activity, "label": label})
+
+
+@app.route('/api/persistent_damage/<pc_name>/add', methods=['POST'])
+def persistent_damage_add(pc_name):
+    """Add a persistent-damage entry to a PC. Body: {damage, type, source}.
+
+    We intentionally do NOT auto-roll damage or the DC 15 flat check — the
+    player drives those from the sheet (per user request). This endpoint
+    just records the condition; the UI + turn reminder do the reminding.
+    """
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Unknown PC"}), 404
+    data = request.get_json(silent=True) or request.form or {}
+    damage = (data.get('damage') or '').strip()
+    if not damage:
+        return jsonify({"success": False, "error": "Missing damage expression"}), 400
+    ptype = (data.get('type') or '').strip()
+    source = (data.get('source') or '').strip()
+    entry = {'damage': damage, 'type': ptype, 'source': source}
+    def _mutate(pc):
+        _pd = getattr(pc, 'persistent_damage', []) or []
+        lst = list(_pd) if isinstance(_pd, list) else []
+        lst.append(entry)
+        pc.persistent_damage = lst
+        return True
+    _, pc = apply_pc_delta(pc_name, _mutate)
+    # Regenerate reminders if this PC is currently up.
+    try:
+        if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER):
+            cur = ACTIVE_ENCOUNTER[TURN_INDEX]
+            if cur.is_pc and cur.name == pc_name:
+                _generate_turn_reminders()
+    except Exception: pass
+    return jsonify({"success": True, "persistent_damage": list(pc.persistent_damage)})
+
+
+@app.route('/api/persistent_damage/<pc_name>/remove/<int:idx>', methods=['POST'])
+def persistent_damage_remove(pc_name, idx):
+    """Remove one persistent-damage entry by index (e.g. when the player
+    rolls the DC 15 flat check and succeeds, or the GM confirms the source
+    is gone)."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Unknown PC"}), 404
+    def _mutate(pc):
+        _pd = getattr(pc, 'persistent_damage', []) or []
+        lst = list(_pd) if isinstance(_pd, list) else []
+        if 0 <= idx < len(lst):
+            lst.pop(idx)
+        pc.persistent_damage = lst
+        return True
+    _, pc = apply_pc_delta(pc_name, _mutate)
+    try:
+        if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER):
+            cur = ACTIVE_ENCOUNTER[TURN_INDEX]
+            if cur.is_pc and cur.name == pc_name:
+                _generate_turn_reminders()
+    except Exception: pass
+    return jsonify({"success": True, "persistent_damage": list(pc.persistent_damage)})
+
+
+@app.route('/api/persistent_damage/<pc_name>/flat_check/<int:idx>', methods=['POST'])
+def persistent_damage_flat_check(pc_name, idx):
+    """Roll the DC 15 flat check for a specific persistent-damage entry.
+    On success, the entry is removed. We roll here so the result shows up
+    in the combat log consistently — the player clicks the button, but the
+    RNG is server-side so everyone sees the same outcome.
+    """
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Unknown PC"}), 404
+    pc = PARTY_LIBRARY[pc_name]
+    lst = list(getattr(pc, 'persistent_damage', []) or [])
+    if not (0 <= idx < len(lst)):
+        return jsonify({"success": False, "error": "Bad index"}), 400
+    entry = lst[idx]
+    roll = random.randint(1, 20)
+    removed = roll >= 15
+    label = f"{entry.get('damage','?')} {entry.get('type','')}".strip()
+    if removed:
+        def _mutate(pc):
+            cur = list(getattr(pc, 'persistent_damage', []) or [])
+            if 0 <= idx < len(cur):
+                cur.pop(idx)
+            pc.persistent_damage = cur
+            return True
+        apply_pc_delta(pc_name, _mutate)
+        _combat_log(f"{pc_name}: Flat check {roll} vs DC 15 — persistent {label} ENDS", 'heal')
+    else:
+        _combat_log(f"{pc_name}: Flat check {roll} vs DC 15 — persistent {label} continues", 'damage')
+    try:
+        if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER):
+            cur = ACTIVE_ENCOUNTER[TURN_INDEX]
+            if cur.is_pc and cur.name == pc_name:
+                _generate_turn_reminders()
+    except Exception: pass
+    return jsonify({
+        "success": True,
+        "roll": roll,
+        "dc": 15,
+        "passed": removed,
+        "persistent_damage": list(PARTY_LIBRARY[pc_name].persistent_damage),
+    })
+
+
 @app.route('/api/toggle_shield/<pc_name>', methods=['POST'])
 def toggle_shield(pc_name):
-    """Toggle Raise Shield on/off."""
+    """Raise / lower a shield. PF2e: Raise a Shield is a 1-action activity
+    that gives you the shield's circumstance bonus to AC until the start of
+    your next turn (auto-dropped by the turn advancer).
+
+    Broken/destroyed shields can't be raised — the +AC bonus is lost until
+    the shield is repaired.
+    """
     if pc_name not in PARTY_LIBRARY:
         return jsonify({"error": "Character not found"}), 404
-    
-    file_path = get_pc_file_path(pc_name)
-    if not file_path:
-        return jsonify({"error": "File not found"}), 404
-    
-    with open(file_path, 'r', encoding='utf-8') as f:
-        pc_json = json.load(f)
-    build = pc_json.get('build', pc_json)
-    
-    build['shield_raised'] = not build.get('shield_raised', False)
-    save_and_reload_character(pc_name, pc_json, file_path)
-    
     pc = PARTY_LIBRARY[pc_name]
-    return jsonify({"success": True, "shield_raised": pc.shield_raised, "ac": pc.ac})
+    if getattr(pc, 'shield_destroyed', False):
+        return jsonify({"success": False, "error": "Shield is destroyed — can't raise"}), 400
+    # Broken shields CAN still be raised (they just can't Block) — so we allow it.
+
+    def _mutate(pc):
+        pc.shield_raised = not bool(getattr(pc, 'shield_raised', False))
+        return True
+    _, pc = apply_pc_delta(pc_name, _mutate)
+    return jsonify({
+        "success": True,
+        "shield_raised": pc.shield_raised,
+        "shield_broken": bool(getattr(pc, 'shield_broken', False)),
+        "shield_hp": int(getattr(pc, 'shield_hp', 0) or 0),
+        "shield_max_hp": int(getattr(pc, 'shield_max_hp', 0) or 0),
+        "ac": pc.ac,
+    })
 
 @app.route('/api/learn_spell/<pc_name>', methods=['POST'])
 def learn_spell(pc_name):

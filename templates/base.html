@@ -187,6 +187,81 @@
         // Other pages may open their own EventSource for tracker/map/pc updates;
         // EventSource is cheap, so this connection is dedicated to the toast layer.
         if (!window.location.pathname.startsWith('/player')) {
+            // Phase 7: degree-of-success banner shared across GM toasts and
+            // the tracker combat-log. Kept on window so tracker.html can use
+            // the same styling without duplicating the palette.
+            function _degBanner(degree) {
+                if (!degree) return '';
+                const cfg = {
+                    crit_success: {label:'CRIT SUCCESS', bg:'#fbbf24', fg:'#1f1f1f'},
+                    success:      {label:'SUCCESS',      bg:'#22c55e', fg:'#052e16'},
+                    failure:      {label:'FAILURE',      bg:'#dc2626', fg:'#fff'},
+                    crit_failure: {label:'CRIT FAIL',    bg:'#7f1d1d', fg:'#fca5a5'},
+                }[degree];
+                if (!cfg) return '';
+                return `<div style="margin:4px 0 2px; padding:4px 8px; border-radius:4px; background:${cfg.bg}; color:${cfg.fg}; font-weight:800; font-size:10px; letter-spacing:0.08em; text-align:center;">${cfg.label}</div>`;
+            }
+            window._degBanner = _degBanner;
+
+            // Phase 8: infer damage type from a breakdown string like
+            // "1d8 + 4 = 12 slashing" so the "Apply" button sends the right type
+            // for W/R/I adjustments. Falls back to 'untyped'.
+            function _inferDamageType(detail) {
+                if (!detail) return 'untyped';
+                const known = ['bludgeoning','piercing','slashing','fire','cold','acid','electricity','sonic','negative','positive','force','mental','poison','bleed','precision','spirit','vitality','void'];
+                const lower = detail.toLowerCase();
+                for (const t of known) { if (lower.includes(t)) return t; }
+                return 'untyped';
+            }
+
+            // Phase 8: apply a pasted damage total to a selected encounter
+            // participant. `btn` is the chip that was clicked; we replace the
+            // chip row with the picker to keep the toast compact.
+            async function _toastApplyDamage(btn, amount, dtype) {
+                const row = btn.parentNode;
+                row.innerHTML = '<span class="text-[10px] text-base-400">Loading…</span>';
+                try {
+                    const resp = await fetch('/api/tracker_state');
+                    const data = await resp.json();
+                    const combatants = (data && data.combatants) ? data.combatants : [];
+                    if (!combatants.length) {
+                        row.innerHTML = '<span class="text-[10px] text-base-400">No active encounter</span>';
+                        return;
+                    }
+                    row.innerHTML = '';
+                    const sel = document.createElement('select');
+                    sel.className = 'flex-1';
+                    sel.style.cssText = 'font-size:10px; padding:2px 4px; border-radius:3px; background:var(--bg-body); border:1px solid var(--border-default); color:var(--text-primary);';
+                    sel.innerHTML = '<option value="">Pick target…</option>' + combatants.map(c => `<option value="${c.instance_id}">${c.name} (${c.current_hp}/${c.max_hp})</option>`).join('');
+                    const apply = document.createElement('button');
+                    apply.textContent = 'Apply';
+                    apply.style.cssText = 'padding:2px 8px; font-size:10px; border-radius:3px; background:rgba(220,38,38,0.2); border:1px solid rgba(220,38,38,0.4); color:#fca5a5; font-weight:700; cursor:pointer;';
+                    apply.onclick = async () => {
+                        const iid = sel.value;
+                        if (!iid) { sel.style.borderColor = '#dc2626'; return; }
+                        const fd = new FormData();
+                        fd.append('amount', String(amount));
+                        fd.append('action', 'damage');
+                        fd.append('damage_type', dtype);
+                        try {
+                            const r = await fetch(`/api/adjust_hp/${iid}`, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: fd});
+                            if (r.ok) {
+                                row.innerHTML = `<span class="text-[10px]" style="color:#86efac;">✓ Applied ${amount}${dtype!=='untyped'?' '+dtype:''}</span>`;
+                            } else {
+                                row.innerHTML = '<span class="text-[10px]" style="color:#fca5a5;">Apply failed</span>';
+                            }
+                        } catch(_) {
+                            row.innerHTML = '<span class="text-[10px]" style="color:#fca5a5;">Apply failed</span>';
+                        }
+                    };
+                    row.appendChild(sel);
+                    row.appendChild(apply);
+                } catch(_) {
+                    row.innerHTML = '<span class="text-[10px] text-base-400">Fetch failed</span>';
+                }
+            }
+            window._toastApplyDamage = _toastApplyDamage;
+
             function showToast(log) {
                 const c = document.getElementById('gm-toast-container');
                 if (!c) return;
@@ -194,9 +269,27 @@
                 t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
                 t.style.background = 'var(--bg-raised)';
                 t.style.border = '1px solid var(--border-default)';
-                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action || ''}</div><div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail || ''}</div>`;
+                const degHTML = _degBanner(log.degree);
+
+                // Phase 8: if this is a damage roll, show an Apply button that
+                // lets the GM push the total onto a picked combatant with one click.
+                let applyHTML = '';
+                const action = String(log.action || '');
+                const isDamageRoll = /^(CRIT )?Damage:/i.test(action);
+                const dmgTotal = parseInt(log.result, 10);
+                if (isDamageRoll && !isNaN(dmgTotal) && dmgTotal > 0) {
+                    const dtype = _inferDamageType(log.detail);
+                    applyHTML = `<div class="flex items-center gap-2 mt-1" data-apply-row>
+                        <button onclick="_toastApplyDamage(this, ${dmgTotal}, '${dtype}')" style="padding:2px 8px; font-size:10px; border-radius:3px; background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.35); color:#fca5a5; font-weight:700; cursor:pointer;">Apply ${dmgTotal}${dtype!=='untyped'?' '+dtype:''}</button>
+                        <span class="text-[9px] text-base-400">→ pick target</span>
+                    </div>`;
+                }
+
+                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action || ''}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail || ''}</div>${applyHTML}`;
                 c.prepend(t);
-                setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, 6000);
+                // Damage-apply toasts stick longer so the GM has time to pick a target.
+                const ttl = isDamageRoll ? 15000 : 6000;
+                setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, ttl);
             }
             try {
                 const _toastSSE = new EventSource('/api/events');

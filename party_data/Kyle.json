@@ -426,10 +426,20 @@
     "notes": "",
     "expended_slots": {},
     "shield_raised": false,
-    "current_hp": 26,
+    "current_hp": 8,
     "current_focus": 1,
     "conditions": {},
     "prepared_spells": {},
-    "cast_prep": {}
+    "cast_prep": {},
+    "shield_hp": 20,
+    "temp_hp": 0,
+    "hero_points": 1,
+    "reaction_used": false,
+    "persistent_damage": null,
+    "exploration_activity": null,
+    "shield_hardness": 5,
+    "shield_max_hp": 20,
+    "shield_bt": 10,
+    "shield_ac_bonus": 2
   }
 }
