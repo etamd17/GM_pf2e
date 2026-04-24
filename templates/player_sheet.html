@@ -2025,7 +2025,7 @@
                         <button onclick="rollInitiativeFromSheet()" class="tb" style="padding:4px 8px; color:#c084fc;" title="Roll Initiative">Init</button>
                     </div>
                     <a href="/map" class="tb">Map</a>
-                    <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — restore HP, spell slots, focus points, and clear short-term conditions">Rest</button>
+                    <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Rest</button>
                     {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb" title="Revert last level-up">Undo Level</button>{% endif %}
                     <button onclick="openLevelUpDrawer()" class="tb primary no-print">Level Up</button>
                     <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary print-only" style="display:none;">Level Up</a>
@@ -4821,7 +4821,7 @@
                 : 'The sun crests the ridge. You rise rested — preparations made, spells inscribed, vigor restored.';
             const list = kind === 'confirm'
                 ? [
-                    'Full HP restored',
+                    'HP recovered: Con modifier × level (min 1/level)',
                     'Focus Points restored',
                     'Spell slots refreshed (prepared spells cleared)',
                     'Fatigued, Frightened, Sickened, Stunned cleared',
@@ -4880,13 +4880,18 @@
                 const res = await fetch(`/api/long_rest/${pcNameEncoded}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
+                    const r = data.restored;
+                    const conSign = r.con_mod >= 0 ? '+' : '';
+                    const hpMsg = r.hp_regained > 0
+                        ? `HP: +${r.hp_regained} recovered (Con ${conSign}${r.con_mod} × level ⇒ ${r.hp_per_level}/lvl) → ${r.hp}/${r.hp_max}`
+                        : `HP: already full (${r.hp}/${r.hp_max})`;
                     const bullets = [
-                        `HP restored to ${data.restored.hp}`,
-                        `Focus: ${data.restored.focus} restored`,
+                        hpMsg,
+                        `Focus: ${r.focus} restored`,
                         'Spell slots refreshed'
                     ];
-                    if (data.restored.drained > 0) bullets.push(`Drained: reduced to ${data.restored.drained}`);
-                    if (data.restored.doomed > 0) bullets.push(`Doomed: still ${data.restored.doomed} — a night's rest will not lift it`);
+                    if (r.drained > 0) bullets.push(`Drained: reduced to ${r.drained}`);
+                    if (r.doomed > 0) bullets.push(`Doomed: still ${r.doomed} — a night's rest will not lift it`);
                     await restAnnounce(bullets);
                     window.location.reload();
                 }

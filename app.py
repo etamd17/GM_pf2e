@@ -6618,7 +6618,36 @@ def compendium_detail():
 def long_rest(pc_name):
     if pc_name in PARTY_LIBRARY:
         pc = PARTY_LIBRARY[pc_name]
-        pc.current_hp = pc.hp
+
+        # PF2E Rest Rules (Core Rulebook p.480 "Resting"):
+        # - HP regained = Con modifier (minimum 1) × level, capped at max HP.
+        #   You do NOT wake with full HP. Treat Wounds / other healing is
+        #   applied separately during rest; this endpoint models only the
+        #   base rest-recovery rule.
+        # - Wounded: clears entirely after full night's rest
+        # - Drained: reduces by 1 (not cleared)
+        # - Doomed: does NOT change from rest (only specific effects remove it)
+        # - Fatigued: clears after rest (explicit rule)
+        # - All other short-duration conditions (stunned, slowed, stupefied,
+        #   enfeebled, clumsy, frightened, sickened) expire after 8 hours —
+        #   their typical durations are rounds/minutes, not days.
+        # - Dying clears (you woke up, you aren't dying anymore)
+        # - Focus Points refill to max (daily preparations).
+        # - Hero Points are NOT restored by rest — per PF2e they reset at
+        #   the start of each session (GM awards 1); they are intentionally
+        #   left untouched here.
+
+        # HP recovery: max(1, con_mod) * level, capped at max HP.
+        try:
+            con_mod = int(pc.mods.get('con', 0))
+        except Exception:
+            con_mod = 0
+        hp_per_level = max(1, con_mod)
+        hp_before = pc.current_hp
+        hp_regained = hp_per_level * pc.level
+        pc.current_hp = min(pc.hp, pc.current_hp + hp_regained)
+        hp_actually_regained = pc.current_hp - hp_before
+
         pc.current_focus = pc.focus_max
         # Temp HP always fades after a rest — clear the manual pool so it
         # doesn't linger across days. Toggle-based temp HP refreshes with
@@ -6628,19 +6657,6 @@ def long_rest(pc_name):
             pc.temp_hp = pc.toggle_effects_summary.get('temp_hp', 0)
         except Exception:
             pc.temp_hp = 0
-        
-        # PF2E Rest Rules (Core Rulebook):
-        # - Wounded: clears entirely after full night's rest
-        # - Drained: reduces by 1 (not cleared)
-        # - Doomed: does NOT change from rest (only specific effects remove it)
-        # - Fatigued: clears after rest (explicit rule)
-        # - All other short-duration conditions (stunned, slowed, stupefied,
-        #   enfeebled, clumsy, frightened, sickened) expire after 8 hours —
-        #   their typical durations are rounds/minutes, not days.
-        # - Dying clears (you woke up, you aren't dying anymore)
-        # - Hero Points are NOT restored by rest — per PF2e they reset at
-        #   the start of each session (GM awards 1); they are intentionally
-        #   left untouched here.
         drained_val = max(0, pc.conditions.get('drained', 0) - 1)
         doomed_val = pc.conditions.get('doomed', 0)  # Preserved
 
@@ -6668,12 +6684,17 @@ def long_rest(pc_name):
         # Sync to tracker
         for c in ACTIVE_ENCOUNTER:
             if c.is_pc and c.name == pc_name:
-                c.current_hp = pc.hp
+                c.current_hp = pc.current_hp
                 c.current_focus = pc.focus_max
                 c.conditions = dict(pc.conditions)
         
         result = {"success": True, "restored": {
-            "hp": pc.hp, "focus": pc.focus_max,
+            "hp": pc.current_hp,
+            "hp_max": pc.hp,
+            "hp_regained": hp_actually_regained,
+            "hp_per_level": hp_per_level,
+            "con_mod": con_mod,
+            "focus": pc.focus_max,
             "drained": drained_val, "doomed": doomed_val,
             "conditions_cleared": True
         }}
