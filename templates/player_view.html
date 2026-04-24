@@ -70,7 +70,14 @@
                     <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
                     {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
                     <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#5EADAD{% else %}#ef4444{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
-                    <span class="font-display text-accent-300 text-base font-bold relative z-10">{{ pc.name[0] }}</span>
+                    {% if pc.portrait %}
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                             loading="lazy"
+                             class="relative z-10"
+                             style="width:36px;height:36px;border-radius:50%;object-fit:cover;object-position: {{ pc.portrait_focus_x | default(50) }}% {{ pc.portrait_focus_y | default(50) }}%;">
+                    {% else %}
+                        <span class="font-display text-accent-300 text-base font-bold relative z-10">{{ pc.name[0] }}</span>
+                    {% endif %}
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="text-base-100 font-semibold text-sm truncate">{{ pc.name }}</div>
@@ -86,10 +93,14 @@
             </div>
             <div class="flex items-center justify-between mt-3 pt-3 relative z-1 pointer-events-none" style="border-top:1px solid rgba(255,255,255,0.04)">
                 <div class="flex gap-3 text-[10px] text-base-500 font-medium">
-                    <span>AC <span class="text-info-400 font-bold">{{ pc.ac }}</span></span>
-                    <span>Fort <span class="text-success-400 font-bold">+{{ pc.fort }}</span></span>
-                    <span>Ref <span class="text-info-300 font-bold">+{{ pc.ref }}</span></span>
-                    <span>Will <span class="text-spell-300 font-bold">+{{ pc.will }}</span></span>
+                    {# Defense quartet rendered in uniform ivory — they
+                       are peer stats, so coloring them differently just
+                       reads as noise. HP stays color-coded below because
+                       HP is a live signal, not a reference number. #}
+                    <span>AC <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">{{ pc.ac }}</span></span>
+                    <span>Fort <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">+{{ pc.fort }}</span></span>
+                    <span>Ref <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">+{{ pc.ref }}</span></span>
+                    <span>Will <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">+{{ pc.will }}</span></span>
                 </div>
                 <div><span class="text-sm font-bold {% if pc.current_hp == 0 %}text-danger-500{% elif pc.current_hp < pc.hp * 0.5 %}text-gold-300{% else %}text-success-400{% endif %}">{{ pc.current_hp }}</span><span class="text-base-600 text-xs">/{{ pc.hp }}</span></div>
             </div>

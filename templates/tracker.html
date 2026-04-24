@@ -212,7 +212,10 @@
   display:grid;
   grid-template-columns: 28px 56px 1fr 52px 220px 210px 130px;
   gap:6px; padding:10px 12px;
+  /* Ruled scroll-strip: double hairline bottom (gilt under the border) to
+     evoke a manuscript roll of combatants. Pure CSS, one paint. */
   border-bottom:1px solid var(--t-border);
+  box-shadow: 0 2px 0 -1px rgba(200,168,78,0.08);
   align-items:center;
   transition: background .15s, box-shadow .15s;
 }
@@ -221,7 +224,10 @@
   background:
     linear-gradient(90deg, var(--t-row-active) 0%, rgba(196,60,60,0.04) 40%, transparent 75%),
     linear-gradient(90deg, rgba(200,168,78,0.04) 0%, transparent 40%);
-  box-shadow: inset 3px 0 0 var(--t-red), inset -1px 0 0 rgba(200,168,78,0.12);
+  box-shadow:
+    inset 3px 0 0 var(--t-red),
+    inset -1px 0 0 rgba(200,168,78,0.12),
+    0 2px 0 -1px rgba(200,168,78,0.2);
 }
 .trk .combatant.active .nm { color:var(--t-red-b); }
 .trk .combatant.delaying { opacity:.55; font-style:italic; }
@@ -229,8 +235,22 @@
 .trk .combatant.down .nm { text-decoration:line-through; color:var(--t-t3); }
 .trk .combatant:last-child { border-bottom:0; }
 
-.trk .c-drag { cursor:grab; color:var(--t-t4); font-size:14px; user-select:none; text-align:center; }
-.trk .c-drag:hover { color:var(--t-gold); }
+/* Gilt dagger-grip drag handle — SVG-style unicode hilt, colored by gold
+   on hover so dragging feels like grasping an actual dagger to re-seat the
+   combatant in the marching order. */
+.trk .c-drag {
+  cursor: grab;
+  color: var(--t-t4);
+  font-size: 14px;
+  user-select: none;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  line-height: 1;
+  transition: color 0.12s, transform 0.12s;
+}
+.trk .c-drag::before { content: "⚔"; }
+.trk .c-drag:hover { color: var(--t-gold); transform: scale(1.15); }
+.trk .c-drag:active { cursor: grabbing; transform: scale(0.95); }
 .trk .sortable-ghost { background:rgba(196,60,60,0.08) !important; }
 
 .trk .c-init { text-align:center; }
@@ -255,7 +275,16 @@
 }
 .trk .port.pc { background:linear-gradient(135deg, rgba(74,150,150,0.2), rgba(74,150,150,0.08)); color:var(--t-teal); border:1px solid rgba(74,150,150,0.45); }
 .trk .port.enemy { background:linear-gradient(135deg, rgba(196,60,60,0.2), rgba(196,60,60,0.08)); color:var(--t-red-b); border:1px solid rgba(196,60,60,0.45); }
-.trk .combatant.active .port { box-shadow:0 0 0 2px rgba(196,60,60,0.3), 0 0 14px rgba(196,60,60,0.2); }
+/* Active combatant's portrait gets a gilt ring + faint illumination glow,
+   like an illuminated initial on a manuscript page. */
+.trk .combatant.active .port {
+  box-shadow:
+    0 0 0 2px rgba(196,60,60,0.4),
+    0 0 0 3px rgba(200,168,78,0.4),
+    0 0 14px rgba(196,60,60,0.2);
+  color: var(--t-gold) !important;
+  font-weight: 800;
+}
 
 .trk .nm-wrap { min-width:0; }
 .trk .nm {

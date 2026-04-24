@@ -376,7 +376,9 @@
             <div class="flex items-center gap-3">
                 <div class="portrait-ring">
                     {% if pc.portrait %}
-                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                             loading="lazy"
+                             style="object-position: {{ pc.portrait_focus_x | default(50) }}% {{ pc.portrait_focus_y | default(50) }}%;">
                     {% else %}
                         <span class="font-display text-lg text-accent-300">{{ pc.name[0] }}</span>
                     {% endif %}

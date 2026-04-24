@@ -25,16 +25,20 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&display=swap');
 
         :root {
-            /* === Design C palette === */
-            --bg-base: #0f1117;
-            --bg-surface: #161921;
-            --bg-raised: #1c2029;
-            --bg-overlay: #242835;
-            --bg-hover: #2a2f40;
-            --bg-input: #0b0d13;
+            /* === Design C palette (2026-04: warm-ink shift) ===
+               Base tones pulled 8–12° toward amber so the gilt/rubric
+               accents read as parchment-on-leather instead of
+               tech-dashboard-dark-mode. Hue shift only; lightness
+               preserved, so contrast ratios still pass WCAG AA. */
+            --bg-base: #12100C;
+            --bg-surface: #1A1712;
+            --bg-raised: #211C15;
+            --bg-overlay: #2A241B;
+            --bg-hover: #332C22;
+            --bg-input: #0C0A07;
 
             --border: rgba(255,255,255,0.06);
             --border-subtle: rgba(255,255,255,0.06);
@@ -107,7 +111,69 @@
 
             --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             --font-display: 'Cinzel', serif;
+            --font-flavor: 'Alegreya', 'Iowan Old Style', Georgia, serif;
+
+            /* === TTRPG theme tokens ===
+               Rubric/gilt/verdigris/azure used as semantic roles for
+               section headers and status strips. Aliased to the
+               existing palette where a natural match exists so the
+               rest of the stylesheet keeps working unchanged.
+               `--rubric` is the medieval-manuscript red reserved for
+               mortal/failure states (Dying, Persistent, Broken). */
+            --rubric: #b33a3a;
+            --rubric-dim: rgba(179,58,58,0.18);
+            --gilt: var(--gold);
+            --gilt-dim: var(--gold-glow);
+            --verdigris: #6ea67b;
+            --verdigris-dim: rgba(110,166,123,0.14);
+            --azure: #6a8fc7;
+            --azure-dim: rgba(106,143,199,0.15);
+            --hairline: rgba(255,255,255,0.08);
+            --hairline-strong: rgba(255,255,255,0.16);
         }
+
+        /* === Rubric section header ===
+           Hairline-flanked small-caps label — replaces emoji+text
+           badges on status strips. Looks etched, not vibe-coded.
+           Usage: <span class="rubric" data-tint="rubric|gilt|verdigris|azure">PERSISTENT DAMAGE</span>
+           Optional flanking rules render via ::before/::after. */
+        .rubric {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-display);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--t2);
+        }
+        .rubric::before,
+        .rubric::after {
+            content: '';
+            display: inline-block;
+            width: 18px;
+            height: 1px;
+            background: currentColor;
+            opacity: 0.45;
+        }
+        .rubric[data-tint="rubric"]   { color: var(--rubric); }
+        .rubric[data-tint="gilt"]     { color: var(--gilt); }
+        .rubric[data-tint="verdigris"]{ color: var(--verdigris); }
+        .rubric[data-tint="azure"]    { color: var(--azure); }
+
+        /* Double-rule divider — thin+thin with a hairline gap, the
+           way rulebooks separate sections. Use as a wrapper class on
+           cards/panels or as a stand-alone <hr class="dbl-rule">. */
+        .dbl-rule {
+            border: 0;
+            border-top: 1px solid var(--hairline);
+            border-bottom: 1px solid var(--hairline);
+            height: 3px;
+            margin: 14px 0;
+            background: transparent;
+        }
+        .dbl-rule-top    { border-top: 1px solid var(--hairline); box-shadow: inset 0 2px 0 0 var(--bg-base), inset 0 3px 0 0 var(--hairline); }
 
         * { box-sizing: border-box; }
         body { font-family: var(--font-ui); background: var(--bg-base); color: var(--text-primary); }
@@ -117,6 +183,81 @@
         .font-header { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.02em; }
         .font-body { font-family: var(--font-ui); }
         .font-d { font-family: var(--font-display); }
+        .font-flavor { font-family: var(--font-flavor); }
+
+        /* === Flavor text: Alegreya serif for long-form rules prose ===
+           Applied to feat descriptions, spell bodies, session notes,
+           adventure log entries, handouts. Kept at 14px so it reads
+           as a book rather than UI chrome. */
+        .feat-desc, .spell-desc, .adventure-log, .session-note-body,
+        .handout-body, .rule-text, .item-description {
+            font-family: var(--font-flavor);
+            font-size: 14px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+        }
+        .feat-desc em, .spell-desc em, .adventure-log em,
+        .session-note-body em, .handout-body em, .rule-text em {
+            font-style: italic;
+            color: var(--text-primary);
+        }
+
+        /* === Session journal: ruled parchment ===
+           Each entry sits on a faint horizontal rule like a bound campaign
+           journal. Background is a subtly-warmed surface (not full parchment
+           — that would blow out contrast at night-play levels), and the
+           date is set in small caps as a scribe's marginalia. The ruled
+           lines are drawn with a single linear-gradient per entry so the
+           cost is one paint, no extra elements. */
+        .journal-page {
+            padding: 4px 2px;
+            background:
+                linear-gradient(180deg, rgba(232,196,120,0.015) 0%, rgba(232,196,120,0.04) 100%);
+            border-radius: 4px;
+        }
+        .journal-entry {
+            padding: 10px 12px 10px 18px;
+            position: relative;
+            background-image: repeating-linear-gradient(
+                to bottom,
+                transparent 0,
+                transparent 20px,
+                rgba(224,182,90,0.09) 20px,
+                rgba(224,182,90,0.09) 21px
+            );
+            border-bottom: 1px solid rgba(224,182,90,0.14);
+        }
+        .journal-entry::before {
+            /* Drop-cap gilt bullet at the left margin — like a scribe's mark */
+            content: "❦";
+            position: absolute;
+            left: 4px; top: 11px;
+            color: var(--gilt);
+            font-size: 10px;
+            opacity: 0.55;
+            line-height: 1;
+        }
+        .journal-entry:last-child { border-bottom: none; }
+        .journal-date {
+            display: block;
+            font-size: 9px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--gilt);
+            opacity: 0.7;
+            margin-bottom: 2px;
+        }
+        .journal-text {
+            font-family: var(--font-flavor, 'Alegreya', Georgia, serif);
+            font-size: 14px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        .journal-empty {
+            font-family: var(--font-flavor, 'Alegreya', Georgia, serif);
+            color: var(--text-faint);
+        }
 
         /* Scrollbars */
         ::-webkit-scrollbar { width: 6px; }
@@ -135,7 +276,7 @@
         /* Design System Components (legacy compat) */
         .ds-surface { background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
         .ds-surface-sunken { background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
-        .ds-label { font-family: var(--font-ui); font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--t3); }
+        .ds-label { font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3); }
         .ds-value { font-family: var(--font-ui); font-weight: 700; color: var(--text-primary); }
         .ds-divider { border: none; border-top: 1px solid var(--border-subtle); margin: 16px 0; }
 
@@ -153,12 +294,29 @@
             font-weight: 700;
             color: #fff;
             line-height: 1.1;
+            letter-spacing: 0.02em;
+        }
+        .char-name::first-letter {
+            font-family: var(--font-display);
+            font-size: 38px;
+            font-weight: 700;
+            line-height: 0.9;
+            color: var(--gilt);
+            padding-right: 2px;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.5);
         }
         .char-subtitle {
             font-family: var(--font-ui);
             font-size: 12px;
             color: var(--t3);
             margin-top: 2px;
+        }
+        .sub-orn {
+            color: var(--gilt);
+            font-family: var(--font-flavor, 'Alegreya', Georgia, serif);
+            font-size: 11px;
+            opacity: 0.72;
+            padding: 0 2px;
         }
         .char-level-badge {
             display: inline-flex; align-items: center;
@@ -202,14 +360,15 @@
         }
         .ability-block:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
         .ability-block .mod {
-            font-family: var(--font-ui);
-            font-size: 22px; font-weight: 800;
+            font-family: var(--font-display);
+            font-size: 24px; font-weight: 700;
             color: #fff; line-height: 1;
+            font-variant-numeric: lining-nums tabular-nums;
         }
         .ability-block .label {
-            font-family: var(--font-ui);
+            font-family: var(--font-display);
             font-size: 10px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.08em;
+            text-transform: uppercase; letter-spacing: 0.18em;
             color: var(--t3);
             margin-top: 2px;
         }
@@ -226,8 +385,8 @@
             cursor: pointer;
         }
         .stat-box:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
-        .stat-box .stat-value { font-family: var(--font-ui); font-size: 20px; font-weight: 800; color: #fff; line-height: 1; }
-        .stat-box .stat-label { font-family: var(--font-ui); font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t3); margin-top: 2px; }
+        .stat-box .stat-value { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: #fff; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+        .stat-box .stat-label { font-family: var(--font-display); font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3); margin-top: 2px; }
 
         /* === DEFENSE STAT === */
         .defense-stat {
@@ -241,8 +400,8 @@
             min-width: 48px;
         }
         .defense-stat:hover { border-color: rgba(255,255,255,0.2); }
-        .defense-stat .val { font-size: 18px; font-weight: 800; line-height: 1; }
-        .defense-stat .lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-top: 2px; }
+        .defense-stat .val { font-family: var(--font-display); font-size: 20px; font-weight: 700; line-height: 1; font-variant-numeric: lining-nums tabular-nums; color: var(--text-primary); }
+        .defense-stat .lbl { font-family: var(--font-display); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; color: var(--t3); margin-top: 2px; }
 
         /* === HP BAR === */
         .hp-section {
@@ -254,23 +413,30 @@
             border: 1px solid var(--border-s);
             border-radius: var(--radius-md);
         }
-        .hp-current { font-size: 24px; font-weight: 800; line-height: 1; color: var(--green); }
+        .hp-current { font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1; color: var(--green); font-variant-numeric: lining-nums tabular-nums; }
         .hp-max { font-size: 13px; color: var(--t3); }
+        /* Signature-line input — flat, no fill, gilt bottom-rule
+           only. Reads as a hand-filled character-sheet line rather
+           than a Google Form field. Focus brightens the gilt rule. */
         .hp-input {
             width: 60px;
-            background: var(--bg-base);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-sm);
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(201,163,78,0.28);
+            border-radius: 0;
             color: var(--text-primary);
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             text-align: center;
-            padding: 4px 6px;
-            font-family: var(--font-ui);
+            padding: 3px 4px 2px;
+            font-family: var(--font-display);
+            font-variant-numeric: lining-nums tabular-nums;
             outline: none;
+            transition: border-color 0.15s;
         }
-        .hp-input:focus { border-color: var(--red-b); }
-        .hp-input::placeholder { color: var(--t4); }
+        .hp-input:focus { border-bottom-color: var(--gilt); }
+        .hp-input:hover { border-bottom-color: rgba(201,163,78,0.5); }
+        .hp-input::placeholder { color: var(--t4); font-family: var(--font-ui); font-weight: 500; }
         .hp-btn {
             padding: 4px 12px;
             border-radius: var(--radius-sm);
@@ -288,12 +454,54 @@
         .hp-btn.heal:hover { background: rgba(62,186,104,0.2); }
 
         /* === HP Gauge === */
-        .hp-gauge, .hp-gauge-bar { position:relative; height:6px; border-radius:3px; background:var(--bg-base); overflow:hidden; }
-        .hp-gauge-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
-        .hp-gauge-fill.high { background:linear-gradient(90deg,#22C55E,var(--green)); }
-        .hp-gauge-fill.mid { background:linear-gradient(90deg,#D97706,#FBBF24); }
-        .hp-gauge-fill.low { background:linear-gradient(90deg,#DC2626,#F87171); }
-        .hp-gauge-fill.dead { background:#7F1D1D; }
+        /* === HP vitality gauge ===
+           Restyled as a ruled vitality bar: gilt-capped frame with faint
+           tick marks every ~20%, giving the bar a cast-metal, scribed-scale
+           feel without any SVG / image cost. Ticks are drawn by the frame
+           itself via a repeating linear-gradient (1 paint, no extra DOM). */
+        .hp-gauge, .hp-gauge-bar {
+            position: relative;
+            height: 8px;
+            border-radius: 2px;
+            background:
+                repeating-linear-gradient(
+                    to right,
+                    transparent 0,
+                    transparent calc(20% - 1px),
+                    rgba(224,182,90,0.25) calc(20% - 1px),
+                    rgba(224,182,90,0.25) 20%
+                ),
+                linear-gradient(180deg, #0b0a08 0%, #1a1612 100%);
+            border: 1px solid #3a2a0a;
+            box-shadow:
+                inset 0 1px 0 rgba(224,182,90,0.15),
+                inset 0 -1px 0 rgba(0,0,0,0.45);
+            overflow: hidden;
+        }
+        /* Gilt end-caps — tiny 2px bars at each end of the frame */
+        .hp-gauge::before, .hp-gauge::after,
+        .hp-gauge-bar::before, .hp-gauge-bar::after {
+            content: "";
+            position: absolute;
+            top: -2px; bottom: -2px;
+            width: 3px;
+            background: linear-gradient(180deg, #d4a746 0%, #7a5a10 100%);
+            border-radius: 1px;
+            box-shadow: 0 0 1px #4a380a;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .hp-gauge::before, .hp-gauge-bar::before { left: -3px; }
+        .hp-gauge::after, .hp-gauge-bar::after { right: -3px; }
+        .hp-gauge-fill {
+            height: 100%;
+            transition: width 0.4s ease, background 0.4s ease, box-shadow 0.4s ease;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+        .hp-gauge-fill.high { background: linear-gradient(180deg, #4ade80 0%, var(--green) 60%, #15803d 100%); }
+        .hp-gauge-fill.mid  { background: linear-gradient(180deg, #fbbf24 0%, #d97706 60%, #92400e 100%); }
+        .hp-gauge-fill.low  { background: linear-gradient(180deg, #f87171 0%, #dc2626 60%, #7f1d1d 100%); }
+        .hp-gauge-fill.dead { background: linear-gradient(180deg, #7F1D1D 0%, #3a0808 100%); }
 
         /* === Stats strip (Design C horizontal cards) === */
         /* Tightened on 2025-04 per user request: the AC/Speed/Saves/HP row
@@ -309,14 +517,18 @@
         }
         .ss-block {
             flex: 1 1 0; min-width: 96px;
-            text-align: center; padding: 5px 8px 6px;
+            text-align: center; padding: 2px 8px 3px;
             border-right: 1px solid var(--border);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .ss-block:last-child { border-right: none; }
-        .ss-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-bottom: 2px; }
-        .ss-val { font-size: 24px; font-weight: 800; color: #fff; line-height: 1; }
-        .ss-sub { font-size: 10px; color: var(--t3); margin-top: 2px; }
+        .ss-lbl { font-family: var(--font-display); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; color: var(--t3); margin-bottom: 0; line-height: 1.1; }
+        .ss-val { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: #fff; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+        .ss-sub { font-size: 9px; color: var(--t3); margin-top: 1px; line-height: 1.1; }
+        /* HP block is the one ss-block that needs extra vertical room to
+           house the gauge + TMP input + shield gauge. Keep it snug but don't
+           clip. The `hp-area` modifier exists specifically for this. */
+        .ss-block.hp-area { padding: 3px 8px 4px; }
 
         /* === CONDITION BAR === */
         .condition-bar {
@@ -371,6 +583,82 @@
         }
         .condition-pill.cond-warn .cond-val { background: #F59E0B; }
         .condition-pill.cond-crit .cond-val { background: #dc2626; box-shadow: 0 0 0 1px rgba(255,255,255,0.25), 0 0 6px rgba(220,38,38,0.7); }
+
+        /* === Heraldic condition tinctures ===
+           PF2e conditions cluster into natural families; each
+           family gets its own shield-tincture color so the board
+           reads at a glance — gules (mortal), sable (mental),
+           vert (corporeal/poison), azure (temporal/positional),
+           or (visibility). The .cond-val numeric badge
+           overrides to the tincture's "charge" color so the
+           whole pill stays visually coherent. */
+
+        /* Gules — mortal / failure. Kept red, explicitly. */
+        .condition-pill[data-cond-name="dying"],
+        .condition-pill[data-cond-name="wounded"],
+        .condition-pill[data-cond-name="doomed"] {
+            background: rgba(179,58,58,0.12);
+            border-color: rgba(179,58,58,0.35);
+            color: #f5a8a8;
+        }
+        .condition-pill[data-cond-name="dying"] button,
+        .condition-pill[data-cond-name="wounded"] button,
+        .condition-pill[data-cond-name="doomed"] button { color: #f5a8a8; }
+
+        /* Sable — mental afflictions. Muted violet-gray. */
+        .condition-pill[data-cond-name="frightened"],
+        .condition-pill[data-cond-name="stupefied"],
+        .condition-pill[data-cond-name="confused"] {
+            background: rgba(138,120,168,0.11);
+            border-color: rgba(138,120,168,0.32);
+            color: #c8b8d8;
+        }
+        .condition-pill[data-cond-name="frightened"] button,
+        .condition-pill[data-cond-name="stupefied"] button,
+        .condition-pill[data-cond-name="confused"] button { color: #c8b8d8; }
+        .condition-pill[data-cond-name="frightened"] .cond-val,
+        .condition-pill[data-cond-name="stupefied"] .cond-val,
+        .condition-pill[data-cond-name="confused"] .cond-val { background: #7d6fa2; }
+
+        /* Vert — corporeal / poison / body-weakening. Aged copper. */
+        .condition-pill[data-cond-name="sickened"],
+        .condition-pill[data-cond-name="drained"],
+        .condition-pill[data-cond-name="enfeebled"],
+        .condition-pill[data-cond-name="clumsy"] {
+            background: rgba(110,166,123,0.10);
+            border-color: rgba(110,166,123,0.30);
+            color: #b4d8bd;
+        }
+        .condition-pill[data-cond-name="sickened"] button,
+        .condition-pill[data-cond-name="drained"] button,
+        .condition-pill[data-cond-name="enfeebled"] button,
+        .condition-pill[data-cond-name="clumsy"] button { color: #b4d8bd; }
+        .condition-pill[data-cond-name="sickened"] .cond-val,
+        .condition-pill[data-cond-name="drained"] .cond-val,
+        .condition-pill[data-cond-name="enfeebled"] .cond-val,
+        .condition-pill[data-cond-name="clumsy"] .cond-val { background: #5d8a6a; }
+
+        /* Azure — temporal / positional. Muted blue. */
+        .condition-pill[data-cond-name="slowed"],
+        .condition-pill[data-cond-name="stunned"] {
+            background: rgba(106,143,199,0.11);
+            border-color: rgba(106,143,199,0.32);
+            color: #b8cee8;
+        }
+        .condition-pill[data-cond-name="slowed"] button,
+        .condition-pill[data-cond-name="stunned"] button { color: #b8cee8; }
+        .condition-pill[data-cond-name="slowed"] .cond-val,
+        .condition-pill[data-cond-name="stunned"] .cond-val { background: #5a7fb5; }
+
+        /* Or — visibility/positional toggles. Gilt gold. */
+        .condition-toggle.active[onclick*="'prone'"],
+        .condition-toggle.active[onclick*="'off_guard'"],
+        .condition-toggle.active[onclick*="'concealed'"],
+        .condition-toggle.active[onclick*="'hidden'"] {
+            background: rgba(200,168,78,0.12);
+            border-color: rgba(200,168,78,0.35);
+            color: #e6c97a;
+        }
         .condition-toggle {
             padding: 3px 10px;
             border-radius: 999px;
@@ -399,9 +687,12 @@
             border-bottom: 2px solid var(--border);
             background: var(--bg-surface);
         }
+        /* Chapter-tab treatment — Cinzel small-caps with a gilt
+           underline on active. Reads as a rulebook's chapter-tab
+           margin rather than an IDE tab. */
         .tab-btn {
-            padding: 10px 18px;
-            font-family: var(--font-ui);
+            padding: 10px 20px;
+            font-family: var(--font-display);
             font-size: 11px;
             font-weight: 700;
             color: var(--t3);
@@ -412,11 +703,25 @@
             cursor: pointer;
             transition: color 0.15s, border-color 0.15s;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.18em;
             white-space: nowrap;
         }
-        .tab-btn.active { color: var(--red-b); border-bottom-color: var(--red-b); }
+        .tab-btn.active { color: var(--gilt); border-bottom-color: var(--gilt); }
         .tab-btn:not(.active):hover { color: var(--t2); }
+
+        /* Chapter numbers: roman-numeral prefix on each tab.
+           Uses CSS counters so the numbering auto-updates if tabs
+           are added/removed/reordered. Dot-middle between numeral
+           and title reads as a rulebook's chapter marker. */
+        .tab-bar-scroll { counter-reset: chapter; }
+        .tab-btn { counter-increment: chapter; }
+        .tab-btn::before {
+            content: counter(chapter, upper-roman) " \00b7 ";
+            color: var(--gilt-dim, rgba(201,163,78,0.55));
+            margin-right: 2px;
+            font-weight: 700;
+        }
+        .tab-btn.active::before { color: var(--gilt); }
         .tab-content { display: none; animation: fadeIn 0.2s ease-out; }
         .tab-content.active { display: block; }
 
@@ -447,8 +752,20 @@
         /* Button variants (Design C) */
         .btn { display:inline-flex; align-items:center; gap:4px; padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2); cursor: pointer; transition: all 0.15s; font-family: var(--font-ui); }
         .btn:hover { background: var(--bg-overlay); color: var(--t1); }
-        .btn-primary { background: var(--red); color: #fff; border-color: var(--red); }
-        .btn-primary:hover { background: var(--red-b); border-color: var(--red-b); }
+        .btn-primary {
+            background: linear-gradient(180deg, #8a2929 0%, var(--red) 55%, #5a1717 100%);
+            color: #fff7e1;
+            border-color: #3a0f0f;
+            box-shadow:
+                inset 0 1px 0 rgba(224,182,90,0.55),
+                inset 0 -1px 0 rgba(0,0,0,0.35),
+                0 1px 0 rgba(0,0,0,0.4);
+            text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(180deg, #9c3030 0%, var(--red-b) 55%, #6a1a1a 100%);
+            border-color: #2a0808;
+        }
         .btn-red { background: var(--red-glow); color: var(--red-b); border-color: rgba(196,60,60,0.3); }
         .btn-red:hover { background: rgba(196,60,60,0.2); }
         .btn-ghost { background: transparent; border-color: var(--border-s); color: var(--t3); }
@@ -484,27 +801,65 @@
         .sheet-page .bg-gray-950 { background: var(--bg-base) !important; }
         .sheet-page .bg-gray-700 { background: var(--bg-overlay) !important; }
 
-        /* === SECTION HEADER === */
+        /* === SECTION HEADER ===
+           Double-rule under Cinzel small-caps — the scriptorium-style
+           panel header that replaces the old single-underline. The
+           gap + hairline trick (padding-bottom: 6px, border +
+           box-shadow) renders as two parallel rules without a
+           second element. */
         .section-header {
-            font-family: var(--font-ui);
+            font-family: var(--font-display);
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--gold);
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--border);
+            letter-spacing: 0.14em;
+            color: var(--gilt);
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--hairline-strong);
+            box-shadow: 0 3px 0 -2px var(--hairline);
             margin-bottom: 16px;
         }
         .sec-h { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t3); margin-bottom: 8px; }
         .sec-h span { color: var(--t4); font-weight: 500; }
 
-        /* === PANEL CARD (Design C) === */
+        /* === PANEL CARD (2026-04: gilt-edge rulebook compartment) ===
+           Paizo hardcovers separate stat-block compartments with a
+           fine gilt rule along the top edge and a subtle inset
+           highlight. We reproduce that: a gradient tints the top
+           20% toward gilt, a slightly brighter top border carries
+           the actual hairline, and a soft outer drop-shadow gives
+           the panel a page-laid-on-table lift. */
         .panel-card {
-            background: var(--bg-raised);
+            background:
+                linear-gradient(180deg, rgba(201,163,78,0.035) 0%, rgba(201,163,78,0) 28%),
+                var(--bg-raised);
             border: 1px solid var(--border);
+            border-top: 1px solid rgba(201,163,78,0.22);
             border-radius: var(--radius-lg);
             padding: 16px;
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.025),
+                0 2px 10px rgba(0,0,0,0.35);
+        }
+
+        /* Stat-block sub-dividers — hairlines between sub-sections
+           inside a panel-card. Use .stat-sub to wrap each sub-block;
+           consecutive siblings get a top hairline. Matches Paizo
+           stat-block typography where sections are visually pooled
+           but internally divided. */
+        .stat-sub + .stat-sub {
+            border-top: 1px solid var(--hairline);
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        .stat-sub-label {
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--t3);
+            margin-bottom: 4px;
         }
 
         /* Saves/Skills card look (Design C) */
@@ -528,7 +883,11 @@
         .skill-row:hover { background: var(--bg-hover); }
         .skill-row .skill-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
         .skill-row .skill-stat { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
-        .skill-row .skill-mod { font-size: 15px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .skill-row .skill-mod { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: lining-nums tabular-nums; }
+        /* Skill modifier roll buttons on the Core tab use a Tailwind
+           `text-lg font-bold` chain instead of the .skill-mod class.
+           Target those via their role: any <button onclick="rollSkill(…)"> inside a skill-row. */
+        .skill-row button[onclick^="rollSkill"] { font-family: var(--font-display) !important; font-variant-numeric: lining-nums tabular-nums; letter-spacing: 0.02em; }
 
         /* === ACTION BUTTON === */
         .action-btn {
@@ -551,13 +910,59 @@
         .action-btn.primary { background: var(--red); border-color: var(--red); color: white; }
         .action-btn.primary:hover { background: var(--red-b); border-color: var(--red-b); }
 
-        /* Topbar small-button (Design C) */
+        /* Topbar small-button (Design C) — ghost / secondary tier.
+           Primary tier (.tb.primary) gets embossed gilt-edge treatment so
+           the eye lands on Level Up / Save / Strike above lower-stakes
+           ghost buttons (Cancel, Map, Init). Using box-shadow insets (no
+           extra DOM, no runtime cost) and a 1px gilt top highlight to fake
+           lamp-lit pressed metal. */
         .tb { padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
               border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2);
-              cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+              cursor: pointer; transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.05s;
+              text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
         .tb:hover { background: var(--bg-overlay); color: var(--t1); }
-        .tb.primary { background: var(--red); color: #fff; border-color: var(--red); }
-        .tb.primary:hover { background: var(--red-b); border-color: var(--red-b); }
+        .tb:active { transform: translateY(1px); }
+        .tb.primary {
+            background: linear-gradient(180deg, #8a2929 0%, var(--red) 55%, #5a1717 100%);
+            color: #fff7e1;
+            border-color: #3a0f0f;
+            box-shadow:
+                inset 0 1px 0 rgba(224,182,90,0.55),
+                inset 0 -1px 0 rgba(0,0,0,0.35),
+                0 1px 0 rgba(0,0,0,0.4);
+            text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+            letter-spacing: 0.03em;
+        }
+        .tb.primary:hover {
+            background: linear-gradient(180deg, #9c3030 0%, var(--red-b) 55%, #6a1a1a 100%);
+            border-color: #2a0808;
+            box-shadow:
+                inset 0 1px 0 rgba(232,192,100,0.7),
+                inset 0 -1px 0 rgba(0,0,0,0.4),
+                0 1px 0 rgba(0,0,0,0.45),
+                0 0 0 1px rgba(200,160,72,0.25);
+        }
+        .tb.primary:active {
+            box-shadow:
+                inset 0 1px 2px rgba(0,0,0,0.5),
+                inset 0 -1px 0 rgba(224,182,90,0.25);
+        }
+        /* Gilt-tier variant — for crown-jewel actions (Rest, Cast, Strike) */
+        .tb.gilt {
+            background: linear-gradient(180deg, #d4a746 0%, #a6811f 55%, #6c5110 100%);
+            color: #1a1208;
+            border-color: #4a380a;
+            box-shadow:
+                inset 0 1px 0 rgba(255,232,160,0.7),
+                inset 0 -1px 0 rgba(0,0,0,0.3),
+                0 1px 0 rgba(0,0,0,0.4);
+            text-shadow: 0 1px 0 rgba(255,230,150,0.4);
+            letter-spacing: 0.03em;
+        }
+        .tb.gilt:hover {
+            background: linear-gradient(180deg, #e3ba5a 0%, #b8922a 55%, #7a5c14 100%);
+            border-color: #3a2a06;
+        }
 
         /* Resource Counter (legacy compat) */
         .resource-counter {
@@ -571,16 +976,155 @@
         .resource-counter .resource-value { font-family: var(--font-ui); font-size: 18px; font-weight: 800; line-height: 1; }
 
         /* === TRAIT PILLS === */
-        .trait-pill { display:inline-block; font-size: 9px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; padding:2px 8px; border-radius:var(--radius-sm); background:var(--gold-glow); border:1px solid rgba(200,168,78,0.18); color:var(--gold); margin-right:4px; margin-bottom:2px; }
+        /* === Rule engine chip ===
+           Signals "the system is already doing the math for you."
+           Gilt-bordered rubric treatment, fits under the Character
+           Details panel. Hover reveals the full explanation via title. */
+        .rule-engine-chip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background:
+                linear-gradient(180deg, rgba(201,163,78,0.06), rgba(201,163,78,0.02));
+            border: 1px solid rgba(201,163,78,0.28);
+            border-radius: var(--radius-sm);
+            cursor: help;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .rule-engine-chip:hover {
+            background: rgba(201,163,78,0.10);
+            border-color: var(--gilt);
+        }
+        .rule-engine-label {
+            font-family: var(--font-display);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--gilt);
+        }
+        .rule-engine-count {
+            font-family: var(--font-display);
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--rubric);
+            font-variant-numeric: lining-nums tabular-nums;
+        }
 
-        /* === PORTRAIT (Design C red border) === */
-        .portrait-circle { width:52px; height:52px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; position:relative; border:2px solid var(--red); background:var(--bg-raised); transition:border-color 0.2s; }
-        .portrait-circle:hover { border-color: var(--red-b); }
-        .portrait-circle img { width:100%; height:100%; object-fit:cover; }
-        .portrait-badge { position:absolute; bottom:-2px; right:-2px; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; border:2px solid var(--bg-surface); background: var(--bg-raised); }
+        /* === Spell-rank rubric headers ===
+           Paizo-style: small-caps Cinzel title in rubric red with a
+           gilt hairline under. Applied via .spell-rank-header class
+           when you want the stronger rubric look over the default
+           muted label. */
+        .spell-rank-header {
+            font-family: var(--font-display);
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--rubric);
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--hairline-strong);
+            box-shadow: 0 3px 0 -2px var(--hairline);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .spell-rank-header .rank-count {
+            color: var(--gilt);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+        }
 
-        /* Portrait placeholder letter color */
-        .portrait-circle .font-header { color: var(--red-b) !important; }
+        /* === Trait pills — Paizo rectangle style ===
+           Rubric-red fill with ivory hairline and small-caps Cinzel;
+           rarity variants shift the fill to amber/purple/red. */
+        .trait-pill {
+            display: inline-block;
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: 2px;
+            background: #7c2222;
+            border: 1px solid rgba(244,236,216,0.32);
+            color: #f4ecd8;
+            margin-right: 4px;
+            margin-bottom: 2px;
+            line-height: 1.35;
+        }
+        .trait-pill.agile,
+        .trait-pill.finesse,
+        .trait-pill.ranged { background: #3a1818; border-color: rgba(244,236,216,0.22); }
+        .trait-pill.deadly,
+        .trait-pill.fatal { background: #5a1414; }
+        .trait-pill.magical { background: #2e1a4a; border-color: rgba(244,236,216,0.24); }
+        /* Rarity tints (use data-rarity on parent or direct class) */
+        .trait-pill.rarity-rare,
+        [data-rarity="rare"] .trait-pill.rarity {
+            background: #8a6b14; color: #fff9e6;
+        }
+        .trait-pill.rarity-uncommon,
+        [data-rarity="uncommon"] .trait-pill.rarity {
+            background: #7a4e0a;
+        }
+        .trait-pill.rarity-unique,
+        [data-rarity="unique"] .trait-pill.rarity {
+            background: #4a1e6a;
+        }
+
+        /* === PORTRAIT — heraldic crest frame ===
+           Larger face, gilt hairline ring, inner dark well so the
+           portrait reads as a medallion rather than an avatar dot.
+           Class monogram sits at the lower-right as a pennant. */
+        .portrait-circle {
+            width: 64px; height: 64px;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; flex-shrink: 0;
+            position: relative;
+            background: var(--bg-raised);
+            border: 1px solid var(--gilt);
+            box-shadow:
+                0 0 0 2px var(--bg-surface),
+                0 0 0 3px rgba(201,163,78,0.35),
+                inset 0 0 0 1px rgba(0,0,0,0.45),
+                0 2px 6px rgba(0,0,0,0.4);
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .portrait-circle:hover {
+            box-shadow:
+                0 0 0 2px var(--bg-surface),
+                0 0 0 3px var(--gilt),
+                inset 0 0 0 1px rgba(0,0,0,0.45),
+                0 2px 10px rgba(201,163,78,0.25);
+        }
+        .portrait-circle img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            /* Focus point applied via inline style from template, falls back to center */
+            object-position: var(--portrait-focus, center center);
+        }
+        .portrait-badge {
+            position: absolute;
+            bottom: -3px; right: -3px;
+            min-width: 22px; height: 18px; padding: 0 4px;
+            border-radius: 9px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px;
+            border: 1px solid var(--gilt);
+            background: var(--bg-raised);
+            color: var(--gilt);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .portrait-circle .font-header { color: var(--gilt) !important; }
 
         /* Spell Rank Borders */
         .spell-rank-0 { border-left:3px solid #6B7280; }
@@ -595,38 +1139,167 @@
         .spell-rank-9 { border-left:3px solid #EF4444; }
         .spell-rank-10 { border-left:3px solid #FFD700; }
 
-        /* Spell Card Popup */
+        /* === Spell Card: illuminated grimoire page ===
+           Paizo stat-block layout in spirit: trait pill strip across the top,
+           drop-cap on the spell name, Alegreya flavor serif for the body.
+           Wrapped in the shared .parchment-frame visual language so the
+           spell feels like a page torn from a tome. */
         .spell-card-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:500; display:flex; align-items:center; justify-content:center; padding:1rem; animation:fadeIn 0.15s ease; }
         .spell-card {
-            background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:10px;
-            width:100%; max-width:480px; max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+            background:
+                linear-gradient(180deg, #1a1714 0%, #161310 100%);
+            border:1px solid #4a380a;
+            border-radius:10px;
+            width:100%; max-width:520px; max-height:85vh; overflow-y:auto;
+            box-shadow:
+                0 20px 60px rgba(0,0,0,0.6),
+                0 0 0 1px rgba(224,182,90,0.25),
+                inset 0 0 0 1px rgba(224,182,90,0.08);
             animation: cardSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
         @keyframes cardSlideUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
-        .spell-card-header { padding:16px 20px; border-bottom:1px solid var(--border-default); }
-        .spell-card-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-        .spell-card-meta-tag { font-family:var(--font-ui); font-size:10px; letter-spacing:0.05em; text-transform:uppercase; padding:3px 10px; border-radius:4px; font-weight:600; }
-        .spell-card-body { padding:16px 20px; font-family:var(--font-ui); font-size:14px; line-height:1.7; color:var(--text-secondary); }
-        .spell-card-body p { margin-bottom:0.8rem; }
-        .spell-card-body strong, .spell-card-body b { color:var(--color-ac); }
-        .spell-card-body hr { border:none; border-top:1px solid var(--border-subtle); margin:12px 0; }
-
-        .spell-card-footer { padding:12px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:8px; }
+        .spell-card-header {
+            padding:14px 22px 10px;
+            border-bottom:1px double rgba(224,182,90,0.3);
+            position: relative;
+        }
+        /* Illuminated drop-cap on spell names */
+        .spell-card-header h3::first-letter,
+        .spell-card-title::first-letter {
+            font-family: 'Cinzel', serif;
+            font-size: 1.7em;
+            line-height: 0.85;
+            color: var(--gilt);
+            padding-right: 1px;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.55);
+        }
+        .spell-card-header h3,
+        .spell-card-title {
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.04em;
+            color: #f0d88a;
+        }
+        .spell-card-meta { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+        .spell-card-meta-tag {
+            font-family: 'Cinzel', serif;
+            font-size: 9px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 3px 10px;
+            border-radius: 2px;
+            font-weight: 700;
+            background: #7c2222;
+            color: #f5e5b8;
+            border: 1px solid #2a0808;
+            box-shadow: inset 0 1px 0 rgba(224,182,90,0.15);
+        }
+        .spell-card-body {
+            padding: 16px 22px;
+            font-family: var(--font-flavor, 'Alegreya', Georgia, serif);
+            font-size: 15px;
+            line-height: 1.6;
+            color: #cfc4a8;
+        }
+        .spell-card-body p { margin-bottom: 0.7rem; }
+        .spell-card-body strong, .spell-card-body b {
+            color: #e0b65a;
+            font-family: 'Cinzel', serif;
+            font-size: 0.9em;
+            letter-spacing: 0.04em;
+        }
+        .spell-card-body hr {
+            border: none;
+            border-top: 1px solid rgba(224,182,90,0.25);
+            margin: 12px 0;
+        }
+        .spell-card-footer {
+            padding: 12px 22px;
+            border-top: 1px double rgba(224,182,90,0.3);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
         .action-pips { display:inline-flex; gap:2px; vertical-align:middle; }
         .action-pip { display:inline-block; width:14px; height:14px; background:var(--color-ac); border-radius:3px; }
         .action-pip.free { background:none; border:2px solid var(--color-ac); width:12px; height:12px; border-radius:50%; }
         .action-pip.reaction { background:none; border:2px solid #F59E0B; width:14px; height:14px; border-radius:50%; position:relative; }
         .action-pip.reaction::after { content:''; position:absolute; top:2px; left:5px; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:6px solid #F59E0B; transform:translateX(-2px); }
 
+        /* === Action-cost leading pill (Paizo-style) ===
+           Optional alternative to action-pips. Red-gules rounded square,
+           ivory glyph, sits at the leading edge of a strike/activity
+           block. Use .action-cost[data-cost="1|2|3|r|f"]. */
+        .action-cost {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 6px;
+            background: #7c2222;
+            color: #f4ecd8;
+            border: 1px solid rgba(244,236,216,0.28);
+            border-radius: 3px;
+            font-family: var(--font-display);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            line-height: 1;
+            margin-right: 8px;
+            vertical-align: middle;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .action-cost[data-cost="r"], .action-cost.reaction { background: #8a5a14; }
+        .action-cost[data-cost="f"], .action-cost.free { background: #3a1818; }
+
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
         @keyframes turnBannerOut { from { transform:translateY(0); opacity:1; } to { transform:translateY(-100%); opacity:0; } }
 
-        /* Proficiency Badges (monochrome T/E, gold M/L) */
-        .prof-t { background:rgba(255,255,255,0.06); color:var(--t2); border:1px solid rgba(255,255,255,0.1); }
-        .prof-e { background:rgba(255,255,255,0.08); color:#e2e2e8; border:1px solid rgba(255,255,255,0.15); }
-        .prof-m { background:var(--gold-glow); color:var(--gold); border:1px solid rgba(200,168,78,0.3); }
-        .prof-l { background:var(--gold-glow); color:var(--gold); border:1px solid rgba(200,168,78,0.4); font-weight:800; }
+        /* Proficiency Badges — heraldic rosette treatment.
+           Circular chips with Cinzel letter + tier-marked border weight.
+           U = hollow circle, T = single gilt hairline, E = doubled hairline,
+           M = filled gilt glow, L = gilt rosette with ✦ marker. */
+        .prof-t, .prof-e, .prof-m, .prof-l {
+            font-family: var(--font-display) !important;
+            font-weight: 700 !important;
+            letter-spacing: 0 !important;
+            border-radius: 50% !important;
+            position: relative;
+        }
+        .prof-t {
+            background: rgba(255,255,255,0.04);
+            color: var(--t2);
+            border: 1px solid rgba(201,163,78,0.28);
+        }
+        .prof-e {
+            background: rgba(255,255,255,0.06);
+            color: #e6e2d6;
+            border: 1px solid rgba(201,163,78,0.45);
+            box-shadow: inset 0 0 0 2px rgba(201,163,78,0.10);
+        }
+        .prof-m {
+            background: radial-gradient(circle, rgba(201,163,78,0.22) 0%, rgba(201,163,78,0.06) 75%);
+            color: var(--gilt);
+            border: 1px solid rgba(201,163,78,0.55);
+        }
+        .prof-l {
+            background: radial-gradient(circle, rgba(201,163,78,0.32) 0%, rgba(201,163,78,0.10) 80%);
+            color: var(--gilt);
+            border: 1px solid var(--gilt);
+            box-shadow: 0 0 0 1px rgba(201,163,78,0.18), inset 0 0 6px rgba(201,163,78,0.18);
+            font-weight: 800 !important;
+        }
+        .prof-l::after {
+            content: "\2726";
+            position: absolute;
+            top: -5px;
+            right: -4px;
+            font-size: 8px;
+            color: var(--gilt);
+            text-shadow: 0 0 3px rgba(201,163,78,0.6);
+            line-height: 1;
+        }
 
         .prof-U { color: var(--t3); }
         .prof-T { color: var(--t2); font-weight: bold; }
@@ -651,9 +1324,187 @@
         .sk-dot.L { background: var(--gold); border-color: var(--gold); }
 
         /* Focus Pips (blue accent) */
-        .focus-pip { display:inline-block; width:12px; height:12px; border-radius:50%; border:2px solid var(--blue); margin:0 2px; vertical-align:middle; }
-        .focus-pip.filled { background:var(--blue); box-shadow:0 0 6px rgba(90,142,232,0.4); }
-        .focus-pip.empty { background:transparent; }
+        /* === Focus pool pips as rune-spark glyphs ===
+           PF2e focus pool shows 1-3 points of psychic/divine/arcane/primal
+           charge. Replaced the plain filled-circle with a ◊ glyph on a thin
+           hexagon frame, tinted by the caster's tradition. Empty = hollow,
+           filled = ignited. Pure CSS — no animation, no JS load, no images.
+           Tradition tint is driven by data-tradition on the wrapper. */
+        .focus-pip {
+            display: inline-block;
+            width: 14px; height: 14px;
+            margin: 0 3px;
+            vertical-align: middle;
+            position: relative;
+            /* hexagon frame via clip-path — cheap, GPU-accelerated on paint */
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            background: rgba(255,255,255,0.03);
+            --rune-color: var(--blue);
+        }
+        .focus-pip::before {
+            content: "◇";
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; line-height: 1;
+            color: var(--rune-color);
+            opacity: 0.35;
+        }
+        .focus-pip.filled {
+            background: radial-gradient(circle at 50% 50%,
+                color-mix(in srgb, var(--rune-color) 35%, transparent) 0%,
+                color-mix(in srgb, var(--rune-color) 12%, transparent) 60%,
+                transparent 100%);
+        }
+        .focus-pip.filled::before {
+            content: "◆";
+            color: var(--rune-color);
+            opacity: 1;
+            text-shadow: 0 0 4px color-mix(in srgb, var(--rune-color) 60%, transparent);
+        }
+        /* Tradition tints — applied via data-tradition on the pips wrapper */
+        [data-tradition="arcane"] .focus-pip { --rune-color: #8a7de0; }
+        [data-tradition="divine"] .focus-pip { --rune-color: #e0b65a; }
+        [data-tradition="occult"] .focus-pip { --rune-color: #b07fd9; }
+        [data-tradition="primal"] .focus-pip { --rune-color: #6ea86b; }
+
+        /* === Custom parchment tooltip ===
+           Opt-in replacement for `title=`: use data-pf-tip="..." (supports \n
+           for line breaks) on any element that needs a richer hover note. A
+           single shared tooltip element is injected on first hover; we use
+           delegated pointerenter/leave so idle cost is zero. The tooltip is
+           positioned once on open (no rAF). */
+        .pf-tooltip {
+            position: fixed;
+            z-index: 10000;
+            max-width: 320px;
+            padding: 10px 14px 12px;
+            background:
+                linear-gradient(180deg, #1c1814 0%, #17130f 100%);
+            color: #cfc4a8;
+            font-family: var(--font-flavor, 'Alegreya', Georgia, serif);
+            font-size: 13px;
+            line-height: 1.5;
+            border: 1px solid #4a380a;
+            border-top: 2px solid #c49a2e;
+            border-radius: 4px;
+            box-shadow:
+                0 10px 30px rgba(0,0,0,0.55),
+                0 0 0 1px rgba(224,182,90,0.2);
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity 0.12s ease, transform 0.12s ease;
+            white-space: pre-line;
+        }
+        .pf-tooltip.open { opacity: 1; transform: translateY(0); }
+        .pf-tooltip .pf-tip-title {
+            display: block;
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--gilt);
+            margin-bottom: 4px;
+        }
+
+        /* === Resource chip (Hero + Focus) ===
+           Compact pill that sits in the action toolbar. Single border, single
+           background — no nested surfaces stacking shadows. */
+        .resource-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-s);
+            white-space: nowrap;
+        }
+        .resource-chip-lbl {
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--gilt);
+            margin-right: 2px;
+        }
+        .resource-chip-btn {
+            width: 18px; height: 18px;
+            border-radius: 4px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-s);
+            color: var(--t3);
+            font-size: 11px; font-weight: 700;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .resource-chip-btn:hover { color: var(--t1); background: var(--bg-overlay); }
+        .resource-chip-pips { display: inline-flex; align-items: center; }
+
+        /* === Shield SVG meter ===
+           The SVG is 22×26 so it sits inline with text. --shield-fill drives
+           the paint (set on the wrapper and updated by JS with a single style
+           write). The fill rect is sized to the whole viewBox and its y-offset
+           creates the bottom-up drain — no D3, no path morphing. */
+        .shield-svg {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 2px;
+            vertical-align: middle;
+            --shield-fill: 100%;
+            --shield-tone: #93C5FD;
+        }
+        .shield-svg .shield-fill-rect {
+            fill: var(--shield-tone);
+            opacity: 0.62;
+            /* We animate the rect's y via transform to draw bottom-up.
+               transform on an SVG shape is cheap (compositor-accelerated). */
+            transform-origin: 50% 100%;
+            transform: scaleY(calc(var(--shield-fill) / 100));
+            transition: transform 0.3s ease, fill 0.3s;
+        }
+        .shield-svg.broken { --shield-tone: #eab308; }
+        .shield-svg.broken .shield-cracks { opacity: 0.6; }
+        .shield-svg.destroyed { --shield-tone: #ef4444; }
+        .shield-svg.destroyed .shield-cracks { opacity: 1; stroke-width: 0.9; }
+        /* === Hero Point signet pips ===
+           PF2e hero points cap at 3. Rather than a bare integer, render three
+           gilt signet coins so the pool reads at a glance — empty coins are
+           hollow, filled coins glow with a faint ember (no animation, purely
+           paint). All-CSS: no icons, no images, no JS redraw cost. */
+        .hero-pip {
+            display: inline-block;
+            width: 14px; height: 14px;
+            margin: 0 2px;
+            vertical-align: middle;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #2a1e0a 0%, #1a1208 60%, #0a0604 100%);
+            border: 1.5px solid #6b5212;
+            position: relative;
+            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(224,182,90,0.15);
+        }
+        .hero-pip::before {
+            content: "★";
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; line-height: 1;
+            color: #6b5212;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+        }
+        .hero-pip.filled {
+            background: radial-gradient(circle at 35% 30%, #f5d26a 0%, #c49a2e 55%, #7a5a10 100%);
+            border-color: #3a2a06;
+            box-shadow:
+                inset 0 -1px 0 rgba(0,0,0,0.35),
+                inset 0 1px 0 rgba(255,232,160,0.7),
+                0 0 6px rgba(224,182,90,0.45);
+        }
+        .hero-pip.filled::before {
+            color: #1a1208;
+            text-shadow: 0 1px 0 rgba(255,230,150,0.4);
+        }
 
         /* Prep Slots */
         .prep-slot { min-height: 40px; border: 1px dashed rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; transition: all 0.2s; cursor: pointer; }
@@ -681,7 +1532,48 @@
             50% { box-shadow: 0 0 12px 4px rgba(251,191,36,0.3); }
             100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
         }
-        .roll-toast { animation: rollSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* === Roll toast as wax-seal dispatch ===
+           Dispatches arrive from a herald — cream parchment card, rubric top
+           edge, a red wax-seal mark on the left. Built on existing Tailwind
+           bg-gray-* classes so it blends with the dark theme but reads as a
+           scroll of proclamation. One gradient + one pseudo-element, nothing
+           animating after slide-in. */
+        .roll-toast {
+            animation: rollSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            background:
+                linear-gradient(180deg, #1c1a15 0%, #171411 100%) !important;
+            border: 1px solid #4a380a !important;
+            border-top: 2px solid #7a5a10 !important;
+            box-shadow:
+                0 10px 30px rgba(0,0,0,0.55),
+                inset 0 1px 0 rgba(224,182,90,0.18),
+                inset 0 0 0 1px rgba(224,182,90,0.1) !important;
+            padding-left: 40px !important;
+            position: relative;
+        }
+        .roll-toast::before {
+            /* Wax-seal rosette at the left — red disc with a gilt sigil */
+            content: "✦";
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background:
+                radial-gradient(circle at 35% 30%, #9a3030 0%, #6a1414 60%, #3a0808 100%);
+            border: 1.5px solid #2a0404;
+            box-shadow:
+                inset 0 -1px 0 rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(240,100,100,0.3),
+                0 1px 2px rgba(0,0,0,0.5);
+            color: #e0b65a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+        }
         .roll-total-pop { animation: rollPop 0.3s ease; }
         .dice-face {
             display: inline-flex; align-items: center; justify-content: center;
@@ -699,6 +1591,51 @@
         .dice-d12 { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fecaca; }
         .dice-d20 { background: linear-gradient(135deg, #f59e0b, #d97706); color: #1c1917; }
         .dice-d100 { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #c7d2fe; }
+
+        /* === Carved-stone d20 floating button ===
+           SVG face renders once. Hover triggers a tiny transform-only wobble
+           via animation-play-state so idle CPU is zero. Removing will-change
+           on animationend keeps the compositor layer short-lived. */
+        .d20-fab {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            border: none;
+            padding: 0;
+            background: radial-gradient(circle at 35% 30%, #2a1e0a 0%, #0a0604 75%);
+            box-shadow:
+                0 6px 18px rgba(0,0,0,0.55),
+                inset 0 1px 0 rgba(224,182,90,0.3),
+                0 0 0 3px #1a1208,
+                0 0 0 4px rgba(224,182,90,0.3);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.15s;
+        }
+        .d20-fab svg {
+            transform-origin: 50% 55%;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+        }
+        .d20-fab:hover {
+            transform: translateY(-1px);
+        }
+        .d20-fab:hover svg {
+            animation: d20-wobble 0.6s ease-in-out;
+        }
+        .d20-fab:active svg {
+            transform: scale(0.9) rotate(-8deg);
+        }
+        @keyframes d20-wobble {
+            0%   { transform: rotate(0deg); }
+            20%  { transform: rotate(-12deg) scale(1.06); }
+            40%  { transform: rotate(10deg)  scale(1.04); }
+            60%  { transform: rotate(-6deg)  scale(1.03); }
+            80%  { transform: rotate(4deg); }
+            100% { transform: rotate(0deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .d20-fab:hover svg { animation: none; }
+        }
 
         .foundry-content p { margin-bottom: 0.5rem; }
         .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; }
@@ -718,6 +1655,52 @@
         .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
         .modal-content { background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 12px; max-height: 85vh; overflow-y: auto; }
 
+        /* === Parchment frame ===
+           Deckle-edge + gilt corner treatment for modal/panel cards. Rendered
+           entirely with pseudo-elements: no images, no SVG, no layout passes.
+           Apply .parchment-frame to any modal inner card. The effect composes
+           cleanly over existing backgrounds and borders. */
+        .parchment-frame {
+            position: relative;
+            border: 1px solid #4a380a !important;
+            box-shadow:
+                0 0 0 1px rgba(224,182,90,0.35),
+                0 10px 40px rgba(0,0,0,0.6),
+                inset 0 0 0 1px rgba(224,182,90,0.12);
+        }
+        /* Gilt corner ornaments via pseudo-elements (four corners using
+           background-image positioned at each corner — one shared paint). */
+        .parchment-frame::before,
+        .parchment-frame::after {
+            content: "";
+            position: absolute;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            left: 0; top: 0;
+            border-radius: inherit;
+        }
+        .parchment-frame::before {
+            /* Four corner L-ornaments drawn as SVG data URIs (tiny, inline). */
+            background-image:
+                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2,10 Q2,4 6,3 Q10,2 14,2' fill='none' stroke='%23c49a2e' stroke-width='1.2'/><circle cx='3.5' cy='3.5' r='1.4' fill='%23e0b65a'/></svg>"),
+                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M22,10 Q22,4 18,3 Q14,2 10,2' fill='none' stroke='%23c49a2e' stroke-width='1.2'/><circle cx='20.5' cy='3.5' r='1.4' fill='%23e0b65a'/></svg>"),
+                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2,14 Q2,20 6,21 Q10,22 14,22' fill='none' stroke='%23c49a2e' stroke-width='1.2'/><circle cx='3.5' cy='20.5' r='1.4' fill='%23e0b65a'/></svg>"),
+                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M22,14 Q22,20 18,21 Q14,22 10,22' fill='none' stroke='%23c49a2e' stroke-width='1.2'/><circle cx='20.5' cy='20.5' r='1.4' fill='%23e0b65a'/></svg>");
+            background-position: top left, top right, bottom left, bottom right;
+            background-size: 20px 20px;
+            background-repeat: no-repeat;
+            opacity: 0.85;
+        }
+        /* Deckle-edge via subtle dashed inner accent — adds texture without
+           breaking the crisp rounded corners. */
+        .parchment-frame::after {
+            border: 1px dashed rgba(224,182,90,0.15);
+            border-radius: inherit;
+            inset: 6px;
+            width: auto; height: auto;
+        }
+
         /* === LEVEL-UP DRAWER OVERLAY (Proposal 6) === */
         .levelup-drawer-backdrop {
             position: fixed; inset: 0;
@@ -733,8 +1716,11 @@
             width: 520px; max-width: 100vw;
             z-index: 601;
             background: var(--bg-base);
-            border-left: 1px solid var(--border-strong);
-            box-shadow: -8px 0 40px rgba(0,0,0,0.5);
+            /* Gilt edge where the "scroll" meets the viewport edge */
+            border-left: 2px solid #7a5a10;
+            box-shadow:
+                -8px 0 40px rgba(0,0,0,0.6),
+                inset 12px 0 18px -10px rgba(224,182,90,0.14);
             transform: translateX(100%);
             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex; flex-direction: column;
@@ -742,13 +1728,38 @@
         .levelup-drawer.open { transform: translateX(0); }
         .levelup-drawer-header {
             display: flex; justify-content: space-between; align-items: center;
-            padding: 12px 16px;
-            background: var(--bg-surface);
-            border-bottom: 1px solid var(--border);
+            padding: 14px 18px;
+            /* Banner header: ruby field with gilt top + bottom rules to evoke
+               a medieval proclamation banner. */
+            background:
+                linear-gradient(180deg, #3a0f0f 0%, #5a1717 55%, #3a0f0f 100%);
+            border-top: 1px solid #c49a2e;
+            border-bottom: 1px solid #c49a2e;
+            box-shadow:
+                inset 0 1px 0 rgba(224,182,90,0.35),
+                inset 0 -1px 0 rgba(224,182,90,0.35);
             flex-shrink: 0;
+            position: relative;
+        }
+        /* Decorative gilt rosettes at each end of the banner */
+        .levelup-drawer-header::before,
+        .levelup-drawer-header::after {
+            content: "❦";
+            color: #e0b65a;
+            font-size: 14px;
+            opacity: 0.75;
         }
         .levelup-drawer-header h3 {
-            font-family: var(--font-display); font-size: 16px; font-weight: 700; color: #fff; margin: 0;
+            font-family: var(--font-display);
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #f5e5b8;
+            margin: 0;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+            flex: 1;
+            text-align: center;
         }
         .levelup-drawer-close {
             width: 28px; height: 28px; border-radius: 50%;
@@ -831,17 +1842,79 @@
         }
 
         @media print {
-            body { background: white !important; color: #222 !important; font-size: 11pt; }
+            /* === Parchment-ink print stylesheet ===
+               Cream paper, dark ink, serif body. Cascades through
+               Tailwind gray-* overrides so the sheet prints like a
+               Paizo character sheet rather than a screenshot of dark
+               mode. Gilt reduces to dark-gold so it still prints on
+               a laser. */
+            :root {
+                --paper: #f4ecd8;
+                --paper-alt: #ecdfc2;
+                --ink: #1a1612;
+                --ink-soft: #4a4038;
+                --ink-muted: #6b5e52;
+                --print-gold: #7a5a07;
+                --print-rubric: #8a2a2a;
+                --print-rule: #8a7a60;
+            }
+            @page { margin: 12mm; }
+            body { background: var(--paper) !important; color: var(--ink) !important; font-family: 'Alegreya', Georgia, serif !important; font-size: 10.5pt; }
             body::before { display: none; }
-            .no-print, #dice-widget, #roll-toast-container, #equip-modal, #roll-context-menu, [onclick] { display: none !important; }
-            .sheet-page { background: white !important; border: 1px solid #ccc !important; padding: 12pt !important; }
-            .sheet-page .bg-gray-800, .sheet-page .bg-gray-900, .sheet-page .bg-gray-950 { background: #f5f5f0 !important; border-color: #ddd !important; }
-            .font-header { color: #333 !important; }
-            .tab-content { display: block !important; page-break-inside: avoid; margin-bottom: 20pt; }
-            .tab-content::before { content: attr(data-print-title); display: block; font-family: 'Cinzel', serif; font-size: 14pt; font-weight: 700; margin-bottom: 8pt; border-bottom: 2px solid #333; padding-bottom: 4pt; }
-            .tab-btn { display: none !important; }
-            * { color: #333 !important; border-color: #ccc !important; text-shadow: none !important; box-shadow: none !important; }
-            a { text-decoration: none !important; }
+            .no-print, #dice-widget, #roll-toast-container, #equip-modal, #roll-context-menu,
+            #condition-adder, #levelup-drawer, #floating-actions, .tab-btn,
+            [onclick*="switchTab"], button[onclick] { display: none !important; }
+            .sheet-page, .panel-card, .stat-box, .ability-block,
+            .bg-gray-800, .bg-gray-900, .bg-gray-950, .bg-gray-700 {
+                background: var(--paper) !important;
+                border-color: var(--print-rule) !important;
+                box-shadow: none !important;
+            }
+            .panel-card, .stat-box, .ability-block {
+                border: 1px solid var(--print-rule) !important;
+                border-top: 1.5px solid var(--print-gold) !important;
+                page-break-inside: avoid;
+            }
+            .char-name, .char-name::first-letter,
+            .section-header, .font-header, .font-display,
+            h1, h2, h3, h4 {
+                font-family: 'Cinzel', serif !important;
+                color: var(--ink) !important;
+                text-shadow: none !important;
+            }
+            .char-name::first-letter { color: var(--print-gold) !important; }
+            .section-header { color: var(--print-gold) !important; border-bottom-color: var(--print-rule) !important; }
+            .rubric, [data-tint="rubric"] { color: var(--print-rubric) !important; }
+            .tab-content { display: block !important; page-break-inside: avoid; margin-bottom: 18pt; }
+            .tab-content::before {
+                content: attr(data-print-title);
+                display: block;
+                font-family: 'Cinzel', serif;
+                font-size: 13pt;
+                font-weight: 700;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: var(--print-gold) !important;
+                margin-bottom: 8pt;
+                padding-bottom: 4pt;
+                border-bottom: 2px double var(--print-gold);
+            }
+            .feat-desc, .spell-desc, .adventure-log, .session-note-body, .handout-body {
+                font-family: 'Alegreya', Georgia, serif !important;
+                color: var(--ink-soft) !important;
+            }
+            .ss-val, .ability-block .mod, .stat-box .stat-value,
+            .defense-stat .val, .hp-current, .skill-row .skill-mod {
+                font-family: 'Cinzel', serif !important;
+                color: var(--ink) !important;
+            }
+            .text-white, .text-gray-100, .text-gray-200, .text-gray-300,
+            .text-gray-400, .text-amber-200, .text-amber-300, .text-amber-400 {
+                color: var(--ink) !important;
+            }
+            .text-red-400, .text-red-500 { color: var(--print-rubric) !important; }
+            a { color: var(--ink) !important; text-decoration: none !important; }
+            * { text-shadow: none !important; box-shadow: none !important; }
         }
     </style>
 </head>
@@ -886,16 +1959,26 @@
             <div class="flex flex-wrap justify-between items-center gap-3">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
                     <a href="/player" class="transition-colors" style="color:var(--t3); font-size:18px; line-height:1;" title="Back to roster">&#8592;</a>
-                    <!-- Portrait (Design C red circle) -->
-                    <div class="portrait-circle" onclick="document.getElementById('portrait-upload').click()" title="Click to upload portrait">
+                    <!-- Portrait — heraldic medallion with gilt ring.
+                         Clicking uploads; right-click (or long-press) re-frames an
+                         existing portrait without re-uploading the file. -->
+                    <div class="portrait-circle"
+                         onclick="document.getElementById('portrait-upload').click()"
+                         oncontextmenu="event.preventDefault(); if ({{ 'true' if pc.portrait else 'false' }}) openPortraitRecenter();"
+                         title="Click: upload portrait · Right-click: re-frame focus">
                         {% if pc.portrait %}
-                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}">
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                             style="object-position: {{ pc.portrait_focus_x }}% {{ pc.portrait_focus_y }}%;">
                         {% else %}
-                        <span class="font-header" style="font-size:22px; color:var(--red-b);">{{ pc.name[0] }}</span>
+                        <span class="font-header" style="font-size:26px;">{{ pc.name[0] }}</span>
                         {% endif %}
                         <input type="file" id="portrait-upload" class="hidden" accept="image/*" onchange="uploadPortrait(this)">
-                        <div class="portrait-badge">
-                            {% if pc.class_name == 'Fighter' %}⚔{% elif pc.class_name == 'Cleric' %}✝{% elif pc.class_name == 'Wizard' %}🔮{% elif pc.class_name == 'Rogue' %}🗡{% elif pc.class_name == 'Druid' %}🌿{% elif pc.class_name == 'Champion' %}🛡{% elif pc.class_name == 'Monk' %}👊{% elif pc.class_name == 'Barbarian' %}🪓{% elif pc.class_name == 'Bard' %}🎵{% elif pc.class_name == 'Ranger' %}🏹{% elif pc.class_name == 'Sorcerer' %}✨{% elif pc.class_name == 'Kineticist' %}🔥{% elif pc.class_name == 'Oracle' %}👁{% elif pc.class_name == 'Witch' %}🌙{% elif pc.class_name == 'Magus' %}⚡{% else %}📜{% endif %}
+                        {# Class monogram — three-letter small-cap instead of a
+                           color-emoji. Reads as a heraldic badge; matches the
+                           Cinzel heading hierarchy. Fighter-family classes
+                           keep the ⚔ dingbat (typographic, not emoji). #}
+                        <div class="portrait-badge" style="font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.08em;">
+                            {% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}
                         </div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -903,25 +1986,51 @@
                             {{ pc.name }}
                             <span class="char-level-badge">Level {{ pc.level }}</span>
                         </h1>
-                        <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span style="color:var(--t4);">•</span> {{ pc.subclass }}{% endif %} <span style="color:var(--t4);">•</span> {{ pc.size }}</p>
+                        <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span class="sub-orn" aria-hidden="true">❦</span> {{ pc.subclass }}{% endif %} <span class="sub-orn" aria-hidden="true">✦</span> {{ pc.size }}</p>
                     </div>
                     {% if pc.status_penalty > 0 %}<span class="px-2 py-0.5 rounded" style="background:rgba(196,60,60,0.1); border:1px solid rgba(196,60,60,0.2); color:var(--red-b); font-size:11px; font-weight:600;">Debuffed -{{ pc.status_penalty }}</span>{% endif %}
                     {% if pc.active_toggles %}<span class="px-2 py-0.5 rounded" style="background:rgba(90,142,232,0.1); border:1px solid rgba(90,142,232,0.2); color:var(--blue); font-size:11px; font-weight:600;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
                 </div>
                 <!-- Action Toolbar (Proposal 3: custom dice moved here from removed Quick Rolls bar) -->
                 <div class="flex gap-2 flex-wrap mobile-actions items-center">
+                    {# Resource chips — Hero + Focus live here rather than in
+                       the HP block so the HP area reads cleanly as "hit points
+                       and shield" only. Still top-of-screen, still one click. #}
+                    <span class="resource-chip no-print" title="Hero Points (max 3) — spend to reroll or stave off death">
+                        <span class="resource-chip-lbl">Hero</span>
+                        <button onclick="modifyHero('decrease')" class="resource-chip-btn">−</button>
+                        <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips">
+                            {% for i in range(3) %}
+                            <span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>
+                            {% endfor %}
+                        </span>
+                        <span id="current-hero" style="display:none;">{{ pc.hero_points }}</span>
+                        <button onclick="modifyHero('increase')" class="resource-chip-btn">+</button>
+                    </span>
+                    {% if pc.focus_max > 0 %}
+                    <span class="resource-chip no-print" title="Focus Pool ({{ pc.current_focus }}/{{ pc.focus_max }}) — spent by focus spells, restored by Refocus">
+                        <span class="resource-chip-lbl">Focus</span>
+                        <button onclick="modifyFocus('decrease')" class="resource-chip-btn">−</button>
+                        <span id="header-focus-pips" data-tradition="{{ (pc.spell_casters[0].tradition if pc.spell_casters else 'arcane') | lower }}" class="resource-chip-pips">
+                            {% for i in range(pc.focus_max) %}
+                            <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
+                            {% endfor %}
+                        </span>
+                        <button onclick="modifyFocus('increase')" class="resource-chip-btn">+</button>
+                    </span>
+                    {% endif %}
                     <div class="flex items-center gap-1 no-print" style="margin-right:4px;">
                         <input type="text" id="custom-dice" placeholder="2d6+4" class="hp-input" style="width:72px; font-size:11px; padding:4px 6px;">
-                        <button onclick="rollCustomDice()" class="tb" style="padding:4px 8px;">🎲</button>
+                        <button onclick="rollCustomDice()" class="tb" style="padding:4px 8px;" title="Roll custom dice notation">Roll</button>
                         <button onclick="rollInitiativeFromSheet()" class="tb" style="padding:4px 8px; color:#c084fc;" title="Roll Initiative">Init</button>
                     </div>
-                    <a href="/map" class="tb">🗺 Map</a>
-                    <button onclick="takeLongRest()" class="tb">🛏 Rest</button>
-                    {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb">↶ Undo Level</button>{% endif %}
-                    <button onclick="openLevelUpDrawer()" class="tb primary no-print">★ Level Up</button>
-                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary print-only" style="display:none;">★ Level Up</a>
-                    <button onclick="window.print()" class="no-print tb">🖨 Print</button>
-                    <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print tb" title="Download character sheet PDF">📄 PDF</a>
+                    <a href="/map" class="tb">Map</a>
+                    <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — restore HP, spell slots, focus points, and clear short-term conditions">Rest</button>
+                    {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb" title="Revert last level-up">Undo Level</button>{% endif %}
+                    <button onclick="openLevelUpDrawer()" class="tb primary no-print">Level Up</button>
+                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary print-only" style="display:none;">Level Up</a>
+                    <button onclick="window.print()" class="no-print tb">Print</button>
+                    <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print tb" title="Download character sheet PDF">PDF</a>
                 </div>
             </div>
         </div>
@@ -951,8 +2060,8 @@
                 <div id="ac-current" data-ac-live class="ss-val">{{ pc.ac }}</div>
                 <div class="ss-sub">
                     <button data-shield-btn onclick="toggleShield()" class="no-print" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC, 1 action, lasts until start of your next turn)"
-                            style="padding:2px 8px; font-size:10px; margin-right:2px; border-radius:4px; cursor:pointer; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
-                        🛡 {% if pc.shield_raised %}Raised{% else %}Raise{% endif %}
+                            style="padding:2px 8px; font-size:10px; margin-right:2px; border-radius:4px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
+                        Shield {% if pc.shield_raised %}· Raised{% else %}· Raise{% endif %}
                     </button>
                     <button onclick="useShieldBlock()" class="no-print" title="Shield Block (reaction)"
                             style="padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold);">
@@ -1039,7 +2148,7 @@
                     <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:24px; height:24px; padding:0; font-size:13px;">−</button>
                     <div style="text-align:center; min-width:90px;">
                         <div>
-                            <span id="current-hp" class="hp-current" style="font-size:24px; font-weight:800; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
+                            <span id="current-hp" class="hp-current" style="font-size:26px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
                             <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
                             <span id="temp-hp-chip" class="no-print" style="color:var(--blue); font-size:11px; font-weight:700; margin-left:6px; {% if pc.temp_hp <= 0 %}display:none;{% endif %}"
                                   title="Temporary HP (drains first on damage)">+<span id="temp-hp-val">{{ pc.temp_hp }}</span> tmp</span>
@@ -1060,37 +2169,45 @@
                             style="padding:3px 8px; font-size:10px; border-radius:4px; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; cursor:pointer; font-weight:700; letter-spacing:0.04em;">
                         +<span style="font-size:9px;">TMP</span>
                     </button>
-                    <!-- Resources inline: Hero + Focus -->
-                    <span class="resource-counter" style="padding:3px 8px;">
-                        <span class="resource-label" style="color:var(--gold);">★</span>
-                        <button onclick="modifyHero('decrease')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">-</button>
-                        <span id="current-hero" class="resource-value" style="color:var(--gold); font-size:14px; width:16px; text-align:center;">{{ pc.hero_points }}</span>
-                        <button onclick="modifyHero('increase')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">+</button>
-                    </span>
-                    {% if pc.focus_max > 0 %}
-                    <span class="resource-counter" style="padding:3px 8px;">
-                        <span class="resource-label" style="color:var(--blue);">◈</span>
-                        <button onclick="modifyFocus('decrease')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">-</button>
-                        <span id="header-focus-pips">
-                            {% for i in range(pc.focus_max) %}
-                            <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
-                            {% endfor %}
-                        </span>
-                        <button onclick="modifyFocus('increase')" style="width:18px; height:18px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); font-size:11px; font-weight:700; cursor:pointer;">+</button>
-                    </span>
-                    {% endif %}
                 </div>
                 {# Shield durability mini-gauge — only shown when the PC
                    actually has a shield configured. Shows HP/max, a bar, and
                    the current state (Raised / Lowered / Broken / Destroyed). #}
                 {% if pc.shield_max_hp > 0 %}
+                {% set sh_pct = (pc.shield_hp / pc.shield_max_hp * 100) if pc.shield_max_hp > 0 else 0 %}
                 <div id="shield-gauge" class="no-print flex items-center justify-center gap-1 flex-wrap" style="margin-top:4px; font-size:10px;">
-                    <span style="font-size:10px; font-weight:700; letter-spacing:0.06em; color:#93C5FD;">🛡</span>
+                    <span style="font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#93C5FD;">Shield</span>
                     <span id="shield-hp-text" style="font-weight:700; color:#c8c8d4;">{{ pc.shield_hp }}/{{ pc.shield_max_hp }}</span>
-                    <div style="width:56px; height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">
-                        {% set sh_pct = (pc.shield_hp / pc.shield_max_hp * 100) if pc.shield_max_hp > 0 else 0 %}
-                        <div id="shield-hp-fill" style="width:{{ sh_pct|int }}%; height:100%; background:{% if pc.shield_destroyed %}#ef4444{% elif pc.shield_broken %}#eab308{% else %}#93C5FD{% endif %}; transition:width 0.3s, background 0.3s;"></div>
-                    </div>
+                    {# SVG quartered-shield meter.
+                       - The fill height is driven by --shield-fill so JS only
+                         sets one CSS var rather than rebuilding any DOM.
+                       - Broken / destroyed states show crack paths.
+                       - The whole thing is 22×26px, scales as SVG, no raster. #}
+                    <span id="shield-svg-wrap"
+                          class="shield-svg {% if pc.shield_destroyed %}destroyed{% elif pc.shield_broken %}broken{% endif %}"
+                          style="--shield-fill: {{ sh_pct|int }}%;"
+                          aria-hidden="true">
+                        <svg viewBox="0 0 22 26" width="22" height="26" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <clipPath id="sh-heater-clip">
+                                    <path d="M1,1 L21,1 L21,13 Q21,21 11,25 Q1,21 1,13 Z"/>
+                                </clipPath>
+                            </defs>
+                            <!-- back plate -->
+                            <path d="M1,1 L21,1 L21,13 Q21,21 11,25 Q1,21 1,13 Z"
+                                  fill="rgba(30,35,50,0.75)" stroke="#93C5FD" stroke-width="0.8"/>
+                            <!-- vitality fill, bottom-up -->
+                            <rect class="shield-fill-rect" x="0" y="0" width="22" height="26"
+                                  clip-path="url(#sh-heater-clip)"/>
+                            <!-- heraldic quartering (faint cross lines) -->
+                            <path d="M11,1 L11,25 M1,12 L21,12" stroke="rgba(224,182,90,0.22)" stroke-width="0.4" fill="none"/>
+                            <!-- crack paths (hidden unless broken/destroyed) -->
+                            <g class="shield-cracks" stroke="#1a1208" stroke-width="0.6" fill="none" opacity="0">
+                                <path d="M7,4 L10,10 L8,14 L12,20"/>
+                                <path d="M14,6 L13,11 L16,17"/>
+                            </g>
+                        </svg>
+                    </span>
                     <span id="shield-state-lbl" style="font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:{% if pc.shield_destroyed %}#ef4444{% elif pc.shield_broken %}#eab308{% elif pc.shield_raised %}#93C5FD{% else %}var(--t3){% endif %};">
                         {% if pc.shield_destroyed %}Destroyed{% elif pc.shield_broken %}Broken{% elif pc.shield_raised %}Raised · H{{ pc.shield_hardness }}{% else %}H{{ pc.shield_hardness }}{% endif %}
                     </span>
@@ -1100,8 +2217,8 @@
                     <button id="shield-repair-btn" type="button" onclick="repairShield()" class="no-print"
                             title="Requires 10 min downtime (Repair activity — Crafting check)"
                             {% if pc.shield_hp >= pc.shield_max_hp %}disabled style="opacity:0.35; cursor:not-allowed;"{% endif %}
-                            style="margin-left:4px; padding:1px 6px; font-size:9px; letter-spacing:0.04em; text-transform:uppercase; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); cursor:pointer;">
-                        🔧 Repair
+                            style="margin-left:4px; padding:1px 6px; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); cursor:pointer;">
+                        Repair
                     </button>
                 </div>
                 {% endif %}
@@ -1121,7 +2238,7 @@
             {# Penalty breakdown line — shows per-stat penalty summary #}
             {% if pc.status_penalty > 0 %}
             <div style="font-size:12px; font-weight:600; color:#fca5a5; margin-bottom:4px; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center;">
-                <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#f87171; margin-right:2px;">⚠ Penalties Active</span>
+                <span class="rubric" data-tint="rubric" style="margin-right:2px;">Penalties Active</span>
                 <span>All checks &minus;{{ pc.status_penalty }}
                     ({% if pc.conditions.get('frightened', 0) > 0 %}Frightened {{ pc.conditions.frightened }}{% endif %}{% if pc.conditions.get('sickened', 0) > 0 %}{% if pc.conditions.get('frightened', 0) > 0 %}, {% endif %}Sickened {{ pc.conditions.sickened }}{% endif %})</span>
                 {% if pc.conditions.get('enfeebled', 0) > 0 %}<span style="color:#fca5a5;">· STR checks &minus;{{ pc.conditions.enfeebled }} (Enfeebled)</span>{% endif %}
@@ -1131,14 +2248,32 @@
                 {% if pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) %}<span style="color:#fca5a5;">· AC &minus;2 ({% if pc.conditions.get('off_guard', false) %}Off-Guard{% endif %}{% if pc.conditions.get('prone', false) %}{% if pc.conditions.get('off_guard', false) %}, {% endif %}Prone{% endif %})</span>{% endif %}
             </div>
             {% endif %}
-            {# Condition pills row — interactive +/- and toggles #}
+            {# Condition pills row — interactive +/- and toggles.
+               title= carries the full PF2e rule text for hover tooltips. #}
+            {% set cond_rules = {
+                'frightened': 'You take a status penalty equal to your frightened value to all your checks and DCs. At the end of each of your turns, your frightened value decreases by 1.',
+                'sickened':   'You take a status penalty equal to your sickened value to all your checks and DCs. You can\'t willingly ingest anything. Spend a single action to retch (DC 15 + sickened value Fortitude save) to reduce by 1, or 2 by critical success.',
+                'enfeebled':  'You take a status penalty equal to your enfeebled value to Strength-based rolls and DCs, including Strength-based melee damage.',
+                'clumsy':     'You take a status penalty equal to your clumsy value to Dexterity-based checks and DCs, including AC, Reflex saves, ranged attack rolls, and Dexterity skills.',
+                'drained':    'You take a status penalty equal to your drained value to Constitution-based checks (including Fortitude saves). You lose HP equal to your level times your drained value; your maximum HP is also reduced by this amount until the condition ends.',
+                'stupefied':  'You take a status penalty equal to your stupefied value to Intelligence-, Wisdom-, and Charisma-based checks and DCs, including Will saves, spell attack rolls, and spell DCs. Casting a spell requires a flat check DC 5 + stupefied value or the spell is lost.',
+                'stunned':    'You can\'t act while stunned. Stunned usually has a value; when you regain actions, you lose that many (Stunned 1 loses 1 action next turn). Stunned overrides slowed; reduce by the number of actions lost.',
+                'slowed':     'You lose a number of actions each turn equal to your slowed value (usually to a minimum of 1 action remaining for slowed 1–2).',
+                'wounded':    'Your wounded value increases each time you are reduced to 0 HP. When you gain dying, increase it by your wounded value + 1. Wounded ends when you are fully healed (returned to full HP and rest).',
+                'doomed':     'Increase the dying value at which you die by your doomed value reduced from the base (i.e. you die at dying 4 − doomed). Reduce doomed by 1 each time you get a full night\'s rest.',
+                'dying':      'You are unconscious and near death. On your turn, attempt a recovery check (DC 10 + dying value). Success: reduce dying by 1 (crit success by 2). Failure: dying increases by 1 (crit failure by 2). At dying 4 (or lower if doomed), you die. When you recover, you gain wounded 1 (or +1 if already wounded).',
+                'prone':      'You\'re lying on the ground. You take a −2 status penalty to attack rolls and can only act with movement actions that allow you to Crawl or Stand. You have AC +2 vs. ranged, −2 vs. melee, and are Off-Guard.',
+                'off_guard':  'You are distracted or unable to focus on defense. You take a −2 status penalty to AC.',
+                'concealed':  'While concealed from a creature, you are difficult to see. The creature must succeed at a DC 5 flat check when targeting you with an attack, spell, or other effect; failure means you\'re missed.',
+                'hidden':     'While hidden from a creature, that creature knows the space you\'re in but cannot see you. Attacks against you require a DC 11 flat check; failure misses.'
+            } %}
             <div class="flex flex-wrap gap-2 items-center">
                 {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed', 'dying'] %}
                 {% set cval = pc.conditions.get(cond, 0) %}
                 {% set sev_class = 'cond-crit' if (cval >= 3 or (cond == 'dying' and cval >= 2)) else ('cond-warn' if cval >= 2 else '') %}
                 <div class="condition-pill {{ sev_class }}" id="cond-wrap-{{ cond }}" data-cond-name="{{ cond }}"
                      style="{% if cval == 0 %}display:none;{% endif %}"
-                     title="{{ cond|replace('_',' ')|title }} {{ cval }}">
+                     title="{{ cond|replace('_',' ')|title }} {{ cval }} — {{ cond_rules.get(cond, '') }}">
                     <button onclick="adjustCondition('{{ cond }}', -1)" title="Reduce">−</button>
                     <span style="font-size:11px;">{{ cond|upper }}</span>
                     <span class="cond-val" id="cond-val-{{ cond }}">{{ cval }}</span>
@@ -1147,7 +2282,8 @@
                 {% endfor %}
                 {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
                 {% set cval = pc.conditions.get(cond, false) %}
-                <button onclick="toggleBoolCondition('{{ cond }}')" id="cond-btn-{{ cond }}" class="condition-toggle {% if cval %}active{% endif %}">
+                <button onclick="toggleBoolCondition('{{ cond }}')" id="cond-btn-{{ cond }}" class="condition-toggle {% if cval %}active{% endif %}"
+                        title="{{ cond|replace('_',' ')|title }} — {{ cond_rules.get(cond, '') }}">
                     {{ cond|replace('_','-')|upper }}
                 </button>
                 {% endfor %}
@@ -1168,7 +2304,7 @@
          style="background:rgba(239,68,68,0.08); border-bottom:1px solid rgba(239,68,68,0.25); {% if not _pd_list %}display:none;{% endif %}">
         <div class="max-w-6xl mx-auto px-4 md:px-6 py-2">
             <div style="display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center;">
-                <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#fca5a5;">🔥 Persistent Damage</span>
+                <span class="rubric" data-tint="rubric">Persistent Damage</span>
                 <div id="pd-list" style="display:flex; flex-wrap:wrap; gap:6px;">
                     {% for e in _pd_list %}
                     <div class="pd-entry" data-pd-idx="{{ loop.index0 }}" style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); font-size:11px;">
@@ -1211,7 +2347,7 @@
     <div class="no-print" id="explore-strip"
          style="background:rgba(34,197,94,0.05); border-bottom:1px solid rgba(34,197,94,0.15);">
         <div class="max-w-6xl mx-auto px-4 md:px-6 py-1.5" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#86EFAC;">🧭 Exploration</span>
+            <span class="rubric" data-tint="verdigris">Exploration</span>
             <select id="exploration-select" onchange="setExplorationActivity(this.value)"
                     title="What are you doing while the party travels?"
                     style="padding:3px 8px; font-size:11px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1); min-width:200px;">
@@ -1299,9 +2435,9 @@
                                 {% endfor %}
                             {% endfor %}
                             {% if active_mods %}
-                            <div class="bg-gray-800/50 border border-gray-700 px-3 py-2 rounded flex justify-between items-center" title="Feats and Features automatically modifying stats.">
-                                <span class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Rule Engine</span>
-                                <span class="text-xs font-bold text-gray-400">{{ active_mods|length }} Active</span>
+                            <div class="rule-engine-chip" title="Automatic: your feats and features are currently adjusting {{ active_mods|length }} stat{{ 's' if active_mods|length != 1 else '' }}. The sheet rolls with these baked in — no need to track the math.">
+                                <span class="rule-engine-label">&#x2726; Rule Engine</span>
+                                <span class="rule-engine-count">{{ active_mods|length }} active</span>
                             </div>
                             {% endif %}
                         </div>
@@ -1586,7 +2722,8 @@
                                 <div class="ds-surface-sunken p-4 group" style="border-radius:var(--radius-md);">
                                 <div class="flex justify-between items-start mb-2">
                                     <div class="flex items-center gap-2">
-                                        <span class="font-bold block leading-none text-lg" style="color:var(--accent-gold);">{{ attack.name }} <span class="text-xs opacity-50">◆</span></span>
+                                        <span class="action-cost" data-cost="1" title="One Action — Strike">&#9670;</span>
+                                        <span class="font-header font-bold block leading-none" style="font-size:17px; letter-spacing:0.02em; color:var(--gilt);">{{ attack.name }}</span>
                                         {% if attack.has_two_hand %}
                                         <button onclick="toggleTwoHand('{{ attack.name|replace("'", "\\'") }}')" class="px-2 py-0.5 rounded font-bold uppercase tracking-wider border transition-colors {% if attack.is_two_handed %}bg-amber-600 text-white border-amber-500{% else %}text-gray-400 border-gray-600 hover:text-white{% endif %}" style="font-size:var(--text-2xs); background:{% if not attack.is_two_handed %}var(--surface-overlay){% endif %};">
                                             2H
@@ -1596,6 +2733,12 @@
                                     <button onclick="deleteWeapon('{{ attack.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors px-1 opacity-0 group-hover:opacity-100 text-xs font-bold" title="Unequip">
                                         DROP
                                     </button>
+                                </div>
+                                {# Paizo-style compact summary line. Primary hit bonus + damage expression read as a single statline, separating "what are my numbers" from the interactive 1st/2nd/3rd MAP buttons below. #}
+                                <div class="weapon-statline" style="font-family:var(--font-flavor); font-size:13px; color:var(--text-secondary); margin-bottom:8px; line-height:1.4;">
+                                    {% if attack.strikes and attack.strikes[0] %}<span style="font-family:var(--font-display); color:var(--text-primary); font-variant-numeric:lining-nums tabular-nums; font-weight:700;">{{ attack.strikes[0].label }}</span> to hit<span style="color:var(--t4);"> &middot; </span>{% endif %}
+                                    <span style="font-family:var(--font-display); font-variant-numeric:lining-nums tabular-nums;">{{ attack.damage }}</span>
+                                    {% if attack.damage_type %} {{ attack.damage_type }}{% endif %}
                                 </div>
                                 {% if attack.traits %}
                                 <div class="mb-3">
@@ -1689,7 +2832,7 @@
                             <div class="flex items-center gap-2 px-3 py-2 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);">
                                 <span class="font-header text-[9px] tracking-widest uppercase" style="color:var(--color-spell);">Focus</span>
                                 <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm">◀</button>
-                                <span id="focus-pips">
+                                <span id="focus-pips" data-tradition="{{ (caster.tradition if caster and caster.tradition else 'arcane') | lower }}">
                                     {% for i in range(pc.focus_max) %}
                                     <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
                                     {% endfor %}
@@ -1822,10 +2965,10 @@
                     <div class="p-5 space-y-5">
                         {% for lvl in caster.levels %}
                         <div>
-                            <div class="flex justify-between items-center mb-3 pb-1" style="border-bottom:1px solid var(--border-subtle);">
-                                <span class="font-header text-sm tracking-wider" style="color:var(--text-secondary);">
+                            <div class="spell-rank-header">
+                                <span>
                                     {{ lvl.label }}
-                                    {% if lvl.level == 0 %}<span style="color:var(--text-muted);" class="text-[10px] ml-1">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                    {% if lvl.level == 0 %}<span class="rank-count">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
                                 </span>
                                 {% if lvl.level > 0 and lvl.slots > 0 and 'focus' not in c_type_lower %}
                                 <div class="flex gap-1 items-center px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
@@ -1869,8 +3012,8 @@
                             <div class="space-y-4 max-h-[550px] overflow-y-auto custom-scrollbar pr-2">
                                 {% for lvl in caster.levels %}
                                 <div>
-                                    <div class="font-header text-[10px] tracking-wider uppercase mb-2 pb-1" style="color:var(--text-muted); border-bottom:1px solid var(--border-subtle);">
-                                        {{ lvl.label }}{% if lvl.level == 0 %} <span style="color:var(--text-faint);">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                    <div class="spell-rank-header" style="font-size:11px;">
+                                        <span>{{ lvl.label }}{% if lvl.level == 0 %} <span class="rank-count">(Rank {{ pc.cantrip_rank }})</span>{% endif %}</span>
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         {% for sp in lvl.spells %}
@@ -1923,7 +3066,7 @@
             
             <!-- Browse / Learn Spell Modal -->
             <div id="spell-browse-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-                <div class="rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col" style="background:var(--bg-surface); border:1px solid var(--border-strong);">
+                <div class="parchment-frame rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col" style="background:var(--bg-surface);">
                     <div class="p-4 flex justify-between items-center" style="border-bottom:1px solid var(--border-default);">
                         <h3 class="font-header text-lg" style="color:var(--color-spell);">Browse Spells</h3>
                         <button onclick="document.getElementById('spell-browse-modal').classList.add('hidden')" class="text-xl" style="color:var(--text-muted);">&times;</button>
@@ -2041,7 +3184,7 @@
                 <div class="text-sm text-gray-400 foundry-content leading-relaxed">{{ feat.desc|safe }}</div>
             </div>
             {% else %}
-            <div class="panel-card italic text-sm text-center" style="color:var(--text-muted);">No feats acquired yet.</div>
+            <div class="panel-card italic text-center" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">No feat chosen at this level. The page awaits.</div>
             {% endfor %}
         </div>
 
@@ -2113,8 +3256,8 @@
                             <span>Max {{ pc.max_bulk_limit }}B</span>
                         </div>
                         {% if pc.is_encumbered %}
-                        <div class="mt-2 text-[10px]" style="color:#F59E0B;">
-                            ⚠ Clumsy 1 · −10 ft Speed (drop items to recover)
+                        <div class="mt-2 text-[10px]" style="color:#F59E0B; font-family:var(--font-display); letter-spacing:0.08em; text-transform:uppercase;">
+                            Encumbered — Clumsy 1 · −10 ft Speed (drop items to recover)
                         </div>
                         {% endif %}
                     </div>
@@ -2130,7 +3273,7 @@
                             <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">✖</button>
                         </div>
                         {% else %}
-                        <div class="text-center text-gray-500 italic p-4 text-sm bg-gray-950 rounded border border-gray-800">Backpack is empty.</div>
+                        <div class="text-center italic p-4 rounded border" style="background:var(--bg-input); border-color:var(--border-subtle); color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">The pack hangs light — no burden carried here.</div>
                         {% endfor %}
                     </div>
 
@@ -2164,7 +3307,7 @@
                     <div class="mt-4 pt-3 border-t border-gray-700 flex justify-between items-center">
                         <span class="text-[10px] text-gray-600">Auto-saves after you stop typing</span>
                         <button onclick="exportCharacter()" class="bg-gray-900 hover:bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1.5">
-                            📥 Export Character JSON
+                            Export Character JSON
                         </button>
                     </div>
                 </div>
@@ -2181,18 +3324,18 @@
                         <button onclick="addSessionNote()" class="font-header text-[9px] tracking-wider uppercase px-3 py-2 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add</button>
                     </div>
                     
-                    <div class="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                    <div class="journal-page space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                         {% for note in pc.session_notes | reverse %}
                         {% set note_idx = pc.session_notes | length - loop.index %}
-                        <div class="flex justify-between items-start p-2 rounded group" style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
+                        <div class="journal-entry flex justify-between items-start group">
                             <div class="flex-1">
-                                <span class="font-header text-[9px] tracking-wider" style="color:var(--text-muted);">{{ note.date }}</span>
-                                <p class="text-sm mt-0.5" style="color:var(--text-secondary);">{{ note.text }}</p>
+                                <span class="journal-date font-header">{{ note.date }}</span>
+                                <p class="journal-text">{{ note.text }}</p>
                             </div>
                             <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:var(--text-muted);" title="Delete">✕</button>
                         </div>
                         {% else %}
-                        <div class="text-center py-4 italic text-sm" style="color:var(--text-faint);">No journal entries yet. Add notes after each session.</div>
+                        <div class="journal-empty text-center py-4 italic text-sm">No chronicle yet. Entries from each session will gather here.</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -2286,7 +3429,7 @@
 
         <!-- Pet Add Modal -->
         <div id="pet-add-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-            <div class="rounded-xl w-full max-w-lg p-6" style="background:var(--bg-surface); border:1px solid var(--border-strong);">
+            <div class="parchment-frame rounded-xl w-full max-w-lg p-6" style="background:var(--bg-surface);">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-header text-lg" style="color:var(--color-spell);">Add Companion / Familiar</h3>
                     <button onclick="document.getElementById('pet-add-modal').classList.add('hidden')" class="text-xl" style="color:var(--text-muted);">&times;</button>
@@ -2364,7 +3507,7 @@
 
     <!-- Equipment Browser Modal -->
     <div id="equip-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-        <div class="rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" style="background:var(--surface-raised); border:1px solid var(--border-default);">
+        <div class="parchment-frame rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" style="background:var(--surface-raised);">
             <div class="bg-gray-900 px-5 py-3 border-b border-gray-700 flex justify-between items-center shrink-0">
                 <h2 id="equip-modal-title" class="text-lg font-header text-amber-500">Equipment Browser</h2>
                 <button onclick="document.getElementById('equip-modal').classList.add('hidden')" class="text-gray-500 hover:text-white text-xl">&times;</button>
@@ -2414,13 +3557,17 @@
                 </div>
                 <div class="mb-3">
                     <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-2">Quick Rolls</div>
+                    {# Quick-rolls grid — unified ivory treatment. Previous
+                       red/blue/purple coloring for Fort/Ref/Will gave them
+                       unequal emphasis; they're peer saves, so render them
+                       the same. Gilt hover is the only call-to-action tint. #}
                     <div class="grid grid-cols-3 gap-1">
-                        <button onclick="rollSkill('Perception', {{ pc.perception }})" class="bg-gray-900 hover:bg-gray-700 text-gray-300 py-1 rounded text-[10px] font-bold border border-gray-700 transition-colors truncate px-1">Perc +{{ pc.perception }}</button>
-                        <button onclick="rollSkill('Fort Save', {{ pc.fort }})" class="bg-red-900/20 hover:bg-red-900/40 text-red-300 py-1 rounded text-[10px] font-bold border border-red-900/30 transition-colors truncate px-1">Fort +{{ pc.fort }}</button>
-                        <button onclick="rollSkill('Ref Save', {{ pc.ref }})" class="bg-blue-900/20 hover:bg-blue-900/40 text-blue-300 py-1 rounded text-[10px] font-bold border border-blue-900/30 transition-colors truncate px-1">Ref +{{ pc.ref }}</button>
-                        <button onclick="rollSkill('Will Save', {{ pc.will }})" class="bg-purple-900/20 hover:bg-purple-900/40 text-purple-300 py-1 rounded text-[10px] font-bold border border-purple-900/30 transition-colors truncate px-1">Will +{{ pc.will }}</button>
-                        <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})" class="bg-gray-900 hover:bg-gray-700 text-gray-300 py-1 rounded text-[10px] font-bold border border-gray-700 transition-colors truncate px-1">Init +{{ pc.initiative_mod }}</button>
-                        <button onclick="rollFlat()" class="bg-gray-900 hover:bg-gray-700 text-gray-300 py-1 rounded text-[10px] font-bold border border-gray-700 transition-colors truncate px-1">Flat Check</button>
+                        <button onclick="rollSkill('Perception', {{ pc.perception }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Perc +{{ pc.perception }}</button>
+                        <button onclick="rollSkill('Fort Save', {{ pc.fort }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Fort +{{ pc.fort }}</button>
+                        <button onclick="rollSkill('Ref Save', {{ pc.ref }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Ref +{{ pc.ref }}</button>
+                        <button onclick="rollSkill('Will Save', {{ pc.will }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Will +{{ pc.will }}</button>
+                        <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Init +{{ pc.initiative_mod }}</button>
+                        <button onclick="rollFlat()" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Flat Check</button>
                     </div>
                 </div>
                 <form class="flex gap-2" onsubmit="event.preventDefault(); customDiceRoll();">
@@ -2429,8 +3576,36 @@
                 </form>
             </div>
         </div>
-        <button onclick="toggleDicePanel()" class="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 rounded-full shadow-xl border-none flex items-center justify-center text-white transition-transform hover:scale-105 z-[100] ring-4 ring-gray-900">
-            <span class="font-header text-xl tracking-tighter">d20</span>
+        <button onclick="toggleDicePanel()" class="d20-fab z-[100]" aria-label="Dice roller" title="Dice roller">
+            <svg viewBox="0 0 56 56" width="44" height="44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs>
+                    <linearGradient id="d20-stone" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#d4a746"/>
+                        <stop offset="50%" stop-color="#8a6712"/>
+                        <stop offset="100%" stop-color="#3a2a08"/>
+                    </linearGradient>
+                    <linearGradient id="d20-face" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#3a2a08"/>
+                        <stop offset="100%" stop-color="#1a1208"/>
+                    </linearGradient>
+                </defs>
+                <!-- icosahedron silhouette -->
+                <polygon points="28,4 52,18 52,40 28,52 4,40 4,18"
+                         fill="url(#d20-stone)" stroke="#4a380a" stroke-width="1.5"/>
+                <!-- top triangle face (carved) -->
+                <polygon points="28,8 48,20 28,28 8,20"
+                         fill="url(#d20-face)" stroke="#2a1e06" stroke-width="0.8"/>
+                <!-- bottom-left face -->
+                <polygon points="8,20 28,28 18,46 8,40"
+                         fill="#2a1c06" opacity="0.55"/>
+                <!-- bottom-right face -->
+                <polygon points="48,20 28,28 38,46 48,40"
+                         fill="#1a1208" opacity="0.65"/>
+                <!-- carved "20" -->
+                <text x="28" y="22" text-anchor="middle"
+                      font-family="Cinzel, serif" font-weight="700" font-size="11"
+                      fill="#e8c46f" stroke="#1a1208" stroke-width="0.3">20</text>
+            </svg>
         </button>
     </div>
 
@@ -2444,15 +3619,157 @@
         // ==========================================
         // PORTRAIT UPLOAD
         // ==========================================
+        // Portrait upload → focus picker flow.
+        //   1. User picks a file.
+        //   2. Modal opens showing the full image with a crosshair centered.
+        //   3. Clicking on the image sets the focus point (as percent).
+        //   4. Confirm posts file + focus_x/focus_y; server stores both.
+        // No server-side image processing (keeps it fast); the focus point
+        // becomes a CSS object-position var that all portrait sites read.
         async function uploadPortrait(input) {
             if (!input.files || !input.files[0]) return;
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-            try {
-                const res = await fetch(`/api/upload_portrait/${pcNameEncoded}`, { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.success) window.location.reload();
-            } catch(e) { console.error('Portrait upload error:', e); }
+            const file = input.files[0];
+            openPortraitFocusPicker(file);
+            // Reset input so picking the same file again still fires onchange
+            input.value = '';
+        }
+
+        function openPortraitFocusPicker(file) {
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const dataUrl = ev.target.result;
+                let overlay = document.getElementById('portrait-focus-overlay');
+                if (overlay) overlay.remove();
+
+                overlay = document.createElement('div');
+                overlay.id = 'portrait-focus-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+                overlay.innerHTML = `
+                    <div class="parchment-frame" style="max-width:520px;width:100%;background:var(--bg-surface);border-radius:var(--radius-lg);padding:20px;">
+                        <h3 style="font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--gilt);margin:0 0 4px 0;">Frame Your Portrait</h3>
+                        <p style="font-family:var(--font-flavor);font-size:13px;color:var(--text-secondary);margin:0 0 12px 0;">Click the part of the image that should sit centered in the portrait circle.</p>
+                        <div id="pf-stage" style="position:relative;width:100%;aspect-ratio:1/1;background:#000;border:1px solid var(--border-default);border-radius:var(--radius-md);overflow:hidden;cursor:crosshair;">
+                            <img id="pf-img" src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;" alt="preview">
+                            <div id="pf-crosshair" style="position:absolute;top:50%;left:50%;width:18px;height:18px;border:2px solid var(--gilt);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(0,0,0,0.6),0 0 8px rgba(201,163,78,0.6);pointer-events:none;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-family:var(--font-display);font-size:10px;letter-spacing:0.08em;color:var(--text-muted);">
+                            <span>Focus: <span id="pf-readout" style="color:var(--gilt);font-variant-numeric:lining-nums tabular-nums;">50, 50</span></span>
+                            <span>Click to set · drag for precision</span>
+                        </div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                            <button id="pf-cancel" class="tb">Cancel</button>
+                            <button id="pf-save" class="tb primary">Save Portrait</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                let fx = 50, fy = 50;
+                const stage = overlay.querySelector('#pf-stage');
+                const img = overlay.querySelector('#pf-img');
+                const cross = overlay.querySelector('#pf-crosshair');
+                const readout = overlay.querySelector('#pf-readout');
+
+                function setFocus(x, y) {
+                    fx = Math.max(0, Math.min(100, x));
+                    fy = Math.max(0, Math.min(100, y));
+                    img.style.objectPosition = fx + '% ' + fy + '%';
+                    cross.style.left = fx + '%';
+                    cross.style.top = fy + '%';
+                    readout.textContent = Math.round(fx) + ', ' + Math.round(fy);
+                }
+                function handlePoint(ev) {
+                    const rect = stage.getBoundingClientRect();
+                    const cx = (ev.clientX - rect.left) / rect.width * 100;
+                    const cy = (ev.clientY - rect.top) / rect.height * 100;
+                    setFocus(cx, cy);
+                }
+                let dragging = false;
+                stage.addEventListener('mousedown', (e) => { dragging = true; handlePoint(e); });
+                stage.addEventListener('mousemove', (e) => { if (dragging) handlePoint(e); });
+                window.addEventListener('mouseup', () => { dragging = false; });
+                stage.addEventListener('touchstart', (e) => { if (e.touches[0]) handlePoint(e.touches[0]); e.preventDefault(); }, {passive:false});
+                stage.addEventListener('touchmove',  (e) => { if (e.touches[0]) handlePoint(e.touches[0]); e.preventDefault(); }, {passive:false});
+
+                overlay.querySelector('#pf-cancel').addEventListener('click', () => overlay.remove());
+                overlay.querySelector('#pf-save').addEventListener('click', async () => {
+                    const saveBtn = overlay.querySelector('#pf-save');
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = 'Saving…';
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('focus_x', fx.toFixed(2));
+                    formData.append('focus_y', fy.toFixed(2));
+                    try {
+                        const res = await fetch(`/api/upload_portrait/${pcNameEncoded}`, { method: 'POST', body: formData });
+                        const data = await res.json();
+                        if (data.success) { overlay.remove(); window.location.reload(); }
+                        else { alert('Portrait upload failed: ' + (data.error || 'unknown error')); saveBtn.disabled = false; saveBtn.textContent = 'Save Portrait'; }
+                    } catch(e) {
+                        console.error('Portrait upload error:', e);
+                        alert('Portrait upload failed. Check console.');
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = 'Save Portrait';
+                    }
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Re-center an already-uploaded portrait without re-uploading the file.
+        // Triggered from a context-menu / long-press on the portrait circle.
+        async function openPortraitRecenter() {
+            const overlay = document.createElement('div');
+            overlay.id = 'portrait-focus-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+            const imgSrc = document.querySelector('.portrait-circle img')?.src;
+            if (!imgSrc) { alert('Upload a portrait first.'); return; }
+            overlay.innerHTML = `
+                <div class="parchment-frame" style="max-width:520px;width:100%;background:var(--bg-surface);border-radius:var(--radius-lg);padding:20px;">
+                    <h3 style="font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--gilt);margin:0 0 12px 0;">Re-Frame Portrait</h3>
+                    <div id="pf-stage" style="position:relative;width:100%;aspect-ratio:1/1;background:#000;border:1px solid var(--border-default);border-radius:var(--radius-md);overflow:hidden;cursor:crosshair;">
+                        <img id="pf-img" src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;" alt="preview">
+                        <div id="pf-crosshair" style="position:absolute;top:50%;left:50%;width:18px;height:18px;border:2px solid var(--gilt);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(0,0,0,0.6);pointer-events:none;"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:8px;font-family:var(--font-display);font-size:10px;letter-spacing:0.08em;color:var(--text-muted);">
+                        <span>Focus: <span id="pf-readout" style="color:var(--gilt);">50, 50</span></span>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                        <button id="pf-cancel" class="tb">Cancel</button>
+                        <button id="pf-save" class="tb primary">Save Focus</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            let fx = 50, fy = 50;
+            const stage = overlay.querySelector('#pf-stage');
+            const img = overlay.querySelector('#pf-img');
+            const cross = overlay.querySelector('#pf-crosshair');
+            const readout = overlay.querySelector('#pf-readout');
+            function setFocus(x, y) {
+                fx = Math.max(0, Math.min(100, x)); fy = Math.max(0, Math.min(100, y));
+                img.style.objectPosition = fx + '% ' + fy + '%';
+                cross.style.left = fx + '%'; cross.style.top = fy + '%';
+                readout.textContent = Math.round(fx) + ', ' + Math.round(fy);
+            }
+            function handlePoint(ev) {
+                const rect = stage.getBoundingClientRect();
+                setFocus((ev.clientX - rect.left) / rect.width * 100, (ev.clientY - rect.top) / rect.height * 100);
+            }
+            let dragging = false;
+            stage.addEventListener('mousedown', (e) => { dragging = true; handlePoint(e); });
+            stage.addEventListener('mousemove', (e) => { if (dragging) handlePoint(e); });
+            window.addEventListener('mouseup', () => { dragging = false; });
+            overlay.querySelector('#pf-cancel').onclick = () => overlay.remove();
+            overlay.querySelector('#pf-save').onclick = async () => {
+                const fd = new FormData();
+                fd.append('focus_x', fx.toFixed(2));
+                fd.append('focus_y', fy.toFixed(2));
+                try {
+                    const res = await fetch(`/api/update_portrait_focus/${pcNameEncoded}`, { method: 'POST', body: fd });
+                    const data = await res.json();
+                    if (data.success) { overlay.remove(); window.location.reload(); }
+                } catch(e) { console.error(e); alert('Save failed.'); }
+            };
         }
 
         // ==========================================
@@ -2483,7 +3800,7 @@
                     // Raise-Shield button styling
                     const btn = document.querySelector('[data-shield-btn]');
                     if (btn) {
-                        btn.textContent = currentShield.raised ? '🛡 Raised' : '🛡 Raise';
+                        btn.textContent = currentShield.raised ? 'Shield · Raised' : 'Shield · Raise';
                         if (currentShield.raised) {
                             btn.style.background = 'rgba(90,142,232,0.2)';
                             btn.style.borderColor = 'rgba(90,142,232,0.4)';
@@ -3198,7 +4515,7 @@
             
             const list = document.getElementById('spell-browse-list');
             if (filtered.length === 0) {
-                list.innerHTML = '<div class="text-center italic py-8" style="color:var(--text-muted);">No spells match your filters.</div>';
+                list.innerHTML = '<div class="text-center italic py-8" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">No incantation answers these bindings.</div>';
                 return;
             }
             list.innerHTML = filtered.map(s => `
@@ -3296,6 +4613,63 @@
             if (savedTab && document.getElementById(`tab-${savedTab}`)) {
                 switchTab(savedTab);
             }
+        })();
+
+        // === Custom parchment tooltip (D12) ===
+        // Delegated listener: walks up from the event target to find the
+        // nearest [data-pf-tip]. Tooltip is created once on first use and
+        // reused. Position computed one-shot on open. No rAF, no resize
+        // watcher — if the target moves while hovered, nothing breaks:
+        // the tooltip disappears on mouseleave anyway.
+        (function setupParchmentTooltip() {
+            let tipEl = null;
+            function ensure() {
+                if (tipEl) return tipEl;
+                tipEl = document.createElement('div');
+                tipEl.className = 'pf-tooltip';
+                tipEl.setAttribute('role', 'tooltip');
+                document.body.appendChild(tipEl);
+                return tipEl;
+            }
+            function open(target) {
+                const raw = target.getAttribute('data-pf-tip');
+                if (!raw) return;
+                const tip = ensure();
+                // Optional title line syntax: "TITLE :: body text"
+                const idx = raw.indexOf(' :: ');
+                if (idx > -1) {
+                    tip.innerHTML = '<span class="pf-tip-title"></span>';
+                    tip.querySelector('.pf-tip-title').textContent = raw.slice(0, idx);
+                    tip.appendChild(document.createTextNode(raw.slice(idx + 4)));
+                } else {
+                    tip.textContent = raw;
+                }
+                // Position: anchor above the target, fall below if no room.
+                const r = target.getBoundingClientRect();
+                tip.style.visibility = 'hidden';
+                tip.classList.add('open');
+                const tr = tip.getBoundingClientRect();
+                let top = r.top - tr.height - 8;
+                if (top < 8) top = r.bottom + 8;
+                let left = r.left + r.width / 2 - tr.width / 2;
+                left = Math.max(8, Math.min(left, window.innerWidth - tr.width - 8));
+                tip.style.top = top + 'px';
+                tip.style.left = left + 'px';
+                tip.style.visibility = '';
+            }
+            function close() {
+                if (tipEl) tipEl.classList.remove('open');
+            }
+            document.addEventListener('pointerover', e => {
+                const t = e.target.closest && e.target.closest('[data-pf-tip]');
+                if (t) open(t);
+            });
+            document.addEventListener('pointerout', e => {
+                const t = e.target.closest && e.target.closest('[data-pf-tip]');
+                if (t) close();
+            });
+            // Close on any scroll (positions would stale otherwise)
+            document.addEventListener('scroll', close, { passive: true, capture: true });
         })();
 
         // INIT SLOT TRACKERS — full server-side persistence
@@ -3431,26 +4805,89 @@
             } catch(e) {}
         }
 
+        // === D15: Themed rest flow ===
+        // Replaces native confirm + alert with a "night falls" parchment
+        // modal. Built on the shared .parchment-frame look. The modal is
+        // injected on demand (no hidden DOM baseline cost) and removed on
+        // close. Single CSS transition handles the fade-in; no loops.
+        function _buildRestModal(kind, payload, resolve) {
+            const overlay = document.createElement('div');
+            overlay.className = 'rest-modal-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(180deg, rgba(8,10,20,0.92) 0%, rgba(2,4,10,0.96) 100%);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;transition:opacity 0.2s ease;';
+            const glyph = kind === 'confirm' ? '☾' : '☀';
+            const title = kind === 'confirm' ? 'Night Falls' : 'Dawn Breaks';
+            const intro = kind === 'confirm'
+                ? 'You make camp and settle in for a long rest. Tending spells, salves, and a warded watch will consume the hours until morning.'
+                : 'The sun crests the ridge. You rise rested — preparations made, spells inscribed, vigor restored.';
+            const list = kind === 'confirm'
+                ? [
+                    'Full HP restored',
+                    'Focus Points restored',
+                    'Spell slots refreshed (prepared spells cleared)',
+                    'Fatigued, Frightened, Sickened, Stunned cleared',
+                    'Clumsy, Enfeebled, Slowed, Stupefied cleared',
+                    'Wounded removed · Drained reduces by 1',
+                    'Doomed persists · Hero Points unchanged'
+                  ]
+                : payload.bullets;
+            overlay.innerHTML = `
+                <div class="parchment-frame" style="max-width:480px;width:100%;background:linear-gradient(180deg, #1a1613 0%, #120f0c 100%);border-radius:var(--radius-lg);padding:28px 24px 20px;position:relative;">
+                    <div style="text-align:center;margin-bottom:10px;">
+                        <span style="display:inline-block;font-size:38px;line-height:1;color:${kind==='confirm'?'#8a7de0':'#e0b65a'};text-shadow:0 0 18px ${kind==='confirm'?'rgba(138,125,224,0.4)':'rgba(224,182,90,0.5)'};">${glyph}</span>
+                    </div>
+                    <h3 style="font-family:'Cinzel',serif;font-size:18px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#f0d88a;text-align:center;margin:0 0 12px 0;text-shadow:0 1px 0 rgba(0,0,0,0.5);">${title}</h3>
+                    <p style="font-family:var(--font-flavor, Alegreya, Georgia, serif);font-size:14px;color:#cfc4a8;text-align:center;line-height:1.55;margin:0 0 14px 0;">${intro}</p>
+                    <ul style="list-style:none;padding:0;margin:0 0 18px 0;font-family:var(--font-flavor, Alegreya, Georgia, serif);font-size:13px;color:#b8ad92;">
+                        ${list.map(item => `<li style="padding:3px 0 3px 20px;position:relative;"><span style="position:absolute;left:0;color:var(--gilt);font-size:10px;">❦</span>${item}</li>`).join('')}
+                    </ul>
+                    <div style="display:flex;gap:10px;justify-content:center;">
+                        ${kind === 'confirm'
+                            ? '<button class="tb rest-cancel">Stay Watchful</button><button class="tb gilt rest-confirm">Make Camp</button>'
+                            : '<button class="tb gilt rest-ack">Greet the Day</button>'}
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+            function teardown(v) {
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 180);
+                resolve(v);
+            }
+            const cancel = overlay.querySelector('.rest-cancel');
+            const confirmBtn = overlay.querySelector('.rest-confirm');
+            const ack = overlay.querySelector('.rest-ack');
+            if (cancel) cancel.onclick = () => teardown(false);
+            if (confirmBtn) confirmBtn.onclick = () => teardown(true);
+            if (ack) ack.onclick = () => teardown(true);
+            overlay.addEventListener('click', e => { if (e.target === overlay) teardown(false); });
+        }
+        function restConfirm() {
+            return new Promise(resolve => _buildRestModal('confirm', null, resolve));
+        }
+        function restAnnounce(bullets) {
+            return new Promise(resolve => _buildRestModal('announce', { bullets }, resolve));
+        }
+
         async function takeLongRest() {
-            if (!confirm("Take a Long Rest (Daily Preparations)?\n\n• Full HP restored\n• Focus Points restored\n• Spell slots refreshed (prepared spells cleared)\n• Conditions cleared (Drained reduces by 1, Doomed persists)\n• Wounded removed")) return;
+            const ok = await restConfirm();
+            if (!ok) return;
             try {
                 // Clear all spell state (server handles clearing via long_rest endpoint)
                 window._expendedSlots = {};
                 window._preparedSpells = {};
                 window._castPrep = {};
-                
+
                 const res = await fetch(`/api/long_rest/${pcNameEncoded}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    // Show restoration summary
-                    let summary = `Long Rest Complete!\n\n`;
-                    summary += `HP: ${data.restored.hp}/${data.restored.hp}\n`;
-                    summary += `Focus: ${data.restored.focus} restored\n`;
-                    summary += `Spell slots: Refreshed\n`;
-                    if (data.restored.drained > 0) summary += `Drained: Reduced to ${data.restored.drained}\n`;
-                    if (data.restored.doomed > 0) summary += `Doomed: Still ${data.restored.doomed} (does not clear from rest)\n`;
-                    summary += `\nPrepare your spells for the new day!`;
-                    alert(summary);
+                    const bullets = [
+                        `HP restored to ${data.restored.hp}`,
+                        `Focus: ${data.restored.focus} restored`,
+                        'Spell slots refreshed'
+                    ];
+                    if (data.restored.drained > 0) bullets.push(`Drained: reduced to ${data.restored.drained}`);
+                    if (data.restored.doomed > 0) bullets.push(`Doomed: still ${data.restored.doomed} — a night's rest will not lift it`);
+                    await restAnnounce(bullets);
                     window.location.reload();
                 }
             } catch(e) { console.error('Long rest error:', e); }
@@ -3461,7 +4898,17 @@
             try {
                 const response = await fetch(`/api/adjust_hero/${pcNameEncoded}`, { method: 'POST', body: formData });
                 const data = await response.json();
-                if (data.success) document.getElementById('current-hero').innerText = data.current_hero;
+                if (data.success) {
+                    const n = data.current_hero;
+                    document.getElementById('current-hero').innerText = n;
+                    const pipsWrap = document.getElementById('hero-pips');
+                    if (pipsWrap) {
+                        pipsWrap.dataset.current = n;
+                        // Cheap redraw: flip filled class on 3 pips. O(3), no layout thrash.
+                        const pips = pipsWrap.querySelectorAll('.hero-pip');
+                        pips.forEach((p, i) => p.classList.toggle('filled', i < n));
+                    }
+                }
             } catch (error) {}
         }
 
@@ -3522,26 +4969,25 @@
         }
         function _paintShieldGauge() {
             const txt   = document.getElementById('shield-hp-text');
-            const fill  = document.getElementById('shield-hp-fill');
+            const wrap  = document.getElementById('shield-svg-wrap');
             const lbl   = document.getElementById('shield-state-lbl');
-            if (!txt || !fill || !lbl) return; // no shield configured
+            if (!txt || !wrap || !lbl) return; // no shield configured
             txt.textContent = `${currentShield.hp}/${currentShield.max_hp}`;
             const pct = currentShield.max_hp > 0 ? Math.max(0, Math.min(100, Math.round(currentShield.hp / currentShield.max_hp * 100))) : 0;
-            fill.style.width = pct + '%';
+            // Single style-var write — triggers only one paint, no layout.
+            wrap.style.setProperty('--shield-fill', pct + '%');
+            wrap.classList.toggle('broken', !!currentShield.broken && !currentShield.destroyed);
+            wrap.classList.toggle('destroyed', !!currentShield.destroyed);
             if (currentShield.destroyed) {
-                fill.style.background = '#ef4444';
                 lbl.style.color = '#ef4444';
                 lbl.textContent = 'Destroyed';
             } else if (currentShield.broken) {
-                fill.style.background = '#eab308';
                 lbl.style.color = '#eab308';
                 lbl.textContent = 'Broken';
             } else if (currentShield.raised) {
-                fill.style.background = '#93C5FD';
                 lbl.style.color = '#93C5FD';
                 lbl.textContent = `Raised · H${currentShield.hardness}`;
             } else {
-                fill.style.background = '#93C5FD';
                 lbl.style.color = 'var(--t3)';
                 lbl.textContent = `H${currentShield.hardness}`;
             }
@@ -3633,9 +5079,9 @@
                     if (data.dead) {
                         showRollToast('☠ DEAD', 0, `${pcName} has reached Dying 4 and is dead.`, false, true);
                     } else if (data.dying > 0 && action === 'damage') {
-                        showRollToast('💀 Dying', data.dying, `Dying ${data.dying}${data.wounded > 0 ? ` (Wounded ${data.wounded})` : ''}`, false, true);
+                        showRollToast('Dying', data.dying, `Dying ${data.dying}${data.wounded > 0 ? ` (Wounded ${data.wounded})` : ''}`, false, true);
                     } else if (data.dying === 0 && data.wounded > 0 && action === 'heal') {
-                        showRollToast('🩹 Stabilized', 0, `No longer dying. Wounded ${data.wounded}.`, false, false);
+                        showRollToast('Stabilized', 0, `No longer dying. Wounded ${data.wounded}.`, false, false);
                     }
                 }
             } catch (error) {}
@@ -3713,7 +5159,7 @@
                         // Re-sync the Raise-Shield button styling on remote mutation
                         const btn = document.querySelector('[data-shield-btn]');
                         if (btn) {
-                            btn.textContent = currentShield.raised ? '🛡 Raised' : '🛡 Raise';
+                            btn.textContent = currentShield.raised ? 'Shield · Raised' : 'Shield · Raise';
                             btn.style.background = currentShield.raised ? 'rgba(90,142,232,0.2)' : 'var(--bg-base)';
                             btn.style.borderColor = currentShield.raised ? 'rgba(90,142,232,0.4)' : 'var(--border-s)';
                             btn.style.color = currentShield.raised ? '#93C5FD' : 'var(--t3)';
@@ -4453,7 +5899,7 @@
                 if (r.ok) {
                     // Friendly toast using the existing roll toast helper
                     if (typeof showRollToast === 'function') {
-                        showRollToast(`${spellName} area placed`, '✨', `Open the map to aim it.`, false, false);
+                        showRollToast(`${spellName} area placed`, '✦', `Open the map to aim it.`, false, false);
                     }
                 } else {
                     alert(`Couldn't place ${spellName}: ${r.status}`);
@@ -4973,7 +6419,7 @@
             });
             
             if (items.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-600 text-sm italic py-8">No items match your search.</div>';
+                container.innerHTML = '<div class="text-center italic py-8" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">The quartermaster finds no such wares.</div>';
                 return;
             }
             
@@ -5495,7 +6941,7 @@
             <div style="background:#24242e;border:1px solid rgba(212,162,68,0.3);border-radius:12px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
                 <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);background:#0d0d12;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <div style="font-family:'Cinzel',serif;color:#d4a244;font-size:18px;font-weight:700;">📜 ${h.title || 'Handout'}</div>
+                        <div style="font-family:'Cinzel',serif;color:#d4a244;font-size:18px;font-weight:700;letter-spacing:0.06em;">${h.title || 'Handout'}</div>
                         <div style="font-size:10px;color:#8080a0;margin-top:2px;">From the GM • ${h.time || ''}</div>
                     </div>
                     <button onclick="document.getElementById('handout-popup').remove()" style="color:#8080a0;font-size:22px;background:none;border:none;cursor:pointer;line-height:1;">&times;</button>

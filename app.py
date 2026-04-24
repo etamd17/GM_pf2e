@@ -1303,6 +1303,15 @@ class Character:
         
         self.notes = safe_str(build.get('notes'), '')
         self.portrait = safe_str(build.get('portrait'), '')
+        # Portrait focus point (percent 0-100) so the circular crop can be
+        # re-framed without re-uploading. Defaults to dead-center.
+        _pf = build.get('portrait_focus') or {}
+        try:
+            self.portrait_focus_x = float(_pf.get('x', 50)) if isinstance(_pf, dict) else 50.0
+            self.portrait_focus_y = float(_pf.get('y', 50)) if isinstance(_pf, dict) else 50.0
+        except (TypeError, ValueError):
+            self.portrait_focus_x = 50.0
+            self.portrait_focus_y = 50.0
         self.active_toggles = build.get('active_toggles') or []
         self.shield_raised = build.get('shield_raised', False)
         # Phase 11: Auto-populate shield stats from Pathbuilder equipment.
@@ -2099,7 +2108,13 @@ class Character:
                             spells_at_lvl.append({'name': safe_str(s_name), 'desc': COMPENDIUM_LIBRARY.get(safe_str(s_name).lower(), "<em>No description.</em>")})
                 
                 if spells_at_lvl or max_slots > 0:
-                    c_info['levels'].append({'level': lvl, 'label': 'Cantrips' if lvl == 0 else f'Level {lvl}', 'slots': max_slots, 'spells': spells_at_lvl})
+                    # Paizo-style rank labels: "Cantrips", "1st-Rank Spells", etc.
+                    if lvl == 0:
+                        rank_label = 'Cantrips'
+                    else:
+                        _suf = 'th' if (10 <= lvl % 100 <= 20) else {1:'st', 2:'nd', 3:'rd'}.get(lvl % 10, 'th')
+                        rank_label = f'{lvl}{_suf}-Rank Spells'
+                    c_info['levels'].append({'level': lvl, 'label': rank_label, 'slots': max_slots, 'spells': spells_at_lvl})
             if c_info['levels']: self.spell_casters.append(c_info)
 
         # Kineticist impulses — shown as spontaneous-style (no prep needed)
@@ -6302,6 +6317,10 @@ def gm_party_state():
             'hero_points': getattr(pc, 'hero_points', 1),
             'spell_casters': spell_casters,
             'portrait': getattr(pc, 'portrait', None),
+            'portrait_focus': {
+                'x': getattr(pc, 'portrait_focus_x', 50.0),
+                'y': getattr(pc, 'portrait_focus_y', 50.0),
+            },
             'attacks': [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(pc, 'attacks', [])],
             'mods': getattr(pc, 'mods', {}),
             # Phase 10: GM party view shows each PC's current exploration activity.
@@ -6610,18 +6629,27 @@ def long_rest(pc_name):
         except Exception:
             pc.temp_hp = 0
         
-        # PF2E Rest Rules:
+        # PF2E Rest Rules (Core Rulebook):
         # - Wounded: clears entirely after full night's rest
         # - Drained: reduces by 1 (not cleared)
         # - Doomed: does NOT change from rest (only specific effects remove it)
-        # - Fatigued: clears after rest
-        # - All other temporary conditions clear
+        # - Fatigued: clears after rest (explicit rule)
+        # - All other short-duration conditions (stunned, slowed, stupefied,
+        #   enfeebled, clumsy, frightened, sickened) expire after 8 hours —
+        #   their typical durations are rounds/minutes, not days.
+        # - Dying clears (you woke up, you aren't dying anymore)
+        # - Hero Points are NOT restored by rest — per PF2e they reset at
+        #   the start of each session (GM awards 1); they are intentionally
+        #   left untouched here.
         drained_val = max(0, pc.conditions.get('drained', 0) - 1)
         doomed_val = pc.conditions.get('doomed', 0)  # Preserved
-        
+
         pc.conditions = {
             'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0,
             'doomed': doomed_val, 'drained': drained_val,
+            'fatigued': 0,
+            'stunned': 0, 'slowed': 0, 'stupefied': 0,
+            'enfeebled': 0, 'clumsy': 0,
             'prone': False, 'off_guard': False, 'concealed': False,
             'hidden': False, 'undetected': False
         }
@@ -7414,32 +7442,48 @@ def cast_spell(pc_name):
 
 @app.route('/api/upload_portrait/<pc_name>', methods=['POST'])
 def upload_portrait(pc_name):
-    """Upload a character portrait image."""
+    """Upload a character portrait image.
+
+    Accepts an optional focus point (focus_x, focus_y as 0–100 floats) so the
+    player can frame which part of their uploaded image sits inside the
+    circular crop. Stored as pc.portrait_focus = {'x': 50, 'y': 50} and
+    rendered via CSS object-position on all portrait sites.
+    """
     if 'file' not in request.files:
         return jsonify({"error": "No file"}), 400
     file = request.files['file']
     if not file.filename:
         return jsonify({"error": "No filename"}), 400
-    
+
     # Validate image type
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
         return jsonify({"error": "Invalid image type"}), 400
-    
+
+    # Optional focus point — percent (0-100). Default to dead-center.
+    def _clamp_focus(v):
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            return 50.0
+        return max(0.0, min(100.0, n))
+    focus_x = _clamp_focus(request.form.get('focus_x', 50))
+    focus_y = _clamp_focus(request.form.get('focus_y', 50))
+
     portraits_dir = os.path.join(PARTY_DIR, 'portraits')
     if not os.path.exists(portraits_dir):
         os.makedirs(portraits_dir)
-    
+
     safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', pc_name)
     filename = f"{safe_name}.{ext}"
-    
+
     # Remove old portrait if exists
     for old in os.listdir(portraits_dir):
         if old.startswith(safe_name + '.'):
             os.remove(os.path.join(portraits_dir, old))
-    
+
     file.save(os.path.join(portraits_dir, filename))
-    
+
     # Update the character JSON
     file_path = get_pc_file_path(pc_name)
     if file_path and os.path.exists(file_path):
@@ -7447,15 +7491,47 @@ def upload_portrait(pc_name):
             pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
         build['portrait'] = filename
+        build['portrait_focus'] = {'x': focus_x, 'y': focus_y}
         save_and_reload_character(pc_name, pc_json, file_path)
-    
-    return jsonify({"success": True, "filename": filename})
+
+    return jsonify({"success": True, "filename": filename, "focus": {'x': focus_x, 'y': focus_y}})
+
+
+@app.route('/api/update_portrait_focus/<pc_name>', methods=['POST'])
+def update_portrait_focus(pc_name):
+    """Update only the focus point for an already-uploaded portrait.
+    Cheaper than a re-upload when the player just wants to recentre."""
+    def _clamp_focus(v):
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            return 50.0
+        return max(0.0, min(100.0, n))
+    # Accept either form or JSON body so callers can do either.
+    payload = request.get_json(silent=True) or {}
+    focus_x = _clamp_focus(request.form.get('focus_x', payload.get('focus_x', 50)))
+    focus_y = _clamp_focus(request.form.get('focus_y', payload.get('focus_y', 50)))
+    file_path = get_pc_file_path(pc_name)
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"error": "Character not found"}), 404
+    with open(file_path, 'r', encoding='utf-8') as f:
+        pc_json = json.load(f)
+    build = pc_json.get('build', pc_json)
+    build['portrait_focus'] = {'x': focus_x, 'y': focus_y}
+    save_and_reload_character(pc_name, pc_json, file_path)
+    return jsonify({"success": True, "focus": {'x': focus_x, 'y': focus_y}})
+
 
 @app.route('/portraits/<filename>')
 def serve_portrait(filename):
-    """Serve portrait images from party_data/portraits/."""
+    """Serve portrait images from party_data/portraits/.
+
+    max_age=3600 keeps the browser from refetching on every page nav
+    while still letting a freshly-uploaded portrait appear within an
+    hour. Combined with the cache-busting query string the frontend
+    adds on upload (?v=<mtime>), re-uploads show immediately too."""
     portraits_dir = os.path.join(PARTY_DIR, 'portraits')
-    return send_from_directory(portraits_dir, filename)
+    return send_from_directory(portraits_dir, filename, max_age=3600)
 
 @app.route('/api/export_character/<pc_name>')
 def export_character(pc_name):
@@ -7517,7 +7593,7 @@ def import_pathbuilder():
             # Fields to PRESERVE from existing (runtime/custom data)
             PRESERVE_KEYS = [
                 'current_hp', 'conditions', 'current_focus', 'hero_points',
-                'notes', 'session_notes', 'portrait', 'active_toggles',
+                'notes', 'session_notes', 'portrait', 'portrait_focus', 'active_toggles',
                 'shield_raised', 'shield_hp', 'shield_max_hp', 'shield_hardness', 'shield_bt', 'shield_ac_bonus',
                 'expended_slots', 'signature_spells', 'active_effects',
                 'weapons',  # Preserve custom weapons added in-app
