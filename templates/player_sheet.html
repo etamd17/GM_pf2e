@@ -290,15 +290,15 @@
         }
         .char-name {
             font-family: var(--font-display);
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
             color: #fff;
-            line-height: 1.1;
+            line-height: 1.05;
             letter-spacing: 0.02em;
         }
         .char-name::first-letter {
             font-family: var(--font-display);
-            font-size: 38px;
+            font-size: 30px;
             font-weight: 700;
             line-height: 0.9;
             color: var(--gilt);
@@ -307,9 +307,10 @@
         }
         .char-subtitle {
             font-family: var(--font-ui);
-            font-size: 12px;
+            font-size: 11px;
             color: var(--t3);
-            margin-top: 2px;
+            margin-top: 1px;
+            line-height: 1.2;
         }
         .sub-orn {
             color: var(--gilt);
@@ -321,12 +322,12 @@
         .char-level-badge {
             display: inline-flex; align-items: center;
             font-family: var(--font-ui);
-            font-size: 10px; font-weight: 700;
-            padding: 3px 10px; border-radius: 99px;
+            font-size: 9px; font-weight: 700;
+            padding: 2px 8px; border-radius: 99px;
             background: var(--red-glow); color: var(--red-b);
             border: 1px solid rgba(196,60,60,0.25);
             text-transform: uppercase; letter-spacing: 0.06em;
-            margin-left: 8px;
+            margin-left: 6px;
         }
 
         /* === Ability row (Design C boxed cards with colored accent) === */
@@ -335,16 +336,16 @@
            the fold on smaller laptop screens. Cards still read clearly at
            arm's length, just less wasted vertical whitespace. */
         .ability-row-wrap {
-            display: flex; justify-content: center; gap: 10px;
-            padding: 7px 16px;
+            display: flex; justify-content: center; gap: 8px;
+            padding: 3px 16px 4px;
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border);
             flex-wrap: wrap;
         }
         .ability-block {
             display: flex; flex-direction: column; align-items: center;
-            width: 84px; min-width: 72px;
-            padding: 6px 6px 5px;
+            width: 78px; min-width: 66px;
+            padding: 2px 6px 3px;
             background: var(--bg-raised);
             border: 1px solid var(--border-s);
             border-radius: 8px;
@@ -361,16 +362,17 @@
         .ability-block:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
         .ability-block .mod {
             font-family: var(--font-display);
-            font-size: 24px; font-weight: 700;
+            font-size: 22px; font-weight: 700;
             color: #fff; line-height: 1;
             font-variant-numeric: lining-nums tabular-nums;
         }
         .ability-block .label {
             font-family: var(--font-display);
-            font-size: 10px; font-weight: 700;
+            font-size: 9px; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.18em;
             color: var(--t3);
-            margin-top: 2px;
+            margin-top: 1px;
+            line-height: 1.1;
         }
 
         /* === Stat Box (saves/PER etc. legacy) === */
@@ -522,8 +524,8 @@
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .ss-block:last-child { border-right: none; }
-        .ss-lbl { font-family: var(--font-display); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; color: var(--t3); margin-bottom: 0; line-height: 1.1; }
-        .ss-val { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: #fff; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+        .ss-lbl { font-family: var(--font-display); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; color: var(--t3); margin-bottom: 0; line-height: 1.05; }
+        .ss-val { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: #fff; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
         .ss-sub { font-size: 9px; color: var(--t3); margin-top: 1px; line-height: 1.1; }
         /* HP block is the one ss-block that needs extra vertical room to
            house the gauge + TMP input + shield gauge. Keep it snug but don't
@@ -1084,7 +1086,7 @@
            portrait reads as a medallion rather than an avatar dot.
            Class monogram sits at the lower-right as a pennant. */
         .portrait-circle {
-            width: 64px; height: 64px;
+            width: 50px; height: 50px;
             border-radius: 50%;
             overflow: hidden;
             display: flex; align-items: center; justify-content: center;
@@ -1955,7 +1957,7 @@
     <div class="char-header w-full">
 
         <!-- ROW 1 — Identity + Actions (Design C topbar) -->
-        <div class="max-w-6xl mx-auto px-4 md:px-6 pt-3 pb-2">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 pt-2 pb-1">
             <div class="flex flex-wrap justify-between items-center gap-3">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
                     <a href="/player" class="transition-colors" style="color:var(--t3); font-size:18px; line-height:1;" title="Back to roster">&#8592;</a>
@@ -1970,7 +1972,7 @@
                         <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
                              style="object-position: {{ pc.portrait_focus_x }}% {{ pc.portrait_focus_y }}%;">
                         {% else %}
-                        <span class="font-header" style="font-size:26px;">{{ pc.name[0] }}</span>
+                        <span class="font-header" style="font-size:22px;">{{ pc.name[0] }}</span>
                         {% endif %}
                         <input type="file" id="portrait-upload" class="hidden" accept="image/*" onchange="uploadPortrait(this)">
                         {# Class monogram — three-letter small-cap instead of a
@@ -2346,7 +2348,7 @@
     ═══════════════════════════════════════════════════════════════ #}
     <div class="no-print" id="explore-strip"
          style="background:rgba(34,197,94,0.05); border-bottom:1px solid rgba(34,197,94,0.15);">
-        <div class="max-w-6xl mx-auto px-4 md:px-6 py-1.5" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div class="max-w-6xl mx-auto px-4 md:px-6" style="padding-top:3px; padding-bottom:3px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span class="rubric" data-tint="verdigris">Exploration</span>
             <select id="exploration-select" onchange="setExplorationActivity(this.value)"
                     title="What are you doing while the party travels?"
@@ -2359,7 +2361,7 @@
 
     <!-- SHEET BODY                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 py-5 pb-20">
+    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20">
 
         <!-- Encounter Initiative Bar (populated live via SSE) -->
         <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
