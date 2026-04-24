@@ -2526,9 +2526,41 @@ class Character:
     def ref(self): return self._calc_save('dex', 'reflex')
     @property
     def will(self): return self._calc_save('wis', 'will')
-    
+
+    def _save_breakdown(self, stat_key, prof_key, label):
+        """Human-readable tooltip string for a save / perception-like roll."""
+        prof_val = safe_int(self.proficiencies.get(prof_key), 2)
+        prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'T')
+        stat_mod = self.mods.get(stat_key, 0)
+        sign = lambda v: f"+{v}" if v >= 0 else str(v)
+        parts = [f"{stat_key.upper()} {sign(stat_mod)}"]
+        if prof_val > 0:
+            parts.append(f"{prof_letter} +{prof_val}")
+            parts.append(f"Lvl +{self.level}")
+        abp = get_abp_bonus(self.level, 'save_potency') if prof_key != 'perception' else get_abp_bonus(self.level, 'perception_potency')
+        if abp:
+            parts.append(f"ABP +{abp}")
+        sp = self.get_status_penalty(stat_key)
+        if sp:
+            parts.append(f"status −{sp}")
+        if self.highest_buff:
+            parts.append(f"buff +{self.highest_buff}")
+        rm = self.get_rule_mod(prof_key)
+        if rm:
+            parts.append(f"feat {sign(rm)}")
+        return f"{label}: " + " · ".join(parts)
+
     @property
-    def perception(self): 
+    def fort_breakdown(self): return self._save_breakdown('con', 'fortitude', 'Fortitude')
+    @property
+    def ref_breakdown(self): return self._save_breakdown('dex', 'reflex', 'Reflex')
+    @property
+    def will_breakdown(self): return self._save_breakdown('wis', 'will', 'Will')
+    @property
+    def perception_breakdown(self): return self._save_breakdown('wis', 'perception', 'Perception')
+
+    @property
+    def perception(self):
         prof_val = safe_int(self.proficiencies.get('perception'), 2)
         base = self.mods.get('wis', 0) if prof_val == 0 else self.mods.get('wis', 0) + self.level + prof_val
         abp_perc = get_abp_bonus(self.level, 'perception_potency')
@@ -2622,7 +2654,29 @@ class Character:
             total_mod = val - penalty + self.highest_buff + self.get_rule_mod(skill.lower())
             
             prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'U')
-            res.append({'name': skill.title(), 'stat': stat.upper(), 'prof_val': prof_val, 'prof_letter': prof_letter, 'total': f"+{total_mod}" if total_mod >= 0 else str(total_mod), 'penalty': penalty})
+            # Human-readable breakdown string for roll-button tooltips — lets
+            # players see *why* a skill is +X (which Demiplane is criticized
+            # for hiding). Build out of parts so zero-value parts are omitted.
+            stat_mod = self.mods.get(stat, 0)
+            parts = []
+            sign = lambda v: f"+{v}" if v >= 0 else str(v)
+            parts.append(f"{stat.upper()} {sign(stat_mod)}")
+            if prof_val > 0:
+                parts.append(f"{prof_letter} +{prof_val}")
+                parts.append(f"Lvl +{self.level}")
+            if stat in ['str','dex'] and self.active_armor_penalty:
+                parts.append(f"armor −{self.active_armor_penalty}")
+            if skill == 'stealth' and self.stealth_penalty:
+                parts.append(f"stealth −{self.stealth_penalty}")
+            if penalty:
+                parts.append(f"status −{penalty}")
+            if self.highest_buff:
+                parts.append(f"buff +{self.highest_buff}")
+            rule_mod_val = self.get_rule_mod(skill.lower())
+            if rule_mod_val:
+                parts.append(f"feat {sign(rule_mod_val)}")
+            breakdown = " · ".join(parts)
+            res.append({'name': skill.title(), 'stat': stat.upper(), 'prof_val': prof_val, 'prof_letter': prof_letter, 'total': f"+{total_mod}" if total_mod >= 0 else str(total_mod), 'penalty': penalty, 'breakdown': breakdown})
             
         for skill, prof_val in self.proficiencies.items():
             if skill.startswith('lore:'):
@@ -2730,14 +2784,32 @@ class Character:
                 if t.startswith('deadly'): crit_effects.append(t.title())
                 if t.startswith('fatal'): crit_effects.append(t.title())
             
+            # Attack breakdown tooltip — show why the hit bonus is what it is.
+            sign = lambda v: f"+{v}" if v >= 0 else str(v)
+            atk_parts = [f"{attack_stat.upper()} {sign(stat_mod)}"]
+            if prof_val > 0:
+                atk_parts.append(f"{ {0:'U',2:'T',4:'E',6:'M',8:'L'}.get(prof_val,'T') } +{prof_val}")
+                atk_parts.append(f"Lvl +{self.level}")
+            if abp_hit:
+                atk_parts.append(f"ABP +{abp_hit}")
+            if self.get_status_penalty(attack_stat):
+                atk_parts.append(f"status −{self.get_status_penalty(attack_stat)}")
+            if self.highest_buff:
+                atk_parts.append(f"buff +{self.highest_buff}")
+            if circ_pen:
+                atk_parts.append(f"prone −{circ_pen}")
+            if self.get_rule_mod('attack'):
+                atk_parts.append(f"feat {sign(self.get_rule_mod('attack'))}")
+            atk_breakdown = " · ".join(atk_parts)
             res.append({
-                'name': w.get('name'), 
-                'strikes': strikes, 
-                'damage': dmg_str, 
+                'name': w.get('name'),
+                'strikes': strikes,
+                'damage': dmg_str,
                 'traits': traits,
                 'has_two_hand': has_two_hand_trait,
                 'is_two_handed': is_two_handed,
-                'crit_effects': " | ".join(crit_effects)
+                'crit_effects': " | ".join(crit_effects),
+                'breakdown': atk_breakdown,
             })
         return res
 

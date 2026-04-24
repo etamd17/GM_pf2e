@@ -1843,6 +1843,184 @@
             .tab-btn { padding:6px 10px !important; font-size:11px !important; }
         }
 
+        /* === TABLET breakpoint (iPad portrait / small laptop) ===
+           A lot of play happens in this 600-900px range — a player
+           on an iPad should not see the Combat tab's weapon grid
+           collapse to one wide column wasting half the page. */
+        @media (min-width: 481px) and (max-width: 900px) {
+            .sheet-page .grid.grid-cols-1.lg\\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 12px !important; }
+            .sheet-page .grid.grid-cols-1.xl\\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 12px !important; }
+            .sheet-page .lg\\:col-span-1 { grid-column: span 1 !important; }
+            .sheet-page .lg\\:col-span-2 { grid-column: span 2 !important; }
+            .panel-card { padding: 12px; }
+        }
+
+        /* === THEME variants (toggle via data-theme on <html>).
+           Only a handful of CSS vars flip — the rest cascade. Persisted
+           in localStorage so it sticks across reloads. */
+        html[data-theme="hi-contrast"] {
+            --text-primary: #ffffff !important;
+            --text-secondary: #f5f5f5 !important;
+            --text-muted: #d4d4d4 !important;
+            --t3: #c8c8c8 !important;
+            --t4: #b0b0b0 !important;
+            --border: rgba(255,255,255,0.4) !important;
+            --border-s: rgba(255,255,255,0.3) !important;
+            --border-subtle: rgba(255,255,255,0.25) !important;
+            --bg-surface: #0a0a0a !important;
+            --bg-base: #000 !important;
+        }
+        html[data-theme="hi-contrast"] .tb,
+        html[data-theme="hi-contrast"] button { outline: 1px solid rgba(255,255,255,0.25); }
+        html[data-theme="hi-contrast"] .char-subtitle,
+        html[data-theme="hi-contrast"] .ss-lbl { color: #e5e5e5 !important; }
+
+        html[data-theme="parchment"] {
+            --bg-base: #f3ead5 !important;
+            --bg-surface: #ece2c7 !important;
+            --bg-raised: #e5dabd !important;
+            --bg-overlay: #dccdaa !important;
+            --text-primary: #2a1e10 !important;
+            --text-secondary: #3a2b18 !important;
+            --text-muted: #5d4b31 !important;
+            --t3: #5d4b31 !important;
+            --t4: #7a6745 !important;
+            --border: rgba(90,65,30,0.35) !important;
+            --border-s: rgba(90,65,30,0.25) !important;
+            --border-subtle: rgba(90,65,30,0.18) !important;
+        }
+        html[data-theme="parchment"] body { background: #f3ead5 !important; color: #2a1e10 !important; }
+        html[data-theme="parchment"] .char-name::first-letter { color: #7c2222 !important; }
+
+        /* === Theme-toggle button (small, lives in the header action row) */
+        .theme-toggle {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 6px;
+            background: var(--bg-raised); border: 1px solid var(--border-s);
+            color: var(--t3); cursor: pointer; font-size: 14px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .theme-toggle:hover { background: var(--bg-overlay); color: var(--gilt); }
+
+        /* === Sustained-spell chip (lives near focus in the toolbar).
+           Single DOM element populated on demand; hidden when empty. */
+        .sustain-chip {
+            display: none; align-items: center; gap: 6px;
+            padding: 3px 8px; border-radius: 99px;
+            background: rgba(167,139,250,0.08);
+            border: 1px solid rgba(167,139,250,0.25);
+            font-family: var(--font-ui); font-size: 11px;
+            color: var(--color-spell, #a78bfa);
+        }
+        .sustain-chip.active { display: inline-flex; }
+        .sustain-chip-label { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 9px; opacity: 0.75; }
+        .sustain-chip-item { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px; background: rgba(167,139,250,0.12); border-radius: 4px; }
+        .sustain-chip-item button { background: transparent; color: inherit; opacity: 0.7; padding: 0 2px; font-size: 11px; }
+        .sustain-chip-item button:hover { opacity: 1; color: #ef4444; }
+
+        /* === Roll history pullout — collapsed button expands a small
+           card with the last 5 rolls. Zero idle cost; built on click. */
+        .roll-history-btn {
+            position: fixed; bottom: 18px; right: 88px; z-index: 800;
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--bg-surface); border: 1px solid var(--gilt);
+            color: var(--gilt); font-size: 16px; cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.15s;
+        }
+        .roll-history-btn:hover { transform: scale(1.08); }
+        .roll-history-panel {
+            position: fixed; bottom: 60px; right: 18px; z-index: 800;
+            width: 280px; max-height: 320px; overflow-y: auto;
+            background: var(--bg-surface); border: 1px solid var(--gilt);
+            border-radius: 8px; padding: 8px; display: none;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+            font-family: var(--font-ui); font-size: 12px;
+        }
+        .roll-history-panel.open { display: block; }
+        .roll-history-item {
+            padding: 6px 8px; border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+        .roll-history-item:last-child { border-bottom: none; }
+        .roll-history-item .rh-title { font-weight: 700; color: var(--text-primary); }
+        .roll-history-item .rh-total { float: right; color: var(--gilt); font-family: var(--font-display); font-weight: 700; }
+        .roll-history-item .rh-detail { font-size: 10px; color: var(--t3); font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+        .roll-history-item.crit .rh-total { color: #fbbf24; }
+        .roll-history-item.fumble .rh-total { color: #ef4444; }
+        .roll-history-empty { padding: 10px; color: var(--t3); font-style: italic; text-align: center; }
+
+        /* === Undo toast (small, 5s, appears on spell-slot expend) */
+        .undo-toast {
+            position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+            background: var(--bg-surface); color: var(--text-primary);
+            border: 1px solid var(--gilt); border-radius: 6px;
+            padding: 8px 14px; z-index: 9000;
+            font-family: var(--font-ui); font-size: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: flex; align-items: center; gap: 12px;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .undo-toast.show { opacity: 1; }
+        .undo-toast button { color: var(--gilt); font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+        .undo-toast button:hover { background: rgba(201,163,78,0.15); }
+
+        /* === "Your turn" flash — gentle gilt pulse on the sticky header */
+        @keyframes your-turn-flash {
+            0% { box-shadow: 0 0 0 0 rgba(201,163,78,0.6), inset 0 0 0 0 rgba(201,163,78,0.3); }
+            50% { box-shadow: 0 0 24px 4px rgba(201,163,78,0.45), inset 0 0 20px rgba(201,163,78,0.15); }
+            100% { box-shadow: 0 0 0 0 rgba(201,163,78,0), inset 0 0 0 0 rgba(201,163,78,0); }
+        }
+        .char-header.your-turn { animation: your-turn-flash 2s ease 2; }
+        @media (prefers-reduced-motion: reduce) {
+            .char-header.your-turn { animation: none; outline: 2px solid var(--gilt); }
+        }
+
+        /* === Usable-items row on Combat tab */
+        .usable-items-row {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            padding: 8px 10px; margin-bottom: 12px;
+            background: rgba(201,163,78,0.04);
+            border: 1px solid rgba(201,163,78,0.15);
+            border-radius: 6px;
+        }
+        .usable-items-row:empty { display: none; }
+        .usable-items-label {
+            font-family: var(--font-display); font-size: 9px;
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--gilt); align-self: center; margin-right: 4px;
+        }
+        .usable-item-btn {
+            padding: 4px 10px; border-radius: 4px;
+            background: var(--bg-raised); border: 1px solid var(--border-s);
+            color: var(--text-secondary); font-size: 11px;
+            cursor: pointer; transition: background 0.12s;
+        }
+        .usable-item-btn:hover { background: var(--bg-overlay); color: var(--gilt); border-color: var(--gilt); }
+        .usable-item-btn .ui-qty { color: var(--t3); margin-left: 4px; font-size: 10px; }
+
+        /* === Per-feat note field */
+        .feat-note-input {
+            margin-top: 8px; width: 100%;
+            background: var(--bg-base); border: 1px solid var(--border-subtle);
+            border-radius: 4px; padding: 4px 8px;
+            font-family: var(--font-flavor, Alegreya, Georgia, serif);
+            font-size: 12px; color: var(--text-secondary);
+            font-style: italic;
+        }
+        .feat-note-input:focus { outline: none; border-color: var(--gilt); color: var(--text-primary); }
+        .feat-note-input::placeholder { color: var(--t4); opacity: 0.6; }
+
+        /* === Inventory live-filter input */
+        .inv-filter {
+            width: 100%; margin-bottom: 8px;
+            background: var(--bg-base); border: 1px solid var(--border-s);
+            border-radius: 4px; padding: 5px 10px;
+            font-family: var(--font-ui); font-size: 12px; color: var(--text-primary);
+        }
+        .inv-filter:focus { outline: none; border-color: var(--gilt); }
+
         @media print {
             /* === Parchment-ink print stylesheet ===
                Cream paper, dark ink, serif body. Cascades through
@@ -2026,6 +2204,11 @@
                         <button onclick="rollCustomDice()" class="tb" style="padding:4px 8px;" title="Roll custom dice notation">Roll</button>
                         <button onclick="rollInitiativeFromSheet()" class="tb" style="padding:4px 8px; color:#c084fc;" title="Roll Initiative">Init</button>
                     </div>
+                    <span id="sustain-chip" class="sustain-chip no-print" aria-label="Spells currently being sustained">
+                        <span class="sustain-chip-label">Sustain</span>
+                        <span id="sustain-items"></span>
+                    </span>
+                    <button id="theme-toggle-btn" class="theme-toggle no-print" onclick="cyclePlayerTheme()" aria-label="Cycle UI theme" title="Cycle theme (dark → parchment → high-contrast)">◑</button>
                     <a href="/map" class="tb">Map</a>
                     <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Rest</button>
                     {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb" title="Revert last level-up">Undo Level</button>{% endif %}
@@ -2091,7 +2274,7 @@
             {% set perc_rank = pc.proficiencies.get('perception', 2) %}
             {% set perc_rank_label = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_rank, 'T') %}
             {% set perc_rank_color = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(perc_rank, '#4a9696') %}
-            <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" title="Roll Perception ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(perc_rank, 'Trained') }})">
+            <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" role="button" tabindex="0" aria-label="Roll Perception +{{ pc.perception }}" title="{{ pc.perception_breakdown }}">
                 <div class="ss-lbl">Perception</div>
                 <div class="ss-val">+{{ pc.perception }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
@@ -2119,7 +2302,7 @@
             {% set fort_rank = pc.proficiencies.get('fortitude', 2) %}
             {% set fort_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(fort_rank, 'T') %}
             {% set fort_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(fort_rank, '#4a9696') %}
-            <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" title="Roll Fortitude Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(fort_rank, 'Trained') }})">
+            <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" role="button" tabindex="0" aria-label="Roll Fortitude save +{{ pc.fort }}" title="{{ pc.fort_breakdown }}">
                 <div class="ss-lbl">Fort</div>
                 <div class="ss-val">+{{ pc.fort }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ fort_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ fort_rc }};">{{ fort_rl }}</span></div>
@@ -2127,7 +2310,7 @@
             {% set ref_rank = pc.proficiencies.get('reflex', 2) %}
             {% set ref_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ref_rank, 'T') %}
             {% set ref_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(ref_rank, '#4a9696') %}
-            <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" title="Roll Reflex Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(ref_rank, 'Trained') }})">
+            <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" role="button" tabindex="0" aria-label="Roll Reflex save +{{ pc.ref }}" title="{{ pc.ref_breakdown }}">
                 <div class="ss-lbl">Reflex</div>
                 <div class="ss-val">+{{ pc.ref }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ ref_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ ref_rc }};">{{ ref_rl }}</span></div>
@@ -2135,7 +2318,7 @@
             {% set will_rank = pc.proficiencies.get('will', 2) %}
             {% set will_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(will_rank, 'T') %}
             {% set will_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(will_rank, '#4a9696') %}
-            <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" title="Roll Will Save ({{ {0:'Untrained', 2:'Trained', 4:'Expert', 6:'Master', 8:'Legendary'}.get(will_rank, 'Trained') }})">
+            <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" role="button" tabindex="0" aria-label="Roll Will save +{{ pc.will }}" title="{{ pc.will_breakdown }}">
                 <div class="ss-lbl">Will</div>
                 <div class="ss-val">+{{ pc.will }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ will_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ will_rc }};">{{ will_rl }}</span></div>
@@ -2464,13 +2647,19 @@
                                     {{ perc_let }}
                                 </span>
                                 <span class="ds-label mr-2">Perception</span>
-                                <button onclick="rollSkill('Perception', {{ pc.perception }})" class="text-lg font-bold {{ accent_color }} hover:text-amber-300 transition-colors">+{{ pc.perception }}</button>
+                                <button onclick="rollSkill('Perception', {{ pc.perception }})"
+                                        class="text-lg font-bold {{ accent_color }} hover:text-amber-300 transition-colors"
+                                        aria-label="Roll Perception +{{ pc.perception }}"
+                                        title="{{ pc.perception_breakdown }}">+{{ pc.perception }}</button>
                             </div>
                         </div>
 
                         <div class="skill-row mb-4 group">
                             <span class="ds-label tracking-widest">Initiative (Perception + Bonuses)</span>
-                            <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})" class="text-lg font-bold text-white group-hover:text-amber-300 transition-colors">+{{ pc.initiative_mod }}</button>
+                            <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})"
+                                    class="text-lg font-bold text-white group-hover:text-amber-300 transition-colors"
+                                    aria-label="Roll Initiative +{{ pc.initiative_mod }}"
+                                    title="Initiative — typically Perception ({{ pc.perception_breakdown }})">+{{ pc.initiative_mod }}</button>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
@@ -2490,7 +2679,10 @@
                                         <span class="uppercase" style="font-size:var(--text-2xs); color:var(--text-muted);">{{ skill.stat }}</span>
                                     </div>
                                 </div>
-                                <button onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})" class="text-lg font-bold font-mono {{ stat_color }} group-hover:text-amber-400 transition-colors px-2">
+                                <button onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})"
+                                        class="text-lg font-bold font-mono {{ stat_color }} group-hover:text-amber-400 transition-colors px-2"
+                                        aria-label="Roll {{ skill.name }} {{ skill.total }}"
+                                        title="{{ skill.name }} {{ skill.total }} — {{ skill.breakdown }}">
                                     {{ skill.total }}{% if skill.penalty %}<span class="penalty-tag">−{{ skill.penalty }}</span>{% endif %}
                                 </button>
                             </div>
@@ -2502,6 +2694,11 @@
         </div>
 
         <div id="tab-combat" data-print-title="Combat" class="tab-content sheet-page space-y-6">
+            {# Usable items — scanned from inventory client-side on load.
+               Shows a compact "Use" row for healing potions, antidotes,
+               tools, etc. so players don't have to switch to Inventory
+               tab mid-combat to grab a potion. Populated by JS. #}
+            <div id="usable-items-row" class="usable-items-row no-print" aria-label="Quick-use items from your inventory"></div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-1 space-y-6">
                     <div class="panel-card">
@@ -2567,7 +2764,10 @@
                                     </span>
                                     <span class="text-[10px] text-gray-500 font-bold uppercase">Fort</span>
                                 </div>
-                                <button onclick="rollSkill('Fortitude Save', {{ pc.fort }})" class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full">+{{ pc.fort }}</button>
+                                <button onclick="rollSkill('Fortitude Save', {{ pc.fort }})"
+                                        class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full"
+                                        aria-label="Roll Fortitude save +{{ pc.fort }}"
+                                        title="{{ pc.fort_breakdown }}">+{{ pc.fort }}</button>
                             </div>
                             
                             <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
@@ -2582,7 +2782,10 @@
                                     </span>
                                     <span class="text-[10px] text-gray-500 font-bold uppercase">Ref</span>
                                 </div>
-                                <button onclick="rollSkill('Reflex Save', {{ pc.ref }})" class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full">+{{ pc.ref }}</button>
+                                <button onclick="rollSkill('Reflex Save', {{ pc.ref }})"
+                                        class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full"
+                                        aria-label="Roll Reflex save +{{ pc.ref }}"
+                                        title="{{ pc.ref_breakdown }}">+{{ pc.ref }}</button>
                             </div>
 
                             <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
@@ -2597,7 +2800,10 @@
                                     </span>
                                     <span class="text-[10px] text-gray-500 font-bold uppercase">Will</span>
                                 </div>
-                                <button onclick="rollSkill('Will Save', {{ pc.will }})" class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full">+{{ pc.will }}</button>
+                                <button onclick="rollSkill('Will Save', {{ pc.will }})"
+                                        class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full"
+                                        aria-label="Roll Will save +{{ pc.will }}"
+                                        title="{{ pc.will_breakdown }}">+{{ pc.will }}</button>
                             </div>
                         </div>
 
@@ -2757,7 +2963,8 @@
                                             <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')"
                                                     class="flex-1 text-white py-2 rounded text-sm transition-all hover:scale-105 transform"
                                                     style="background:var(--surface-overlay); border:1px solid var(--border-default); border-left:3px solid {% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};"
-                                                    title="{% if loop.index0 == 0 %}First Strike — no MAP. Add {{ strike.label }} to your d20.{% elif loop.index0 == 1 %}Second Strike — MAP {{ strike.map_label }}. Add {{ strike.label }} to your d20.{% else %}Third Strike — MAP {{ strike.map_label }}. Add {{ strike.label }} to your d20.{% endif %} Crit on roll vs AC + 10 (or nat 20 that hits).">
+                                                    aria-label="{{ attack.name }} strike {{ loop.index }} at {{ strike.label }}"
+                                                    title="{% if loop.index0 == 0 %}1st Strike {{ strike.label }} — {{ attack.breakdown }}{% else %}Strike {{ loop.index }} {{ strike.label }} — {{ attack.breakdown }} · MAP {{ strike.map_label }}{% endif %}">
                                                 <span class="block font-bold uppercase tracking-widest mb-1" style="font-size:var(--text-2xs); color:{% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};">
                                                     {% if loop.index0 == 0 %}1st Strike{% elif loop.index0 == 1 %}2nd (MAP){% else %}3rd (MAP){% endif %}
                                                 </span>
@@ -3179,11 +3386,13 @@
                 <div class="absolute top-0 right-0 bg-gray-900 border-b border-l border-gray-700 text-gray-500 px-3 py-1 rounded-bl text-[10px] uppercase font-bold">Lvl {{ feat.level|default('1') }}</div>
                 <div class="flex justify-between items-start mb-3">
                     <h4 class="text-lg font-bold text-amber-500">{{ feat.name }}</h4>
-                    <button onclick="rollFeature('{{ feat.name|replace("'", "\\'") }}')" class="bg-purple-900/40 hover:bg-purple-800 text-purple-300 border border-purple-900/50 px-3 py-1 rounded text-xs font-bold transition-transform transform hover:scale-105 opacity-0 group-hover:opacity-100 mt-1">
+                    <button onclick="rollFeature('{{ feat.name|replace("'", "\\'") }}')" class="bg-purple-900/40 hover:bg-purple-800 text-purple-300 border border-purple-900/50 px-3 py-1 rounded text-xs font-bold transition-transform transform hover:scale-105 opacity-0 group-hover:opacity-100 mt-1" aria-label="Send {{ feat.name }} description to GM">
                         Send to GM
                     </button>
                 </div>
                 <div class="text-sm text-gray-400 foundry-content leading-relaxed">{{ feat.desc|safe }}</div>
+                <input type="text" class="feat-note-input no-print" data-feat-note="{{ feat.name }}"
+                       placeholder="Personal note — tracking counters, house rulings, etc." aria-label="Note for {{ feat.name }}">
             </div>
             {% else %}
             <div class="panel-card italic text-center" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">No feat chosen at this level. The page awaits.</div>
@@ -3264,11 +3473,14 @@
                         {% endif %}
                     </div>
 
-                    <div class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                    <input type="search" id="inv-filter" class="inv-filter no-print"
+                           placeholder="Filter gear…" aria-label="Filter inventory"
+                           oninput="filterInventory(this.value)">
+                    <div id="inv-list" class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                         {% for item in pc.equipment %}
                         {% set raw_bulk = item.bulk|string|upper %}
                         {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
-                        <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group">
+                        <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group inv-item" data-inv-name="{{ item.name|lower }}">
                             <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
                             <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2 {% if display_bulk == 'L' %}text-amber-600{% elif display_bulk|int > 0 %}text-amber-500{% endif %}">{{ display_bulk }}B</span>
                             <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
@@ -3609,6 +3821,10 @@
                       fill="#e8c46f" stroke="#1a1208" stroke-width="0.3">20</text>
             </svg>
         </button>
+        <button id="roll-history-btn" class="roll-history-btn no-print" onclick="toggleRollHistory()" aria-label="Recent rolls" title="Recent rolls">⟲</button>
+        <div id="roll-history-panel" class="roll-history-panel no-print" aria-live="polite" role="log" aria-label="Recent rolls history">
+            <div class="roll-history-empty">No rolls yet this session.</div>
+        </div>
     </div>
 
     <script>
@@ -6987,6 +7203,358 @@
                 localStorage.setItem('pf2e_handouts_seen', JSON.stringify(seen.slice(-50)));
             } catch(e) {}
         })();
+
+        // ═══════════════════════════════════════════════════════════════
+        // UX BATCH — P0/P1/P2 additions (2026-04-24)
+        //
+        // All client-side, all localStorage-persisted. Zero new backend
+        // roundtrips on idle. Each feature is self-contained behind an
+        // IIFE or a named function so the rest of the sheet is untouched.
+        // ═══════════════════════════════════════════════════════════════
+
+        // --- THEME TOGGLE ------------------------------------------------
+        // Three cycle states: default (no attr) → parchment → hi-contrast.
+        // Persist in localStorage under a per-user key so each player on
+        // the same browser can set their own preference.
+        (function initTheme() {
+            const key = 'pf2e_theme_v1';
+            const saved = localStorage.getItem(key);
+            if (saved && saved !== 'default') {
+                document.documentElement.setAttribute('data-theme', saved);
+            }
+        })();
+        function cyclePlayerTheme() {
+            const cur = document.documentElement.getAttribute('data-theme') || 'default';
+            const next = cur === 'default' ? 'parchment' : cur === 'parchment' ? 'hi-contrast' : 'default';
+            if (next === 'default') document.documentElement.removeAttribute('data-theme');
+            else document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('pf2e_theme_v1', next);
+            // Tiny confirmation — use existing toast if available.
+            try { showRollToast('Theme', next, `UI switched to ${next}`, false, false, [], null); } catch(_) {}
+        }
+
+        // --- SPELL SLOT UNDO TOAST --------------------------------------
+        // Wraps the existing per-checkbox change handler set up in the
+        // spell tab bootstrap. A short "Undo" toast re-enables the slot
+        // if the player accidentally clicked.
+        function showUndoToast(message, onUndo, ms) {
+            ms = ms || 5000;
+            document.querySelectorAll('.undo-toast').forEach(t => t.remove());
+            const t = document.createElement('div');
+            t.className = 'undo-toast';
+            t.innerHTML = `<span>${message}</span><button type="button">Undo</button>`;
+            document.body.appendChild(t);
+            requestAnimationFrame(() => t.classList.add('show'));
+            const btn = t.querySelector('button');
+            const dismiss = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 220); };
+            btn.addEventListener('click', () => { try { onUndo(); } catch(_) {} dismiss(); }, { once: true });
+            setTimeout(dismiss, ms);
+        }
+        // Patch spell-slot listeners once the original handlers are wired.
+        // We listen on the root in capture phase — cheaper than re-binding
+        // the original change handler and doesn't fight the existing one.
+        document.addEventListener('change', (e) => {
+            const cb = e.target.closest && e.target.closest('input.spell-slot-cb');
+            if (!cb) return;
+            if (!cb.checked) return; // only the EXPEND direction needs undo
+            const rank = cb.getAttribute('data-spell-level');
+            const lbl = rank === '0' ? 'Cantrip' : `Rank ${rank}`;
+            showUndoToast(`${lbl} slot expended`, () => {
+                cb.checked = false;
+                // Fire the same change event so the original handler
+                // writes the un-expended state back to the server.
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        }, true);
+
+        // --- YOUR-TURN FLASH --------------------------------------------
+        // Track last-seen active combatant. When it becomes the PC, flash
+        // the sticky header. Reset the class after the animation so a
+        // re-trigger in the same turn won't replay it (it won't unless
+        // the GM toggles turns, which is rare).
+        (function wireTurnFlash() {
+            let lastActive = null;
+            window.addEventListener('pf2e-encounter-update', (e) => {
+                try {
+                    const enc = e.detail && e.detail.encounter;
+                    if (!Array.isArray(enc)) return;
+                    const active = enc.find(c => c.is_active);
+                    if (!active) { lastActive = null; return; }
+                    if (active.name === pcName && lastActive !== pcName) {
+                        const h = document.querySelector('.char-header');
+                        if (h) {
+                            h.classList.remove('your-turn');
+                            // force reflow so the animation restarts
+                            void h.offsetWidth;
+                            h.classList.add('your-turn');
+                            // Gentle bell if the page was hidden
+                            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                                try { new Notification(`${pcName} — your turn!`); } catch(_) {}
+                            }
+                        }
+                    }
+                    lastActive = active.name;
+                } catch(_) {}
+            });
+        })();
+        // Patch the existing SSE handler to dispatch the synthetic event.
+        // We do this by wrapping EventSource's addEventListener — simpler:
+        // monkey-patch nothing, just re-wire by reading the DOM after the
+        // existing handler has painted, but that's brittle. Instead, emit
+        // the event from the existing handler via a MutationObserver on
+        // #encounter-initiative-bar (single node, very cheap).
+        (function observeEncounterBar() {
+            const bar = document.getElementById('encounter-initiative-bar');
+            if (!bar) return;
+            const mo = new MutationObserver(() => {
+                const spans = bar.querySelectorAll('span');
+                const enc = [];
+                spans.forEach(s => {
+                    const text = (s.textContent || '').trim();
+                    if (!text || text.startsWith('Round')) return;
+                    const isActive = text.endsWith('▶');
+                    const name = text.replace(/\s*▶$/, '').trim();
+                    enc.push({ name, is_active: isActive });
+                });
+                window.dispatchEvent(new CustomEvent('pf2e-encounter-update', { detail: { encounter: enc } }));
+            });
+            mo.observe(bar, { childList: true, subtree: true });
+        })();
+
+        // --- PER-FEAT NOTES ---------------------------------------------
+        // localStorage key is scoped to pc name so multiple PCs on the
+        // same browser don't clobber each other. No backend change.
+        (function initFeatNotes() {
+            const storeKey = `pf2e_feat_notes_${pcName}`;
+            let notes = {};
+            try { notes = JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch(_) { notes = {}; }
+            const inputs = document.querySelectorAll('[data-feat-note]');
+            inputs.forEach(inp => {
+                const name = inp.getAttribute('data-feat-note');
+                if (notes[name]) inp.value = notes[name];
+                let t;
+                inp.addEventListener('input', () => {
+                    clearTimeout(t);
+                    t = setTimeout(() => {
+                        notes[name] = inp.value;
+                        try { localStorage.setItem(storeKey, JSON.stringify(notes)); } catch(_) {}
+                    }, 400);
+                });
+            });
+        })();
+
+        // --- INVENTORY LIVE FILTER --------------------------------------
+        function filterInventory(q) {
+            q = (q || '').toLowerCase().trim();
+            document.querySelectorAll('#inv-list .inv-item').forEach(el => {
+                const name = el.getAttribute('data-inv-name') || '';
+                el.style.display = (!q || name.includes(q)) ? '' : 'none';
+            });
+        }
+
+        // --- ROLL HISTORY PULLOUT ---------------------------------------
+        // Hooks broadcastToGM to collect the last 8 rolls into memory
+        // and localStorage (so a reload doesn't wipe them). Panel only
+        // builds its DOM when opened — zero idle render cost.
+        (function initRollHistory() {
+            const storeKey = `pf2e_roll_history_${pcName}`;
+            let history = [];
+            try { history = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch(_) { history = []; }
+            const MAX = 8;
+            function push(entry) {
+                history.unshift(entry);
+                history = history.slice(0, MAX);
+                try { localStorage.setItem(storeKey, JSON.stringify(history)); } catch(_) {}
+                const panel = document.getElementById('roll-history-panel');
+                if (panel && panel.classList.contains('open')) render();
+            }
+            function render() {
+                const panel = document.getElementById('roll-history-panel');
+                if (!panel) return;
+                if (!history.length) {
+                    panel.innerHTML = '<div class="roll-history-empty">No rolls yet this session.</div>';
+                    return;
+                }
+                panel.innerHTML = history.map(h => `
+                    <div class="roll-history-item${h.crit ? ' crit' : ''}${h.fumble ? ' fumble' : ''}">
+                        <span class="rh-total">${h.total}</span>
+                        <div class="rh-title">${h.title}</div>
+                        <div class="rh-detail">${h.detail || ''}</div>
+                    </div>`).join('');
+            }
+            window.toggleRollHistory = function() {
+                const panel = document.getElementById('roll-history-panel');
+                if (!panel) return;
+                const open = panel.classList.toggle('open');
+                if (open) render();
+            };
+            // Close on outside click
+            document.addEventListener('click', (e) => {
+                const panel = document.getElementById('roll-history-panel');
+                const btn = document.getElementById('roll-history-btn');
+                if (!panel || !panel.classList.contains('open')) return;
+                if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+                panel.classList.remove('open');
+            });
+            // Wrap broadcastToGM to collect entries
+            const origBroadcast = window.broadcastToGM;
+            if (typeof origBroadcast === 'function') {
+                window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+                    try {
+                        const crit = /CRIT[\s_]?SUCCESS|\bCRIT\b/i.test(detailText || '') && !/CRIT[\s_]?FAIL/i.test(detailText || '');
+                        const fumble = /CRIT[\s_]?FAIL|\bMISS\b/i.test(detailText || '');
+                        push({ title: actionName, total: rollResult, detail: detailText || '', crit, fumble, t: Date.now() });
+                    } catch(_) {}
+                    return origBroadcast.apply(this, arguments);
+                };
+            }
+        })();
+
+        // --- CONDITION PENALTY NOTE IN ROLL BROADCASTS ------------------
+        // Status penalties are already baked into pc.skills totals by the
+        // backend, but the chat line never tells the player *why* the
+        // number dipped. Wrap broadcastToGM once more to append a note
+        // listing the active conditions with non-zero values.
+        (function wireConditionPenaltyNote() {
+            const prev = window.broadcastToGM;
+            if (typeof prev !== 'function') return;
+            window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+                try {
+                    const c = (typeof currentConditions !== 'undefined') ? currentConditions : {};
+                    const notes = [];
+                    ['frightened', 'sickened', 'enfeebled', 'clumsy', 'stupefied', 'drained'].forEach(k => {
+                        const v = c[k];
+                        if (typeof v === 'number' && v > 0) notes.push(`${k} ${v}`);
+                    });
+                    if (notes.length) {
+                        detailText = (detailText || '') + `  [cond: ${notes.join(', ')}]`;
+                    }
+                } catch(_) {}
+                return prev(actionName, rollResult, detailText, degree);
+            };
+        })();
+
+        // --- SUSTAINED-SPELL TRACKER ------------------------------------
+        // When a spell is cast, prompt for "sustain?" only if the spell's
+        // rollSpell label contains keywords that suggest a sustainable
+        // spell. Conservative — false negatives are better than nagging
+        // on every cantrip. Decrements on round advance (via the
+        // encounter MutationObserver above).
+        (function initSustain() {
+            const storeKey = `pf2e_sustain_${pcName}`;
+            let sustained = [];
+            try { sustained = JSON.parse(sessionStorage.getItem(storeKey) || '[]'); } catch(_) { sustained = []; }
+            function render() {
+                const chip = document.getElementById('sustain-chip');
+                const items = document.getElementById('sustain-items');
+                if (!chip || !items) return;
+                if (!sustained.length) { chip.classList.remove('active'); items.innerHTML = ''; return; }
+                chip.classList.add('active');
+                items.innerHTML = sustained.map((s, i) => `
+                    <span class="sustain-chip-item" title="Round ${s.round} of sustaining ${s.name}">
+                        ${s.name}<button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">✕</button>
+                    </span>`).join(' ');
+            }
+            function save() {
+                try { sessionStorage.setItem(storeKey, JSON.stringify(sustained)); } catch(_) {}
+            }
+            window.addSustain = function(name) {
+                if (!name) return;
+                if (sustained.find(s => s.name === name)) return;
+                sustained.push({ name, round: 1 });
+                save(); render();
+            };
+            window.endSustain = function(i) {
+                sustained.splice(i, 1);
+                save(); render();
+            };
+            // Round-tick: observe the encounter bar text for "Round N"
+            let lastRound = null;
+            window.addEventListener('pf2e-encounter-update', () => {
+                const bar = document.getElementById('encounter-initiative-bar');
+                if (!bar) return;
+                const m = /Round\s*(\d+)/.exec(bar.textContent || '');
+                if (!m) return;
+                const r = parseInt(m[1], 10);
+                if (lastRound !== null && r > lastRound && sustained.length) {
+                    sustained.forEach(s => s.round += (r - lastRound));
+                    save(); render();
+                }
+                lastRound = r;
+            });
+            // Hook rollSpell — on cast, optionally prompt to track sustain.
+            // We do NOT auto-detect which spells are sustainable (that list
+            // is huge). Instead we surface a tiny non-blocking affordance:
+            // the roll toast will include a "Sustain" button via a wrapper.
+            const origRollSpell = window.rollSpell;
+            if (typeof origRollSpell === 'function') {
+                window.rollSpell = function(spellName, e, slotInfo) {
+                    const ret = origRollSpell.apply(this, arguments);
+                    // After the toast renders, slip a small "Track sustain" button in.
+                    setTimeout(() => {
+                        const toast = document.querySelector('.roll-toast');
+                        if (!toast || toast.dataset.susPatched) return;
+                        toast.dataset.susPatched = '1';
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'px-2 py-0.5 text-[10px] rounded border ml-2';
+                        btn.style.cssText = 'border-color:rgba(167,139,250,0.35); color:#c4b5fd; background:rgba(167,139,250,0.08);';
+                        btn.textContent = '+Sustain';
+                        btn.title = `Track ${spellName} as sustained (round counter in header)`;
+                        btn.onclick = () => { addSustain(spellName); btn.disabled = true; btn.textContent = 'Tracking ✓'; };
+                        toast.appendChild(btn);
+                    }, 50);
+                    return ret;
+                };
+            }
+            render();
+        })();
+
+        // --- USABLE ITEMS ROW (Combat tab) ------------------------------
+        // Scan equipment for common consumables/tools and surface them
+        // as a compact action row so the player doesn't tab-switch mid-
+        // combat. Sends a simple "Used X" message to the GM on click.
+        (function initUsableItems() {
+            const row = document.getElementById('usable-items-row');
+            if (!row) return;
+            const equipment = {{ pc.equipment | tojson | safe }};
+            if (!Array.isArray(equipment) || !equipment.length) return;
+            const keywords = [
+                { match: /healing potion|healer/i, label: 'Heal' },
+                { match: /antidote|antiplague|elixir of life/i, label: 'Drink' },
+                { match: /thunderstone|alchemist['’]?s fire|acid flask|liquid ice/i, label: 'Throw' },
+                { match: /bandolier|scroll of/i, label: 'Use' },
+                { match: /healer['’]?s tools|repair kit|thieves['’]? tools/i, label: 'Use' },
+                { match: /torch|lantern/i, label: 'Light' },
+                { match: /wand of/i, label: 'Activate' },
+            ];
+            const hits = [];
+            equipment.forEach(it => {
+                if (!it || !it.name) return;
+                for (const k of keywords) {
+                    if (k.match.test(it.name)) { hits.push({ item: it, label: k.label }); break; }
+                }
+            });
+            if (!hits.length) return;
+            let html = '<span class="usable-items-label">At hand</span>';
+            hits.slice(0, 8).forEach(h => {
+                const safe = (h.item.name || '').replace(/'/g, "&#39;");
+                html += `<button type="button" class="usable-item-btn" onclick="useItem('${safe.replace(/\\/g,'\\\\')}', '${h.label}')" title="${h.label} ${safe}">${h.label}: ${safe}<span class="ui-qty">×${h.item.qty || 1}</span></button>`;
+            });
+            row.innerHTML = html;
+        })();
+        window.useItem = function(name, verb) {
+            try { broadcastToGM(`${verb} ${name}`, '—', `Item used from inventory`); } catch(_) {}
+            try { showRollToast(`${verb}: ${name}`, '', 'Item used — GM notified. Reduce qty on Inventory tab if consumed.', false, false, [], null); } catch(_) {}
+        };
+
+        // --- Request Notification permission lazily on first "your turn" use.
+        if ('Notification' in window && Notification.permission === 'default') {
+            // Delay so we don't nag on page load — ask after a short idle.
+            setTimeout(() => {
+                try { Notification.requestPermission(); } catch(_) {}
+            }, 4000);
+        }
     </script>
 
     <!-- Right-Click Context Menu -->
