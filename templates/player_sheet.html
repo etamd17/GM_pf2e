@@ -2021,6 +2021,244 @@
         }
         .inv-filter:focus { outline: none; border-color: var(--gilt); }
 
+        /* === Wave 2 UX additions ============================== */
+
+        /* Connection-status pip — sits in the upper-left corner of the sticky
+           header. Soft, ambient — only catches the eye when it goes red. */
+        .conn-pip {
+            position: absolute; top: 8px; left: 6px; z-index: 5;
+            display: inline-flex; align-items: center; gap: 4px;
+            font-family: var(--font-display); font-size: 8px;
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--t4); pointer-events: none;
+            user-select: none;
+        }
+        .conn-pip-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #4ade80;
+            box-shadow: 0 0 4px rgba(74,222,128,0.5);
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .conn-pip[data-state="stale"] .conn-pip-dot { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.6); }
+        .conn-pip[data-state="dead"] .conn-pip-dot { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.7); animation: conn-blink 1.4s ease infinite; }
+        .conn-pip[data-state="dead"] { color: #ef4444; pointer-events: auto; cursor: pointer; }
+        @keyframes conn-blink { 50% { opacity: 0.3; } }
+        @media (prefers-reduced-motion: reduce) {
+            .conn-pip[data-state="dead"] .conn-pip-dot { animation: none; }
+        }
+
+        /* Save indicator — generic chip that appears next to fields after
+           a successful auto-save, fades out on its own. */
+        .save-flash {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 9px; font-family: var(--font-display);
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: #4ade80; opacity: 0; transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+        .save-flash.show { opacity: 0.85; }
+        .save-flash::before { content: '✓'; font-size: 10px; }
+
+        /* Strike chain — dim spent strikes in the current turn so the
+           player's eye lands on the next one. Reset on turn-tick. */
+        .strike-spent { opacity: 0.45; filter: saturate(0.7); }
+        .strike-next { box-shadow: 0 0 0 2px var(--gilt) inset, 0 0 8px rgba(201,163,78,0.35) !important; }
+
+        /* Dying widget — appears overtop the HP block when current_hp <= 0.
+           Loud red, can't miss. */
+        .dying-widget {
+            display: none; flex-direction: column; gap: 4px;
+            padding: 8px 10px; margin-top: 6px;
+            background: linear-gradient(180deg, rgba(124,34,34,0.25), rgba(60,12,12,0.3));
+            border: 1px solid rgba(239,68,68,0.5);
+            border-radius: 6px;
+            font-family: var(--font-ui); font-size: 12px; color: #fecaca;
+        }
+        .dying-widget.active { display: flex; }
+        .dying-widget-title {
+            font-family: var(--font-display); font-size: 11px;
+            letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700;
+            color: #ef4444;
+        }
+        .dying-widget-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .dying-widget button {
+            padding: 3px 10px; border-radius: 4px;
+            background: rgba(239,68,68,0.18);
+            border: 1px solid rgba(239,68,68,0.4);
+            color: #fecaca; font-size: 11px; font-weight: 700;
+            cursor: pointer; transition: background 0.12s;
+        }
+        .dying-widget button:hover { background: rgba(239,68,68,0.32); }
+        .dying-widget button.recovery { background: rgba(74,222,128,0.15); border-color: rgba(74,222,128,0.4); color: #bbf7d0; }
+        .dying-widget button.recovery:hover { background: rgba(74,222,128,0.25); }
+
+        /* Skill-action quick row — Combat tab. Compact button strip for the
+           highest-frequency PF2e skill actions. */
+        .skill-actions-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 6px;
+            padding: 8px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-s);
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+        .skill-action-btn {
+            display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+            padding: 6px 10px; border-radius: 4px;
+            background: var(--bg-base); border: 1px solid var(--border-subtle);
+            color: var(--text-secondary); cursor: pointer;
+            transition: border-color 0.12s, background 0.12s;
+            text-align: left;
+        }
+        .skill-action-btn:hover { border-color: var(--gilt); background: var(--bg-overlay); color: var(--gilt); }
+        .skill-action-btn-name { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+        .skill-action-btn-meta { font-size: 9px; color: var(--t3); letter-spacing: 0.04em; }
+        .skill-action-btn .action-cost { float: right; opacity: 0.7; }
+
+        /* Heighten-rank picker — small inline popover after spell click. */
+        .heighten-picker {
+            position: absolute; z-index: 9000;
+            background: var(--bg-surface); border: 1px solid var(--gilt);
+            border-radius: 6px; padding: 6px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+            display: flex; gap: 4px; flex-wrap: wrap;
+            min-width: 180px;
+        }
+        .heighten-picker-label {
+            width: 100%; font-family: var(--font-display); font-size: 9px;
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--gilt); margin-bottom: 4px;
+        }
+        .heighten-rank-btn {
+            padding: 4px 10px; border-radius: 4px;
+            background: var(--bg-raised); border: 1px solid var(--border-s);
+            color: var(--text-secondary); font-family: var(--font-display);
+            font-weight: 700; cursor: pointer; min-width: 30px;
+            transition: background 0.1s;
+        }
+        .heighten-rank-btn:hover { background: var(--gilt); color: #1a1208; border-color: var(--gilt); }
+        .heighten-rank-btn.base { border-color: var(--gilt); }
+
+        /* PF2e jargon glossary tooltip (delegated, single element) */
+        #pf2e-glossary-tooltip {
+            position: fixed; z-index: 9500;
+            background: linear-gradient(180deg, #1a1613 0%, #120f0c 100%);
+            border: 1px solid var(--gilt); border-radius: 4px;
+            padding: 8px 12px; max-width: 280px;
+            font-family: var(--font-flavor, Alegreya, Georgia, serif);
+            font-size: 12px; line-height: 1.4; color: #cfc4a8;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+            pointer-events: none; display: none;
+        }
+        #pf2e-glossary-tooltip strong {
+            display: block; font-family: var(--font-display);
+            font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+            color: var(--gilt); margin-bottom: 4px;
+        }
+        .has-glossary { border-bottom: 1px dotted rgba(201,163,78,0.45); cursor: help; }
+
+        /* Class cheat-sheet card — collapsible, on Feats tab */
+        .class-cheatsheet {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-s);
+            border-left: 3px solid var(--gilt);
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+        }
+        .class-cheatsheet summary {
+            font-family: var(--font-display); font-size: 13px;
+            letter-spacing: 0.1em; text-transform: uppercase;
+            color: var(--gilt); cursor: pointer; outline: none;
+            list-style: none; user-select: none;
+        }
+        .class-cheatsheet summary::-webkit-details-marker { display: none; }
+        .class-cheatsheet summary::before { content: '▸ '; transition: transform 0.15s; display: inline-block; }
+        .class-cheatsheet[open] summary::before { transform: rotate(90deg); }
+        .class-cheatsheet-body { margin-top: 10px; font-family: var(--font-flavor); font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+        .class-cheatsheet-body ul { padding-left: 18px; margin: 4px 0; }
+        .class-cheatsheet-body li { margin: 3px 0; }
+        .class-cheatsheet-body strong { color: var(--gilt); font-family: var(--font-display); font-weight: 700; }
+
+        /* Invested chip on Inventory */
+        .invested-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 3px 10px; border-radius: 99px;
+            background: rgba(167,139,250,0.08);
+            border: 1px solid rgba(167,139,250,0.25);
+            font-size: 11px; color: #c4b5fd;
+            font-family: var(--font-ui);
+        }
+        .invested-chip.warn { background: rgba(220,38,38,0.12); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+        .invested-chip-num { font-family: var(--font-display); font-weight: 700; }
+
+        /* Color-blind safe palette — toggled via data-cb on <html> */
+        html[data-cb="1"] .text-red-400, html[data-cb="1"] .text-red-500 { color: #f97316 !important; }
+        html[data-cb="1"] .text-green-400, html[data-cb="1"] .text-green-500 { color: #38bdf8 !important; }
+        html[data-cb="1"] .conn-pip-dot { background: #38bdf8 !important; }
+        html[data-cb="1"] .save-flash { color: #38bdf8 !important; }
+        html[data-cb="1"] .condition-pill[data-family="movement"] { background: rgba(56,189,248,0.12) !important; border-color: rgba(56,189,248,0.3) !important; color: #7dd3fc !important; }
+
+        /* Crit toast variant — extra wax-seal flair on nat-20 */
+        @keyframes crit-burst {
+            0% { transform: scale(1); }
+            30% { transform: scale(1.06) rotate(-1deg); }
+            60% { transform: scale(1.02) rotate(1deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+        .roll-toast.crit-flair { animation: crit-burst 0.55s ease; border-color: #fbbf24 !important; box-shadow: 0 0 16px rgba(251,191,36,0.45), 0 4px 14px rgba(0,0,0,0.5) !important; }
+        .roll-toast.crit-flair::after {
+            content: '✦'; position: absolute; top: -10px; right: -10px;
+            font-size: 26px; color: #fbbf24;
+            text-shadow: 0 0 12px rgba(251,191,36,0.7);
+            animation: crit-burst 0.7s ease;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .roll-toast.crit-flair, .roll-toast.crit-flair::after { animation: none; }
+        }
+
+        /* Whisper-to-GM input — small panel that slides up from bottom */
+        .whisper-fab {
+            position: fixed; bottom: 18px; right: 152px; z-index: 800;
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--bg-surface); border: 1px solid var(--gilt);
+            color: var(--gilt); cursor: pointer; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            transition: transform 0.15s;
+        }
+        .whisper-fab:hover { transform: scale(1.08); }
+        .whisper-panel {
+            position: fixed; bottom: 60px; right: 18px; z-index: 800;
+            width: 320px; max-width: calc(100vw - 36px);
+            background: var(--bg-surface); border: 1px solid var(--gilt);
+            border-radius: 8px; padding: 10px; display: none;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+        }
+        .whisper-panel.open { display: block; }
+        .whisper-panel textarea {
+            width: 100%; min-height: 70px; resize: vertical;
+            background: var(--bg-base); border: 1px solid var(--border-s);
+            border-radius: 4px; padding: 6px 8px; color: var(--text-primary);
+            font-family: var(--font-ui); font-size: 12px; outline: none;
+        }
+        .whisper-panel textarea:focus { border-color: var(--gilt); }
+        .whisper-panel-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+        .whisper-panel-status { font-size: 10px; color: var(--t3); font-style: italic; }
+
+        /* Build validator chips on level-up drawer */
+        .lvl-validator { margin: 12px 0; padding: 10px 12px; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.25); border-radius: 6px; }
+        .lvl-validator h4 { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #fbbf24; margin: 0 0 6px 0; }
+        .lvl-validator ul { list-style: none; padding: 0; margin: 0; font-size: 12px; color: #fde68a; }
+        .lvl-validator li { padding: 2px 0 2px 16px; position: relative; }
+        .lvl-validator li::before { content: '!'; position: absolute; left: 0; color: #fbbf24; font-weight: 700; }
+        .lvl-validator.ok { background: rgba(74,222,128,0.06); border-color: rgba(74,222,128,0.25); }
+        .lvl-validator.ok h4 { color: #4ade80; }
+        .lvl-validator.ok li { color: #bbf7d0; }
+        .lvl-validator.ok li::before { content: '✓'; color: #4ade80; }
+
         @media print {
             /* === Parchment-ink print stylesheet ===
                Cream paper, dark ink, serif body. Cascades through
@@ -2132,7 +2370,14 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- CHARACTER HEADER — DDB-style sticky header                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div class="char-header w-full">
+    <div class="char-header w-full" style="position:relative;">
+
+        {# Connection-status pip (P2 #19) — lives in the dead space top-left
+           of the sticky header. Green = SSE alive, amber = stale, red = dead.
+           Idle cost: zero (single static element, painted by SSE handler). #}
+        <span id="conn-pip" class="conn-pip no-print" data-state="alive" title="Live connection to GM screen">
+            <span class="conn-pip-dot"></span><span id="conn-pip-label">live</span>
+        </span>
 
         <!-- ROW 1 — Identity + Actions (Design C topbar) -->
         <div class="max-w-6xl mx-auto px-4 md:px-6 pt-2 pb-1">
@@ -2327,6 +2572,19 @@
             <!-- HP block -->
             <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}" style="flex:2.2; min-width:240px;">
                 <div class="ss-lbl">Hit Points</div>
+                {# Dying widget (Wave 2 #4) — only renders when current_hp == 0,
+                   driven by the dying/wounded values that already exist in the
+                   condition tracker. Shows the recovery DC and a one-click
+                   recovery flat-check button. #}
+                <div id="dying-widget" class="dying-widget no-print {% if pc.current_hp == 0 %}active{% endif %}" aria-live="polite">
+                    <div class="dying-widget-title">⚠ Dying <span id="dying-val">{{ pc.conditions.get('dying', 0) }}</span> · Wounded <span id="wounded-val">{{ pc.conditions.get('wounded', 0) }}</span></div>
+                    <div class="dying-widget-row">
+                        <button onclick="rollRecoveryCheck()" class="recovery" title="Recovery flat check: DC 10 + Dying value. Success: Dying −1. Crit success: Dying −2 + conscious. Failure: Dying +1. Crit failure: Dying +2.">Recovery Check</button>
+                        <button onclick="adjustDying(-1)" title="Reduce Dying (e.g., after taking 2 actions to remove)">−1 Dying</button>
+                        <button onclick="adjustDying(1)" title="Increase Dying (took damage while dying, or failed save)">+1 Dying</button>
+                        <button onclick="callForHeal()" title="Broadcast 'I need healing!' to the GM">Call for Help</button>
+                    </div>
+                </div>
                 <div class="flex items-center justify-center gap-2">
                     {# Damage (−) lives on the LEFT now: reads left-to-right as
                        "take X damage then see HP result". Heal on the right. #}
@@ -2539,6 +2797,14 @@
                 <option value="">Loading…</option>
             </select>
             <span id="exploration-tip" style="font-size:10px; color:var(--t3); font-style:italic;"></span>
+            {# Treat Wounds quick-button (Wave 2 #6) — most-rolled exploration
+               skill. Picks a target party member, rolls Medicine, dispatches
+               to GM with the proposed healing amount. GM applies. #}
+            <button id="treat-wounds-btn" class="tb no-print" onclick="openTreatWounds()"
+                    style="margin-left:auto; padding:3px 10px; font-size:11px;"
+                    title="Treat Wounds — roll Medicine to heal an ally (10 minutes per use)">
+                ❦ Treat Wounds
+            </button>
         </div>
     </div>
 
@@ -2699,6 +2965,11 @@
                tools, etc. so players don't have to switch to Inventory
                tab mid-combat to grab a potion. Populated by JS. #}
             <div id="usable-items-row" class="usable-items-row no-print" aria-label="Quick-use items from your inventory"></div>
+            {# Skill-action quick row (Wave 2 #5) — the half-dozen PF2e skill
+               actions that fire 5-10 times per combat. One click rolls the
+               check and dispatches to the GM with the target save type
+               labeled, so the GM compares to the right number. #}
+            <div id="skill-actions-row" class="skill-actions-row no-print" aria-label="Common combat skill actions"></div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-1 space-y-6">
                     <div class="panel-card">
@@ -3303,7 +3574,14 @@
         </div>
 
         <div id="tab-feats" data-print-title="Feats" class="tab-content sheet-page space-y-4">
-            
+
+            {# Class cheat-sheet (Wave 2 #12) — pulled from a static dictionary
+               below. Closed by default to stay out of the way. #}
+            <details id="class-cheatsheet" class="class-cheatsheet" data-class="{{ pc.class_name|lower }}" data-subclass="{{ (pc.subclass or '')|lower }}">
+                <summary>Class Quick Reference — {{ pc.class_name }}{% if pc.subclass %} ({{ pc.subclass }}){% endif %}</summary>
+                <div id="class-cheatsheet-body" class="class-cheatsheet-body">Loading…</div>
+            </details>
+
             <!-- ANCESTRY FEATURES -->
             {% if pc.ancestry_features %}
             <div class="mb-6">
@@ -3404,9 +3682,19 @@
                 <div class="panel-card">
                     <div class="flex justify-between items-center mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
                         <h3 class="section-header" style="border:none; margin:0; padding:0;">Wealth & Inventory</h3>
-                        <button onclick="saveWealth()" id="btn-wealth" class="action-btn">
-                            Save Coins
-                        </button>
+                        <div class="flex items-center gap-2">
+                            {# Invested chip (Wave 2 #24) — PF2e caps invested
+                               magic items at 10. Players track via local
+                               toggle (no backend yet). Star toggle per item
+                               below in JS. #}
+                            <span id="invested-chip" class="invested-chip no-print" title="Invested magic items (PF2e cap: 10)">
+                                <span style="opacity:0.7;">Invested</span>
+                                <span class="invested-chip-num"><span id="invested-count">0</span>/10</span>
+                            </span>
+                            <button onclick="saveWealth()" id="btn-wealth" class="action-btn">
+                                Save Coins
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-4 gap-3 mb-6">
@@ -3482,6 +3770,7 @@
                         {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
                         <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group inv-item" data-inv-name="{{ item.name|lower }}">
                             <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
+                            <button class="invested-toggle no-print mr-2" data-item-name="{{ item.name }}" title="Toggle: invested magic item (counts toward 10/day cap)" aria-label="Toggle invested for {{ item.name }}" style="background:transparent; color:var(--t4); font-size:14px; padding:0 4px; cursor:pointer;">★</button>
                             <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2 {% if display_bulk == 'L' %}text-amber-600{% elif display_bulk|int > 0 %}text-amber-500{% endif %}">{{ display_bulk }}B</span>
                             <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
                             <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">✖</button>
@@ -3822,6 +4111,18 @@
             </svg>
         </button>
         <button id="roll-history-btn" class="roll-history-btn no-print" onclick="toggleRollHistory()" aria-label="Recent rolls" title="Recent rolls">⟲</button>
+        <button id="whisper-fab" class="whisper-fab no-print" onclick="toggleWhisper()" aria-label="Whisper to GM" title="Whisper to GM (private message)">✉</button>
+        <div id="whisper-panel" class="whisper-panel no-print" role="dialog" aria-label="Whisper to GM">
+            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt); margin-bottom:6px;">✉ Whisper to GM</div>
+            <textarea id="whisper-text" placeholder="Private question, plan, or roleplay note for the GM…" maxlength="800"></textarea>
+            <div class="whisper-panel-actions">
+                <span class="whisper-panel-status" id="whisper-status">Sent privately — GM only</span>
+                <div style="display:flex; gap:6px;">
+                    <button class="tb" onclick="closeWhisper()" style="padding:3px 8px; font-size:11px;">Cancel</button>
+                    <button class="tb gilt" onclick="sendWhisper()" style="padding:3px 10px; font-size:11px;">Send</button>
+                </div>
+            </div>
+        </div>
         <div id="roll-history-panel" class="roll-history-panel no-print" aria-live="polite" role="log" aria-label="Recent rolls history">
             <div class="roll-history-empty">No rolls yet this session.</div>
         </div>
@@ -7555,6 +7856,949 @@
                 try { Notification.requestPermission(); } catch(_) {}
             }, 4000);
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // WAVE 2 — UX additions per user feedback (2026-04-24)
+        // ═══════════════════════════════════════════════════════════════
+
+        // ----- Connection status pip (P2 #19) -----------------------------
+        // Hook into the existing _sheetMarkSseAlive heartbeat to set live
+        // state. Independently watch for "no heartbeat in 12s" → stale,
+        // 30s → dead. Cheap interval (1Hz). Click the dead pip to reload.
+        (function initConnPip() {
+            const pip = document.getElementById('conn-pip');
+            const lbl = document.getElementById('conn-pip-label');
+            if (!pip || !lbl) return;
+            let lastBeat = Date.now();
+            // Wrap _sheetMarkSseAlive if defined
+            if (typeof window._sheetMarkSseAlive === 'function') {
+                const orig = window._sheetMarkSseAlive;
+                window._sheetMarkSseAlive = function() { lastBeat = Date.now(); return orig.apply(this, arguments); };
+            } else {
+                // Fallback: tap into pf2e-encounter-update too.
+                window.addEventListener('pf2e-encounter-update', () => { lastBeat = Date.now(); });
+            }
+            setInterval(() => {
+                const age = Date.now() - lastBeat;
+                let state = 'alive', text = 'live';
+                if (age > 30000) { state = 'dead'; text = 'offline — click to reload'; }
+                else if (age > 12000) { state = 'stale'; text = 'reconnecting'; }
+                if (pip.dataset.state !== state) {
+                    pip.dataset.state = state;
+                    lbl.textContent = text;
+                }
+            }, 1000);
+            pip.addEventListener('click', () => {
+                if (pip.dataset.state === 'dead') window.location.reload();
+            });
+        })();
+
+        // ----- Reaction auto-reset on round tick --------------------------
+        // The reaction chip already exists in markup — just listen for
+        // round changes via the encounter MutationObserver and call
+        // /api/set_reaction with used=false when a new round begins.
+        (function wireReactionReset() {
+            let lastRound = null;
+            window.addEventListener('pf2e-encounter-update', () => {
+                const bar = document.getElementById('encounter-initiative-bar');
+                if (!bar) return;
+                const m = /Round\s*(\d+)/.exec(bar.textContent || '');
+                if (!m) return;
+                const r = parseInt(m[1], 10);
+                if (lastRound !== null && r > lastRound && typeof reactionUsed !== 'undefined' && reactionUsed) {
+                    fetch(`/api/set_reaction/${pcNameEncoded}`, {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({used: false})
+                    }).then(r => r.json()).then(d => {
+                        if (d && d.success) {
+                            window.reactionUsed = false;
+                            if (typeof _paintReactionChip === 'function') _paintReactionChip();
+                        }
+                    }).catch(() => {});
+                }
+                lastRound = r;
+            });
+        })();
+
+        // ----- Strike chain auto-progression ------------------------------
+        // After clicking 1st Strike, dim it and add the "next" highlight to
+        // 2nd. After 2nd, highlight 3rd. Reset on round/turn change. We do
+        // NOT touch what rollAttack does; we just paint state.
+        (function wireStrikeChain() {
+            // Tag the 1st/2nd/3rd buttons within each weapon row so we can
+            // step through them. Each weapon's row has three buttons in
+            // order: identify by sibling index inside the same flex.
+            function getStrikeRows() {
+                const rows = [];
+                document.querySelectorAll('button[onclick^="rollAttack"]').forEach(btn => {
+                    const flex = btn.parentElement;
+                    if (!flex) return;
+                    if (!flex.dataset.strikeRow) {
+                        flex.dataset.strikeRow = '1';
+                        const buttons = Array.from(flex.querySelectorAll('button[onclick^="rollAttack"]'));
+                        buttons.forEach((b, i) => b.dataset.strikeIdx = i);
+                        rows.push({ flex, buttons });
+                    }
+                });
+                return rows;
+            }
+            function dimSpent(flex, idx) {
+                const buttons = Array.from(flex.querySelectorAll('button[onclick^="rollAttack"]'));
+                buttons.forEach((b, i) => {
+                    b.classList.remove('strike-spent', 'strike-next');
+                    if (i <= idx) b.classList.add('strike-spent');
+                    if (i === idx + 1) b.classList.add('strike-next');
+                });
+            }
+            function resetAll() {
+                document.querySelectorAll('button[onclick^="rollAttack"]').forEach(b => {
+                    b.classList.remove('strike-spent', 'strike-next');
+                });
+            }
+            // Delegate click capture
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest && e.target.closest('button[onclick^="rollAttack"]');
+                if (!btn) return;
+                getStrikeRows();  // ensure tagged
+                const flex = btn.parentElement;
+                const idx = parseInt(btn.dataset.strikeIdx || '0', 10);
+                if (flex) dimSpent(flex, idx);
+            }, true);
+            // Reset on round tick (or turn change)
+            let lastRound = null, lastActive = null;
+            window.addEventListener('pf2e-encounter-update', (e) => {
+                const enc = (e.detail && e.detail.encounter) || [];
+                const active = enc.find(c => c.is_active);
+                const bar = document.getElementById('encounter-initiative-bar');
+                const m = bar ? /Round\s*(\d+)/.exec(bar.textContent || '') : null;
+                const r = m ? parseInt(m[1], 10) : null;
+                const aName = active ? active.name : null;
+                if ((lastRound !== null && r !== lastRound) || (lastActive !== null && aName !== lastActive)) {
+                    resetAll();
+                }
+                lastRound = r; lastActive = aName;
+            });
+        })();
+
+        // ----- Dying widget (Wave 2 #4) -----------------------------------
+        // Driven by pc.conditions.dying / wounded already coming from the
+        // server via SSE. Visibility toggles when current_hp == 0.
+        function _refreshDyingWidget() {
+            const w = document.getElementById('dying-widget');
+            if (!w) return;
+            const hpEl = document.getElementById('current-hp');
+            const cur = hpEl ? parseInt(hpEl.textContent, 10) : 1;
+            const dying = (currentConditions || {}).dying || 0;
+            const wounded = (currentConditions || {}).wounded || 0;
+            const dvEl = document.getElementById('dying-val');
+            const wvEl = document.getElementById('wounded-val');
+            if (dvEl) dvEl.textContent = dying;
+            if (wvEl) wvEl.textContent = wounded;
+            if (cur <= 0 || dying > 0) w.classList.add('active');
+            else w.classList.remove('active');
+        }
+        // Hook into the existing applyHpUpdate / applyConditionUpdate so the
+        // widget updates whenever HP or conditions change.
+        (function patchHpAndConditions() {
+            const origHp = window.applyHpUpdate;
+            if (typeof origHp === 'function') {
+                window.applyHpUpdate = function() {
+                    const r = origHp.apply(this, arguments);
+                    try { _refreshDyingWidget(); } catch(_) {}
+                    return r;
+                };
+            }
+            const origCond = window.applyConditionUpdate;
+            if (typeof origCond === 'function') {
+                window.applyConditionUpdate = function() {
+                    const r = origCond.apply(this, arguments);
+                    try { _refreshDyingWidget(); } catch(_) {}
+                    return r;
+                };
+            }
+            _refreshDyingWidget();
+        })();
+        function rollRecoveryCheck() {
+            const dying = (currentConditions || {}).dying || 1;
+            const dc = 10 + dying;
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            let outcome = '';
+            if (d20 === 20) outcome = `CRIT SUCCESS — Dying reduced by 2 (or to 0 if Dying 2)`;
+            else if (d20 >= dc) outcome = `Success — Dying −1`;
+            else if (d20 === 1) outcome = `CRIT FAIL — Dying +2`;
+            else outcome = `Failure — Dying +1`;
+            const detail = `1d20 (${d20}) vs DC ${dc} flat — ${outcome}`;
+            try { broadcastToGM('Recovery Check', d20.toString(), detail, null); } catch(_) {}
+            try { showRollToast('Recovery Check', d20, detail, d20 === 20, d20 === 1, [{sides:20,value:d20}], dc); } catch(_) {}
+        }
+        async function adjustDying(delta) {
+            const cur = (currentConditions || {}).dying || 0;
+            const next = Math.max(0, cur + delta);
+            try {
+                await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({condition: 'dying', value: next})
+                });
+            } catch(_) {}
+        }
+        function callForHeal() {
+            try { broadcastToGM('CALL FOR HEAL', '!', `${pcName} is dying — needs healing immediately.`); } catch(_) {}
+            try { showRollToast('Call for Help', '!', 'GM notified. Hold on.', false, false, [], null); } catch(_) {}
+        }
+
+        // ----- Skill-action quick row (Wave 2 #5) -------------------------
+        // Common PF2e combat actions. Each maps to a skill mod the PC has
+        // and labels the target save type so the GM compares correctly.
+        (function initSkillActions() {
+            const row = document.getElementById('skill-actions-row');
+            if (!row) return;
+            const skills = {{ pc.skills | tojson | safe }};
+            function getSkillMod(name) {
+                const s = skills.find(s => s.name.toLowerCase() === name.toLowerCase());
+                if (!s) return null;
+                const t = s.total;
+                return typeof t === 'string' ? parseInt(t, 10) : t;
+            }
+            // Definition list — name, skill required, action cost, target save, hint
+            const ACTIONS = [
+                { name: 'Demoralize',    skill: 'Intimidation', cost: '1', vs: 'Will DC',  hint: 'Frightened 1 (crit: 2). −10 if you don\'t share a language.' },
+                { name: 'Trip',          skill: 'Athletics',    cost: '1', vs: 'Reflex DC', hint: 'Crit: prone + 1d6 dmg. Two-handed weapon = +1 circ?' },
+                { name: 'Grapple',       skill: 'Athletics',    cost: '1', vs: 'Fortitude DC', hint: 'Success: Grabbed. Crit: Restrained.' },
+                { name: 'Shove',         skill: 'Athletics',    cost: '1', vs: 'Fortitude DC', hint: 'Success: 5 ft push. Crit: 10 ft + prone.' },
+                { name: 'Tumble Through',skill: 'Acrobatics',   cost: '1', vs: 'Reflex DC',  hint: 'Move through enemy\'s square (and avoid Reactive Strike).' },
+                { name: 'Feint',         skill: 'Deception',    cost: '1', vs: 'Perception DC',hint: 'Success: target Off-Guard until end of your next turn.' },
+                { name: 'Bon Mot',       skill: 'Diplomacy',    cost: '1', vs: 'Will DC',  hint: 'Crit: −3 Perception/Will. Need feat. Skip if PC lacks it.' },
+                { name: 'Recall Knowledge',skill: 'Arcana',     cost: '1', vs: 'Lore DC',  hint: 'Pick the relevant Lore skill (Arcana/Religion/Nature/etc).' },
+            ];
+            const html = [];
+            ACTIONS.forEach(a => {
+                let mod = getSkillMod(a.skill);
+                let skillToUse = a.skill;
+                // Recall Knowledge — pick the highest of Arcana/Religion/Nature/Occultism/Society
+                if (a.name === 'Recall Knowledge') {
+                    const candidates = ['Arcana','Religion','Nature','Occultism','Society','Crafting','Medicine'];
+                    let best = null, bestMod = -99;
+                    candidates.forEach(c => { const m = getSkillMod(c); if (m !== null && m > bestMod) { best = c; bestMod = m; } });
+                    if (best) { skillToUse = best; mod = bestMod; }
+                }
+                if (mod === null || mod === undefined || isNaN(mod)) return; // skill not available
+                const sign = mod >= 0 ? '+' : '';
+                html.push(`<button type="button" class="skill-action-btn" onclick="rollSkillAction('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')" title="${a.hint}">
+                    <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
+                    <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod} · vs ${a.vs}</span>
+                </button>`);
+            });
+            row.innerHTML = html.join('');
+        })();
+        function rollSkillAction(name, skill, mod, vsLabel) {
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + mod;
+            const isCrit = d20 === 20, isFumble = d20 === 1;
+            const sign = mod >= 0 ? `+${mod}` : `${mod}`;
+            const detail = `${name} (${skill} ${sign}): 1d20 (${d20}) ${sign} = ${total} — vs ${vsLabel}${isCrit ? ' [CRIT 20]' : isFumble ? ' [NAT 1]' : ''}`;
+            try { broadcastToGM(name, total.toString(), detail, null); } catch(_) {}
+            try { showRollToast(name, total, detail, isCrit, isFumble, [{sides:20,value:d20}], null); } catch(_) {}
+        }
+
+        // ----- Heighten-rank picker (Wave 2 #7) ---------------------------
+        // Wrap rollSpell: when a player triggers a heightenable spell,
+        // pop a tiny picker at the click site. If they pick a rank, we
+        // re-call _rollSpellInner with the picked rank baked into the
+        // dispatched broadcast text.
+        (function initHeightenPicker() {
+            // List of heightenable spells (very short — common ones).
+            // Anything not in this list skips the picker.
+            const HEIGHTEN_SET = new Set([
+                'heal','harm','magic missile','fear','fireball','lightning bolt',
+                'sound burst','soothe','bless','bane','glitterdust','grease',
+                'detect magic','dispel magic','enlarge','daze','telekinetic projectile',
+                'electric arc','shield','sure strike','phantom pain','runic body',
+                'force barrage','breathe fire','produce flame','ray of frost',
+                'acid splash','divine lance','hydraulic push','remove fear',
+                'remove paralysis','sanctified ground','shadow blast'
+            ]);
+            const origRollSpell = window.rollSpell;
+            if (typeof origRollSpell !== 'function') return;
+            window.rollSpell = function(spellName, e, slotInfo) {
+                const lower = (spellName || '').toLowerCase();
+                if (!HEIGHTEN_SET.has(lower) || !e || !e.target) {
+                    return origRollSpell.apply(this, arguments);
+                }
+                e.preventDefault(); e.stopPropagation();
+                // Determine base rank — slotInfo.rank if provided, else 1.
+                const baseRank = (slotInfo && typeof slotInfo.rank === 'number') ? slotInfo.rank : 1;
+                const maxRank = Math.max(baseRank, 10);  // up to rank 10
+                const picker = document.createElement('div');
+                picker.className = 'heighten-picker';
+                let html = `<div class="heighten-picker-label">Cast ${spellName} at rank…</div>`;
+                for (let r = baseRank; r <= maxRank; r++) {
+                    html += `<button type="button" class="heighten-rank-btn ${r === baseRank ? 'base' : ''}" data-rank="${r}">${r}</button>`;
+                }
+                picker.innerHTML = html;
+                // Position next to the click
+                const rect = e.target.getBoundingClientRect();
+                picker.style.top = (window.scrollY + rect.bottom + 4) + 'px';
+                picker.style.left = (window.scrollX + rect.left) + 'px';
+                document.body.appendChild(picker);
+                function tearDown() { picker.remove(); document.removeEventListener('click', dismiss, true); }
+                function dismiss(ev) { if (!picker.contains(ev.target)) tearDown(); }
+                setTimeout(() => document.addEventListener('click', dismiss, true), 0);
+                picker.addEventListener('click', (ev) => {
+                    const b = ev.target.closest('.heighten-rank-btn');
+                    if (!b) return;
+                    const rank = parseInt(b.dataset.rank, 10);
+                    tearDown();
+                    const newSlotInfo = Object.assign({}, slotInfo || {}, { rank });
+                    // Re-call with rank baked in. If the spell has a save,
+                    // we'll annotate it on the broadcast detail (handled by
+                    // the spell-DC append patch below).
+                    window._heightenedRankAt = rank;
+                    try { origRollSpell.call(this, `${spellName} (rank ${rank})`, null, newSlotInfo); }
+                    finally { window._heightenedRankAt = null; }
+                });
+            };
+        })();
+
+        // ----- Spell DC + save type label (Wave 2 #8) ---------------------
+        // Wrap broadcastToGM once more: when an action label starts with
+        // "Cast ", append the PC's spell DC and a hint about which save
+        // is targeted (if a known save-targeting spell). Cheap heuristic.
+        (function wireSpellDCNote() {
+            const SPELL_SAVE = {
+                'fear': 'Will', 'soothe': 'no save', 'heal': 'no save (ally)',
+                'harm': 'Fortitude (basic)', 'fireball': 'Reflex (basic)',
+                'lightning bolt': 'Reflex (basic)', 'magic missile': 'no save',
+                'sound burst': 'Fortitude (basic)', 'glitterdust': 'Reflex',
+                'grease': 'Reflex', 'phantom pain': 'Will', 'daze': 'Will (basic)',
+                'electric arc': 'Reflex (basic)', 'breathe fire': 'Reflex (basic)',
+                'acid splash': 'no save', 'divine lance': 'no save',
+                'hydraulic push': 'no save', 'force barrage': 'no save',
+                'telekinetic projectile': 'no save', 'ray of frost': 'no save',
+                'produce flame': 'no save', 'bless': 'no save', 'bane': 'Will',
+                'remove fear': 'no save', 'remove paralysis': 'no save',
+            };
+            const prev = window.broadcastToGM;
+            if (typeof prev !== 'function') return;
+            const SPELL_DC = {{ pc.spell_dc | int }};
+            window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+                try {
+                    if ((actionName || '').toLowerCase().startsWith('cast ')) {
+                        const nm = actionName.replace(/^cast /i, '').replace(/\s*\(rank \d+\).*$/, '').toLowerCase().trim();
+                        const save = SPELL_SAVE[nm];
+                        const extras = [];
+                        if (save && save !== 'no save' && save !== 'no save (ally)') {
+                            extras.push(`${save} save vs DC ${SPELL_DC}`);
+                        } else if (save) {
+                            extras.push(save);
+                        }
+                        if (extras.length) detailText = (detailText || '') + ` · ${extras.join(' · ')}`;
+                    }
+                } catch(_) {}
+                return prev(actionName, rollResult, detailText, degree);
+            };
+        })();
+
+        // ----- Crit toast variant (Wave 2 #18) ----------------------------
+        // After showRollToast renders, if it indicates a crit, add a class
+        // for the burst animation. Done via MutationObserver on the toast
+        // container so we don't touch the existing showRollToast code.
+        (function initCritToast() {
+            const container = document.getElementById('roll-toast-container');
+            if (!container) return;
+            const mo = new MutationObserver((muts) => {
+                muts.forEach(m => {
+                    m.addedNodes && m.addedNodes.forEach(n => {
+                        if (!(n instanceof HTMLElement)) return;
+                        if (!n.classList || !n.classList.contains('roll-toast')) return;
+                        // Look for NAT 20 marker added by existing toast code.
+                        if (n.querySelector('.nat20') || /NAT 20|CRIT SUCCESS|\bCRIT\b/.test(n.textContent || '')) {
+                            n.classList.add('crit-flair');
+                        }
+                    });
+                });
+            });
+            mo.observe(container, { childList: true });
+        })();
+
+        // ----- Auto-save indicator (Wave 2 #20) ---------------------------
+        // Generic helper: callers pass an element; we append a fading
+        // ✓ chip inside it. No layout shift (absolute or inline-flex).
+        window.flashSaved = function(target) {
+            if (typeof target === 'string') target = document.querySelector(target);
+            if (!target) return;
+            let chip = target.querySelector('.save-flash');
+            if (!chip) {
+                chip = document.createElement('span');
+                chip.className = 'save-flash';
+                chip.textContent = 'Saved';
+                target.appendChild(chip);
+            }
+            chip.classList.add('show');
+            clearTimeout(chip._t);
+            chip._t = setTimeout(() => chip.classList.remove('show'), 1400);
+        };
+
+        // ----- Color-blind palette toggle (Wave 2 #21) --------------------
+        // Persisted in localStorage; toggleable via Ctrl+Shift+C
+        // (deliberate: power-user keypress, no UI clutter).
+        (function initColorBlind() {
+            const key = 'pf2e_cb_v1';
+            if (localStorage.getItem(key) === '1') {
+                document.documentElement.setAttribute('data-cb', '1');
+            }
+            window.toggleColorBlind = function() {
+                const on = document.documentElement.getAttribute('data-cb') === '1';
+                if (on) { document.documentElement.removeAttribute('data-cb'); localStorage.removeItem(key); }
+                else { document.documentElement.setAttribute('data-cb', '1'); localStorage.setItem(key, '1'); }
+                try { showRollToast('Color-blind mode', on ? 'OFF' : 'ON', 'Toggle: Ctrl+Shift+C', false, false, [], null); } catch(_) {}
+            };
+            // Hook the existing theme cycle so it includes a CB step too:
+            // theme cycle stays as-is; CB is orthogonal.
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+                    e.preventDefault(); window.toggleColorBlind();
+                }
+            });
+        })();
+
+        // ----- Glossary tooltips (Wave 2 #11) -----------------------------
+        // PF2e jargon → 1-2 line plain-English definitions. Single shared
+        // tooltip element, delegated listeners, zero idle cost.
+        const PF2E_GLOSSARY = {
+            'off-guard': 'You take a −2 circumstance penalty to AC. Replaces "flat-footed" from earlier editions.',
+            'flat-footed': 'Old name for Off-Guard. −2 to AC.',
+            'frightened': 'Status penalty equal to value on attacks, saves, skill checks, DCs. Decreases by 1 at end of your turn.',
+            'sickened': 'Status penalty to attacks, saves, skill checks, DCs. Spend an action and roll Fort vs source DC to lower by 1.',
+            'enfeebled': 'Status penalty to Strength-based rolls and damage.',
+            'clumsy': 'Status penalty to Dexterity-based rolls (attacks, AC, Reflex, Acrobatics).',
+            'stupefied': 'Status penalty to Intelligence/Wisdom/Charisma-based rolls; DC equal to 5+value to cast spells.',
+            'drained': 'Lose value × level HP. Stat penalty to Constitution-based rolls. Reduces by 1 per long rest.',
+            'wounded': 'You\'ve recovered from dying. Increases dying value when you fall again.',
+            'doomed': 'You die at (Dying = max - doomed) instead of 4. Reduces by 1 per long rest.',
+            'persistent': 'Damage at the end of each turn until ended. DC 15 flat check or appropriate action removes.',
+            'concealed': 'Attackers must succeed at a DC 5 flat check on attacks against you, or miss.',
+            'hidden': 'Attackers don\'t know your exact location. DC 11 flat check; on miss, attack fails.',
+            'undetected': 'Attackers don\'t know you exist. They must guess your square.',
+            'prone': 'You\'re Off-Guard, take −2 to attacks, can only Crawl/Stand/use ranged.',
+            'restrained': 'You\'re Immobilized + Off-Guard, can only act with non-physical or Escape.',
+            'grabbed': 'You\'re Immobilized + Off-Guard. Escape with Athletics/Acrobatics check.',
+            'immobilized': 'You can\'t use Move actions. Doesn\'t prevent free actions.',
+            'slowed': 'You lose actions equal to value at the start of each turn.',
+            'quickened': 'You gain 1 extra action at the start of each turn (limited by source).',
+            'stunned': 'Lose actions equal to value (or until value=0). Doesn\'t affect free actions.',
+            'fascinated': '−2 to Perception/skill checks not related to subject. End by Hostile actions toward you.',
+            'fatigued': 'You\'re tired. −1 to AC and saves. Removed by full night\'s rest.',
+            'paralyzed': 'You\'re Off-Guard, can\'t act except mental + free, fail Reflex saves automatically.',
+            'unconscious': 'You\'re Asleep + Off-Guard + Blinded. Drop held items.',
+            'blinded': 'Everything is concealed (DC 5 flat check) or hidden (DC 11). Auto-fail Perception checks requiring sight.',
+            'deafened': 'Auto-fail Perception checks requiring hearing. −2 to verbal-component spell DCs?',
+            'dying': 'When dying value reaches max (4 + doomed) you die. Recovery checks each turn (DC 10 + dying flat).',
+            'unnoticed': 'Target is unaware you\'re even there at all (vs. undetected which means they know but can\'t pinpoint).',
+            'reactive strike': 'Trigger: a creature within reach uses a manipulate or move action, makes a ranged attack, or leaves a square. Effect: melee Strike against the trigger.',
+            'attack of opportunity': 'Same as Reactive Strike (Remaster name change).',
+            'map': 'Multiple Attack Penalty. −5 on second attack, −10 on third (−4/−8 with Agile).',
+            'agile': 'Reduces MAP from −5/−10 to −4/−8 on this weapon.',
+            'finesse': 'You may use Dexterity instead of Strength on attack rolls (damage stays Strength).',
+            'deadly': 'Adds an extra die of damage on a critical hit (size = trait, e.g., Deadly d8).',
+            'fatal': 'Replaces normal damage die with this die size on a crit, plus extra die.',
+            'reach': 'Increases melee threat range by the listed amount (default +5 ft).',
+            'sustained': 'Spell ends unless you spend a Sustain a Spell action each turn (1 action, max 10 rounds).',
+            'heighten': 'Cast a spell at a higher rank to scale its effect. Prepared casters prepare it heightened; spontaneous spend a higher slot.',
+            'cantrip': 'Spell rank 0. Auto-heightened to ⌈your level / 2⌉. Unlimited casts per day.',
+            'focus point': 'Cast focus spells; max 3, spent per cast. Refocus action restores 1 (1 minute downtime).',
+            'hero point': 'Reroll a check or save (keep higher), or stave off death. Reset to 1 each session.',
+            'recall knowledge': 'Use a Lore-related skill against the target\'s identification DC to learn its abilities.',
+            'aid': 'Spend a reaction (when prepared) and the helper must beat DC 20: success = +1 to ally\'s next roll, crit success = +2.',
+        };
+        (function initGlossaryTooltip() {
+            const tip = document.createElement('div');
+            tip.id = 'pf2e-glossary-tooltip';
+            document.body.appendChild(tip);
+            // Decorate: any element with .has-glossary AND data-glossary, OR
+            // any condition pill (whose label matches a known term). Add
+            // listeners via delegation so dynamic content (added by JS)
+            // also gets the tooltip behaviour.
+            function findTerm(el) {
+                if (!el || !el.getAttribute) return null;
+                const explicit = el.getAttribute('data-glossary');
+                if (explicit && PF2E_GLOSSARY[explicit.toLowerCase()]) return explicit.toLowerCase();
+                // Fall through: condition pills carry a data-cond attr
+                const cond = el.getAttribute('data-cond');
+                if (cond && PF2E_GLOSSARY[cond.toLowerCase()]) return cond.toLowerCase();
+                // Trait pills — text content alone
+                if (el.classList && el.classList.contains('trait-pill')) {
+                    const t = (el.textContent || '').trim().toLowerCase();
+                    if (PF2E_GLOSSARY[t]) return t;
+                }
+                return null;
+            }
+            document.addEventListener('pointerover', (e) => {
+                const target = e.target.closest('[data-glossary], .trait-pill, .condition-pill, [data-cond]');
+                if (!target) return;
+                const term = findTerm(target);
+                if (!term) return;
+                const def = PF2E_GLOSSARY[term];
+                tip.innerHTML = `<strong>${term}</strong>${def}`;
+                tip.style.display = 'block';
+                const r = target.getBoundingClientRect();
+                let top = r.bottom + 6;
+                if (top + 100 > window.innerHeight) top = r.top - 100;
+                tip.style.top = Math.max(8, top) + 'px';
+                tip.style.left = Math.min(window.innerWidth - 300, Math.max(8, r.left)) + 'px';
+            });
+            document.addEventListener('pointerout', (e) => {
+                if (!e.relatedTarget || !e.relatedTarget.closest('[data-glossary], .trait-pill, .condition-pill')) {
+                    tip.style.display = 'none';
+                }
+            });
+        })();
+
+        // ----- Class cheat sheet (Wave 2 #12) -----------------------------
+        // Static dictionary keyed by class name. Tiny — focuses on the
+        // 3-5 things players forget per class. Covers the 4 the table
+        // currently has plus a few common others.
+        const CLASS_CHEATSHEETS = {
+            'druid': {
+                lines: [
+                    '<strong>Order:</strong> Storm — Tempest Surge focus spell, Storm Born (no penalty in weather).',
+                    '<strong>Animal companion:</strong> if Animal order, follow PC2 Animal Companion rules.',
+                    '<strong>Wild Empathy:</strong> talk to animals at base; +Charisma roll.',
+                    '<strong>Anathema:</strong> avoid violating natural balance — irreversible damage to nature voids your spells until atonement.',
+                    '<strong>Cantrip rank:</strong> cantrips heighten to ⌈level/2⌉ automatically.',
+                ]
+            },
+            'cleric': {
+                lines: [
+                    '<strong>Divine Font:</strong> bonus Heal or Harm slots equal to 1 + Cha mod (Charisma key) of your highest spell rank.',
+                    '<strong>Doctrine:</strong> Warpriest gets MAP-friendly martial proficiency, gets Shield Block at L2.',
+                    '<strong>Anathema:</strong> deity-specific. Violating loses spellcasting until atonement.',
+                    '<strong>Channel Smite (warpriest):</strong> spend a Heal/Harm slot to add damage on a Strike.',
+                    '<strong>Domain spells:</strong> always available focus spells from your deity\'s domain(s).',
+                ]
+            },
+            'kineticist': {
+                lines: [
+                    '<strong>Impulses:</strong> NOT spells — don\'t use slots, don\'t expend focus. Many are 1 action.',
+                    '<strong>Elemental Blast:</strong> ranged or melee depending on element; uses Class DC for accuracy/damage.',
+                    '<strong>Stance impulses:</strong> persist until you stop sustaining; some require Channel Elements first.',
+                    '<strong>Channel Elements:</strong> 1-action stance entry. Can use a Junction every round once channeled.',
+                    '<strong>Overflow:</strong> high-cost impulses end your channel; use late in combat.',
+                ]
+            },
+            'champion': {
+                lines: [
+                    '<strong>Cause:</strong> Liberator/Paladin/Redeemer/Antipaladin/Tyrant/Desecrator — drives reaction (Liberating Step / Retributive Strike / Glimpse of Redemption).',
+                    '<strong>Lay on Hands:</strong> 1 action focus spell — heal an ally for 6 HP × spell rank.',
+                    '<strong>Champion\'s Reaction:</strong> trigger varies by cause. Use it every round you can.',
+                    '<strong>Anathema:</strong> cause-specific (e.g., Liberator: never letting a chained ally stay chained).',
+                    '<strong>Divine Ally (Steed/Blade/Shield):</strong> gives bonded steed, weapon rune slot, or shield boost.',
+                ]
+            },
+            'fighter': {
+                lines: [
+                    '<strong>Attack of Opportunity:</strong> always-on reactive strike (1st-edition Reach equivalent).',
+                    '<strong>Power Attack / Sudden Charge / Knockdown:</strong> common L1 class feats — pick what fits weapon style.',
+                    '<strong>Bravery:</strong> reduce frightened severity by 1 (and not Off-Guard while frightened).',
+                    '<strong>Weapon Mastery (L5):</strong> +1 per level on a weapon group.',
+                ]
+            },
+            'wizard': {
+                lines: [
+                    '<strong>Curriculum spell list:</strong> auto-prepared if you\'ve learned them; 1 free slot of curriculum spells per rank.',
+                    '<strong>Drain Bonded Item:</strong> recall a spell already cast that day — once per day per rank? Check thesis.',
+                    '<strong>Thesis:</strong> Spell Substitution / Metamagical Experimentation / Improved Familiar / Staff Nexus — pick at L1.',
+                    '<strong>Cantrip rank:</strong> auto-heighten to ⌈level/2⌉.',
+                ]
+            },
+            'rogue': {
+                lines: [
+                    '<strong>Sneak Attack:</strong> +1d6 at L1, +1d6 every 4 levels, vs Off-Guard targets.',
+                    '<strong>Surprise Attack:</strong> targets Off-Guard on round 1 if you rolled higher Init.',
+                    '<strong>Racket:</strong> Thief/Ruffian/Scoundrel/Mastermind/Eldritch Trickster — drives skill emphasis.',
+                ]
+            },
+            'rogue-thief': {
+                lines: [
+                    '<strong>Thief Racket:</strong> add Dex to melee damage for finesse weapons (not Str).',
+                ]
+            },
+            'sorcerer': {
+                lines: [
+                    '<strong>Spontaneous casting:</strong> cast any known spell into any same-or-higher-rank slot.',
+                    '<strong>Signature spells:</strong> 1 per spell rank — auto-heightens when cast at higher rank.',
+                    '<strong>Bloodline:</strong> grants tradition + bloodline spells (focus pool) + bloodline magic effects.',
+                ]
+            },
+            'bard': {
+                lines: [
+                    '<strong>Compositions:</strong> focus spells with the auditory + linguistic traits.',
+                    '<strong>Inspire Courage / Defense / Heroics:</strong> usually the bard\'s job to keep up at all times.',
+                    '<strong>Muse:</strong> Enigma / Maestro / Polymath / Warrior — drives feats.',
+                ]
+            },
+        };
+        (function initClassCheatsheet() {
+            const det = document.getElementById('class-cheatsheet');
+            const body = document.getElementById('class-cheatsheet-body');
+            if (!det || !body) return;
+            const cls = (det.dataset.class || '').toLowerCase();
+            const sub = (det.dataset.subclass || '').toLowerCase();
+            const subKey = `${cls}-${sub}`;
+            const main = CLASS_CHEATSHEETS[cls];
+            const subBlock = CLASS_CHEATSHEETS[subKey];
+            if (!main && !subBlock) {
+                body.innerHTML = '<em>No quick-reference card for this class yet. Open the Feats list below for full text.</em>';
+                return;
+            }
+            let html = '<ul>';
+            if (subBlock) subBlock.lines.forEach(l => html += `<li>${l}</li>`);
+            if (main) main.lines.forEach(l => html += `<li>${l}</li>`);
+            html += '</ul>';
+            body.innerHTML = html;
+        })();
+
+        // ----- Treat Wounds button (Wave 2 #6) ----------------------------
+        // Open a small modal: pick a target party member, pick a DC tier
+        // (Trained DC 15 / Expert 20 / Master 30 / Legendary 40), roll
+        // Medicine, broadcast to GM with the proposed healing amount.
+        async function openTreatWounds() {
+            const medicine = ({{ pc.skills | tojson | safe }}).find(s => s.name.toLowerCase() === 'medicine');
+            if (!medicine) {
+                alert('You don\'t have Medicine listed.');
+                return;
+            }
+            // Fetch party list
+            let party = [];
+            try {
+                const res = await fetch('/api/party_list');
+                const d = await res.json();
+                party = (d.party || []).filter(p => p.name !== pcName);
+            } catch(_) {}
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed; inset:0; background:rgba(8,10,20,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px;';
+            const med_total = parseInt(medicine.total, 10);
+            const overlayHTML = `
+                <div class="parchment-frame" style="max-width:420px; width:100%; background:linear-gradient(180deg,#1a1613 0%,#120f0c 100%); border-radius:8px; padding:22px;">
+                    <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 12px 0; text-align:center;">❦ Treat Wounds</h3>
+                    <p style="font-family:var(--font-flavor); font-size:13px; color:#cfc4a8; line-height:1.45; margin:0 0 12px 0;">
+                        10 minutes. Roll Medicine vs DC of the proficiency tier you choose. Heal 2d8 (Trained), 4d8 (Expert), 6d8 (Master), 8d8 (Legendary). +10 to roll = DC +5; +20 = DC +10. Failure: no heal. Crit fail: target takes 1d8.
+                    </p>
+                    <div style="margin-bottom:10px;">
+                        <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Target</label>
+                        <select id="tw-target" class="hp-input" style="width:100%; padding:6px 8px; margin-top:4px;">
+                            ${party.map(p => `<option value="${p.name}">${p.name}</option>`).join('')}
+                            ${party.length ? '' : `<option value="${pcName}">${pcName} (self)</option>`}
+                        </select>
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Tier (DC / heal die)</label>
+                        <select id="tw-tier" class="hp-input" style="width:100%; padding:6px 8px; margin-top:4px;">
+                            <option value="trained" data-dc="15" data-dice="2">Trained — DC 15, 2d8 heal</option>
+                            <option value="expert" data-dc="20" data-dice="4">Expert — DC 20, 4d8 heal</option>
+                            <option value="master" data-dc="30" data-dice="6">Master — DC 30, 6d8 heal</option>
+                            <option value="legendary" data-dc="40" data-dice="8">Legendary — DC 40, 8d8 heal</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
+                        <button class="tb" onclick="this.closest('div[style*=\\'inset:0\\']')?.remove()" style="padding:5px 12px; font-size:12px;">Cancel</button>
+                        <button class="tb gilt" id="tw-go" style="padding:5px 14px; font-size:12px;">Roll Medicine ${med_total >= 0 ? '+' : ''}${med_total}</button>
+                    </div>
+                </div>`;
+            overlay.innerHTML = overlayHTML;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+            overlay.querySelector('#tw-go').onclick = async () => {
+                const target = overlay.querySelector('#tw-target').value;
+                const tierSel = overlay.querySelector('#tw-tier');
+                const tier = tierSel.value;
+                const dc = parseInt(tierSel.selectedOptions[0].dataset.dc, 10);
+                const numDice = parseInt(tierSel.selectedOptions[0].dataset.dice, 10);
+                overlay.remove();
+                // Roll d20
+                const d20 = Math.floor(Math.random() * 20) + 1;
+                const total = d20 + med_total;
+                let success = 'failure', heal = 0;
+                if (d20 === 20) success = 'crit_success';
+                else if (d20 === 1) success = 'crit_failure';
+                else if (total >= dc + 10) success = 'crit_success';
+                else if (total >= dc) success = 'success';
+                else if (total <= dc - 10) success = 'crit_failure';
+                if (success === 'success') {
+                    for (let i = 0; i < numDice; i++) heal += Math.floor(Math.random() * 8) + 1;
+                } else if (success === 'crit_success') {
+                    for (let i = 0; i < numDice; i++) heal += Math.floor(Math.random() * 8) + 1;
+                    heal += 10;
+                } else if (success === 'crit_failure') {
+                    heal = -(Math.floor(Math.random() * 8) + 1);  // takes 1d8 dmg
+                }
+                const sign = med_total >= 0 ? '+' : '';
+                const detail = `Treat Wounds (${tier}, DC ${dc}): 1d20 (${d20}) ${sign}${med_total} = ${total} → ${success.replace('_',' ')} → ${heal >= 0 ? `+${heal}` : heal} HP to ${target}`;
+                try { broadcastToGM(`Treat Wounds → ${target}`, total.toString(), detail, success); } catch(_) {}
+                try { showRollToast(`Treat Wounds → ${target}`, total, detail, d20===20, d20===1, [{sides:20,value:d20}], dc); } catch(_) {}
+                // Server log so the GM can show "table time on healing"
+                try {
+                    await fetch(`/api/treat_wounds/${pcNameEncoded}`, {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({
+                            target, roll_total: total, healing: heal, dc,
+                            success, proficiency: tier
+                        })
+                    });
+                } catch(_) {}
+            };
+        }
+
+        // ----- Whisper to GM (Wave 2 #15) ---------------------------------
+        function toggleWhisper() {
+            const p = document.getElementById('whisper-panel');
+            if (!p) return;
+            p.classList.toggle('open');
+            if (p.classList.contains('open')) {
+                const ta = document.getElementById('whisper-text');
+                if (ta) ta.focus();
+            }
+        }
+        function closeWhisper() { document.getElementById('whisper-panel')?.classList.remove('open'); }
+        async function sendWhisper() {
+            const ta = document.getElementById('whisper-text');
+            const status = document.getElementById('whisper-status');
+            if (!ta || !ta.value.trim()) return;
+            try {
+                const res = await fetch(`/api/whisper/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({text: ta.value.trim()})
+                });
+                const d = await res.json();
+                if (d.success) {
+                    if (status) status.textContent = 'Sent ✓';
+                    ta.value = '';
+                    setTimeout(closeWhisper, 600);
+                } else if (status) {
+                    status.textContent = 'Send failed — try again';
+                }
+            } catch(e) { if (status) status.textContent = 'Network error'; }
+        }
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            const p = document.getElementById('whisper-panel');
+            const fab = document.getElementById('whisper-fab');
+            if (!p || !p.classList.contains('open')) return;
+            if (p.contains(e.target) || (fab && fab.contains(e.target))) return;
+            p.classList.remove('open');
+        });
+
+        // ----- Loot received SSE listener (Wave 2 #26) --------------------
+        // GM sends loot via /api/send_loot. We listen for the broadcast,
+        // show a celebratory toast, and reload to pick up the new
+        // equipment + coins.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Defer to ensure the existing connectSSE is up first.
+        });
+        (function listenForLoot() {
+            // Hook into the existing EventSource by polling for the
+            // global window.EventSource we'd need to reach. Instead, use
+            // a separate EventSource just for this — cheap, the server
+            // already supports it.
+            try {
+                const es = new EventSource('/api/events');
+                es.addEventListener('loot_received', (e) => {
+                    let data;
+                    try { data = JSON.parse(e.data); } catch(_) { return; }
+                    if (!data || data.target !== pcName) return;
+                    const lines = [];
+                    (data.items || []).forEach(it => {
+                        if (it && it.name) lines.push(`× ${it.qty || 1} ${it.name}`);
+                    });
+                    const c = data.coins || {};
+                    const coinLine = ['pp','gp','sp','cp']
+                        .filter(k => c[k]).map(k => `${c[k]} ${k}`).join(' · ');
+                    if (coinLine) lines.unshift(coinLine);
+                    if (!lines.length) return;
+                    try { showRollToast('Loot received', '', lines.join('\n'), false, false, [], null); } catch(_) {}
+                    // Reload after a beat so the inventory reflects.
+                    setTimeout(() => window.location.reload(), 1800);
+                });
+                // GM check request — pop a banner with a one-click Roll
+                es.addEventListener('check_request', (e) => {
+                    let d;
+                    try { d = JSON.parse(e.data); } catch(_) { return; }
+                    if (!d || !d.skill) return;
+                    if (Array.isArray(d.targets) && d.targets.length && !d.targets.includes(pcName)) return;
+                    showCheckRequestBanner(d);
+                });
+            } catch(_) {}
+        })();
+        function showCheckRequestBanner(d) {
+            const skills = {{ pc.skills | tojson | safe }};
+            const skillName = (d.skill || '').trim();
+            // Look up the modifier — fall back to perception/saves
+            let mod = null, label = skillName;
+            const direct = skills.find(s => s.name.toLowerCase() === skillName.toLowerCase());
+            if (direct) mod = parseInt(direct.total, 10);
+            else if (skillName.toLowerCase().startsWith('perc')) { mod = {{ pc.perception }}; label = 'Perception'; }
+            else if (skillName.toLowerCase().startsWith('fort')) { mod = {{ pc.fort }}; label = 'Fortitude Save'; }
+            else if (skillName.toLowerCase().startsWith('ref'))  { mod = {{ pc.ref }};  label = 'Reflex Save'; }
+            else if (skillName.toLowerCase().startsWith('will')) { mod = {{ pc.will }}; label = 'Will Save'; }
+            const dcStr = d.dc ? ` vs DC ${d.dc}` : '';
+            const sign = mod !== null && mod >= 0 ? '+' : '';
+            const banner = document.createElement('div');
+            banner.style.cssText = 'position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:9000; background:linear-gradient(180deg,#1a1613,#120f0c); border:1px solid var(--gilt); border-radius:6px; padding:8px 16px; box-shadow:0 4px 14px rgba(0,0,0,0.5); display:flex; align-items:center; gap:10px;';
+            banner.innerHTML = `
+                <span style="font-family:var(--font-display); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">GM asks for</span>
+                <strong style="color:#fde68a; font-size:13px;">${label}</strong>
+                <span style="color:var(--t3); font-size:11px;">${dcStr}</span>
+                ${mod !== null ? `<button class="tb gilt" style="padding:4px 12px; font-size:11px;">Roll ${sign}${mod}</button>` : `<span style="color:#ef4444; font-size:11px;">no modifier found</span>`}
+                <button style="background:transparent; color:var(--t3); padding:0 4px;">✕</button>`;
+            document.body.appendChild(banner);
+            const [rollBtn, closeBtn] = banner.querySelectorAll('button');
+            if (mod !== null && rollBtn) {
+                rollBtn.onclick = () => { rollSkill(label, mod, d.dc); banner.remove(); };
+            }
+            if (closeBtn) closeBtn.onclick = () => banner.remove();
+            setTimeout(() => banner.remove(), 18000);
+        }
+
+        // ----- Invested-items toggle (Wave 2 #24) -------------------------
+        (function initInvested() {
+            const storeKey = `pf2e_invested_${pcName}`;
+            let invested = {};
+            try { invested = JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch(_) {}
+            const toggles = document.querySelectorAll('.invested-toggle');
+            const countEl = document.getElementById('invested-count');
+            const chip = document.getElementById('invested-chip');
+            function repaint() {
+                let n = 0;
+                toggles.forEach(t => {
+                    const k = t.getAttribute('data-item-name');
+                    if (invested[k]) { t.style.color = 'var(--gilt)'; n++; }
+                    else t.style.color = 'var(--t4)';
+                });
+                if (countEl) countEl.textContent = n;
+                if (chip) chip.classList.toggle('warn', n > 10);
+            }
+            toggles.forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const k = t.getAttribute('data-item-name');
+                    invested[k] = !invested[k];
+                    if (!invested[k]) delete invested[k];
+                    try { localStorage.setItem(storeKey, JSON.stringify(invested)); } catch(_) {}
+                    repaint();
+                });
+            });
+            repaint();
+        })();
+
+        // ----- Build validator on level-up drawer (Wave 2 #29) ------------
+        // Hook into openLevelUpDrawer if defined; show the validator at the
+        // top of the drawer body.
+        (function wireLevelUpValidator() {
+            const orig = window.openLevelUpDrawer;
+            if (typeof orig !== 'function') return;
+            window.openLevelUpDrawer = async function() {
+                const r = orig.apply(this, arguments);
+                try {
+                    const res = await fetch(`/api/levelup_validate/${pcNameEncoded}`);
+                    const d = await res.json();
+                    const drawer = document.querySelector('.levelup-drawer-body, .levelup-drawer-content, .levelup-drawer');
+                    if (!drawer) return r;
+                    let v = drawer.querySelector('#lvl-validator');
+                    if (!v) {
+                        v = document.createElement('div');
+                        v.id = 'lvl-validator';
+                        v.className = 'lvl-validator';
+                        drawer.insertBefore(v, drawer.firstChild);
+                    }
+                    if (!d.issues || !d.issues.length) {
+                        v.classList.add('ok');
+                        v.innerHTML = `<h4>Build looks complete for level ${d.level}</h4><ul><li>No missing choices detected.</li></ul>`;
+                    } else {
+                        v.classList.remove('ok');
+                        v.innerHTML = `<h4>Level ${d.level} — choices to make</h4><ul>${d.issues.map(i => `<li>${i}</li>`).join('')}</ul>`;
+                    }
+                } catch(_) {}
+                return r;
+            };
+        })();
+
+        // ----- Session journal end-of-session prompt (Wave 2 #30) ---------
+        // Surface a small button somewhere a player will see at session end.
+        // We add it next to the existing PC notes Save button on the
+        // Inventory tab. Click → modal asking "What happened this session?"
+        // → posts to /api/session_journal so the GM can paste into Obsidian.
+        (function injectJournalButton() {
+            // Find the campaign notes button; fall back to whatever exists.
+            const target = document.querySelector('button[onclick="saveNotes()"]');
+            if (!target) return;
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.style.marginRight = '6px';
+            btn.title = 'Send a 1-2 line "what happened this session" note to the GM (private). Used to seed the session journal.';
+            btn.textContent = '📜 Session Recap';
+            btn.onclick = openJournalPrompt;
+            target.parentElement.insertBefore(btn, target);
+        })();
+        function openJournalPrompt() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed; inset:0; background:rgba(8,10,20,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px;';
+            overlay.innerHTML = `
+                <div class="parchment-frame" style="max-width:460px; width:100%; background:linear-gradient(180deg,#1a1613 0%,#120f0c 100%); border-radius:8px; padding:22px;">
+                    <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 6px 0; text-align:center;">📜 Session Recap</h3>
+                    <p style="font-family:var(--font-flavor); font-size:13px; color:#cfc4a8; line-height:1.45; margin:0 0 12px 0; text-align:center;">
+                        A line or two — what happened from your character's view? Sent privately to the GM only.
+                    </p>
+                    <textarea id="journal-text" maxlength="2000" placeholder="We met an old hermit at the crossroads. She gave me a strange iron key and warned us about the bog…" style="width:100%; min-height:120px; resize:vertical; background:var(--bg-base); border:1px solid var(--border-s); border-radius:4px; padding:8px; color:var(--text-primary); font-family:var(--font-flavor); font-size:13px; line-height:1.5;"></textarea>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+                        <span style="font-size:10px; color:var(--t3); font-style:italic;">GM-only — feeds your campaign journal</span>
+                        <div style="display:flex; gap:8px;">
+                            <button class="tb" onclick="this.closest('div[style*=\\'inset:0\\']')?.remove()" style="padding:5px 12px; font-size:12px;">Cancel</button>
+                            <button class="tb gilt" id="journal-send" style="padding:5px 14px; font-size:12px;">Send to GM</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+            overlay.querySelector('#journal-send').onclick = async () => {
+                const text = (overlay.querySelector('#journal-text').value || '').trim();
+                if (!text) { overlay.remove(); return; }
+                try {
+                    await fetch(`/api/session_journal/${pcNameEncoded}`, {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({text})
+                    });
+                    try { showRollToast('Session note', 'sent', 'GM has it.', false, false, [], null); } catch(_) {}
+                } catch(_) {}
+                overlay.remove();
+            };
+            overlay.querySelector('textarea').focus();
+        }
+
+        // ----- Decorate condition pills with data-cond for glossary -----
+        (function decorateConditionPills() {
+            document.querySelectorAll('.condition-pill, [data-condition]').forEach(p => {
+                if (p.getAttribute('data-cond')) return;
+                // Try to extract the condition name from text content
+                const t = (p.textContent || '').trim().toLowerCase();
+                const name = t.split(/\s+/)[0];  // first word
+                if (name) p.setAttribute('data-cond', name);
+            });
+        })();
+
+        // ----- Auto-save indicator on Notes/Wealth ------------------------
+        // Wrap the existing saveWealth + scheduleAutoSave functions so a
+        // ✓ Saved chip appears next to their button.
+        (function wireSaveIndicators() {
+            ['saveWealth','saveNotes'].forEach(fn => {
+                if (typeof window[fn] !== 'function') return;
+                const orig = window[fn];
+                window[fn] = async function() {
+                    const ret = await orig.apply(this, arguments);
+                    const btn = document.getElementById(fn === 'saveWealth' ? 'btn-wealth' : 'btn-notes');
+                    if (btn) flashSaved(btn.parentElement);
+                    return ret;
+                };
+            });
+        })();
     </script>
 
     <!-- Right-Click Context Menu -->

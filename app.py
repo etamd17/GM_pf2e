@@ -6773,6 +6773,236 @@ def long_rest(pc_name):
         return jsonify(result)
     return jsonify({"success": False})
 
+
+# ════════════════════════════════════════════════════════════════════════
+# Player → GM private channels (Wave 2 UX additions, 2026-04-24)
+#
+# All four of these endpoints accept a small JSON payload from a player
+# sheet and broadcast it as a GM-only SSE event using the existing
+# `player_filter=lambda d: None` pattern. Players never see each other's
+# whispers or journal entries; the GM screen subscribes to the new event
+# names and surfaces them in its existing inbox / log UI.
+# ════════════════════════════════════════════════════════════════════════
+
+# In-memory session log of healing events. Cheap, transient — wiped on
+# server restart. Mostly used so the GM screen can compute "how much
+# table time spent healing this session" if it ever wants to.
+SESSION_HEALING_LOG = []  # list of dicts: {ts, healer, target, amount, source}
+SESSION_JOURNAL = {}      # pc_name -> list of {ts, text}
+
+@app.route('/api/whisper/<pc_name>', methods=['POST'])
+def player_whisper(pc_name):
+    """Player-only → GM-only message. Players never see other players'
+    whispers; the GM screen surfaces them in its inbox."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown player"}), 404
+    data = request.get_json(silent=True) or {}
+    text = (data.get('text') or '').strip()
+    if not text:
+        return jsonify({"success": False, "error": "empty"}), 400
+    text = text[:1000]  # hard cap
+    payload = {
+        'pc_name': pc_name,
+        'text': text,
+        'ts': time.time() if 'time' in dir() else 0,
+    }
+    try:
+        import time as _t
+        payload['ts'] = _t.time()
+    except Exception:
+        pass
+    sse_broadcast('whisper', payload, player_filter=lambda d: None)
+    return jsonify({"success": True})
+
+
+@app.route('/api/treat_wounds/<pc_name>', methods=['POST'])
+def treat_wounds_dispatch(pc_name):
+    """Player rolled Treat Wounds — broadcast a GM-visible record so the
+    GM applies the healing (and we keep a session log of total healing
+    time + amounts for the optional 'how much table time on healing'
+    summary)."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown player"}), 404
+    data = request.get_json(silent=True) or {}
+    target = (data.get('target') or '').strip()
+    roll_total = data.get('roll_total')
+    healing = data.get('healing')
+    proficiency = (data.get('proficiency') or 'Trained').strip()
+    dc = data.get('dc')
+    success = data.get('success')  # crit_success / success / failure / crit_failure
+    if not target or healing is None:
+        return jsonify({"success": False, "error": "missing target or healing"}), 400
+    payload = {
+        'healer': pc_name,
+        'target': target,
+        'roll_total': roll_total,
+        'dc': dc,
+        'success': success,
+        'healing': healing,
+        'proficiency': proficiency,
+    }
+    try:
+        import time as _t
+        payload['ts'] = _t.time()
+    except Exception:
+        payload['ts'] = 0
+    SESSION_HEALING_LOG.append(payload)
+    # Cap log length so a long-running server doesn't grow unboundedly.
+    if len(SESSION_HEALING_LOG) > 500:
+        del SESSION_HEALING_LOG[:len(SESSION_HEALING_LOG) - 500]
+    sse_broadcast('treat_wounds', payload, player_filter=lambda d: None)
+    return jsonify({"success": True})
+
+
+@app.route('/api/healing_log')
+def healing_log_get():
+    """GM-side fetch of the in-memory healing log."""
+    return jsonify({"log": SESSION_HEALING_LOG})
+
+
+@app.route('/api/session_journal/<pc_name>', methods=['POST'])
+def session_journal_add(pc_name):
+    """End-of-session prompt — player jots a one-line summary, GM gets
+    a private SSE event so they can paste it into their Obsidian vault.
+    Also appended to in-memory log so the GM screen can render a 'this
+    session's recap' panel even on hot-reload."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown player"}), 404
+    data = request.get_json(silent=True) or {}
+    text = (data.get('text') or '').strip()
+    if not text:
+        return jsonify({"success": False, "error": "empty"}), 400
+    text = text[:2000]
+    try:
+        import time as _t
+        ts = _t.time()
+    except Exception:
+        ts = 0
+    SESSION_JOURNAL.setdefault(pc_name, []).append({'ts': ts, 'text': text})
+    sse_broadcast('journal_entry', {
+        'pc_name': pc_name, 'text': text, 'ts': ts,
+    }, player_filter=lambda d: None)
+    return jsonify({"success": True})
+
+
+@app.route('/api/session_journal')
+def session_journal_get():
+    """GM-side: get all journal entries this session, grouped by PC."""
+    return jsonify({"journal": SESSION_JOURNAL})
+
+
+# GM → player check request (Wave 2 #14). GM screen posts which skill
+# (and optional DC) to broadcast — every player's sheet pops a small
+# banner with a "Roll +N" button using their own modifier.
+@app.route('/api/request_check', methods=['POST'])
+def request_check_from_players():
+    data = request.get_json(silent=True) or {}
+    skill = (data.get('skill') or '').strip()
+    if not skill:
+        return jsonify({"success": False, "error": "missing skill"}), 400
+    dc = data.get('dc')
+    targets = data.get('targets') or []  # empty list = everyone
+    secret = bool(data.get('secret', False))
+    payload = {
+        'skill': skill,
+        'dc': dc,
+        'targets': targets,
+        'secret': secret,
+    }
+    sse_broadcast('check_request', payload)
+    return jsonify({"success": True})
+
+
+# Level-up validator (Wave 2 #29) — checks the build for incomplete
+# choices that PF2e requires at the player's current level. Returns a
+# list of issue strings; the level-up drawer renders these as a checklist
+# so the player isn't surprised mid-session.
+@app.route('/api/levelup_validate/<pc_name>')
+def levelup_validate(pc_name):
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown player"}), 404
+    pc = PARTY_LIBRARY[pc_name]
+    issues = []
+    L = pc.level
+    # Skill increase: every odd level from 3 onward (PF2e core).
+    expected_skill_increases = max(0, (L - 1) // 2)  # L3=1, L5=2, L7=3...
+    actual_increases = sum(1 for v in (pc.proficiencies or {}).values() if isinstance(v, int) and v >= 4)
+    # The check above is a heuristic; many builds have starting trained
+    # skills, so flag only when we are clearly under the boost count.
+    # General feat: every even level from 3 onward.
+    # Class feat: every even level.
+    # Ancestry feat: 1, 5, 9, 13, 17.
+    # Ability boosts: every 5 levels (L5/L10/L15/L20).
+    feats = pc.feats or []
+    class_feat_levels = sorted({safe_int(f.get('level'), 0) for f in feats if 'class' in (f.get('type','').lower() or 'class')})
+    # The build engine usually fills these via Pathbuilder. Surface only
+    # generic warnings if the count looks short for the level.
+    if L >= 5:
+        boosts_hit = bool(getattr(pc, 'level_5_boosts_applied', None))
+        if not boosts_hit and L >= 5:
+            # Heuristic: flag if no L5 boost recorded in build.
+            try:
+                build = pc._build_ref or {}
+                applied = (build.get('attributes', {}) or {}).get('boosts_applied', [])
+                if not any(str(b).startswith('5') for b in (applied or [])):
+                    issues.append(f"Level 5 ability boosts: pick four +1s (or +2 to a stat below 18).")
+            except Exception:
+                pass
+    # Spell prep for prepared casters: surface if prepared_spells looks empty.
+    if pc.spell_casters:
+        for ci, c in enumerate(pc.spell_casters):
+            if 'prepared' in (c.get('type','').lower()):
+                build = pc._build_ref or {}
+                prep = (build.get('prepared_spells') or {}).get(str(ci), {})
+                if not prep:
+                    issues.append(f"Prepared caster #{ci+1} ({c.get('name','?')}) has no prepared spells.")
+    return jsonify({"success": True, "issues": issues, "level": L})
+
+
+# GM → player loot dispatch (Wave 2 #26). The GM-side caller specifies
+# which player to send to; we broadcast a GM event AND emit a
+# player-targeted event the player sheet listens for.
+@app.route('/api/send_loot', methods=['POST'])
+def send_loot_to_player():
+    data = request.get_json(silent=True) or {}
+    target = (data.get('target') or '').strip()
+    items = data.get('items') or []  # list of {name, qty?, bulk?, note?}
+    coins = data.get('coins') or {}  # {pp, gp, sp, cp}
+    if not target or target not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown target"}), 404
+    if not isinstance(items, list):
+        items = []
+    pc = PARTY_LIBRARY[target]
+    # Apply coins to the PC's wallet directly so the player just sees
+    # their wallet update without an extra "accept" step.
+    pc.pp = int(getattr(pc, 'pp', 0) or 0) + int(coins.get('pp', 0) or 0)
+    pc.gp = int(getattr(pc, 'gp', 0) or 0) + int(coins.get('gp', 0) or 0)
+    pc.sp = int(getattr(pc, 'sp', 0) or 0) + int(coins.get('sp', 0) or 0)
+    pc.cp = int(getattr(pc, 'cp', 0) or 0) + int(coins.get('cp', 0) or 0)
+    # Append items to the PC's inventory (build['equipment'] for persistence).
+    file_path = get_pc_file_path(target)
+    if file_path and os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        equipment = build.get('equipment') or []
+        for it in items:
+            if not isinstance(it, dict): continue
+            nm = (it.get('name') or '').strip()
+            if not nm: continue
+            qty = int(it.get('qty', 1) or 1)
+            equipment.append([nm, qty])
+        build['equipment'] = equipment
+        # Persist coins
+        build['pp'] = pc.pp; build['gp'] = pc.gp; build['sp'] = pc.sp; build['cp'] = pc.cp
+        save_and_reload_character(target, pc_json, file_path)
+    # Tell the target player's sheet to refresh (and surface a toast).
+    sse_broadcast('loot_received', {
+        'target': target, 'items': items, 'coins': coins,
+    })
+    return jsonify({"success": True})
+
+
 @app.route('/api/equip_armor/<pc_name>', methods=['POST'])
 def equip_armor(pc_name):
     data = request.json
