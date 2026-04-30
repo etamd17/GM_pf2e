@@ -2788,7 +2788,8 @@ class Character:
             sign = lambda v: f"+{v}" if v >= 0 else str(v)
             atk_parts = [f"{attack_stat.upper()} {sign(stat_mod)}"]
             if prof_val > 0:
-                atk_parts.append(f"{ {0:'U',2:'T',4:'E',6:'M',8:'L'}.get(prof_val,'T') } +{prof_val}")
+                _prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'T')
+                atk_parts.append(f"{_prof_letter} +{prof_val}")
                 atk_parts.append(f"Lvl +{self.level}")
             if abp_hit:
                 atk_parts.append(f"ABP +{abp_hit}")
@@ -6787,15 +6788,43 @@ def long_rest(pc_name):
 # In-memory session log of healing events + session journal. Persisted
 # to disk so a server bounce mid-session doesn't lose state. All writes
 # guarded by a single lock since these are append-mostly + small.
-import threading as _threading
-SESSION_STATE_LOCK = _threading.Lock()
+#
+# Path: prefer a writable data dir if RAILWAY mounts a volume there,
+# otherwise fall back to the project dir. Failure to load OR save is
+# non-fatal — the in-memory dicts still work, the disk just won't
+# persist across restarts.
+SESSION_STATE_LOCK = threading.Lock()
 SESSION_HEALING_LOG = []  # list of dicts: {ts, healer, target, amount, source}
 SESSION_JOURNAL = {}      # pc_name -> list of {ts, text}
-_SESSION_STATE_PATH = os.path.join(os.path.dirname(__file__), 'session_state.json')
+
+def _resolve_session_state_path():
+    candidates = [
+        os.environ.get('SESSION_STATE_PATH'),
+        os.path.join(os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', ''), 'session_state.json') if os.environ.get('RAILWAY_VOLUME_MOUNT_PATH') else None,
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'session_state.json'),
+    ]
+    for c in candidates:
+        if not c: continue
+        try:
+            d = os.path.dirname(c) or '.'
+            os.makedirs(d, exist_ok=True)
+            # Probe writability without leaving a file behind.
+            test = os.path.join(d, '.session_state_probe')
+            with open(test, 'w') as f: f.write('ok')
+            os.remove(test)
+            return c
+        except Exception:
+            continue
+    return None  # disk persistence disabled
+
+_SESSION_STATE_PATH = _resolve_session_state_path()
 
 def _save_session_state():
     """Persist healing log + journal to disk. Called after any mutation
-    (which are infrequent — a few per session). Cheap: ~1KB JSON."""
+    (which are infrequent — a few per session). Cheap: ~1KB JSON.
+    Silent no-op if the path probe failed at boot."""
+    if not _SESSION_STATE_PATH:
+        return
     try:
         with SESSION_STATE_LOCK:
             payload = {
@@ -6811,6 +6840,8 @@ def _load_session_state():
     """Restore healing log + journal on boot. Idempotent — safe to
     call multiple times; later calls just overwrite in-memory state."""
     global SESSION_HEALING_LOG, SESSION_JOURNAL
+    if not _SESSION_STATE_PATH:
+        return
     try:
         if not os.path.exists(_SESSION_STATE_PATH):
             return
@@ -6933,12 +6964,12 @@ def session_journal_get():
 # don't both grab the "first free" slot.
 # ════════════════════════════════════════════════════════════════════════
 _PC_SPELL_LOCKS = {}  # pc_name -> threading.Lock
-_PC_SPELL_LOCKS_GUARD = _threading.Lock()
+_PC_SPELL_LOCKS_GUARD = threading.Lock()
 def _pc_spell_lock(pc_name):
     with _PC_SPELL_LOCKS_GUARD:
         L = _PC_SPELL_LOCKS.get(pc_name)
         if L is None:
-            L = _threading.Lock()
+            L = threading.Lock()
             _PC_SPELL_LOCKS[pc_name] = L
         return L
 
