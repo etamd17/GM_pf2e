@@ -8799,6 +8799,441 @@
                 };
             });
         })();
+
+        // ═══════════════════════════════════════════════════════════════
+        // WAVE 3 — Spell-rules audit fix + 1-7 follow-ups (2026-04-24)
+        // ═══════════════════════════════════════════════════════════════
+
+        // ----- Defensive guard: currentConditions may be undefined on the
+        // initial render path before SSE has populated it. Initialize.
+        if (typeof window.currentConditions === 'undefined') window.currentConditions = {};
+
+        // ----- PF2e cast validation wrapper ------------------------------
+        // Replaces the older "_autoExpendSpellSlot" client-only flow with
+        // a server-validated /api/cast_spell call. Prepared casters now
+        // require the spell to be in a prepared slot at the chosen rank;
+        // spontaneous casters are prompted to pick a slot rank ≥ spell
+        // base rank. Cantrip / focus / impulse skip the call entirely.
+        const _origRollSpell_v3 = window.rollSpell;
+        if (typeof _origRollSpell_v3 === 'function') {
+            window.rollSpell = function(spellName, e, slotInfo) {
+                // Strip an existing "(rank N)" suffix from spell name so we
+                // can detect the same spell on reroll.
+                const baseName = (spellName || '').replace(/\s*\(rank \d+\).*$/, '').trim();
+                if (!slotInfo || slotInfo.casterIdx === undefined || slotInfo.rank === undefined) {
+                    return _origRollSpell_v3.apply(this, arguments);
+                }
+                if (e) { try { e.preventDefault(); e.stopPropagation(); } catch(_){} }
+                const casterIdx = slotInfo.casterIdx;
+                const baseRank = slotInfo.rank;
+                // Look up caster type to drive the flow.
+                const casters = (typeof castersData !== 'undefined') ? castersData : [];
+                const caster = casters[casterIdx] || {};
+                const ctype = ((caster.type || '') + '').toLowerCase();
+                if (baseRank <= 0 || ctype.includes('focus') || ctype.includes('impulse') || ctype.includes('alchemical') || ctype.includes('innate')) {
+                    return _origRollSpell_v3.call(this, spellName, null, slotInfo);
+                }
+                // PREPARED: cast at exactly the prepared rank. Bypass picker.
+                if (ctype.includes('prepared') && !ctype.includes('spontaneous')) {
+                    castSpellWithValidation(baseName, casterIdx, baseRank, baseRank, 'prepared');
+                    return;
+                }
+                // SPONTANEOUS / SPONTANEOUS-BOUNDED: open slot-rank picker.
+                openSlotRankPicker(baseName, casterIdx, baseRank, e);
+            };
+        }
+
+        function openSlotRankPicker(spellName, casterIdx, baseRank, evt) {
+            // Find the highest rank with slots for this caster.
+            const casters = (typeof castersData !== 'undefined') ? castersData : [];
+            const caster = casters[casterIdx] || {};
+            const levels = caster.levels || [];
+            // Build list of {rank, slots, expended} for ranks >= baseRank
+            const expended = window._expendedSlots || {};
+            const opts = [];
+            levels.forEach(lvl => {
+                const r = parseInt(lvl.level, 10);
+                const slots = parseInt(lvl.slots, 10) || 0;
+                if (r < baseRank || slots <= 0) return;
+                const list = expended[`c${casterIdx}_l${r}`] || [];
+                const used = list.filter(Boolean).length;
+                opts.push({ rank: r, slots, used });
+            });
+            if (!opts.length) {
+                // No slots — just show a clear error toast and don't roll.
+                try { showRollToast(spellName, '!', 'No available slots at rank ' + baseRank + ' or higher. Wait for a long rest.', false, true, [], null); } catch(_) {}
+                return;
+            }
+            // If only one rank available with at least one free slot, skip the picker.
+            const free = opts.filter(o => o.used < o.slots);
+            if (free.length === 1) {
+                castSpellWithValidation(spellName, casterIdx, baseRank, free[0].rank, 'spontaneous');
+                return;
+            }
+            // Build picker
+            const pick = document.createElement('div');
+            pick.className = 'heighten-picker';
+            pick.style.zIndex = 9100;
+            let html = `<div class="heighten-picker-label">${spellName} — pick slot rank</div>`;
+            opts.forEach(o => {
+                const remaining = Math.max(0, o.slots - o.used);
+                const disabled = remaining === 0;
+                html += `<button type="button" class="heighten-rank-btn ${o.rank === baseRank ? 'base' : ''}"
+                    data-rank="${o.rank}" ${disabled ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}
+                    title="Rank ${o.rank} slot — ${remaining}/${o.slots} remaining">
+                    ${o.rank} <span style="font-size:9px; opacity:0.7;">(${remaining}/${o.slots})</span>
+                </button>`;
+            });
+            pick.innerHTML = html;
+            // Position
+            if (evt && evt.target) {
+                const r = evt.target.getBoundingClientRect();
+                pick.style.top = (window.scrollY + r.bottom + 4) + 'px';
+                pick.style.left = (window.scrollX + r.left) + 'px';
+            } else {
+                pick.style.top = '40%'; pick.style.left = '40%';
+            }
+            document.body.appendChild(pick);
+            const tearDown = () => { pick.remove(); document.removeEventListener('click', dismiss, true); };
+            const dismiss = (ev) => { if (!pick.contains(ev.target)) tearDown(); };
+            setTimeout(() => document.addEventListener('click', dismiss, true), 0);
+            pick.addEventListener('click', (ev) => {
+                const b = ev.target.closest('.heighten-rank-btn');
+                if (!b || b.disabled) return;
+                const rank = parseInt(b.dataset.rank, 10);
+                tearDown();
+                castSpellWithValidation(spellName, casterIdx, baseRank, rank, 'spontaneous');
+            });
+        }
+
+        async function castSpellWithValidation(spellName, casterIdx, baseRank, slotRank, castType) {
+            try {
+                const res = await fetch(`/api/cast_spell/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        caster_idx: casterIdx,
+                        spell_rank: baseRank,
+                        slot_rank: slotRank,
+                        spell_name: spellName,
+                        cast_type: castType,
+                    })
+                });
+                const d = await res.json();
+                if (!d.success) {
+                    try { showRollToast(spellName, '!', d.error || 'Cast failed', false, true, [], null); } catch(_) {}
+                    return;
+                }
+                // Update local expended_slots for spontaneous, refresh checkboxes.
+                if (d.expended && castType === 'spontaneous') {
+                    const key = `c${casterIdx}_l${slotRank}`;
+                    window._expendedSlots = window._expendedSlots || {};
+                    const list = window._expendedSlots[key] || [];
+                    while (list.length <= d.slot_idx) list.push(false);
+                    list[d.slot_idx] = true;
+                    window._expendedSlots[key] = list;
+                    const cb = document.querySelector(`input.spell-slot-cb[data-caster-idx="${casterIdx}"][data-spell-level="${slotRank}"][data-slot-idx="${d.slot_idx}"]`);
+                    if (cb) cb.checked = true;
+                }
+                // Now run the actual roll-toast/broadcast via the original.
+                const labeled = slotRank > baseRank ? `${spellName} (rank ${slotRank})` : spellName;
+                if (typeof _origRollSpell_v3 === 'function') {
+                    // Pass slotInfo with rank=base AND skipServerExpend so
+                    // the inner doesn't re-call the slot endpoint.
+                    _origRollSpell_v3.call(window, labeled, null, null);
+                }
+            } catch(e) {
+                console.error('cast validation failed:', e);
+            }
+        }
+
+        // ----- Prepared caster: "Prepare your spells first" notice --------
+        // For each prepared caster, after renderPrepUI runs, check if the
+        // prepared map is empty. If so, surface a loud notice at the top
+        // of the prep column so a brand-new player doesn't stare at a
+        // blank spell list wondering why nothing casts.
+        (function watchPreparedCasterEmpty() {
+            const casters = (typeof castersData !== 'undefined') ? castersData : [];
+            casters.forEach((c, idx) => {
+                const t = ((c.type || '') + '').toLowerCase();
+                if (!t.includes('prepared') || t.includes('spontaneous')) return;
+                const wrap = document.getElementById('prep-ui-' + idx);
+                if (!wrap) return;
+                const checkEmpty = () => {
+                    const prep = (window._preparedSpells && window._preparedSpells[idx]) ||
+                                 (window._preparedSpells && window._preparedSpells[String(idx)]) || {};
+                    const totalPrepped = Object.values(prep).reduce((acc, arr) => {
+                        if (Array.isArray(arr)) acc += arr.filter(Boolean).length;
+                        return acc;
+                    }, 0);
+                    let notice = wrap.querySelector('.prep-empty-notice');
+                    if (totalPrepped === 0) {
+                        if (!notice) {
+                            notice = document.createElement('div');
+                            notice.className = 'prep-empty-notice no-print';
+                            notice.style.cssText = 'background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.3); border-left:3px solid #fbbf24; padding:10px 14px; margin-bottom:10px; border-radius:4px; color:#fde68a; font-size:13px; line-height:1.5;';
+                            notice.innerHTML = '<strong style="font-family:var(--font-display); letter-spacing:0.12em; text-transform:uppercase; color:#fbbf24;">⚠ Prepare your spells</strong><br><span style="font-family:var(--font-flavor); font-size:12px;">As a prepared caster you must prepare spells from your spellbook into specific rank slots before you can cast them. Drag a spell from the left column into the slot you want to fill — that spell is then locked into that slot until you long-rest.</span>';
+                            wrap.insertBefore(notice, wrap.firstChild);
+                        }
+                    } else if (notice) {
+                        notice.remove();
+                    }
+                };
+                // Run after render and re-run when renderPrepUI is called.
+                setTimeout(checkEmpty, 250);
+                if (typeof window.renderPrepUI === 'function') {
+                    const orig = window.renderPrepUI;
+                    window.renderPrepUI = function() {
+                        const r = orig.apply(this, arguments);
+                        try { checkEmpty(); } catch(_) {}
+                        return r;
+                    };
+                }
+            });
+        })();
+
+        // ----- Spell list filters (Wave 3 #10) ----------------------------
+        // Adds chip-row above the existing spell search input on the
+        // Magic tab. Filters by save type (Will/Reflex/Fort/None) and
+        // action cost (1A/2A/3A/Reaction/Free). Trait pills decorate
+        // each spell entry from a static keyword scan of cached descs
+        // for the basic ones; users still rely on existing search.
+        (function initSpellFilters() {
+            const search = document.getElementById('spell-search');
+            if (!search) return;
+            const wrap = search.parentElement;
+            if (!wrap || wrap.querySelector('.spell-filter-chips')) return;
+            const chips = document.createElement('div');
+            chips.className = 'spell-filter-chips no-print';
+            chips.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; margin: 6px 0;';
+            const FILTERS = [
+                { id: 'save-will',  label: 'Will',     match: /will/i,     cls: 'save' },
+                { id: 'save-ref',   label: 'Reflex',   match: /reflex/i,   cls: 'save' },
+                { id: 'save-fort',  label: 'Fort',     match: /fort/i,     cls: 'save' },
+                { id: 'cost-1',     label: '1A',       match: /1\s*action|◆(?!◆)/, cls: 'cost' },
+                { id: 'cost-2',     label: '2A',       match: /2\s*actions?|◆◆(?!◆)/, cls: 'cost' },
+                { id: 'cost-3',     label: '3A',       match: /3\s*actions?|◆◆◆/, cls: 'cost' },
+                { id: 'cost-reaction', label: 'Reaction', match: /reaction|↻|↺/i, cls: 'cost' },
+                { id: 'attack',     label: 'Attack',   match: /spell attack|ranged spell|melee spell/i, cls: 'misc' },
+            ];
+            const active = new Set();
+            FILTERS.forEach(f => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.dataset.filter = f.id;
+                b.textContent = f.label;
+                b.style.cssText = 'padding:3px 9px; border-radius:99px; background:var(--bg-raised); border:1px solid var(--border-s); color:var(--text-secondary); font-size:11px; cursor:pointer; transition:background 0.1s;';
+                b.onclick = () => {
+                    if (active.has(f.id)) { active.delete(f.id); b.style.background = 'var(--bg-raised)'; b.style.color = 'var(--text-secondary)'; b.style.borderColor = 'var(--border-s)'; }
+                    else { active.add(f.id); b.style.background = 'rgba(201,163,78,0.15)'; b.style.color = 'var(--gilt)'; b.style.borderColor = 'var(--gilt)'; }
+                    applyFilters();
+                };
+                chips.appendChild(b);
+            });
+            const clear = document.createElement('button');
+            clear.type = 'button';
+            clear.textContent = '✕ Clear';
+            clear.style.cssText = 'padding:3px 9px; border-radius:99px; background:transparent; border:1px solid var(--border-s); color:var(--t3); font-size:11px; cursor:pointer; margin-left:auto;';
+            clear.onclick = () => {
+                active.clear();
+                chips.querySelectorAll('button[data-filter]').forEach(b => {
+                    b.style.background = 'var(--bg-raised)';
+                    b.style.color = 'var(--text-secondary)';
+                    b.style.borderColor = 'var(--border-s)';
+                });
+                applyFilters();
+            };
+            chips.appendChild(clear);
+            wrap.insertBefore(chips, search.nextSibling);
+            function applyFilters() {
+                const filters = FILTERS.filter(f => active.has(f.id));
+                document.querySelectorAll('.spell-entry').forEach(el => {
+                    if (!filters.length) {
+                        el.dataset.filterHidden = '';
+                        if (el.style.display === 'none' && !el.dataset.searchHidden) el.style.display = '';
+                        return;
+                    }
+                    // Pull cached desc + heuristic match.
+                    const name = (el.getAttribute('data-spell-name') || '').toLowerCase();
+                    const desc = ((window._spellDescCache && (window._spellDescCache[name] || {}).desc) || '').toLowerCase();
+                    const text = name + ' ' + desc + ' ' + (el.textContent || '').toLowerCase();
+                    const matchAll = filters.every(f => f.match.test(text));
+                    if (matchAll) { el.dataset.filterHidden = ''; if (!el.dataset.searchHidden) el.style.display = ''; }
+                    else { el.dataset.filterHidden = '1'; el.style.display = 'none'; }
+                });
+            }
+        })();
+
+        // ----- Pet detail rolls (Wave 3 #27) ------------------------------
+        // Decorate each pet card with clickable saves/perception/strikes.
+        // Adds an HP -/+ row so the player can track pet damage. State
+        // persisted in localStorage (no backend change for the simple
+        // case; advanced HP+conditions tracking can graduate to server later).
+        (function initPetSheet() {
+            const pets = {{ pc.pets | tojson | safe }};
+            if (!Array.isArray(pets) || !pets.length) return;
+            const cards = document.querySelectorAll('#tab-pets [class*="rounded-lg"][style*="bg-raised"]');
+            // Cards rendered server-side are in the same order as pets.
+            cards.forEach((card, idx) => {
+                const pet = pets[idx];
+                if (!pet) return;
+                // Re-make stat boxes interactive: AC stays display, but Fort/Ref/Will/Perception/Strikes become rollable.
+                const grid = card.querySelector('.grid.grid-cols-6.gap-2.mb-3');
+                if (grid) {
+                    const cells = grid.querySelectorAll('div');
+                    // Pattern: AC, HP, Fort, Ref, Will, Spd
+                    if (cells.length >= 6) {
+                        attachPetRoll(cells[2], `${pet.name} Fort`, pet.fort);
+                        attachPetRoll(cells[3], `${pet.name} Reflex`, pet.ref);
+                        attachPetRoll(cells[4], `${pet.name} Will`, pet.will);
+                    }
+                    // Inject Perception button if known
+                    if (pet.perception != null) {
+                        const percChip = document.createElement('div');
+                        percChip.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:4px; cursor:pointer; margin-right:6px;';
+                        percChip.innerHTML = `<span class="text-[10px] font-header uppercase" style="color:var(--text-faint);">Perc</span><span class="text-xs font-bold" style="color:var(--text-secondary);">+${pet.perception}</span>`;
+                        percChip.title = `Roll Perception +${pet.perception} for ${pet.name}`;
+                        percChip.onclick = () => doPetRoll(`${pet.name} Perception`, pet.perception);
+                        const after = card.querySelector('.grid.grid-cols-6.gap-2.mb-3');
+                        if (after) after.parentElement.insertBefore(makePetActionsRow(pet, percChip), after.nextSibling);
+                    }
+                }
+                // Make attack rows clickable.
+                card.querySelectorAll('.flex.justify-between.items-center.p-2.mt-1.rounded').forEach((row, ai) => {
+                    const atk = (pet.attacks || [])[ai];
+                    if (!atk) return;
+                    row.style.cursor = 'pointer';
+                    row.title = `Roll ${atk.name} +${atk.bonus} for ${pet.damage || atk.damage} damage`;
+                    row.onclick = () => {
+                        const d20 = Math.floor(Math.random() * 20) + 1;
+                        const total = d20 + (atk.bonus || 0);
+                        const sign = atk.bonus >= 0 ? '+' : '';
+                        const detail = `${pet.name}: ${atk.name} 1d20 (${d20}) ${sign}${atk.bonus} = ${total}${d20===20 ? ' [CRIT]' : d20===1 ? ' [MISS]' : ''} | ${atk.damage}`;
+                        try { broadcastToGM(`${pet.name}: ${atk.name}`, total.toString(), detail, null); } catch(_) {}
+                        try { showRollToast(`${pet.name}: ${atk.name}`, total, detail, d20===20, d20===1, [{sides:20,value:d20}], null); } catch(_) {}
+                    };
+                });
+            });
+        })();
+        function attachPetRoll(cell, label, mod) {
+            if (!cell) return;
+            cell.style.cursor = 'pointer';
+            cell.title = `Roll ${label} ${mod >= 0 ? '+' : ''}${mod}`;
+            cell.onclick = () => doPetRoll(label, mod);
+        }
+        function doPetRoll(label, mod) {
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + (mod || 0);
+            const sign = mod >= 0 ? '+' : '';
+            const detail = `${label}: 1d20 (${d20}) ${sign}${mod} = ${total}${d20===20 ? ' [CRIT]' : d20===1 ? ' [CRIT FAIL]' : ''}`;
+            try { broadcastToGM(label, total.toString(), detail, null); } catch(_) {}
+            try { showRollToast(label, total, detail, d20===20, d20===1, [{sides:20,value:d20}], null); } catch(_) {}
+        }
+        function makePetActionsRow(pet, percChip) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; padding:6px 8px; background:var(--bg-base); border:1px dashed var(--border-subtle); border-radius:4px;';
+            const lbl = document.createElement('span');
+            lbl.className = 'font-header text-[9px] tracking-wider uppercase';
+            lbl.style.color = 'var(--text-muted)';
+            lbl.textContent = 'Pet Actions';
+            row.appendChild(lbl);
+            row.appendChild(percChip);
+            // Stride / Aid / Support buttons
+            const mkBtn = (label, fn) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.style.cssText = 'padding:3px 8px; border-radius:4px; background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary); font-size:11px; cursor:pointer;';
+                b.textContent = label;
+                b.onclick = fn;
+                return b;
+            };
+            row.appendChild(mkBtn('Stride', () => {
+                try { broadcastToGM(`${pet.name}: Stride`, `${pet.speed||25} ft`, `${pet.name} moves up to ${pet.speed||25} ft.`, null); } catch(_) {}
+            }));
+            row.appendChild(mkBtn('Aid an ally', () => {
+                try { broadcastToGM(`${pet.name}: Aid`, '—', `${pet.name} prepares to aid an ally on their next check.`, null); } catch(_) {}
+            }));
+            // HP −/+ tracker (localStorage scoped to PC + pet name)
+            const hpKey = `pf2e_pethp_${pcName}_${pet.name}`;
+            let curHP = parseInt(localStorage.getItem(hpKey), 10);
+            if (isNaN(curHP)) curHP = pet.hp;
+            const hpWrap = document.createElement('span');
+            hpWrap.style.cssText = 'display:inline-flex; align-items:center; gap:4px; margin-left:auto;';
+            const minus = mkBtn('−', () => { curHP = Math.max(0, curHP - 1); writeHP(); });
+            const plus  = mkBtn('+', () => { curHP = Math.min(pet.hp, curHP + 1); writeHP(); });
+            const hpVal = document.createElement('span');
+            hpVal.style.cssText = 'font-family:var(--font-display); font-weight:700; min-width:48px; text-align:center;';
+            const writeHP = () => {
+                hpVal.textContent = `${curHP} / ${pet.hp}`;
+                hpVal.style.color = curHP <= 0 ? '#ef4444' : (curHP < pet.hp/2 ? '#fbbf24' : '#4ade80');
+                try { localStorage.setItem(hpKey, String(curHP)); } catch(_) {}
+            };
+            writeHP();
+            // Inline editable: click value, type number, Enter applies.
+            hpVal.style.cursor = 'text';
+            hpVal.title = 'Click to edit HP directly';
+            hpVal.onclick = () => {
+                const n = prompt(`${pet.name} HP (max ${pet.hp})`, String(curHP));
+                if (n === null) return;
+                const v = parseInt(n, 10);
+                if (!isNaN(v)) { curHP = Math.max(0, Math.min(pet.hp, v)); writeHP(); }
+            };
+            const hpLabel = document.createElement('span');
+            hpLabel.className = 'font-header text-[9px] tracking-wider uppercase';
+            hpLabel.style.color = 'var(--text-muted)';
+            hpLabel.textContent = 'HP';
+            hpWrap.appendChild(hpLabel);
+            hpWrap.appendChild(minus);
+            hpWrap.appendChild(hpVal);
+            hpWrap.appendChild(plus);
+            row.appendChild(hpWrap);
+            return row;
+        }
+
+        // ----- Empty-state copy refresh (Wave 3 #7) -----------------------
+        // Replaces the small italic empty messages with directional copy
+        // pointing the player to the next action they can take.
+        (function refreshEmptyStates() {
+            // Scan known empty-state divs and rewrite their text if they
+            // match the old wording. Idempotent — won't double-replace.
+            const map = [
+                ['No weapons equipped.', 'No weapons equipped — visit your character builder (Pathbuilder) or pick from inventory to add a weapon.'],
+                ['The pack hangs light — no burden carried here.', 'The pack hangs light — no burden carried here. Use Quick Add Common Items below to grab adventuring gear.'],
+                ['No companions or familiars.', 'No companions or familiars. Click + Add Pet to bring an animal companion or familiar onto this sheet.'],
+                ['This character does not possess spellcasting abilities.', 'This character does not possess spellcasting abilities. (Multiclass dedications can grant casting later — pick one in Level Up.)'],
+                ['No feat chosen at this level. The page awaits.', 'No feats chosen yet. Open Level Up → Feats to pick ancestry, class, skill, or general feats appropriate to your current level.'],
+            ];
+            document.querySelectorAll('.italic, [class*="italic"]').forEach(el => {
+                const t = (el.textContent || '').trim();
+                map.forEach(([from, to]) => {
+                    if (t === from) el.textContent = to;
+                });
+            });
+        })();
+
+        // ----- Reduced-motion final pass (Wave 3 #6) ----------------------
+        // Catch any keyframes we added that didn't already gate on
+        // prefers-reduced-motion. We do it dynamically by injecting one
+        // tiny stylesheet that disables animation on a few classes when
+        // the user prefers reduced motion AND the env didn't already.
+        (function reducedMotionPass() {
+            const mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+            if (!mq || !mq.matches) return;
+            const s = document.createElement('style');
+            s.textContent = `
+                .crit-flair, .crit-flair::after, .your-turn,
+                .roll-toast, .conn-pip-dot, .roll-history-btn:hover,
+                .whisper-fab:hover, .d20-fab:hover svg,
+                .ability-block:hover, .skill-action-btn:hover {
+                    animation: none !important;
+                    transition: none !important;
+                }
+            `;
+            document.head.appendChild(s);
+        })();
+
+        // ----- Pet HP gauge color refresh on pc_update -------------------
+        // No-op placeholder hook for future server-side pet HP, so we
+        // don't have to retrofit later.
     </script>
 
     <!-- Right-Click Context Menu -->

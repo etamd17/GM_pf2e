@@ -6784,11 +6784,45 @@ def long_rest(pc_name):
 # names and surfaces them in its existing inbox / log UI.
 # ════════════════════════════════════════════════════════════════════════
 
-# In-memory session log of healing events. Cheap, transient — wiped on
-# server restart. Mostly used so the GM screen can compute "how much
-# table time spent healing this session" if it ever wants to.
+# In-memory session log of healing events + session journal. Persisted
+# to disk so a server bounce mid-session doesn't lose state. All writes
+# guarded by a single lock since these are append-mostly + small.
+import threading as _threading
+SESSION_STATE_LOCK = _threading.Lock()
 SESSION_HEALING_LOG = []  # list of dicts: {ts, healer, target, amount, source}
 SESSION_JOURNAL = {}      # pc_name -> list of {ts, text}
+_SESSION_STATE_PATH = os.path.join(os.path.dirname(__file__), 'session_state.json')
+
+def _save_session_state():
+    """Persist healing log + journal to disk. Called after any mutation
+    (which are infrequent — a few per session). Cheap: ~1KB JSON."""
+    try:
+        with SESSION_STATE_LOCK:
+            payload = {
+                'healing_log': SESSION_HEALING_LOG[-500:],
+                'journal': {k: v[-100:] for k, v in SESSION_JOURNAL.items()},
+            }
+        with open(_SESSION_STATE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(payload, f)
+    except Exception as e:
+        print(f"[SESSION_STATE] save failed: {e}")
+
+def _load_session_state():
+    """Restore healing log + journal on boot. Idempotent — safe to
+    call multiple times; later calls just overwrite in-memory state."""
+    global SESSION_HEALING_LOG, SESSION_JOURNAL
+    try:
+        if not os.path.exists(_SESSION_STATE_PATH):
+            return
+        with open(_SESSION_STATE_PATH, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+        with SESSION_STATE_LOCK:
+            SESSION_HEALING_LOG[:] = payload.get('healing_log', []) or []
+            SESSION_JOURNAL.clear()
+            SESSION_JOURNAL.update(payload.get('journal', {}) or {})
+    except Exception as e:
+        print(f"[SESSION_STATE] load failed: {e}")
+_load_session_state()
 
 @app.route('/api/whisper/<pc_name>', methods=['POST'])
 def player_whisper(pc_name):
@@ -6801,16 +6835,12 @@ def player_whisper(pc_name):
     if not text:
         return jsonify({"success": False, "error": "empty"}), 400
     text = text[:1000]  # hard cap
+    import time as _t
     payload = {
         'pc_name': pc_name,
         'text': text,
-        'ts': time.time() if 'time' in dir() else 0,
+        'ts': _t.time(),
     }
-    try:
-        import time as _t
-        payload['ts'] = _t.time()
-    except Exception:
-        pass
     sse_broadcast('whisper', payload, player_filter=lambda d: None)
     return jsonify({"success": True})
 
@@ -6832,6 +6862,7 @@ def treat_wounds_dispatch(pc_name):
     success = data.get('success')  # crit_success / success / failure / crit_failure
     if not target or healing is None:
         return jsonify({"success": False, "error": "missing target or healing"}), 400
+    import time as _t
     payload = {
         'healer': pc_name,
         'target': target,
@@ -6840,16 +6871,14 @@ def treat_wounds_dispatch(pc_name):
         'success': success,
         'healing': healing,
         'proficiency': proficiency,
+        'ts': _t.time(),
     }
-    try:
-        import time as _t
-        payload['ts'] = _t.time()
-    except Exception:
-        payload['ts'] = 0
-    SESSION_HEALING_LOG.append(payload)
-    # Cap log length so a long-running server doesn't grow unboundedly.
-    if len(SESSION_HEALING_LOG) > 500:
-        del SESSION_HEALING_LOG[:len(SESSION_HEALING_LOG) - 500]
+    with SESSION_STATE_LOCK:
+        SESSION_HEALING_LOG.append(payload)
+        # Cap log length so a long-running server doesn't grow unboundedly.
+        if len(SESSION_HEALING_LOG) > 500:
+            del SESSION_HEALING_LOG[:len(SESSION_HEALING_LOG) - 500]
+    _save_session_state()
     sse_broadcast('treat_wounds', payload, player_filter=lambda d: None)
     return jsonify({"success": True})
 
@@ -6873,12 +6902,11 @@ def session_journal_add(pc_name):
     if not text:
         return jsonify({"success": False, "error": "empty"}), 400
     text = text[:2000]
-    try:
-        import time as _t
-        ts = _t.time()
-    except Exception:
-        ts = 0
-    SESSION_JOURNAL.setdefault(pc_name, []).append({'ts': ts, 'text': text})
+    import time as _t
+    ts = _t.time()
+    with SESSION_STATE_LOCK:
+        SESSION_JOURNAL.setdefault(pc_name, []).append({'ts': ts, 'text': text})
+    _save_session_state()
     sse_broadcast('journal_entry', {
         'pc_name': pc_name, 'text': text, 'ts': ts,
     }, player_filter=lambda d: None)
@@ -6889,6 +6917,138 @@ def session_journal_add(pc_name):
 def session_journal_get():
     """GM-side: get all journal entries this session, grouped by PC."""
     return jsonify({"journal": SESSION_JOURNAL})
+
+
+# ════════════════════════════════════════════════════════════════════════
+# PF2e spell-cast validation (Wave 3 — spell rules audit fix).
+#
+# Replaces the older "auto-expend at base rank" flow. Enforces RAW:
+#   - Spontaneous: chosen slot rank must be >= spell's base rank, and
+#     that specific slot must be unexpended. Cantrips and focus spells
+#     are exempt (no slots).
+#   - Prepared: spell must currently be PREPARED at the chosen slot
+#     (i.e. the daily-prep stored mapping has this spell at that rank).
+#     Cantrips exempt.
+# Mutations to expended_slots are guarded by a per-PC lock so two clicks
+# don't both grab the "first free" slot.
+# ════════════════════════════════════════════════════════════════════════
+_PC_SPELL_LOCKS = {}  # pc_name -> threading.Lock
+_PC_SPELL_LOCKS_GUARD = _threading.Lock()
+def _pc_spell_lock(pc_name):
+    with _PC_SPELL_LOCKS_GUARD:
+        L = _PC_SPELL_LOCKS.get(pc_name)
+        if L is None:
+            L = _threading.Lock()
+            _PC_SPELL_LOCKS[pc_name] = L
+        return L
+
+@app.route('/api/cast_spell/<pc_name>', methods=['POST'])
+def cast_spell(pc_name):
+    """Validate + record a spell cast. Returns success/failure with a
+    short reason string. Client uses the response to decide whether to
+    fire the actual roll-toast / GM broadcast."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown player"}), 404
+    data = request.get_json(silent=True) or {}
+    try:
+        caster_idx = int(data.get('caster_idx', 0))
+        slot_rank = int(data.get('slot_rank', 0))
+        spell_rank = int(data.get('spell_rank', 0))  # base rank of the spell
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "bad caster/rank"}), 400
+    spell_name = (data.get('spell_name') or '').strip()
+    cast_type = (data.get('cast_type') or '').strip().lower()  # spontaneous/prepared/focus/cantrip/innate
+
+    # Cantrips and focus / innate / impulse spells skip slot validation.
+    if cast_type in ('cantrip', 'focus', 'innate', 'impulse', 'alchemical') or spell_rank <= 0:
+        return jsonify({"success": True, "expended": False, "reason": "no slot needed"})
+
+    pc = PARTY_LIBRARY[pc_name]
+    # Find the caster
+    casters = pc.spell_casters or []
+    if caster_idx < 0 or caster_idx >= len(casters):
+        return jsonify({"success": False, "error": "invalid caster index"}), 400
+    caster = casters[caster_idx]
+    real_type = (caster.get('type') or '').strip().lower()
+
+    # Slot rank must be >= spell rank (PF2e RAW: no down-casting).
+    if slot_rank < spell_rank:
+        return jsonify({
+            "success": False,
+            "error": f"Slot rank {slot_rank} is lower than spell rank {spell_rank}. PF2e: a spell cannot be cast in a slot lower than its base rank."
+        }), 400
+
+    file_path = get_pc_file_path(pc_name)
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"success": False, "error": "no save file"}), 500
+
+    with _pc_spell_lock(pc_name):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        expended = build.get('expended_slots') or {}
+        prepared = build.get('prepared_spells') or {}
+        key = f"c{caster_idx}_l{slot_rank}"
+
+        # Determine slot count for this caster + rank
+        slot_count = 0
+        for lvl in (caster.get('levels') or []):
+            if int(lvl.get('level', -1)) == slot_rank:
+                slot_count = int(lvl.get('slots', 0))
+                break
+        if slot_count <= 0:
+            return jsonify({"success": False, "error": f"You have no rank-{slot_rank} slots."}), 400
+
+        # PREPARED — the spell must be at this exact slot in the daily prep.
+        if 'prepared' in real_type and 'spontaneous' not in real_type:
+            prep_for_caster = prepared.get(str(caster_idx)) or prepared.get(caster_idx) or {}
+            slots_at_rank = prep_for_caster.get(str(slot_rank)) or prep_for_caster.get(slot_rank) or []
+            if not isinstance(slots_at_rank, list):
+                slots_at_rank = []
+            target_idx = -1
+            for i, prepped_name in enumerate(slots_at_rank):
+                if prepped_name and prepped_name.strip().lower() == spell_name.lower():
+                    # Already cast?
+                    cast_prep = build.get('cast_prep') or {}
+                    cast_key = f"{caster_idx}_{slot_rank}_{i}"
+                    if cast_prep.get(cast_key):
+                        continue
+                    target_idx = i
+                    break
+            if target_idx < 0:
+                return jsonify({
+                    "success": False,
+                    "error": f"\"{spell_name}\" is not prepared in a rank-{slot_rank} slot. Prepare it first (open Spellbook → drag to a rank-{slot_rank} slot)."
+                }), 400
+            # Mark this prepared slot as cast.
+            cast_prep = build.get('cast_prep') or {}
+            cast_prep[f"{caster_idx}_{slot_rank}_{target_idx}"] = True
+            build['cast_prep'] = cast_prep
+            save_and_reload_character(pc_name, pc_json, file_path)
+            return jsonify({"success": True, "expended": True, "slot_rank": slot_rank,
+                            "slot_idx": target_idx, "type": "prepared"})
+
+        # SPONTANEOUS — find the first free slot at slot_rank.
+        free_idx = -1
+        slot_list = expended.get(key) or []
+        for i in range(slot_count):
+            if i >= len(slot_list) or not slot_list[i]:
+                free_idx = i
+                break
+        if free_idx < 0:
+            return jsonify({
+                "success": False,
+                "error": f"No rank-{slot_rank} slots left today. Pick a higher rank or a cantrip / focus spell."
+            }), 400
+        # Pad and mark.
+        while len(slot_list) <= free_idx:
+            slot_list.append(False)
+        slot_list[free_idx] = True
+        expended[key] = slot_list
+        build['expended_slots'] = expended
+        save_and_reload_character(pc_name, pc_json, file_path)
+        return jsonify({"success": True, "expended": True, "slot_rank": slot_rank,
+                        "slot_idx": free_idx, "type": "spontaneous"})
 
 
 # GM → player check request (Wave 2 #14). GM screen posts which skill
@@ -7085,17 +7245,20 @@ def spell_slots(pc_name):
             "cast_prep": build.get('cast_prep', {})
         })
 
-    # POST — save slot state (accepts any combination of the three keys)
+    # POST — save slot state (accepts any combination of the three keys).
+    # Guarded by the per-PC spell lock so a click on a slot checkbox can't
+    # race with a /api/cast_spell write and clobber it (or vice versa).
     data = request.json
-    with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
-    build = pc_json.get('build', pc_json)
-    if 'expended_slots' in data:
-        build['expended_slots'] = data['expended_slots']
-    if 'prepared_spells' in data:
-        build['prepared_spells'] = data['prepared_spells']
-    if 'cast_prep' in data:
-        build['cast_prep'] = data['cast_prep']
-    save_and_reload_character(pc_name, pc_json, file_path)
+    with _pc_spell_lock(pc_name):
+        with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        if 'expended_slots' in data:
+            build['expended_slots'] = data['expended_slots']
+        if 'prepared_spells' in data:
+            build['prepared_spells'] = data['prepared_spells']
+        if 'cast_prep' in data:
+            build['cast_prep'] = data['cast_prep']
+        save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
 @app.route('/api/add_item/<pc_name>', methods=['POST'])

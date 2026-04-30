@@ -646,6 +646,8 @@
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
         <button class="hb-btn gold" onclick="openSecretRollPanel()" title="GM Secret Roll">🎲 Secret</button>
         <button class="hb-btn purple" onclick="openHandoutPanel()" title="Send handout to players">📜 Handout</button>
+        <button class="hb-btn gold" onclick="openLootPanel()" title="Send loot (items + coins) to a player">💰 Loot</button>
+        <button class="hb-btn purple" onclick="openCheckRequestPanel()" title="Ask players to roll a skill / save">🎲 Check</button>
         <button class="hb-btn danger" onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')">Clear</button>
         {# hidden legacy round badge, kept for renderMeta backward-compat #}
         <span id="round-badge" class="hidden">Round {{ round_number }}</span>
@@ -765,6 +767,85 @@
             <input type="file" id="handout-image" accept="image/*" style="color:var(--t-t3);font-size:11px;">
         </div>
         <button class="ts-btn primary" onclick="sendHandout()">Send Handout</button>
+    </div>
+</div>
+
+{# ═══════════════════ LOOT DISPATCH PANEL ═══════════════════ #}
+<div id="loot-panel" class="panel hidden">
+    <div class="panel-head">
+        <span class="panel-ttl" style="color:var(--t-gold);">💰 Send Loot to Player</span>
+        <button class="panel-close" onclick="document.getElementById('loot-panel').classList.add('hidden')">&times;</button>
+    </div>
+    <div class="handout-grid">
+        <div>
+            <label class="tlabel">Recipient</label>
+            <select id="loot-target" class="tselect" style="width:100%;">
+                {% for p in party %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="tlabel">Coins (PP / GP / SP / CP)</label>
+            <div style="display:flex; gap:4px;">
+                <input type="number" id="loot-pp" class="tinput" placeholder="PP" min="0" style="width:25%;">
+                <input type="number" id="loot-gp" class="tinput" placeholder="GP" min="0" style="width:25%;">
+                <input type="number" id="loot-sp" class="tinput" placeholder="SP" min="0" style="width:25%;">
+                <input type="number" id="loot-cp" class="tinput" placeholder="CP" min="0" style="width:25%;">
+            </div>
+        </div>
+    </div>
+    <div style="margin:10px 0;">
+        <label class="tlabel">Items (one per line, format: <code>quantity × name</code> or just the name)</label>
+        <textarea id="loot-items" rows="3" placeholder="2 × Healing Potion (Lesser)&#10;Sword of Thirsting&#10;Scroll of Invisibility" class="tinput" style="width:100%;resize:vertical;"></textarea>
+        <div style="font-size:10px; color:var(--t-t3); margin-top:4px;">The items + coins land directly on the player's sheet — no accept step.</div>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="ts-btn" onclick="document.getElementById('loot-panel').classList.add('hidden')">Cancel</button>
+        <button class="ts-btn primary" onclick="sendLoot()">Send</button>
+    </div>
+</div>
+
+{# ═══════════════════ CHECK-REQUEST PANEL ═══════════════════ #}
+<div id="check-request-panel" class="panel hidden">
+    <div class="panel-head">
+        <span class="panel-ttl" style="color:var(--t-gold);">🎲 Request a Roll from Players</span>
+        <button class="panel-close" onclick="document.getElementById('check-request-panel').classList.add('hidden')">&times;</button>
+    </div>
+    <div class="handout-grid">
+        <div>
+            <label class="tlabel">Skill / Save</label>
+            <select id="cr-skill" class="tselect" style="width:100%;">
+                <optgroup label="Saves">
+                    <option>Fortitude Save</option><option>Reflex Save</option><option>Will Save</option>
+                </optgroup>
+                <optgroup label="Perception">
+                    <option>Perception</option><option>Initiative</option>
+                </optgroup>
+                <optgroup label="Skills">
+                    <option>Acrobatics</option><option>Arcana</option><option>Athletics</option>
+                    <option>Crafting</option><option>Deception</option><option>Diplomacy</option>
+                    <option>Intimidation</option><option>Medicine</option><option>Nature</option>
+                    <option>Occultism</option><option>Performance</option><option>Religion</option>
+                    <option>Society</option><option>Stealth</option><option>Survival</option>
+                    <option>Thievery</option>
+                </optgroup>
+            </select>
+        </div>
+        <div>
+            <label class="tlabel">DC (optional)</label>
+            <input type="number" id="cr-dc" class="tinput" placeholder="e.g. 18" style="width:100%;">
+        </div>
+    </div>
+    <div style="margin: 8px 0;">
+        <label class="tlabel">Targets</label>
+        <select id="cr-targets" class="tselect" style="width:100%;" multiple size="4">
+            <option value="" selected>(everyone)</option>
+            {% for p in party %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}
+        </select>
+        <div style="font-size:10px; color:var(--t-t3); margin-top:4px;">Hold Cmd/Ctrl to multi-select. Leaving "(everyone)" highlighted asks all players.</div>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="ts-btn" onclick="document.getElementById('check-request-panel').classList.add('hidden')">Cancel</button>
+        <button class="ts-btn primary" onclick="sendCheckRequest()">Ask Players</button>
     </div>
 </div>
 
@@ -2143,6 +2224,176 @@ async function sendHandout() {
         } else { toast(data.error || 'Failed', 'error'); }
     } catch(e) { toast('Failed to send handout', 'error'); }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// LOOT DISPATCH (GM-side, Wave 3 #5)
+// ═══════════════════════════════════════════════════════════════════
+function openLootPanel() {
+    document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('loot-panel').classList.remove('hidden');
+}
+async function sendLoot() {
+    const target = document.getElementById('loot-target').value;
+    const pp = parseInt(document.getElementById('loot-pp').value, 10) || 0;
+    const gp = parseInt(document.getElementById('loot-gp').value, 10) || 0;
+    const sp = parseInt(document.getElementById('loot-sp').value, 10) || 0;
+    const cp = parseInt(document.getElementById('loot-cp').value, 10) || 0;
+    const raw = (document.getElementById('loot-items').value || '').trim();
+    if (!target) { toast('Pick a recipient', 'error'); return; }
+    if (!pp && !gp && !sp && !cp && !raw) { toast('Add some loot first', 'error'); return; }
+    // Parse "N × name" / "N x name" / just "name" lines.
+    const items = [];
+    raw.split(/\r?\n/).forEach(line => {
+        const t = line.trim(); if (!t) return;
+        const m = /^(\d+)\s*[x×]\s*(.+)$/i.exec(t);
+        if (m) items.push({ name: m[2].trim(), qty: parseInt(m[1], 10) });
+        else items.push({ name: t, qty: 1 });
+    });
+    try {
+        const res = await fetch('/api/send_loot', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ target, items, coins: { pp, gp, sp, cp } })
+        });
+        const d = await res.json();
+        if (d.success) {
+            toast(`Loot sent to ${target}`, 'success');
+            ['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('loot-panel').classList.add('hidden');
+        } else {
+            toast(d.error || 'Send failed', 'error');
+        }
+    } catch(e) { toast('Network error', 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CHECK REQUEST (GM-side, Wave 2 #14)
+// ═══════════════════════════════════════════════════════════════════
+function openCheckRequestPanel() {
+    document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('check-request-panel').classList.remove('hidden');
+}
+async function sendCheckRequest() {
+    const skill = document.getElementById('cr-skill').value;
+    const dcRaw = document.getElementById('cr-dc').value.trim();
+    const dc = dcRaw ? parseInt(dcRaw, 10) : null;
+    const sel = document.getElementById('cr-targets');
+    const targets = Array.from(sel.selectedOptions).map(o => o.value).filter(v => v);
+    try {
+        const res = await fetch('/api/request_check', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ skill, dc, targets })
+        });
+        const d = await res.json();
+        if (d.success) {
+            toast(`Asked players for ${skill}${dc ? ' DC '+dc : ''}`, 'success');
+            document.getElementById('check-request-panel').classList.add('hidden');
+        } else { toast(d.error || 'Failed', 'error'); }
+    } catch(e) { toast('Network error', 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER → GM INBOX (Wave 2 #15 + #30)
+// Listens for `whisper` and `journal_entry` events, surfaces them in
+// a small floating inbox panel that auto-shows on new message.
+// ═══════════════════════════════════════════════════════════════════
+(function wireGMInbox() {
+    // Build the inbox UI on demand — keeps idle DOM clean.
+    const inbox = document.createElement('div');
+    inbox.id = 'gm-inbox';
+    inbox.style.cssText = 'position:fixed; bottom:18px; right:18px; width:340px; max-height:60vh; overflow-y:auto; background:#161616; border:1px solid #c9a34e; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5); z-index:900; font-family:Inter,sans-serif; display:none;';
+    inbox.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #2a2a2a; background:#0e0e0e;">
+            <strong style="color:#c9a34e; font-size:12px; letter-spacing:0.16em; text-transform:uppercase;">📨 Player Inbox</strong>
+            <button onclick="document.getElementById('gm-inbox').style.display='none'" style="background:transparent; border:none; color:#888; font-size:14px; cursor:pointer; padding:2px 6px;">✕</button>
+        </div>
+        <div id="gm-inbox-list" style="padding:8px; font-size:12px; color:#ddd;"></div>`;
+    document.body.appendChild(inbox);
+
+    const fab = document.createElement('button');
+    fab.id = 'gm-inbox-fab';
+    fab.title = 'Player inbox (whispers + session notes)';
+    fab.textContent = '📨';
+    fab.style.cssText = 'position:fixed; bottom:18px; right:18px; width:42px; height:42px; border-radius:50%; background:#161616; border:1px solid #c9a34e; color:#c9a34e; font-size:20px; cursor:pointer; z-index:899; box-shadow:0 4px 12px rgba(0,0,0,0.4);';
+    fab.onclick = () => {
+        inbox.style.display = inbox.style.display === 'block' ? 'none' : 'block';
+        if (inbox.style.display === 'block') fab.dataset.unread = '0';
+        repaintFab();
+    };
+    document.body.appendChild(fab);
+
+    const messages = [];  // {kind:'whisper'|'journal', pc, text, ts}
+    function repaint() {
+        const list = document.getElementById('gm-inbox-list');
+        if (!list) return;
+        if (!messages.length) { list.innerHTML = '<em style="color:#888;">No messages yet.</em>'; return; }
+        list.innerHTML = messages.slice(-50).reverse().map(m => {
+            const t = new Date((m.ts || 0) * 1000).toLocaleTimeString();
+            const tag = m.kind === 'journal' ? '📜 recap' : '✉ whisper';
+            const color = m.kind === 'journal' ? '#fbbf24' : '#c4b5fd';
+            return `<div style="margin-bottom:8px; padding:6px 8px; background:#1a1a1a; border-left:3px solid ${color}; border-radius:3px;">
+                <div style="font-size:10px; color:#888; margin-bottom:3px;">${tag} · <strong style="color:${color};">${m.pc}</strong> · ${t}</div>
+                <div style="white-space:pre-wrap; font-family:'Crimson Pro',serif; line-height:1.4;">${(m.text||'').replace(/</g,'&lt;')}</div>
+            </div>`;
+        }).join('');
+    }
+    function repaintFab() {
+        const n = parseInt(fab.dataset.unread || '0', 10);
+        if (n > 0) {
+            fab.style.background = '#7c2222';
+            fab.style.color = '#fde68a';
+            fab.title = `${n} new message${n > 1 ? 's' : ''}`;
+            fab.textContent = '📨' + (n > 9 ? '·' : n);
+        } else {
+            fab.style.background = '#161616';
+            fab.style.color = '#c9a34e';
+            fab.title = 'Player inbox';
+            fab.textContent = '📨';
+        }
+    }
+    fab.dataset.unread = '0';
+    repaintFab();
+
+    // Subscribe to SSE — tracker already has a connection elsewhere; we
+    // open a parallel one for inbox events. Cheap: SSE is multiplexed.
+    try {
+        const es = new EventSource('/api/events');
+        es.addEventListener('whisper', (e) => {
+            try {
+                const d = JSON.parse(e.data || '{}');
+                messages.push({ kind: 'whisper', pc: d.pc_name, text: d.text, ts: d.ts });
+                if (inbox.style.display !== 'block') {
+                    fab.dataset.unread = String(parseInt(fab.dataset.unread || '0', 10) + 1);
+                    repaintFab();
+                }
+                repaint();
+            } catch(_) {}
+        });
+        es.addEventListener('journal_entry', (e) => {
+            try {
+                const d = JSON.parse(e.data || '{}');
+                messages.push({ kind: 'journal', pc: d.pc_name, text: d.text, ts: d.ts });
+                if (inbox.style.display !== 'block') {
+                    fab.dataset.unread = String(parseInt(fab.dataset.unread || '0', 10) + 1);
+                    repaintFab();
+                }
+                repaint();
+            } catch(_) {}
+        });
+        es.addEventListener('treat_wounds', (e) => {
+            try {
+                const d = JSON.parse(e.data || '{}');
+                const ok = d.success === 'success' || d.success === 'crit_success';
+                const sign = (d.healing >= 0 ? '+' : '') + d.healing;
+                messages.push({
+                    kind: 'whisper', pc: d.healer,
+                    text: `Treat Wounds → ${d.target}: rolled ${d.roll_total} vs DC ${d.dc} (${(d.success||'').replace('_',' ')}) → ${sign} HP`,
+                    ts: d.ts
+                });
+                repaint();
+            } catch(_) {}
+        });
+    } catch(e) { console.error('GM inbox SSE failed:', e); }
+})();
 
 </script>
 {% endblock %}
