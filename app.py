@@ -7974,39 +7974,6 @@ def sync_spell_slots(pc_name):
     _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
 
-@app.route('/api/cast_spell/<pc_name>', methods=['POST'])
-def cast_spell(pc_name):
-    """Cast a spell: auto-deduct the spell slot and broadcast the change.
-    Body: {caster_idx: int, level: int, slot_idx: int, spell_name: str}
-    """
-    if pc_name not in PARTY_LIBRARY:
-        return jsonify({"error": "Character not found"}), 404
-    data = request.json or {}
-    caster_idx = int(data.get('caster_idx', 0))
-    spell_level = int(data.get('level', 0))
-    slot_idx = int(data.get('slot_idx', 0))
-    spell_name = data.get('spell_name', 'Unknown')
-
-    file_path = get_pc_file_path(pc_name)
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({"error": "Character file not found"}), 404
-
-    with open(file_path, 'r', encoding='utf-8') as f:
-        pc_json = json.load(f)
-    build = pc_json.get('build', pc_json)
-    expended = build.get('expended_slots', {})
-
-    # Mark the slot as expended: key is "caster_idx-level-slot_idx"
-    slot_key = f"{caster_idx}-{spell_level}-{slot_idx}"
-    expended[slot_key] = True
-    build['expended_slots'] = expended
-    save_and_reload_character(pc_name, pc_json, file_path)
-
-    # Broadcast to all clients (GM sees updated spell usage)
-    _broadcast_pc_state(pc_name)
-
-    return jsonify({"success": True, "slot_key": slot_key, "spell_name": spell_name})
-
 @app.route('/api/upload_portrait/<pc_name>', methods=['POST'])
 def upload_portrait(pc_name):
     """Upload a character portrait image.
