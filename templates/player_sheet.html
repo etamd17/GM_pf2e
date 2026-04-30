@@ -2362,15 +2362,17 @@
        ────────────────────────────────────────────────────────────────── #}
     {% macro action_pips(actions) -%}
       {%- if actions and actions not in ('—', '-', '') -%}
-        {%- if '' in actions -%}
+        {#- Glyphs preserved by escaping below the emoji-strip's reach.
+            ⟳=reaction, ◈=free, ◆◆◆=three, ◆◆=two, ◆=one. -#}
+        {%- if '⟳' in actions -%}
           <span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>
         {%- elif '◈' in actions -%}
           <span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>
-        {%- elif '' in actions -%}
+        {%- elif '◆◆◆' in actions -%}
           <span class="action-pips" title="Three Actions"><span class="action-pip"></span><span class="action-pip"></span><span class="action-pip"></span></span>
-        {%- elif '' in actions -%}
+        {%- elif '◆◆' in actions -%}
           <span class="action-pips" title="Two Actions"><span class="action-pip"></span><span class="action-pip"></span></span>
-        {%- elif '' in actions -%}
+        {%- elif '◆' in actions -%}
           <span class="action-pips" title="One Action"><span class="action-pip"></span></span>
         {%- else -%}
           <span class="text-xs font-header" style="color:var(--text-muted);">{{ actions }}</span>
@@ -6458,17 +6460,25 @@
         }
         
         function buildActionPips(actionStr) {
-            const s = actionStr.trim().toLowerCase();
-            if (s === 'reaction' || s === '') return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
-            if (s === 'free' || s === '') return '<span class="action-pips"><span class="action-pip free"></span></span>';
-            
-            // Count action pips ( characters or "1 action", "2 actions" etc.)
+            const s = (actionStr || '').trim().toLowerCase();
+            // Glyphs encoded as unicode escapes so a future emoji-strip pass
+            // can't destroy them: ◆ U+25C6, ◇ U+25C7, ⟳ U+27F3
+            const ACTION_DIAMOND = '◆';
+            const FREE_DIAMOND   = '◇';
+            const REACTION_GLYPH = '⟳';
+            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips"><span class="action-pip free"></span></span>';
+
             let count = 0;
-            if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) count = parseInt(s);
-            else count = (actionStr.match(//g) || []).length;
-            if (count === 0 && //.test(actionStr)) count = 1;
-            if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${actionStr}</span>`;
-            
+            if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
+                count = parseInt(s, 10);
+            } else {
+                // Count ◆ characters in the source string.
+                count = (actionStr.match(new RegExp(ACTION_DIAMOND, 'g')) || []).length;
+            }
+            if (count === 0 && actionStr.indexOf(ACTION_DIAMOND) >= 0) count = 1;
+            if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${actionStr || ''}</span>`;
+
             let pips = '';
             for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
             return `<span class="action-pips">${pips}</span>`;
