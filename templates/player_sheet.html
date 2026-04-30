@@ -229,7 +229,7 @@
         }
         .journal-entry::before {
             /* Drop-cap gilt bullet at the left margin — like a scribe's mark */
-            content: "❦";
+            content: "";
             position: absolute;
             left: 4px; top: 11px;
             color: var(--gilt);
@@ -1261,7 +1261,7 @@
         /* Proficiency Badges — heraldic rosette treatment.
            Circular chips with Cinzel letter + tier-marked border weight.
            U = hollow circle, T = single gilt hairline, E = doubled hairline,
-           M = filled gilt glow, L = gilt rosette with ✦ marker. */
+           M = filled gilt glow, L = gilt rosette with  marker. */
         .prof-t, .prof-e, .prof-m, .prof-l {
             font-family: var(--font-display) !important;
             font-weight: 700 !important;
@@ -1344,7 +1344,7 @@
             --rune-color: var(--blue);
         }
         .focus-pip::before {
-            content: "◇";
+            content: "";
             position: absolute; inset: 0;
             display: flex; align-items: center; justify-content: center;
             font-size: 11px; line-height: 1;
@@ -1358,7 +1358,7 @@
                 transparent 100%);
         }
         .focus-pip.filled::before {
-            content: "◆";
+            content: "";
             color: var(--rune-color);
             opacity: 1;
             text-shadow: 0 0 4px color-mix(in srgb, var(--rune-color) 60%, transparent);
@@ -1488,7 +1488,7 @@
             box-shadow: inset 0 -1px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(224,182,90,0.15);
         }
         .hero-pip::before {
-            content: "★";
+            content: "";
             position: absolute; inset: 0;
             display: flex; align-items: center; justify-content: center;
             font-size: 9px; line-height: 1;
@@ -1555,7 +1555,7 @@
         }
         .roll-toast::before {
             /* Wax-seal rosette at the left — red disc with a gilt sigil */
-            content: "✦";
+            content: "";
             position: absolute;
             left: 10px;
             top: 50%;
@@ -1746,7 +1746,7 @@
         /* Decorative gilt rosettes at each end of the banner */
         .levelup-drawer-header::before,
         .levelup-drawer-header::after {
-            content: "❦";
+            content: "";
             color: #e0b65a;
             font-size: 14px;
             opacity: 0.75;
@@ -2057,7 +2057,7 @@
             pointer-events: none;
         }
         .save-flash.show { opacity: 0.85; }
-        .save-flash::before { content: '✓'; font-size: 10px; }
+        .save-flash::before { content: ''; font-size: 10px; }
 
         /* Strike chain — dim spent strikes in the current turn so the
            player's eye lands on the next one. Reset on turn-tick. */
@@ -2210,7 +2210,7 @@
         }
         .roll-toast.crit-flair { animation: crit-burst 0.55s ease; border-color: #fbbf24 !important; box-shadow: 0 0 16px rgba(251,191,36,0.45), 0 4px 14px rgba(0,0,0,0.5) !important; }
         .roll-toast.crit-flair::after {
-            content: '✦'; position: absolute; top: -10px; right: -10px;
+            content: ''; position: absolute; top: -10px; right: -10px;
             font-size: 26px; color: #fbbf24;
             text-shadow: 0 0 12px rgba(251,191,36,0.7);
             animation: crit-burst 0.7s ease;
@@ -2257,7 +2257,7 @@
         .lvl-validator.ok { background: rgba(74,222,128,0.06); border-color: rgba(74,222,128,0.25); }
         .lvl-validator.ok h4 { color: #4ade80; }
         .lvl-validator.ok li { color: #bbf7d0; }
-        .lvl-validator.ok li::before { content: '✓'; color: #4ade80; }
+        .lvl-validator.ok li::before { content: ''; color: #4ade80; }
 
         @media print {
             /* === Parchment-ink print stylesheet ===
@@ -2335,8 +2335,10 @@
             * { text-shadow: none !important; box-shadow: none !important; }
         }
     </style>
+    <!-- Design system override (last in cascade — wins over inline styles) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="min-h-screen flex flex-col" style="background:var(--bg-base); color:var(--text-primary); font-family:var(--font-ui);">
+<body class="min-h-screen flex flex-col">
 
     {% set stat_color = 'text-red-400' if pc.status_penalty > 0 else 'text-white' %}
     {% set accent_color = 'text-red-400' if pc.status_penalty > 0 else 'text-amber-400' %}
@@ -2344,22 +2346,22 @@
 
     {# ──────────────────────────────────────────────────────────────────
        Action-cost pip macro. PF2e encodes action cost as Unicode in our
-       CLASS_FEATURES data (◆=1, ◆◆=2, ◆◆◆=3, ◈=free, ⟳=reaction, —=none).
+       CLASS_FEATURES data (=1, =2, =3, ◈=free, =reaction, —=none).
        Render them as proper pips so the glyphs don't look like garbage in
        fonts that lack the ⬥ glyph, and so scanning "how much does this
        cost" is instant — same convention Pathbuilder / Demiplane Nexus use.
        ────────────────────────────────────────────────────────────────── #}
     {% macro action_pips(actions) -%}
       {%- if actions and actions not in ('—', '-', '') -%}
-        {%- if '⟳' in actions -%}
+        {%- if '' in actions -%}
           <span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>
         {%- elif '◈' in actions -%}
           <span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>
-        {%- elif '◆◆◆' in actions -%}
+        {%- elif '' in actions -%}
           <span class="action-pips" title="Three Actions"><span class="action-pip"></span><span class="action-pip"></span><span class="action-pip"></span></span>
-        {%- elif '◆◆' in actions -%}
+        {%- elif '' in actions -%}
           <span class="action-pips" title="Two Actions"><span class="action-pip"></span><span class="action-pip"></span></span>
-        {%- elif '◆' in actions -%}
+        {%- elif '' in actions -%}
           <span class="action-pips" title="One Action"><span class="action-pip"></span></span>
         {%- else -%}
           <span class="text-xs font-header" style="color:var(--text-muted);">{{ actions }}</span>
@@ -2401,7 +2403,7 @@
                         {# Class monogram — three-letter small-cap instead of a
                            color-emoji. Reads as a heraldic badge; matches the
                            Cinzel heading hierarchy. Fighter-family classes
-                           keep the ⚔ dingbat (typographic, not emoji). #}
+                           keep the  dingbat (typographic, not emoji). #}
                         <div class="portrait-badge" style="font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.08em;">
                             {% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}
                         </div>
@@ -2411,56 +2413,64 @@
                             {{ pc.name }}
                             <span class="char-level-badge">Level {{ pc.level }}</span>
                         </h1>
-                        <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span class="sub-orn" aria-hidden="true">❦</span> {{ pc.subclass }}{% endif %} <span class="sub-orn" aria-hidden="true">✦</span> {{ pc.size }}</p>
+                        <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span class="sub-orn" aria-hidden="true"></span> {{ pc.subclass }}{% endif %} <span class="sub-orn" aria-hidden="true"></span> {{ pc.size }}</p>
                     </div>
                     {% if pc.status_penalty > 0 %}<span class="px-2 py-0.5 rounded" style="background:rgba(196,60,60,0.1); border:1px solid rgba(196,60,60,0.2); color:var(--red-b); font-size:11px; font-weight:600;">Debuffed -{{ pc.status_penalty }}</span>{% endif %}
                     {% if pc.active_toggles %}<span class="px-2 py-0.5 rounded" style="background:rgba(90,142,232,0.1); border:1px solid rgba(90,142,232,0.2); color:var(--blue); font-size:11px; font-weight:600;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
                 </div>
-                <!-- Action Toolbar (Proposal 3: custom dice moved here from removed Quick Rolls bar) -->
-                <div class="flex gap-2 flex-wrap mobile-actions items-center">
-                    {# Resource chips — Hero + Focus live here rather than in
-                       the HP block so the HP area reads cleanly as "hit points
-                       and shield" only. Still top-of-screen, still one click. #}
+                {# ─── Action toolbar — Demiplane-style ──────────────────
+                   Identity sits left (already rendered above). On the right
+                   we keep ONLY the high-frequency player actions visible:
+                   Hero / Focus chips, Long Rest, Level Up, and a single
+                   overflow-menu (⋯) button that hides the rest (Map, Print,
+                   PDF, Undo Level, custom-dice roller, theme toggle, etc.)
+                   so the toolbar stops looking like a settings panel. #}
+                <div class="flex gap-3 flex-wrap mobile-actions items-center">
                     <span class="resource-chip no-print" title="Hero Points (max 3) — spend to reroll or stave off death">
                         <span class="resource-chip-lbl">Hero</span>
-                        <button onclick="modifyHero('decrease')" class="resource-chip-btn">−</button>
+                        <button onclick="modifyHero('decrease')" class="resource-chip-btn" aria-label="Lose hero point">−</button>
                         <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips">
-                            {% for i in range(3) %}
-                            <span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>
-                            {% endfor %}
+                            {% for i in range(3) %}<span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>{% endfor %}
                         </span>
                         <span id="current-hero" style="display:none;">{{ pc.hero_points }}</span>
-                        <button onclick="modifyHero('increase')" class="resource-chip-btn">+</button>
+                        <button onclick="modifyHero('increase')" class="resource-chip-btn" aria-label="Gain hero point">+</button>
                     </span>
                     {% if pc.focus_max > 0 %}
                     <span class="resource-chip no-print" title="Focus Pool ({{ pc.current_focus }}/{{ pc.focus_max }}) — spent by focus spells, restored by Refocus">
                         <span class="resource-chip-lbl">Focus</span>
-                        <button onclick="modifyFocus('decrease')" class="resource-chip-btn">−</button>
+                        <button onclick="modifyFocus('decrease')" class="resource-chip-btn" aria-label="Spend focus">−</button>
                         <span id="header-focus-pips" data-tradition="{{ (pc.spell_casters[0].tradition if pc.spell_casters else 'arcane') | lower }}" class="resource-chip-pips">
-                            {% for i in range(pc.focus_max) %}
-                            <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
-                            {% endfor %}
+                            {% for i in range(pc.focus_max) %}<span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>{% endfor %}
                         </span>
-                        <button onclick="modifyFocus('increase')" class="resource-chip-btn">+</button>
+                        <button onclick="modifyFocus('increase')" class="resource-chip-btn" aria-label="Refocus">+</button>
                     </span>
                     {% endif %}
-                    <div class="flex items-center gap-1 no-print" style="margin-right:4px;">
-                        <input type="text" id="custom-dice" placeholder="2d6+4" class="hp-input" style="width:72px; font-size:11px; padding:4px 6px;">
-                        <button onclick="rollCustomDice()" class="tb" style="padding:4px 8px;" title="Roll custom dice notation">Roll</button>
-                        <button onclick="rollInitiativeFromSheet()" class="tb" style="padding:4px 8px; color:#c084fc;" title="Roll Initiative">Init</button>
-                    </div>
                     <span id="sustain-chip" class="sustain-chip no-print" aria-label="Spells currently being sustained">
                         <span class="sustain-chip-label">Sustain</span>
                         <span id="sustain-items"></span>
                     </span>
-                    <button id="theme-toggle-btn" class="theme-toggle no-print" onclick="cyclePlayerTheme()" aria-label="Cycle UI theme" title="Cycle theme (dark → parchment → high-contrast)">◑</button>
-                    <a href="/map" class="tb">Map</a>
-                    <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Rest</button>
-                    {% if pc.level > 1 %}<button onclick="revertLevel()" id="btn-revert" class="tb" title="Revert last level-up">Undo Level</button>{% endif %}
+                    <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Long Rest</button>
                     <button onclick="openLevelUpDrawer()" class="tb primary no-print">Level Up</button>
                     <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary print-only" style="display:none;">Level Up</a>
-                    <button onclick="window.print()" class="no-print tb">Print</button>
-                    <a href="/api/export_pdf/{{ pc.name|urlencode }}" class="no-print tb" title="Download character sheet PDF">PDF</a>
+
+                    {# Overflow — everything secondary lives behind this button. #}
+                    <span class="relative no-print" style="display:inline-block;">
+                        <button class="overflow-menu-btn" onclick="togglePlayerOverflow(event)" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">⋯</button>
+                        <div id="player-overflow-menu" class="overflow-menu" role="menu">
+                            <div style="display:flex; gap:6px; padding: var(--sp-2) var(--sp-4); align-items:center;">
+                                <input type="text" id="custom-dice" placeholder="2d6+4" class="hp-input" style="flex:1; min-width:0; font-size:12px;" aria-label="Custom dice notation">
+                                <button onclick="rollCustomDice()" class="tb" style="padding:4px 10px; font-size:11px;">Roll</button>
+                            </div>
+                            <button onclick="rollInitiativeFromSheet(); closePlayerOverflow();" role="menuitem">Roll initiative</button>
+                            <a href="/map" role="menuitem">Open map</a>
+                            <div class="sep"></div>
+                            {% if pc.level > 1 %}<button onclick="revertLevel(); closePlayerOverflow();" id="btn-revert" role="menuitem">Undo last level-up</button>{% endif %}
+                            <button onclick="window.print(); closePlayerOverflow();" role="menuitem">Print sheet</button>
+                            <a href="/api/export_pdf/{{ pc.name|urlencode }}" role="menuitem">Download PDF</a>
+                            <div class="sep"></div>
+                            <button onclick="cyclePlayerTheme(); closePlayerOverflow();" role="menuitem">Cycle theme</button>
+                        </div>
+                    </span>
                 </div>
             </div>
         </div>
@@ -2495,7 +2505,7 @@
                     </button>
                     <button onclick="useShieldBlock()" class="no-print" title="Shield Block (reaction)"
                             style="padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold);">
-                        ⟳ Block
+                         Block
                     </button>
                     {# Reaction chip — click to toggle. Refreshes automatically
                        at the start of the PC's turn, and Shield Block consumes
@@ -2503,7 +2513,7 @@
                     <button id="reaction-chip" onclick="useReaction()" class="no-print"
                             title="PF2e: 1 reaction per round, refreshed at the start of your turn. Click to toggle if you spend it on AoO, Shield Warden, etc."
                             style="margin-left:4px; padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; border:1px solid rgba(90,142,232,0.35); {% if pc.reaction_used %}background:rgba(220,38,38,0.12); border-color:rgba(220,38,38,0.4); color:#fca5a5;{% else %}background:rgba(90,142,232,0.12); color:#93C5FD;{% endif %}">
-                        ⟲ <span id="reaction-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
+                         <span id="reaction-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
                     </button>
                 </div>
             </div>
@@ -2577,7 +2587,7 @@
                    condition tracker. Shows the recovery DC and a one-click
                    recovery flat-check button. #}
                 <div id="dying-widget" class="dying-widget no-print {% if pc.current_hp == 0 %}active{% endif %}" aria-live="polite">
-                    <div class="dying-widget-title">⚠ Dying <span id="dying-val">{{ pc.conditions.get('dying', 0) }}</span> · Wounded <span id="wounded-val">{{ pc.conditions.get('wounded', 0) }}</span></div>
+                    <div class="dying-widget-title"> Dying <span id="dying-val">{{ pc.conditions.get('dying', 0) }}</span> · Wounded <span id="wounded-val">{{ pc.conditions.get('wounded', 0) }}</span></div>
                     <div class="dying-widget-row">
                         <button onclick="rollRecoveryCheck()" class="recovery" title="Recovery flat check: DC 10 + Dying value. Success: Dying −1. Crit success: Dying −2 + conscious. Failure: Dying +1. Crit failure: Dying +2.">Recovery Check</button>
                         <button onclick="adjustDying(-1)" title="Reduce Dying (e.g., after taking 2 actions to remove)">−1 Dying</button>
@@ -2759,7 +2769,7 @@
                         <button onclick="pdFlatCheck({{ loop.index0 }})" title="Roll DC 15 flat check — success ends the effect"
                                 style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; font-weight:700;">DC 15</button>
                         <button onclick="pdRemove({{ loop.index0 }})" title="Remove (treated / immunity / ended)"
-                                style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">✕</button>
+                                style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">×</button>
                     </div>
                     {% endfor %}
                 </div>
@@ -2803,7 +2813,7 @@
             <button id="treat-wounds-btn" class="tb no-print" onclick="openTreatWounds()"
                     style="margin-left:auto; padding:3px 10px; font-size:11px;"
                     title="Treat Wounds — roll Medicine to heal an ally (10 minutes per use)">
-                ❦ Treat Wounds
+                 Treat Wounds
             </button>
         </div>
     </div>
@@ -2815,7 +2825,7 @@
         <!-- Encounter Initiative Bar (populated live via SSE) -->
         <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
             <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2">
-                <span class="font-header text-[11px] tracking-widest uppercase" style="color:var(--text-muted);">⚔ Combat</span>
+                <span class="font-header text-[11px] tracking-widest uppercase" style="color:var(--text-muted);"> Combat</span>
                 <div id="encounter-initiative-bar" class="flex flex-wrap gap-1 flex-1"></div>
             </div>
         </div>
@@ -3622,9 +3632,9 @@
                                   style="{% if feat.name in pc.active_toggles %}left: 22px; background: var(--color-spell);{% else %}left: 2px; background: var(--text-faint);{% endif %}"></span>
                         </button>
                         {% elif feat.type == 'reaction' %}
-                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-sm" style="background: rgba(196,181,253,0.1); border: 1px solid rgba(196,181,253,0.2); color: #C4B5FD;">⟳</span>
+                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-sm" style="background: rgba(196,181,253,0.1); border: 1px solid rgba(196,181,253,0.2); color: #C4B5FD;"></span>
                         {% elif feat.type == 'action' %}
-                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-xs" style="background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); color: var(--color-spell);">◆</span>
+                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-xs" style="background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); color: var(--color-spell);"></span>
                         {% endif %}
                         
                         <div class="flex-1">
@@ -3770,10 +3780,10 @@
                         {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
                         <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group inv-item" data-inv-name="{{ item.name|lower }}">
                             <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
-                            <button class="invested-toggle no-print mr-2" data-item-name="{{ item.name }}" title="Toggle: invested magic item (counts toward 10/day cap)" aria-label="Toggle invested for {{ item.name }}" style="background:transparent; color:var(--t4); font-size:14px; padding:0 4px; cursor:pointer;">★</button>
+                            <button class="invested-toggle no-print mr-2" data-item-name="{{ item.name }}" title="Toggle: invested magic item (counts toward 10/day cap)" aria-label="Toggle invested for {{ item.name }}" style="background:transparent; color:var(--t4); font-size:14px; padding:0 4px; cursor:pointer;"></button>
                             <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2 {% if display_bulk == 'L' %}text-amber-600{% elif display_bulk|int > 0 %}text-amber-500{% endif %}">{{ display_bulk }}B</span>
                             <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
-                            <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">✖</button>
+                            <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">×</button>
                         </div>
                         {% else %}
                         <div class="text-center italic p-4 rounded border" style="background:var(--bg-input); border-color:var(--border-subtle); color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">The pack hangs light — no burden carried here.</div>
@@ -3835,7 +3845,7 @@
                                 <span class="journal-date font-header">{{ note.date }}</span>
                                 <p class="journal-text">{{ note.text }}</p>
                             </div>
-                            <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:var(--text-muted);" title="Delete">✕</button>
+                            <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:var(--text-muted);" title="Delete">×</button>
                         </div>
                         {% else %}
                         <div class="journal-empty text-center py-4 italic text-sm">No chronicle yet. Entries from each session will gather here.</div>
@@ -3908,7 +3918,7 @@
                             <span class="font-header text-[9px] tracking-wider uppercase" style="color:var(--text-muted);">Attacks</span>
                             {% for atk in pet.attacks %}
                             <div class="flex justify-between items-center p-2 mt-1 rounded" style="background:var(--bg-base); border:1px solid var(--border-subtle);">
-                                <span class="text-sm font-bold" style="color:var(--text-primary);">{{ atk.name }} <span class="text-xs opacity-50" style="color:var(--color-spell);">◆</span></span>
+                                <span class="text-sm font-bold" style="color:var(--text-primary);">{{ atk.name }} <span class="text-xs opacity-50" style="color:var(--color-spell);"></span></span>
                                 <span class="text-xs" style="color:#FBBF24;">+{{ atk.bonus }} <span style="color:var(--text-muted);">({{ atk.damage }})</span></span>
                             </div>
                             {% endfor %}
@@ -4110,10 +4120,10 @@
                       fill="#e8c46f" stroke="#1a1208" stroke-width="0.3">20</text>
             </svg>
         </button>
-        <button id="roll-history-btn" class="roll-history-btn no-print" onclick="toggleRollHistory()" aria-label="Recent rolls" title="Recent rolls">⟲</button>
-        <button id="whisper-fab" class="whisper-fab no-print" onclick="toggleWhisper()" aria-label="Whisper to GM" title="Whisper to GM (private message)">✉</button>
+        <button id="roll-history-btn" class="roll-history-btn no-print" onclick="toggleRollHistory()" aria-label="Recent rolls" title="Recent rolls"></button>
+        <button id="whisper-fab" class="whisper-fab no-print" onclick="toggleWhisper()" aria-label="Whisper to GM" title="Whisper to GM (private message)"></button>
         <div id="whisper-panel" class="whisper-panel no-print" role="dialog" aria-label="Whisper to GM">
-            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt); margin-bottom:6px;">✉ Whisper to GM</div>
+            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt); margin-bottom:6px;"> Whisper to GM</div>
             <textarea id="whisper-text" placeholder="Private question, plan, or roleplay note for the GM…" maxlength="800"></textarea>
             <div class="whisper-panel-actions">
                 <span class="whisper-panel-status" id="whisper-status">Sent privately — GM only</span>
@@ -4627,7 +4637,7 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showRollToast('Daily Preparations', '✓', data.message || 'Spells, focus, and HP restored.', false, false);
+                    showRollToast('Daily Preparations', '', data.message || 'Spells, focus, and HP restored.', false, false);
                     setTimeout(() => window.location.reload(), 1500);
                 }
             } catch(e) { console.error(e); }
@@ -4809,7 +4819,7 @@
                     toast.innerHTML = `
                         <div class="flex justify-between items-start">
                             <span class="font-bold text-xs tracking-wide uppercase" style="color:var(--color-spell);">${roll.name}</span>
-                            <button onclick="this.closest('.roll-toast').remove()" class="text-gray-600 hover:text-white text-xs ml-2">✕</button>
+                            <button onclick="this.closest('.roll-toast').remove()" class="text-gray-600 hover:text-white text-xs ml-2">×</button>
                         </div>
                         <div class="text-sm text-gray-300 mt-1">${roll.action}: <span class="font-bold ${isCrit ? 'text-amber-400' : 'text-white'}">${roll.result}</span></div>
                         <div class="text-[10px] text-gray-500 font-mono mt-1">${roll.detail || ''}</div>
@@ -5333,7 +5343,7 @@
             const overlay = document.createElement('div');
             overlay.className = 'rest-modal-overlay';
             overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(180deg, rgba(8,10,20,0.92) 0%, rgba(2,4,10,0.96) 100%);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;transition:opacity 0.2s ease;';
-            const glyph = kind === 'confirm' ? '☾' : '☀';
+            const glyph = kind === 'confirm' ? '' : '';
             const title = kind === 'confirm' ? 'Night Falls' : 'Dawn Breaks';
             const intro = kind === 'confirm'
                 ? 'You make camp and settle in for a long rest. Tending spells, salves, and a warded watch will consume the hours until morning.'
@@ -5357,7 +5367,7 @@
                     <h3 style="font-family:'Cinzel',serif;font-size:18px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#f0d88a;text-align:center;margin:0 0 12px 0;text-shadow:0 1px 0 rgba(0,0,0,0.5);">${title}</h3>
                     <p style="font-family:var(--font-flavor, Alegreya, Georgia, serif);font-size:14px;color:#cfc4a8;text-align:center;line-height:1.55;margin:0 0 14px 0;">${intro}</p>
                     <ul style="list-style:none;padding:0;margin:0 0 18px 0;font-family:var(--font-flavor, Alegreya, Georgia, serif);font-size:13px;color:#b8ad92;">
-                        ${list.map(item => `<li style="padding:3px 0 3px 20px;position:relative;"><span style="position:absolute;left:0;color:var(--gilt);font-size:10px;">❦</span>${item}</li>`).join('')}
+                        ${list.map(item => `<li style="padding:3px 0 3px 20px;position:relative;"><span style="position:absolute;left:0;color:var(--gilt);font-size:10px;"></span>${item}</li>`).join('')}
                     </ul>
                     <div style="display:flex;gap:10px;justify-content:center;">
                         ${kind === 'confirm'
@@ -5797,7 +5807,7 @@
             autoSaveTimer = setTimeout(async () => {
                 try {
                     await fetch(`/api/save_notes/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({notes: document.getElementById('pc-notes').value}) });
-                    document.getElementById('notes-autosave-status').innerText = 'Auto-saved ✓';
+                    document.getElementById('notes-autosave-status').innerText = 'Auto-saved ';
                     setTimeout(() => { document.getElementById('notes-autosave-status').innerText = ''; }, 3000);
                 } catch(e) {
                     document.getElementById('notes-autosave-status').innerText = 'Save failed';
@@ -6018,7 +6028,7 @@
             if (typeof getPenaltyBreakdown === 'function') {
                 const breakdown = getPenaltyBreakdown(title);
                 if (breakdown) {
-                    penaltyHTML = `<div class="text-[10px] mt-1 px-2 py-1 rounded" style="background:rgba(196,60,60,0.08); border:1px solid rgba(196,60,60,0.15); color:#fca5a5;">⚠ Includes: ${breakdown}</div>`;
+                    penaltyHTML = `<div class="text-[10px] mt-1 px-2 py-1 rounded" style="background:rgba(196,60,60,0.08); border:1px solid rgba(196,60,60,0.15); color:#fca5a5;"> Includes: ${breakdown}</div>`;
                 }
             }
 
@@ -6033,7 +6043,7 @@
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">${title}</span>
-                    <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
+                    <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">×</button>
                 </div>
                 ${diceHTML}
                 <div class="flex items-center gap-2 mb-1">
@@ -6043,7 +6053,7 @@
                 <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700">${detail}</div>
                 ${degreeHTML}
                 ${penaltyHTML}
-                <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
+                <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM </div>
             `;
             container.prepend(toast);
 
@@ -6123,7 +6133,7 @@
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">Attack: ${weaponName}</span>
-                    <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">✕</button>
+                    <button onclick="this.closest('.roll-toast').remove()" class="text-gray-500 hover:text-white text-xs ml-2">×</button>
                 </div>
                 ${diceHTML}
                 <div class="flex items-center gap-2 mb-1">
@@ -6132,7 +6142,7 @@
                 </div>
                 <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700 mb-2">1d20 (${d20}) ${modStr} = ${total}${critStr}</div>
                 <div class="flex gap-2">${dmgButtons}</div>
-                <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM ✓</div>
+                <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM </div>
             `;
             container.prepend(toast);
             setTimeout(() => {
@@ -6215,7 +6225,7 @@
 
             // Build detail string
             let detail = '';
-            let rollResult = '✦';
+            let rollResult = '';
 
             if (isAttackRoll && SPELL_ATTACK > 0) {
                 // Roll the spell attack
@@ -6248,7 +6258,7 @@
                 } else {
                     detail = `Cast ${spellName}`;
                 }
-                showRollToast(`Cast: ${spellName}`, '✦', detail, false, false);
+                showRollToast(`Cast: ${spellName}`, '', detail, false, false);
                 broadcastToGM(`Cast ${spellName}`, "Cast", detail);
             }
         }
@@ -6428,7 +6438,7 @@
                 if (r.ok) {
                     // Friendly toast using the existing roll toast helper
                     if (typeof showRollToast === 'function') {
-                        showRollToast(`${spellName} area placed`, '✦', `Open the map to aim it.`, false, false);
+                        showRollToast(`${spellName} area placed`, '', `Open the map to aim it.`, false, false);
                     }
                 } else {
                     alert(`Couldn't place ${spellName}: ${r.status}`);
@@ -6440,14 +6450,14 @@
         
         function buildActionPips(actionStr) {
             const s = actionStr.trim().toLowerCase();
-            if (s === 'reaction' || s === '⟳') return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
-            if (s === 'free' || s === '◇') return '<span class="action-pips"><span class="action-pip free"></span></span>';
+            if (s === 'reaction' || s === '') return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === '') return '<span class="action-pips"><span class="action-pip free"></span></span>';
             
-            // Count action pips (◆ characters or "1 action", "2 actions" etc.)
+            // Count action pips ( characters or "1 action", "2 actions" etc.)
             let count = 0;
             if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) count = parseInt(s);
-            else count = (actionStr.match(/◆/g) || []).length;
-            if (count === 0 && /◆/.test(actionStr)) count = 1;
+            else count = (actionStr.match(//g) || []).length;
+            if (count === 0 && //.test(actionStr)) count = 1;
             if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${actionStr}</span>`;
             
             let pips = '';
@@ -6486,7 +6496,7 @@
 
         function rollFeature(featureName, e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
-            showRollToast(`Feature: ${featureName}`, '⚡', `Used ${featureName}`, false, false);
+            showRollToast(`Feature: ${featureName}`, '', `Used ${featureName}`, false, false);
             broadcastToGM(`Used Feature: ${featureName}`, "Action", `The player used ${featureName}.`);
         }
 
@@ -6894,7 +6904,7 @@
                 <button onclick="setEquipCat('light')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Light</button>
                 <button onclick="setEquipCat('medium')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Medium</button>
                 <button onclick="setEquipCat('heavy')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Heavy</button>
-                <button onclick="equipArmor('Unarmored')" class="bg-gray-900 text-red-400 border-red-900/50 px-2 py-1 rounded text-[10px] font-bold border hover:border-red-500 ml-2">✕ Unarmored</button>`;
+                <button onclick="equipArmor('Unarmored')" class="bg-gray-900 text-red-400 border-red-900/50 px-2 py-1 rounded text-[10px] font-bold border hover:border-red-500 ml-2">× Unarmored</button>`;
             document.getElementById('equip-search').value = '';
             document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select armor to view details.</div>';
             renderEquipList();
@@ -7202,7 +7212,7 @@
                                     ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:var(--border-subtle); color:var(--text-muted);">Undo</button>`
                                     : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(167,139,250,0.15); color:var(--color-spell);">Cast</button>`
                                 }
-                                <button onclick="event.stopPropagation(); unprepSpell(${cIdx}, ${lvl.level}, ${i})" class="text-gray-600 hover:text-red-400 text-[10px]">✕</button>
+                                <button onclick="event.stopPropagation(); unprepSpell(${cIdx}, ${lvl.level}, ${i})" class="text-gray-600 hover:text-red-400 text-[10px]">×</button>
                             </div>
                         </div>`;
                     } else {
@@ -7358,8 +7368,8 @@
                 const afterShield = Math.max(0, currentShield.hp - Math.max(0, amount - currentShield.hardness));
                 const willBreak = afterShield <= currentShield.bt && afterShield > 0;
                 const willDestroy = afterShield <= 0;
-                const stateNote = willDestroy ? ' ⚠ Shield will be DESTROYED.'
-                                : willBreak   ? ' ⚠ Shield will be BROKEN.'
+                const stateNote = willDestroy ? '  Shield will be DESTROYED.'
+                                : willBreak   ? '  Shield will be BROKEN.'
                                 : '';
                 const msg =
                     `Raise Shield Block against ${amount} damage?\n\n` +
@@ -7758,7 +7768,7 @@
                 chip.classList.add('active');
                 items.innerHTML = sustained.map((s, i) => `
                     <span class="sustain-chip-item" title="Round ${s.round} of sustaining ${s.name}">
-                        ${s.name}<button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">✕</button>
+                        ${s.name}<button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">×</button>
                     </span>`).join(' ');
             }
             function save() {
@@ -7807,7 +7817,7 @@
                         btn.style.cssText = 'border-color:rgba(167,139,250,0.35); color:#c4b5fd; background:rgba(167,139,250,0.08);';
                         btn.textContent = '+Sustain';
                         btn.title = `Track ${spellName} as sustained (round counter in header)`;
-                        btn.onclick = () => { addSustain(spellName); btn.disabled = true; btn.textContent = 'Tracking ✓'; };
+                        btn.onclick = () => { addSustain(spellName); btn.disabled = true; btn.textContent = 'Tracking '; };
                         toast.appendChild(btn);
                     }, 50);
                     return ret;
@@ -8227,7 +8237,7 @@
 
         // ----- Auto-save indicator (Wave 2 #20) ---------------------------
         // Generic helper: callers pass an element; we append a fading
-        // ✓ chip inside it. No layout shift (absolute or inline-flex).
+        //  chip inside it. No layout shift (absolute or inline-flex).
         window.flashSaved = function(target) {
             if (typeof target === 'string') target = document.querySelector(target);
             if (!target) return;
@@ -8484,7 +8494,7 @@
             const med_total = parseInt(medicine.total, 10);
             const overlayHTML = `
                 <div class="parchment-frame" style="max-width:420px; width:100%; background:linear-gradient(180deg,#1a1613 0%,#120f0c 100%); border-radius:8px; padding:22px;">
-                    <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 12px 0; text-align:center;">❦ Treat Wounds</h3>
+                    <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 12px 0; text-align:center;"> Treat Wounds</h3>
                     <p style="font-family:var(--font-flavor); font-size:13px; color:#cfc4a8; line-height:1.45; margin:0 0 12px 0;">
                         10 minutes. Roll Medicine vs DC of the proficiency tier you choose. Heal 2d8 (Trained), 4d8 (Expert), 6d8 (Master), 8d8 (Legendary). +10 to roll = DC +5; +20 = DC +10. Failure: no heal. Crit fail: target takes 1d8.
                     </p>
@@ -8575,7 +8585,7 @@
                 });
                 const d = await res.json();
                 if (d.success) {
-                    if (status) status.textContent = 'Sent ✓';
+                    if (status) status.textContent = 'Sent ';
                     ta.value = '';
                     setTimeout(closeWhisper, 600);
                 } else if (status) {
@@ -8653,7 +8663,7 @@
                 <strong style="color:#fde68a; font-size:13px;">${label}</strong>
                 <span style="color:var(--t3); font-size:11px;">${dcStr}</span>
                 ${mod !== null ? `<button class="tb gilt" style="padding:4px 12px; font-size:11px;">Roll ${sign}${mod}</button>` : `<span style="color:#ef4444; font-size:11px;">no modifier found</span>`}
-                <button style="background:transparent; color:var(--t3); padding:0 4px;">✕</button>`;
+                <button style="background:transparent; color:var(--t3); padding:0 4px;">×</button>`;
             document.body.appendChild(banner);
             const [rollBtn, closeBtn] = banner.querySelectorAll('button');
             if (mod !== null && rollBtn) {
@@ -8739,7 +8749,7 @@
             btn.className = 'action-btn';
             btn.style.marginRight = '6px';
             btn.title = 'Send a 1-2 line "what happened this session" note to the GM (private). Used to seed the session journal.';
-            btn.textContent = '📜 Session Recap';
+            btn.textContent = ' Session Recap';
             btn.onclick = openJournalPrompt;
             target.parentElement.insertBefore(btn, target);
         })();
@@ -8748,7 +8758,7 @@
             overlay.style.cssText = 'position:fixed; inset:0; background:rgba(8,10,20,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px;';
             overlay.innerHTML = `
                 <div class="parchment-frame" style="max-width:460px; width:100%; background:linear-gradient(180deg,#1a1613 0%,#120f0c 100%); border-radius:8px; padding:22px;">
-                    <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 6px 0; text-align:center;">📜 Session Recap</h3>
+                    <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 6px 0; text-align:center;"> Session Recap</h3>
                     <p style="font-family:var(--font-flavor); font-size:13px; color:#cfc4a8; line-height:1.45; margin:0 0 12px 0; text-align:center;">
                         A line or two — what happened from your character's view? Sent privately to the GM only.
                     </p>
@@ -8791,7 +8801,7 @@
 
         // ----- Auto-save indicator on Notes/Wealth ------------------------
         // Wrap the existing saveWealth + scheduleAutoSave functions so a
-        // ✓ Saved chip appears next to their button.
+        //  Saved chip appears next to their button.
         (function wireSaveIndicators() {
             ['saveWealth','saveNotes'].forEach(fn => {
                 if (typeof window[fn] !== 'function') return;
@@ -8812,6 +8822,35 @@
         // ----- Defensive guard: currentConditions may be undefined on the
         // initial render path before SSE has populated it. Initialize.
         if (typeof window.currentConditions === 'undefined') window.currentConditions = {};
+
+        // ----- Player action-toolbar overflow menu (Demiplane-style) -----
+        // The toolbar shows Hero / Focus / Long Rest / Level Up + a single
+        // ⋯ button. Map, Print, PDF, Theme, Undo Level, custom-dice roller
+        // all live inside this menu so the toolbar reads as a few primary
+        // actions rather than a settings panel.
+        function togglePlayerOverflow(e) {
+            if (e) { e.stopPropagation(); }
+            const menu = document.getElementById('player-overflow-menu');
+            const btn = e && e.currentTarget;
+            if (!menu) return;
+            const next = !menu.classList.contains('open');
+            menu.classList.toggle('open', next);
+            if (btn) btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+        }
+        function closePlayerOverflow() {
+            const menu = document.getElementById('player-overflow-menu');
+            if (menu) menu.classList.remove('open');
+            const btn = document.querySelector('.overflow-menu-btn[aria-haspopup="menu"]');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('player-overflow-menu');
+            if (!menu || !menu.classList.contains('open')) return;
+            if (menu.contains(e.target)) return;
+            if (e.target.closest && e.target.closest('.overflow-menu-btn')) return;
+            closePlayerOverflow();
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePlayerOverflow(); });
 
         // ----- PF2e cast validation wrapper ------------------------------
         // Replaces the older "_autoExpendSpellSlot" client-only flow with
@@ -8976,7 +9015,7 @@
                             notice = document.createElement('div');
                             notice.className = 'prep-empty-notice no-print';
                             notice.style.cssText = 'background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.3); border-left:3px solid #fbbf24; padding:10px 14px; margin-bottom:10px; border-radius:4px; color:#fde68a; font-size:13px; line-height:1.5;';
-                            notice.innerHTML = '<strong style="font-family:var(--font-display); letter-spacing:0.12em; text-transform:uppercase; color:#fbbf24;">⚠ Prepare your spells</strong><br><span style="font-family:var(--font-flavor); font-size:12px;">As a prepared caster you must prepare spells from your spellbook into specific rank slots before you can cast them. Drag a spell from the left column into the slot you want to fill — that spell is then locked into that slot until you long-rest.</span>';
+                            notice.innerHTML = '<strong style="font-family:var(--font-display); letter-spacing:0.12em; text-transform:uppercase; color:#fbbf24;"> Prepare your spells</strong><br><span style="font-family:var(--font-flavor); font-size:12px;">As a prepared caster you must prepare spells from your spellbook into specific rank slots before you can cast them. Drag a spell from the left column into the slot you want to fill — that spell is then locked into that slot until you long-rest.</span>';
                             wrap.insertBefore(notice, wrap.firstChild);
                         }
                     } else if (notice) {
@@ -9014,10 +9053,10 @@
                 { id: 'save-will',  label: 'Will',     match: /will/i,     cls: 'save' },
                 { id: 'save-ref',   label: 'Reflex',   match: /reflex/i,   cls: 'save' },
                 { id: 'save-fort',  label: 'Fort',     match: /fort/i,     cls: 'save' },
-                { id: 'cost-1',     label: '1A',       match: /1\s*action|◆(?!◆)/, cls: 'cost' },
-                { id: 'cost-2',     label: '2A',       match: /2\s*actions?|◆◆(?!◆)/, cls: 'cost' },
-                { id: 'cost-3',     label: '3A',       match: /3\s*actions?|◆◆◆/, cls: 'cost' },
-                { id: 'cost-reaction', label: 'Reaction', match: /reaction|↻|↺/i, cls: 'cost' },
+                { id: 'cost-1',     label: '1A',       match: /1\s*action|(?!)/, cls: 'cost' },
+                { id: 'cost-2',     label: '2A',       match: /2\s*actions?|(?!)/, cls: 'cost' },
+                { id: 'cost-3',     label: '3A',       match: /3\s*actions?|/, cls: 'cost' },
+                { id: 'cost-reaction', label: 'Reaction', match: /reaction||/i, cls: 'cost' },
                 { id: 'attack',     label: 'Attack',   match: /spell attack|ranged spell|melee spell/i, cls: 'misc' },
             ];
             const active = new Set();
@@ -9036,7 +9075,7 @@
             });
             const clear = document.createElement('button');
             clear.type = 'button';
-            clear.textContent = '✕ Clear';
+            clear.textContent = '× Clear';
             clear.style.cssText = 'padding:3px 9px; border-radius:99px; background:transparent; border:1px solid var(--border-s); color:var(--t3); font-size:11px; cursor:pointer; margin-left:auto;';
             clear.onclick = () => {
                 active.clear();
@@ -9256,8 +9295,8 @@
     <div class="levelup-drawer-backdrop" id="levelup-backdrop" onclick="closeLevelUpDrawer()"></div>
     <div class="levelup-drawer" id="levelup-drawer">
         <div class="levelup-drawer-header">
-            <h3>★ Level Up — {{ pc.name }}</h3>
-            <button class="levelup-drawer-close" onclick="closeLevelUpDrawer()" title="Close">✕</button>
+            <h3> Level Up — {{ pc.name }}</h3>
+            <button class="levelup-drawer-close" onclick="closeLevelUpDrawer()" title="Close">×</button>
         </div>
         <iframe id="levelup-iframe" src="about:blank"></iframe>
     </div>

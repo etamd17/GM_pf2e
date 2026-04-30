@@ -248,7 +248,7 @@
   line-height: 1;
   transition: color 0.12s, transform 0.12s;
 }
-.trk .c-drag::before { content: "⚔"; }
+.trk .c-drag::before { content: ""; }
 .trk .c-drag:hover { color: var(--t-gold); transform: scale(1.15); }
 .trk .c-drag:active { cursor: grabbing; transform: scale(0.95); }
 .trk .sortable-ghost { background:rgba(196,60,60,0.08) !important; }
@@ -475,7 +475,7 @@
   margin:11px 0 7px;
   display:flex; align-items:center; gap:7px; justify-content:space-between;
 }
-.trk .section-h::before { content:"◆"; color:var(--t-gold); font-size:8px; }
+.trk .section-h::before { content:""; color:var(--t-gold); font-size:8px; }
 .trk .section-h .tk { font-family:'Inter',sans-serif; font-size:9px; color:var(--t-t3); letter-spacing:.6px; font-weight:600; text-transform:none; margin-left:auto; }
 
 .trk .strikes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
@@ -644,10 +644,10 @@
     <div class="hb-right">
         <button class="hb-btn" onclick="apiPost('/api/roll_npc_initiative')" title="Roll d20+Perception for all NPCs">Roll Init</button>
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
-        <button class="hb-btn gold" onclick="openSecretRollPanel()" title="GM Secret Roll">🎲 Secret</button>
-        <button class="hb-btn purple" onclick="openHandoutPanel()" title="Send handout to players">📜 Handout</button>
-        <button class="hb-btn gold" onclick="openLootPanel()" title="Send loot (items + coins) to a player">💰 Loot</button>
-        <button class="hb-btn purple" onclick="openCheckRequestPanel()" title="Ask players to roll a skill / save">🎲 Check</button>
+        <button class="hb-btn gold" onclick="openSecretRollPanel()" title="GM Secret Roll"> Secret</button>
+        <button class="hb-btn purple" onclick="openHandoutPanel()" title="Send handout to players"> Handout</button>
+        <button class="hb-btn gold" onclick="openLootPanel()" title="Send loot (items + coins) to a player"> Loot</button>
+        <button class="hb-btn purple" onclick="openCheckRequestPanel()" title="Ask players to roll a skill / save"> Check</button>
         <button class="hb-btn danger" onclick="if(confirm('Clear the encounter?')) apiPost('/api/clear_encounter')">Clear</button>
         {# hidden legacy round badge, kept for renderMeta backward-compat #}
         <span id="round-badge" class="hidden">Round {{ round_number }}</span>
@@ -717,7 +717,7 @@
 {# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
 <div id="secret-roll-panel" class="panel hidden">
     <div class="panel-head">
-        <span class="panel-ttl">🎲 GM Secret Roll</span>
+        <span class="panel-ttl"> GM Secret Roll</span>
         <button class="panel-close" onclick="document.getElementById('secret-roll-panel').classList.add('hidden')">&times;</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -739,7 +739,7 @@
 {# ═══════════════════ HANDOUT PANEL ═══════════════════ #}
 <div id="handout-panel" class="panel hidden">
     <div class="panel-head">
-        <span class="panel-ttl" style="color:var(--t-gold);">📜 Send Handout to Players</span>
+        <span class="panel-ttl" style="color:var(--t-gold);"> Send Handout to Players</span>
         <button class="panel-close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
@@ -773,7 +773,7 @@
 {# ═══════════════════ LOOT DISPATCH PANEL ═══════════════════ #}
 <div id="loot-panel" class="panel hidden">
     <div class="panel-head">
-        <span class="panel-ttl" style="color:var(--t-gold);">💰 Send Loot to Player</span>
+        <span class="panel-ttl" style="color:var(--t-gold);"> Send Loot to Player</span>
         <button class="panel-close" onclick="document.getElementById('loot-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
@@ -807,7 +807,7 @@
 {# ═══════════════════ CHECK-REQUEST PANEL ═══════════════════ #}
 <div id="check-request-panel" class="panel hidden">
     <div class="panel-head">
-        <span class="panel-ttl" style="color:var(--t-gold);">🎲 Request a Roll from Players</span>
+        <span class="panel-ttl" style="color:var(--t-gold);"> Request a Roll from Players</span>
         <button class="panel-close" onclick="document.getElementById('check-request-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
@@ -910,7 +910,7 @@
         {# ═══════════════════ COMBAT LOG (collapsible) ═══════════════════ #}
         <div class="log-wrap">
             <div class="log-head" onclick="toggleLog(event)">
-                <span class="log-ttl">📜 Combat Log <span id="log-toggle-arrow" style="font-size:8px;opacity:.7;">▴</span></span>
+                <span class="log-ttl"> Combat Log <span id="log-toggle-arrow" style="font-size:8px;opacity:.7;">▴</span></span>
                 <div class="log-btns">
                     <button class="log-btn" onclick="event.stopPropagation(); refreshLog();">Refresh</button>
                     <button class="log-btn" onclick="event.stopPropagation(); copyLog();">Copy</button>
@@ -1210,7 +1210,7 @@ function renderInitList() {
             <div class="c-name">
                 <div class="port ${portCls}">${initials(c.name)}</div>
                 <div class="nm-wrap">
-                    <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ⚡' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
+                    <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
                     <div class="nm-sub">${subText}</div>
                 </div>
             </div>
@@ -1346,7 +1346,7 @@ function renderActivePanel() {
 
     // Conditions
     const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false) : [];
-    html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click ✕ to remove</span>' : ''}</div>`;
+    html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click × to remove</span>' : ''}</div>`;
     if (activeConds.length) {
         html += `<div class="cond-row">`;
         activeConds.forEach(([k,v]) => {
@@ -1358,7 +1358,7 @@ function renderActivePanel() {
                 html += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
                 html += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
             } else {
-                html += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">✕</button>`;
+                html += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">×</button>`;
             }
             html += `</span>`;
         });
@@ -2303,8 +2303,8 @@ async function sendCheckRequest() {
     inbox.style.cssText = 'position:fixed; bottom:18px; right:18px; width:340px; max-height:60vh; overflow-y:auto; background:#161616; border:1px solid #c9a34e; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5); z-index:900; font-family:Inter,sans-serif; display:none;';
     inbox.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #2a2a2a; background:#0e0e0e;">
-            <strong style="color:#c9a34e; font-size:12px; letter-spacing:0.16em; text-transform:uppercase;">📨 Player Inbox</strong>
-            <button onclick="document.getElementById('gm-inbox').style.display='none'" style="background:transparent; border:none; color:#888; font-size:14px; cursor:pointer; padding:2px 6px;">✕</button>
+            <strong style="color:#c9a34e; font-size:12px; letter-spacing:0.16em; text-transform:uppercase;"> Player Inbox</strong>
+            <button onclick="document.getElementById('gm-inbox').style.display='none'" style="background:transparent; border:none; color:#888; font-size:14px; cursor:pointer; padding:2px 6px;">×</button>
         </div>
         <div id="gm-inbox-list" style="padding:8px; font-size:12px; color:#ddd;"></div>`;
     document.body.appendChild(inbox);
@@ -2312,7 +2312,7 @@ async function sendCheckRequest() {
     const fab = document.createElement('button');
     fab.id = 'gm-inbox-fab';
     fab.title = 'Player inbox (whispers + session notes)';
-    fab.textContent = '📨';
+    fab.textContent = '';
     fab.style.cssText = 'position:fixed; bottom:18px; right:18px; width:42px; height:42px; border-radius:50%; background:#161616; border:1px solid #c9a34e; color:#c9a34e; font-size:20px; cursor:pointer; z-index:899; box-shadow:0 4px 12px rgba(0,0,0,0.4);';
     fab.onclick = () => {
         inbox.style.display = inbox.style.display === 'block' ? 'none' : 'block';
@@ -2328,7 +2328,7 @@ async function sendCheckRequest() {
         if (!messages.length) { list.innerHTML = '<em style="color:#888;">No messages yet.</em>'; return; }
         list.innerHTML = messages.slice(-50).reverse().map(m => {
             const t = new Date((m.ts || 0) * 1000).toLocaleTimeString();
-            const tag = m.kind === 'journal' ? '📜 recap' : '✉ whisper';
+            const tag = m.kind === 'journal' ? ' recap' : ' whisper';
             const color = m.kind === 'journal' ? '#fbbf24' : '#c4b5fd';
             return `<div style="margin-bottom:8px; padding:6px 8px; background:#1a1a1a; border-left:3px solid ${color}; border-radius:3px;">
                 <div style="font-size:10px; color:#888; margin-bottom:3px;">${tag} · <strong style="color:${color};">${m.pc}</strong> · ${t}</div>
@@ -2342,12 +2342,12 @@ async function sendCheckRequest() {
             fab.style.background = '#7c2222';
             fab.style.color = '#fde68a';
             fab.title = `${n} new message${n > 1 ? 's' : ''}`;
-            fab.textContent = '📨' + (n > 9 ? '·' : n);
+            fab.textContent = '' + (n > 9 ? '·' : n);
         } else {
             fab.style.background = '#161616';
             fab.style.color = '#c9a34e';
             fab.title = 'Player inbox';
-            fab.textContent = '📨';
+            fab.textContent = '';
         }
     }
     fab.dataset.unread = '0';

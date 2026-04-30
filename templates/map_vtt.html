@@ -737,7 +737,7 @@
             <!-- Top Navigation -->
             <div id="top-nav">
                 <a href="/gm" class="nav-btn">← GM Hub</a>
-                <a href="/gm/tracker" class="nav-btn">⚔ Tracker</a>
+                <a href="/gm/tracker" class="nav-btn"> Tracker</a>
                 <a href="/map" target="_blank" class="nav-btn">👁 Player View</a>
             </div>
             
@@ -751,17 +751,17 @@
             <div id="drawing-status">
                 <span id="drawing-text">Drawing: 0 points</span>
                 <button class="status-btn warning" onclick="undoWallPoint()">↩ Undo</button>
-                <button class="status-btn success" onclick="finishWall()">✓ Done</button>
-                <button class="status-btn danger" onclick="cancelWall()">✕ Cancel</button>
+                <button class="status-btn success" onclick="finishWall()"> Done</button>
+                <button class="status-btn danger" onclick="cancelWall()">× Cancel</button>
             </div>
         </div>
         
         <!-- Right Sidebar -->
         <div id="right-sidebar">
             <div class="sidebar-header">
-                <span>⚔ Combat</span>
+                <span> Combat</span>
                 <div style="display: flex; gap: 4px;">
-                    <button class="tool-btn small" onclick="rollAllInitiative()">🎲 Roll Init</button>
+                    <button class="tool-btn small" onclick="rollAllInitiative()"> Roll Init</button>
                     <button class="tool-btn small" onclick="nextTurn()">Next →</button>
                 </div>
             </div>
@@ -2410,7 +2410,7 @@
             preview.innerHTML = `
                 <span>${totalFeet} ft</span>
                 <span class="${actionsClass}">(${actions} action${actions !== 1 ? 's' : ''})</span>
-                ${difficultCells > 0 ? '<span class="warning">⚠ difficult terrain</span>' : ''}
+                ${difficultCells > 0 ? '<span class="warning"> difficult terrain</span>' : ''}
                 ${usedNote}
                 ${blockedNote}
             `;
@@ -3260,7 +3260,7 @@
             // Check flanking status
             const isFlanked = !token.is_pc && checkFlankingStatus(token);
             if (isFlanked) {
-                html += '<div style="color: #ec4899; font-size: 11px; margin-bottom: 8px;">⚔️ Flanked (Flat-Footed)</div>';
+                html += '<div style="color: #ec4899; font-size: 11px; margin-bottom: 8px;">️ Flanked (Flat-Footed)</div>';
             }
             
             return html;
@@ -3557,7 +3557,7 @@
             
             // Persistent damage reminder
             if (conditions['Persistent Damage']) {
-                reminders.push(`⚠️ Take ${conditions['Persistent Damage']} persistent damage, then flat check DC 15 to end`);
+                reminders.push(`️ Take ${conditions['Persistent Damage']} persistent damage, then flat check DC 15 to end`);
             }
             
             // Dying check reminder
@@ -3580,7 +3580,7 @@
             
             // Stunned reminder  
             if (conditions['Stunned']) {
-                reminders.push(`⚡ Stunned ${conditions['Stunned']} - lose ${conditions['Stunned']} action(s) (decreases by actions lost)`);
+                reminders.push(` Stunned ${conditions['Stunned']} - lose ${conditions['Stunned']} action(s) (decreases by actions lost)`);
             }
             
             remindersEl.innerHTML = reminders.join('<br>');

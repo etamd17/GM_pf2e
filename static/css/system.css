@@ -1,0 +1,949 @@
+/* ════════════════════════════════════════════════════════════════════
+   GM_pf2e — Design System (2026-04)
+   ────────────────────────────────────────────────────────────────────
+   Reference: Demiplane Pathfinder Nexus (dark page, parchment-cream
+   content cards), with restraint borrowed from printed PF2e books.
+   Two-color brand: GILT + RUBY. All other hues are neutral grays.
+
+   This file is loaded LAST in the cascade. It uses !important freely
+   on the override layer because it has to win against inline style=""
+   attributes in older templates that we haven't refactored yet. New
+   code should consume classes from this file and never inline colors,
+   gradients, shadows, or paddings.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Tokens ─────────────────────────────────────────────────────── */
+
+:root, [data-theme="dark"] {
+    /* Brand */
+    --gilt-50:  #faf2dd;
+    --gilt-100: #f0d88a;
+    --gilt-200: #e0b65a;       /* primary affordance */
+    --gilt-300: #c9a34e;       /* DEFAULT brand */
+    --gilt-400: #a4842b;
+    --gilt-500: #7d6418;
+    --gilt-600: #574510;
+
+    --ruby-50:  #fde4e4;
+    --ruby-100: #f5b7b7;
+    --ruby-200: #d36e6e;
+    --ruby-300: #a83a3a;
+    --ruby-400: #7c2222;       /* DEFAULT brand */
+    --ruby-500: #5a1414;
+    --ruby-600: #3f0d0d;
+
+    /* Neutral ramp (single ramp, no off-blacks/cool-grays mixed in) */
+    --ink-50:   #faf7ee;       /* parchment cream — content card bg */
+    --ink-100:  #f0ead7;
+    --ink-200:  #e3dac0;
+    --ink-300:  #c9bfa3;
+    --ink-400:  #9a917a;
+    --ink-500:  #6f6755;
+    --ink-600:  #4a4334;
+    --ink-700:  #2e2920;
+    --ink-800:  #1d1a14;       /* surface */
+    --ink-900:  #14110c;       /* page background */
+    --ink-950:  #0c0a07;
+
+    /* Functional aliases — most code reads these, not the raw ramp */
+    --bg-page:        var(--ink-900);          /* dark page background */
+    --bg-card:        var(--ink-50);           /* parchment-cream card */
+    --bg-card-2:      var(--ink-100);          /* slightly tinted card variant */
+    --bg-sunken:      var(--ink-800);          /* recessed dark area on the page */
+    --bg-input:       var(--ink-100);          /* input fields on cream cards */
+    --bg-input-dark:  var(--ink-800);          /* input fields on dark surfaces */
+    --bg-overlay:     rgba(20, 17, 12, 0.85);  /* modal scrim */
+
+    --text-on-cream:  #2a1f10;                 /* primary on parchment */
+    --text-on-cream-2:#4d3f24;                 /* secondary on parchment */
+    --text-on-cream-3:#7a6940;                 /* muted on parchment */
+    --text-on-dark:   var(--ink-100);          /* primary on dark page */
+    --text-on-dark-2: var(--ink-300);          /* secondary on dark page */
+    --text-on-dark-3: var(--ink-400);          /* muted on dark page */
+
+    --border-card:    rgba(74, 67, 52, 0.25);  /* gentle line on parchment */
+    --border-rule:    rgba(74, 67, 52, 0.5);   /* rule line — section dividers */
+    --border-dark:    rgba(255, 255, 255, 0.08);
+    --border-strong:  rgba(255, 255, 255, 0.16);
+
+    --accent:         var(--gilt-300);
+    --accent-hover:   var(--gilt-200);
+    --danger:         var(--ruby-300);
+    --danger-strong:  var(--ruby-400);
+    --success:        #4a7c2a;                 /* used SPARINGLY — only HP-full state */
+    --warn:           #8a6a14;                 /* used SPARINGLY — only HP-low state */
+
+    /* Spacing — strict 4px grid. Use these, never inline pixel values. */
+    --sp-1:  4px;
+    --sp-2:  8px;
+    --sp-3:  12px;
+    --sp-4:  16px;
+    --sp-5:  20px;
+    --sp-6:  24px;
+    --sp-7:  32px;
+    --sp-8:  48px;
+    --sp-9:  64px;
+
+    /* Radii — exactly two sizes, pick one consciously */
+    --r-sm: 2px;     /* inputs, pills, tags */
+    --r-md: 4px;     /* cards, modals, buttons */
+
+    /* Elevation — exactly two, no mixing border + shadow */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.4);
+
+    /* Motion — opacity + transform only, no keyframes */
+    --t-fast: 120ms ease;
+    --t-base: 180ms ease;
+    --t-slow: 280ms ease;
+
+    /* Type stack — strict role assignment */
+    --font-display: 'Cinzel', 'Cormorant Garamond', Georgia, serif;
+    --font-flavor:  'Alegreya', Georgia, 'Times New Roman', serif;
+    --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --t-fast: 1ms;
+        --t-base: 1ms;
+        --t-slow: 1ms;
+    }
+}
+
+/* ── 2. Override hostile legacy tokens from base.html / player_sheet  ─ */
+
+:root, [data-theme="dark"], html, body {
+    /* Many existing rules read these names. Re-point them so legacy
+       inline `var(--gilt)` / `var(--bg-surface)` use the new ramp. */
+    --gilt:           var(--gilt-300);
+    --gilt-bright:    var(--gilt-200);
+    --bg-base:        var(--bg-page);
+    --bg-body:        var(--bg-page);
+    --bg-surface:     var(--bg-card);          /* legacy "surface" → cream card */
+    --bg-raised:      var(--bg-card);
+    --bg-overlay:     rgba(20, 17, 12, 0.85);
+    --text-primary:   var(--text-on-cream);    /* default context: card */
+    --text-secondary: var(--text-on-cream-2);
+    --text-muted:     var(--text-on-cream-3);
+    --t1: var(--text-on-cream);
+    --t2: var(--text-on-cream-2);
+    --t3: var(--text-on-cream-3);
+    --t4: var(--text-on-cream-3);
+    --border:         var(--border-card);
+    --border-s:       var(--border-card);
+    --border-default: var(--border-card);
+    --border-subtle:  var(--border-card);
+    --border-strong:  var(--border-rule);
+    --red:            var(--ruby-300);
+    --red-b:          var(--ruby-200);
+    --red-d:          var(--ruby-400);
+    --red-glow:       transparent;
+    --green:          var(--success);
+    --blue:           var(--ink-500);          /* deprecate — was azure soup */
+    --color-spell:    var(--gilt-300);         /* deprecate — was purple */
+    --color-ref:      var(--ink-500);
+    --color-danger:   var(--ruby-300);
+    --accent-primary: var(--gilt-300);
+    --accent-secondary: var(--gilt-400);
+    --accent-gold:    var(--gilt-300);
+    --accent-gold-light: var(--gilt-200);
+    --rune-color:     var(--gilt-300);         /* deprecate — was tradition tint */
+    --print-gold:     var(--gilt-400);
+    --print-rubric:   var(--ruby-400);
+    --print-ink:      var(--ink-900);
+    --ink:            var(--ink-900);
+}
+
+/* ── 3. Base resets ─────────────────────────────────────────────────── */
+
+html, body {
+    background: var(--bg-page) !important;
+    color: var(--text-on-dark) !important;
+    font-family: var(--font-ui) !important;
+}
+
+/* Headings everywhere are display type */
+h1, h2, h3, h4, h5, h6, .font-header, .font-display {
+    font-family: var(--font-display) !important;
+    letter-spacing: 0.04em !important;
+    font-weight: 600 !important;
+}
+
+/* Disable noisy keyframes globally */
+.crit-flair, .crit-flair::after,
+.your-turn, .your-turn-flash,
+.dice-face, .nat20,
+.shield-fill-rect, .shield-cracks,
+.toast-animate, .roll-total-pop {
+    animation: none !important;
+}
+
+/* Strip the d20 SVG hover-wobble — replace with subtle scale. */
+.d20-fab svg { animation: none !important; }
+.d20-fab:hover svg { animation: none !important; transform: scale(1.06) !important; }
+
+/* Strip every "0 0 Npx rgba(...)" glow — collapse to elevation 1 only. */
+.parchment-frame::before, .parchment-frame::after,
+.spell-card-corner-tl, .spell-card-corner-tr,
+.spell-card-corner-bl, .spell-card-corner-br {
+    content: none !important;
+    background: none !important;
+    display: none !important;
+}
+
+/* ── 4. Page chrome — sticky header, nav, sheet body ────────────────── */
+
+.char-header {
+    background: var(--bg-page) !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+    color: var(--text-on-dark) !important;
+}
+.char-header .ss-block,
+.char-header .ss-lbl,
+.char-header .ss-val {
+    color: var(--text-on-dark) !important;
+}
+.char-header .ss-lbl { color: var(--text-on-dark-3) !important; }
+
+/* Drop the giant gilt drop-cap on the character name — keep the rest of
+   the heading typography, just neutralize the showy first-letter. */
+.char-name::first-letter {
+    font-size: inherit !important;
+    color: inherit !important;
+    text-shadow: none !important;
+    padding-right: 0 !important;
+    line-height: inherit !important;
+}
+
+/* Sub-ornament glyphs (❦, ✦) in subtitle — hide. */
+.sub-orn { display: none !important; }
+
+/* ── 5. Cards / panels — flat, single border, no nesting glow ────────── */
+
+.panel-card,
+.parchment-frame,
+.sheet-page > .panel-card,
+.tab-content .panel-card {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: none !important;
+    padding: var(--sp-5) !important;
+    margin-bottom: var(--sp-4) !important;
+}
+
+/* Nested panel-cards lose their card chrome — they become content
+   sections separated by a rule line, not boxes-in-boxes. */
+.panel-card .panel-card,
+.panel-card .parchment-frame {
+    background: transparent !important;
+    border: none !important;
+    border-top: 1px solid var(--border-card) !important;
+    border-radius: 0 !important;
+    padding: var(--sp-4) 0 !important;
+    margin-bottom: 0 !important;
+}
+.panel-card .panel-card:first-child,
+.panel-card .parchment-frame:first-child {
+    border-top: none !important;
+    padding-top: 0 !important;
+}
+
+/* All text inside cards reads as cream-context */
+.panel-card,
+.panel-card *,
+.parchment-frame,
+.parchment-frame *,
+.tab-content {
+    color: inherit;
+}
+
+.panel-card .text-gray-300,
+.panel-card .text-gray-400,
+.panel-card .text-gray-500,
+.panel-card .text-gray-600 {
+    color: var(--text-on-cream-2) !important;
+}
+.panel-card .text-white { color: var(--text-on-cream) !important; }
+.panel-card .text-amber-400,
+.panel-card .text-amber-500,
+.panel-card .text-amber-600 {
+    color: var(--gilt-400) !important;
+}
+.panel-card .text-purple-300,
+.panel-card .text-purple-400,
+.panel-card .text-purple-500,
+.panel-card .text-violet-300 {
+    color: var(--text-on-cream) !important;
+}
+.panel-card .text-cyan-200,
+.panel-card .text-yellow-400,
+.panel-card .text-yellow-200,
+.panel-card .text-orange-400,
+.panel-card .text-orange-300 {
+    color: var(--text-on-cream-2) !important;
+}
+.panel-card .text-red-400,
+.panel-card .text-red-500 {
+    color: var(--ruby-400) !important;
+}
+.panel-card .text-green-400,
+.panel-card .text-green-500 {
+    color: var(--success) !important;
+}
+.panel-card .text-blue-400,
+.panel-card .text-blue-500,
+.panel-card .text-info-300,
+.panel-card .text-info-400 {
+    color: var(--text-on-cream-2) !important;
+}
+
+/* Inputs & selects — flat, sit on cream, gilt focus ring */
+.panel-card input,
+.panel-card select,
+.panel-card textarea,
+.hp-input, .tinput, .tselect {
+    background: var(--bg-input) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-sm) !important;
+    box-shadow: none !important;
+    padding: var(--sp-2) var(--sp-3) !important;
+    font-family: var(--font-ui) !important;
+    transition: border-color var(--t-fast), background var(--t-fast) !important;
+}
+.panel-card input:focus,
+.panel-card select:focus,
+.panel-card textarea:focus,
+.hp-input:focus, .tinput:focus, .tselect:focus {
+    outline: none !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(201, 163, 78, 0.15) !important;
+}
+
+/* Section headers inside cards */
+.section-header {
+    font-family: var(--font-display) !important;
+    font-size: 12px !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+    color: var(--text-on-cream-2) !important;
+    border-bottom: 1px solid var(--border-rule) !important;
+    padding-bottom: var(--sp-2) !important;
+    margin-bottom: var(--sp-4) !important;
+}
+
+/* ── 6. Buttons — single button system ──────────────────────────────── */
+
+/* Default button (.tb, .action-btn, .ts-btn, .hb-btn) — neutral on
+   the page, parchment on cream cards. */
+button.tb, .tb, button.action-btn, .action-btn,
+button.ts-btn, .ts-btn, button.hb-btn, .hb-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--sp-2) !important;
+    padding: var(--sp-2) var(--sp-3) !important;
+    border: 1px solid var(--border-strong) !important;
+    background: transparent !important;
+    color: var(--text-on-dark) !important;
+    font-family: var(--font-ui) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.02em !important;
+    border-radius: var(--r-sm) !important;
+    cursor: pointer !important;
+    transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast) !important;
+    box-shadow: none !important;
+    text-transform: none !important;
+    line-height: 1 !important;
+    height: auto !important;
+}
+button.tb:hover, .tb:hover,
+button.action-btn:hover, .action-btn:hover,
+button.ts-btn:hover, .ts-btn:hover,
+button.hb-btn:hover, .hb-btn:hover {
+    background: rgba(201, 163, 78, 0.08) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+button.tb:focus-visible, .tb:focus-visible,
+button.action-btn:focus-visible, .action-btn:focus-visible {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: 2px !important;
+}
+
+/* Buttons inside parchment cards stay readable on cream */
+.panel-card button.tb,
+.panel-card .tb,
+.panel-card button.action-btn,
+.panel-card .action-btn {
+    color: var(--text-on-cream) !important;
+    border-color: var(--border-card) !important;
+}
+.panel-card button.tb:hover,
+.panel-card .tb:hover,
+.panel-card button.action-btn:hover,
+.panel-card .action-btn:hover {
+    background: rgba(201, 163, 78, 0.1) !important;
+    border-color: var(--accent) !important;
+    color: var(--gilt-500) !important;
+}
+
+/* Primary variant — ONE per major surface, used for the call-to-action */
+.tb.primary, .action-btn.primary, .ts-btn.primary, .btn-primary,
+.tb.gilt, .action-btn.gilt {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
+.tb.primary:hover, .action-btn.primary:hover, .ts-btn.primary:hover, .btn-primary:hover,
+.tb.gilt:hover, .action-btn.gilt:hover {
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+    color: var(--ink-950) !important;
+}
+
+/* Danger variant — for destructive actions only */
+.tb.danger, .ts-btn.danger, .hb-btn.danger {
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+    background: transparent !important;
+}
+.tb.danger:hover, .ts-btn.danger:hover, .hb-btn.danger:hover {
+    background: rgba(168, 58, 58, 0.1) !important;
+    color: var(--ruby-200) !important;
+    border-color: var(--ruby-200) !important;
+}
+
+/* Strip flashy variant classes that survived from earlier passes. */
+.hb-btn.gold, .hb-btn.purple {
+    border-color: var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    background: transparent !important;
+}
+.hb-btn.gold:hover, .hb-btn.purple:hover {
+    background: rgba(201, 163, 78, 0.08) !important;
+    color: var(--accent) !important;
+    border-color: var(--accent) !important;
+}
+
+/* HP +/− buttons — neutral, square, restrained */
+.hp-btn, .resource-chip-btn {
+    width: 24px !important; height: 24px !important;
+    padding: 0 !important;
+    border: 1px solid var(--border-card) !important;
+    background: var(--bg-card-2) !important;
+    color: var(--text-on-cream) !important;
+    border-radius: var(--r-sm) !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+    transition: background var(--t-fast), border-color var(--t-fast) !important;
+}
+.hp-btn:hover, .resource-chip-btn:hover {
+    background: rgba(201, 163, 78, 0.1) !important;
+    border-color: var(--accent) !important;
+    color: var(--gilt-500) !important;
+}
+.hp-btn.damage:hover { color: var(--danger) !important; border-color: var(--danger) !important; }
+.hp-btn.heal:hover   { color: var(--success) !important; border-color: var(--success) !important; }
+
+/* ── 7. Tabs — bottom-rule active, no boxes ──────────────────────────── */
+
+.tab-btn {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    color: var(--text-on-dark-3) !important;
+    padding: var(--sp-2) var(--sp-4) !important;
+    font-family: var(--font-display) !important;
+    font-size: 12px !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+    font-weight: 500 !important;
+    box-shadow: none !important;
+    transition: color var(--t-fast), border-color var(--t-fast) !important;
+    background-image: none !important;
+}
+.tab-btn:hover, .tab-btn:focus-visible {
+    color: var(--text-on-dark) !important;
+    background: transparent !important;
+    outline: none !important;
+}
+.tab-btn.active, .tab-btn[aria-selected="true"] {
+    color: var(--accent) !important;
+    border-bottom-color: var(--accent) !important;
+}
+
+/* ── 8. Pips — flat dots, no glow, no clip-path ─────────────────────── */
+
+.hero-pip, .focus-pip {
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    border: 1.5px solid var(--text-on-dark-3) !important;
+    box-shadow: none !important;
+    background-image: none !important;
+    clip-path: none !important;
+    display: inline-block !important;
+    transform: none !important;
+    transition: background var(--t-fast), border-color var(--t-fast) !important;
+}
+.hero-pip::before, .focus-pip::before { content: none !important; display: none !important; }
+.hero-pip.filled, .focus-pip.filled {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+}
+
+/* Tradition tints — neutralized */
+[data-tradition] .focus-pip,
+[data-tradition] .focus-pip.filled,
+[data-tradition] .focus-pip.empty {
+    background: transparent !important;
+    border-color: var(--text-on-dark-3) !important;
+}
+[data-tradition] .focus-pip.filled {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+}
+
+/* Resource chips (Hero / Focus) — flat pill, no card chrome */
+.resource-chip {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: 999px !important;
+    padding: 4px 10px !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: none !important;
+    gap: var(--sp-2) !important;
+}
+.resource-chip-lbl {
+    font-family: var(--font-ui) !important;
+    font-size: 10px !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: var(--text-on-dark-3) !important;
+    font-weight: 600 !important;
+}
+
+/* ── 9. Stats strip — typography-only, no card chrome ─────────────────── */
+
+.stats-strip { background: var(--bg-page) !important; border-bottom: 1px solid var(--border-strong) !important; }
+.ss-block {
+    background: transparent !important;
+    border: none !important;
+    border-right: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+}
+.ss-block:last-child { border-right: none !important; }
+.ss-lbl {
+    font-family: var(--font-ui) !important;
+    font-size: 10px !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: var(--text-on-dark-3) !important;
+    font-weight: 600 !important;
+}
+.ss-val {
+    font-family: var(--font-display) !important;
+    font-weight: 600 !important;
+    color: var(--text-on-dark) !important;
+    font-variant-numeric: lining-nums tabular-nums !important;
+    text-shadow: none !important;
+}
+
+/* ── 10. HP bar — keep functional color (per user request) ──────────── */
+
+.hp-gauge, .hp-gauge-bar {
+    background: var(--ink-700) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    height: 6px !important;
+}
+.hp-gauge::before, .hp-gauge::after,
+.hp-gauge-bar::before, .hp-gauge-bar::after { content: none !important; display: none !important; }
+.hp-gauge-fill {
+    background: var(--success) !important;
+    transition: width var(--t-base), background var(--t-fast) !important;
+    box-shadow: none !important;
+    border-radius: 999px !important;
+    height: 100% !important;
+}
+.hp-gauge-fill.high { background: var(--success) !important; }
+.hp-gauge-fill.mid  { background: var(--warn)    !important; }
+.hp-gauge-fill.low  { background: var(--danger)  !important; }
+.hp-gauge-fill.dead { background: var(--ruby-400) !important; opacity: 0.5 !important; }
+
+/* Shield mini-gauge — flat, no SVG flair */
+.shield-svg, .shield-fill-rect, .shield-cracks {
+    filter: none !important;
+}
+
+/* ── 11. Trait + condition pills — neutralize the family colors ──────── */
+
+.trait-pill, .condition-pill {
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    color: var(--text-on-cream-2) !important;
+    border-radius: var(--r-sm) !important;
+    padding: 2px 8px !important;
+    font-size: 10px !important;
+    font-family: var(--font-ui) !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
+.trait-pill.agile, .trait-pill.finesse, .trait-pill.deadly,
+.trait-pill.ranged, .trait-pill.magical {
+    background: transparent !important;
+    border-color: var(--border-card) !important;
+    color: var(--text-on-cream-2) !important;
+}
+/* Conditions on the dark sticky strip */
+.condition-bar {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+    padding: var(--sp-2) 0 !important;
+}
+.condition-bar .condition-pill {
+    border-color: var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+    background: transparent !important;
+}
+.condition-pill[data-cond="dying"],
+.condition-pill[data-cond="wounded"],
+.condition-pill[data-cond="doomed"] {
+    border-color: var(--danger) !important;
+    color: var(--ruby-200) !important;
+}
+
+/* Profession letter chips (U/T/E/M/L) — flat, monochrome */
+.prof-t, .prof-e, .prof-m, .prof-l {
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    color: var(--text-on-cream) !important;
+    box-shadow: none !important;
+    background-image: none !important;
+    font-weight: 600 !important;
+}
+.prof-t { color: var(--gilt-500) !important; border-color: var(--gilt-300) !important; }
+.prof-e { color: var(--ruby-400) !important; border-color: var(--ruby-300) !important; }
+.prof-m { color: var(--ink-900)  !important; border-color: var(--ink-600) !important; background: var(--ink-200) !important; }
+.prof-l { color: var(--accent)   !important; border-color: var(--accent) !important; background: var(--ink-900) !important; }
+
+/* ── 12. Toasts — flat, left-rule accent, no wax-seal flair ──────────── */
+
+#roll-toast-container, #gm-toast-container {
+    pointer-events: none !important;
+}
+.roll-toast {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-left: 3px solid var(--accent) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-2) !important;
+    padding: var(--sp-3) var(--sp-4) !important;
+    background-image: none !important;
+    pointer-events: auto !important;
+}
+.roll-toast::before, .roll-toast::after {
+    content: none !important;
+    display: none !important;
+    background: none !important;
+}
+.roll-toast.crit-flair {
+    border-left-color: var(--gilt-200) !important;
+    box-shadow: var(--shadow-2) !important;
+}
+.roll-toast .text-amber-500,
+.roll-toast .text-amber-400 { color: var(--gilt-500) !important; }
+.roll-toast .text-red-400,
+.roll-toast .text-red-500 { color: var(--ruby-400) !important; }
+.roll-toast .bg-gray-950,
+.roll-toast .bg-gray-900,
+.roll-toast .bg-gray-800 {
+    background: var(--ink-100) !important;
+    color: var(--text-on-cream) !important;
+    border-color: var(--border-card) !important;
+}
+.dice-face {
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    color: var(--text-on-cream) !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
+
+/* ── 13. Modals — single backdrop, parchment card, no corner ornaments  */
+
+.modal-backdrop, [class*="bg-black/80"], .fixed.inset-0[onclick*="hidden"] {
+    background: var(--bg-overlay) !important;
+}
+.parchment-frame {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-2) !important;
+}
+
+/* ── 14. Drawer (level-up) — flat, no banner ──────────────────────────── */
+
+.levelup-drawer { background: var(--bg-page) !important; box-shadow: var(--shadow-2) !important; }
+.levelup-drawer-header {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    padding: var(--sp-4) var(--sp-5) !important;
+}
+.levelup-drawer-header::before,
+.levelup-drawer-header::after { content: none !important; display: none !important; }
+
+/* ── 15. d20 FAB + roll history button + whisper FAB — flat circle ──── */
+
+.d20-fab, .roll-history-btn, .whisper-fab {
+    background: var(--bg-sunken) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: var(--shadow-1) !important;
+    transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast) !important;
+}
+.d20-fab:hover, .roll-history-btn:hover, .whisper-fab:hover {
+    background: var(--bg-sunken) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    transform: none !important;
+}
+.d20-fab svg path, .d20-fab svg rect, .d20-fab svg polygon, .d20-fab svg line {
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+.d20-fab svg [fill^="url"] { fill: currentColor !important; }
+.d20-fab svg [stroke^="url"] { stroke: currentColor !important; }
+
+/* ── 16. Spell rank borders — kill the rainbow ────────────────────────── */
+
+.spell-rank-0, .spell-rank-1, .spell-rank-2, .spell-rank-3,
+.spell-rank-4, .spell-rank-5, .spell-rank-6, .spell-rank-7,
+.spell-rank-8, .spell-rank-9, .spell-rank-10 {
+    border-left: 3px solid var(--border-card) !important;
+}
+.spell-entry {
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-sm) !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
+.spell-entry:hover {
+    background: rgba(201, 163, 78, 0.06) !important;
+    border-color: var(--accent) !important;
+}
+.spell-rank-header {
+    font-family: var(--font-display) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    color: var(--text-on-cream-2) !important;
+    border-bottom: 1px solid var(--border-rule) !important;
+    padding-bottom: var(--sp-1) !important;
+    margin-bottom: var(--sp-3) !important;
+}
+
+/* ── 17. Sustain chip / connection pip / overflow menu (new) ─────────── */
+
+.sustain-chip {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+    border-radius: 999px !important;
+    padding: 4px 10px !important;
+    box-shadow: none !important;
+}
+.sustain-chip.active { color: var(--accent) !important; border-color: var(--accent) !important; }
+.sustain-chip-item {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: inherit !important;
+}
+
+/* Action overflow menu — replaces the noisy chip-row */
+.overflow-menu-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark-2);
+    font-family: var(--font-ui);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color var(--t-fast), color var(--t-fast);
+}
+.overflow-menu-btn:hover { border-color: var(--accent); color: var(--accent); }
+.overflow-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 200px;
+    background: var(--bg-card);
+    color: var(--text-on-cream);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-2);
+    padding: var(--sp-1) 0;
+    display: none;
+    z-index: 850;
+}
+.overflow-menu.open { display: block; }
+.overflow-menu a, .overflow-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: var(--sp-2) var(--sp-4);
+    background: transparent;
+    border: none;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: inherit;
+    cursor: pointer;
+    transition: background var(--t-fast);
+    text-decoration: none;
+}
+.overflow-menu a:hover, .overflow-menu button:hover { background: rgba(201, 163, 78, 0.1); color: var(--gilt-500); }
+.overflow-menu .sep {
+    height: 1px;
+    background: var(--border-card);
+    margin: var(--sp-1) 0;
+}
+
+/* ── 18. Tracker / GM tools — minimal nav, parchment cards on dark base */
+
+body.tracker, .layout, .grid-wrap, .tool-strip, .panel {
+    background: var(--bg-page) !important;
+    color: var(--text-on-dark) !important;
+}
+.panel {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-2) !important;
+    padding: var(--sp-5) !important;
+}
+.panel-head, .panel-ttl {
+    font-family: var(--font-display) !important;
+    font-size: 12px !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    color: var(--text-on-cream-2) !important;
+    border-bottom: 1px solid var(--border-rule) !important;
+    padding-bottom: var(--sp-2) !important;
+    margin-bottom: var(--sp-4) !important;
+    background: none !important;
+    background-image: none !important;
+}
+.panel-close {
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-on-cream-3) !important;
+    font-size: 18px !important;
+    cursor: pointer !important;
+}
+.panel-close:hover { color: var(--text-on-cream) !important; }
+
+.tlabel {
+    font-family: var(--font-ui) !important;
+    font-size: 10px !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+    color: var(--text-on-cream-3) !important;
+    margin-bottom: 4px !important;
+    display: block !important;
+}
+
+/* GM Inbox FAB — apply same flat-circle treatment */
+#gm-inbox-fab {
+    background: var(--bg-sunken) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: var(--shadow-1) !important;
+}
+#gm-inbox-fab:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+#gm-inbox {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: var(--shadow-2) !important;
+}
+
+/* ── 19. Mobile & print — minor refinements ───────────────────────────── */
+
+@media (max-width: 600px) {
+    .panel-card { padding: var(--sp-3) !important; }
+    .ss-block { padding: var(--sp-1) var(--sp-2) !important; }
+}
+
+@media print {
+    .panel-card, .parchment-frame {
+        box-shadow: none !important;
+        page-break-inside: avoid;
+    }
+    .roll-toast, .d20-fab, .roll-history-btn, .whisper-fab,
+    #gm-inbox, #gm-inbox-fab,
+    .conn-pip, .theme-toggle, .overflow-menu, .overflow-menu-btn { display: none !important; }
+}
+
+/* ── 20. Final cleanup of legacy decorations ─────────────────────────── */
+
+/* Anything that uses the cyan accent from base.html nav */
+.text-accent-300, .text-accent-200, .text-accent-100 { color: var(--accent) !important; }
+.bg-accent-500, .bg-accent-600 { background: var(--accent) !important; color: var(--ink-950) !important; }
+.border-accent-500, .border-accent-400 { border-color: var(--accent) !important; }
+
+/* Tailwind purple/violet classes scattered through the templates */
+.bg-purple-900\/40, [class*="bg-purple"] {
+    background: rgba(201, 163, 78, 0.08) !important;
+}
+[class*="border-purple"] { border-color: var(--border-card) !important; }
+[class*="text-purple"] { color: var(--text-on-cream-2) !important; }
+[class*="bg-amber-900"], [class*="bg-amber-800"] { background: rgba(201, 163, 78, 0.1) !important; }
+[class*="bg-red-900"], [class*="bg-red-800"] { background: rgba(168, 58, 58, 0.12) !important; }
+[class*="bg-green-900"], [class*="bg-green-800"] { background: rgba(74, 124, 42, 0.1) !important; }
+[class*="bg-blue-900"], [class*="bg-blue-800"] { background: var(--ink-700) !important; }
+
+/* Generic rounded shadow utility classes — kill */
+[class*="shadow-2xl"], [class*="shadow-lg"], [class*="shadow-xl"] {
+    box-shadow: var(--shadow-1) !important;
+}
+
+/* Inline gradient-bg overrides — most common offenders */
+[style*="linear-gradient"] { background-image: none !important; }
+
+/* End of system.css */

@@ -112,8 +112,9 @@
         }
         .drawer-mode .drawer-submit-bar { display: block !important; }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="bg-gray-950 text-gray-200 font-body flex h-screen">
+<body class="font-body flex h-screen">
 
     <!-- Compact stepper (visible only in drawer mode) -->
     <div class="compact-stepper" id="compact-stepper">
@@ -135,7 +136,7 @@
         </div>
         <div class="flex-1 overflow-y-auto py-4 space-y-1" id="nav-container">
             <button onclick="navTo('classfeatures')" id="nav-classfeatures" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
-                <span>1. Class Features</span> <span id="chk-classfeatures" class="text-xs text-green-400 text-lg font-bold leading-none">✓</span>
+                <span>1. Class Features</span> <span id="chk-classfeatures" class="text-xs text-green-400 text-lg font-bold leading-none"></span>
             </button>
             <button onclick="navTo('abilities')" id="nav-abilities" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
                 <span>2. Abilities</span> <span id="chk-abilities" class="text-xs"></span>
@@ -196,7 +197,7 @@
             <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
                 <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
                     <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">The 4 Free Boosts</h3>
-                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-abilities-done">✓ 4/4 Allocated</span>
+                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-abilities-done"> 4/4 Allocated</span>
                 </div>
                 <div id="ui-abilities" class="flex flex-wrap gap-4"></div>
             </div>
@@ -288,7 +289,7 @@
             </div>
 
             <div class="w-full md:w-2/3 bg-gray-900 flex flex-col relative h-1/2 md:h-full">
-                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">✖</button>
+                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">×</button>
                 <div class="p-8 md:p-12 flex-1 overflow-y-auto custom-scrollbar relative" id="mod-preview"></div>
                 <div class="p-6 border-t border-gray-800 bg-gray-950 flex justify-end shrink-0">
                     <button id="btn-lock" class="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg hidden transition-transform transform hover:scale-105" onclick="lockModal()">Lock In Choice</button>
@@ -473,8 +474,8 @@
             };
             
             const iconMap = {
-                'perception': '👁', 'fortitude': '🛡', 'reflex': '⚡', 'will': '🧠',
-                'simple': '⚔️', 'martial': '⚔️', 'advanced': '⚔️', 'unarmed': '👊',
+                'perception': '👁', 'fortitude': '', 'reflex': '', 'will': '🧠',
+                'simple': '️', 'martial': '️', 'advanced': '️', 'unarmed': '👊',
                 'unarmored': '🧥', 'light': '🧥', 'medium': '🧥', 'heavy': '🧥',
                 'class_dc': '🎯', 'spell_attack': '✨', 'spell_dc': '✨'
             };
@@ -556,7 +557,7 @@
                     
                     let btnBorder = isSelected ? 'border-amber-500 bg-amber-900/30' : 'border-gray-600 bg-gray-900 hover:border-amber-500/50 hover:bg-gray-800';
                     let btnText = isSelected ? 'text-amber-400' : 'text-gray-300';
-                    let checkMark = isSelected ? '<span class="text-amber-500 text-lg ml-2">✓</span>' : '';
+                    let checkMark = isSelected ? '<span class="text-amber-500 text-lg ml-2"></span>' : '';
                     
                     // Rank boxes for this save showing the upgrade
                     let boxes = '';
@@ -763,7 +764,7 @@
                 document.getElementById(`fin-btn-${stat}`).classList.add('bg-amber-900/20', 'border-amber-500');
                 document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'bg-amber-500');
                 document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'border-amber-500');
-                document.getElementById(`fin-chk-${stat}`).innerText = "✓";
+                document.getElementById(`fin-chk-${stat}`).innerText = "";
             }
             if(state.free_boosts_selected.length === 4) document.getElementById('msg-abilities-done').classList.remove('hidden');
             else document.getElementById('msg-abilities-done').classList.add('hidden');
@@ -1038,7 +1039,7 @@
                             </div>
                             <div class="flex flex-wrap gap-2" id="ui-new-spells-${idx}-${diff.lvl}">
                                 ${(state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).map(s =>
-                                    `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${esc(s.name)}')" class="text-red-500 ml-1 hidden group-hover:inline">✖</button></div>`
+                                    `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${esc(s.name)}')" class="text-red-500 ml-1 hidden group-hover:inline">×</button></div>`
                                 ).join('')}
                             </div>
                         </div>`;
@@ -1153,7 +1154,7 @@
                 state.retrained_feats.map((rf, i) => `
                     <div class="flex justify-between items-center bg-gray-900 border border-amber-500 p-3 rounded">
                         <div class="text-xs text-gray-300">Dropped <span class="text-red-400 font-bold line-through">${rf.old}</span> → Learned <span class="text-green-400 font-bold">${rf.new.name}</span></div>
-                        <button onclick="cancelRetrain(${i})" class="text-gray-500 hover:text-white">✖</button>
+                        <button onclick="cancelRetrain(${i})" class="text-gray-500 hover:text-white">×</button>
                     </div>
                 `).join('');
             }
@@ -1428,17 +1429,17 @@
             let monkPathNeeded = pcClass === 'monk' && monkPathConfig[targetLevel];
             let monkPathValid = !monkPathNeeded || state.monk_path_choice !== null;
             if (monkPathNeeded) {
-                if (monkPathValid) { document.getElementById('chk-classfeatures').innerText = "✓"; document.getElementById('chk-classfeatures').className = "text-xs text-green-400 text-lg font-bold leading-none"; }
+                if (monkPathValid) { document.getElementById('chk-classfeatures').innerText = ""; document.getElementById('chk-classfeatures').className = "text-xs text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-classfeatures').innerText = "!"; document.getElementById('chk-classfeatures').className = "text-red-500 font-bold"; }
             }
             
             if(reqs.ability_boosts) {
-                if(state.free_boosts_selected.length === 4) { document.getElementById('chk-abilities').innerText = "✓"; document.getElementById('chk-abilities').className = "text-green-400 text-lg font-bold leading-none"; }
+                if(state.free_boosts_selected.length === 4) { document.getElementById('chk-abilities').innerText = ""; document.getElementById('chk-abilities').className = "text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-abilities').innerText = "!"; document.getElementById('chk-abilities').className = "text-red-500 font-bold"; }
             }
             if(reqs.skill_increase) {
                 let max = reqs.skill_increase + state.retro_int_skills;
-                if(state.skill_increases_selected.length === max) { document.getElementById('chk-skills').innerText = "✓"; document.getElementById('chk-skills').className = "text-green-400 text-lg font-bold leading-none"; }
+                if(state.skill_increases_selected.length === max) { document.getElementById('chk-skills').innerText = ""; document.getElementById('chk-skills').className = "text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-skills').innerText = "!"; document.getElementById('chk-skills').className = "text-red-500 font-bold"; }
             }
 
@@ -1452,7 +1453,7 @@
                 }
             });
             if(fValid && (reqs.ancestry_feat || reqs.class_feat || reqs.general_feat || reqs.skill_feat)) { 
-                document.getElementById('chk-feats').innerText = "✓"; document.getElementById('chk-feats').className = "text-green-400 text-lg font-bold leading-none"; 
+                document.getElementById('chk-feats').innerText = ""; document.getElementById('chk-feats').className = "text-green-400 text-lg font-bold leading-none"; 
             } else if (!fValid) { document.getElementById('chk-feats').innerText = "!"; document.getElementById('chk-feats').className = "text-red-500 font-bold"; }
 
             let mValid = true;
@@ -1480,7 +1481,7 @@
             });
             
             if(state.spellCasters.length > 0) {
-                if(mValid) { document.getElementById('chk-magic').innerText = "✓"; document.getElementById('chk-magic').className = "text-green-400 text-lg font-bold leading-none"; }
+                if(mValid) { document.getElementById('chk-magic').innerText = ""; document.getElementById('chk-magic').className = "text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-magic').innerText = "!"; document.getElementById('chk-magic').className = "text-red-500 font-bold"; }
             }
 
@@ -1496,7 +1497,7 @@
                 btnF.disabled = false; btnF.innerText = "Lock In Level";
                 btnF.classList.remove('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
                 btnF.classList.add('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-lg', 'shadow-red-900/50');
-                document.getElementById('chk-review').innerText = "✓"; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none";
+                document.getElementById('chk-review').innerText = ""; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none";
             } else {
                 btnF.disabled = true; btnF.innerText = "Incomplete Form";
                 btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');

@@ -42,8 +42,9 @@
         h2, h3, h4, label { font-family: 'Cinzel', serif; }
         input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="bg-gray-950 text-gray-200 font-body flex h-screen">
+<body class="font-body flex h-screen">
 
     <div class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
         <div class="p-6 border-b border-gray-800">
@@ -212,7 +213,7 @@
             <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
                 <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
                     <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">The 4 Free Boosts</h3>
-                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-free-boosts-done">✓ All Allocated</span>
+                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-free-boosts-done"> All Allocated</span>
                 </div>
                 <div id="ui-free-boosts" class="flex flex-wrap gap-4"></div>
             </div>
@@ -373,7 +374,7 @@
             </div>
 
             <div class="w-full md:w-2/3 bg-gray-900 flex flex-col relative h-1/2 md:h-full">
-                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">✖</button>
+                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">×</button>
                 <div class="p-8 md:p-12 flex-1 overflow-y-auto custom-scrollbar relative" id="mod-preview"></div>
                 <div class="p-6 border-t border-gray-800 bg-gray-950 flex justify-end shrink-0">
                     <button id="btn-lock" class="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg hidden transition-transform transform hover:scale-105" onclick="lockModal()">Lock In Choice</button>
@@ -1088,8 +1089,8 @@
             const ui0 = document.getElementById('ui-spell-list-0');
             const ui1 = document.getElementById('ui-spell-list-1');
             
-            let html0 = state.spells.filter(s=>s.level===0).map(s => `<div class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-bold text-gray-300 flex justify-between items-center group w-full">${s.name}<button onclick="removeSpell('${s.name.replace("'","\\'")}')" class="ml-2 text-gray-600 hover:text-red-500">✖</button></div>`).join('');
-            let html1 = state.spells.filter(s=>s.level===1).map(s => `<div class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-bold text-gray-300 flex justify-between items-center group w-full">${s.name}<button onclick="removeSpell('${s.name.replace("'","\\'")}')" class="ml-2 text-gray-600 hover:text-red-500">✖</button></div>`).join('');
+            let html0 = state.spells.filter(s=>s.level===0).map(s => `<div class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-bold text-gray-300 flex justify-between items-center group w-full">${s.name}<button onclick="removeSpell('${s.name.replace("'","\\'")}')" class="ml-2 text-gray-600 hover:text-red-500">×</button></div>`).join('');
+            let html1 = state.spells.filter(s=>s.level===1).map(s => `<div class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-bold text-gray-300 flex justify-between items-center group w-full">${s.name}<button onclick="removeSpell('${s.name.replace("'","\\'")}')" class="ml-2 text-gray-600 hover:text-red-500">×</button></div>`).join('');
             
             const cData = bData.classes[state.cls] || { starting_spells: { cantrips: 0, lvl1: 0 } };
             let cCount = state.spells.filter(s=>s.level===0).length;
@@ -1143,7 +1144,7 @@
                 document.getElementById(`fin-btn-${stat}`).classList.add('bg-amber-900/20', 'border-amber-500');
                 document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'bg-amber-500');
                 document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'border-amber-500');
-                document.getElementById(`fin-chk-${stat}`).innerHTML = `<span class="text-black text-xs font-bold">✓</span>`;
+                document.getElementById(`fin-chk-${stat}`).innerHTML = `<span class="text-black text-xs font-bold"></span>`;
             }
             if(state.freeBoosts.length === 4) document.getElementById('msg-free-boosts-done').classList.remove('hidden');
             else document.getElementById('msg-free-boosts-done').classList.add('hidden');
@@ -1232,11 +1233,11 @@
             if (state.bgLores.length > 0) {
                 bgHtml += state.bgLores.map(l => {
                     let loreName = l.replace('lore: ', '').replace('lore:', '').trim();
-                    return `<span class="inline-flex items-center bg-green-900/30 border border-green-800/50 text-green-400 px-3 py-1.5 rounded text-xs font-bold mr-2 mb-1">✓ ${loreName.charAt(0).toUpperCase() + loreName.slice(1)} Lore <span class="text-green-600 ml-1">(Background)</span></span>`;
+                    return `<span class="inline-flex items-center bg-green-900/30 border border-green-800/50 text-green-400 px-3 py-1.5 rounded text-xs font-bold mr-2 mb-1"> ${loreName.charAt(0).toUpperCase() + loreName.slice(1)} Lore <span class="text-green-600 ml-1">(Background)</span></span>`;
                 }).join('');
             }
             if (state.bgNeedsLore && state.customLores.length === 0) {
-                bgHtml += `<span class="inline-flex items-center bg-amber-900/30 border border-amber-700/50 text-amber-400 px-3 py-1.5 rounded text-xs font-bold mr-2 mb-1">⚠ Your background grants a Lore of your choice — add one below</span>`;
+                bgHtml += `<span class="inline-flex items-center bg-amber-900/30 border border-amber-700/50 text-amber-400 px-3 py-1.5 rounded text-xs font-bold mr-2 mb-1"> Your background grants a Lore of your choice — add one below</span>`;
             }
             bgLoreEl.innerHTML = bgHtml;
             
@@ -1245,7 +1246,7 @@
             customEl.innerHTML = state.customLores.map((l, i) => `
                 <span class="inline-flex items-center bg-gray-900 border border-gray-700 text-gray-300 px-3 py-1.5 rounded text-xs font-bold">
                     ${l} Lore
-                    <button onclick="removeCustomLore(${i})" class="ml-2 text-gray-600 hover:text-red-400 transition-colors">✕</button>
+                    <button onclick="removeCustomLore(${i})" class="ml-2 text-gray-600 hover:text-red-400 transition-colors">×</button>
                 </span>
             `).join('');
         }
@@ -1304,7 +1305,7 @@
             });
             // Custom languages
             state.customLanguages.forEach((lang, idx) => {
-                html += `<div class="px-3 py-2 rounded border bg-purple-900/30 border-purple-800 text-purple-300 text-xs font-bold cursor-pointer group" onclick="removeCustomLanguage(${idx})">${lang} <span class="text-red-500 hidden group-hover:inline ml-1">✖</span></div>`;
+                html += `<div class="px-3 py-2 rounded border bg-purple-900/30 border-purple-800 text-purple-300 text-xs font-bold cursor-pointer group" onclick="removeCustomLanguage(${idx})">${lang} <span class="text-red-500 hidden group-hover:inline ml-1">×</span></div>`;
             });
             container.innerHTML = html;
         }
@@ -1349,17 +1350,17 @@
         function runValidation() {
             state.name = document.getElementById('inp-name').value;
             
-            if(state.name) { document.getElementById('chk-start').innerText = "✓"; document.getElementById('chk-start').className = "text-green-400 text-xl font-bold leading-none"; }
+            if(state.name) { document.getElementById('chk-start').innerText = ""; document.getElementById('chk-start').className = "text-green-400 text-xl font-bold leading-none"; }
             else { document.getElementById('chk-start').innerText = "!"; document.getElementById('chk-start').className = "text-red-500 font-bold"; }
 
             let safeBoosts = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].boosts : {};
             let aReq = document.getElementById('sel-anc-method').value === 'alternate' ? 2 : parseDeepBoosts(safeBoosts).free + parseDeepBoosts(safeBoosts).fixed.length;
             if(state.ancestry && state.heritage && state.ancFeat && (!aReq || state.ancBoosts.length >= aReq)) { 
-                document.getElementById('chk-ancestry').innerText = "✓"; document.getElementById('chk-ancestry').className = "text-green-400 text-xl font-bold leading-none"; 
+                document.getElementById('chk-ancestry').innerText = ""; document.getElementById('chk-ancestry').className = "text-green-400 text-xl font-bold leading-none"; 
             } else { document.getElementById('chk-ancestry').innerText = "!"; document.getElementById('chk-ancestry').className = "text-red-500 font-bold"; }
 
             if(state.background && state.bgBoosts.length === 2 && state.bgBoosts[0] && state.bgBoosts[1]) {
-                document.getElementById('chk-background').innerText = "✓"; document.getElementById('chk-background').className = "text-green-400 text-xl font-bold leading-none"; 
+                document.getElementById('chk-background').innerText = ""; document.getElementById('chk-background').className = "text-green-400 text-xl font-bold leading-none"; 
             } else { document.getElementById('chk-background').innerText = "!"; document.getElementById('chk-background').className = "text-red-500 font-bold"; }
 
             let cValid = false;
@@ -1375,10 +1376,10 @@
                 
                 cValid = subValid && featValid;
             }
-            if(cValid) { document.getElementById('chk-class').innerText = "✓"; document.getElementById('chk-class').className = "text-green-400 text-xl font-bold leading-none"; }
+            if(cValid) { document.getElementById('chk-class').innerText = ""; document.getElementById('chk-class').className = "text-green-400 text-xl font-bold leading-none"; }
             else { document.getElementById('chk-class').innerText = "!"; document.getElementById('chk-class').className = "text-red-500 font-bold"; }
 
-            if(state.freeBoosts.length === 4) { document.getElementById('chk-abilities').innerText = "✓"; document.getElementById('chk-abilities').className = "text-green-400 text-xl font-bold leading-none"; }
+            if(state.freeBoosts.length === 4) { document.getElementById('chk-abilities').innerText = ""; document.getElementById('chk-abilities').className = "text-green-400 text-xl font-bold leading-none"; }
             else { document.getElementById('chk-abilities').innerText = "!"; document.getElementById('chk-abilities').className = "text-red-500 font-bold"; }
 
             let skValid = false; let spValid = true; let extrasValid = true;
@@ -1421,11 +1422,11 @@
                 if ((bgDesc.includes("choose") || bgDesc.includes("select") || bgDesc.includes("scarred") || bgDesc.includes("choice")) && !state.guided.bg_choice) extrasValid = false;
             }
             
-            if(skValid && spValid && extrasValid && state.cls) { document.getElementById('chk-skills').innerText = "✓"; document.getElementById('chk-skills').className = "text-green-400 text-xl font-bold leading-none"; }
+            if(skValid && spValid && extrasValid && state.cls) { document.getElementById('chk-skills').innerText = ""; document.getElementById('chk-skills').className = "text-green-400 text-xl font-bold leading-none"; }
             else { document.getElementById('chk-skills').innerText = "!"; document.getElementById('chk-skills').className = "text-red-500 font-bold"; }
 
             const btnF = document.getElementById('btn-finish');
-            if(state.name && document.getElementById('chk-ancestry').innerText==="✓" && document.getElementById('chk-background').innerText==="✓" && document.getElementById('chk-class').innerText==="✓" && state.freeBoosts.length===4 && skValid && spValid && extrasValid) {
+            if(state.name && document.getElementById('chk-ancestry').innerText==="" && document.getElementById('chk-background').innerText==="" && document.getElementById('chk-class').innerText==="" && state.freeBoosts.length===4 && skValid && spValid && extrasValid) {
                 btnF.disabled = false; btnF.innerText = "Forge Character";
                 btnF.classList.remove('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
                 btnF.classList.add('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');

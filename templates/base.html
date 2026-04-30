@@ -74,6 +74,10 @@
         .toast-animate { animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
         {% block extra_head %}{% endblock %}
     </style>
+    <!-- Design system — loaded LAST in cascade. Single source of truth
+         for the two-color brand (gilt + ruby), neutral grays, and
+         strict typography roles. New code consumes classes from here. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -246,7 +250,7 @@
                         try {
                             const r = await fetch(`/api/adjust_hp/${iid}`, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: fd});
                             if (r.ok) {
-                                row.innerHTML = `<span class="text-[10px]" style="color:#86efac;">✓ Applied ${amount}${dtype!=='untyped'?' '+dtype:''}</span>`;
+                                row.innerHTML = `<span class="text-[10px]" style="color:#86efac;"> Applied ${amount}${dtype!=='untyped'?' '+dtype:''}</span>`;
                             } else {
                                 row.innerHTML = '<span class="text-[10px]" style="color:#fca5a5;">Apply failed</span>';
                             }
