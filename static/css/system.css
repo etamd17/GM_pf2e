@@ -1193,4 +1193,276 @@ html[data-theme="light"] .panel-card {
     border-bottom: 1px solid var(--border-strong) !important;
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   25. Per-template polish — tracker / GM screen / encounter builder /
+       party view / generator / level-up drawer.
+   These templates each define their own --t-* tokens and use heavy
+   gradient stacks. Re-point the tokens and flatten the gradients so
+   the brand contract holds across every screen.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ─── tracker.html + gmscreen.html share the .trk / --t-* namespace ─── */
+.trk, body .trk, body.tracker, html .trk {
+    --t-bg-base:    var(--bg-page) !important;
+    --t-bg-surface: var(--bg-card) !important;
+    --t-bg-raised:  var(--bg-card-2) !important;
+    --t-bg-higher:  var(--bg-card) !important;
+    --t-red:        var(--ruby-300) !important;
+    --t-red-b:      var(--ruby-200) !important;
+    --t-red-d:      var(--ruby-400) !important;
+    --t-gold:       var(--gilt-300) !important;
+    --t-gold-b:     var(--gilt-200) !important;
+    --t-teal:       var(--text-on-dark-2) !important;   /* deprecated hue */
+    --t-purple:     var(--gilt-300) !important;         /* deprecated hue */
+    --t-blue:       var(--text-on-dark-2) !important;   /* deprecated hue */
+    --t-green:      var(--success) !important;
+    --t-t1:         var(--text-on-dark) !important;
+    --t-t2:         var(--text-on-dark-2) !important;
+    --t-t3:         var(--text-on-dark-3) !important;
+    --t-t4:         var(--text-on-dark-3) !important;
+    --t-border:     var(--border-strong) !important;
+    --t-row-active: rgba(201, 163, 78, 0.10) !important;
+    background-image: none !important;            /* kill triple radial-gradient page tint */
+    color: var(--text-on-dark) !important;
+}
+
+/* Hero bar — flatten the body and kill the rainbow ribbon. */
+.trk .hero-bar {
+    background: var(--bg-sunken) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+    border-radius: var(--r-md) !important;
+}
+.trk .hero-bar::before, .trk .hero-bar::after {
+    content: none !important;
+    background: none !important;
+    display: none !important;
+}
+
+/* Round + turn blocks — flat. */
+.trk .round-block, .trk .turn-now { background: transparent !important; box-shadow: none !important; }
+.trk .round-block .v {
+    background: none !important;
+    background-image: none !important;
+    color: var(--accent) !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    -webkit-text-fill-color: var(--accent) !important;
+}
+.trk .turn-now .v::before { content: '' !important; }
+
+/* Next / prev buttons — flat brand */
+.trk .next-btn, .trk .prev-btn {
+    background: transparent !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    border-radius: var(--r-sm) !important;
+    box-shadow: none !important;
+}
+.trk .next-btn { background: var(--ruby-400) !important; border-color: var(--ruby-400) !important; color: #fff !important; }
+.trk .next-btn:hover { background: var(--ruby-300) !important; border-color: var(--ruby-300) !important; }
+.trk .prev-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
+
+/* Combatant card grid */
+.trk .combatant, .trk .grid-wrap, .trk .ts-search {
+    background: var(--bg-sunken) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+    color: var(--text-on-dark) !important;
+}
+.trk .combatant.active, .trk .row-active {
+    background: var(--t-row-active) !important;
+    border-color: var(--accent) !important;
+}
+
+/* Tracker labels & section heads */
+.trk .name { font-family: var(--font-display) !important; color: var(--text-on-dark) !important; }
+.trk .meta { color: var(--text-on-dark-3) !important; }
+.trk .lbl, .trk .l { color: var(--text-on-dark-3) !important; letter-spacing: 0.14em !important; font-family: var(--font-ui) !important; }
+
+/* Tool strip + log */
+.trk .tool-strip, .trk .log-panel {
+    background: var(--bg-sunken) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+}
+
+/* Buttons inside tracker stay neutral on the dark page */
+.trk button, .trk .ts-btn, .trk .hb-btn, .trk .act-btn {
+    background: transparent !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: none !important;
+    border-radius: var(--r-sm) !important;
+    font-family: var(--font-ui) !important;
+}
+.trk button:hover, .trk .ts-btn:hover, .trk .hb-btn:hover, .trk .act-btn:hover {
+    background: rgba(201, 163, 78, 0.08) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+.trk button.primary, .trk .ts-btn.primary,
+.trk button.gold, .trk .hb-btn.gold {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+}
+.trk button.primary:hover, .trk .ts-btn.primary:hover,
+.trk button.gold:hover, .trk .hb-btn.gold:hover {
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+}
+.trk button.danger, .trk .ts-btn.danger, .trk .hb-btn.danger {
+    background: transparent !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+}
+.trk button.danger:hover, .trk .ts-btn.danger:hover, .trk .hb-btn.danger:hover {
+    background: rgba(168, 58, 58, 0.1) !important;
+    color: var(--ruby-200) !important;
+    border-color: var(--ruby-200) !important;
+}
+
+/* Tracker rainbow / triple-color ribbons in CSS pseudo elements */
+.trk *::before,
+.trk *::after {
+    background-image: none !important;
+}
+/* But preserve action-pip / hero-pip dots which use ::before for the glyph */
+.action-pip::before, .hero-pip::before, .focus-pip::before { /* leave content rules alone */ }
+
+/* ─── gmscreen.html — same --t-* override applies via .trk path ─── */
+/* The gmscreen page wraps in similar --t-* token defs; reuse the .trk
+   selector AND target the body element directly so rules cascade. */
+body[class*="gmscreen"], body[data-page="gmscreen"], .gmscreen {
+    --t-bg-surface: var(--bg-card) !important;
+    --t-bg-raised: var(--bg-card-2) !important;
+    --t-border: var(--border-strong) !important;
+    --t-gold: var(--gilt-300) !important;
+    background: var(--bg-page) !important;
+    background-image: none !important;
+}
+.masonry-item, .masonry-item th, .masonry-item td {
+    background: transparent !important;
+    color: var(--text-on-cream) !important;
+}
+.masonry-item th { color: var(--gilt-500) !important; font-family: var(--font-display) !important; }
+
+/* ─── party_view.html — body gradient + cards ─── */
+body.party-view, .party-view-body,
+body[style*="linear-gradient"] {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+}
+
+/* ─── encounter_builder.html — extends base, mostly inherits.
+   Toast and small inline labels still need the brand colors. ─── */
+[id^="encounter-toast"], .eb-toast {
+    font-family: var(--font-ui) !important;
+}
+
+/* ─── generator.html — minimal, extends base. Nothing template-specific.
+   The base + system.css cascade handles it. ─── */
+
+/* ─── player_levelup.html — gradient choice cards, rainbow nav ─── */
+.nav-item {
+    background: transparent !important;
+    background-image: none !important;
+    color: var(--text-on-dark-2) !important;
+    border-left: 3px solid transparent !important;
+    border-radius: 0 !important;
+    padding: 8px 16px !important;
+    transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast) !important;
+}
+.nav-item:hover {
+    background: rgba(201, 163, 78, 0.06) !important;
+    color: var(--text-on-dark) !important;
+    border-left-color: var(--ink-500) !important;
+}
+.nav-item.active {
+    background: rgba(124, 34, 34, 0.10) !important;
+    background-image: none !important;
+    border-left: 3px solid var(--danger) !important;
+    color: var(--ruby-200) !important;
+}
+
+.choice-card {
+    background: var(--bg-card) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--text-on-cream) !important;
+    box-shadow: none !important;
+    transition: border-color var(--t-fast), background var(--t-fast) !important;
+    transform: none !important;
+}
+.choice-card:hover {
+    background: var(--bg-card-2) !important;
+    background-image: none !important;
+    border-color: var(--accent) !important;
+    transform: none !important;
+    box-shadow: var(--shadow-1) !important;
+}
+.choice-card.selected {
+    border-color: var(--danger) !important;
+    background: var(--bg-card) !important;
+}
+.choice-card .title { font-family: var(--font-display) !important; color: var(--ruby-400) !important; }
+.choice-card .subtitle { font-family: var(--font-display) !important; color: var(--text-on-cream-3) !important; }
+
+.stat-pill {
+    background: var(--bg-card-2) !important;
+    border: 1px solid var(--border-card) !important;
+    color: var(--text-on-cream) !important;
+    border-radius: var(--r-sm) !important;
+    transition: border-color var(--t-fast), background var(--t-fast) !important;
+}
+.stat-pill:hover { border-color: var(--accent) !important; color: var(--gilt-500) !important; }
+.stat-pill.selected, .stat-pill.active { background: var(--accent) !important; color: var(--ink-950) !important; border-color: var(--accent) !important; }
+
+/* Levelup page page chrome */
+body.levelup, .levelup-page {
+    background: var(--bg-page) !important;
+    color: var(--text-on-dark) !important;
+}
+.levelup-drawer-header,
+.drawer-submit-bar {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border-color: var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+}
+.drawer-submit-bar button { /* primary action stands out */ }
+
+/* Step counter / step indicators */
+.step-indicator, .step-circle {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+    font-family: var(--font-display) !important;
+}
+.step-indicator.active, .step-circle.active {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+}
+.step-indicator.complete, .step-circle.complete {
+    background: var(--ruby-400) !important;
+    color: var(--ink-50) !important;
+    border-color: var(--ruby-400) !important;
+}
+
+/* Nuclear gradient kill — anywhere not handled above. Inline-styled
+   linear-gradient backgrounds on legacy elements get flattened to a
+   solid surface. Using attribute selectors so we catch the worst. */
+[style*="linear-gradient"]:not(.hp-gauge-fill):not(.hp-gauge):not(.hp-gauge-bar) {
+    background-image: none !important;
+}
+[style*="radial-gradient"] { background-image: none !important; }
+
 /* End of system.css */
