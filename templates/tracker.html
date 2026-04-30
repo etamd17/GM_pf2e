@@ -1432,6 +1432,40 @@ function renderActivePanel() {
         html += `</div>`;
     }
 
+    // PC Spells — listed by caster and rank so the GM can see what the
+    // PC has available without flipping to their full sheet. Cantrips
+    // (rank 0) and ranks with at least one spell are shown; empty
+    // ranks are skipped. Slots remaining shown if applicable.
+    if (c.is_pc && Array.isArray(c.spell_casters) && c.spell_casters.length) {
+        const headerExtras = [];
+        if (c.spell_attack)  headerExtras.push(`Atk +${c.spell_attack}`);
+        if (c.spell_dc)      headerExtras.push(`DC ${c.spell_dc}`);
+        if (c.focus_pool)    headerExtras.push(`Focus ${c.focus_current ?? c.focus_pool}/${c.focus_pool}`);
+        const extra = headerExtras.length ? ` <span style="font-size:10px;font-weight:400;letter-spacing:.4px;color:var(--t-t3);">(${headerExtras.join(' · ')})</span>` : '';
+        html += `<div class="section-h">Spells${extra}</div>`;
+        c.spell_casters.forEach(sc => {
+            const tradition = sc.tradition ? sc.tradition.charAt(0).toUpperCase() + sc.tradition.slice(1) : '';
+            const ctype     = sc.type ? sc.type : '';
+            const subtitle  = [tradition, ctype].filter(Boolean).join(' · ');
+            html += `<div class="abl-row">
+                <div class="abl-nm">${sc.name || 'Spellcaster'}${subtitle ? ` <span style="font-size:10px;font-weight:400;color:var(--t-t3);letter-spacing:.4px;">— ${subtitle}</span>` : ''}</div>`;
+            (sc.levels || []).forEach(lvl => {
+                const spells = (lvl.spells || []).map(s => s.name).filter(Boolean);
+                if (!spells.length && !lvl.slots) return;
+                const slotTag = (lvl.slots > 0 && lvl.level > 0)
+                    ? `<span style="color:var(--t-gold);font-size:10px;font-weight:400;letter-spacing:.4px;">[${lvl.slots} slot${lvl.slots===1?'':'s'}]</span> `
+                    : '';
+                if (spells.length) {
+                    html += `<div class="abl-dsc" style="margin-top:3px;">
+                        <strong style="color:var(--t-t1);">${lvl.label || ('Rank ' + lvl.level)}:</strong>
+                        ${slotTag}${spells.join(', ')}
+                    </div>`;
+                }
+            });
+            html += `</div>`;
+        });
+    }
+
     // End-of-turn reminder
     const reminders = [];
     if (c.persistent_damage) reminders.push(`Take <b>${c.persistent_damage}</b> persistent damage, then DC 15 flat check.`);

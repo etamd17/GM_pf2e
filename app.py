@@ -3981,6 +3981,35 @@ def _get_tracker_state():
             if c.is_pc:
                 entry['strikes'] = [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(c, 'attacks', [])]
                 entry['feats'] = [{'name': f['name'], 'desc': f.get('desc', '')} for f in getattr(c, 'feats', [])]
+                # Spell casters: name, tradition, type, and per-rank known
+                # spell list. The active-combatant card on the tracker uses
+                # this so the GM can see the PC's spell options at a glance.
+                # Trim the levels payload to just what the card needs (name +
+                # action cost) to keep the tracker_state response lean.
+                _sc = []
+                for sc in getattr(c, 'spell_casters', []) or []:
+                    _levels = []
+                    for lvl in (sc.get('levels') or []):
+                        _spells = [{'name': sp.get('name', ''), 'actions': sp.get('actions', '')}
+                                   for sp in (lvl.get('spells') or []) if sp.get('name')]
+                        if _spells or lvl.get('slots'):
+                            _levels.append({
+                                'level': lvl.get('level'),
+                                'label': lvl.get('label', f"Rank {lvl.get('level','?')}"),
+                                'slots': lvl.get('slots', 0),
+                                'spells': _spells,
+                            })
+                    _sc.append({
+                        'name': sc.get('name', ''),
+                        'tradition': sc.get('tradition', ''),
+                        'type': sc.get('type', ''),
+                        'levels': _levels,
+                    })
+                entry['spell_casters'] = _sc
+                entry['spell_attack'] = getattr(c, 'spell_attack', 0)
+                entry['spell_dc'] = getattr(c, 'spell_dc', 0)
+                entry['focus_pool'] = getattr(c, 'focus_max', 0)
+                entry['focus_current'] = getattr(c, 'current_focus', 0)
             else:
                 entry['strikes'] = [{'name': s['name'], 'hit': f"+{s['bonus']}" if s['bonus'] >= 0 else str(s['bonus']), 'damage': s['damage']} for s in getattr(c, 'strikes', [])]
                 entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
