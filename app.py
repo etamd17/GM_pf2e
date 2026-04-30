@@ -440,6 +440,51 @@ _sse_last_cleanup = time.time()
 _SSE_MAX_SUBSCRIBERS = 50  # Hard cap to prevent memory leaks
 _SSE_STALE_TIMEOUT = 120  # Seconds before a non-consuming queue is considered stale
 
+# SSE keepalive thread — fires a real `keepalive` event every 25s so:
+#   1. Edge proxies (Railway, Cloudflare, etc.) see bytes within their
+#      idle-timeout window and don't drop the long-lived connection.
+#   2. Player sheets reset their `_sheetMarkSseAlive` heartbeat marker,
+#      so the connection-status pip in the upper-left correctly reads
+#      "live" during an idle round of roleplay.
+# The per-connection comment heartbeat already there (`: heartbeat`)
+# keeps bytes flowing but doesn't fire JS event listeners, so the
+# client's freshness watchdog wouldn't reset without this.
+_SSE_KEEPALIVE_SECS = 25
+_sse_keepalive_started = False
+_sse_keepalive_lock = threading.Lock()
+def _sse_keepalive_loop():
+    while True:
+        try:
+            time.sleep(_SSE_KEEPALIVE_SECS)
+            with _sse_lock:
+                n = len(_sse_subscribers)
+            if n > 0:
+                # Bypass the player_filter logic — this is identical for
+                # GM and players, no PII risk.
+                msg = f"event: keepalive\ndata: {{\"t\":{int(time.time())}}}\n\n"
+                with _sse_lock:
+                    dead = []
+                    for entry in _sse_subscribers:
+                        try:
+                            entry[0].put_nowait(msg)
+                        except queue.Full:
+                            dead.append(entry)
+                    for e in dead:
+                        if e in _sse_subscribers:
+                            _sse_subscribers.remove(e)
+        except Exception as e:
+            print(f"[SSE keepalive] {e}")
+
+def _ensure_sse_keepalive():
+    global _sse_keepalive_started
+    with _sse_keepalive_lock:
+        if _sse_keepalive_started:
+            return
+        t = threading.Thread(target=_sse_keepalive_loop, name='sse-keepalive', daemon=True)
+        t.start()
+        _sse_keepalive_started = True
+
+
 def sse_broadcast(event_type, data, *, player_filter=None):
     """Push an event to all connected SSE clients.
 
@@ -6412,6 +6457,11 @@ def gm_party_state():
 @app.route('/api/events')
 def sse_stream():
     """Server-Sent Events stream for real-time updates to player sheets."""
+    # Lazily start the keepalive broadcaster on the first SSE connection.
+    # Doing it here (instead of at module import) means the thread only
+    # exists when actually needed and avoids subtle issues with gunicorn
+    # forking workers — the thread starts inside the worker that owns it.
+    _ensure_sse_keepalive()
     # Resolve GM status from the live Flask session at connect time. SSE
     # connections are long-lived; the session state captured here is what
     # sse_broadcast() uses to decide whether this subscriber gets raw GM

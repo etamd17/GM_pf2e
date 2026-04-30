@@ -5657,6 +5657,11 @@
             const evtSource = new EventSource('/api/events');
             evtSource.onopen = _sheetMarkSseAlive;
             evtSource.addEventListener('connected', _sheetMarkSseAlive);
+            // Server emits a real `keepalive` event every ~25s so edge
+            // proxies don't drop the long-lived connection AND so the
+            // client's freshness watchdog (the upper-left conn pip) sees
+            // traffic on an idle round.
+            evtSource.addEventListener('keepalive', _sheetMarkSseAlive);
 
             evtSource.addEventListener('pc_update', (e) => {
                 _sheetMarkSseAlive();
