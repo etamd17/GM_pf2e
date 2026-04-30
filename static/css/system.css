@@ -14,7 +14,16 @@
 
 /* ── 1. Tokens ─────────────────────────────────────────────────────── */
 
-:root, [data-theme="dark"] {
+/* Force the new dark-base + parchment-card surface for EVERY data-theme
+   value. Older builds wrote "parchment" or "hi-contrast" or "light" into
+   localStorage and those legacy themes would otherwise leak through and
+   break readability. The brand contract is one design now. */
+:root,
+[data-theme="dark"],
+[data-theme="light"],
+[data-theme="parchment"],
+[data-theme="hi-contrast"],
+[data-theme="default"] {
     /* Brand */
     --gilt-50:  #faf2dd;
     --gilt-100: #f0d88a;
@@ -113,7 +122,13 @@
 
 /* ── 2. Override hostile legacy tokens from base.html / player_sheet  ─ */
 
-:root, [data-theme="dark"], html, body {
+:root,
+[data-theme="dark"],
+[data-theme="light"],
+[data-theme="parchment"],
+[data-theme="hi-contrast"],
+[data-theme="default"],
+html, body {
     /* Many existing rules read these names. Re-point them so legacy
        inline `var(--gilt)` / `var(--bg-surface)` use the new ramp. */
     --gilt:           var(--gilt-300);
@@ -945,5 +960,90 @@ body.tracker, .layout, .grid-wrap, .tool-strip, .panel {
 
 /* Inline gradient-bg overrides — most common offenders */
 [style*="linear-gradient"] { background-image: none !important; }
+
+/* ── 21. Sub-card legibility on parchment ─────────────────────────────
+   Various legacy components have their own dark-tinted backgrounds
+   that survive inside our new cream cards. Force them to use a light
+   parchment-2 background with dark text so they read on the card. */
+
+.panel-card .ds-surface-sunken,
+.panel-card .skill-row,
+.panel-card .bg-gray-950,
+.panel-card .bg-gray-900,
+.panel-card .bg-gray-800,
+.panel-card [style*="background:var(--bg-base)"],
+.panel-card [style*="background:var(--bg-input)"],
+.panel-card [style*="background:var(--bg-raised)"],
+.panel-card [style*="background:#0"],
+.panel-card [style*="background:#1"] {
+    background: var(--bg-card-2) !important;
+    background-image: none !important;
+    color: var(--text-on-cream) !important;
+    border-color: var(--border-card) !important;
+}
+
+.panel-card .ds-label,
+.panel-card .skill-row .ds-label,
+.panel-card .text-amber-400,
+.panel-card .text-amber-500 {
+    color: var(--gilt-500) !important;
+}
+
+/* Tighter tab visibility on the dark page background. */
+.tab-btn {
+    color: var(--text-on-dark-2) !important;
+    font-weight: 600 !important;
+}
+.tab-btn:hover {
+    color: var(--text-on-dark) !important;
+    background: rgba(201, 163, 78, 0.06) !important;
+}
+.tab-btn.active {
+    color: var(--accent) !important;
+    border-bottom-color: var(--accent) !important;
+}
+
+/* Roman numerals in front of tab labels (I, II, III, etc.) — make them
+   the same color as the tab text so they don't read as separate. */
+.tab-btn::first-line { color: inherit !important; }
+
+/* ── 22. Click-target safety belt ─────────────────────────────────────
+   The wave-2 player_sheet introduced several full-screen-positioned
+   elements that initialize closed but rely on JS classes to stay that
+   way. If JS errors at init we don't want them to swallow clicks.
+   These selectors make sure the closed-state never blocks anything. */
+#whisper-panel:not(.open),
+#roll-history-panel:not(.open),
+#player-overflow-menu:not(.open),
+.overflow-menu:not(.open),
+#pf2e-glossary-tooltip:not(.show) {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* Modals that use Tailwind .hidden — make absolutely sure they don't
+   intercept events while hidden. (Tailwind's `.hidden` is display:none
+   but a !important override on a parent could leak.) */
+.fixed.inset-0.hidden,
+[class*="fixed"][class*="inset-0"][class*="hidden"] {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* ── 23. Force dark page chrome regardless of legacy theme attrs ───── */
+
+html, body { background-color: var(--bg-page) !important; }
+html[data-theme="parchment"] body,
+html[data-theme="hi-contrast"] body,
+html[data-theme="light"] body {
+    background-color: var(--bg-page) !important;
+    color: var(--text-on-dark) !important;
+}
+html[data-theme="parchment"] .panel-card,
+html[data-theme="hi-contrast"] .panel-card,
+html[data-theme="light"] .panel-card {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+}
 
 /* End of system.css */

@@ -2,10 +2,13 @@
 <html lang="en">
 <head>
     <script>
-        // Apply saved theme immediately to prevent flash of wrong theme
+        // Single design system — collapse any legacy theme value to "dark"
+        // so the parchment / hi-contrast / light variants from earlier
+        // builds can't beat the new tokens at the attribute level.
         (function() {
-            var t = localStorage.getItem('pf2e_theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.setAttribute('data-theme', 'dark');
+            try { localStorage.setItem('pf2e_theme', 'dark'); } catch(_) {}
+            try { localStorage.removeItem('pf2e_theme_v1'); } catch(_) {}
         })();
     </script>
     <meta charset="UTF-8">

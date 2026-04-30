@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>{{ pc.name }} - Player Sheet</title>
+    <script>
+        // Single design system — clear any stale legacy theme value so
+        // wave-2 "parchment" / "hi-contrast" can't beat the new tokens.
+        (function() {
+            try { document.documentElement.setAttribute('data-theme', 'dark'); } catch(_) {}
+            try { localStorage.removeItem('pf2e_theme_v1'); } catch(_) {}
+            try { localStorage.setItem('pf2e_theme', 'dark'); } catch(_) {}
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module" src="/static/js/dice-engine.js"></script>
     <script>
@@ -9053,10 +9062,10 @@
                 { id: 'save-will',  label: 'Will',     match: /will/i,     cls: 'save' },
                 { id: 'save-ref',   label: 'Reflex',   match: /reflex/i,   cls: 'save' },
                 { id: 'save-fort',  label: 'Fort',     match: /fort/i,     cls: 'save' },
-                { id: 'cost-1',     label: '1A',       match: /1\s*action|(?!)/, cls: 'cost' },
-                { id: 'cost-2',     label: '2A',       match: /2\s*actions?|(?!)/, cls: 'cost' },
-                { id: 'cost-3',     label: '3A',       match: /3\s*actions?|/, cls: 'cost' },
-                { id: 'cost-reaction', label: 'Reaction', match: /reaction||/i, cls: 'cost' },
+                { id: 'cost-1',     label: '1A',       match: /1\s*action\b/i, cls: 'cost' },
+                { id: 'cost-2',     label: '2A',       match: /2\s*actions?\b/i, cls: 'cost' },
+                { id: 'cost-3',     label: '3A',       match: /3\s*actions?\b/i, cls: 'cost' },
+                { id: 'cost-reaction', label: 'Reaction', match: /\breaction\b/i, cls: 'cost' },
                 { id: 'attack',     label: 'Attack',   match: /spell attack|ranged spell|melee spell/i, cls: 'misc' },
             ];
             const active = new Set();
