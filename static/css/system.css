@@ -1046,4 +1046,151 @@ html[data-theme="light"] .panel-card {
     color: var(--text-on-cream) !important;
 }
 
+/* ── 24. Cream-context contrast fixes ────────────────────────────────
+   The wave-3 redefinition of --bg-raised / --bg-surface to parchment
+   cream means several legacy components that were designed as
+   "white-text on dark card" now render as "white-text on cream card",
+   i.e. invisible. Force their text color back to the dark cream-context
+   value so the numbers actually read. */
+
+/* Ability score cards (STR/DEX/...). The cards themselves now have a
+   cream background; the modifier and label both need dark text. */
+.ability-block {
+    background: var(--bg-card-2) !important;
+    border-color: var(--border-card) !important;
+    color: var(--text-on-cream) !important;
+    box-shadow: none !important;
+}
+.ability-block .mod,
+.ability-block .label,
+.ability-block .ds-label {
+    color: var(--text-on-cream) !important;
+    text-shadow: none !important;
+}
+.ability-block .label,
+.ability-block .ds-label {
+    color: var(--text-on-cream-2) !important;
+}
+.ability-block::before {
+    background: var(--accent) !important;
+}
+.ability-block:hover {
+    background: rgba(201, 163, 78, 0.10) !important;
+    border-color: var(--accent) !important;
+}
+
+/* Stat boxes (legacy, used in a few panels) — same treatment. */
+.stat-box {
+    background: var(--bg-card-2) !important;
+    border-color: var(--border-card) !important;
+}
+.stat-box .stat-value, .stat-box .stat-label {
+    color: var(--text-on-cream) !important;
+    text-shadow: none !important;
+}
+.stat-box .stat-label { color: var(--text-on-cream-2) !important; }
+
+/* Defense stat tiles (saves block in Combat tab). */
+.defense-stat {
+    background: var(--bg-card-2) !important;
+    border-color: var(--border-card) !important;
+}
+.defense-stat .val, .defense-stat .lbl {
+    color: var(--text-on-cream) !important;
+    text-shadow: none !important;
+}
+
+/* Roll buttons inside cards — the player sheet has dozens of these
+   inline-styled with text-white or color:#fff. Force dark on cream. */
+.panel-card .text-white,
+.panel-card button.text-white,
+.panel-card [class*="text-white"],
+.skill-row button,
+.skill-row .skill-mod,
+.skill-row [onclick],
+.ability-block button,
+.ability-block [onclick] {
+    color: var(--text-on-cream) !important;
+    text-shadow: none !important;
+}
+.skill-row button:hover,
+.skill-row [onclick]:hover,
+.ability-block button:hover,
+.ability-block [onclick]:hover,
+.panel-card button.text-white:hover {
+    color: var(--accent) !important;
+    text-shadow: none !important;
+}
+
+/* The skill-row hover background was a light gray that disappeared on
+   cream. Use a faint gilt tint instead so the hover is still visible. */
+.skill-row {
+    color: var(--text-on-cream) !important;
+}
+.skill-row:hover {
+    background: rgba(201, 163, 78, 0.08) !important;
+}
+.skill-row .skill-name { color: var(--text-on-cream) !important; }
+.skill-row .skill-stat { color: var(--text-on-cream-3) !important; }
+
+/* Generic: any element styled inline with `color: #fff` or
+   `color: white` while inside a parchment context — force dark text.
+   Inline-style attribute selectors aren't perfect but they catch the
+   majority of legacy white-on-dark widgets that flipped to white-on-cream. */
+.panel-card [style*="color:#fff"],
+.panel-card [style*="color: #fff"],
+.panel-card [style*="color:white"],
+.panel-card [style*="color: white"],
+.ability-block [style*="color:#fff"],
+.ability-block [style*="color: #fff"],
+.stat-box [style*="color:#fff"],
+.defense-stat [style*="color:#fff"] {
+    color: var(--text-on-cream) !important;
+}
+
+/* The "stat highlight" amber/gold inline color in skill rows reads as
+   gilt-500 on cream so it's clearly the rollable affordance. */
+.panel-card .text-amber-300,
+.panel-card .text-amber-400,
+.panel-card .text-amber-500,
+.panel-card .group-hover\:text-amber-300,
+.panel-card .group-hover\:text-amber-400,
+.panel-card [style*="color:var(--accent-gold-light)"],
+.panel-card [style*="color:var(--accent-gold)"],
+.panel-card [style*="color: var(--accent-gold)"] {
+    color: var(--gilt-500) !important;
+}
+.skill-row:hover button,
+.skill-row:hover .skill-mod {
+    color: var(--gilt-500) !important;
+}
+
+/* Section header inside a card — make sure it actually renders. */
+.panel-card .section-header,
+.panel-card h3.section-header,
+.panel-card h4 {
+    color: var(--text-on-cream-2) !important;
+}
+
+/* Stats strip values — these live on the dark page header, NOT on a
+   cream card. Make sure they stay light. (Belt-and-suspenders against
+   the broad cream-context overrides above.) */
+.stats-strip,
+.stats-strip .ss-block,
+.stats-strip .ss-val,
+.stats-strip .ss-lbl,
+.stats-strip .ss-sub,
+.stats-strip [style*="color:#fff"] {
+    color: var(--text-on-dark) !important;
+}
+.stats-strip .ss-lbl { color: var(--text-on-dark-3) !important; }
+.stats-strip .ss-block:hover { background: rgba(201, 163, 78, 0.06) !important; }
+
+/* Ability row sits between the dark sticky header and the dark stats
+   strip. Keep its background dark so the cards float on the page. */
+.ability-row-wrap {
+    background: var(--bg-page) !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+}
+
 /* End of system.css */
