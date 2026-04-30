@@ -867,6 +867,20 @@ body.tracker, .layout, .grid-wrap, .tool-strip, .panel {
     box-shadow: var(--shadow-2) !important;
     padding: var(--sp-5) !important;
 }
+.panel *, .panel label, .panel .tlabel, .panel option {
+    color: inherit;
+}
+/* Tracker .panel doesn't share the .trk text-token cascade — make
+   sure inputs and selects render dark on cream regardless. */
+.panel .tinput, .panel .tselect, .panel input, .panel select, .panel textarea {
+    background: var(--bg-input) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+}
+.panel .tinput::placeholder, .panel input::placeholder, .panel textarea::placeholder {
+    color: var(--text-on-cream-3) !important;
+    opacity: 0.7;
+}
 .panel-head, .panel-ttl {
     font-family: var(--font-display) !important;
     font-size: 12px !important;
@@ -1201,12 +1215,17 @@ html[data-theme="light"] .panel-card {
    the brand contract holds across every screen.
    ════════════════════════════════════════════════════════════════════ */
 
-/* ─── tracker.html + gmscreen.html share the .trk / --t-* namespace ─── */
+/* ─── tracker.html + gmscreen.html share the .trk / --t-* namespace.
+   Surfaces stay DARK across the tracker (it's a tactical GM dashboard,
+   not a book to read). Text tokens stay light. The .panel class (used
+   for handout / loot / check-request modals) is separately overridden
+   below to be cream cards with dark text — its own self-contained
+   inversion. ─── */
 .trk, body .trk, body.tracker, html .trk {
-    --t-bg-base:    var(--bg-page) !important;
-    --t-bg-surface: var(--bg-card) !important;
-    --t-bg-raised:  var(--bg-card-2) !important;
-    --t-bg-higher:  var(--bg-card) !important;
+    --t-bg-base:    var(--bg-page) !important;        /* dark page */
+    --t-bg-surface: var(--bg-sunken) !important;      /* slightly elevated dark */
+    --t-bg-raised:  #221e16 !important;               /* card raise on dark */
+    --t-bg-higher:  #2a261c !important;
     --t-red:        var(--ruby-300) !important;
     --t-red-b:      var(--ruby-200) !important;
     --t-red-d:      var(--ruby-400) !important;
@@ -1216,13 +1235,13 @@ html[data-theme="light"] .panel-card {
     --t-purple:     var(--gilt-300) !important;         /* deprecated hue */
     --t-blue:       var(--text-on-dark-2) !important;   /* deprecated hue */
     --t-green:      var(--success) !important;
-    --t-t1:         var(--text-on-dark) !important;
+    --t-t1:         var(--text-on-dark) !important;     /* light on dark surfaces */
     --t-t2:         var(--text-on-dark-2) !important;
     --t-t3:         var(--text-on-dark-3) !important;
     --t-t4:         var(--text-on-dark-3) !important;
     --t-border:     var(--border-strong) !important;
     --t-row-active: rgba(201, 163, 78, 0.10) !important;
-    background-image: none !important;            /* kill triple radial-gradient page tint */
+    background-image: none !important;
     color: var(--text-on-dark) !important;
 }
 
@@ -1336,6 +1355,141 @@ html[data-theme="light"] .panel-card {
 /* But preserve action-pip / hero-pip dots which use ::before for the glyph */
 .action-pip::before, .hero-pip::before, .focus-pip::before { /* leave content rules alone */ }
 
+/* Hero-card sidebar (the "active combatant detail" card on the right
+   when an encounter is running) — was a tri-stop red→dark→cream
+   gradient that left text unreadable on the cream third. Flatten. */
+.trk .hero-card {
+    background: var(--bg-sunken) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: var(--shadow-1) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--text-on-dark) !important;
+}
+.trk .hero-card *, .trk .hero-card .l, .trk .hero-card .v {
+    color: inherit;
+}
+.trk .hero-port,
+.trk .hero-port.pc {
+    background: #2a261c !important;
+    background-image: none !important;
+    border-color: var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: none !important;
+}
+.trk .hero-ttl .hnm { color: var(--text-on-dark) !important; }
+.trk .hero-ttl .role { color: var(--text-on-dark-2) !important; }
+
+.trk .hero-stats { background: transparent !important; }
+.trk .hs-box {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+}
+.trk .hs-box .v { color: var(--text-on-dark) !important; }
+.trk .hs-box .l { color: var(--text-on-dark-3) !important; }
+
+.trk .hp-ribbon {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+}
+.trk .hp-ribbon .l { color: var(--text-on-dark-3) !important; }
+.trk .hp-ribbon .pct, .trk .hp-ribbon .hp-num { color: var(--text-on-dark) !important; }
+
+/* Trait pills / tag pills within the hero card and stat modal —
+   neutral on dark. The .rare/.uncommon/.unique color-by-rarity classes
+   remain (they're functional, not decorative). */
+.trk .tagp {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-color: var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+}
+.trk .tagp.gold {
+    background: rgba(201, 163, 78, 0.10) !important;
+    border-color: rgba(201, 163, 78, 0.35) !important;
+    color: var(--gilt-200) !important;
+}
+.trk .tagp.pc {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: var(--text-on-dark-2) !important;
+}
+/* rare/uncommon/unique keep their PF2e-canonical colors (#002664,
+   #98691E, #54166E) since those are reference-book correct, but force
+   white text on top so they actually read. */
+.trk .tagp.rare,
+.trk .tagp.uncommon,
+.trk .tagp.unique { color: #fff !important; }
+
+/* Click-to-open stat modal — was linear-gradient(--t-bg-surface,
+   --t-bg-raised) which became cream-cream after my earlier override,
+   leaving the modal contents (which use --t-t1 light) invisible.
+   Flatten to dark. */
+.trk-modal-panel {
+    background: var(--bg-sunken) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: var(--shadow-2) !important;
+}
+.trk-modal-head {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+}
+.trk-modal-head h3 { color: var(--accent) !important; }
+.trk-modal-head .sub { color: var(--text-on-dark-3) !important; }
+.trk-modal-close { color: var(--text-on-dark-3) !important; }
+.trk-modal-close:hover { color: var(--ruby-200) !important; }
+.trk-modal-body {
+    background: var(--bg-sunken) !important;
+    color: var(--text-on-dark) !important;
+}
+.trk-modal-body * { color: inherit; }
+.trk-modal-body .l { color: var(--text-on-dark-3) !important; }
+.trk-modal-body .v { color: var(--text-on-dark) !important; }
+.trk-modal-body .defense-row { color: var(--text-on-dark-2) !important; }
+.trk-modal-body .defense-row .dl { color: var(--text-on-dark-3) !important; }
+.trk-modal-body .defense-row .dv.r { color: var(--success) !important; }
+.trk-modal-body .defense-row .dv.w { color: var(--ruby-200) !important; }
+.trk-modal-body .secret-result {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+}
+
+/* Hero card defense rows (used inside the active combatant card too) */
+.trk .defense-row {
+    color: var(--text-on-dark-2) !important;
+    background: transparent !important;
+}
+.trk .defense-row .dl { color: var(--text-on-dark-3) !important; }
+
+/* HP bar inside the hero card / modal — keep functional color */
+.trk .hp-bar {
+    background: var(--ink-700) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+}
+.trk .hp-bar .f { transition: width var(--t-base) !important; border-radius: 999px !important; }
+.trk .hp-bar .f.high { background: var(--success) !important; }
+.trk .hp-bar .f.mid  { background: var(--warn)    !important; }
+.trk .hp-bar .f.low  { background: var(--danger)  !important; }
+.trk .hp-bar .f.dead { background: var(--ruby-400) !important; opacity: 0.5 !important; }
+
+/* Tracker condition rows (used in the modal too) */
+.trk .cond-row {
+    background: transparent !important;
+    color: var(--text-on-dark) !important;
+}
+.trk .cond-row .tagp { color: inherit; }
+
 /* ─── gmscreen.html — same --t-* override applies via .trk path ─── */
 /* The gmscreen page wraps in similar --t-* token defs; reuse the .trk
    selector AND target the body element directly so rules cascade. */
@@ -1366,8 +1520,50 @@ body[style*="linear-gradient"] {
     font-family: var(--font-ui) !important;
 }
 
-/* ─── generator.html — minimal, extends base. Nothing template-specific.
-   The base + system.css cascade handles it. ─── */
+/* ─── generator.html — gen-cards, content typography ─── */
+.gen-card {
+    background: var(--bg-sunken) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--text-on-dark) !important;
+    box-shadow: none !important;
+    overflow: hidden;
+    transition: border-color var(--t-fast) !important;
+}
+.gen-card:hover { border-color: var(--accent) !important; }
+.gen-card-header {
+    background: var(--bg-page) !important;
+    background-image: none !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+    color: var(--accent) !important;
+}
+.gen-card-header span,
+.gen-card-header .text-accent-300,
+.gen-card-header .text-base-500 {
+    color: var(--accent) !important;
+}
+.gen-card-body {
+    color: var(--text-on-dark-2) !important;
+    line-height: 1.55 !important;
+}
+.gen-content { color: var(--text-on-dark-2) !important; }
+.gen-content b, .gen-content strong { color: var(--accent) !important; }
+.gen-content em { color: var(--text-on-dark-3) !important; }
+.gen-content hr { border-top: 1px solid var(--border-strong) !important; }
+.gen-content ul li { color: var(--text-on-dark-2) !important; }
+.gen-content a { color: var(--accent) !important; }
+.reroll-btn {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+    border-radius: var(--r-sm) !important;
+    transition: border-color var(--t-fast), color var(--t-fast) !important;
+}
+.reroll-btn:hover {
+    opacity: 1 !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
 
 /* ─── player_levelup.html — gradient choice cards, rainbow nav ─── */
 .nav-item {
@@ -1464,5 +1660,72 @@ body.levelup, .levelup-page {
     background-image: none !important;
 }
 [style*="radial-gradient"] { background-image: none !important; }
+
+/* ─── base.html — top nav + bottom-right dice widget ─── */
+nav { background: var(--bg-page) !important; border-color: var(--border-strong) !important; }
+nav a {
+    color: var(--text-on-dark-2) !important;
+    transition: color var(--t-fast) !important;
+}
+nav a:hover { color: var(--accent) !important; background: transparent !important; }
+nav .text-accent-300 { color: var(--accent) !important; }
+nav .text-accent-300:hover { color: var(--accent-hover) !important; }
+nav .font-display.text-accent-300 { color: var(--accent) !important; }
+nav .text-base-300, nav .text-base-400, nav .text-base-500, nav .text-base-600 {
+    color: var(--text-on-dark-2) !important;
+}
+nav button:hover { background: transparent !important; }
+
+/* Dice widget (bottom-right floating panel inherited by base.html
+   templates). Was teal #52A8A8 — make it gilt. */
+#dice-widget button[onclick="toggleDicePanel()"],
+#dice-widget button[type="submit"] {
+    background: var(--accent) !important;
+    background-image: none !important;
+    color: var(--ink-950) !important;
+    border-radius: 50% !important;
+    border: none !important;
+    box-shadow: var(--shadow-1) !important;
+}
+#dice-widget button[onclick="toggleDicePanel()"]:hover,
+#dice-widget button[type="submit"]:hover { background: var(--accent-hover) !important; }
+#dice-panel {
+    background: var(--bg-card) !important;
+    background-image: none !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    box-shadow: var(--shadow-2) !important;
+    border-radius: var(--r-md) !important;
+}
+#dice-panel * { color: inherit; }
+#dice-panel .text-accent-300, #dice-total { color: var(--accent) !important; }
+#dice-panel .bg-base-800, #dice-panel button {
+    background: var(--bg-card-2) !important;
+    background-image: none !important;
+    border: 1px solid var(--border-card) !important;
+    color: var(--text-on-cream) !important;
+    border-radius: var(--r-sm) !important;
+}
+#dice-panel button:hover {
+    background: rgba(201, 163, 78, 0.10) !important;
+    border-color: var(--accent) !important;
+    color: var(--gilt-500) !important;
+}
+#dice-panel button[type="submit"] {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+}
+#dice-breakdown { color: var(--text-on-cream-3) !important; }
+
+/* GM toast container (inherited from base) */
+#gm-toast-container .toast,
+#gm-toast-container > div {
+    background: var(--bg-card) !important;
+    color: var(--text-on-cream) !important;
+    border: 1px solid var(--border-card) !important;
+    border-left: 3px solid var(--accent) !important;
+    box-shadow: var(--shadow-2) !important;
+}
 
 /* End of system.css */
