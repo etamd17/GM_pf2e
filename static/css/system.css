@@ -2707,26 +2707,11 @@ button[onclick^="rollDamage"]:hover {
     padding-top: 96px;
     font-family: var(--font-ui);
 }
-@media (min-width: 1280px) {
-    /* True 3-column layout: left meta rail (220) + center stats (240)
-       + right tabs+content (rest). The header stays full-width on top
-       so identity + action toolbar still span. The two side rails are
-       position:fixed; main body content is shifted right by the sum.
-       This keeps the existing horizontal ability-row + stats-strip in
-       markup (their IDs serve SSE) but visually hides them since the
-       new center rail shows the same data vertically. */
-    #char-meta-rail { display: block; }
-    #stats-rail { display: block; }
-    body.min-h-screen.flex.flex-col,
-    body.min-h-screen { padding-left: 460px !important; }
-
-    /* Hide the redundant horizontal strips on wide. JS that targets
-       their IDs (current-hp, ac-current, etc.) still finds them in
-       the DOM — they just don't render. */
-    .ability-row-wrap, .stats-strip { display: none !important; }
-}
-
-/* ── Stats rail (the 2nd vertical column on wide viewports) ─────────── */
+/* ── Stats rail (the 2nd vertical column on wide viewports). The
+   default display:none MUST come BEFORE the media-query rule below
+   that flips it to display:block — otherwise the cascade picks the
+   later rule even inside the matching media query, and the rail
+   stays hidden. */
 #stats-rail {
     display: none;
     position: fixed;
@@ -2742,6 +2727,25 @@ button[onclick^="rollDamage"]:hover {
     padding-top: 96px;
     z-index: 9;
     font-family: var(--font-ui);
+}
+
+@media (min-width: 1280px) {
+    /* True 3-column layout: left meta rail (220) + center stats (240)
+       + right tabs+content (rest). The header stays full-width on top
+       so identity + action toolbar still span. The two side rails are
+       position:fixed; main body content is shifted right by the sum.
+       This keeps the existing horizontal ability-row + stats-strip in
+       markup (their IDs serve SSE) but visually hides them since the
+       new center rail shows the same data vertically. */
+    #char-meta-rail { display: block !important; }
+    #stats-rail    { display: block !important; }
+    body.min-h-screen.flex.flex-col,
+    body.min-h-screen { padding-left: 460px !important; }
+
+    /* Hide the redundant horizontal strips on wide. JS that targets
+       their IDs (current-hp, ac-current, etc.) still finds them in
+       the DOM — they just don't render. */
+    .ability-row-wrap, .stats-strip { display: none !important; }
 }
 #stats-rail::-webkit-scrollbar { width: 4px; }
 #stats-rail::-webkit-scrollbar-track { background: transparent; }
