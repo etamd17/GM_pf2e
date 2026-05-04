@@ -1656,11 +1656,14 @@ body.levelup, .levelup-page {
 
 #sidebar-nav, .compact-stepper, .drawer-submit-bar { display: none !important; }
 
-/* All step panels are always visible — kill the old "active-only" rule.
-   Visibility is gated by state.sections_visible (set in init), which
-   applies inline display:none to hidden steps. */
-.step-panel { display: block !important; }
-.step-panel + .step-panel:not([style*="display: none"]) {
+/* Step panels are visible by default in single-page mode — kill the
+   old "active-only" rule. Sections that aren't relevant at this level
+   carry the .lvl-hidden class (applied by init) which beats this rule.
+   Using a class-based hide instead of inline style:display:none so we
+   don't fight !important specificity. */
+.step-panel { display: block; }
+.step-panel.lvl-hidden { display: none !important; }
+.step-panel + .step-panel:not(.lvl-hidden) {
     border-top: 1px solid var(--border-card) !important;
     margin-top: var(--sp-3) !important;
     padding-top: var(--sp-3) !important;

@@ -487,9 +487,11 @@
                 review:        true,
             };
             // Hide the step panels that aren't relevant — Pathbuilder-style.
+            // Class-based hide so we don't fight the .step-panel CSS specificity.
             Object.entries(state.sections_visible).forEach(([sid, on]) => {
                 const el = document.getElementById(`step-${sid}`);
-                if (el) el.style.display = on ? '' : 'none';
+                if (!el) return;
+                el.classList.toggle('lvl-hidden', !on);
             });
 
             // Legacy nav anchors (now hidden in the topbar). Kept alive so
@@ -771,7 +773,7 @@
         window.openRetrainStep = function() {
             const el = document.getElementById('step-retrain');
             if (!el) return;
-            el.style.display = '';
+            el.classList.remove('lvl-hidden');
             state.sections_visible.retrain = true;
             buildSectionProgress();
             paintSectionProgress();
