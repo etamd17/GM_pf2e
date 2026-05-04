@@ -8597,6 +8597,83 @@ def submit_levelup(pc_name):
                 if 'monk_paths' not in build: build['monk_paths'] = {}
                 build['monk_paths'][str(new_level)] = save_key
 
+    # ─── Animal companion / familiar auto-level (PF2e PC1 p.220) ──────
+    # Each level a companion gains:
+    #   +1 Perception, AC, all saves, attack bonus, weapon DC
+    #   +1 to all skill proficiencies (single bonus, not per-skill)
+    #   +(6 + Con mod) HP per level
+    # Familiars scale by PC level; their HP is 5 × PC level. We bump
+    # any pet entry that looks like a companion or familiar by the level
+    # delta. Uses the snapshot we just took (`previous_level`) to compute
+    # delta, so a multi-level jump scales correctly.
+    prev_level = level_history[str(new_level)].get('previous_level', new_level - 1)
+    level_delta = max(0, new_level - prev_level)
+    if level_delta > 0:
+        def _is_companion(p):
+            t = (p.get('type', '') + ' ' + p.get('class', '') + ' ' + p.get('name', '')).lower()
+            if any(k in t for k in ['animal companion', 'companion', 'mount', 'eidolon']):
+                return True
+            return bool(p.get('is_animal_companion'))
+        def _is_familiar(p):
+            t = (p.get('type', '') + ' ' + p.get('name', '')).lower()
+            return 'familiar' in t or bool(p.get('is_familiar'))
+
+        def _bump_companion(p):
+            """Apply RAW per-level scaling to an animal companion."""
+            con_mod = safe_int(p.get('con_mod'), safe_int(p.get('con'), 2))
+            hp_per_level = max(1, 6 + con_mod)
+            new_max = safe_int(p.get('hp'), 0) + hp_per_level * level_delta
+            old_max = safe_int(p.get('hp'), 0)
+            current = safe_int(p.get('current_hp'), old_max)
+            # Heal proportionally so a wounded companion doesn't suddenly
+            # appear at full HP after level-up.
+            if old_max > 0:
+                new_current = min(new_max, int(current + hp_per_level * level_delta))
+            else:
+                new_current = new_max
+            p['hp'] = new_max
+            p['current_hp'] = new_current
+            for k in ('perception', 'ac', 'fort', 'ref', 'will'):
+                p[k] = safe_int(p.get(k), 0) + level_delta
+            for atk in (p.get('attacks') or []):
+                if isinstance(atk, dict):
+                    atk['bonus'] = safe_int(atk.get('bonus'), 0) + level_delta
+            # Track per-level so future level-ups don't double-bump
+            p['_last_levelled_at'] = new_level
+            p['level'] = new_level
+
+        def _bump_familiar(p):
+            """Familiars: HP = 5 × PC level. Saves/perception use PC's
+            check totals at table time, not stored stats — but if the
+            stored stats exist, bump them to keep the sheet readable."""
+            new_max = max(safe_int(p.get('hp'), 0), 5 * new_level)
+            old_max = safe_int(p.get('hp'), 0)
+            current = safe_int(p.get('current_hp'), old_max)
+            new_current = min(new_max, current + (new_max - old_max))
+            p['hp'] = new_max
+            p['current_hp'] = new_current
+            p['level'] = new_level
+            for k in ('perception', 'ac', 'fort', 'ref', 'will'):
+                if p.get(k) is not None:
+                    p[k] = safe_int(p.get(k), 0) + level_delta
+            p['_last_levelled_at'] = new_level
+
+        for bucket_key in ('pets_custom', 'pets'):
+            bucket = build.get(bucket_key) or []
+            if not isinstance(bucket, list):
+                continue
+            for pet in bucket:
+                if not isinstance(pet, dict):
+                    continue
+                # Skip pets the player already manually levelled at this
+                # level — the _last_levelled_at flag prevents re-applying.
+                if pet.get('_last_levelled_at') == new_level:
+                    continue
+                if _is_companion(pet):
+                    _bump_companion(pet)
+                elif _is_familiar(pet):
+                    _bump_familiar(pet)
+
     save_and_reload_character(pc_name, pc_json, file_path)
     # Push updated HP / conditions / level to all connected clients so the
     # GM tracker and party view reflect the level-up immediately without
@@ -8627,6 +8704,35 @@ def revert_level(pc_name):
                 build['proficiencies'] = snapshot['previous_proficiencies']
                 build['feats'] = snapshot['previous_feats']
                 build['spellCasters'] = snapshot.get('previous_spellCasters', build.get('spellCasters', []))
+                # Companion / familiar reverse-bump (mirror of submit_levelup).
+                # Computed from the level delta so a multi-level revert
+                # rolls back the matching number of bumps.
+                _delta = max(0, current_level - snapshot['previous_level'])
+                if _delta > 0:
+                    for bk in ('pets_custom', 'pets'):
+                        for pet in (build.get(bk) or []):
+                            if not isinstance(pet, dict):
+                                continue
+                            t = (pet.get('type', '') + ' ' + pet.get('name', '')).lower()
+                            is_comp = ('companion' in t or 'mount' in t or 'eidolon' in t
+                                       or pet.get('is_animal_companion'))
+                            is_fam  = 'familiar' in t or pet.get('is_familiar')
+                            if not (is_comp or is_fam):
+                                continue
+                            con_mod = safe_int(pet.get('con_mod'), safe_int(pet.get('con'), 2))
+                            hp_per_level = max(1, 6 + con_mod) if is_comp else 5
+                            new_max = max(1, safe_int(pet.get('hp'), 0) - hp_per_level * _delta)
+                            new_cur = min(new_max, safe_int(pet.get('current_hp'), new_max))
+                            pet['hp'] = new_max
+                            pet['current_hp'] = new_cur
+                            for k in ('perception', 'ac', 'fort', 'ref', 'will'):
+                                if pet.get(k) is not None:
+                                    pet[k] = max(0, safe_int(pet.get(k), 0) - _delta)
+                            for atk in (pet.get('attacks') or []):
+                                if isinstance(atk, dict):
+                                    atk['bonus'] = safe_int(atk.get('bonus'), 0) - _delta
+                            pet['level'] = snapshot['previous_level']
+                            pet.pop('_last_levelled_at', None)
                 # Remove this level's history entry
                 del level_history[str(current_level)]
                 build['level_history'] = level_history

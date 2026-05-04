@@ -173,7 +173,6 @@
                  per-level gain upfront, like Pathbuilder's stat sidebar -->
             <div id="hp-preview-banner" class="mb-6 bg-red-950/20 border border-red-900/40 rounded-lg px-5 py-3 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <span class="text-lg">❤️</span>
                     <div>
                         <span class="text-sm font-bold text-gray-300">Hit Points</span>
                         <span id="hp-preview-detail" class="text-xs text-gray-500 ml-2"></span>
@@ -234,9 +233,18 @@
                     <h2 class="text-3xl font-bold text-white mb-2">Feat Selection</h2>
                     <p class="text-gray-400">Select the feats granted to you at this level.</p>
                 </div>
-                <button onclick="addBonusFeatLevelUp()" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded transition-colors shadow">
-                    + Add Bonus Feat
-                </button>
+                <div class="flex gap-2">
+                    <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none px-2" title="Free Archetype variant rule (GM Core p.187): adds an extra archetype feat slot at every even level. Toggle on if your campaign uses this optional rule.">
+                        <input type="checkbox" id="chk-free-archetype" onchange="toggleFreeArchetype(this.checked)" class="accent-amber-500">
+                        Free Archetype
+                    </label>
+                    <button onclick="addArchetypeFeatLevelUp()" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded transition-colors shadow">
+                        + Archetype Feat
+                    </button>
+                    <button onclick="addBonusFeatLevelUp()" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded transition-colors shadow">
+                        + Add Bonus Feat
+                    </button>
+                </div>
             </div>
             <div id="ui-feats" class="space-y-4"></div>
         </div>
@@ -367,9 +375,13 @@
             retrained_feats: [], 
             spellCasters: JSON.parse(JSON.stringify(pc.raw_spellCasters || [])),
             bonus_feats_added: 0,
-            auto_bumps: {},        // Populated from CLASS_PROGRESSION
+            archetype_feats_added: 0,    // "+ Archetype Feat" button counter
+            free_archetype: false,       // Free Archetype variant toggle
+            free_archetype_slot: 0,      // 1 if FA toggle ON and target level even
+            auto_bumps: {},              // Populated from CLASS_PROGRESSION
             new_spells: [],
-            monk_path_choice: null  // For Monk Path to Perfection saves
+            monk_path_choice: null,      // For Monk Path to Perfection saves
+            target_level: targetLevel
         };
         let mCtx = { type: null, data: [], active: null, meta: {}, tab: 'all', activeTabs: false };
 
@@ -420,6 +432,25 @@
 
             if (reqs.ability_boosts) buildAbilitiesUI();
             buildSkillsUI();
+            // Restore Free-Archetype toggle from localStorage so it
+            // survives reload of the same level-up page.
+            try {
+                if (localStorage.getItem(`pf2e_free_archetype_${pc.name}`) === '1') {
+                    state.free_archetype = true;
+                    state.free_archetype_slot = (targetLevel % 2 === 0) ? 1 : 0;
+                    const cb = document.getElementById('chk-free-archetype');
+                    if (cb) cb.checked = true;
+                }
+            } catch(_) {}
+            // Hide "+ Archetype Feat" if PC has no dedications yet AND
+            // is below L2 (no archetype path possible at L1 RAW).
+            try {
+                const dedCount = (typeof _knownDedications === 'function') ? _knownDedications().length : 0;
+                if (targetLevel < 2 && dedCount === 0) {
+                    const btn = document.querySelector('button[onclick*="addArchetypeFeatLevelUp"]');
+                    if (btn) btn.style.display = 'none';
+                }
+            } catch(_) {}
             buildFeatsUI();
             buildMagicUI();
             buildRetrainUI();
@@ -925,34 +956,43 @@
             const ui = document.getElementById('ui-feats');
             let html = "";
 
-            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat'].forEach(ft => {
+            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat', 'archetype_feat'].forEach(ft => {
                 let count = reqs[ft] || 0;
-                
+
                 if (ft === 'class_feat') count += state.bonus_feats_added;
-                
+                if (ft === 'archetype_feat') {
+                    // Combine: extra archetype slots from "+ Archetype Feat" button
+                    // plus free-archetype variant (one per even level when ON).
+                    count += (state.archetype_feats_added || 0);
+                    count += (state.free_archetype_slot || 0);
+                }
+
                 for(let i=0; i<count; i++) {
                     let key = count > 1 ? `${ft}_${i}` : ft;
-                    
-                    let label = ft.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                    let label = ft.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     if (pcClass === 'kineticist' && ft === 'class_feat') label = "Class / Impulse Feat";
+                    if (ft === 'archetype_feat' && (state.free_archetype_slot || 0) > 0 && i === count - 1 && (state.archetype_feats_added || 0) === 0) {
+                        label = "Free Archetype Feat";
+                    }
                     if (count > 1) label += ` ${i + 1}`;
-                    
+
                     let val = state.feats_selected[key] ? state.feats_selected[key].name : "Select Feat...";
                     let subtitle = state.feats_selected[key] ? "Locked In" : `${label} *`;
-                    
+
                     html += `
-                    <div class="choice-card bg-gray-900 hover:bg-gray-800" onclick="openModal('${ft}', {key: '${key}'})">
+                    <div class="choice-card bg-gray-900 hover:bg-gray-800" data-feat-slot-type="${ft}" onclick="openModal('${ft}', {key: '${key}'})">
                         <div class="flex justify-between items-center w-full">
                             <div>
                                 <div class="subtitle ${state.feats_selected[key] ? 'text-green-400' : ''}">${subtitle}</div>
                                 <div class="title">${val}</div>
                             </div>
-                            <span class="text-gray-500 font-bold text-xl">→</span>
+                            <span class="text-gray-500 font-bold text-xl">&rarr;</span>
                         </div>
                     </div>`;
                 }
             });
-            
+
             if(html === "") html = "<div class='text-gray-500 italic'>No feats granted at this level.</div>";
             ui.innerHTML = html;
         }
@@ -961,6 +1001,86 @@
             state.bonus_feats_added++;
             buildFeatsUI();
             runValidation();
+        }
+
+        // ─── Archetype + Free Archetype support ────────────────────────
+        // The class feat picker EXCLUDES archetype/dedication feats so
+        // a player can't accidentally take an archetype feat as a class
+        // feat. The Archetype-Feat picker is the path for them.
+        // _knownDedications() walks the build's existing feats and
+        // returns the archetypes the PC has dedicated to, plus the
+        // count of feats they have from each.
+        function _knownDedications() {
+            const feats = (build && build.feats) || [];
+            // feats are arrays in Pathbuilder format: [name, ?, category, level]
+            // OR our internal builder format: [name, type, level, desc]
+            const seen = {};
+            feats.forEach(f => {
+                if (!Array.isArray(f) || f.length === 0) return;
+                const name = (f[0] || '').toString();
+                if (!name) return;
+                const lname = name.toLowerCase();
+                if (lname.endsWith(' dedication')) {
+                    const arch = lname.replace(/ dedication$/,'').trim();
+                    if (!seen[arch]) seen[arch] = { archetype: arch, feat_count: 0 };
+                    seen[arch].feat_count++;  // dedication itself counts
+                } else {
+                    // Match this feat against known archetypes — by checking
+                    // any descriptor or by name-token overlap. We don't have
+                    // structural archetype data on the feat array itself, so
+                    // count any non-dedication feat that's also tagged with
+                    // an archetype trait we've already seen.
+                    for (const arch of Object.keys(seen)) {
+                        if (lname.includes(arch)) seen[arch].feat_count++;
+                    }
+                }
+            });
+            // Also scan state.feats for in-progress level-up picks
+            (state.feats || []).forEach(f => {
+                if (!f || !f.name) return;
+                const lname = f.name.toLowerCase();
+                if (lname.endsWith(' dedication')) {
+                    const arch = lname.replace(/ dedication$/,'').trim();
+                    if (!seen[arch]) seen[arch] = { archetype: arch, feat_count: 0 };
+                    seen[arch].feat_count++;
+                } else {
+                    for (const arch of Object.keys(seen)) {
+                        if (lname.includes(arch)) seen[arch].feat_count++;
+                    }
+                }
+            });
+            return Object.values(seen);
+        }
+
+        function addArchetypeFeatLevelUp() {
+            state.archetype_feats_added = (state.archetype_feats_added || 0) + 1;
+            buildFeatsUI();
+            runValidation();
+            // Auto-open the picker for the slot we just added — saves a click.
+            // (buildFeatsUI rendered a slot at the end with type 'archetype_feat'.)
+            const slots = document.querySelectorAll('[data-feat-slot-type="archetype_feat"]');
+            if (slots.length) {
+                const last = slots[slots.length - 1];
+                const btn = last.querySelector('button[onclick*="openMod"]');
+                if (btn) btn.click();
+            }
+        }
+
+        function toggleFreeArchetype(on) {
+            state.free_archetype = !!on;
+            // Free Archetype RAW (GM Core p.187): adds a free archetype feat
+            // slot at every even level, in addition to the normal class feat.
+            // We surface this by injecting one extra archetype-feat slot
+            // when the toggle is ON and the new level is even.
+            if (state.free_archetype && (state.target_level % 2 === 0)) {
+                state.free_archetype_slot = 1;
+            } else {
+                state.free_archetype_slot = 0;
+            }
+            buildFeatsUI();
+            runValidation();
+            // Persist so the toggle survives reload of the same level-up page
+            try { localStorage.setItem(`pf2e_free_archetype_${pc.name}`, on ? '1' : '0'); } catch(_) {}
         }
 
         function buildMagicUI() {
@@ -1287,6 +1407,57 @@
                 if (type === 'class_feat') {
                     title = "Class Feat";
                     mCtx.data = (dbFeats['class'] || []).filter(f => f.level <= targetLevel && f.traits.some(t => typeof t==='string' && t.toLowerCase() === pcClass) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                }
+                else if (type === 'archetype_feat') {
+                    // Archetype feats — for PCs with multiclass / archetype dedications.
+                    // Show:
+                    //  - All dedications at L2+ if PC has none yet (entry path).
+                    //  - Feats tagged with the archetype name of any dedication
+                    //    the PC already has.
+                    //  - New dedications, but only if PC has 2+ feats from each
+                    //    existing archetype (PF2e: cannot take new dedication
+                    //    until current archetype has at least 2 feats from it).
+                    title = "Archetype Feat";
+                    const dedications = _knownDedications();
+                    const archetypeNames = dedications.map(d => d.archetype);
+                    const all = (dbFeats['class'] || []).concat(dbFeats['archetype'] || []);
+                    const isArchetype = (f) => f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase() === 'archetype');
+                    const isDedication = (f) => f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase() === 'dedication');
+                    const featArchetype = (f) => {
+                        // The archetype-name trait is whichever non-system trait the
+                        // feat carries. We pull the first non-action / non-rarity
+                        // trait — e.g. "sanguimancer", "barbarian" (for multiclass).
+                        const sys = new Set(['archetype','dedication','rare','uncommon','unique','common','manipulate','concentrate','flourish','reaction','free','open','rest','exploration','downtime','focus','bardic','composition','litany','virtuous','hex','curse','divine','primal','arcane','occult','metamagic','mental','auditory','linguistic','visual','auditory','prediction','revelation','aura','poison','disease','mindshifting','attack','death','disarm','disrupt','escape','fortune','misfortune','magical','spellshape','vitality','void','plant','negative','positive','radiation']);
+                        for (const t of (f.traits || [])) {
+                            const lt = (typeof t === 'string') ? t.toLowerCase() : '';
+                            if (lt && !sys.has(lt) && !lt.includes('skill')) return lt;
+                        }
+                        return '';
+                    };
+                    let pool = all.filter(f => f.level <= targetLevel && (isArchetype(f) || isDedication(f)));
+                    pool = pool.filter(f => {
+                        const arch = featArchetype(f);
+                        if (isDedication(f)) {
+                            // Block re-taking a dedication you already have.
+                            if (archetypeNames.includes(arch)) return false;
+                            // PF2e: cannot take new dedication until you have 2+
+                            // feats from each existing archetype.
+                            for (const known of dedications) {
+                                if (known.feat_count < 2) return false;
+                            }
+                            return true;
+                        }
+                        // Non-dedication archetype feat — only show feats from
+                        // an archetype the PC has dedicated to.
+                        return archetypeNames.includes(arch);
+                    });
+                    // De-dup by name (some compendiums double-list)
+                    const seen = new Set();
+                    mCtx.data = pool.filter(f => {
+                        const key = (f.name || '').toLowerCase();
+                        if (seen.has(key)) return false;
+                        seen.add(key); return true;
+                    });
                 }
                 else if (type === 'general_feat') {
                     title = "General / Skill Feat";

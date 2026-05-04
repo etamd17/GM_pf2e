@@ -1648,6 +1648,153 @@ body.levelup, .levelup-page {
 }
 .drawer-submit-bar button { /* primary action stands out */ }
 
+/* ── Levelup sidebar density + box-in-box flatten ─────────────────────
+   The wizard sidebar had px-6 py-4 buttons with 7 items + chunky header
+   + chunky footer = ~580px tall, forcing scroll on laptops. The step
+   panels nested bg-gray-800 boxes inside bg-gray-900 page background,
+   producing the "card in card in card" vibe-coded look the user
+   flagged. These overrides tighten the sidebar and flatten every
+   nested box on the step panels into a single rule-line section. */
+
+#sidebar-nav { width: 220px !important; min-width: 220px !important; }
+#sidebar-nav .p-6 { padding: var(--sp-3) var(--sp-4) !important; }
+#sidebar-nav h1 { font-size: 18px !important; line-height: 1 !important; margin: 0 !important; color: var(--accent) !important; }
+#sidebar-nav p { margin-top: var(--sp-1) !important; font-size: 11px !important; }
+#sidebar-nav #btn-back-sheet { font-size: 10px !important; margin-bottom: var(--sp-2) !important; }
+#sidebar-nav #nav-container { padding: var(--sp-2) 0 !important; gap: 0 !important; }
+
+#sidebar-nav .nav-item {
+    padding: 9px var(--sp-4) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.08em !important;
+    font-family: var(--font-display) !important;
+    font-weight: 500 !important;
+    color: var(--text-on-dark-2) !important;
+    border-left: 3px solid transparent !important;
+    background: transparent !important;
+    background-image: none !important;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast) !important;
+}
+#sidebar-nav .nav-item:hover {
+    background: rgba(201, 163, 78, 0.06) !important;
+    color: var(--text-on-dark) !important;
+    border-left-color: var(--ink-500) !important;
+}
+#sidebar-nav .nav-item.active {
+    background: rgba(124, 34, 34, 0.10) !important;
+    color: var(--ruby-200) !important;
+    border-left: 3px solid var(--danger) !important;
+}
+#sidebar-nav .nav-item span:first-child { letter-spacing: 0.06em; }
+
+/* Sidebar footer (the "Finish / Submit" bar) */
+#sidebar-nav > div:last-child { padding: var(--sp-3) !important; background: transparent !important; border-top: 1px solid var(--border-strong) !important; }
+#btn-finish, #btn-finish-drawer {
+    width: 100% !important;
+    padding: var(--sp-3) !important;
+    font-size: 12px !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+    font-family: var(--font-display) !important;
+    background: var(--bg-card) !important;
+    color: var(--text-on-dark-3) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--r-sm) !important;
+}
+#btn-finish:not([disabled]), #btn-finish-drawer:not([disabled]) {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+    cursor: pointer !important;
+}
+#btn-finish:not([disabled]):hover, #btn-finish-drawer:not([disabled]):hover {
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+}
+
+/* Step panel padding: was p-8 lg:p-12 (32-48px); tighten to p-5 lg:p-6 */
+.step-panel { padding: var(--sp-5) !important; }
+@media (min-width: 1024px) { .step-panel { padding: var(--sp-6) !important; } }
+.step-panel h2 { font-size: 22px !important; line-height: 1.2 !important; margin-bottom: var(--sp-2) !important; color: var(--text-on-dark) !important; font-family: var(--font-display) !important; letter-spacing: 0.04em !important; }
+.step-panel > p { font-size: 13px !important; color: var(--text-on-dark-2) !important; margin-bottom: var(--sp-5) !important; line-height: 1.5 !important; }
+
+/* Flatten the bg-gray-800 / bg-gray-900 inner boxes the step panels
+   nest. These were the "card in card in card" vibe-coded culprit.
+   Replace with rule-line section headers and transparent backgrounds. */
+.step-panel .bg-gray-800,
+.step-panel .bg-gray-900,
+.step-panel [class*="bg-gray-800"],
+.step-panel [class*="bg-gray-900"] {
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    border-top: 1px solid var(--border-strong) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: var(--sp-4) 0 !important;
+    margin-top: var(--sp-2) !important;
+}
+.step-panel .bg-gray-800:first-of-type,
+.step-panel .bg-gray-900:first-of-type {
+    border-top: none !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+/* Section headings inside flattened panels read as rule-line section dividers */
+.step-panel h3 {
+    font-family: var(--font-display) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+    color: var(--gilt-300) !important;
+    border-bottom: 1px solid var(--border-rule) !important;
+    padding-bottom: var(--sp-2) !important;
+    margin-bottom: var(--sp-3) !important;
+    font-weight: 600 !important;
+}
+.step-panel h4 {
+    font-family: var(--font-display) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: var(--text-on-dark-2) !important;
+    margin: var(--sp-3) 0 var(--sp-2) !important;
+}
+
+/* HP preview banner — keep the ruby tint but flat */
+#hp-preview-banner {
+    background: rgba(124, 34, 34, 0.08) !important;
+    background-image: none !important;
+    border: 1px solid rgba(168, 58, 58, 0.30) !important;
+    border-radius: var(--r-md) !important;
+    box-shadow: none !important;
+}
+
+/* Custom scrollbar inside the level-up content area — match dark theme */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* "+ Add Bonus Feat", "+ Train a New Lore Skill", etc. — same button system */
+.step-panel button[onclick*="addBonusFeat"],
+.step-panel button[onclick*="addLore"],
+.step-panel button[onclick*="unlockArchetype"] {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--accent) !important;
+    padding: var(--sp-2) var(--sp-3) !important;
+    font-size: 11px !important;
+    border-radius: var(--r-sm) !important;
+    transition: border-color var(--t-fast), background var(--t-fast) !important;
+}
+.step-panel button[onclick*="addBonusFeat"]:hover,
+.step-panel button[onclick*="addLore"]:hover,
+.step-panel button[onclick*="unlockArchetype"]:hover {
+    background: rgba(201, 163, 78, 0.08) !important;
+    border-color: var(--accent) !important;
+}
+
 /* Step counter / step indicators */
 .step-indicator, .step-circle {
     background: transparent !important;
