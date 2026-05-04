@@ -268,6 +268,15 @@
             <h2 class="text-3xl font-bold text-white mb-2">Review Changes</h2>
             <p class="text-gray-400 mb-8">Verify your level up choices before locking them into the database.</p>
             <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl" id="ui-review-content"></div>
+            {# Optional retrain (downtime activity, not a level-up choice
+               proper) — hidden by default so the page only shows what
+               actually changes at this level. Click to expand. #}
+            <div style="margin-top: var(--sp-5); display:flex; justify-content:flex-end;">
+                <button onclick="openRetrainStep()" type="button"
+                        style="background: transparent; border: 1px solid var(--border-strong); color: var(--text-on-dark-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;">
+                    Retrain a feat?
+                </button>
+            </div>
         </div>
     </main>
 
@@ -415,13 +424,67 @@
             buildClassFeaturesUI(bumpsAtThisLevel);
             updateHpPreview();
 
-            if (reqs.ability_boosts) document.getElementById('nav-abilities').style.display = 'flex';
-            if (reqs.skill_increase) document.getElementById('nav-skills').style.display = 'flex';
-            if (reqs.class_feat || reqs.general_feat || reqs.skill_feat || reqs.ancestry_feat) document.getElementById('nav-feats').style.display = 'flex';
-            
-            if (state.spellCasters.length > 0 || classMatrix[pcClass]?.spellcasting) {
-                document.getElementById('nav-magic').style.display = 'flex';
-            }
+            // Decide which sections actually have something to do at this
+            // level. Pathbuilder-style: only show what the player has to
+            // touch. Saved into state so buildSectionProgress can skip the
+            // hidden sections too.
+            const hasAutoBumps = Object.keys(bumpsAtThisLevel || {}).length > 0;
+            const hasFeatThisLevel = !!(reqs.class_feat || reqs.general_feat || reqs.skill_feat || reqs.ancestry_feat);
+            // Magic step is only relevant when:
+            //   - player has casters AND a new spell rank unlocks here, OR
+            //   - player is spontaneous (must pick a new known spell), OR
+            //   - player is Wizard/Witch/Magus (must learn into spellbook)
+            const _newRankUnlocks = (function() {
+                if (!state.spellCasters || !state.spellCasters.length) return false;
+                // A new rank is "unlocked" when this level's slot table has
+                // a non-zero rank that wasn't available at the previous level.
+                try {
+                    for (const sc of state.spellCasters) {
+                        const ct = (sc.castingType || sc.spellcastingType || sc.type || '').toLowerCase();
+                        if (ct.includes('focus') || ct.includes('innate') || ct.includes('alchemical')) continue;
+                        let tableKey = 'spontaneous';
+                        if (ct.includes('bounded') && ct.includes('prepared')) tableKey = 'bounded_prepared';
+                        else if (ct.includes('bounded')) tableKey = 'bounded_spontaneous';
+                        else if (ct.includes('prepared')) tableKey = 'prepared';
+                        if (pcClass === 'sorcerer' && ct.includes('spontaneous')) tableKey = 'sorcerer';
+                        const cur = (SPELL_SLOTS[tableKey] && SPELL_SLOTS[tableKey][targetLevel]) || [];
+                        const prev = (SPELL_SLOTS[tableKey] && SPELL_SLOTS[tableKey][targetLevel - 1]) || [];
+                        for (let i = 0; i < cur.length; i++) {
+                            if ((cur[i] || 0) > 0 && (prev[i] || 0) === 0) return true;
+                        }
+                    }
+                } catch(_) {}
+                return false;
+            })();
+            const _isSpontaneous = state.spellCasters.some(sc => {
+                const ct = (sc.castingType || sc.spellcastingType || sc.type || '').toLowerCase();
+                return ct.includes('spontaneous');
+            });
+            const _isSpellbook = ['wizard','witch','magus'].includes(pcClass);
+            const hasMagicThisLevel = state.spellCasters.length > 0 && (_newRankUnlocks || _isSpontaneous || _isSpellbook);
+
+            // Stash the visibility map so other helpers can read it.
+            state.sections_visible = {
+                classfeatures: hasAutoBumps,    // Class Features step shows only when something auto-bumps
+                abilities:     !!reqs.ability_boosts,
+                skills:        !!reqs.skill_increase,
+                feats:         hasFeatThisLevel,
+                magic:         hasMagicThisLevel,
+                retrain:       false,           // optional, surfaced via a "Retrain a feat" button
+                review:        true,
+            };
+            // Hide the step panels that aren't relevant — Pathbuilder-style.
+            Object.entries(state.sections_visible).forEach(([sid, on]) => {
+                const el = document.getElementById(`step-${sid}`);
+                if (el) el.style.display = on ? '' : 'none';
+            });
+
+            // Legacy nav anchors (now hidden in the topbar). Kept alive so
+            // runValidation's chk-X writes don't error.
+            if (state.sections_visible.abilities) document.getElementById('nav-abilities').style.display = 'flex';
+            if (state.sections_visible.skills)    document.getElementById('nav-skills').style.display = 'flex';
+            if (state.sections_visible.feats)     document.getElementById('nav-feats').style.display = 'flex';
+            if (state.sections_visible.magic)     document.getElementById('nav-magic').style.display = 'flex';
 
             if (reqs.ability_boosts) buildAbilitiesUI();
             buildSkillsUI();
@@ -666,26 +729,41 @@
 
         // Build a tiny gilt-or-ruby progress strip in the sticky top bar
         // that maps to each visible step on the page. Click a pip to
-        // smooth-scroll to that section.
+        // smooth-scroll to that section. Pips are only created for
+        // sections that actually have something to do at this level
+        // (Pathbuilder-style: don't render abilities pip at L3 etc.).
         function buildSectionProgress() {
             const strip = document.getElementById('lvl-section-progress');
             if (!strip) return;
+            const v = state.sections_visible || {};
             const sections = [
-                { id: 'classfeatures', label: 'Class Features', required: true },
-                { id: 'abilities',     label: 'Abilities',      required: !!(reqs && reqs.ability_boosts) },
-                { id: 'skills',        label: 'Skills',         required: !!(reqs && reqs.skill_increase) },
-                { id: 'feats',         label: 'Feats',          required: !!(reqs && (reqs.class_feat || reqs.general_feat || reqs.skill_feat || reqs.ancestry_feat)) },
-                { id: 'magic',         label: 'Magic',          required: state.spellCasters.length > 0 || classMatrix[pcClass]?.spellcasting },
-                { id: 'retrain',       label: 'Retrain',        required: false },
-                { id: 'review',        label: 'Review',         required: true },
-            ];
+                { id: 'classfeatures', label: 'Class Features', show: v.classfeatures },
+                { id: 'abilities',     label: 'Abilities',      show: v.abilities     },
+                { id: 'skills',        label: 'Skills',         show: v.skills        },
+                { id: 'feats',         label: 'Feats',          show: v.feats         },
+                { id: 'magic',         label: 'Magic',          show: v.magic         },
+                { id: 'retrain',       label: 'Retrain',        show: v.retrain       },
+                { id: 'review',        label: 'Review',         show: v.review        },
+            ].filter(s => s.show);
             strip.innerHTML = sections.map(s =>
-                `<span class="section-pip" data-step="${s.id}" data-required="${s.required ? '1' : '0'}" title="${s.label}"></span>`
+                `<span class="section-pip" data-step="${s.id}" data-required="1" title="${s.label}"></span>`
             ).join('');
             strip.querySelectorAll('.section-pip').forEach(p => {
                 p.addEventListener('click', () => navTo(p.dataset.step));
             });
         }
+        // "Retrain a feat?" surfaced as a button near the Review section
+        // so the optional step is reachable without rendering a whole
+        // empty panel by default.
+        window.openRetrainStep = function() {
+            const el = document.getElementById('step-retrain');
+            if (!el) return;
+            el.style.display = '';
+            state.sections_visible.retrain = true;
+            buildSectionProgress();
+            paintSectionProgress();
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
         function paintSectionProgress() {
             const strip = document.getElementById('lvl-section-progress');
             if (!strip) return;
