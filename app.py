@@ -8522,11 +8522,49 @@ def save_new_character():
     save_and_reload_character(char_name, new_char_json, file_path)
     return jsonify({"success": True, "message": "Character saved successfully!"})
 
+def _filter_class_level_features_for_pc(pc):
+    """Return a per-PC subset of CLASS_LEVEL_FEATURES.
+
+    Each entry in CLASS_LEVEL_FEATURES may carry an optional `subclass`
+    field — a list of subclass names (case-insensitive) the entry applies
+    to. Entries with no `subclass` apply to every subclass in the class.
+    This lets us ship "Storm-only" or "Warpriest-only" entries instead of
+    one generic line that mentions every option.
+
+    Falls back to the unfiltered class entries if the PC has no subclass
+    set yet — keeps level-up working during character creation.
+    """
+    cls = (getattr(pc, 'class_name', '') or '').strip().lower()
+    sub = (getattr(pc, 'subclass', '') or '').strip().lower()
+    src = CLASS_LEVEL_FEATURES.get(cls, {})
+    out = {}
+    for lvl, entries in src.items():
+        kept = []
+        for e in entries:
+            scope = e.get('subclass')
+            if scope is None:
+                kept.append(e)
+                continue
+            scopes_lc = [str(s).strip().lower() for s in scope]
+            if sub and sub in scopes_lc:
+                kept.append(e)
+                continue
+            # No subclass selected yet — show all variants so the player
+            # can preview what each branch unlocks before committing.
+            if not sub:
+                kept.append(e)
+        if kept:
+            out[lvl] = kept
+    return out
+
 @app.route('/player/levelup/<pc_name>')
 def player_levelup(pc_name):
-    if pc_name in PARTY_LIBRARY: 
+    if pc_name in PARTY_LIBRARY:
         pc = PARTY_LIBRARY[pc_name]
-        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=CLASS_LEVEL_FEATURES)
+        # Filter class-level features by the PC's subclass before passing
+        # to the template — Storm Druid only sees Storm entries, etc.
+        clf = _filter_class_level_features_for_pc(pc)
+        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf)
     return redirect(url_for('player_view'))
 
 @app.route('/api/submit_levelup/<pc_name>', methods=['POST'])

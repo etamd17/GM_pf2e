@@ -2778,13 +2778,15 @@ button[onclick^="rollDamage"]:hover {
        + right tabs+content (rest). The header stays full-width on top
        so identity + action toolbar still span. The two side rails are
        position:fixed; main body content is shifted right by the sum.
-       This keeps the existing horizontal ability-row + stats-strip in
-       markup (their IDs serve SSE) but visually hides them since the
-       new center rail shows the same data vertically. */
+       Scoped via :has() so this push ONLY applies on the player sheet
+       (the only page with the rails). Without the scope every other
+       page — tracker, GM Screen, party_view, map — gets pushed 460px
+       right with nothing in the gutter. */
     #char-meta-rail { display: block !important; }
     #stats-rail    { display: block !important; }
-    body.min-h-screen.flex.flex-col,
-    body.min-h-screen { padding-left: 460px !important; }
+    body:has(#char-meta-rail) {
+        padding-left: 460px !important;
+    }
 
     /* Layout per spec: HP / Shield / AC / Saves / Abilities all live
        UNDER the character name in .stats-strip + .ability-row-wrap. The

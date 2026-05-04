@@ -5319,17 +5319,41 @@
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(`tab-${tabId}`).classList.add('active');
-            document.getElementById(`btn-tab-${tabId}`).classList.add('active');
+            const panel = document.getElementById(`tab-${tabId}`);
+            const btn   = document.getElementById(`btn-tab-${tabId}`);
+            if (panel) panel.classList.add('active');
+            if (btn)   btn.classList.add('active');
             localStorage.setItem(`pf2e_tab_${pcName}`, tabId);
         }
-        
-        // Restore last active tab on page load
-        (function() {
-            const savedTab = localStorage.getItem(`pf2e_tab_${pcName}`);
-            if (savedTab && document.getElementById(`tab-${savedTab}`)) {
-                switchTab(savedTab);
+
+        // Tab init on page load. Two paths:
+        //  1. Saved tab in localStorage AND its button is visible at this
+        //     viewport → restore it.
+        //  2. Otherwise → first tab whose button is visible (combat first,
+        //     core last on wide where it's hidden).
+        // Without this fallback, .tab-content's default display:none can
+        // leave the page blank if the saved tab is hidden by media query.
+        (function initTab() {
+            const wide = window.innerWidth >= 1280;
+            const order = ['combat', 'magic', 'feats', 'inventory', 'pets', 'core'];
+            function btnVisible(id) {
+                const b = document.getElementById(`btn-tab-${id}`);
+                return b && getComputedStyle(b).display !== 'none';
             }
+            const savedTab = localStorage.getItem(`pf2e_tab_${pcName}`);
+            // On wide, core is hidden — never restore it.
+            const candidate = (wide && savedTab === 'core') ? null : savedTab;
+            if (candidate && document.getElementById(`tab-${candidate}`) && btnVisible(candidate)) {
+                switchTab(candidate);
+                return;
+            }
+            for (const id of order) {
+                if (document.getElementById(`tab-${id}`) && btnVisible(id)) {
+                    switchTab(id);
+                    return;
+                }
+            }
+            switchTab('combat');
         })();
 
         // === Custom parchment tooltip (D12) ===
@@ -7676,7 +7700,10 @@
             }
         }
 
-        switchTab('core');
+        // Tab init is handled by the initTab IIFE earlier in this script —
+        // don't stomp it with a hardcoded switchTab('core'), which was
+        // causing every PC sheet to land on a hidden Core tab on wide
+        // viewports until the user clicked another tab manually.
         initDailyPrep();
 
         // ==========================================
@@ -8080,28 +8107,19 @@
             try { showRollToast(`${verb}: ${name}`, '', 'Item used — GM notified. Reduce qty on Inventory tab if consumed.', false, false, [], null); } catch(_) {}
         };
 
-        // ----- Auto-switch Core → Combat on wide viewports -----------
-        // On viewports >=1280px the meta + stats rails carry everything
-        // that lived in the Core & Skills tab, so the tab is hidden via
-        // CSS. If the player had Core selected before widening the
-        // window (or it's their default), bump them over to Combat.
-        (function autoSwitchCoreOnWide() {
-            const apply = () => {
-                if (window.innerWidth >= 1280) {
-                    const coreBtn = document.getElementById('btn-tab-core');
-                    const coreActive = coreBtn && coreBtn.classList.contains('active');
-                    if (coreActive && typeof switchTab === 'function') {
-                        switchTab('combat');
-                    }
-                }
-            };
-            // Initial pass (wait a tick so tabs init first)
-            setTimeout(apply, 50);
-            // Re-evaluate on resize crossing the breakpoint
+        // Re-evaluate on resize: if the user crosses the wide breakpoint
+        // while on Core (only valid on narrow), flip to Combat so they
+        // don't end up staring at a hidden panel.
+        (function watchTabBreakpoint() {
             let lastWide = window.innerWidth >= 1280;
             window.addEventListener('resize', () => {
                 const nowWide = window.innerWidth >= 1280;
-                if (nowWide && !lastWide) apply();
+                if (nowWide && !lastWide) {
+                    const coreBtn = document.getElementById('btn-tab-core');
+                    if (coreBtn && coreBtn.classList.contains('active')) {
+                        switchTab('combat');
+                    }
+                }
                 lastWide = nowWide;
             });
         })();
@@ -8307,49 +8325,90 @@
         }
 
         // ----- Skill-action quick row (Wave 2 #5) -------------------------
-        // Common PF2e combat actions. Each maps to a skill mod the PC has
-        // and labels the target save type so the GM compares correctly.
-        (function initSkillActions() {
+        // Common PF2e combat actions. Even when a PC is UNTRAINED in the
+        // backing skill, the action is still legal (untrained = ability mod
+        // + 0 prof). Previously we skipped any action whose skill wasn't in
+        // pc.skills, so PCs without Athletics didn't see Grapple/Trip/Shove
+        // — that was wrong; PF2e allows untrained Athletics.
+        //
+        // Belt-and-suspenders: also re-run on DOMContentLoaded in case some
+        // earlier script in this block throws and abandons the IIFE chain.
+        function _buildSkillActionsRow() {
             const row = document.getElementById('skill-actions-row');
             if (!row) return;
             const skills = {{ pc.skills | tojson | safe }};
+            const mods   = {{ pc.mods   | tojson | safe }};
+            // Skill → key ability fallback (untrained mod = ability + 0).
+            const SKILL_ABILITY = {
+                'acrobatics':'dex','arcana':'int','athletics':'str','crafting':'int',
+                'deception':'cha','diplomacy':'cha','intimidation':'cha','medicine':'wis',
+                'nature':'wis','occultism':'int','performance':'cha','religion':'wis',
+                'society':'int','stealth':'dex','survival':'wis','thievery':'dex',
+            };
             function getSkillMod(name) {
                 const s = skills.find(s => s.name.toLowerCase() === name.toLowerCase());
-                if (!s) return null;
-                const t = s.total;
-                return typeof t === 'string' ? parseInt(t, 10) : t;
+                if (s) {
+                    const t = s.total;
+                    const v = typeof t === 'string' ? parseInt(t, 10) : t;
+                    if (!isNaN(v)) return { mod: v, trained: true };
+                }
+                // Fallback: untrained — return ability mod + 0 prof.
+                const ab = SKILL_ABILITY[name.toLowerCase()];
+                if (ab && typeof mods[ab] === 'number') {
+                    return { mod: mods[ab], trained: false };
+                }
+                return { mod: 0, trained: false };
             }
             // Definition list — name, skill required, action cost, target save, hint
             const ACTIONS = [
                 { name: 'Demoralize',    skill: 'Intimidation', cost: '1', vs: 'Will DC',  hint: 'Frightened 1 (crit: 2). −10 if you don\'t share a language.' },
-                { name: 'Trip',          skill: 'Athletics',    cost: '1', vs: 'Reflex DC', hint: 'Crit: prone + 1d6 dmg. Two-handed weapon = +1 circ?' },
+                { name: 'Trip',          skill: 'Athletics',    cost: '1', vs: 'Reflex DC', hint: 'Crit: prone + 1d6 dmg.' },
                 { name: 'Grapple',       skill: 'Athletics',    cost: '1', vs: 'Fortitude DC', hint: 'Success: Grabbed. Crit: Restrained.' },
                 { name: 'Shove',         skill: 'Athletics',    cost: '1', vs: 'Fortitude DC', hint: 'Success: 5 ft push. Crit: 10 ft + prone.' },
                 { name: 'Tumble Through',skill: 'Acrobatics',   cost: '1', vs: 'Reflex DC',  hint: 'Move through enemy\'s square (and avoid Reactive Strike).' },
                 { name: 'Feint',         skill: 'Deception',    cost: '1', vs: 'Perception DC',hint: 'Success: target Off-Guard until end of your next turn.' },
-                { name: 'Bon Mot',       skill: 'Diplomacy',    cost: '1', vs: 'Will DC',  hint: 'Crit: −3 Perception/Will. Need feat. Skip if PC lacks it.' },
+                { name: 'Bon Mot',       skill: 'Diplomacy',    cost: '1', vs: 'Will DC',  hint: 'Crit: −3 Perception/Will. Skill feat: Bon Mot.' },
                 { name: 'Recall Knowledge',skill: 'Arcana',     cost: '1', vs: 'Lore DC',  hint: 'Pick the relevant Lore skill (Arcana/Religion/Nature/etc).' },
             ];
             const html = [];
             ACTIONS.forEach(a => {
-                let mod = getSkillMod(a.skill);
+                let info = getSkillMod(a.skill);
                 let skillToUse = a.skill;
                 // Recall Knowledge — pick the highest of Arcana/Religion/Nature/Occultism/Society
                 if (a.name === 'Recall Knowledge') {
                     const candidates = ['Arcana','Religion','Nature','Occultism','Society','Crafting','Medicine'];
-                    let best = null, bestMod = -99;
-                    candidates.forEach(c => { const m = getSkillMod(c); if (m !== null && m > bestMod) { best = c; bestMod = m; } });
-                    if (best) { skillToUse = best; mod = bestMod; }
+                    let best = null, bestInfo = null;
+                    candidates.forEach(c => {
+                        const m = getSkillMod(c);
+                        if (m && (bestInfo === null || m.mod > bestInfo.mod)) { best = c; bestInfo = m; }
+                    });
+                    if (best && bestInfo) { skillToUse = best; info = bestInfo; }
                 }
-                if (mod === null || mod === undefined || isNaN(mod)) return; // skill not available
+                const mod = info.mod;
+                const untrained = !info.trained;
                 const sign = mod >= 0 ? '+' : '';
-                html.push(`<button type="button" class="skill-action-btn" onclick="rollSkillAction('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')" title="${a.hint}">
+                const untTag = untrained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
+                html.push(`<button type="button" class="skill-action-btn" onclick="rollSkillAction('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')" title="${a.hint}${untrained ? ' [Untrained — uses raw ability mod]' : ''}">
                     <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
-                    <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod} · vs ${a.vs}</span>
+                    <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
                 </button>`);
             });
             row.innerHTML = html.join('');
-        })();
+        }
+        try { _buildSkillActionsRow(); } catch(e) { console.error('skill-actions init:', e); }
+        // Belt-and-suspenders: re-run after DOMContentLoaded so an upstream
+        // throw can't permanently kill the row. Cheap — bails if already built.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                const row = document.getElementById('skill-actions-row');
+                if (row && row.children.length === 0) { try { _buildSkillActionsRow(); } catch(_) {} }
+            });
+        } else {
+            setTimeout(() => {
+                const row = document.getElementById('skill-actions-row');
+                if (row && row.children.length === 0) { try { _buildSkillActionsRow(); } catch(_) {} }
+            }, 100);
+        }
         function rollSkillAction(name, skill, mod, vsLabel) {
             const d20 = Math.floor(Math.random() * 20) + 1;
             const total = d20 + mod;
@@ -9545,6 +9604,70 @@
         </div>
         <iframe id="levelup-iframe" src="about:blank"></iframe>
     </div>
+
+    {# ── Standalone skill-actions builder ─────────────────────────────
+       Lives in its own <script> tag at the END of body so an upstream
+       throw in the giant in-line script block (1.1 MB) cannot kill it.
+       Players were missing Grapple/Trip/etc because the original IIFE
+       was buried in that giant block and never ran. This is the safety
+       net that always fires regardless. #}
+    <script>
+    (function buildSkillActionsStandalone() {
+        const row = document.getElementById('skill-actions-row');
+        if (!row || row.children.length > 0) return;
+        const skills = {{ pc.skills | tojson | safe }};
+        const mods   = {{ pc.mods   | tojson | safe }};
+        const SKILL_ABILITY = {
+            'acrobatics':'dex','arcana':'int','athletics':'str','crafting':'int',
+            'deception':'cha','diplomacy':'cha','intimidation':'cha','medicine':'wis',
+            'nature':'wis','occultism':'int','performance':'cha','religion':'wis',
+            'society':'int','stealth':'dex','survival':'wis','thievery':'dex',
+        };
+        function getMod(name) {
+            const s = skills.find(s => s.name && s.name.toLowerCase() === name.toLowerCase());
+            if (s && s.total !== undefined) {
+                const v = typeof s.total === 'string' ? parseInt(s.total, 10) : s.total;
+                if (!isNaN(v)) return { mod: v, trained: true };
+            }
+            const ab = SKILL_ABILITY[name.toLowerCase()];
+            if (ab && typeof mods[ab] === 'number') return { mod: mods[ab], trained: false };
+            return { mod: 0, trained: false };
+        }
+        const ACTIONS = [
+            { name: 'Demoralize',     skill: 'Intimidation', cost: '1', vs: 'Will DC',       hint: 'Frightened 1 (crit: 2). −10 if you don\'t share a language.' },
+            { name: 'Trip',           skill: 'Athletics',    cost: '1', vs: 'Reflex DC',     hint: 'Crit: prone + 1d6 dmg.' },
+            { name: 'Grapple',        skill: 'Athletics',    cost: '1', vs: 'Fortitude DC',  hint: 'Success: Grabbed. Crit: Restrained.' },
+            { name: 'Shove',          skill: 'Athletics',    cost: '1', vs: 'Fortitude DC',  hint: 'Success: 5 ft push. Crit: 10 ft + prone.' },
+            { name: 'Tumble Through', skill: 'Acrobatics',   cost: '1', vs: 'Reflex DC',     hint: 'Move through enemy\'s square (and avoid Reactive Strike).' },
+            { name: 'Feint',          skill: 'Deception',    cost: '1', vs: 'Perception DC', hint: 'Success: target Off-Guard until end of your next turn.' },
+            { name: 'Bon Mot',        skill: 'Diplomacy',    cost: '1', vs: 'Will DC',       hint: 'Skill feat. Crit: −3 Perception/Will.' },
+            { name: 'Recall Knowledge', skill: 'Arcana',     cost: '1', vs: 'Lore DC',       hint: 'Pick the relevant Lore skill (Arcana/Religion/Nature/etc).' },
+        ];
+        const html = [];
+        ACTIONS.forEach(a => {
+            let info = getMod(a.skill);
+            let skillToUse = a.skill;
+            if (a.name === 'Recall Knowledge') {
+                const candidates = ['Arcana','Religion','Nature','Occultism','Society','Crafting','Medicine'];
+                let best = null, bestInfo = null;
+                candidates.forEach(c => {
+                    const m = getMod(c);
+                    if (m && (bestInfo === null || m.mod > bestInfo.mod)) { best = c; bestInfo = m; }
+                });
+                if (best && bestInfo) { skillToUse = best; info = bestInfo; }
+            }
+            const mod = info.mod;
+            const sign = mod >= 0 ? '+' : '';
+            const untTag = !info.trained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
+            const handler = `(typeof rollSkillAction === 'function' ? rollSkillAction : function(n,s,m,v){alert(n+' '+s+' '+m+' vs '+v);})('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')`;
+            html.push(`<button type="button" class="skill-action-btn" onclick="${handler}" title="${a.hint}${!info.trained ? ' [Untrained]' : ''}">
+                <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
+                <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
+            </button>`);
+        });
+        row.innerHTML = html.join('');
+    })();
+    </script>
 
 </body>
 </html>
