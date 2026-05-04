@@ -2332,4 +2332,319 @@ button[onclick^="rollInitiative"],
     color: inherit !important;
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   27. Pathbuilder push II (2026-05) — pull harder on the visual feel.
+   The user wants more Pathbuilder, less Demiplane. Pathbuilder uses:
+   - A SLIGHTLY more orange-amber accent (closer to #d28a3d)
+   - Cooler-leaning dark surfaces (a hint of blue-grey, less warm-amber)
+   - Compact 1-line stat tiles with the value in the accent color
+   - Wide top action bar (Rest / Add Condition / Add Custom Buff)
+   - Tab labels as plain uppercase text (already done)
+   - Roll buttons that look like flat dark rectangles
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 27a. Slightly cooler page background + warmer accent. The values
+   are tuned by eye against Pathbuilder's screenshots. */
+:root,
+[data-theme="dark"], [data-theme="light"], [data-theme="parchment"],
+[data-theme="hi-contrast"], [data-theme="default"] {
+    --bg-page:    #0d0c10 !important;     /* slight blue-grey shift */
+    --bg-card:    #181820 !important;
+    --bg-card-2:  #22222e !important;
+    --bg-input:   #0a090d !important;
+    --bg-sunken:  #131319 !important;
+    --gilt-100:   #f4d99a !important;
+    --gilt-200:   #e8b66a !important;     /* PB-style amber */
+    --gilt-300:   #d28a3d !important;     /* PRIMARY ACCENT — slightly more orange */
+    --gilt-400:   #a86515 !important;
+    --border-card:   rgba(210, 138, 61, 0.16) !important;
+    --border-rule:   rgba(210, 138, 61, 0.30) !important;
+    --border-strong: rgba(255, 255, 255, 0.12) !important;
+    --text-on-cream:   #e8e6df !important;     /* primary text on cards */
+    --text-on-cream-2: #b8b4a6 !important;
+    --text-on-cream-3: #807c70 !important;
+    --text-on-dark:    #ebe9df !important;
+    --text-on-dark-2:  #b8b4a6 !important;
+    --text-on-dark-3:  #807c70 !important;
+}
+body { background: var(--bg-page) !important; }
+
+/* ── 27b. Top action toolbar — wide row, plain rectangles like
+   Pathbuilder's "Rest / Add Condition / Add Custom Buff" strip. */
+.mobile-actions { gap: var(--sp-2) !important; }
+.mobile-actions .tb {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark) !important;
+    border-radius: var(--r-sm) !important;
+    padding: 6px 12px !important;
+    font-family: var(--font-ui) !important;
+    font-weight: 500 !important;
+    font-size: 11px !important;
+    letter-spacing: 0.04em !important;
+    text-transform: none !important;
+    box-shadow: none !important;
+}
+.mobile-actions .tb:hover {
+    background: var(--bg-card-2) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+.mobile-actions .tb.gilt,
+.mobile-actions .tb.primary {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+    font-weight: 600 !important;
+}
+.mobile-actions .tb.gilt:hover,
+.mobile-actions .tb.primary:hover {
+    background: var(--gilt-200) !important;
+    border-color: var(--gilt-200) !important;
+}
+
+/* ── 27c. Hero/Focus pill — flatter, more "stat card" than chip. */
+.resource-chip {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--r-sm) !important;
+    padding: 4px 8px !important;
+    gap: 4px !important;
+}
+.resource-chip-lbl {
+    font-size: 9px !important;
+    letter-spacing: 0.16em !important;
+    color: var(--text-on-dark-3) !important;
+}
+
+/* ── 27d. Skills column — Pathbuilder displays skills as a single
+   column. Override the existing two-column grid on the Core & Skills
+   tab so it reads as one tight list. */
+.sheet-page .grid.grid-cols-1.md\\:grid-cols-2.gap-x-6.gap-y-2 {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+}
+
+/* ── 27e. Ability tiles — 6 tight tiles in a row, Pathbuilder size. */
+.ability-row-wrap {
+    background: var(--bg-page) !important;
+    padding: var(--sp-2) var(--sp-4) !important;
+    gap: var(--sp-2) !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+}
+.ability-block {
+    flex: 1 1 0 !important;
+    max-width: 110px !important;
+    min-width: 60px !important;
+    padding: 4px 6px !important;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-strong) !important;
+}
+.ability-block .mod {
+    font-size: 16px !important;
+    color: var(--accent) !important;
+}
+.ability-block .label {
+    font-size: 9px !important;
+    margin-top: 0 !important;
+}
+
+/* ── 27f. Stats strip — Pathbuilder runs these as one wide row of
+   tiles with the value in the accent. Already mostly there; tighten. */
+.stats-strip {
+    background: var(--bg-page) !important;
+    border-top: 1px solid var(--border-strong) !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+}
+.ss-block {
+    border-right: 1px solid var(--border-strong) !important;
+    padding: 6px 10px !important;
+}
+.ss-val { font-size: 16px !important; color: var(--accent) !important; }
+.ss-lbl { font-size: 9px !important; }
+
+/* ── 27g. Tab bar — Pathbuilder's "Weapons | Defense | Gear | …" plain
+   text-tab strip. Tighten more. */
+.tab-bar {
+    background: var(--bg-page) !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+    padding: 0 var(--sp-4) !important;
+}
+.tab-btn {
+    padding: 8px 14px !important;
+    font-size: 11px !important;
+    letter-spacing: 0.14em !important;
+    color: var(--text-on-dark-3) !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+    margin: 0 !important;
+}
+.tab-btn:hover { color: var(--text-on-dark) !important; background: transparent !important; }
+.tab-btn.active {
+    color: var(--accent) !important;
+    border-bottom-color: var(--accent) !important;
+    background: transparent !important;
+}
+
+/* ── 27h. Panel cards — flatter, tighter. */
+.panel-card {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--r-sm) !important;
+    padding: var(--sp-4) !important;
+    box-shadow: none !important;
+    margin-bottom: var(--sp-3) !important;
+}
+
+/* ── 27i. Roll buttons — flat dark rectangles like PB's Roll/Options/
+   Runes/Stow/Delete strips. */
+button.tb, .tb {
+    background: transparent !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+    font-size: 11px !important;
+    padding: 5px 10px !important;
+    border-radius: var(--r-sm) !important;
+    box-shadow: none !important;
+    font-family: var(--font-ui) !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+    letter-spacing: 0.02em !important;
+}
+button.tb:hover, .tb:hover {
+    background: var(--bg-card-2) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+
+/* ── 27j. Strike attack/damage buttons (Combat tab) — match PB's
+   compact 3-button-strip layout per weapon. */
+button[onclick^="rollAttack"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--accent) !important;
+    border-radius: var(--r-sm) !important;
+    padding: 6px 10px !important;
+    font-family: var(--font-display) !important;
+    font-variant-numeric: tabular-nums lining-nums !important;
+    font-weight: 600 !important;
+}
+button[onclick^="rollAttack"]:hover {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+}
+button[onclick^="rollDamage"] {
+    background: rgba(210, 138, 61, 0.06) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--accent) !important;
+}
+button[onclick^="rollDamage"]:hover {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+}
+
+/* ── 27k. Char-header — tighter, Pathbuilder reads compact. */
+.char-header {
+    background: var(--bg-page) !important;
+    border-bottom: 1px solid var(--border-strong) !important;
+}
+.char-name {
+    font-size: 18px !important;
+    color: var(--text-on-dark) !important;
+    text-shadow: none !important;
+    letter-spacing: 0.02em !important;
+    font-weight: 600 !important;
+}
+.char-subtitle {
+    font-size: 11px !important;
+    color: var(--text-on-dark-3) !important;
+    letter-spacing: 0.04em !important;
+}
+.char-level-badge {
+    background: transparent !important;
+    color: var(--accent) !important;
+    border: 1px solid var(--accent) !important;
+    font-size: 9px !important;
+    padding: 1px 8px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.16em !important;
+}
+
+/* ── 27l. Spell entry rows — Pathbuilder's compact one-liner. */
+.spell-entry {
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    border-bottom: 1px solid var(--border-card) !important;
+    border-left: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+}
+.spell-entry:hover {
+    background: rgba(210, 138, 61, 0.05) !important;
+}
+.spell-rank-header {
+    font-family: var(--font-display) !important;
+    font-size: 10px !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    color: var(--accent) !important;
+    border-bottom: 1px solid var(--border-card) !important;
+    padding-bottom: var(--sp-1) !important;
+    margin-bottom: var(--sp-2) !important;
+}
+
+/* ── 27m. Inventory rows — flat one-liners. */
+.inv-item, .equipment-item {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid var(--border-card) !important;
+    border-radius: 0 !important;
+    padding: 6px 10px !important;
+}
+.inv-item:hover { background: rgba(210, 138, 61, 0.05) !important; }
+
+/* ── 27n. Profession letter chips — Pathbuilder uses small filled
+   squares, not outlined letters. */
+.prof-t { background: rgba(210, 138, 61, 0.18) !important; color: var(--gilt-200) !important; border-color: rgba(210, 138, 61, 0.3) !important; }
+.prof-e { background: rgba(210, 138, 61, 0.32) !important; color: var(--gilt-100) !important; border-color: rgba(210, 138, 61, 0.5) !important; }
+.prof-m { background: var(--accent) !important; color: var(--ink-950) !important; border-color: var(--accent) !important; }
+.prof-l { background: #c43c3c !important; color: #fff !important; border-color: #c43c3c !important; }
+
+/* ── 27o. Reaction chip in toolbar — Pathbuilder doesn't have this
+   exact element, but ours should be a one-line muted pill not a
+   bright-blue chip. */
+#reaction-chip {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-on-dark-2) !important;
+    border-radius: var(--r-sm) !important;
+    padding: 4px 10px !important;
+    font-size: 10px !important;
+    letter-spacing: 0.04em !important;
+}
+#reaction-chip:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
+
+/* ── 27p. Sticky header tighter — Pathbuilder's top is dense. */
+.char-header > div:first-child {
+    padding-top: var(--sp-2) !important;
+    padding-bottom: var(--sp-2) !important;
+}
+.portrait-circle {
+    width: 44px !important;
+    height: 44px !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+}
+.portrait-circle:hover { box-shadow: none !important; border-color: var(--accent) !important; }
+.portrait-badge {
+    bottom: -2px !important; right: -2px !important;
+    height: 14px !important; min-width: 18px !important;
+    font-size: 8px !important;
+    border: 1px solid var(--accent) !important;
+    color: var(--accent) !important;
+    background: var(--bg-page) !important;
+}
+
 /* End of system.css */

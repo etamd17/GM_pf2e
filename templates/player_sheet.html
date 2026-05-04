@@ -2460,6 +2460,11 @@
                         <span class="sustain-chip-label">Sustain</span>
                         <span id="sustain-items"></span>
                     </span>
+                    {# Pathbuilder-style proactive condition picker — was
+                       previously discoverable only through the condition
+                       strip (which only appears when conditions are active).
+                       Now players can apply a condition before it kicks in. #}
+                    <button onclick="openConditionPicker()" class="tb no-print" title="Add a condition (Frightened, Sickened, Off-Guard, etc.)">+ Condition</button>
                     <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Long Rest</button>
                     {# Single Level Up button. The print-only fallback link
                        was a duplicate-on-screen because my .tb display:inline-flex
@@ -4742,6 +4747,102 @@
             } catch(e) { console.error(e); }
         }
         
+        // Pathbuilder-style condition picker — opens a flat modal listing
+        // every PF2e condition with a quick-apply button. Numeric conditions
+        // (Frightened, Sickened, etc.) prompt for a value; toggle conditions
+        // (Off-Guard, Prone, etc.) just flip on. Closes via backdrop click
+        // or × button.
+        function openConditionPicker() {
+            const NUMERIC = [
+                ['frightened', 'Frightened', 'Status penalty to all checks; ends at end of turn -1 step.'],
+                ['sickened', 'Sickened', 'Status penalty; spend action + Fort save to reduce.'],
+                ['enfeebled', 'Enfeebled', 'Status penalty to STR-based rolls and damage.'],
+                ['clumsy', 'Clumsy', 'Status penalty to DEX-based rolls (incl. AC + Reflex).'],
+                ['drained', 'Drained', 'Lose value × level HP. CON penalty.'],
+                ['stupefied', 'Stupefied', 'Status penalty to INT/WIS/CHA rolls + spell DCs.'],
+                ['dying', 'Dying', 'Unconscious. Recovery DC 10 + value flat.'],
+                ['wounded', 'Wounded', 'Increases your Dying value when you fall again.'],
+                ['doomed', 'Doomed', 'You die at Dying max - value instead of 4.'],
+                ['stunned', 'Stunned', 'Lose actions = value at start of turn.'],
+                ['slowed', 'Slowed', 'Lose actions = value at start of turn.'],
+            ];
+            const TOGGLE = [
+                ['off_guard', 'Off-Guard', '−2 circumstance to AC.'],
+                ['prone', 'Prone', '−2 to attacks, Off-Guard, can only Crawl/Stand.'],
+                ['concealed', 'Concealed', 'Attackers DC 5 flat check or miss.'],
+                ['hidden', 'Hidden', 'Attackers DC 11 flat check; on miss, attack fails.'],
+                ['undetected', 'Undetected', 'Attackers must guess your square.'],
+            ];
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed; inset:0; background:rgba(8,6,3,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px;';
+            const cur = (typeof currentConditions !== 'undefined') ? currentConditions : {};
+            const numHtml = NUMERIC.map(([k,nm,desc]) => {
+                const v = cur[k] || 0;
+                return `<div data-cond-row="${k}" style="display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border-card);">
+                    <div style="flex:1; min-width:0;">
+                        <div style="color:var(--text-on-cream); font-weight:600; font-size:13px;">${nm}</div>
+                        <div style="color:var(--text-on-cream-3); font-size:11px;">${desc}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <button data-cond-act="dec" data-cond="${k}" class="tb" style="width:24px; height:24px; padding:0;">−</button>
+                        <span data-cond-cur="${k}" style="min-width:18px; text-align:center; font-family:var(--font-display); font-weight:700; color:${v>0?'var(--accent)':'var(--text-on-cream-3)'};">${v}</span>
+                        <button data-cond-act="inc" data-cond="${k}" class="tb" style="width:24px; height:24px; padding:0;">+</button>
+                    </div>
+                </div>`;
+            }).join('');
+            const togHtml = TOGGLE.map(([k,nm,desc]) => {
+                const on = !!cur[k];
+                return `<div data-cond-row="${k}" style="display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border-card);">
+                    <div style="flex:1; min-width:0;">
+                        <div style="color:var(--text-on-cream); font-weight:600; font-size:13px;">${nm}</div>
+                        <div style="color:var(--text-on-cream-3); font-size:11px;">${desc}</div>
+                    </div>
+                    <button data-cond-act="toggle" data-cond="${k}" class="tb ${on ? 'gilt' : ''}" style="padding:4px 12px; font-size:11px;">${on ? 'On' : 'Off'}</button>
+                </div>`;
+            }).join('');
+            overlay.innerHTML = `
+                <div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); width:100%; max-width:520px; max-height:80vh; display:flex; flex-direction:column; box-shadow: 0 6px 24px rgba(0,0,0,0.45);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border-card);">
+                        <h3 style="font-family:var(--font-display); font-size:13px; letter-spacing:0.18em; text-transform:uppercase; color:var(--accent); margin:0;">Add Condition</h3>
+                        <button data-close style="background:transparent; border:none; color:var(--text-on-cream-3); cursor:pointer; font-size:18px; line-height:1; padding:0 4px;">×</button>
+                    </div>
+                    <div style="overflow-y:auto; padding:var(--sp-2) 0;">
+                        <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-on-cream-3); padding:var(--sp-2) var(--sp-4) var(--sp-1);">Numeric</div>
+                        ${numHtml}
+                        <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-on-cream-3); padding:var(--sp-3) var(--sp-4) var(--sp-1);">Toggle</div>
+                        ${togHtml}
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.matches('[data-close]')) overlay.remove(); });
+            overlay.addEventListener('click', async (e) => {
+                const btn = e.target.closest('[data-cond-act]');
+                if (!btn) return;
+                const cond = btn.getAttribute('data-cond');
+                const act = btn.getAttribute('data-cond-act');
+                if (act === 'toggle') {
+                    await toggleBoolCondition(cond);
+                    const newOn = !((cur && cur[cond]) || false);
+                    cur[cond] = newOn;
+                    btn.classList.toggle('gilt', newOn);
+                    btn.textContent = newOn ? 'On' : 'Off';
+                } else {
+                    const delta = act === 'inc' ? 1 : -1;
+                    const old = parseInt(cur[cond] || 0, 10);
+                    const next = Math.max(0, Math.min(10, old + delta));
+                    try {
+                        await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({condition: cond, value: next})
+                        });
+                        cur[cond] = next;
+                        const sp = overlay.querySelector(`[data-cond-cur="${cond}"]`);
+                        if (sp) { sp.textContent = next; sp.style.color = next > 0 ? 'var(--accent)' : 'var(--text-on-cream-3)'; }
+                    } catch(_) {}
+                }
+            });
+        }
+
         async function toggleBoolCondition(cond) {
             try {
                 const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
