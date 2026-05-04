@@ -2839,6 +2839,177 @@ button[onclick^="rollDamage"]:hover {
 .sr-val .hero-pip, .sr-val .focus-pip {
     margin-left: 2px;
 }
+
+/* HP control card — primary surface in the rail. Big readable value,
+   colored bar, and the +/- and TMP controls inline below. */
+.sr-hp-card { padding-bottom: var(--sp-3) !important; }
+.sr-hp-display {
+    text-align: center;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    margin: 4px 0 6px;
+}
+.sr-hp-cur { font-size: 26px; font-weight: 700; color: var(--accent); }
+.sr-hp-sep { font-size: 14px; color: var(--text-on-dark-3); margin: 0 2px; }
+.sr-hp-max { font-size: 14px; color: var(--text-on-dark-2); }
+.sr-hp-tmp {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 11px;
+    font-family: var(--font-ui);
+    color: #93C5FD;
+    font-weight: 600;
+}
+.sr-hp-bar {
+    height: 6px;
+    background: var(--ink-700);
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: var(--sp-2);
+}
+.sr-hp-controls {
+    display: grid;
+    grid-template-columns: 28px 1fr 28px auto;
+    gap: 4px;
+    align-items: center;
+}
+.sr-hp-btn {
+    width: 28px; height: 28px;
+    background: var(--bg-card-2);
+    color: var(--text-on-dark);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: border-color var(--t-fast), color var(--t-fast);
+}
+.sr-hp-btn.damage:hover { border-color: var(--ruby-200); color: var(--ruby-200); }
+.sr-hp-btn.heal:hover   { border-color: var(--success); color: var(--success); }
+#sr-hp-input {
+    width: 100%;
+    height: 28px;
+    background: var(--bg-input);
+    color: var(--text-on-dark);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    text-align: center;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-size: 13px;
+    font-weight: 600;
+}
+#sr-hp-input:focus { outline: none; border-color: var(--accent); }
+#sr-hp-input::-webkit-outer-spin-button, #sr-hp-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sr-tmp-btn {
+    height: 28px;
+    padding: 0 8px;
+    background: rgba(90, 142, 232, 0.10);
+    color: #93C5FD;
+    border: 1px solid rgba(90, 142, 232, 0.35);
+    border-radius: var(--r-sm);
+    font-size: 10px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.sr-tmp-btn:hover { background: rgba(90, 142, 232, 0.18); border-color: rgba(90, 142, 232, 0.55); }
+
+/* Shield controls card */
+.sr-shield-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+    margin-top: var(--sp-2);
+}
+.sr-shield-action {
+    padding: 6px 4px;
+    background: var(--bg-card-2);
+    color: var(--text-on-dark-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    font-size: 10px;
+    font-family: var(--font-display);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.sr-shield-action:hover { border-color: var(--accent); color: var(--accent); }
+.sr-shield-action.raised {
+    background: rgba(210, 138, 61, 0.18);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.sr-shield-action[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* Skills list inside the rail — single-column rows, prof letter on
+   the left, name in the middle, +N total on the right. */
+.sr-skills .sr-row + .sr-row { border-top: 1px solid var(--border-card); }
+.sr-skill-row { padding: 4px var(--sp-1) !important; gap: var(--sp-2) !important; }
+.sr-skill-prof {
+    flex: 0 0 18px;
+    width: 18px; height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 3px;
+}
+.sr-prof-u {
+    background: transparent;
+    border: 1px solid var(--border-card);
+    color: var(--text-on-dark-3);
+}
+.sr-skill-name {
+    flex: 1 1 auto;
+    font-size: 11px;
+    color: var(--text-on-dark);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Header HP chip — small live HP readout under the player name. */
+.header-hp-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(210, 138, 61, 0.10);
+    border: 1px solid rgba(210, 138, 61, 0.35);
+    border-radius: 99px;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    color: var(--text-on-dark);
+    font-size: 12px;
+    font-weight: 600;
+}
+.header-hp-chip-lbl {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    font-weight: 700;
+}
+.header-hp-chip-sep { color: var(--text-on-dark-3); margin: 0 1px; }
+
+/* On wide viewports the rails carry everything that lived in the Core
+   & Skills tab (meta + skills). Hide the tab + its button entirely; if
+   the player was on Core when they widened the window, the tab flow
+   will fall through to Combat (which renders by default). */
+@media (min-width: 1280px) {
+    #btn-tab-core { display: none !important; }
+    #tab-core { display: none !important; }
+    /* Force Combat to be the visible default when none is "active". */
+    #tab-combat:not(.active):not([data-explicit-hidden]) { display: block !important; }
+}
 #char-meta-rail::-webkit-scrollbar { width: 4px; }
 #char-meta-rail::-webkit-scrollbar-track { background: transparent; }
 #char-meta-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
