@@ -20,8 +20,22 @@
         
         .nav-item { display: none; font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.06em; } 
         .nav-item.active { background: linear-gradient(90deg, rgba(196,60,60,0.12), transparent); border-left: 3px solid #c43c3c; color: #e85555; }
-        .step-panel { display: none; animation: fadeIn 0.25s ease-out; }
-        .step-panel.active { display: block; }
+        /* Wizard-step routing: only the .active panel renders. The
+           !important defends against Tailwind utility classes that show
+           up later in the cascade and might re-flip display. */
+        .step-panel { display: none !important; animation: fadeIn 0.25s ease-out; }
+        .step-panel.active { display: block !important; }
+        .step-panel.lvl-hidden { display: none !important; }
+        /* Per-step nav footer — Continue / Back. Renders inside each panel
+           via the buildStepNav() helper after the panel content. */
+        .step-nav { display:flex; justify-content:space-between; align-items:center; margin-top:32px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.08); gap:12px; flex-wrap:wrap; }
+        .step-nav-btn { font-family:'Cinzel',serif; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:8px 18px; border-radius:4px; cursor:pointer; transition:all 0.2s; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#b8b8cc; }
+        .step-nav-btn:hover { border-color:rgba(196,60,60,0.4); color:#e85555; background:rgba(196,60,60,0.08); }
+        .step-nav-btn.primary { background:rgba(196,60,60,0.18); border-color:rgba(196,60,60,0.5); color:#e85555; }
+        .step-nav-btn.primary:hover { background:rgba(196,60,60,0.3); border-color:#c43c3c; }
+        .step-nav-btn[disabled] { opacity:0.35; cursor:not-allowed; }
+        /* "current" pip — the section-pip the user is actively on. */
+        .section-pip.current { box-shadow: 0 0 0 2px rgba(196,60,60,0.6); transform: scale(1.4); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .choice-card { background: linear-gradient(135deg, #1c2029, #161921); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
@@ -129,9 +143,11 @@
                 <h1 style="font-family:var(--font-display); font-size:18px; color:var(--accent); margin:0; line-height:1; letter-spacing:0.04em;">Level Up</h1>
                 <p style="font-size:11px; color:var(--text-on-dark-2); margin:0; margin-top:2px;">{{ pc.name }} &middot; advancing to Level <span id="lbl-target-level" style="color:var(--text-on-dark); font-weight:600;"></span></p>
             </div>
-            <button id="btn-finish" onclick="submitLevelUp()" disabled
-                    style="background: var(--bg-card); color: var(--text-on-dark-3); border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-5); font-family: var(--font-display); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; cursor:not-allowed;">
-                Incomplete
+            {# When disabled, clicking jumps to the first incomplete section
+               so the badge becomes a locator instead of a dead-end. #}
+            <button id="btn-finish" onclick="onFinishClick()"
+                    style="background: var(--bg-card); color: var(--text-on-dark-3); border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-5); font-family: var(--font-display); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;">
+                <span id="btn-finish-lbl">Incomplete</span>
             </button>
         </div>
         {# Tiny progress strip — gilt for completed sections, ruby tint for incomplete. Built by buildSectionProgress() #}
@@ -546,7 +562,9 @@
             buildMagicUI();
             buildRetrainUI();
 
-            // Always start on class features so the player sees what's automatic
+            // Build per-step Back/Continue navigation footers, then land
+            // on class features so the player sees what's automatic.
+            buildStepNav();
             navTo('classfeatures');
         }
         
@@ -752,14 +770,89 @@
             runValidation();
         }
 
-        // navTo() in single-page mode: scroll the section into view.
-        // The old hide/show logic is gone (every panel is rendered
-        // simultaneously in the stacked layout).
+        // navTo() — wizard-step routing. Hide all .step-panel siblings, show
+        // only the requested one. The CSS in the head already declares
+        // `.step-panel { display: none } .step-panel.active { display: block }`
+        // so the active swap drives visibility. Replaces the broken
+        // "all visible at once with huge gaps" single-page scroll model.
+        let _currentStep = null;
         function navTo(stepId) {
             const target = document.getElementById(`step-${stepId}`);
-            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (!target) return;
+            // Skip steps marked irrelevant for this level (e.g., abilities at L3).
+            if (target.classList.contains('lvl-hidden')) return;
+            // Swap active class.
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            target.classList.add('active');
+            _currentStep = stepId;
+            // Reset scroll so the user starts at the top of the new step.
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            // Reflect active step in the section-pip strip.
+            const strip = document.getElementById('lvl-section-progress');
+            if (strip) {
+                strip.querySelectorAll('.section-pip').forEach(p => {
+                    p.classList.toggle('current', p.dataset.step === stepId);
+                });
+            }
             if (stepId === 'review') renderReview();
             runValidation();
+        }
+        // Next / previous helpers — wired by the per-step Continue / Back
+        // buttons rendered into each panel below.
+        function _visibleStepIds() {
+            const v = state.sections_visible || {};
+            return ['classpicks','classfeatures','abilities','skills','feats','magic','retrain','review']
+                .filter(s => v[s] && !document.getElementById(`step-${s}`)?.classList.contains('lvl-hidden'));
+        }
+        window.navNext = function() {
+            const list = _visibleStepIds();
+            const i = list.indexOf(_currentStep);
+            if (i >= 0 && i < list.length - 1) navTo(list[i + 1]);
+        };
+        window.navPrev = function() {
+            const list = _visibleStepIds();
+            const i = list.indexOf(_currentStep);
+            if (i > 0) navTo(list[i - 1]);
+        };
+        // Top-bar Finish button. When the form is complete, it submits.
+        // When incomplete, it jumps to the first section flagged red — so
+        // the user always knows where to go next instead of staring at a
+        // disabled button.
+        window.onFinishClick = function() {
+            const btn = document.getElementById('btn-finish');
+            if (btn && !btn.dataset.disabled) {
+                submitLevelUp();
+                return;
+            }
+            // Find first incomplete pip and navTo it.
+            const strip = document.getElementById('lvl-section-progress');
+            const firstBad = strip ? strip.querySelector('.section-pip.incomplete') : null;
+            if (firstBad) navTo(firstBad.dataset.step);
+            else navTo('review');
+        };
+        // Append a per-step nav footer (Back / Continue) to every visible
+        // panel. Idempotent — call after each panel build/refresh.
+        function buildStepNav() {
+            const list = _visibleStepIds();
+            list.forEach((id, idx) => {
+                const panel = document.getElementById(`step-${id}`);
+                if (!panel) return;
+                let nav = panel.querySelector(':scope > .step-nav');
+                if (!nav) {
+                    nav = document.createElement('div');
+                    nav.className = 'step-nav';
+                    panel.appendChild(nav);
+                }
+                const isFirst = idx === 0;
+                const isLast = idx === list.length - 1;
+                nav.innerHTML = `
+                    <button class="step-nav-btn" onclick="navPrev()" ${isFirst ? 'disabled' : ''}>← Back</button>
+                    <span style="font-size:10px; letter-spacing:0.1em; color:#5e6378; text-transform:uppercase;">Step ${idx + 1} of ${list.length}</span>
+                    ${isLast
+                        ? `<button class="step-nav-btn primary" onclick="onFinishClick()">Finalize</button>`
+                        : `<button class="step-nav-btn primary" onclick="navNext()">Continue →</button>`}
+                `;
+            });
         }
 
         // Build a tiny gilt-or-ruby progress strip in the sticky top bar
@@ -1885,27 +1978,28 @@
             if (!cpValid) globalValid = false;
 
             const btnF = document.getElementById('btn-finish');
+            const btnFLbl = document.getElementById('btn-finish-lbl');
             if(globalValid) {
-                btnF.disabled = false; btnF.innerText = "Lock In Level";
-                btnF.classList.remove('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
-                btnF.classList.add('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-lg', 'shadow-red-900/50');
+                btnF.dataset.disabled = '';
+                if (btnFLbl) btnFLbl.textContent = 'Lock In Level';
+                btnF.style.background = 'rgba(196,60,60,0.2)';
+                btnF.style.borderColor = 'rgba(196,60,60,0.5)';
+                btnF.style.color = '#e85555';
+                btnF.title = '';
                 document.getElementById('chk-review').innerText = ""; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none";
             } else {
-                btnF.disabled = true; btnF.innerText = "Incomplete Form";
-                btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
-                btnF.classList.remove('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-lg', 'shadow-red-900/50');
+                btnF.dataset.disabled = '1';
+                if (btnFLbl) btnFLbl.textContent = 'Incomplete · click to jump';
+                btnF.style.background = 'var(--bg-card)';
+                btnF.style.borderColor = 'var(--border-strong)';
+                btnF.style.color = 'var(--text-on-dark-3)';
+                btnF.title = 'Form is incomplete — click to jump to the first unfinished section';
                 document.getElementById('chk-review').innerText = "";
             }
 
-            // Sync drawer submit button
-            const btnDrawer = document.getElementById('btn-finish-drawer');
-            if (btnDrawer) {
-                btnDrawer.disabled = btnF.disabled;
-                btnDrawer.innerText = btnF.innerText;
-                btnDrawer.className = btnF.className;
-            }
-
-            buildCompactStepper();
+            // Refresh per-step nav footers (totals/labels may have changed
+            // as sections become valid/invalid — buildStepNav is idempotent).
+            try { if (typeof buildStepNav === 'function') buildStepNav(); } catch(_) {}
         }
 
         async function submitLevelUp() {

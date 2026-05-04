@@ -463,8 +463,23 @@ button.action-btn:focus-visible, .action-btn:focus-visible {
     border-color: var(--accent) !important;
 }
 
-/* HP +/− buttons — neutral, square, restrained */
-.hp-btn, .resource-chip-btn {
+/* HP +/− buttons — 32×32 to clear the touch-target threshold for mid-
+   combat clicks. Resource chip buttons (Hero/Focus) keep their 24px
+   compact size since they fire less often. */
+.hp-btn {
+    width: 32px !important; height: 32px !important;
+    padding: 0 !important;
+    border: 1px solid var(--border-card) !important;
+    background: var(--bg-card-2) !important;
+    color: var(--text-on-cream) !important;
+    border-radius: var(--r-sm) !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+    transition: background var(--t-fast), border-color var(--t-fast) !important;
+}
+.resource-chip-btn {
     width: 24px !important; height: 24px !important;
     padding: 0 !important;
     border: 1px solid var(--border-card) !important;
@@ -3030,14 +3045,15 @@ button[onclick^="rollDamage"]:hover {
 .header-hp-chip-sep { color: var(--text-on-dark-3); margin: 0 1px; }
 
 /* On wide viewports the rails carry everything that lived in the Core
-   & Skills tab (meta + skills). Hide the tab + its button entirely; if
-   the player was on Core when they widened the window, the tab flow
-   will fall through to Combat (which renders by default). */
+   & Skills tab (meta + skills). Hide the tab + its button entirely.
+   The autoSwitchCoreOnWide IIFE in player_sheet.html flips the active
+   tab to Combat if Core was selected when the window crossed the
+   breakpoint — we DON'T also force #tab-combat visible here, because
+   that fights .tab-content.active and locks the user on Combat
+   regardless of what tab they click. */
 @media (min-width: 1280px) {
     #btn-tab-core { display: none !important; }
     #tab-core { display: none !important; }
-    /* Force Combat to be the visible default when none is "active". */
-    #tab-combat:not(.active):not([data-explicit-hidden]) { display: block !important; }
 }
 #char-meta-rail::-webkit-scrollbar { width: 4px; }
 #char-meta-rail::-webkit-scrollbar-track { background: transparent; }

@@ -2423,13 +2423,10 @@
                         <h1 class="char-name font-header flex items-center gap-2 flex-wrap">
                             {{ pc.name }}
                             <span class="char-level-badge">Level {{ pc.level }}</span>
-                            {# Live HP chip under the player name. Mirrors
-                               #current-hp via syncStatsRail's MutationObserver
-                               so SSE updates keep this chip current. #}
-                            <span class="header-hp-chip" title="Hit Points (live). HP controls are in the stats rail at left.">
-                                <span class="header-hp-chip-lbl">HP</span>
-                                <span id="header-hp-chip-cur">{{ pc.current_hp }}</span><span class="header-hp-chip-sep">/</span><span>{{ pc.hp }}</span>
-                            </span>
+                            {# HP chip removed — the under-name vital strip
+                               (Hit Points block) is right below this and
+                               shows the same number with a gauge. No need
+                               to duplicate. #}
                         </h1>
                         <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span class="sub-orn" aria-hidden="true"></span> {{ pc.subclass }}{% endif %} <span class="sub-orn" aria-hidden="true"></span> {{ pc.size }}</p>
                     </div>
@@ -2477,7 +2474,11 @@
                        was a duplicate-on-screen because my .tb display:inline-flex
                        !important rule beat its inline display:none, so it's
                        now consolidated into the one drawer-opening button. #}
-                    <button onclick="openLevelUpDrawer()" class="tb primary no-print">Level Up</button>
+                    {# Level Up = full-page wizard. The drawer was a UX dead-end
+                       (you couldn't see the rest of the sheet anyway). Direct
+                       link sends the player to the dedicated /player/levelup
+                       page with proper step navigation. #}
+                    <a href="/player/levelup/{{ pc.name | urlencode }}" class="tb primary no-print" style="text-decoration:none;">Level Up</a>
 
                     {# Overflow — everything secondary lives behind this button. #}
                     <span class="relative no-print" style="display:inline-block;">
@@ -2520,30 +2521,12 @@
 
         <!-- ROW 3 — Stats strip (AC / Speed / Perception / Class DC / HP) -->
         <div class="stats-strip">
-            <!-- AC -->
+            <!-- AC (just the number + shield badge — actions live in HP/Shield zone) -->
             <div id="ac-block" class="ss-block {% if pc.shield_raised %}shield-raised{% endif %}" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
                 <div class="ss-lbl">Armor Class</div>
                 <div class="ss-val {% if pc.shield_raised %}shield-raised{% endif %}" data-ac-wrap>
                     <span id="ac-current" data-ac-live>{{ pc.ac }}</span>
                     <span id="ac-shield-bonus" class="ac-shield-bonus" {% if not pc.shield_raised or pc.shield_ac_bonus <= 0 %}style="display:none;"{% endif %}>+{{ pc.shield_ac_bonus }} SHIELD</span>
-                </div>
-                <div class="ss-sub">
-                    <button data-shield-btn onclick="toggleShield()" class="no-print" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC, 1 action, lasts until start of your next turn)"
-                            style="padding:2px 8px; font-size:10px; margin-right:2px; border-radius:4px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
-                        Shield {% if pc.shield_raised %}· Raised{% else %}· Raise{% endif %}
-                    </button>
-                    <button onclick="useShieldBlock()" class="no-print" title="Shield Block (reaction)"
-                            style="padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold);">
-                         Block
-                    </button>
-                    {# Reaction chip — click to toggle. Refreshes automatically
-                       at the start of the PC's turn, and Shield Block consumes
-                       it. Turns red when spent. #}
-                    <button id="reaction-chip" onclick="useReaction()" class="no-print"
-                            title="PF2e: 1 reaction per round, refreshed at the start of your turn. Click to toggle if you spend it on AoO, Shield Warden, etc."
-                            style="margin-left:4px; padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; border:1px solid rgba(90,142,232,0.35); {% if pc.reaction_used %}background:rgba(220,38,38,0.12); border-color:rgba(220,38,38,0.4); color:#fca5a5;{% else %}background:rgba(90,142,232,0.12); color:#93C5FD;{% endif %}">
-                         <span id="reaction-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
-                    </button>
                 </div>
             </div>
 
@@ -2624,11 +2607,13 @@
                         <button onclick="callForHeal()" title="Broadcast 'I need healing!' to the GM">Call for Help</button>
                     </div>
                 </div>
-                <div class="flex items-center justify-center gap-2">
+                <div class="flex items-center justify-center gap-3">
                     {# Damage (−) lives on the LEFT now: reads left-to-right as
-                       "take X damage then see HP result". Heal on the right. #}
-                    <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:24px; height:24px; padding:0; font-size:13px;">−</button>
-                    <div style="text-align:center; min-width:90px;">
+                       "take X damage then see HP result". Heal on the right.
+                       32×32 buttons clear the touch-target threshold for
+                       in-person play with shaking hands / cold pizza grease. #}
+                    <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:32px; height:32px; padding:0; font-size:16px;">−</button>
+                    <div style="text-align:center; min-width:96px;">
                         <div>
                             <span id="current-hp" class="hp-current" style="font-size:26px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
                             <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
@@ -2640,7 +2625,7 @@
                             <div class="hp-gauge-fill {% if pc.current_hp == 0 %}dead{% elif hp_pct <= 25 %}low{% elif hp_pct <= 50 %}mid{% else %}high{% endif %}" style="width:{{ hp_pct|int }}%"></div>
                         </div>
                     </div>
-                    <button class="hp-btn heal" onclick="applyHPChange('heal')" title="Heal" style="width:24px; height:24px; padding:0; font-size:13px;">+</button>
+                    <button class="hp-btn heal" onclick="applyHPChange('heal')" title="Heal" style="width:32px; height:32px; padding:0; font-size:16px;">+</button>
                 </div>
                 <div class="flex items-center justify-center gap-1 no-print flex-wrap" style="margin-top:4px;">
                     <input type="number" class="hp-input" id="hp-change-input" placeholder="0" min="0" style="width:56px;">
@@ -2650,6 +2635,25 @@
                     <button id="temp-hp-btn" onclick="addTempHP(event)" oncontextmenu="clearTempHP(event)" title="Grant temporary HP (right-click to clear)"
                             style="padding:3px 8px; font-size:10px; border-radius:4px; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; cursor:pointer; font-weight:700; letter-spacing:0.04em;">
                         +<span style="font-size:9px;">TMP</span>
+                    </button>
+                </div>
+
+                {# Shield Raise / Block / Reaction — moved here from AC block.
+                   These belong in the HP/defensive-action zone, not riding
+                   shotgun next to the AC number. #}
+                <div class="flex items-center justify-center gap-1 no-print flex-wrap" style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-card);">
+                    <button data-shield-btn onclick="toggleShield()" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC, 1 action, lasts until start of your next turn)"
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
+                        Shield {% if pc.shield_raised %}· Raised{% else %}· Raise{% endif %}
+                    </button>
+                    <button onclick="useShieldBlock()" title="Shield Block (reaction): the shield prevents Hardness damage, then absorbs leftover."
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold); letter-spacing:0.06em; text-transform:uppercase; font-weight:700;">
+                        Block
+                    </button>
+                    <button id="reaction-chip" onclick="useReaction()"
+                            title="PF2e: 1 reaction per round, refreshed at the start of your turn. Click to toggle if you spend it on AoO, Shield Warden, etc."
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; border:1px solid rgba(90,142,232,0.35); letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.reaction_used %}background:rgba(220,38,38,0.12); border-color:rgba(220,38,38,0.4); color:#fca5a5;{% else %}background:rgba(90,142,232,0.12); color:#93C5FD;{% endif %}">
+                        <span id="reaction-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
                     </button>
                 </div>
                 {# Shield durability mini-gauge — only shown when the PC
@@ -2898,26 +2902,53 @@
             <div class="meta-card-body">{{ pc.senses | join(', ') }}</div>
         </div>
         {% endif %}
-        <div class="meta-card">
-            <div class="meta-card-head">Quick Stats</div>
-            <div class="meta-card-row">
-                <span class="meta-card-lbl">Class DC</span>
-                <span class="meta-card-val accent">{{ pc.class_dc }}</span>
+        {# Initiative — small inline row, kept on the rail because it's a
+           one-shot start-of-combat roll. #}
+        <div class="meta-card" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <span class="meta-card-lbl">Initiative</span>
+            <button onclick="rollInitiativeFromSheet()" class="meta-card-val accent" style="background:transparent; border:none; cursor:pointer; padding:0; font:inherit; color:var(--accent);" title="Roll initiative (+{{ pc.initiative_mod }})">+{{ pc.initiative_mod }}</button>
+        </div>
+
+        {# Quick conditions — the most-used subset, one click each. The full
+           PF2e condition list still lives behind the "+ Condition" button in
+           the header overflow; this rail surfaces the eight that fire most.
+           Numeric conditions (Frightened/Sickened/Wounded/Dying) +/− here;
+           toggle conditions (Off-Guard/Prone/Concealed/Hidden) flip. #}
+        <div class="meta-card no-print">
+            <div class="meta-card-head">Quick Conditions</div>
+            <div id="meta-quick-conds" style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                {% set _qc_num = [
+                    ('frightened', 'Frightened'),
+                    ('sickened', 'Sickened'),
+                    ('wounded', 'Wounded'),
+                    ('dying', 'Dying'),
+                ] %}
+                {% set _qc_bool = [
+                    ('off_guard', 'Off-Guard'),
+                    ('prone', 'Prone'),
+                    ('concealed', 'Concealed'),
+                    ('hidden', 'Hidden'),
+                ] %}
+                {% for c, lbl in _qc_num %}
+                {% set cv = pc.conditions.get(c, 0) %}
+                <div class="qc-row" data-qc-num="{{ c }}" style="display:grid; grid-template-columns: 1fr auto auto auto; align-items:center; gap:4px; font-size:11px;">
+                    <span class="qc-lbl" style="color:var(--text-on-dark-2); letter-spacing:0.04em;">{{ lbl }}</span>
+                    <button onclick="adjustCondition('{{ c }}', -1)" aria-label="Decrease {{ lbl }}" style="width:22px; height:22px; padding:0; border-radius:3px; background:transparent; border:1px solid var(--border-strong); color:var(--text-on-dark-2); font-size:12px; cursor:pointer;">−</button>
+                    <span class="qc-val" data-qc-val="{{ c }}" style="min-width:18px; text-align:center; font-weight:700; color:{% if cv > 0 %}var(--ruby-200){% else %}var(--text-on-dark-3){% endif %};">{{ cv }}</span>
+                    <button onclick="adjustCondition('{{ c }}', 1)" aria-label="Increase {{ lbl }}" style="width:22px; height:22px; padding:0; border-radius:3px; background:transparent; border:1px solid var(--border-strong); color:var(--text-on-dark-2); font-size:12px; cursor:pointer;">+</button>
+                </div>
+                {% endfor %}
+                <div style="height:1px; background:var(--border-card); margin:4px 0;"></div>
+                {% for c, lbl in _qc_bool %}
+                {% set cv = pc.conditions.get(c, false) %}
+                <button class="qc-toggle" data-qc-bool="{{ c }}" onclick="adjustCondition('{{ c }}', 'toggle')"
+                        style="display:flex; align-items:center; justify-content:space-between; padding:4px 8px; border-radius:3px; background:{% if cv %}rgba(196,60,60,0.18){% else %}transparent{% endif %}; border:1px solid {% if cv %}rgba(196,60,60,0.4){% else %}var(--border-strong){% endif %}; color:{% if cv %}#fca5a5{% else %}var(--text-on-dark-2){% endif %}; font-size:11px; letter-spacing:0.04em; font-family:var(--font-ui); cursor:pointer; text-align:left;">
+                    <span>{{ lbl }}</span>
+                    <span data-qc-bool-state="{{ c }}" style="font-size:10px; opacity:0.7;">{% if cv %}ON{% else %}—{% endif %}</span>
+                </button>
+                {% endfor %}
             </div>
-            {% if pc.spell_dc and pc.spell_dc > 0 %}
-            <div class="meta-card-row">
-                <span class="meta-card-lbl">Spell DC</span>
-                <span class="meta-card-val accent">{{ pc.spell_dc }}</span>
-            </div>
-            <div class="meta-card-row">
-                <span class="meta-card-lbl">Spell Atk</span>
-                <span class="meta-card-val accent">+{{ pc.spell_attack }}</span>
-            </div>
-            {% endif %}
-            <div class="meta-card-row">
-                <span class="meta-card-lbl">Initiative</span>
-                <span class="meta-card-val accent">+{{ pc.initiative_mod }}</span>
-            </div>
+            <button onclick="openConditionPicker()" style="margin-top:6px; width:100%; padding:4px 8px; border-radius:3px; background:transparent; border:1px dashed var(--border-strong); color:var(--text-on-dark-3); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;">More…</button>
         </div>
     </aside>
 
@@ -3109,115 +3140,30 @@
             <div id="skill-actions-row" class="skill-actions-row no-print" aria-label="Common combat skill actions"></div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-1 space-y-6">
+                    {# Armor & Equipment — was "Defenses & Saves", but the
+                       AC and Fort/Ref/Will numbers now live in the under-name
+                       strip and the equipped-armor browser is the only thing
+                       this card uniquely surfaces. Tighter card, no duplicate
+                       numbers. #}
                     <div class="panel-card">
-                        <h3 class="section-header">Defenses & Saves</h3>
-                        
-                        {% set ac_val = pc.proficiencies.get('ac', 2) %}
-                        {% set ac_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ac_val, 'U') %}
-                        
-                        <div class="flex flex-col bg-gray-900 p-3 rounded border border-gray-700 mb-4 shadow-inner relative">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold
-                                        {% if ac_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
-                                        {% elif ac_let == 'T' %} prof-t
-                                        {% elif ac_let == 'E' %} prof-e
-                                        {% elif ac_let == 'M' %} prof-m
-                                        {% else %} prof-l {% endif %}">
-                                        {{ ac_let }}
-                                    </span>
-                                    <span class="text-sm font-bold text-gray-400">Armor Class</span>
-                                </div>
-                                <span class="text-3xl font-bold {{ blue_accent }}">{{ pc.ac }}</span>
-                            </div>
-                            
-                            <div class="mt-3 pt-3 border-t border-gray-800">
-                                <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Equipped Armor</label>
-                                <button onclick="toggleArmorBrowser()" class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-sm text-amber-500 font-bold text-left hover:border-amber-500/50 transition-colors">
-                                    {{ pc.armor_name or 'Unarmored' }} (AC +{{ pc.ac_item|default(0) }})
-                                    <span class="text-gray-600 text-[10px] float-right mt-1">▼ Browse</span>
-                                </button>
-                                
-                                {% if pc.armor_name %}
-                                <div class="grid grid-cols-3 gap-2 mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                                    <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Dex Cap</span><span class="text-white">+{{ pc.ac_dex_cap }}</span></div>
-                                    <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Str Req</span><span class="text-white">{{ pc.armor_str_req }}</span></div>
-                                    {% if pc.mods.get('str', 0) >= pc.armor_str_req %}
-                                        <div class="bg-green-900/20 p-2 rounded text-center border border-green-900/50"><span class="block text-green-500/70 mb-0.5">Penalties</span><span class="text-green-400">Erased</span></div>
-                                    {% else %}
-                                        <div class="bg-red-900/20 p-2 rounded text-center border border-red-900/50" title="Check / Speed Penalty"><span class="block text-red-500/70 mb-0.5">Chk/Spd</span><span class="text-red-400">{{ pc.active_armor_penalty }} / {{ pc.active_speed_penalty }}</span></div>
-                                    {% endif %}
-                                </div>
+                        <h3 class="section-header">Armor &amp; Equipment</h3>
+                        <div class="flex flex-col bg-gray-900 p-3 rounded border border-gray-700 shadow-inner relative">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Equipped Armor</label>
+                            <button onclick="toggleArmorBrowser()" class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-sm text-amber-500 font-bold text-left hover:border-amber-500/50 transition-colors">
+                                {{ pc.armor_name or 'Unarmored' }} (AC +{{ pc.ac_item|default(0) }})
+                                <span class="text-gray-600 text-[10px] float-right mt-1">▼ Browse</span>
+                            </button>
+                            {% if pc.armor_name %}
+                            <div class="grid grid-cols-3 gap-2 mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Dex Cap</span><span class="text-white">+{{ pc.ac_dex_cap }}</span></div>
+                                <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Str Req</span><span class="text-white">{{ pc.armor_str_req }}</span></div>
+                                {% if pc.mods.get('str', 0) >= pc.armor_str_req %}
+                                    <div class="bg-green-900/20 p-2 rounded text-center border border-green-900/50"><span class="block text-green-500/70 mb-0.5">Penalties</span><span class="text-green-400">Erased</span></div>
+                                {% else %}
+                                    <div class="bg-red-900/20 p-2 rounded text-center border border-red-900/50" title="Check / Speed Penalty"><span class="block text-red-500/70 mb-0.5">Chk/Spd</span><span class="text-red-400">{{ pc.active_armor_penalty }} / {{ pc.active_speed_penalty }}</span></div>
                                 {% endif %}
                             </div>
-                        </div>
-
-                        {% set f_val = pc.proficiencies.get('fortitude', 2) %}
-                        {% set f_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(f_val, 'U') %}
-                        {% set r_val = pc.proficiencies.get('reflex', 2) %}
-                        {% set r_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(r_val, 'U') %}
-                        {% set w_val = pc.proficiencies.get('will', 2) %}
-                        {% set w_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(w_val, 'U') %}
-
-                        <div class="grid grid-cols-3 gap-2">
-                            <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
-                                <div class="flex justify-between w-full mb-1">
-                                    <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold leading-none
-                                        {% if f_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
-                                        {% elif f_let == 'T' %} prof-t
-                                        {% elif f_let == 'E' %} prof-e
-                                        {% elif f_let == 'M' %} prof-m
-                                        {% else %} prof-l {% endif %}">
-                                        {{ f_let }}
-                                    </span>
-                                    <span class="text-[10px] text-gray-500 font-bold uppercase">Fort</span>
-                                </div>
-                                <button onclick="rollSkill('Fortitude Save', {{ pc.fort }})"
-                                        class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full"
-                                        aria-label="Roll Fortitude save +{{ pc.fort }}"
-                                        title="{{ pc.fort_breakdown }}">+{{ pc.fort }}</button>
-                            </div>
-                            
-                            <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
-                                <div class="flex justify-between w-full mb-1">
-                                    <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold leading-none
-                                        {% if r_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
-                                        {% elif r_let == 'T' %} prof-t
-                                        {% elif r_let == 'E' %} prof-e
-                                        {% elif r_let == 'M' %} prof-m
-                                        {% else %} prof-l {% endif %}">
-                                        {{ r_let }}
-                                    </span>
-                                    <span class="text-[10px] text-gray-500 font-bold uppercase">Ref</span>
-                                </div>
-                                <button onclick="rollSkill('Reflex Save', {{ pc.ref }})"
-                                        class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full"
-                                        aria-label="Roll Reflex save +{{ pc.ref }}"
-                                        title="{{ pc.ref_breakdown }}">+{{ pc.ref }}</button>
-                            </div>
-
-                            <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center shadow-inner relative flex flex-col items-center">
-                                <div class="flex justify-between w-full mb-1">
-                                    <span class="text-[9px] w-4 h-4 flex items-center justify-center rounded font-bold leading-none
-                                        {% if w_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
-                                        {% elif w_let == 'T' %} prof-t
-                                        {% elif w_let == 'E' %} prof-e
-                                        {% elif w_let == 'M' %} prof-m
-                                        {% else %} prof-l {% endif %}">
-                                        {{ w_let }}
-                                    </span>
-                                    <span class="text-[10px] text-gray-500 font-bold uppercase">Will</span>
-                                </div>
-                                <button onclick="rollSkill('Will Save', {{ pc.will }})"
-                                        class="text-lg font-bold {{ stat_color }} mt-1 hover:text-amber-400 transition-colors w-full"
-                                        aria-label="Roll Will save +{{ pc.will }}"
-                                        title="{{ pc.will_breakdown }}">+{{ pc.will }}</button>
-                            </div>
-                        </div>
-
-                        <div class="skill-row mt-4">
-                            <span class="ds-label">Class DC</span>
-                            <span class="text-sm font-bold text-white">{{ pc.class_dc }}</span>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -4867,10 +4813,33 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    // Update in-place instead of full page reload
                     _refreshConditionStrip();
+                    _paintMetaQuickConds(data.conditions || {});
                 }
             } catch(e) { console.error(e); }
+        }
+
+        // Paint the meta-rail Quick Conditions block from a fresh conditions
+        // dict (server-canonical). Called after adjustCondition + on SSE
+        // pc_update so other players' changes propagate.
+        function _paintMetaQuickConds(conds) {
+            ['frightened','sickened','wounded','dying'].forEach(c => {
+                const el = document.querySelector(`[data-qc-val="${c}"]`);
+                if (!el) return;
+                const v = parseInt(conds[c] || 0, 10) || 0;
+                el.textContent = v;
+                el.style.color = v > 0 ? 'var(--ruby-200)' : 'var(--text-on-dark-3)';
+            });
+            ['off_guard','prone','concealed','hidden'].forEach(c => {
+                const btn = document.querySelector(`[data-qc-bool="${c}"]`);
+                const lbl = document.querySelector(`[data-qc-bool-state="${c}"]`);
+                if (!btn || !lbl) return;
+                const on = !!conds[c];
+                btn.style.background = on ? 'rgba(196,60,60,0.18)' : 'transparent';
+                btn.style.borderColor = on ? 'rgba(196,60,60,0.4)' : 'var(--border-strong)';
+                btn.style.color = on ? '#fca5a5' : 'var(--text-on-dark-2)';
+                lbl.textContent = on ? 'ON' : '—';
+            });
         }
         
         // Pathbuilder-style condition picker — opens a flat modal listing
@@ -5903,6 +5872,7 @@
                     if (data.name !== pcName) return;
                     applyHpUpdate(data.current_hp);
                     applyConditionUpdate(data.conditions || {});
+                    _paintMetaQuickConds(data.conditions || {});
                     // Temp HP + shield gauge: mirror server truth so the
                     // Shield-Block confirm + +TMP button always see fresh state.
                     if (typeof data.temp_hp === 'number') {
