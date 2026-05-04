@@ -2461,8 +2461,11 @@
                         <span id="sustain-items"></span>
                     </span>
                     <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Long Rest</button>
+                    {# Single Level Up button. The print-only fallback link
+                       was a duplicate-on-screen because my .tb display:inline-flex
+                       !important rule beat its inline display:none, so it's
+                       now consolidated into the one drawer-opening button. #}
                     <button onclick="openLevelUpDrawer()" class="tb primary no-print">Level Up</button>
-                    <a href="/player/levelup/{{ pc.name|urlencode }}" class="tb primary print-only" style="display:none;">Level Up</a>
 
                     {# Overflow — everything secondary lives behind this button. #}
                     <span class="relative no-print" style="display:inline-block;">
