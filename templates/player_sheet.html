@@ -2837,12 +2837,16 @@
         </div>
     </div>
 
+    {# ── 3-column body wrapper start ──────────────────────────────────
+       On wide viewports (≥1280px) body becomes a CSS Grid with three
+       columns: left meta rail · center stats stack · right tabs+content.
+       On narrow viewports it falls back to the original vertical flow.
+       The grid is configured in system.css; here we just emit the three
+       grid-item wrappers in source order so each lands in its column. #}
+
     {# ── Pathbuilder-style left meta rail ──────────────────────────────
-       Sticks to the left below the header. Carries the character meta
-       cards (ancestry / background / class / heritage / class options)
-       so the right column stays focused on stats + tabs. Hidden on
-       narrow viewports (<1280px) — the cards collapse into the existing
-       Core & Skills tab content. #}
+       In the grid this is grid-area: rail. On narrow viewports it
+       hides; the same info lives in the Core & Skills tab. #}
     <aside id="char-meta-rail" class="no-print" aria-label="Character meta">
         <div class="meta-card">
             <div class="meta-card-row">
@@ -2904,6 +2908,91 @@
                 <span class="meta-card-lbl">Initiative</span>
                 <span class="meta-card-val accent">+{{ pc.initiative_mod }}</span>
             </div>
+        </div>
+    </aside>
+
+    {# ── Center stats rail (3-column layout, wide viewports only) ─────
+       Pathbuilder runs stats in a vertical column to the right of the
+       meta sidebar. We mirror the same data here. The existing
+       horizontal ability-row + stats-strip stay in the markup but get
+       hidden on wide viewports so the data isn't duplicated visually.
+       Same data, presented vertically. The IDs the JS reads
+       (current-hp, ac-current, hero-pips, etc.) live in the original
+       header markup; this rail uses NEW IDs (stats-rail-*) so it
+       doesn't conflict with SSE handlers. Updates from SSE that target
+       the original IDs propagate to the rail via JS hooks (added at
+       the bottom of the script block). #}
+    <aside id="stats-rail" class="no-print" aria-label="Quick stats" data-pc-name="{{ pc.name }}">
+        <div class="stats-rail-section stats-rail-abilities">
+            {% for stat in pc.ability_display %}
+            <div class="sr-ability" onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')" role="button" tabindex="0">
+                <div class="sr-ability-lbl">{{ stat.label[:3]|upper }}</div>
+                <div class="sr-ability-val">{{ stat.mod }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="stats-rail-section">
+            <div class="sr-row">
+                <span class="sr-lbl">AC</span>
+                <span class="sr-val accent" id="stats-rail-ac">{{ pc.ac }}</span>
+            </div>
+            <div class="sr-row">
+                <span class="sr-lbl">HP</span>
+                <span class="sr-val" id="stats-rail-hp">{{ pc.current_hp }} / {{ pc.hp }}</span>
+            </div>
+            {% if pc.shield_max_hp > 0 %}
+            <div class="sr-row">
+                <span class="sr-lbl">Shield</span>
+                <span class="sr-val" id="stats-rail-shield">{{ pc.shield_hp }}/{{ pc.shield_max_hp }}</span>
+            </div>
+            {% endif %}
+            <div class="sr-row">
+                <span class="sr-lbl">Speed</span>
+                <span class="sr-val">{{ pc.active_speed }} ft</span>
+            </div>
+        </div>
+
+        <div class="stats-rail-section">
+            <div class="sr-head">Saves</div>
+            <div class="sr-row sr-row-roll" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" role="button" tabindex="0" title="{{ pc.fort_breakdown }}">
+                <span class="sr-lbl">Fort</span>
+                <span class="sr-val accent">+{{ pc.fort }}</span>
+            </div>
+            <div class="sr-row sr-row-roll" onclick="rollSkill('Reflex Save', {{ pc.ref }})" role="button" tabindex="0" title="{{ pc.ref_breakdown }}">
+                <span class="sr-lbl">Reflex</span>
+                <span class="sr-val accent">+{{ pc.ref }}</span>
+            </div>
+            <div class="sr-row sr-row-roll" onclick="rollSkill('Will Save', {{ pc.will }})" role="button" tabindex="0" title="{{ pc.will_breakdown }}">
+                <span class="sr-lbl">Will</span>
+                <span class="sr-val accent">+{{ pc.will }}</span>
+            </div>
+            <div class="sr-row sr-row-roll" onclick="rollSkill('Perception', {{ pc.perception }})" role="button" tabindex="0" title="{{ pc.perception_breakdown }}">
+                <span class="sr-lbl">Perception</span>
+                <span class="sr-val accent">+{{ pc.perception }}</span>
+            </div>
+        </div>
+
+        <div class="stats-rail-section">
+            <div class="sr-head">Resources</div>
+            <div class="sr-row">
+                <span class="sr-lbl">Hero Pts</span>
+                <span class="sr-val">
+                    <span id="stats-rail-hero-pips">
+                        {% for i in range(3) %}<span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>{% endfor %}
+                    </span>
+                </span>
+            </div>
+            {% if pc.focus_max > 0 %}
+            <div class="sr-row">
+                <span class="sr-lbl">Focus</span>
+                <span class="sr-val">
+                    <span id="stats-rail-focus-pips">
+                        {% for i in range(pc.focus_max) %}<span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>{% endfor %}
+                    </span>
+                </span>
+            </div>
+            {% endif %}
         </div>
     </aside>
 
@@ -8056,6 +8145,54 @@
             try { broadcastToGM(`${verb} ${name}`, '—', `Item used from inventory`); } catch(_) {}
             try { showRollToast(`${verb}: ${name}`, '', 'Item used — GM notified. Reduce qty on Inventory tab if consumed.', false, false, [], null); } catch(_) {}
         };
+
+        // ----- Stats rail sync (3-column layout) -----------------------
+        // The new #stats-rail aside duplicates HP/AC/Hero/Focus from the
+        // original markup. Observe the source elements and mirror their
+        // values into the rail so SSE updates show up there too.
+        (function syncStatsRail() {
+            const map = [
+                ['current-hp',   'stats-rail-hp', (el, target) => {
+                    const max = (typeof maxHp !== 'undefined') ? maxHp : (parseInt({{ pc.hp | int }}, 10) || 0);
+                    target.textContent = `${el.textContent || '0'} / ${max}`;
+                }],
+                ['ac-current',   'stats-rail-ac', (el, target) => { target.textContent = el.textContent; }],
+            ];
+            map.forEach(([srcId, dstId, copy]) => {
+                const src = document.getElementById(srcId);
+                const dst = document.getElementById(dstId);
+                if (!src || !dst) return;
+                const apply = () => { try { copy(src, dst); } catch(_) {} };
+                apply();
+                new MutationObserver(apply).observe(src, { childList: true, characterData: true, subtree: true });
+            });
+            // Hero pips
+            const heroSrc = document.getElementById('hero-pips');
+            const heroDst = document.getElementById('stats-rail-hero-pips');
+            if (heroSrc && heroDst) {
+                const sync = () => { heroDst.innerHTML = heroSrc.innerHTML; };
+                new MutationObserver(sync).observe(heroSrc, { childList: true, attributes: true, subtree: true });
+                sync();
+            }
+            // Focus pips
+            const focusSrc = document.getElementById('header-focus-pips');
+            const focusDst = document.getElementById('stats-rail-focus-pips');
+            if (focusSrc && focusDst) {
+                const sync = () => { focusDst.innerHTML = focusSrc.innerHTML; };
+                new MutationObserver(sync).observe(focusSrc, { childList: true, attributes: true, subtree: true });
+                sync();
+            }
+            // Shield (only present if the PC has a shield)
+            const shieldDst = document.getElementById('stats-rail-shield');
+            if (shieldDst) {
+                const tx = document.getElementById('shield-hp-text');
+                if (tx) {
+                    const sync = () => { shieldDst.textContent = tx.textContent; };
+                    new MutationObserver(sync).observe(tx, { childList: true, characterData: true, subtree: true });
+                    sync();
+                }
+            }
+        })();
 
         // --- Request Notification permission lazily on first "your turn" use.
         if ('Notification' in window && Notification.permission === 'default') {

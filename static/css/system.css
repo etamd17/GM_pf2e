@@ -2708,13 +2708,132 @@ button[onclick^="rollDamage"]:hover {
     font-family: var(--font-ui);
 }
 @media (min-width: 1280px) {
+    /* True 3-column layout: left meta rail (220) + center stats (240)
+       + right tabs+content (rest). The header stays full-width on top
+       so identity + action toolbar still span. The two side rails are
+       position:fixed; main body content is shifted right by the sum.
+       This keeps the existing horizontal ability-row + stats-strip in
+       markup (their IDs serve SSE) but visually hides them since the
+       new center rail shows the same data vertically. */
     #char-meta-rail { display: block; }
-    /* Push body content right to clear the rail. The rail is
-       position:fixed so it always covers the left 220px regardless
-       of scroll. The header is body's child so it inherits this
-       offset and stays right of the rail. */
+    #stats-rail { display: block; }
     body.min-h-screen.flex.flex-col,
-    body.min-h-screen { padding-left: 220px !important; }
+    body.min-h-screen { padding-left: 460px !important; }
+
+    /* Hide the redundant horizontal strips on wide. JS that targets
+       their IDs (current-hp, ac-current, etc.) still finds them in
+       the DOM — they just don't render. */
+    .ability-row-wrap, .stats-strip { display: none !important; }
+}
+
+/* ── Stats rail (the 2nd vertical column on wide viewports) ─────────── */
+#stats-rail {
+    display: none;
+    position: fixed;
+    left: 220px;
+    top: 0;
+    bottom: 0;
+    width: 240px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg-page);
+    border-right: 1px solid var(--border-strong);
+    padding: var(--sp-3);
+    padding-top: 96px;
+    z-index: 9;
+    font-family: var(--font-ui);
+}
+#stats-rail::-webkit-scrollbar { width: 4px; }
+#stats-rail::-webkit-scrollbar-track { background: transparent; }
+#stats-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+.stats-rail-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    padding: var(--sp-2) var(--sp-3);
+    margin-bottom: var(--sp-2);
+}
+.stats-rail-section:last-child { margin-bottom: 0; }
+.sr-head {
+    font-family: var(--font-display);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding-bottom: var(--sp-1);
+    margin-bottom: var(--sp-1);
+    border-bottom: 1px solid var(--border-card);
+}
+.sr-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    gap: var(--sp-2);
+}
+.sr-row + .sr-row { border-top: 1px solid var(--border-card); }
+.sr-row-roll {
+    cursor: pointer;
+    transition: background var(--t-fast);
+    margin: 0 calc(var(--sp-2) * -1);
+    padding: 4px var(--sp-2);
+    border-radius: var(--r-sm);
+}
+.sr-row-roll:hover { background: rgba(210, 138, 61, 0.10); }
+.sr-row-roll:hover + .sr-row { border-top-color: transparent; }
+.sr-lbl {
+    font-family: var(--font-display);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-on-dark-3);
+}
+.sr-val {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-on-dark);
+}
+.sr-val.accent { color: var(--accent); font-size: 15px; }
+
+.stats-rail-abilities {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 4px;
+}
+.sr-ability {
+    background: var(--bg-card-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    padding: 4px 0;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color var(--t-fast), background var(--t-fast);
+}
+.sr-ability:hover {
+    border-color: var(--accent);
+    background: rgba(210, 138, 61, 0.08);
+}
+.sr-ability-lbl {
+    font-family: var(--font-display);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    color: var(--text-on-dark-3);
+}
+.sr-ability-val {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1.1;
+}
+
+/* The Hero/Focus pips inside the rail render at the natural pip size */
+.sr-val .hero-pip, .sr-val .focus-pip {
+    margin-left: 2px;
 }
 #char-meta-rail::-webkit-scrollbar { width: 4px; }
 #char-meta-rail::-webkit-scrollbar-track { background: transparent; }
