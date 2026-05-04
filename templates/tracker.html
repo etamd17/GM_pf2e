@@ -1991,30 +1991,75 @@ refreshLog();
 
 /* ──────────────── SSE + Polling ──────────────── */
 let evtSource = null;
+let _trackerSseLastMsg = 0;
+function _trackerMarkSseAlive() { _trackerSseLastMsg = Date.now(); }
 function connectSSE() {
     if (evtSource) { try { evtSource.close(); } catch(e){} }
     evtSource = new EventSource('/api/events');
+    evtSource.onopen = _trackerMarkSseAlive;
+    evtSource.addEventListener('connected', _trackerMarkSseAlive);
+    evtSource.addEventListener('keepalive', _trackerMarkSseAlive);
     evtSource.addEventListener('encounter_update', function(e) {
-        apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
+        _trackerMarkSseAlive();
+        // The SSE payload already carries everything that mutates at combat
+        // tempo: HP, conditions, active_name, round, turn_index. We patch
+        // those in place against STATE.combatants (the rich GET response).
+        // Only when the encounter shape changes (combatant added/removed/
+        // reordered) do we fall back to a full GET for AC/saves/strikes.
+        try {
+            const sse = JSON.parse(e.data);
+            const ssEnc = Array.isArray(sse.encounter) ? sse.encounter : null;
+            if (!ssEnc) {
+                apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
+                return;
+            }
+            const cur = STATE.combatants || [];
+            const sameShape = cur.length === ssEnc.length
+                && cur.every((c, i) => c && ssEnc[i] && c.name === ssEnc[i].name && c.is_pc === ssEnc[i].is_pc);
+            if (!sameShape) {
+                apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
+                return;
+            }
+            // In-place patch: HP, conditions, is_active. Active flag drives
+            // the highlighted row; HP feeds the bar + numeric.
+            ssEnc.forEach((src, i) => {
+                const dst = cur[i];
+                if (!dst) return;
+                if (typeof src.current_hp === 'number') dst.current_hp = src.current_hp;
+                if (typeof src.max_hp === 'number')     dst.max_hp     = src.max_hp;
+                if (src.conditions)                     dst.conditions = src.conditions;
+                if (typeof src.hp_status === 'string')  dst.hp_status  = src.hp_status;
+            });
+            STATE.round = sse.round ?? STATE.round;
+            STATE.turn_index = sse.turn_index ?? STATE.turn_index;
+            STATE.active_name = sse.active_name ?? null;
+            render();
+        } catch(_) {
+            apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
+        }
     });
     // New combat events stream directly into the log panel — replaces 5s polling
     evtSource.addEventListener('combat_log', function(e) {
+        _trackerMarkSseAlive();
         try { _appendLogEntry(JSON.parse(e.data)); } catch(_) {}
     });
-    evtSource.addEventListener('connected', function() {});
     evtSource.onerror = function() {
         // Will auto-reconnect after a delay
     };
 }
 connectSSE();
 
-// Polling fallback every 10s
+// Polling fallback — only fires when SSE has been silent >30s. With a healthy
+// stream the tracker never burns a redundant /api/tracker_state GET.
+const _TRACKER_SSE_STALE_MS = 30_000;
 setInterval(async () => {
+    const silent = Date.now() - _trackerSseLastMsg;
+    if (_trackerSseLastMsg && silent < _TRACKER_SSE_STALE_MS) return;
     try {
         const data = await apiGet('/api/tracker_state');
         applyState(data);
     } catch(e) {}
-}, 10000);
+}, 8000);
 
 
 /* ──────────────── Keyboard shortcut ──────────────── */

@@ -2521,9 +2521,12 @@
         <!-- ROW 3 — Stats strip (AC / Speed / Perception / Class DC / HP) -->
         <div class="stats-strip">
             <!-- AC -->
-            <div class="ss-block" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
+            <div id="ac-block" class="ss-block {% if pc.shield_raised %}shield-raised{% endif %}" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
                 <div class="ss-lbl">Armor Class</div>
-                <div id="ac-current" data-ac-live class="ss-val">{{ pc.ac }}</div>
+                <div class="ss-val {% if pc.shield_raised %}shield-raised{% endif %}" data-ac-wrap>
+                    <span id="ac-current" data-ac-live>{{ pc.ac }}</span>
+                    <span id="ac-shield-bonus" class="ac-shield-bonus" {% if not pc.shield_raised or pc.shield_ac_bonus <= 0 %}style="display:none;"{% endif %}>+{{ pc.shield_ac_bonus }} SHIELD</span>
+                </div>
                 <div class="ss-sub">
                     <button data-shield-btn onclick="toggleShield()" class="no-print" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC, 1 action, lasts until start of your next turn)"
                             style="padding:2px 8px; font-size:10px; margin-right:2px; border-radius:4px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
@@ -2919,131 +2922,12 @@
     </aside>
 
     {# ── Center stats rail (3-column layout, wide viewports only) ─────
-       Pathbuilder runs stats in a vertical column to the right of the
-       meta sidebar. We mirror the same data here. The existing
-       horizontal ability-row + stats-strip stay in the markup but get
-       hidden on wide viewports so the data isn't duplicated visually.
-       Same data, presented vertically. The IDs the JS reads
-       (current-hp, ac-current, hero-pips, etc.) live in the original
-       header markup; this rail uses NEW IDs (stats-rail-*) so it
-       doesn't conflict with SSE handlers. Updates from SSE that target
-       the original IDs propagate to the rail via JS hooks (added at
-       the bottom of the script block). #}
-    <aside id="stats-rail" class="no-print" aria-label="Quick stats" data-pc-name="{{ pc.name }}">
-        <div class="stats-rail-section stats-rail-abilities">
-            {% for stat in pc.ability_display %}
-            <div class="sr-ability" onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')" role="button" tabindex="0">
-                <div class="sr-ability-lbl">{{ stat.label[:3]|upper }}</div>
-                <div class="sr-ability-val">{{ stat.mod }}</div>
-            </div>
-            {% endfor %}
-        </div>
-
-        {# HP control card — primary surface. The +/- buttons read from a
-           dedicated rail input, falling back to a prompt if empty. The
-           HP value here mirrors #current-hp via MutationObserver. #}
-        <div class="stats-rail-section sr-hp-card">
-            <div class="sr-head">Hit Points</div>
-            <div class="sr-hp-display">
-                <span class="sr-hp-cur" id="stats-rail-hp-cur">{{ pc.current_hp }}</span><span class="sr-hp-sep">/</span><span class="sr-hp-max">{{ pc.hp }}</span>
-                <span id="stats-rail-tmp" class="sr-hp-tmp" style="{% if pc.temp_hp <= 0 %}display:none;{% endif %}">+<span id="stats-rail-tmp-val">{{ pc.temp_hp }}</span> tmp</span>
-            </div>
-            {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
-            <div class="sr-hp-bar">
-                <div id="stats-rail-hp-fill" class="hp-gauge-fill {% if pc.current_hp == 0 %}dead{% elif hp_pct <= 25 %}low{% elif hp_pct <= 50 %}mid{% else %}high{% endif %}" style="width:{{ hp_pct|int }}%; height:100%;"></div>
-            </div>
-            <div class="sr-hp-controls">
-                <button class="sr-hp-btn damage" onclick="adjustHpRail('damage')" title="Take damage" aria-label="Take damage">−</button>
-                <input type="number" id="sr-hp-input" min="0" placeholder="0" aria-label="HP change amount">
-                <button class="sr-hp-btn heal" onclick="adjustHpRail('heal')" title="Heal" aria-label="Heal">+</button>
-                <button class="sr-tmp-btn" onclick="adjustHpRail('tmp')" oncontextmenu="event.preventDefault(); clearTempHP();" title="Grant temporary HP (right-click to clear)" aria-label="Add temporary HP">+TMP</button>
-            </div>
-        </div>
-
-        {% if pc.shield_max_hp > 0 %}
-        {# Shield card — Raise Shield + Block + Repair, plus durability. #}
-        <div class="stats-rail-section sr-shield-card">
-            <div class="sr-head">Shield</div>
-            <div class="sr-row">
-                <span class="sr-lbl">HP</span>
-                <span class="sr-val" id="stats-rail-shield">{{ pc.shield_hp }}/{{ pc.shield_max_hp }}</span>
-            </div>
-            <div class="sr-row">
-                <span class="sr-lbl">Hardness</span>
-                <span class="sr-val">{{ pc.shield_hardness }}</span>
-            </div>
-            <div class="sr-row">
-                <span class="sr-lbl">Status</span>
-                <span class="sr-val" id="stats-rail-shield-state" style="font-size:11px; color:{% if pc.shield_destroyed %}var(--ruby-200){% elif pc.shield_broken %}#eab308{% elif pc.shield_raised %}var(--accent){% else %}var(--text-on-dark-3){% endif %};">
-                    {% if pc.shield_destroyed %}Destroyed{% elif pc.shield_broken %}Broken{% elif pc.shield_raised %}Raised{% else %}Lowered{% endif %}
-                </span>
-            </div>
-            <div class="sr-shield-controls">
-                <button data-shield-btn-rail onclick="toggleShield()" class="sr-shield-action {% if pc.shield_raised %}raised{% endif %}" title="Raise Shield (1 action; +{{ pc.shield_ac_bonus }} AC until your next turn)">
-                    {% if pc.shield_raised %}Lower Shield{% else %}Raise Shield{% endif %}
-                </button>
-                <button onclick="useShieldBlock()" class="sr-shield-action" title="Shield Block (reaction)">Block</button>
-                <button onclick="repairShield()" class="sr-shield-action" {% if pc.shield_hp >= pc.shield_max_hp %}disabled{% endif %} title="Repair shield (10-min downtime)">Repair</button>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="stats-rail-section">
-            <div class="sr-row">
-                <span class="sr-lbl">AC</span>
-                <span class="sr-val accent" id="stats-rail-ac">{{ pc.ac }}</span>
-            </div>
-            <div class="sr-row">
-                <span class="sr-lbl">Speed</span>
-                <span class="sr-val">{{ pc.active_speed }} ft</span>
-            </div>
-        </div>
-
-        <div class="stats-rail-section">
-            <div class="sr-head">Saves</div>
-            <div class="sr-row sr-row-roll" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" role="button" tabindex="0" title="{{ pc.fort_breakdown }}">
-                <span class="sr-lbl">Fort</span>
-                <span class="sr-val accent">+{{ pc.fort }}</span>
-            </div>
-            <div class="sr-row sr-row-roll" onclick="rollSkill('Reflex Save', {{ pc.ref }})" role="button" tabindex="0" title="{{ pc.ref_breakdown }}">
-                <span class="sr-lbl">Reflex</span>
-                <span class="sr-val accent">+{{ pc.ref }}</span>
-            </div>
-            <div class="sr-row sr-row-roll" onclick="rollSkill('Will Save', {{ pc.will }})" role="button" tabindex="0" title="{{ pc.will_breakdown }}">
-                <span class="sr-lbl">Will</span>
-                <span class="sr-val accent">+{{ pc.will }}</span>
-            </div>
-            <div class="sr-row sr-row-roll" onclick="rollSkill('Perception', {{ pc.perception }})" role="button" tabindex="0" title="{{ pc.perception_breakdown }}">
-                <span class="sr-lbl">Perception</span>
-                <span class="sr-val accent">+{{ pc.perception }}</span>
-            </div>
-        </div>
-
-        <div class="stats-rail-section">
-            <div class="sr-head">Resources</div>
-            <div class="sr-row">
-                <span class="sr-lbl">Hero Pts</span>
-                <span class="sr-val">
-                    <span id="stats-rail-hero-pips">
-                        {% for i in range(3) %}<span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>{% endfor %}
-                    </span>
-                </span>
-            </div>
-            {% if pc.focus_max > 0 %}
-            <div class="sr-row">
-                <span class="sr-lbl">Focus</span>
-                <span class="sr-val">
-                    <span id="stats-rail-focus-pips">
-                        {% for i in range(pc.focus_max) %}<span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>{% endfor %}
-                    </span>
-                </span>
-            </div>
-            {% endif %}
-        </div>
-
-        {# Skills — single-column list living in the center rail, per user
-           request. The same skills also render in the Core & Skills tab
-           for narrow viewports; on wide we hide the tab's skills card. #}
+       Layout per user request: HP / Shield / AC / Saves / Abilities all
+       live UNDER the character name (in the existing .stats-strip and
+       .ability-row-wrap blocks, which are now visible on wide too).
+       This rail is now SKILLS ONLY so the full skill list is visible
+       without scrolling fighting the rest of the stats. #}
+    <aside id="stats-rail" class="no-print" aria-label="Skills" data-pc-name="{{ pc.name }}">
         <div class="stats-rail-section sr-skills">
             <div class="sr-head">Skills</div>
             {% for skill in pc.skills %}
@@ -4554,6 +4438,23 @@
         // ==========================================
         // RAISE SHIELD TOGGLE
         // ==========================================
+        // Paint the AC stat block to reflect the Raise Shield bonus:
+        // adds .shield-raised on the wrapper + AC value, and shows/hides
+        // the "+N SHIELD" badge. Called from the toggleShield() click,
+        // the SSE pc_update handler, and the start-of-turn refresh.
+        function _paintAcShieldBadge(raised) {
+            const block = document.getElementById('ac-block');
+            const acEl  = document.getElementById('ac-current');
+            const wrap  = document.querySelector('[data-ac-wrap]');
+            const badge = document.getElementById('ac-shield-bonus');
+            if (block) block.classList.toggle('shield-raised', !!raised);
+            if (wrap)  wrap.classList.toggle('shield-raised', !!raised);
+            if (acEl)  acEl.classList.toggle('shield-raised', !!raised);
+            if (badge) {
+                const bonus = parseInt((badge.textContent.match(/\d+/) || [0])[0], 10) || 0;
+                badge.style.display = (raised && bonus > 0) ? '' : 'none';
+            }
+        }
         async function toggleShield() {
             try {
                 const res = await fetch(`/api/toggle_shield/${pcNameEncoded}`, { method: 'POST' });
@@ -4566,6 +4467,7 @@
                     currentShield.hp     = data.shield_hp     ?? currentShield.hp;
                     currentShield.max_hp = data.shield_max_hp ?? currentShield.max_hp;
                     _paintShieldGauge();
+                    _paintAcShieldBadge(currentShield.raised);
                     // AC number in the header
                     const acEl = document.getElementById('ac-current') || document.querySelector('[data-ac-live]');
                     if (acEl && typeof data.ac === 'number') acEl.textContent = data.ac;
@@ -5138,18 +5040,16 @@
         }
         
         // ==========================================
-        // SSE: SHARED ROLL FEED (see other players' rolls)
+        // SSE: shared listeners attached to the single EventSource
+        // opened by connectSSE() further down. We expose handler-attach
+        // functions; connectSSE wires them onto its own socket so the
+        // page only ever holds ONE /api/events connection.
         // ==========================================
-        (function setupPlayerSSE() {
-            const evtSource = new EventSource('/api/events');
-            
+        function _attachSharedSseListeners(evtSource) {
             evtSource.addEventListener('player_roll', (e) => {
                 try {
                     const roll = JSON.parse(e.data);
-                    // Don't show our own rolls (we already see them via showRollToast)
                     if (roll.name === pcName) return;
-                    
-                    // Show a mini-toast for other players' rolls
                     const container = document.getElementById('roll-toast-container');
                     const toast = document.createElement('div');
                     const isCrit = roll.result && (roll.detail || '').includes('[CRIT');
@@ -5172,42 +5072,22 @@
                     }, 6000);
                 } catch(e) {}
             });
-            
-            evtSource.addEventListener('pc_update', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.name === pcName) {
-                        // Update HP display in-place
-                        const hpEl = document.getElementById('hp-current');
-                        if (hpEl) hpEl.textContent = data.current_hp;
-                        _refreshConditionStrip();
-                    }
-                } catch(e) {}
-            });
-            
+
             evtSource.addEventListener('encounter_update', (e) => {
                 try {
                     const data = JSON.parse(e.data);
-                    if (data.active_name === pcName) {
-                        showTurnBanner();
-                    }
+                    if (data.active_name === pcName) showTurnBanner();
                 } catch(e) {}
             });
 
-            // HANDOUT listener — show handouts pushed by GM
             evtSource.addEventListener('handout', (e) => {
                 try {
                     const h = JSON.parse(e.data);
-                    // Check if this handout is for us
                     if (!h.recipients.includes('all') && !h.recipients.includes(pcName)) return;
                     showHandoutPopup(h);
                 } catch(e) {}
             });
-
-            evtSource.onerror = () => {
-                // Auto-reconnect handled by browser EventSource
-            };
-        })();
+        }
         
         // ==========================================
         // TURN TRANSITION BANNER
@@ -5934,6 +5814,8 @@
                     const hpEl = document.getElementById('current-hp');
                     hpEl.innerText = data.current_hp;
                     currentHp = data.current_hp;
+                    const chip = document.getElementById('header-hp-chip-cur');
+                    if (chip) chip.textContent = currentHp;
                     // Temp-HP sync: damage may have drained it, heal leaves it alone.
                     if (typeof data.temp_hp === 'number') {
                         currentTempHp = data.temp_hp;
@@ -5974,7 +5856,7 @@
             if (!hpEl) return;
             hpEl.innerText = currentHp;
             const pct = currentHp / maxHp;
-            hpEl.className = 'text-2xl font-bold leading-none font-header ' + 
+            hpEl.className = 'text-2xl font-bold leading-none font-header ' +
                 (currentHp === 0 ? 'text-red-500' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-amber-400' : 'text-green-400');
             hpEl.style.transform = 'scale(1.2)';
             setTimeout(() => hpEl.style.transform = 'scale(1)', 200);
@@ -5984,6 +5866,9 @@
                 gauge.style.width = Math.round(pct * 100) + '%';
                 gauge.className = 'hp-gauge-fill ' + (currentHp === 0 ? 'dead' : pct <= 0.25 ? 'low' : pct <= 0.5 ? 'mid' : 'high');
             }
+            // Direct mirror to the header HP chip — no MutationObserver needed.
+            const chip = document.getElementById('header-hp-chip-cur');
+            if (chip) chip.textContent = currentHp;
         }
         
         function applyConditionUpdate(conditions) {
@@ -6006,11 +5891,10 @@
             const evtSource = new EventSource('/api/events');
             evtSource.onopen = _sheetMarkSseAlive;
             evtSource.addEventListener('connected', _sheetMarkSseAlive);
-            // Server emits a real `keepalive` event every ~25s so edge
-            // proxies don't drop the long-lived connection AND so the
-            // client's freshness watchdog (the upper-left conn pip) sees
-            // traffic on an idle round.
             evtSource.addEventListener('keepalive', _sheetMarkSseAlive);
+
+            // Roll-feed + handout + turn-banner listeners share this socket.
+            try { _attachSharedSseListeners(evtSource); } catch(_){}
 
             evtSource.addEventListener('pc_update', (e) => {
                 _sheetMarkSseAlive();
@@ -6034,6 +5918,7 @@
                         currentShield.broken    = !!data.shield.broken;
                         currentShield.destroyed = !!data.shield.destroyed;
                         _paintShieldGauge();
+                        _paintAcShieldBadge(currentShield.raised);
                         // Re-sync the Raise-Shield button styling on remote mutation
                         const btn = document.querySelector('[data-shield-btn]');
                         if (btn) {
@@ -6051,14 +5936,28 @@
                         const acEl = document.getElementById('ac-current');
                         if (acEl) acEl.textContent = data.ac;
                     }
-                    // Persistent damage list: if the structure changed vs. what's
-                    // currently rendered (via Jinja on last reload), do a full page
-                    // reload so the per-entry indices match the server. Cheap and
-                    // self-healing; the list is usually 0-2 entries.
+                    // Persistent damage list: patch in place. Reload would
+                    // drop typed input, scroll position, and any open modal.
                     if (Array.isArray(data.persistent_damage)) {
-                        const curEntries = document.querySelectorAll('#pd-list .pd-entry').length;
-                        if (curEntries !== data.persistent_damage.length) {
-                            window.location.reload();
+                        const list = document.getElementById('pd-list');
+                        const strip = document.getElementById('pd-strip');
+                        const addbar = document.getElementById('pd-addbar');
+                        const curEntries = list ? list.querySelectorAll('.pd-entry').length : 0;
+                        if (list && curEntries !== data.persistent_damage.length) {
+                            const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+                            list.innerHTML = data.persistent_damage.map((e, idx) => `
+                                <div class="pd-entry" data-pd-idx="${idx}" style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); font-size:11px;">
+                                    <strong style="color:#fca5a5;">${esc(e.damage)}${e.type ? ' ' + esc(e.type) : ''}</strong>
+                                    ${e.source ? `<span style="color:var(--t3); font-size:10px;">(${esc(e.source)})</span>` : ''}
+                                    <input type="number" class="pd-take-input" placeholder="dmg" min="0" style="width:48px; padding:2px 4px; font-size:10px; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1);">
+                                    <button onclick="pdTakeDamage(${idx})" title="Apply the rolled damage to your HP" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-weight:700;">Take</button>
+                                    <button onclick="pdFlatCheck(${idx})" title="Roll DC 15 flat check — success ends the effect" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; font-weight:700;">DC 15</button>
+                                    <button onclick="pdRemove(${idx})" title="Remove (treated / immunity / ended)" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">×</button>
+                                </div>
+                            `).join('');
+                            const has = data.persistent_damage.length > 0;
+                            if (strip)  strip.style.display  = has ? '' : 'none';
+                            if (addbar) addbar.style.display = has ? 'none' : '';
                         }
                     }
                     // Update focus pips
@@ -8237,123 +8136,8 @@
             });
         })();
 
-        // ----- Stats rail sync (3-column layout) -----------------------
-        // The new #stats-rail aside duplicates HP/AC/Hero/Focus from the
-        // original markup. Observe the source elements and mirror their
-        // values into the rail so SSE updates show up there too.
-        (function syncStatsRail() {
-            // HP — current value, the gauge fill width, and the green/yellow/red
-            // class all need to mirror the original.
-            const hpSrc = document.getElementById('current-hp');
-            const hpDst = document.getElementById('stats-rail-hp-cur');
-            const hpFillSrc = document.querySelector('.stats-strip .hp-gauge-fill');
-            const hpFillDst = document.getElementById('stats-rail-hp-fill');
-            if (hpSrc && hpDst) {
-                const apply = () => {
-                    hpDst.textContent = (hpSrc.textContent || '0').trim();
-                    if (hpFillSrc && hpFillDst) {
-                        hpFillDst.style.width = hpFillSrc.style.width;
-                        hpFillDst.className = 'hp-gauge-fill ' + hpFillSrc.className.replace(/^.*hp-gauge-fill\s*/, '');
-                    }
-                };
-                apply();
-                new MutationObserver(apply).observe(hpSrc, { childList: true, characterData: true, subtree: true });
-                if (hpFillSrc) {
-                    new MutationObserver(apply).observe(hpFillSrc, { attributes: true, attributeFilter: ['class', 'style'] });
-                }
-            }
-
-            // AC — single-element mirror.
-            const acSrc = document.getElementById('ac-current');
-            const acDst = document.getElementById('stats-rail-ac');
-            if (acSrc && acDst) {
-                const apply = () => { acDst.textContent = (acSrc.textContent || '0').trim(); };
-                apply();
-                new MutationObserver(apply).observe(acSrc, { childList: true, characterData: true, subtree: true });
-            }
-
-            // Temp HP chip
-            const tmpSrc = document.getElementById('temp-hp-val');
-            const tmpDst = document.getElementById('stats-rail-tmp-val');
-            const tmpWrap = document.getElementById('stats-rail-tmp');
-            if (tmpSrc && tmpDst && tmpWrap) {
-                const apply = () => {
-                    const v = parseInt(tmpSrc.textContent, 10) || 0;
-                    tmpDst.textContent = v;
-                    tmpWrap.style.display = v > 0 ? '' : 'none';
-                };
-                apply();
-                new MutationObserver(apply).observe(tmpSrc, { childList: true, characterData: true, subtree: true });
-            }
-
-            // Hero / Focus pips
-            ['hero-pips:stats-rail-hero-pips', 'header-focus-pips:stats-rail-focus-pips'].forEach(pair => {
-                const [s, d] = pair.split(':');
-                const src = document.getElementById(s); const dst = document.getElementById(d);
-                if (!src || !dst) return;
-                const sync = () => { dst.innerHTML = src.innerHTML; };
-                sync();
-                new MutationObserver(sync).observe(src, { childList: true, attributes: true, subtree: true });
-            });
-
-            // Shield text + state label
-            const shTextSrc = document.getElementById('shield-hp-text');
-            const shTextDst = document.getElementById('stats-rail-shield');
-            if (shTextSrc && shTextDst) {
-                const sync = () => { shTextDst.textContent = shTextSrc.textContent; };
-                sync();
-                new MutationObserver(sync).observe(shTextSrc, { childList: true, characterData: true, subtree: true });
-            }
-            const shStateSrc = document.getElementById('shield-state-lbl');
-            const shStateDst = document.getElementById('stats-rail-shield-state');
-            if (shStateSrc && shStateDst) {
-                const sync = () => { shStateDst.textContent = shStateSrc.textContent.trim(); };
-                sync();
-                new MutationObserver(sync).observe(shStateSrc, { childList: true, characterData: true, subtree: true });
-            }
-
-            // Mirror the Raise Shield button's "Raised" state. Style the rail
-            // shield-action button when the original toggles.
-            const shBtnSrc = document.querySelector('[data-shield-btn]');
-            const shBtnDst = document.querySelector('[data-shield-btn-rail]');
-            if (shBtnSrc && shBtnDst) {
-                const sync = () => {
-                    const isRaised = shBtnSrc.textContent.toLowerCase().includes('raised');
-                    shBtnDst.classList.toggle('raised', isRaised);
-                    shBtnDst.textContent = isRaised ? 'Lower Shield' : 'Raise Shield';
-                };
-                sync();
-                new MutationObserver(sync).observe(shBtnSrc, { childList: true, characterData: true, attributes: true, subtree: true });
-            }
-
-            // HP chip under the player name in the header — ALSO mirror the
-            // current HP value so the player name area shows live HP.
-            const hpChipDst = document.getElementById('header-hp-chip-cur');
-            if (hpSrc && hpChipDst) {
-                const apply = () => { hpChipDst.textContent = (hpSrc.textContent || '0').trim(); };
-                apply();
-                new MutationObserver(apply).observe(hpSrc, { childList: true, characterData: true, subtree: true });
-            }
-        })();
-
-        // ----- HP rail input wrapper -----------------------------------
-        // The rail has its own +/- buttons + input. They delegate to the
-        // existing applyHPChange / addTempHP / clearTempHP by mirroring
-        // the rail input value into the original #hp-change-input before
-        // calling, so the existing logic stays intact.
-        function adjustHpRail(verb) {
-            const railInput = document.getElementById('sr-hp-input');
-            const origInput = document.getElementById('hp-change-input');
-            if (railInput && origInput) {
-                origInput.value = railInput.value || '';
-            }
-            try {
-                if (verb === 'damage' || verb === 'heal') applyHPChange(verb);
-                else if (verb === 'tmp') addTempHP();
-            } finally {
-                if (railInput) railInput.value = '';
-            }
-        }
+        // Header HP chip is updated directly by applyHpUpdate / modifyHP —
+        // no MutationObserver needed. Initial value is set by Jinja.
 
         // --- Request Notification permission lazily on first "your turn" use.
         if ('Notification' in window && Notification.permission === 'default') {

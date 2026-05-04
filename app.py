@@ -621,24 +621,18 @@ def _do_broadcast_pc_state(pc_name):
             },
             'reaction_used': bool(getattr(pc, 'reaction_used', False)),
             'ac': int(getattr(pc, 'ac', 0) or 0),
+            'shield_ac_bonus': int(getattr(pc, 'shield_ac_bonus', 0) or 0),
             'persistent_damage': list(getattr(pc, 'persistent_damage', []) or []),
             'exploration_activity': str(getattr(pc, 'exploration_activity', '') or ''),
             'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
             'focus': getattr(pc, 'current_focus', 0),
             'hero_points': getattr(pc, 'hero_points', 1),
             'spell_casters': spell_summary,
+            # Read from the in-memory PC (hydrated at __init__ from the
+            # build's expended_slots dict). Routes that mutate slots keep
+            # pc.expended_slots in sync so this never has to hit disk.
+            'expended_slots': dict(getattr(pc, 'expended_slots', {}) or {}),
         }
-    # Read expended slots from disk outside the lock (file I/O)
-    expended_slots = {}
-    try:
-        fp = get_pc_file_path(pc_name)
-        if fp and os.path.exists(fp):
-            with open(fp, 'r', encoding='utf-8') as f:
-                build = json.load(f).get('build', {})
-                expended_slots = build.get('expended_slots', {})
-    except Exception:
-        pass
-    payload['expended_slots'] = expended_slots
     sse_broadcast('pc_update', payload)
 
 def _broadcast_encounter_state():
@@ -1210,6 +1204,7 @@ def apply_pc_delta(pc_name, mutator, *, sync_conditions=True,
     """
     if pc_name not in PARTY_LIBRARY:
         return None, None
+    pc_in_encounter = False
     with ENCOUNTER_LOCK:
         pc = PARTY_LIBRARY[pc_name]
         try:
@@ -1218,10 +1213,17 @@ def apply_pc_delta(pc_name, mutator, *, sync_conditions=True,
             print(f"[apply_pc_delta] {pc_name}: {e}")
             raise
         _sync_tracker_from_pc(pc_name, conditions=sync_conditions)
+        # If this PC is in the active encounter, the tracker / player_view
+        # listen on encounter_update — fire that too so HP changes from a
+        # player sheet propagate to the GM screen without waiting for the
+        # 10-s polling fallback.
+        pc_in_encounter = any(c.is_pc and c.name == pc_name for c in ACTIVE_ENCOUNTER)
     if persist:
         _persist_pc_combat_state(pc_name)
     if broadcast:
         _broadcast_pc_state(pc_name)
+        if pc_in_encounter:
+            _broadcast_encounter_state()
     return result, pc
 
 # --- REQUEST VALIDATION HELPERS ---
@@ -4608,7 +4610,12 @@ def adjust_hp(instance_id):
                         _combat_log(f"{c.name} took {effective}{type_label} damage ({old_hp}→{c.current_hp})", 'damage')
                     if c.current_hp == 0:
                         c.conditions['dying'] = 1 + c.conditions.get('wounded', 0) if was_above_zero else c.conditions.get('dying', 0) + 1
-                        _combat_log(f"{c.name} is Dying {c.conditions['dying']}!", 'critical')
+                        # Doomed-aware death threshold: 4 - doomed.
+                        doomed = int(c.conditions.get('doomed', 0) or 0)
+                        max_dying = max(1, 4 - doomed)
+                        if c.conditions['dying'] >= max_dying:
+                            c.conditions['dying'] = max_dying
+                        _combat_log(f"{c.name} is Dying {c.conditions['dying']}{' — DEAD' if c.conditions['dying'] >= max_dying else ''}!", 'critical')
                 elif action == 'heal':
                     was_dying = c.conditions.get('dying', 0) > 0
                     c.current_hp = min(c.hp, c.current_hp + amount)
@@ -4641,24 +4648,32 @@ def adjust_party_hp(pc_name):
             if action == 'damage':
                 was_above_zero = pc.current_hp > 0
                 remaining = amount
-                # PF2e: temporary HP is lost first, then real HP. Drain the
-                # manual pool (the toggle pool is passive and not drained).
-                thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
-                if thp > 0 and remaining > 0:
-                    used = min(thp, remaining)
-                    pc.temp_hp_manual = thp - used
-                    try:
-                        pc.temp_hp = pc.temp_hp_manual + pc.toggle_effects_summary.get('temp_hp', 0)
-                    except Exception:
-                        pc.temp_hp = pc.temp_hp_manual
+                # PF2e: temporary HP absorbs damage before real HP.
+                # Drain the toggle (passive — re-grants from the toggle),
+                # then the manual pool, then real HP.
+                toggle_thp = 0
+                try:
+                    toggle_thp = int(pc.toggle_effects_summary.get('temp_hp', 0) or 0)
+                except Exception:
+                    toggle_thp = 0
+                if toggle_thp > 0 and remaining > 0:
+                    remaining = max(0, remaining - toggle_thp)
+                manual_thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+                if manual_thp > 0 and remaining > 0:
+                    used = min(manual_thp, remaining)
+                    pc.temp_hp_manual = manual_thp - used
                     remaining -= used
+                pc.temp_hp = int(getattr(pc, 'temp_hp_manual', 0) or 0) + toggle_thp
                 pc.current_hp = max(0, pc.current_hp - remaining)
                 if pc.current_hp == 0 and was_above_zero:
                     pc.conditions['dying'] = 1 + pc.conditions.get('wounded', 0)
                 elif pc.current_hp == 0 and not was_above_zero:
                     pc.conditions['dying'] = pc.conditions.get('dying', 0) + 1
-                if pc.conditions.get('dying', 0) >= 4:
-                    pc.conditions['dying'] = 4
+                # PF2e: dying death threshold is 4 - doomed.
+                doomed = int(pc.conditions.get('doomed', 0) or 0)
+                max_dying = max(1, 4 - doomed)
+                if pc.conditions.get('dying', 0) >= max_dying:
+                    pc.conditions['dying'] = max_dying
             elif action == 'heal':
                 was_dying = pc.conditions.get('dying', 0) > 0
                 pc.current_hp = min(pc.hp, pc.current_hp + amount)
@@ -4669,6 +4684,7 @@ def adjust_party_hp(pc_name):
 
         _, pc = apply_pc_delta(pc_name, _mutate)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            doomed = int(pc.conditions.get('doomed', 0) or 0)
             return jsonify({
                 "success": True, "current_hp": pc.current_hp,
                 "temp_hp": int(getattr(pc, 'temp_hp', 0) or 0),
@@ -4676,7 +4692,8 @@ def adjust_party_hp(pc_name):
                 "conditions": {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
                 "dying": pc.conditions.get('dying', 0),
                 "wounded": pc.conditions.get('wounded', 0),
-                "dead": pc.conditions.get('dying', 0) >= 4
+                "doomed": doomed,
+                "dead": pc.conditions.get('dying', 0) >= max(1, 4 - doomed)
             })
     except ValueError: pass
     return redirect(url_for('party_view'))
@@ -4863,84 +4880,109 @@ def shield_block(pc_name):
     data = request.json or {}
     damage = safe_int(data.get('damage', 0))
 
-    # Eligibility checks up-front (pc-state, not build JSON — source of truth
-    # is the in-memory PC). If the shield can't block, bail before mutation.
-    shield_hp0 = int(getattr(pc, 'shield_hp', 0) or 0)
+    # Eligibility values — read for the response, but the actual atomic
+    # check + mutate happens inside `_mutate(pc)` under ENCOUNTER_LOCK so
+    # two near-simultaneous clicks can't both consume the reaction.
     shield_max_hp = int(getattr(pc, 'shield_max_hp', 0) or 0)
     shield_hardness = int(getattr(pc, 'shield_hardness', 0) or 0)
     shield_bt = int(getattr(pc, 'shield_bt', 0) or (shield_max_hp // 2))
     if shield_max_hp <= 0:
         return jsonify({"success": False, "error": "No shield equipped"})
-    if shield_hp0 <= 0:
-        return jsonify({"success": False, "error": "Shield is destroyed"})
-    if shield_hp0 <= shield_bt:
-        return jsonify({"success": False, "error": "Shield is broken — repair it before blocking"})
-    # Reaction-budget check (Phase 3). Shield Block consumes the reaction.
-    if getattr(pc, 'reaction_used', False):
-        return jsonify({"success": False, "error": "Reaction already spent this round"})
 
-    # Shield Block (PF2e CRB): the shield prevents damage equal to its
-    # Hardness. You and the shield each take any leftover damage.
-    blocked = min(damage, shield_hardness)
-    leftover = max(0, damage - shield_hardness)
-
-    result = {}
+    state = {'error': None}
 
     def _mutate(pc):
-        new_shield_hp = max(0, shield_hp0 - leftover)
+        # Re-read all eligibility fields under the lock — closes the TOCTOU
+        # window where two reactions could both pass the pre-check.
+        cur_shield_hp = int(getattr(pc, 'shield_hp', 0) or 0)
+        cur_bt = int(getattr(pc, 'shield_bt', 0) or (shield_max_hp // 2))
+        if cur_shield_hp <= 0:
+            state['error'] = "Shield is destroyed"
+            return False
+        if getattr(pc, 'reaction_used', False):
+            state['error'] = "Reaction already spent this round"
+            return False
+        # PF2e: a broken shield CAN still Shield Block — the leftover damage
+        # often destroys it. We allow the action and surface a warning client-
+        # side instead of refusing it server-side.
+        was_broken = cur_shield_hp <= cur_bt
+
+        blocked = min(damage, shield_hardness)
+        leftover = max(0, damage - shield_hardness)
+        new_shield_hp = max(0, cur_shield_hp - leftover)
         pc.shield_hp = new_shield_hp
-        pc.shield_broken = new_shield_hp <= shield_bt
+        pc.shield_broken = new_shield_hp <= cur_bt
         pc.shield_destroyed = new_shield_hp <= 0
-        # Reaction is gone for the round.
         pc.reaction_used = True
 
-        # Full damage pipeline for the leftover that hits the PC.
+        # Full damage pipeline for the leftover that hits the PC. Single
+        # temp-HP pool: drain the toggle component first (effect sources),
+        # then the manual pool, then real HP. Matches PF2e's "any temp HP
+        # absorbs damage before real HP".
         was_above_zero = pc.current_hp > 0
         remaining = leftover
-        thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
-        if thp > 0 and remaining > 0:
-            used = min(thp, remaining)
-            pc.temp_hp_manual = thp - used
-            try:
-                pc.temp_hp = pc.temp_hp_manual + pc.toggle_effects_summary.get('temp_hp', 0)
-            except Exception:
-                pc.temp_hp = pc.temp_hp_manual
+        toggle_thp = 0
+        try:
+            toggle_thp = int(pc.toggle_effects_summary.get('temp_hp', 0) or 0)
+        except Exception:
+            toggle_thp = 0
+        manual_thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+        if toggle_thp > 0 and remaining > 0:
+            # Toggle sources are passive — they absorb damage but the
+            # toggle itself isn't drained (it'll re-grant the same THP
+            # next tick from toggle_effects_summary).
+            remaining = max(0, remaining - toggle_thp)
+        if manual_thp > 0 and remaining > 0:
+            used = min(manual_thp, remaining)
+            pc.temp_hp_manual = manual_thp - used
             remaining -= used
+        pc.temp_hp = int(getattr(pc, 'temp_hp_manual', 0) or 0) + toggle_thp
         pc.current_hp = max(0, pc.current_hp - remaining)
         if pc.current_hp == 0 and was_above_zero:
             pc.conditions['dying'] = 1 + pc.conditions.get('wounded', 0)
         elif pc.current_hp == 0 and not was_above_zero:
             pc.conditions['dying'] = pc.conditions.get('dying', 0) + 1
-        if pc.conditions.get('dying', 0) >= 4:
-            pc.conditions['dying'] = 4
+        # PF2e: dying threshold is 4 - doomed; clamp accordingly.
+        doomed = int(pc.conditions.get('doomed', 0) or 0)
+        max_dying = max(1, 4 - doomed)
+        if pc.conditions.get('dying', 0) >= max_dying:
+            pc.conditions['dying'] = max_dying
 
-        result['shield_hp'] = new_shield_hp
-        result['shield_broken'] = pc.shield_broken
-        result['shield_destroyed'] = pc.shield_destroyed
+        state['blocked'] = blocked
+        state['leftover'] = leftover
+        state['shield_hp'] = new_shield_hp
+        state['shield_broken'] = pc.shield_broken
+        state['shield_destroyed'] = pc.shield_destroyed
+        state['was_broken'] = was_broken
         return True
 
-    _, pc = apply_pc_delta(pc_name, _mutate)
+    ok, pc = apply_pc_delta(pc_name, _mutate)
+    if not ok:
+        return jsonify({"success": False, "error": state.get('error') or "Shield Block unavailable"})
 
-    status = "destroyed" if result['shield_destroyed'] else "broken" if result['shield_broken'] else "intact"
-    _combat_log(f"{pc_name}: Shield Block! Blocked {blocked} dmg (Hardness {shield_hardness}). Shield took {leftover} ({status}). {leftover} dmg to HP.", 'action')
+    status = "destroyed" if state['shield_destroyed'] else "broken" if state['shield_broken'] else "intact"
+    warn = " [shield was already broken — extra fragile]" if state['was_broken'] else ""
+    _combat_log(f"{pc_name}: Shield Block! Blocked {state['blocked']} dmg (Hardness {shield_hardness}). Shield took {state['leftover']} ({status}){warn}. {state['leftover']} dmg to HP.", 'action')
 
     return jsonify({
         "success": True,
-        "blocked": blocked,
-        "damage_to_char": leftover,
-        "damage_to_shield": leftover,
-        "shield_hp": result['shield_hp'],
+        "blocked": state['blocked'],
+        "damage_to_char": state['leftover'],
+        "damage_to_shield": state['leftover'],
+        "shield_hp": state['shield_hp'],
         "shield_max_hp": shield_max_hp,
         "shield_hardness": shield_hardness,
         "shield_bt": shield_bt,
-        "shield_broken": result['shield_broken'],
-        "shield_destroyed": result['shield_destroyed'],
+        "shield_broken": state['shield_broken'],
+        "shield_destroyed": state['shield_destroyed'],
+        "shield_was_broken": state['was_broken'],
         "current_hp": pc.current_hp,
         "temp_hp": int(getattr(pc, 'temp_hp', 0) or 0),
         "reaction_used": bool(getattr(pc, 'reaction_used', False)),
         "dying": pc.conditions.get('dying', 0),
         "wounded": pc.conditions.get('wounded', 0),
-        "dead": pc.conditions.get('dying', 0) >= 4,
+        "doomed": pc.conditions.get('doomed', 0),
+        "dead": pc.conditions.get('dying', 0) >= max(1, 4 - int(pc.conditions.get('doomed', 0) or 0)),
         "conditions": {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
     })
 
@@ -4962,8 +5004,15 @@ def repair_shield(pc_name):
         build['shield_hp'] = shield_max_hp
     else:
         build['shield_hp'] = min(shield_max_hp, shield_hp + amount)
-    
+
     save_and_reload_character(pc_name, pc_json, file_path)
+    # Mirror onto in-memory PC so the next pc_update payload picks it up,
+    # then broadcast so party_view + GM screen repaint the shield gauge.
+    if pc_name in PARTY_LIBRARY:
+        PARTY_LIBRARY[pc_name].shield_hp = build['shield_hp']
+        PARTY_LIBRARY[pc_name].shield_broken = build['shield_hp'] <= safe_int(build.get('shield_bt'), shield_max_hp // 2)
+        PARTY_LIBRARY[pc_name].shield_destroyed = build['shield_hp'] <= 0
+    _broadcast_pc_state(pc_name)
     return jsonify({"success": True, "shield_hp": build['shield_hp'], "shield_max_hp": shield_max_hp})
 
 @app.route('/api/set_shield_stats/<pc_name>', methods=['POST'])
@@ -4979,8 +5028,10 @@ def set_shield_stats(pc_name):
     build['shield_hp'] = safe_int(data.get('hp'), build['shield_max_hp'])
     build['shield_bt'] = safe_int(data.get('bt'), build['shield_max_hp'] // 2)
     build['shield_ac_bonus'] = safe_int(data.get('ac_bonus'), 2)
-    
+
     save_and_reload_character(pc_name, pc_json, file_path)
+    # save_and_reload_character rebuilds the Character — mirror is automatic.
+    _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
 
 # =============================================================================
@@ -6825,6 +6876,11 @@ def long_rest(pc_name):
         
         # Clear server-side spell slot tracking
         pc._spell_slots_refreshed = True
+        # Snapshot post-rest values before disk roundtrip — save_and_reload_character
+        # rebuilds Character from the saved JSON, so we MUST persist the new
+        # HP/focus/temp_hp/conditions in the build dict here, otherwise the
+        # in-memory mutations get stomped by the reload and the player wakes
+        # up at their pre-rest HP.
         file_path = get_pc_file_path(pc_name)
         if file_path and os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
@@ -6832,15 +6888,30 @@ def long_rest(pc_name):
             build['expended_slots'] = {}
             build['prepared_spells'] = {}
             build['cast_prep'] = {}
+            build['current_hp'] = pc.current_hp
+            build['current_focus'] = pc.current_focus
+            build['temp_hp'] = pc.temp_hp_manual
+            build['conditions'] = dict(pc.conditions)
+            build['reaction_used'] = bool(getattr(pc, 'reaction_used', False))
+            build['shield_raised'] = bool(getattr(pc, 'shield_raised', False))
             save_and_reload_character(pc_name, pc_json, file_path)
+            # Re-fetch the rebuilt PC reference for the broadcast below.
+            pc = PARTY_LIBRARY[pc_name]
 
         # Sync to tracker
+        in_encounter = False
         for c in ACTIVE_ENCOUNTER:
             if c.is_pc and c.name == pc_name:
                 c.current_hp = pc.current_hp
                 c.current_focus = pc.focus_max
                 c.conditions = dict(pc.conditions)
-        
+                in_encounter = True
+
+        # Broadcast so other players' party_view + GM tracker see the rest.
+        _broadcast_pc_state(pc_name)
+        if in_encounter:
+            _broadcast_encounter_state()
+
         result = {"success": True, "restored": {
             "hp": pc.current_hp,
             "hp_max": pc.hp,

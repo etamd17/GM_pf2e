@@ -2680,6 +2680,35 @@ button[onclick^="rollDamage"]:hover {
 }
 .stats-strip > .ss-block { flex: 1 1 0 !important; min-width: 0 !important; }
 .stats-strip .hp-area { flex: 1.6 1 0 !important; }
+/* HP+Shield is the most-touched block during play — pin it first under
+   the character name. Saves / abilities follow in their natural order. */
+.stats-strip .hp-area { order: -1 !important; }
+/* Raise Shield AC visualization — gives the AC stat block a visible
+   "shield is up" treatment instead of just a number bump. */
+.stats-strip .ss-block.shield-raised .ss-val,
+#ac-current.shield-raised {
+    color: #93C5FD !important;
+    text-shadow: 0 0 8px rgba(90,142,232,0.45);
+}
+.stats-strip .ss-block.shield-raised {
+    background: linear-gradient(180deg, rgba(90,142,232,0.10), rgba(90,142,232,0.02));
+    box-shadow: inset 0 0 0 1px rgba(90,142,232,0.35);
+    border-radius: var(--r-sm);
+}
+.ac-shield-bonus {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(90,142,232,0.18);
+    border: 1px solid rgba(90,142,232,0.4);
+    color: #93C5FD;
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    vertical-align: middle;
+}
 
 /* ── 28b. Identity + action toolbar tighter — kill row gap. */
 .char-header .flex-wrap { row-gap: 4px !important; }
@@ -2742,10 +2771,10 @@ button[onclick^="rollDamage"]:hover {
     body.min-h-screen.flex.flex-col,
     body.min-h-screen { padding-left: 460px !important; }
 
-    /* Hide the redundant horizontal strips on wide. JS that targets
-       their IDs (current-hp, ac-current, etc.) still finds them in
-       the DOM — they just don't render. */
-    .ability-row-wrap, .stats-strip { display: none !important; }
+    /* Layout per spec: HP / Shield / AC / Saves / Abilities all live
+       UNDER the character name in .stats-strip + .ability-row-wrap. The
+       stats rail on the left is skills-only, so no duplication. */
+    .stats-strip { flex-wrap: wrap; }
 }
 #stats-rail::-webkit-scrollbar { width: 4px; }
 #stats-rail::-webkit-scrollbar-track { background: transparent; }
