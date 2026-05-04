@@ -2647,4 +2647,151 @@ button[onclick^="rollDamage"]:hover {
     background: var(--bg-page) !important;
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   28. Header dead-space compress + left meta rail (3-column feel).
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 28a. Header compress ─────────────────────────────────────────────
+   The sticky header had row 1 (identity + actions) + row 2 (ability
+   tiles centered) + row 3 (stats strip). The ability row had heavy
+   padding and the tiles centered with dead space on the edges. Make
+   the row full-width and tighten padding so the band reads as one
+   compact stripe. */
+.char-header { padding-top: 0 !important; padding-bottom: 0 !important; }
+.char-header > div:first-child {
+    max-width: none !important;
+    padding: 6px 14px !important;
+}
+.ability-row-wrap {
+    justify-content: stretch !important;
+    padding: 4px 14px !important;
+    gap: 6px !important;
+    max-width: none !important;
+}
+.ability-block {
+    flex: 1 1 0 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 4px 6px !important;
+}
+.stats-strip {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.stats-strip > .ss-block { flex: 1 1 0 !important; min-width: 0 !important; }
+.stats-strip .hp-area { flex: 1.6 1 0 !important; }
+
+/* ── 28b. Identity + action toolbar tighter — kill row gap. */
+.char-header .flex-wrap { row-gap: 4px !important; }
+.char-header .mobile-actions { row-gap: 4px !important; }
+
+/* ── 28c. Left meta rail (Pathbuilder-style sticky sidebar) ───────────
+   The aside is appended right before the sheet body wrapper. On wide
+   viewports it floats fixed-position at the left and shifts the main
+   content right. On narrow viewports it hides; the same info is in
+   the Core & Skills tab. */
+#char-meta-rail {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg-page);
+    border-right: 1px solid var(--border-strong);
+    padding: var(--sp-3);
+    z-index: 10;
+    /* Account for the sticky header above */
+    padding-top: 96px;
+    font-family: var(--font-ui);
+}
+@media (min-width: 1280px) {
+    #char-meta-rail { display: block; }
+    /* Push body content right to clear the rail. The rail is
+       position:fixed so it always covers the left 220px regardless
+       of scroll. The header is body's child so it inherits this
+       offset and stays right of the rail. */
+    body.min-h-screen.flex.flex-col,
+    body.min-h-screen { padding-left: 220px !important; }
+}
+#char-meta-rail::-webkit-scrollbar { width: 4px; }
+#char-meta-rail::-webkit-scrollbar-track { background: transparent; }
+#char-meta-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+.meta-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    padding: var(--sp-2) var(--sp-3);
+    margin-bottom: var(--sp-2);
+    color: var(--text-on-dark-2);
+    font-size: 11px;
+}
+.meta-card:last-child { margin-bottom: 0; }
+.meta-card-head {
+    font-family: var(--font-display);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: var(--sp-1);
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: var(--sp-1);
+}
+.meta-card-body {
+    font-size: 11px;
+    color: var(--text-on-dark);
+    line-height: 1.4;
+}
+.meta-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    gap: var(--sp-2);
+}
+.meta-card-row + .meta-card-row { border-top: 1px solid var(--border-card); }
+.meta-card-lbl {
+    font-family: var(--font-display);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-on-dark-3);
+    flex-shrink: 0;
+}
+.meta-card-val {
+    color: var(--text-on-dark);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.meta-card-val.accent {
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 600;
+}
+.meta-card-sub {
+    color: var(--text-on-dark-3);
+    font-size: 10px;
+    font-weight: 400;
+}
+
+/* ── 28d. On narrow viewports, hide the redundant rail meta in the
+   Core & Skills Character Details card (since the rail covers it). */
+@media (min-width: 1280px) {
+    #tab-core .panel-card[class*="xl:col-span-1"] {
+        display: none !important;
+    }
+    #tab-core .grid.grid-cols-1.xl\\:grid-cols-3 {
+        grid-template-columns: 1fr !important;
+    }
+    #tab-core .xl\\:col-span-2 { grid-column: span 1 !important; }
+}
+
 /* End of system.css */

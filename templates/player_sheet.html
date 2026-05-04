@@ -2837,6 +2837,76 @@
         </div>
     </div>
 
+    {# ── Pathbuilder-style left meta rail ──────────────────────────────
+       Sticks to the left below the header. Carries the character meta
+       cards (ancestry / background / class / heritage / class options)
+       so the right column stays focused on stats + tabs. Hidden on
+       narrow viewports (<1280px) — the cards collapse into the existing
+       Core & Skills tab content. #}
+    <aside id="char-meta-rail" class="no-print" aria-label="Character meta">
+        <div class="meta-card">
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Ancestry</span>
+                <span class="meta-card-val">{{ pc.ancestry }}{% if pc.heritage and pc.heritage != 'None' %} <span class="meta-card-sub">({{ pc.heritage }})</span>{% endif %}</span>
+            </div>
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Background</span>
+                <span class="meta-card-val">{{ pc.background or '—' }}</span>
+            </div>
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Class</span>
+                <span class="meta-card-val">{{ pc.class_name }}{% if pc.subclass %} <span class="meta-card-sub">({{ pc.subclass }})</span>{% endif %}</span>
+            </div>
+            {% if pc.deity and pc.deity not in ('None', 'Not set') %}
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Deity</span>
+                <span class="meta-card-val">{{ pc.deity }}</span>
+            </div>
+            {% endif %}
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Size</span>
+                <span class="meta-card-val">{{ pc.size }}</span>
+            </div>
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Speed</span>
+                <span class="meta-card-val">{{ pc.active_speed }} ft</span>
+            </div>
+        </div>
+        {% if pc.languages %}
+        <div class="meta-card">
+            <div class="meta-card-head">Languages</div>
+            <div class="meta-card-body">{{ pc.languages | join(', ') }}</div>
+        </div>
+        {% endif %}
+        {% if pc.senses %}
+        <div class="meta-card">
+            <div class="meta-card-head">Senses</div>
+            <div class="meta-card-body">{{ pc.senses | join(', ') }}</div>
+        </div>
+        {% endif %}
+        <div class="meta-card">
+            <div class="meta-card-head">Quick Stats</div>
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Class DC</span>
+                <span class="meta-card-val accent">{{ pc.class_dc }}</span>
+            </div>
+            {% if pc.spell_dc and pc.spell_dc > 0 %}
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Spell DC</span>
+                <span class="meta-card-val accent">{{ pc.spell_dc }}</span>
+            </div>
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Spell Atk</span>
+                <span class="meta-card-val accent">+{{ pc.spell_attack }}</span>
+            </div>
+            {% endif %}
+            <div class="meta-card-row">
+                <span class="meta-card-lbl">Initiative</span>
+                <span class="meta-card-val accent">+{{ pc.initiative_mod }}</span>
+            </div>
+        </div>
+    </aside>
+
     <!-- SHEET BODY                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20">
