@@ -1648,15 +1648,55 @@ body.levelup, .levelup-page {
 }
 .drawer-submit-bar button { /* primary action stands out */ }
 
-/* ── Levelup sidebar density + box-in-box flatten ─────────────────────
-   The wizard sidebar had px-6 py-4 buttons with 7 items + chunky header
-   + chunky footer = ~580px tall, forcing scroll on laptops. The step
-   panels nested bg-gray-800 boxes inside bg-gray-900 page background,
-   producing the "card in card in card" vibe-coded look the user
-   flagged. These overrides tighten the sidebar and flatten every
-   nested box on the step panels into a single rule-line section. */
+/* ── Levelup single-page layout ───────────────────────────────────────
+   The sidebar nav was retired in favor of a single stacked-page flow:
+   all seven sections render top-to-bottom in one column; the player
+   scrolls. The sticky top bar carries the back link, identity, level,
+   and the Submit button. Drawer-mode markup is also retired. */
 
-#sidebar-nav { width: 220px !important; min-width: 220px !important; }
+#sidebar-nav, .compact-stepper, .drawer-submit-bar { display: none !important; }
+
+/* All step panels are always visible — kill the old "active-only" rule. */
+.step-panel { display: block !important; }
+.step-panel + .step-panel {
+    border-top: 1px solid var(--border-strong) !important;
+    margin-top: var(--sp-7) !important;
+    padding-top: var(--sp-6) !important;
+}
+
+/* Top bar (the new replacement for the sidebar header) */
+#lvl-topbar { box-shadow: var(--shadow-1) !important; }
+#lvl-topbar h1 { font-weight: 600 !important; }
+#btn-finish:not([disabled]) {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+    cursor: pointer !important;
+}
+#btn-finish:not([disabled]):hover {
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+}
+
+/* Section progress strip — one little dash per section, gilt for
+   complete, ruby-tint for incomplete, gray for not-required. */
+#lvl-section-progress > .section-pip {
+    flex: 1 1 0;
+    height: 3px;
+    background: var(--ink-700);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background var(--t-fast);
+}
+#lvl-section-progress > .section-pip.complete { background: var(--accent); }
+#lvl-section-progress > .section-pip.incomplete { background: rgba(168, 58, 58, 0.55); }
+#lvl-section-progress > .section-pip.optional { background: var(--ink-600); }
+#lvl-section-progress > .section-pip:hover { background: var(--accent-hover); }
+
+/* Legacy sidebar selector retained as a no-op in case any JS still
+   targets it. */
+#sidebar-nav-legacy { display: none !important; }
+.legacy-nav-anchor { display: none !important; }
 #sidebar-nav .p-6 { padding: var(--sp-3) var(--sp-4) !important; }
 #sidebar-nav h1 { font-size: 18px !important; line-height: 1 !important; margin: 0 !important; color: var(--accent) !important; }
 #sidebar-nav p { margin-top: var(--sp-1) !important; font-size: 11px !important; }

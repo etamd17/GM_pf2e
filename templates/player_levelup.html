@@ -114,57 +114,50 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="font-body flex h-screen">
+<body class="font-body" style="overflow-x:hidden;">
 
-    <!-- Compact stepper (visible only in drawer mode) -->
-    <div class="compact-stepper" id="compact-stepper">
-        <!-- Populated by JS based on which steps are visible -->
-    </div>
-
-    <!-- Fixed bottom submit bar (drawer mode only) -->
-    <div class="drawer-submit-bar" id="drawer-submit-bar" style="display:none;">
-        <button id="btn-finish-drawer" onclick="submitLevelUp()" class="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-bold transition-colors cursor-not-allowed text-sm" disabled>
-            Incomplete
-        </button>
-    </div>
-
-    <div id="sidebar-nav" class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
-        <div class="p-6 border-b border-gray-800">
-            <a id="btn-back-sheet" href="/player" class="text-xs text-gray-500 hover:text-white transition-colors mb-2 block uppercase tracking-wider font-bold">← Back to Sheet</a>
-            <h1 class="text-2xl font-header text-red-500 leading-none">Level Up</h1>
-            <p class="text-xs text-gray-400 mt-1">Advancing to Level <span id="lbl-target-level" class="text-white font-bold"></span></p>
-        </div>
-        <div class="flex-1 overflow-y-auto py-4 space-y-1" id="nav-container">
-            <button onclick="navTo('classfeatures')" id="nav-classfeatures" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
-                <span>1. Class Features</span> <span id="chk-classfeatures" class="text-xs text-green-400 text-lg font-bold leading-none"></span>
-            </button>
-            <button onclick="navTo('abilities')" id="nav-abilities" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
-                <span>2. Abilities</span> <span id="chk-abilities" class="text-xs"></span>
-            </button>
-            <button onclick="navTo('skills')" id="nav-skills" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
-                <span>3. Skills</span> <span id="chk-skills" class="text-xs"></span>
-            </button>
-            <button onclick="navTo('feats')" id="nav-feats" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
-                <span>4. Feats</span> <span id="chk-feats" class="text-xs"></span>
-            </button>
-            <button onclick="navTo('magic')" id="nav-magic" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
-                <span>5. Magic</span> <span id="chk-magic" class="text-xs"></span>
-            </button>
-            <button onclick="navTo('retrain')" id="nav-retrain" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
-                <span>6. Retraining</span> <span class="text-xs text-gray-600">Opt</span>
-            </button>
-            <button onclick="navTo('review')" id="nav-review" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center" style="display: flex;">
-                <span>7. Review</span> <span id="chk-review" class="text-xs"></span>
-            </button>
-        </div>
-        <div class="p-6 border-t border-gray-800 bg-gray-900">
-            <button id="btn-finish" onclick="submitLevelUp()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
+    {# ── Sticky top bar ─────────────────────────────────────────────
+       Replaces the cramped sidebar nav. All seven sections are now
+       rendered in a single stacked column below; the player simply
+       scrolls. This bar carries the back link, identity/level label,
+       a tiny scroll-spy progress bar, and the Submit button (which
+       moves with the player as they scroll). #}
+    <header id="lvl-topbar" style="position:sticky; top:0; z-index:40; background:var(--bg-page); border-bottom:1px solid var(--border-strong);">
+        <div style="max-width: 980px; margin: 0 auto; display:flex; align-items:center; gap:var(--sp-4); padding: var(--sp-3) var(--sp-5);">
+            <a id="btn-back-sheet" href="/player" style="font-family:var(--font-ui); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-3); text-decoration:none;">&larr; Sheet</a>
+            <div style="flex:1; min-width:0;">
+                <h1 style="font-family:var(--font-display); font-size:18px; color:var(--accent); margin:0; line-height:1; letter-spacing:0.04em;">Level Up</h1>
+                <p style="font-size:11px; color:var(--text-on-dark-2); margin:0; margin-top:2px;">{{ pc.name }} &middot; advancing to Level <span id="lbl-target-level" style="color:var(--text-on-dark); font-weight:600;"></span></p>
+            </div>
+            <button id="btn-finish" onclick="submitLevelUp()" disabled
+                    style="background: var(--bg-card); color: var(--text-on-dark-3); border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-5); font-family: var(--font-display); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; cursor:not-allowed;">
                 Incomplete
             </button>
         </div>
-    </div>
+        {# Tiny progress strip — gilt for completed sections, ruby tint for incomplete. Built by buildSectionProgress() #}
+        <div id="lvl-section-progress" style="display:flex; gap:2px; max-width:980px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-2);"></div>
+        {# Hidden anchors retained so the legacy runValidation() writes
+           to chk-X spans don't error. The visible signal is the
+           progress strip above; these are display:none. #}
+        <div style="display:none;" aria-hidden="true">
+            <span id="chk-classfeatures"></span>
+            <span id="chk-abilities"></span>
+            <span id="chk-skills"></span>
+            <span id="chk-feats"></span>
+            <span id="chk-magic"></span>
+            <span id="chk-review"></span>
+            <span id="nav-classfeatures"></span>
+            <span id="nav-abilities"></span>
+            <span id="nav-skills"></span>
+            <span id="nav-feats"></span>
+            <span id="nav-magic"></span>
+            <span id="nav-retrain"></span>
+            <span id="nav-review"></span>
+            <button id="btn-finish-drawer" onclick="submitLevelUp()"></button>
+        </div>
+    </header>
 
-    <div class="flex-1 bg-gray-900 overflow-y-auto custom-scrollbar relative flex flex-col">
+    <main id="lvl-page-main" class="custom-scrollbar" style="max-width: 980px; margin: 0 auto; padding: var(--sp-5);">
         
         <div id="step-classfeatures" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
             <h2 class="text-3xl font-bold text-white mb-2">Automatic Class Features</h2>
@@ -276,7 +269,7 @@
             <p class="text-gray-400 mb-8">Verify your level up choices before locking them into the database.</p>
             <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl" id="ui-review-content"></div>
         </div>
-    </div>
+    </main>
 
     <div id="uni-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 md:p-8 opacity-0 transition-opacity duration-200">
         <div class="bg-gray-900 w-full max-w-6xl h-full max-h-[85vh] rounded-xl shadow-2xl border border-gray-700 flex flex-col md:flex-row overflow-hidden transform scale-95 transition-transform duration-200" id="uni-window">
@@ -661,15 +654,54 @@
             runValidation();
         }
 
+        // navTo() in single-page mode: scroll the section into view.
+        // The old hide/show logic is gone (every panel is rendered
+        // simultaneously in the stacked layout).
         function navTo(stepId) {
-            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById(`step-${stepId}`).classList.add('active');
-            document.getElementById(`nav-${stepId}`).classList.add('active');
-            if(stepId === 'review') renderReview();
+            const target = document.getElementById(`step-${stepId}`);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (stepId === 'review') renderReview();
             runValidation();
-            buildCompactStepper();
         }
+
+        // Build a tiny gilt-or-ruby progress strip in the sticky top bar
+        // that maps to each visible step on the page. Click a pip to
+        // smooth-scroll to that section.
+        function buildSectionProgress() {
+            const strip = document.getElementById('lvl-section-progress');
+            if (!strip) return;
+            const sections = [
+                { id: 'classfeatures', label: 'Class Features', required: true },
+                { id: 'abilities',     label: 'Abilities',      required: !!(reqs && reqs.ability_boosts) },
+                { id: 'skills',        label: 'Skills',         required: !!(reqs && reqs.skill_increase) },
+                { id: 'feats',         label: 'Feats',          required: !!(reqs && (reqs.class_feat || reqs.general_feat || reqs.skill_feat || reqs.ancestry_feat)) },
+                { id: 'magic',         label: 'Magic',          required: state.spellCasters.length > 0 || classMatrix[pcClass]?.spellcasting },
+                { id: 'retrain',       label: 'Retrain',        required: false },
+                { id: 'review',        label: 'Review',         required: true },
+            ];
+            strip.innerHTML = sections.map(s =>
+                `<span class="section-pip" data-step="${s.id}" data-required="${s.required ? '1' : '0'}" title="${s.label}"></span>`
+            ).join('');
+            strip.querySelectorAll('.section-pip').forEach(p => {
+                p.addEventListener('click', () => navTo(p.dataset.step));
+            });
+        }
+        function paintSectionProgress() {
+            const strip = document.getElementById('lvl-section-progress');
+            if (!strip) return;
+            strip.querySelectorAll('.section-pip').forEach(p => {
+                const step = p.dataset.step;
+                const required = p.dataset.required === '1';
+                const chk = document.getElementById('chk-' + step);
+                const isError = chk && (chk.innerText || '').trim() === '!';
+                p.classList.remove('complete', 'incomplete', 'optional');
+                if (!required) p.classList.add('optional');
+                else if (isError) p.classList.add('incomplete');
+                else p.classList.add('complete');
+            });
+        }
+        // The actual run-validation hook is at the BOTTOM of the file
+        // (after runValidation is defined), via a microtask wrapper.
 
         function buildCompactStepper() {
             if (!isDrawerMode) return;
@@ -1806,7 +1838,19 @@
             } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
         }
 
+        // Wrap runValidation to also paint the section-progress strip in
+        // the sticky top bar. Done AFTER all functions are defined.
+        (function wrapRunValidation() {
+            const orig = runValidation;
+            runValidation = function() {
+                const r = orig.apply(this, arguments);
+                try { paintSectionProgress(); } catch(_) {}
+                return r;
+            };
+        })();
+
         init();
+        try { buildSectionProgress(); paintSectionProgress(); } catch(_) {}
     </script>
 </body>
 </html>
