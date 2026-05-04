@@ -1417,7 +1417,17 @@ class Character:
         # string key — the UI maps it to a label + tooltip. Empty string means
         # the PC is not doing anything in particular (default: "Walk").
         self.exploration_activity = str(build.get('exploration_activity') or '')
-        self.signature_spells = build.get('signature_spells') or []
+        # Signature spells: stored as either a flat list (legacy) or a
+        # {rank: name} dict (new, post-rank-cap). Expose both forms so
+        # templates can iterate the flat names while validators consult
+        # the rank map.
+        _raw_sig = build.get('signature_spells') or []
+        if isinstance(_raw_sig, dict):
+            self.signature_map = {int(k): v for k, v in _raw_sig.items() if v}
+            self.signature_spells = list(self.signature_map.values())
+        else:
+            self.signature_map = {}
+            self.signature_spells = list(_raw_sig)
         self.session_notes = build.get('session_notes') or []
         self.expended_slots = build.get('expended_slots') or {}
         
@@ -2144,17 +2154,58 @@ class Character:
 
         for caster in self.raw_spellCasters:
             cast_type = safe_str(caster.get('castingType') or caster.get('spellcastingType'), 'Prepared')
+            # Detect Bounded Spellcasting (archetype with 2 slots/rank cap).
+            # Pathbuilder doesn't always set this explicitly, so we infer from
+            # name/type strings.
+            cast_type_lower = cast_type.lower()
+            is_bounded = ('bounded' in cast_type_lower) or ('bounded' in safe_str(caster.get('name'), '').lower())
+            if is_bounded and 'bounded' not in cast_type_lower:
+                cast_type = ('Bounded ' + cast_type).strip()
             c_info = {'name': safe_str(caster.get('name'), 'Spellcasting'), 'tradition': safe_str(caster.get('magicTradition'), 'Unknown'), 'type': cast_type, 'levels': []}
             slots_per_day = caster.get('perDay') or []
-            
+
+            # Cleric Divine Font — +4 heal/harm-only slots at highest cleric rank.
+            # PF2e Player Core: 4 at L1, 5 at L5, 6 at L15. Honor explicit
+            # `divineFont`/`font_kind`/`fontExtra` if set, otherwise derive
+            # from class + sanctification.
+            font_extra = 0
+            font_kind = ''
+            font_at_rank = 0
+            cls_lower_local = self.class_name.lower()
+            if cls_lower_local == 'cleric' and 'prepared' in cast_type_lower:
+                lvl = self.level
+                font_extra = 6 if lvl >= 15 else (5 if lvl >= 5 else 4)
+                # Sanctification → font kind (heal vs harm). Default to heal.
+                sanc_lower = safe_str(build.get('sanctification'), 'Holy').lower()
+                explicit_font = safe_str(caster.get('divineFont') or build.get('divineFont'), '').lower()
+                if explicit_font in ('heal', 'harm'):
+                    font_kind = explicit_font
+                elif 'unholy' in sanc_lower:
+                    font_kind = 'harm'
+                else:
+                    font_kind = 'heal'
+                # Highest cleric spell rank — find the largest index in perDay > 0
+                for i, n in enumerate(slots_per_day):
+                    if safe_int(n) > 0 and i > font_at_rank:
+                        font_at_rank = i
+                # Allow per-PC override
+                if isinstance(build.get('font_extra'), int):
+                    font_extra = max(0, build['font_extra'])
+
             for lvl in range(11):
                 max_slots = safe_int(slots_per_day[lvl]) if lvl < len(slots_per_day) else 0
                 spells_at_lvl = []
                 for s in (caster.get('spells') or []):
                     if safe_int(s.get('spellLevel')) == lvl:
                         for s_name in (s.get('list') or []):
-                            spells_at_lvl.append({'name': safe_str(s_name), 'desc': COMPENDIUM_LIBRARY.get(safe_str(s_name).lower(), "<em>No description.</em>")})
-                
+                            entry = {'name': safe_str(s_name),
+                                     'desc': COMPENDIUM_LIBRARY.get(safe_str(s_name).lower(), "<em>No description.</em>")}
+                            # Innate caster uses_per_day map: {spell_name: N}
+                            uses_map = caster.get('usesPerDay') or {}
+                            if isinstance(uses_map, dict) and uses_map.get(safe_str(s_name)):
+                                entry['uses_per_day'] = safe_int(uses_map[safe_str(s_name)], 1)
+                            spells_at_lvl.append(entry)
+
                 if spells_at_lvl or max_slots > 0:
                     # Paizo-style rank labels: "Cantrips", "1st-Rank Spells", etc.
                     if lvl == 0:
@@ -2162,7 +2213,12 @@ class Character:
                     else:
                         _suf = 'th' if (10 <= lvl % 100 <= 20) else {1:'st', 2:'nd', 3:'rd'}.get(lvl % 10, 'th')
                         rank_label = f'{lvl}{_suf}-Rank Spells'
-                    c_info['levels'].append({'level': lvl, 'label': rank_label, 'slots': max_slots, 'spells': spells_at_lvl})
+                    level_entry = {'level': lvl, 'label': rank_label, 'slots': max_slots, 'spells': spells_at_lvl}
+                    # Attach font slots only at the cleric's highest cleric rank
+                    if font_extra > 0 and lvl == font_at_rank:
+                        level_entry['font_slots'] = font_extra
+                        level_entry['font_kind'] = font_kind
+                    c_info['levels'].append(level_entry)
             if c_info['levels']: self.spell_casters.append(c_info)
 
         # Kineticist impulses — shown as spontaneous-style (no prep needed)
@@ -2396,11 +2452,17 @@ class Character:
                 if self.spell_casters:
                     tradition = self.spell_casters[0].get('tradition', tradition)
                 
+                # Focus spells use a *pool*, not slots. We pass slots=0 so the
+                # spontaneous renderer doesn't draw a slot-checkbox row, and
+                # set focus_pool: True for any future renderer that wants to
+                # show pip readouts inline.
                 self.spell_casters.append({
-                    'name': 'Focus Spells', 
+                    'name': 'Focus Spells',
                     'tradition': tradition,
-                    'type': 'Focus', 
-                    'levels': [{'level': 1, 'label': 'Focus Spells', 'slots': self.focus_max, 'spells': focus_spells}]
+                    'type': 'Focus',
+                    'levels': [{'level': 1, 'label': 'Focus Spells', 'slots': 0,
+                                'focus_pool': True, 'pool_max': self.focus_max,
+                                'spells': focus_spells}]
                 })
 
         # Post-process: add action costs to all spells across all casters
@@ -2433,7 +2495,8 @@ class Character:
                 'name': 'Focus Spells',
                 'tradition': tradition,
                 'type': 'Focus',
-                'levels': [{'level': 1, 'label': 'Focus Spells', 'slots': self.focus_max, 'spells': []}]
+                'levels': [{'level': 1, 'label': 'Focus Spells', 'slots': 0,
+                            'focus_pool': True, 'pool_max': self.focus_max, 'spells': []}]
             })
 
         # Pets: merge Pathbuilder pets with custom pets
@@ -4758,6 +4821,27 @@ def adjust_focus(pc_name):
     except ValueError: pass
     return jsonify({"success": False})
 
+@app.route('/api/refocus/<pc_name>', methods=['POST'])
+def refocus(pc_name):
+    """PF2e Refocus activity: spend 10 minutes performing class-appropriate
+    deeds to restore 1 Focus Point (capped at focus_max, max 3 in pool)."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "unknown player"}), 404
+    def _mutate(pc):
+        if pc.focus_max <= 0:
+            raise ValueError("no focus pool")
+        if pc.current_focus >= pc.focus_max:
+            raise ValueError("focus pool already full")
+        pc.current_focus = min(pc.focus_max, pc.current_focus + 1)
+        return True
+    try:
+        _, pc = apply_pc_delta(pc_name, _mutate)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify({"success": True, "current_focus": pc.current_focus,
+                    "focus_max": pc.focus_max,
+                    "message": f"{pc_name} refocused (10 min). +1 Focus Point."})
+
 @app.route('/api/adjust_hero/<pc_name>', methods=['POST'])
 def adjust_hero(pc_name):
     try:
@@ -4791,9 +4875,11 @@ def daily_preparations(pc_name):
     data = request.json or {}
     heal_full = data.get('heal_full', True)
     
-    # Reset expended spell slots
+    # Reset expended spell slots, prepared lists, and per-slot cast tracking
     build['expended_slots'] = {}
-    
+    build['prepared_spells'] = {}
+    build['cast_prep'] = {}
+
     # Restore focus to max
     build['current_focus'] = pc.focus_max
     
@@ -4845,6 +4931,8 @@ def daily_preparations_all():
             if err: continue
             build = pc_json.get('build', pc_json)
             build['expended_slots'] = {}
+            build['prepared_spells'] = {}
+            build['cast_prep'] = {}
             pc = PARTY_LIBRARY[pc_name]
             build['current_focus'] = pc.focus_max
             if 'conditions' not in build: build['conditions'] = {}
@@ -7172,13 +7260,18 @@ def cast_spell(pc_name):
         prepared = build.get('prepared_spells') or {}
         key = f"c{caster_idx}_l{slot_rank}"
 
-        # Determine slot count for this caster + rank
+        # Determine slot count for this caster + rank (regular + font slots)
         slot_count = 0
+        font_extra = 0
+        font_kind = ''
         for lvl in (caster.get('levels') or []):
             if int(lvl.get('level', -1)) == slot_rank:
                 slot_count = int(lvl.get('slots', 0))
+                font_extra = int(lvl.get('font_slots', 0) or 0)
+                font_kind = (lvl.get('font_kind', '') or '').lower()
                 break
-        if slot_count <= 0:
+        total_slots = slot_count + font_extra
+        if total_slots <= 0:
             return jsonify({"success": False, "error": f"You have no rank-{slot_rank} slots."}), 400
 
         # PREPARED — the spell must be at this exact slot in the daily prep.
@@ -7210,10 +7303,34 @@ def cast_spell(pc_name):
             return jsonify({"success": True, "expended": True, "slot_rank": slot_rank,
                             "slot_idx": target_idx, "type": "prepared"})
 
-        # SPONTANEOUS — find the first free slot at slot_rank.
+        # SPONTANEOUS — must know the spell at slot_rank OR have it signed.
+        # Per PF2e: "you must know a spell at the specific rank that you want
+        # to cast it" — except signature spells, which auto-heighten.
+        # We check the repertoire (caster.levels[].spells) at slot_rank.
+        sig_map = {}
+        _raw_sig = build.get('signature_spells') or []
+        if isinstance(_raw_sig, dict):
+            sig_map = {int(k): v for k, v in _raw_sig.items() if v}
+        sig_names = set(_raw_sig) if isinstance(_raw_sig, list) else set(sig_map.values())
+        is_signature = spell_name in sig_names
+        if not is_signature and slot_rank != spell_rank:
+            # Not signature → must be known at slot_rank
+            known_at_rank = False
+            for lvl in (caster.get('levels') or []):
+                if int(lvl.get('level', -1)) == slot_rank:
+                    for sp in (lvl.get('spells') or []):
+                        if (sp.get('name') or '').strip().lower() == spell_name.lower():
+                            known_at_rank = True
+                            break
+                    break
+            if not known_at_rank:
+                return jsonify({
+                    "success": False,
+                    "error": f'"{spell_name}" is not in your repertoire at rank {slot_rank}. Mark it as a Signature spell or learn it at that rank to heighten.'
+                }), 400
         free_idx = -1
         slot_list = expended.get(key) or []
-        for i in range(slot_count):
+        for i in range(total_slots):
             if i >= len(slot_list) or not slot_list[i]:
                 free_idx = i
                 break
@@ -7230,7 +7347,7 @@ def cast_spell(pc_name):
         build['expended_slots'] = expended
         save_and_reload_character(pc_name, pc_json, file_path)
         return jsonify({"success": True, "expended": True, "slot_rank": slot_rank,
-                        "slot_idx": free_idx, "type": "spontaneous"})
+                        "slot_idx": free_idx, "type": "spontaneous", "signature": is_signature})
 
 
 # GM → player check request (Wave 2 #14). GM screen posts which skill
@@ -7829,19 +7946,34 @@ def learn_spell(pc_name):
     spell_casters = build.get('spellCasters', [])
     if caster_idx >= len(spell_casters):
         return jsonify({"error": "Invalid caster index"}), 400
-    
+
     caster = spell_casters[caster_idx]
+
+    # Tradition gate: can't learn an arcane spell into a divine list, etc.
+    # Allow override via `force=True` (e.g. multiclass dedications can grant
+    # cross-tradition spells).
+    caster_trad = (caster.get('magicTradition') or '').strip().lower()
+    spell_trads = data.get('traditions') or data.get('spell_traditions') or []
+    spell_trads = [str(t).strip().lower() for t in spell_trads if t]
+    force = bool(data.get('force', False))
+    if caster_trad and spell_trads and caster_trad not in spell_trads and not force:
+        return jsonify({
+            "success": False,
+            "error": f'"{spell_name}" is not on the {caster_trad} list (only: {", ".join(sorted(set(spell_trads)))}). Pass force=true to override.',
+            "tradition_mismatch": True
+        }), 400
+
     spells = caster.get('spells', [])
-    
+
     # Find or create the level array
     lvl_entry = next((s for s in spells if s.get('spellLevel') == spell_level), None)
     if not lvl_entry:
         lvl_entry = {"spellLevel": spell_level, "list": []}
         spells.append(lvl_entry)
-    
+
     if spell_name not in lvl_entry['list']:
         lvl_entry['list'].append(spell_name)
-    
+
     caster['spells'] = spells
     save_and_reload_character(pc_name, pc_json, file_path)
 
@@ -7898,9 +8030,12 @@ def forget_spell(pc_name):
         prepped[str(caster_idx)] = caster_prep
         build['prepared_spells'] = prepped
 
-    # Signature spells (spontaneous casters) — drop the entry if present
+    # Signature spells (spontaneous casters) — drop the entry if present.
+    # Handle both legacy flat list and new {rank: name} dict.
     sigs = build.get('signature_spells') or []
-    if spell_name in sigs:
+    if isinstance(sigs, dict):
+        build['signature_spells'] = {k: v for k, v in sigs.items() if v != spell_name}
+    elif spell_name in sigs:
         build['signature_spells'] = [s for s in sigs if s != spell_name]
 
     save_and_reload_character(pc_name, pc_json, file_path)
@@ -7908,19 +8043,83 @@ def forget_spell(pc_name):
 
 @app.route('/api/set_signature_spells/<pc_name>', methods=['POST'])
 def set_signature_spells(pc_name):
-    """Set signature spells for spontaneous casters."""
+    """Set signature spells for spontaneous casters.
+
+    PF2e RAW: a spontaneous caster gets 1 signature spell per spell rank they
+    can cast (not counting cantrips). Each chosen spell must be in the
+    repertoire at its base rank. We accept either a flat list (legacy) or a
+    `{rank: name}` map (new) and normalize both.
+    """
     if pc_name not in PARTY_LIBRARY:
         return jsonify({"error": "Character not found"}), 404
-    
-    data = request.json
+
+    data = request.json or {}
     file_path = get_pc_file_path(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
-    build['signature_spells'] = data.get('signature_spells', [])
+    pc = PARTY_LIBRARY[pc_name]
+
+    # Find spontaneous caster — first one wins. If none, reject.
+    spont = None
+    spont_idx = -1
+    for i, sc in enumerate(pc.spell_casters or []):
+        if 'spontaneous' in (sc.get('type', '').lower()):
+            spont = sc
+            spont_idx = i
+            break
+    if spont is None:
+        return jsonify({"success": False, "error": "Character has no spontaneous caster"}), 400
+
+    # Build {rank: spell_names_known_at_that_rank} from caster levels
+    known_at_rank = {}
+    max_rank = 0
+    for lvl in spont.get('levels', []):
+        r = int(lvl.get('level', 0))
+        if r <= 0:
+            continue
+        if int(lvl.get('slots', 0)) > 0:
+            max_rank = max(max_rank, r)
+        known_at_rank.setdefault(r, set())
+        for sp in (lvl.get('spells') or []):
+            known_at_rank[r].add(sp.get('name'))
+
+    incoming = data.get('signature_spells', [])
+    sig_map = {}  # rank -> name
+    if isinstance(incoming, dict):
+        for k, v in incoming.items():
+            try:
+                rk = int(k)
+            except (TypeError, ValueError):
+                continue
+            if v:
+                sig_map[rk] = str(v)
+    elif isinstance(incoming, list):
+        # Legacy: figure out the rank for each name (lowest rank known).
+        for name in incoming:
+            for r in sorted(known_at_rank.keys()):
+                if name in known_at_rank.get(r, set()):
+                    if r not in sig_map:
+                        sig_map[r] = name
+                    break
+
+    # Enforce: chosen spell must be known at exactly that rank, one per rank,
+    # and rank must be one the PC can cast.
+    cleaned = {}
+    for r, name in sig_map.items():
+        if r > max_rank:
+            return jsonify({"success": False,
+                            "error": f"Signature rank {r} exceeds your max castable rank {max_rank}."}), 400
+        if name not in known_at_rank.get(r, set()):
+            return jsonify({"success": False,
+                            "error": f'"{name}" is not in your repertoire at rank {r}.'}), 400
+        cleaned[str(r)] = name
+
+    build['signature_spells'] = cleaned
+    # Keep a flat list around for legacy UI bindings.
+    build['signature_spells_flat'] = list(cleaned.values())
     save_and_reload_character(pc_name, pc_json, file_path)
-    
-    return jsonify({"success": True})
+    return jsonify({"success": True, "signature_spells": cleaned, "max_rank": max_rank})
 
 @app.route('/api/set_focus_spells/<pc_name>', methods=['POST'])
 def set_focus_spells(pc_name):

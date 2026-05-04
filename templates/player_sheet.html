@@ -1518,12 +1518,39 @@
         }
 
         /* Prep Slots */
-        .prep-slot { min-height: 40px; border: 1px dashed rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; transition: all 0.2s; cursor: pointer; }
+        .prep-slot { min-height: 40px; border: 1px dashed rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; transition: all 0.2s; cursor: pointer; color: var(--text-muted); }
         .prep-slot:hover { border-color: var(--color-ac); background: rgba(96,165,250,0.05); }
         .prep-slot.filled { border: 1px solid rgba(96,165,250,0.35); background: rgba(96,165,250,0.05); color: #93C5FD; font-weight: bold; justify-content: space-between; padding: 0 0.5rem; }
         .prep-slot.expended { opacity: 0.45; border-style: solid; border-color: var(--border-subtle); background: rgba(18,17,26,0.5); }
         .prep-slot.drop-highlight { border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.05); }
         .prep-slot.drop-active { border-color: rgba(74,222,128,0.7); background: rgba(74,222,128,0.12); transform: scale(1.02); box-shadow: 0 0 12px rgba(74,222,128,0.2); }
+        .prep-slot.drop-blocked { border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.06); cursor: not-allowed; }
+        .prep-slot.font-slot { border-color: rgba(74,222,128,0.35); background: rgba(74,222,128,0.04); }
+        .prep-slot.font-slot.filled { border-color: rgba(74,222,128,0.55); color: #86EFAC; }
+        /* Caster-type chip — color-coded by casting model so players can scan */
+        .caster-type-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 12px; font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+        .caster-type-chip.prepared { background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.45); color: #93C5FD; }
+        .caster-type-chip.spontaneous { background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.45); color: #FCD34D; }
+        .caster-type-chip.focus { background: rgba(167,139,250,0.14); border: 1px solid rgba(167,139,250,0.45); color: #C4B5FD; }
+        .caster-type-chip.impulse { background: rgba(142,212,212,0.14); border: 1px solid rgba(142,212,212,0.45); color: #8ED4D4; }
+        .caster-type-chip.alchemical { background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.45); color: #86EFAC; }
+        .caster-type-chip.bounded { background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.45); color: #C4B5FD; }
+        .caster-type-chip.innate { background: rgba(244,114,182,0.12); border: 1px solid rgba(244,114,182,0.45); color: #F9A8D4; }
+        .caster-mental-model { font-family: var(--font-flavor); font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; max-width: 480px; }
+        /* Refocus button — distinguishes the activity from the +/- pip adjusters */
+        .refocus-btn { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border-radius: 4px; background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.35); color: var(--color-spell); cursor: pointer; transition: background 0.15s; }
+        .refocus-btn:hover { background: rgba(167,139,250,0.22); }
+        .refocus-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        /* Cantrip "AT WILL" pill */
+        .at-will-pill { display: inline-block; font-family: var(--font-display); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); color: #86EFAC; }
+        /* Daily prep modal */
+        .daily-prep-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 600; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .daily-prep-modal { background: linear-gradient(180deg, #1a1714 0%, #161310 100%); border: 1px solid #4a380a; border-radius: 12px; max-width: 1100px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+        .daily-prep-header { padding: 16px 20px; border-bottom: 1px solid var(--border-default); display: flex; justify-content: space-between; align-items: center; }
+        .daily-prep-body { flex: 1; overflow: hidden; display: flex; min-height: 0; }
+        .daily-prep-spellbook { width: 38%; border-right: 1px solid var(--border-default); overflow-y: auto; padding: 14px; background: var(--bg-surface); }
+        .daily-prep-slots { flex: 1; overflow-y: auto; padding: 14px; background: var(--bg-raised); }
+        .daily-prep-footer { padding: 12px 20px; border-top: 1px solid var(--border-default); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         [draggable="true"] { user-select: none; }
         [draggable="true"]:active { opacity: 0.6; cursor: grabbing; }
         .bulk-bar { height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; position: relative; }
@@ -3373,39 +3400,69 @@
                 <div class="panel-card overflow-hidden mb-6" style="padding:0;">
                     
                     <!-- Caster Header -->
+                    {% set _ct = c_type_lower %}
+                    {% if 'spontaneous' in _ct and 'bounded' in _ct %}
+                        {% set _chip_class = 'bounded' %}{% set _chip_label = 'Bounded Spontaneous' %}
+                        {% set _model = 'Limited repertoire — cast any known spell from a slot of its rank or higher.' %}
+                    {% elif 'spontaneous' in _ct %}
+                        {% set _chip_class = 'spontaneous' %}{% set _chip_label = 'Spontaneous' %}
+                        {% set _model = 'Cast any spell from your repertoire on the fly. Each cast spends a slot of that rank or higher; signature spells auto-heighten.' %}
+                    {% elif 'focus' in _ct %}
+                        {% set _chip_class = 'focus' %}{% set _chip_label = 'Focus' %}
+                        {% set _model = 'Spend 1 Focus Point per cast. Refocus (10 min) restores 1 point; max 3 in pool. Auto-heightened to half level.' %}
+                    {% elif 'impulse' in _ct %}
+                        {% set _chip_class = 'impulse' %}{% set _chip_label = 'Impulse' %}
+                        {% set _model = 'Impulses are magical but not spells. Use them while your kinetic aura is active — no slots, no daily prep.' %}
+                    {% elif 'alchemical' in _ct %}
+                        {% set _chip_class = 'alchemical' %}{% set _chip_label = 'Alchemical' %}
+                        {% set _model = 'Craft items with infused reagents during daily prep. Items work like spells but use the Formula Book.' %}
+                    {% elif 'innate' in _ct %}
+                        {% set _chip_class = 'innate' %}{% set _chip_label = 'Innate' %}
+                        {% set _model = 'Granted by ancestry or items. Each entry tells you how often it can be cast — usually once per day.' %}
+                    {% else %}
+                        {% set _chip_class = 'prepared' %}{% set _chip_label = 'Prepared' %}
+                        {% set _model = 'Choose your spells at dawn — drag each into a specific rank slot. Each cast expends that prepared copy until you long rest.' %}
+                    {% endif %}
                     <div class="bg-gray-900 p-4 border-b border-gray-700 flex flex-wrap justify-between items-center gap-3">
                         <div>
-                            <div class="flex items-center gap-2 mb-1">
+                            <div class="flex items-center gap-2 mb-1 flex-wrap">
                                 <h3 class="text-xl font-header" style="color:var(--color-spell);">{{ caster.name }}</h3>
+                                <span class="caster-type-chip {{ _chip_class }}">{{ _chip_label }}</span>
                                 <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">{{ caster.tradition }}</span>
                             </div>
-                            <div class="flex gap-3 items-center text-xs">
-                                <span class="text-gray-500 font-header tracking-wider uppercase">{{ caster.type }} Casting</span>
+                            <div class="caster-mental-model">{{ _model }}</div>
+                            <div class="flex gap-3 items-center text-xs flex-wrap mt-2">
                                 {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
                                 <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>
                                 <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">DC {{ pc.spell_dc }}</span>
                                 {% endif %}
-                                {% if 'impulse' not in c_type_lower %}
-                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);">Cantrips = Rank {{ pc.cantrip_rank }}</span>
+                                {% if 'impulse' not in c_type_lower and 'focus' not in c_type_lower %}
+                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);">Cantrips at Rank {{ pc.cantrip_rank }}</span>
                                 {% endif %}
                             </div>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3 flex-wrap">
                             {% if 'focus' in c_type_lower %}
                             <div class="flex items-center gap-2 px-3 py-2 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);">
-                                <span class="font-header text-[9px] tracking-widest uppercase" style="color:var(--color-spell);">Focus</span>
-                                <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm">◀</button>
+                                <span class="font-header text-[9px] tracking-widest uppercase" style="color:var(--color-spell);">Focus {{ pc.current_focus }}/{{ pc.focus_max }}</span>
+                                <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust −1">◀</button>
                                 <span id="focus-pips" data-tradition="{{ (caster.tradition if caster and caster.tradition else 'arcane') | lower }}">
                                     {% for i in range(pc.focus_max) %}
                                     <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
                                     {% endfor %}
                                 </span>
-                                <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm">▶</button>
+                                <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust +1">▶</button>
                             </div>
+                            <button onclick="doRefocus('{{ pc.class_name|lower }}', '{{ (caster.tradition or 'arcane')|lower }}')" class="no-print refocus-btn" title="Spend 10 minutes to restore 1 Focus Point">Refocus (10m)</button>
+                            <button onclick="openDailyPrepModal()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(74,222,128,0.10); border:1px solid rgba(74,222,128,0.3); color:#4ADE80;" title="Long Rest — restore all slots and focus">Long Rest</button>
                             <button onclick="addFocusSpellManual()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add Spell</button>
                             {% endif %}
                             {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}
+                            <button onclick="openDailyPrepModal({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(74,222,128,0.10); border:1px solid rgba(74,222,128,0.3); color:#4ADE80;" title="Open daily preparation modal">Daily Prep</button>
                             <button onclick="openSpellBrowse({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Learn Spell</button>
+                            {% endif %}
+                            {% if 'spontaneous' in c_type_lower %}
+                            <button onclick="openSignatureManager({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.3); color:#FCD34D;" title="Manage signature spells">Signatures</button>
                             {% endif %}
                         </div>
                     </div>
@@ -3531,7 +3588,7 @@
                             <div class="spell-rank-header">
                                 <span>
                                     {{ lvl.label }}
-                                    {% if lvl.level == 0 %}<span class="rank-count">(Rank {{ pc.cantrip_rank }})</span>{% endif %}
+                                    {% if lvl.level == 0 %}<span class="rank-count">(Rank {{ pc.cantrip_rank }})</span> <span class="at-will-pill ml-1">At Will</span>{% endif %}
                                 </span>
                                 {% if lvl.level > 0 and lvl.slots > 0 and 'focus' not in c_type_lower %}
                                 <div class="flex gap-1 items-center px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
@@ -3552,6 +3609,7 @@
                                         <span class="text-sm font-bold truncate" style="color:var(--text-primary);">{{ sp.name }}</span>
                                         {% if sp.actions %}<span class="action-pips ml-1">{{ sp.actions }}</span>{% endif %}
                                         {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell">S</span>{% endif %}
+                                        {% if sp.uses_per_day %}<span class="text-[9px] ml-1 px-1 rounded" style="background:rgba(244,114,182,0.12); border:1px solid rgba(244,114,182,0.3); color:#F9A8D4;" title="Per-day usage">{{ sp.uses_per_day }}/day</span>{% endif %}
                                     </div>
                                     <div class="flex items-center gap-2 shrink-0">
                                         {% if 'spontaneous' in c_type_lower and 'bounded' not in c_type_lower and lvl.level > 0 %}
@@ -3576,7 +3634,7 @@
                                 {% for lvl in caster.levels %}
                                 <div>
                                     <div class="spell-rank-header" style="font-size:11px;">
-                                        <span>{{ lvl.label }}{% if lvl.level == 0 %} <span class="rank-count">(Rank {{ pc.cantrip_rank }})</span>{% endif %}</span>
+                                        <span>{{ lvl.label }}{% if lvl.level == 0 %} <span class="rank-count">(Rank {{ pc.cantrip_rank }})</span> <span class="at-will-pill ml-1">At Will</span>{% endif %}</span>
                                     </div>
                                     <div class="flex flex-col gap-1.5">
                                         {% for sp in lvl.spells %}
@@ -3612,6 +3670,11 @@
                                 <button onclick="clearPrep({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase transition-colors" style="color:var(--text-muted);">Clear All</button>
                             </div>
                             <p class="text-xs mb-4" style="color:var(--text-muted);">Drag spells from your spellbook. Heightened spells show their effective rank.</p>
+                            {% if pc.class_name|lower == 'witch' %}
+                            <div class="text-[11px] mb-3 px-3 py-2 rounded" style="background:rgba(196,181,253,0.08); border-left:3px solid #C4B5FD; color:#DDD6FE;">
+                                <b>Familiar required.</b> Your patron grants your spells through your familiar — if you don't have it during daily prep, you lose access to your hex cantrip and your daily slots.
+                            </div>
+                            {% endif %}
                             
                             <div class="space-y-5 max-h-[550px] overflow-y-auto custom-scrollbar pr-2" id="prep-ui-{{ caster_idx }}">
                                 <div class="text-center italic py-8" style="color:var(--text-faint);">Loading preparation slots...</div>
@@ -3640,8 +3703,8 @@
                            the same ID, typing here silently read from the other input, so results never updated. #}
                         <input type="text" id="spell-browse-search" oninput="filterBrowseSpells()" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-primary); min-width:150px;">
                         <select id="spell-level-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-secondary);">
-                            <option value="">All Levels</option>
-                            {% for i in range(11) %}<option value="{{ i }}">{% if i == 0 %}Cantrips{% else %}Level {{ i }}{% endif %}</option>{% endfor %}
+                            <option value="">All Ranks</option>
+                            {% for i in range(11) %}<option value="{{ i }}">{% if i == 0 %}Cantrips{% else %}Rank {{ i }}{% endif %}</option>{% endfor %}
                         </select>
                         <select id="spell-trad-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-secondary);">
                             <option value="">All Traditions</option>
@@ -4217,6 +4280,7 @@
         const pcLevel = parseInt("{{ pc.level }}") || 1;
         const SPELL_ATTACK = parseInt("{{ pc.spell_attack }}") || 0;
         const SPELL_DC = parseInt("{{ pc.spell_dc }}") || 0;
+        const CANTRIP_RANK = parseInt("{{ pc.cantrip_rank }}") || 1;
 
         // ==========================================
         // PORTRAIT UPLOAD
@@ -5239,22 +5303,37 @@
                 <div class="flex justify-between items-center p-2 rounded mb-1 hover:bg-gray-700 transition-colors" style="border:1px solid var(--border-subtle);">
                     <div>
                         <span class="text-sm font-bold" style="color:var(--text-primary);">${s.name}</span>
-                        <span class="font-header text-[9px] ml-2" style="color:var(--text-muted);">L${s.level}</span>
+                        <span class="font-header text-[9px] ml-2" style="color:var(--text-muted);">${s.level === 0 ? 'CTRP' : 'R' + s.level}</span>
                         ${s.traditions.map(t => `<span class="text-[11px] ml-1 px-1 rounded" style="background:rgba(167,139,250,0.08); color:var(--color-spell);">${t}</span>`).join('')}
                     </div>
-                    <button onclick="learnSpellFromBrowse('${s.name.replace(/'/g,"\\'")}', ${s.level})" class="font-header text-[9px] px-3 py-1 rounded transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">+ Learn</button>
+                    <button onclick="learnSpellFromBrowse('${s.name.replace(/'/g,"\\'")}', ${s.level}, ${JSON.stringify(s.traditions||[]).replace(/"/g,'&quot;')})" class="font-header text-[9px] px-3 py-1 rounded transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">+ Learn</button>
                 </div>
             `).join('');
         }
         
-        async function learnSpellFromBrowse(name, level) {
+        async function learnSpellFromBrowse(name, level, traditions) {
             try {
-                const res = await fetch('/api/learn_spell/' + pcNameEncoded, {
+                const payload = {name, level, caster_idx: browseActiveCasterIdx, traditions: traditions || []};
+                let res = await fetch('/api/learn_spell/' + pcNameEncoded, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name, level, caster_idx: browseActiveCasterIdx})
+                    body: JSON.stringify(payload)
                 });
-                const data = await res.json();
+                let data = await res.json();
+                if (!data.success && data.tradition_mismatch) {
+                    // Offer override (multiclass dedications, granted spells, etc.)
+                    if (confirm(`${data.error}\n\nLearn anyway? (e.g. multiclass dedication grants this)`)) {
+                        payload.force = true;
+                        res = await fetch('/api/learn_spell/' + pcNameEncoded, {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(payload)
+                        });
+                        data = await res.json();
+                    } else {
+                        return;
+                    }
+                }
                 if (data.success) { window.location.reload(); }
+                else if (data.error) { alert(data.error); }
             } catch(e) { console.error(e); }
         }
 
@@ -5270,19 +5349,278 @@
             } catch(e) { console.error(e); }
         }
         
-        // SIGNATURE SPELLS
-        async function toggleSignature(spellName) {
-            let sigs = {{ pc.signature_spells | tojson | safe }};
-            const idx = sigs.indexOf(spellName);
-            if (idx >= 0) sigs.splice(idx, 1);
-            else sigs.push(spellName);
+        // ========================================================
+        // REFOCUS ACTIVITY (PF2e: 10 minutes, +1 Focus Point, max 3)
+        // Class-specific deed text per Archives of Nethys.
+        // ========================================================
+        const REFOCUS_DEEDS = {
+            cleric:    'Pray to your deity or perform a service in their name.',
+            champion:  "Tend the wounds of your allies or reaffirm your cause's vows.",
+            druid:     'Commune with nature, tend a plant, or care for an animal.',
+            monk:      'Meditate to recenter your ki.',
+            bard:      'Practice an instrument, write verse, or perform.',
+            sorcerer:  'Reflect on your bloodline and the source of your magic.',
+            oracle:    'Embrace your mystery and curse, communing with your divine source.',
+            witch:     'Confer with your familiar and your patron.',
+            magus:     'Drill with your weapon, channeling arcane focus through martial form.',
+            ranger:    'Tend to your warden\'s bond with nature or your companion.',
+            summoner:  'Strengthen your link with your eidolon.',
+            psychic:   'Meditate to refocus your unconscious mind.',
+            kineticist: 'Realign with your kinetic gate and the elemental planes.',
+        };
+        async function doRefocus(className, tradition) {
+            const cls = (className || '').toLowerCase();
+            const deed = REFOCUS_DEEDS[cls] || 'Spend 10 minutes performing deeds connected to your magic.';
+            if (!confirm(`Refocus (10 minutes)\n\n${deed}\n\nRestores 1 Focus Point.`)) return;
             try {
-                await fetch('/api/set_signature_spells/' + pcNameEncoded, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({signature_spells: sigs})
+                const res = await fetch(`/api/refocus/${pcNameEncoded}`, { method: 'POST' });
+                const d = await res.json();
+                if (!d.success) {
+                    if (typeof showRollToast === 'function') {
+                        showRollToast('Refocus', '!', d.error || 'Could not refocus.', false, true, [], null);
+                    } else { alert(d.error || 'Could not refocus.'); }
+                    return;
+                }
+                if (typeof broadcastToGM === 'function') {
+                    broadcastToGM('Refocus', `+1 Focus Point`, `${d.message || ''}`);
+                }
+                if (typeof showRollToast === 'function') {
+                    showRollToast('Refocus', `+1`, `Focus ${d.current_focus}/${d.focus_max}`, false, false, [], null);
+                }
+                // Refresh focus pip displays without a full reload.
+                document.querySelectorAll('#focus-pips, #header-focus-pips').forEach(el => {
+                    const max = parseInt(el.querySelectorAll('.focus-pip').length, 10) || d.focus_max;
+                    let html = '';
+                    for (let i = 0; i < max; i++) {
+                        html += `<span class="focus-pip ${i < d.current_focus ? 'filled' : 'empty'}"></span>`;
+                    }
+                    el.innerHTML = html;
                 });
+            } catch (e) { console.error(e); }
+        }
+
+        // ========================================================
+        // DAILY PREP MODAL — one-shot prep flow after Long Rest
+        // ========================================================
+        async function openDailyPrepModal(focusCasterIdx) {
+            // If focusCasterIdx is omitted, auto-pick the first prepared caster.
+            let target = focusCasterIdx;
+            if (typeof target !== 'number') {
+                for (let i = 0; i < castersData.length; i++) {
+                    const t = (castersData[i].type || '').toLowerCase();
+                    if (t.includes('prepared') && !t.includes('spontaneous') && !t.includes('focus') && !t.includes('alchemical')) {
+                        target = i; break;
+                    }
+                }
+            }
+            if (typeof target !== 'number') {
+                // No prepared caster — offer Long Rest only.
+                if (confirm('No prepared caster to plan. Take a Long Rest now (restore HP, slots, focus, hero point)?')) {
+                    await fetch('/api/daily_prep/' + pcNameEncoded, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({heal_full: true})
+                    });
+                    window.location.reload();
+                }
+                return;
+            }
+            const caster = castersData[target];
+            const overlay = document.createElement('div');
+            overlay.className = 'daily-prep-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+            // Build spellbook column (all known spells, grouped by base rank).
+            let spellbookHtml = '';
+            (caster.levels || []).forEach(lvl => {
+                const list = lvl.spells || [];
+                if (!list.length) return;
+                spellbookHtml += `<div class="mb-3"><div class="font-header text-[10px] uppercase tracking-wider mb-1" style="color:var(--text-muted);">${lvl.label}</div>`;
+                list.forEach(sp => {
+                    spellbookHtml += `<div class="flex justify-between items-center p-2 rounded mb-1 cursor-grab spell-rank-${lvl.level}" draggable="true"
+                        ondragstart="onSpellDragStart(event, '${sp.name.replace(/'/g,"\\'")}', ${lvl.level}, ${target})"
+                        style="background:var(--bg-raised);border:1px solid var(--border-subtle);">
+                        <span class="text-xs">${sp.name}</span>
+                        ${sp.actions ? `<span class="text-[10px] opacity-60" style="color:var(--color-spell);">${sp.actions}</span>` : ''}
+                    </div>`;
+                });
+                spellbookHtml += '</div>';
+            });
+
+            overlay.innerHTML = `
+                <div class="daily-prep-modal">
+                    <div class="daily-prep-header">
+                        <div>
+                            <h2 class="font-header text-xl" style="color:#4ADE80;">Daily Preparation</h2>
+                            <div class="text-xs" style="color:var(--text-muted);">Drag from your spellbook into rank slots. Heightening goes UP only.</div>
+                        </div>
+                        <button onclick="this.closest('.daily-prep-overlay').remove()" class="text-2xl" style="color:var(--text-muted);">x</button>
+                    </div>
+                    <div class="daily-prep-body">
+                        <div class="daily-prep-spellbook">
+                            <div class="font-header text-xs uppercase tracking-wider mb-2" style="color:var(--text-secondary);">Spellbook</div>
+                            ${spellbookHtml || '<div class="italic" style="color:var(--text-muted);">No spells learned.</div>'}
+                        </div>
+                        <div class="daily-prep-slots">
+                            <div class="font-header text-xs uppercase tracking-wider mb-2" style="color:#4ADE80;">Slots — drag to fill</div>
+                            <div id="daily-prep-ui-${target}"></div>
+                        </div>
+                    </div>
+                    <div class="daily-prep-footer">
+                        <label class="text-xs flex items-center gap-2" style="color:var(--text-muted);"><input type="checkbox" id="dp-heal-full" checked> Heal to full HP</label>
+                        <div class="flex gap-2">
+                            <button onclick="this.closest('.daily-prep-overlay').remove()" class="font-header text-[10px] uppercase tracking-wider px-3 py-2 rounded" style="background:var(--border-subtle);color:var(--text-secondary);">Cancel</button>
+                            <button id="dp-long-rest" class="font-header text-[10px] uppercase tracking-wider px-3 py-2 rounded" style="background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#4ADE80;">Long Rest & Save Prep</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            // Render the same prep UI into the modal slot div.
+            const modalSlots = overlay.querySelector(`#daily-prep-ui-${target}`);
+            // Temporarily reuse renderPrepUI by swapping the regular ui id pointer
+            const existingUI = document.getElementById(`prep-ui-${target}`);
+            const placeholder = document.createElement('div');
+            if (existingUI && existingUI.parentNode) {
+                existingUI.parentNode.replaceChild(placeholder, existingUI);
+            }
+            modalSlots.id = `prep-ui-${target}`;
+            renderPrepUI(target, caster);
+
+            overlay.querySelector('#dp-long-rest').addEventListener('click', async () => {
+                const heal = overlay.querySelector('#dp-heal-full').checked;
+                // Save current prep state first
+                await _saveSpellState();
+                // Long rest — but DON'T clear prepared_spells; we just set them.
+                // The /api/daily_prep clears them, so we instead call a no-clear variant.
+                // Actually we call daily_prep AFTER preserving the prep we just chose.
+                // Simplest: call daily_prep, then re-save the prep we want kept.
+                const prepToKeep = JSON.parse(JSON.stringify(window._preparedSpells || {}));
+                await fetch('/api/daily_prep/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({heal_full: heal})
+                });
+                // Re-apply the prep the player just chose.
+                window._preparedSpells = prepToKeep;
+                window._castPrep = {};
+                window._expendedSlots = {};
+                await _saveSpellState();
+                window.location.reload();
+            });
+            // On close, restore the original ui-prep div so the magic tab keeps working
+            const restore = () => {
+                modalSlots.id = `daily-prep-ui-${target}`;
+                if (placeholder.parentNode) placeholder.parentNode.replaceChild(existingUI || placeholder, placeholder);
+            };
+            const obs = new MutationObserver(() => {
+                if (!document.body.contains(overlay)) { restore(); obs.disconnect(); }
+            });
+            obs.observe(document.body, { childList: true });
+        }
+
+        // SIGNATURE SPELLS — modal manager that enforces "1 per spell rank"
+        // PF2e Player Core: a spontaneous caster picks one signature spell
+        // per rank they can cast. Signature spells auto-heighten.
+        const _signatureMap = {{ (pc.signature_map if pc.signature_map else {}) | tojson | safe }};
+
+        async function toggleSignature(spellName) {
+            // Quick-toggle from an inline S badge: place this spell in its
+            // base rank's signature slot (replacing any existing one). This
+            // delegates the real validation to the server.
+            let baseRank = -1;
+            for (const c of (typeof castersData !== 'undefined' ? castersData : [])) {
+                if (!('spontaneous' in (c.type || '').toLowerCase())) {
+                    if (!(c.type || '').toLowerCase().includes('spontaneous')) continue;
+                }
+                for (const lvl of (c.levels || [])) {
+                    if ((lvl.spells || []).some(sp => sp.name === spellName) && lvl.level > 0) {
+                        baseRank = (baseRank === -1) ? lvl.level : Math.min(baseRank, lvl.level);
+                    }
+                }
+            }
+            if (baseRank < 1) { alert('Signature must be a non-cantrip spell from your repertoire.'); return; }
+            const next = Object.assign({}, _signatureMap);
+            if (next[String(baseRank)] === spellName) {
+                delete next[String(baseRank)];
+            } else {
+                next[String(baseRank)] = spellName;
+            }
+            try {
+                const res = await fetch('/api/set_signature_spells/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({signature_spells: next})
+                });
+                const d = await res.json();
+                if (!d.success) { alert(d.error || 'Could not update signature spell.'); return; }
                 window.location.reload();
             } catch(e) { console.error(e); }
+        }
+
+        function openSignatureManager(casterIdx) {
+            const c = (typeof castersData !== 'undefined' ? castersData[casterIdx] : null);
+            if (!c) return;
+            // Compute max castable rank and known spells per rank
+            let maxRank = 0;
+            const known = {}; // rank -> [name]
+            (c.levels || []).forEach(lvl => {
+                const r = parseInt(lvl.level, 10);
+                if (r <= 0) return;
+                if (parseInt(lvl.slots, 10) > 0) maxRank = Math.max(maxRank, r);
+                known[r] = (lvl.spells || []).map(sp => sp.name);
+            });
+
+            const overlay = document.createElement('div');
+            overlay.className = 'spell-card-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            const sig = Object.assign({}, _signatureMap);
+            let rowsHtml = '';
+            for (let r = 1; r <= maxRank; r++) {
+                const candidates = (known[r] || []);
+                const current = sig[String(r)] || '';
+                const opts = ['<option value="">— None —</option>'].concat(
+                    candidates.map(n => `<option value="${n.replace(/"/g,'&quot;')}" ${n===current?'selected':''}>${n}</option>`)
+                ).join('');
+                rowsHtml += `
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:6px;background:var(--bg-raised);">
+                        <span class="font-header text-[10px]" style="color:#FCD34D;letter-spacing:.12em;min-width:60px;">RANK ${r}</span>
+                        <select data-sig-rank="${r}" class="sig-pick" style="flex:1;background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:4px 6px;border-radius:4px;">${opts}</select>
+                    </div>`;
+            }
+            overlay.innerHTML = `
+                <div class="spell-card" onclick="event.stopPropagation()" style="max-width:540px;">
+                    <div class="spell-card-header">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-header text-xl" style="color:#FCD34D;">Signature Spells</h3>
+                            <button onclick="this.closest('.spell-card-overlay').remove()" class="text-xl leading-none" style="color:var(--text-muted);">x</button>
+                        </div>
+                        <div class="text-xs mt-1" style="color:var(--text-muted);">PF2e RAW: one signature spell per spell rank you can cast. Signatures auto-heighten when cast in higher slots.</div>
+                    </div>
+                    <div class="spell-card-body" style="padding:16px;">
+                        ${rowsHtml || '<div class="italic" style="color:var(--text-muted);">No castable spell ranks yet.</div>'}
+                    </div>
+                    <div class="spell-card-footer">
+                        <button id="sig-save" class="px-4 py-2 rounded text-sm font-bold" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#FCD34D;">Save</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.querySelector('#sig-save').addEventListener('click', async () => {
+                const next = {};
+                overlay.querySelectorAll('.sig-pick').forEach(sel => {
+                    const r = sel.getAttribute('data-sig-rank');
+                    const v = sel.value;
+                    if (v) next[r] = v;
+                });
+                try {
+                    const res = await fetch('/api/set_signature_spells/' + pcNameEncoded, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({signature_spells: next})
+                    });
+                    const d = await res.json();
+                    if (!d.success) { alert(d.error || 'Save failed'); return; }
+                    overlay.remove();
+                    window.location.reload();
+                } catch(e) { console.error(e); }
+            });
         }
 
         // NEW: FRONTEND CONDITION SYNC
@@ -5457,6 +5795,14 @@
 
             // Migrate any existing localStorage data to server (one-time)
             _migrateLocalStorageSpellState();
+
+            // Re-run prep UI rendering now that prepared_spells is loaded —
+            // the synchronous initDailyPrep() call at the bottom of the
+            // <script> runs before this fetch resolves, so it sees an empty
+            // _preparedSpells and renders only the loading placeholder.
+            try {
+                if (typeof window.initDailyPrep === 'function') window.initDailyPrep();
+            } catch(_) {}
         });
 
         async function _migrateLocalStorageSpellState() {
@@ -6441,9 +6787,14 @@
         function _rollSpellInner(spellName) {
 
             // Look up spell description to determine attack vs save
-            const cached = _spellDescCache[spellName.toLowerCase()];
+            const cached = _spellDescCache[spellName.toLowerCase().replace(/\s*\(rank \d+\).*$/, '').trim()];
             const desc = cached ? cached.desc : '';
             const descLower = desc.toLowerCase();
+            // For cantrips, append the auto-heightened rank so the broadcast
+            // and toast reflect the actual damage tier.
+            if (cached && cached.level === 0 && CANTRIP_RANK > 0 && !/\(rank \d+\)/i.test(spellName)) {
+                spellName = `${spellName} (rank ${CANTRIP_RANK})`;
+            }
 
             // Detect save type from description
             let saveType = '';
@@ -6535,7 +6886,12 @@
             // Rank colors
             const rankColors = ['#6B7280','#60A5FA','#4ADE80','#FBBF24','#F97316','#F43F5E','#A855F7','#6366F1','#EC4899','#EF4444','#FFD700'];
             const rankColor = rankColors[level] || '#6B7280';
-            const rankLabel = level === 0 ? 'Cantrip' : `Rank ${level}`;
+            // Cantrips auto-heighten to half the caster's level (rounded up),
+            // which equals the highest spell rank they can cast. Show that
+            // effective rank on the spell card so the player and GM both see
+            // the actual damage tier.
+            const cantripRank = (typeof CANTRIP_RANK === 'number' && CANTRIP_RANK > 0) ? CANTRIP_RANK : level;
+            const rankLabel = level === 0 ? `Cantrip · Rank ${cantripRank}` : `Rank ${level}`;
             
             // Parse heightened entries from description using regex
             let mainDesc = desc;
@@ -7391,7 +7747,7 @@
 
             let prepState = _getPrepState(cIdx);
             let html = "";
-            
+
             // Build a lookup for spell base levels and action costs
             let spellBaseLevels = {};
             let spellActions = {};
@@ -7406,31 +7762,38 @@
 
             caster.levels.forEach(lvl => {
                 let slots = lvl.slots;
-                if(slots <= 0) return;
+                let fontSlots = parseInt(lvl.font_slots || 0, 10);
+                let fontKind = (lvl.font_kind || '').toLowerCase(); // 'heal' | 'harm' | ''
+                let totalSlots = slots + fontSlots;
+                if(totalSlots <= 0) return;
 
-                if(!prepState[lvl.level]) prepState[lvl.level] = new Array(slots).fill(null);
-                if(prepState[lvl.level].length !== slots) {
+                if(!prepState[lvl.level]) prepState[lvl.level] = new Array(totalSlots).fill(null);
+                if(prepState[lvl.level].length !== totalSlots) {
                     let oldArr = prepState[lvl.level];
-                    prepState[lvl.level] = new Array(slots).fill(null).map((_, i) => oldArr[i] || null);
+                    prepState[lvl.level] = new Array(totalSlots).fill(null).map((_, i) => oldArr[i] || null);
                 }
 
                 let filledCount = prepState[lvl.level].filter(x => x !== null).length;
+                let fontBadge = fontSlots > 0
+                    ? ` <span class="ml-1 px-1.5 py-0.5 rounded text-[9px]" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); color:#86EFAC;">+${fontSlots} ${fontKind === 'harm' ? 'Harm' : 'Heal'} Font</span>`
+                    : '';
 
                 html += `
                 <div>
                     <div class="flex justify-between items-center mb-2">
-                        <span class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-secondary);">${lvl.label}</span>
+                        <span class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-secondary);">${lvl.label}${fontBadge}</span>
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold" style="color:var(--text-muted);">${filledCount}/${slots}</span>
+                            <span class="text-[10px] font-bold" style="color:var(--text-muted);">${filledCount}/${totalSlots}</span>
                             <div class="flex gap-1">
-                                ${Array(slots).fill().map((_, i) => `<input type="checkbox" data-caster-idx="${cIdx}" data-spell-level="${lvl.level}" data-slot-idx="${i}" class="spell-slot-cb w-3 h-3 accent-amber-500" title="Expend Slot">`).join('')}
+                                ${Array(totalSlots).fill().map((_, i) => `<input type="checkbox" data-caster-idx="${cIdx}" data-spell-level="${lvl.level}" data-slot-idx="${i}" class="spell-slot-cb w-3 h-3 ${i >= slots ? 'accent-emerald-500' : 'accent-amber-500'}" title="${i >= slots ? 'Font slot — '+(fontKind==='harm'?'harm':'heal')+' only' : 'Expend Slot'}">`).join('')}
                             </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 `;
 
-                for(let i=0; i<slots; i++) {
+                for(let i=0; i<totalSlots; i++) {
+                    let isFontSlot = i >= slots;
                     let spellName = prepState[lvl.level][i];
                     if(spellName) {
                         let baseLvl = spellBaseLevels[spellName] || 0;
@@ -7439,16 +7802,16 @@
                         let actionTag = spellActions[spellName] ? `<span class="text-[9px] ml-1 opacity-50" style="color:var(--color-spell);">${spellActions[spellName]}</span>` : '';
                         let expendKey = `cast_prep_${pcName}_c${cIdx}_l${lvl.level}_i${i}`;
                         let isExpended = _isCastPrep(expendKey);
-                        
+
                         html += `
-                        <div class="prep-slot filled group relative ${isExpended ? 'expended' : ''}" data-expend-key="${expendKey}">
+                        <div class="prep-slot filled group relative ${isExpended ? 'expended' : ''} ${isFontSlot ? 'font-slot' : ''}" data-expend-key="${expendKey}" data-slot-rank="${lvl.level}" data-caster-idx="${cIdx}">
                             <div class="flex items-center gap-1 truncate pr-1">
                                 <span class="text-xs truncate ${isExpended ? 'line-through opacity-40' : ''}">${spellName}</span>
                                 ${actionTag}
                                 ${heightenTag}
                             </div>
                             <div class="flex items-center gap-1 shrink-0">
-                                ${isExpended 
+                                ${isExpended
                                     ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:var(--border-subtle); color:var(--text-muted);">Undo</button>`
                                     : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(167,139,250,0.15); color:var(--color-spell);">Cast</button>`
                                 }
@@ -7456,11 +7819,15 @@
                             </div>
                         </div>`;
                     } else {
-                        html += `<div class="prep-slot text-[10px] uppercase tracking-widest font-bold" style="color:var(--text-faint);"
+                        let labelText = isFontSlot
+                            ? `${(fontKind === 'harm' ? 'Harm' : 'Heal')} Only`
+                            : 'Drop Spell Here';
+                        html += `<div class="prep-slot ${isFontSlot ? 'font-slot' : ''} text-[10px] uppercase tracking-widest font-bold"
+                                      data-slot-rank="${lvl.level}" data-caster-idx="${cIdx}" data-font-slot="${isFontSlot ? 1 : 0}" data-font-kind="${fontKind}"
                                       ondragover="onPrepSlotDragOver(event)"
                                       ondragleave="onPrepSlotDragLeave(event)"
                                       ondrop="onPrepSlotDrop(event, ${cIdx}, ${lvl.level}, ${i})">
-                                    Drop Spell Here
+                                    ${labelText}
                                  </div>`;
                     }
                 }
@@ -7495,29 +7862,65 @@
             _dragSpellData = { name: spellName, level: level, casterIdx: casterIdx };
             e.dataTransfer.setData('text/plain', spellName);
             e.dataTransfer.effectAllowed = 'copy';
-            // Highlight valid drop targets
+            // Mark valid (drop-highlight) and invalid (drop-blocked) drop targets.
+            // PF2e RAW: a prepared spell may go into a slot of its base rank or
+            // higher, never lower. Heightening goes UP only.
             document.querySelectorAll('.prep-slot:not(.filled)').forEach(slot => {
-                slot.classList.add('drop-highlight');
+                const slotRank = parseInt(slot.getAttribute('data-slot-rank') || '-1', 10);
+                const sameCaster = slot.getAttribute('data-caster-idx') === String(casterIdx);
+                if (sameCaster && slotRank >= 0 && slotRank < level) {
+                    slot.classList.add('drop-blocked');
+                } else if (sameCaster) {
+                    slot.classList.add('drop-highlight');
+                }
             });
         }
-        
+
         function onPrepSlotDragOver(e) {
+            // Block dragover on rank-mismatched slots so the cursor shows "no-drop".
+            if (e.currentTarget.classList.contains('drop-blocked')) {
+                e.dataTransfer.dropEffect = 'none';
+                return; // do NOT preventDefault — that's what tells the browser drop is allowed
+            }
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
             e.currentTarget.classList.add('drop-active');
         }
-        
+
         function onPrepSlotDragLeave(e) {
             e.currentTarget.classList.remove('drop-active');
         }
-        
+
         function onPrepSlotDrop(e, cIdx, lvlNum, slotIdx) {
             e.preventDefault();
             e.currentTarget.classList.remove('drop-active');
-            document.querySelectorAll('.drop-highlight').forEach(el => el.classList.remove('drop-highlight'));
-            
+            document.querySelectorAll('.drop-highlight, .drop-blocked').forEach(el => el.classList.remove('drop-highlight', 'drop-blocked'));
+
             if (!_dragSpellData) return;
-            
+
+            // PF2e RAW guard: spell base rank must be <= slot rank.
+            if (_dragSpellData.level > lvlNum) {
+                showRollToast(_dragSpellData.name, '!',
+                    `Rank ${_dragSpellData.level} spell can't go in a rank ${lvlNum} slot. Heightening goes up, never down.`,
+                    false, true, [], null);
+                _dragSpellData = null;
+                return;
+            }
+
+            // Font-slot guard: only `heal` (or `harm`) goes into Healing/Harmful Font slots.
+            const isFontSlot = e.currentTarget.getAttribute('data-font-slot') === '1';
+            const fontKind = (e.currentTarget.getAttribute('data-font-kind') || '').toLowerCase();
+            if (isFontSlot && fontKind) {
+                const spellLower = _dragSpellData.name.toLowerCase().trim();
+                const allowed = (fontKind === 'heal') ? ['heal'] : ['harm'];
+                if (!allowed.includes(spellLower)) {
+                    showRollToast(_dragSpellData.name, '!',
+                        `Font slot accepts only the "${fontKind}" spell.`, false, true, [], null);
+                    _dragSpellData = null;
+                    return;
+                }
+            }
+
             let prepState = _getPrepState(cIdx);
             if (!prepState[lvlNum]) return;
 
@@ -7537,12 +7940,52 @@
 
         function prepareSpell(cIdx, lvlNum, spellName) {
             event.preventDefault();
+            // Resolve the spell's base rank from the caster's spellbook so we
+            // can find the lowest-ranked legal slot. + Prep should never put
+            // a rank-3 spell into a rank-1 slot.
+            const caster = (typeof castersData !== 'undefined' && castersData[cIdx]) || null;
+            let baseRank = lvlNum;
+            if (caster) {
+                for (const lvl of (caster.levels || [])) {
+                    for (const sp of (lvl.spells || [])) {
+                        if (sp.name === spellName && lvl.level < baseRank) baseRank = lvl.level;
+                        if (sp.name === spellName && lvl.level >= 0) {
+                            // also remember actual base
+                            if (typeof sp.__base === 'undefined') sp.__base = lvl.level;
+                        }
+                    }
+                }
+            }
+            // Find first slot rank >= baseRank with an empty seat.
+            let prepState = _getPrepState(cIdx);
+            const ranksWithSlots = (caster ? caster.levels : [])
+                .filter(l => l.level >= baseRank && (l.slots > 0 || (l.font_slots || 0) > 0))
+                .map(l => l.level)
+                .sort((a, b) => a - b);
+            let chosenRank = -1, chosenIdx = -1;
+            for (const r of ranksWithSlots) {
+                const arr = prepState[r] || [];
+                const idx = arr.indexOf(null);
+                if (idx !== -1) { chosenRank = r; chosenIdx = idx; break; }
+            }
+            if (chosenRank === -1) {
+                alert(`No empty rank-${baseRank}+ slots left. Un-prepare a spell first.`);
+                return;
+            }
+            if (!prepState[chosenRank]) prepState[chosenRank] = [];
+            prepState[chosenRank][chosenIdx] = spellName;
+            _setPrepState(cIdx, prepState);
+            renderPrepUI(cIdx, castersData[cIdx]);
+            return;
+        }
+        // Old fallback path kept for reference but unreachable above.
+        function _legacyPrepareSpell(cIdx, lvlNum, spellName) {
             let prepState = _getPrepState(cIdx);
             let lvlArr = prepState[lvlNum];
             if(!lvlArr) return;
 
             let emptyIdx = lvlArr.indexOf(null);
-            if(emptyIdx === -1) { alert(`No empty slots left for Level ${lvlNum}. Un-prepare a spell first.`); return; }
+            if(emptyIdx === -1) { alert(`No empty slots left for Rank ${lvlNum}. Un-prepare a spell first.`); return; }
 
             lvlArr[emptyIdx] = spellName;
             _setPrepState(cIdx, prepState);
@@ -9196,24 +9639,30 @@
             const casters = (typeof castersData !== 'undefined') ? castersData : [];
             const caster = casters[casterIdx] || {};
             const levels = caster.levels || [];
-            // Build list of {rank, slots, expended} for ranks >= baseRank
+            // Is this spell a signature spell? Signatures auto-heighten to any
+            // open slot >= base rank without requiring repertoire-at-rank.
+            const sigMap = (typeof _signatureMap === 'object' && _signatureMap) ? _signatureMap : {};
+            const sigNames = new Set(Object.values(sigMap));
+            const isSignature = sigNames.has(spellName);
+            // Build list of {rank, slots, expended, knownAtRank, allowed} for ranks >= baseRank
             const expended = window._expendedSlots || {};
             const opts = [];
             levels.forEach(lvl => {
                 const r = parseInt(lvl.level, 10);
-                const slots = parseInt(lvl.slots, 10) || 0;
+                const slots = (parseInt(lvl.slots, 10) || 0) + (parseInt(lvl.font_slots, 10) || 0);
                 if (r < baseRank || slots <= 0) return;
                 const list = expended[`c${casterIdx}_l${r}`] || [];
                 const used = list.filter(Boolean).length;
-                opts.push({ rank: r, slots, used });
+                const knownAtRank = (lvl.spells || []).some(sp => sp.name === spellName);
+                const allowed = (r === baseRank) || isSignature || knownAtRank;
+                opts.push({ rank: r, slots, used, knownAtRank, allowed });
             });
             if (!opts.length) {
-                // No slots — just show a clear error toast and don't roll.
                 try { showRollToast(spellName, '!', 'No available slots at rank ' + baseRank + ' or higher. Wait for a long rest.', false, true, [], null); } catch(_) {}
                 return;
             }
-            // If only one rank available with at least one free slot, skip the picker.
-            const free = opts.filter(o => o.used < o.slots);
+            // Skip picker only if exactly one rank is free AND legal.
+            const free = opts.filter(o => o.used < o.slots && o.allowed);
             if (free.length === 1) {
                 castSpellWithValidation(spellName, casterIdx, baseRank, free[0].rank, 'spontaneous');
                 return;
@@ -9222,14 +9671,16 @@
             const pick = document.createElement('div');
             pick.className = 'heighten-picker';
             pick.style.zIndex = 9100;
-            let html = `<div class="heighten-picker-label">${spellName} — pick slot rank</div>`;
+            let html = `<div class="heighten-picker-label">${spellName} — pick slot rank${isSignature ? ' <span style="color:#FCD34D;font-size:9px;">[Signature]</span>' : ''}</div>`;
             opts.forEach(o => {
                 const remaining = Math.max(0, o.slots - o.used);
-                const disabled = remaining === 0;
+                const disabled = remaining === 0 || !o.allowed;
+                const note = !o.allowed ? '<br><span style="font-size:8px;color:#fca5a5;">not in repertoire</span>'
+                          : (remaining === 0 ? '<br><span style="font-size:8px;color:#fca5a5;">all spent</span>' : '');
                 html += `<button type="button" class="heighten-rank-btn ${o.rank === baseRank ? 'base' : ''}"
                     data-rank="${o.rank}" ${disabled ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}
-                    title="Rank ${o.rank} slot — ${remaining}/${o.slots} remaining">
-                    ${o.rank} <span style="font-size:9px; opacity:0.7;">(${remaining}/${o.slots})</span>
+                    title="${!o.allowed ? 'Heighten requires the spell at this rank, or marking it Signature.' : 'Rank '+o.rank+' slot — '+remaining+'/'+o.slots+' remaining'}">
+                    ${o.rank} <span style="font-size:9px; opacity:0.7;">(${remaining}/${o.slots})</span>${note}
                 </button>`;
             });
             pick.innerHTML = html;
