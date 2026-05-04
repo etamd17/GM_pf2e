@@ -54,26 +54,38 @@
     --ink-900:  #14110c;       /* page background */
     --ink-950:  #0c0a07;
 
-    /* Functional aliases — most code reads these, not the raw ramp */
-    --bg-page:        var(--ink-900);          /* dark page background */
-    --bg-card:        var(--ink-50);           /* parchment-cream card */
-    --bg-card-2:      var(--ink-100);          /* slightly tinted card variant */
-    --bg-sunken:      var(--ink-800);          /* recessed dark area on the page */
-    --bg-input:       var(--ink-100);          /* input fields on cream cards */
-    --bg-input-dark:  var(--ink-800);          /* input fields on dark surfaces */
-    --bg-overlay:     rgba(20, 17, 12, 0.85);  /* modal scrim */
+    /* Functional aliases — most code reads these, not the raw ramp.
+       2026-05 update: cards are now WARM-DARK (one shade above the page)
+       not parchment-cream. The cream-on-dark contrast was too aggressive
+       and read as "vibe-coded" — Demiplane's dark mode is a single warm
+       palette top-to-bottom. The token NAMES (text-on-cream etc.) are
+       kept stable so the ~200 existing rules don't all need rewriting,
+       but the VALUES now mean "primary text on a warm-dark card surface".
 
-    --text-on-cream:  #2a1f10;                 /* primary on parchment */
-    --text-on-cream-2:#4d3f24;                 /* secondary on parchment */
-    --text-on-cream-3:#7a6940;                 /* muted on parchment */
-    --text-on-dark:   var(--ink-100);          /* primary on dark page */
-    --text-on-dark-2: var(--ink-300);          /* secondary on dark page */
-    --text-on-dark-3: var(--ink-400);          /* muted on dark page */
+       The brand stays gilt + ruby; everything else is the warm gray
+       ramp from --ink-700 (raised card) to --ink-950 (page floor). */
+    --bg-page:        #0c0a07;                 /* deep warm-ink page floor */
+    --bg-card:        #1c1813;                 /* card raised one step above page */
+    --bg-card-2:      #28221a;                 /* sub-card / input raise */
+    --bg-sunken:      #14110c;                 /* recessed dark area on the page */
+    --bg-input:       #14110c;                 /* input fields on cards */
+    --bg-input-dark:  #14110c;                 /* alias kept for legacy callers */
+    --bg-overlay:     rgba(8, 6, 3, 0.86);     /* modal scrim */
 
-    --border-card:    rgba(74, 67, 52, 0.25);  /* gentle line on parchment */
-    --border-rule:    rgba(74, 67, 52, 0.5);   /* rule line — section dividers */
+    /* "text-on-cream" tokens were named when cards were parchment.
+       Cards are now warm-dark — the token now means "primary text on
+       the new card color", which is light-cream. */
+    --text-on-cream:   #ede4cf;                /* primary on warm-dark card */
+    --text-on-cream-2: #c8bd9e;                /* secondary on card */
+    --text-on-cream-3: #8e8369;                /* muted on card */
+    --text-on-dark:    #f0ead7;                /* primary on the page floor */
+    --text-on-dark-2:  #c9bfa3;                /* secondary on page */
+    --text-on-dark-3:  #8e8369;                /* muted on page */
+
+    --border-card:    rgba(201, 163, 78, 0.14);  /* warm gilt-tinted hairline */
+    --border-rule:    rgba(201, 163, 78, 0.28);  /* slightly stronger section divider */
     --border-dark:    rgba(255, 255, 255, 0.08);
-    --border-strong:  rgba(255, 255, 255, 0.16);
+    --border-strong:  rgba(255, 255, 255, 0.14);
 
     --accent:         var(--gilt-300);
     --accent-hover:   var(--gilt-200);
@@ -316,14 +328,15 @@ h1, h2, h3, h4, h5, h6, .font-header, .font-display {
     color: var(--text-on-cream-2) !important;
 }
 
-/* Inputs & selects — flat, sit on cream, gilt focus ring */
+/* Inputs & selects — sit RECESSED on warm-dark cards (page-color back).
+   Light text, gilt focus ring. */
 .panel-card input,
 .panel-card select,
 .panel-card textarea,
 .hp-input, .tinput, .tselect {
-    background: var(--bg-input) !important;
+    background: var(--bg-page) !important;
     color: var(--text-on-cream) !important;
-    border: 1px solid var(--border-card) !important;
+    border: 1px solid var(--border-strong) !important;
     border-radius: var(--r-sm) !important;
     box-shadow: none !important;
     padding: var(--sp-2) var(--sp-3) !important;
@@ -346,7 +359,7 @@ h1, h2, h3, h4, h5, h6, .font-header, .font-display {
     letter-spacing: 0.18em !important;
     text-transform: uppercase !important;
     font-weight: 600 !important;
-    color: var(--text-on-cream-2) !important;
+    color: var(--gilt-300) !important;
     border-bottom: 1px solid var(--border-rule) !important;
     padding-bottom: var(--sp-2) !important;
     margin-bottom: var(--sp-4) !important;
