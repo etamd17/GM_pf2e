@@ -157,7 +157,17 @@
         </div>
     </header>
 
-    <main id="lvl-page-main" class="custom-scrollbar" style="max-width: 980px; margin: 0 auto; padding: var(--sp-5);">
+    <main id="lvl-page-main" class="custom-scrollbar" style="max-width: 720px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) var(--sp-8);">
+        {# Pathbuilder-style "Level N" banner header — small red label
+           centered above the unified pick card. #}
+        <div id="lvl-banner" style="text-align:center; margin: var(--sp-2) 0 var(--sp-3);">
+            <span style="display:inline-block; font-family: var(--font-display); font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ruby-200); font-weight: 600;">
+                Level <span id="lvl-banner-num"></span>
+            </span>
+        </div>
+        {# All picks for this level live inside a single dark card so
+           the page reads as one grouping (per Pathbuilder's layout). #}
+        <div id="lvl-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);">
         
         <div id="step-classfeatures" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
             <h2 class="text-3xl font-bold text-white mb-2">Automatic Class Features</h2>
@@ -278,6 +288,7 @@
                 </button>
             </div>
         </div>
+        </div> {# /lvl-card #}
     </main>
 
     <div id="uni-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 md:p-8 opacity-0 transition-opacity duration-200">
@@ -390,6 +401,8 @@
         function esc(str) { return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
         document.getElementById('lbl-target-level').innerText = targetLevel;
+        const _lvlBannerEl = document.getElementById('lvl-banner-num');
+        if (_lvlBannerEl) _lvlBannerEl.innerText = targetLevel;
 
         function init() {
             reqs = classMatrix[pcClass]?.progression?.[targetLevel] || classMatrix[pcClass]?.progression?.[String(targetLevel)];

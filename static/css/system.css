@@ -1656,12 +1656,14 @@ body.levelup, .levelup-page {
 
 #sidebar-nav, .compact-stepper, .drawer-submit-bar { display: none !important; }
 
-/* All step panels are always visible — kill the old "active-only" rule. */
+/* All step panels are always visible — kill the old "active-only" rule.
+   Visibility is gated by state.sections_visible (set in init), which
+   applies inline display:none to hidden steps. */
 .step-panel { display: block !important; }
-.step-panel + .step-panel {
-    border-top: 1px solid var(--border-strong) !important;
-    margin-top: var(--sp-7) !important;
-    padding-top: var(--sp-6) !important;
+.step-panel + .step-panel:not([style*="display: none"]) {
+    border-top: 1px solid var(--border-card) !important;
+    margin-top: var(--sp-3) !important;
+    padding-top: var(--sp-3) !important;
 }
 
 /* Top bar (the new replacement for the sidebar header) */
@@ -1762,15 +1764,48 @@ body.levelup, .levelup-page {
 #lvl-topbar p { white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
 #lvl-topbar #btn-back-sheet { white-space: nowrap !important; flex-shrink: 0 !important; }
 
-/* Step panel padding: was p-8 lg:p-12 (32-48px); tighten to p-5 lg:p-6 */
-.step-panel { padding: var(--sp-5) !important; }
-@media (min-width: 1024px) { .step-panel { padding: var(--sp-6) !important; } }
-.step-panel h2 { font-size: 22px !important; line-height: 1.2 !important; margin-bottom: var(--sp-2) !important; color: var(--text-on-dark) !important; font-family: var(--font-display) !important; letter-spacing: 0.04em !important; }
-.step-panel > p { font-size: 13px !important; color: var(--text-on-dark-2) !important; margin-bottom: var(--sp-5) !important; line-height: 1.5 !important; }
+/* Pathbuilder-style level-up: every step is a small section under one
+   "Level N" header, each choice rendered as a compact card. No verbose
+   per-step intros, no panel-in-panel padding, no chunky H2s. */
+.step-panel {
+    padding: 0 !important;
+    margin-top: var(--sp-5) !important;
+    max-width: none !important;
+}
+.step-panel + .step-panel { padding-top: var(--sp-4) !important; margin-top: var(--sp-4) !important; }
+
+/* Step heading collapses to a small gilt small-caps label like
+   Pathbuilder's "Level 4" markers. */
+.step-panel h2 {
+    font-family: var(--font-display) !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    color: var(--gilt-300) !important;
+    margin: 0 0 var(--sp-3) 0 !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+}
+/* The descriptive paragraph under each H2 is muted and small.  Used to
+   take 5 lines of vertical real estate; now ~1 line of helper text. */
+.step-panel > p {
+    font-size: 11px !important;
+    color: var(--text-on-dark-3) !important;
+    margin: 0 0 var(--sp-3) 0 !important;
+    line-height: 1.4 !important;
+    font-style: italic !important;
+}
+/* Hide the rules-explanation paragraphs entirely — Pathbuilder just
+   shows the choice cards. The user already knows the rules; the page
+   shouldn't repeat the rulebook. */
+.step-panel > p:first-of-type { display: none !important; }
+.step-panel > p:nth-of-type(2)  { display: none !important; }
 
 /* Flatten the bg-gray-800 / bg-gray-900 inner boxes the step panels
    nest. These were the "card in card in card" vibe-coded culprit.
-   Replace with rule-line section headers and transparent backgrounds. */
+   Replace with transparent backgrounds — no border, no padding, no
+   shadow. The choice cards inside provide the structure. */
 .step-panel .bg-gray-800,
 .step-panel .bg-gray-900,
 .step-panel [class*="bg-gray-800"],
@@ -1778,37 +1813,83 @@ body.levelup, .levelup-page {
     background: transparent !important;
     background-image: none !important;
     border: none !important;
-    border-top: 1px solid var(--border-strong) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    padding: var(--sp-4) 0 !important;
-    margin-top: var(--sp-2) !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
-.step-panel .bg-gray-800:first-of-type,
-.step-panel .bg-gray-900:first-of-type {
-    border-top: none !important;
-    padding-top: 0 !important;
-    margin-top: 0 !important;
-}
-/* Section headings inside flattened panels read as rule-line section dividers */
+
+/* H3 / H4 inside step panels — small inline labels, no rule lines or
+   card chrome. Pathbuilder-style: "SKILL UPGRADES" reads as a row
+   header, not a section divider. */
 .step-panel h3 {
     font-family: var(--font-display) !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     letter-spacing: 0.16em !important;
     text-transform: uppercase !important;
-    color: var(--gilt-300) !important;
-    border-bottom: 1px solid var(--border-rule) !important;
-    padding-bottom: var(--sp-2) !important;
-    margin-bottom: var(--sp-3) !important;
+    color: var(--text-on-dark-3) !important;
+    margin: 0 0 var(--sp-2) 0 !important;
+    padding: 0 !important;
+    border: none !important;
     font-weight: 600 !important;
 }
 .step-panel h4 {
     font-family: var(--font-display) !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     letter-spacing: 0.14em !important;
     text-transform: uppercase !important;
+    color: var(--text-on-dark-3) !important;
+    margin: var(--sp-3) 0 var(--sp-1) !important;
+    padding: 0 !important;
+    border: none !important;
+}
+
+/* Hide the verbose per-section flex headers ("Skill Upgrades — 1 left",
+   "The 4 Free Boosts — 4/4 Allocated", etc.) — replace with tight
+   labels. The choice cards already convey state visually. */
+.step-panel .border-b.border-gray-700,
+.step-panel [class*="border-gray-700"] {
+    border-color: transparent !important;
+    padding-bottom: 0 !important;
+    margin-bottom: var(--sp-2) !important;
+}
+
+/* Choice cards (the .choice-card class my system.css already styles)
+   — even tighter padding so they read like Pathbuilder's icon rows. */
+.choice-card {
+    padding: var(--sp-2) var(--sp-3) !important;
+    margin-bottom: var(--sp-1) !important;
+    min-height: auto !important;
+}
+.choice-card .title { font-size: 13px !important; line-height: 1.2 !important; }
+.choice-card .subtitle { font-size: 9px !important; letter-spacing: 0.14em !important; opacity: 0.8 !important; }
+
+/* Skill / ability cards in the grids — same compact treatment. */
+#ui-abilities, #ui-skills, #ui-feats, #ui-magic-containers,
+#ui-classfeatures, #ui-abilities-math, #ui-retrain-list {
+    gap: var(--sp-1) !important;
+}
+#ui-abilities { display: flex !important; flex-wrap: wrap !important; }
+
+/* "1 left" / "4/4 Allocated" counter chips — small inline pill instead
+   of giant 24px headlines. */
+.step-panel #lbl-skill-remaining,
+.step-panel #msg-abilities-done {
+    font-size: 11px !important;
+    font-family: var(--font-display) !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
     color: var(--text-on-dark-2) !important;
-    margin: var(--sp-3) 0 var(--sp-2) !important;
+    text-align: right !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+.step-panel #lbl-skill-math {
+    font-size: 10px !important;
+    color: var(--text-on-dark-3) !important;
+    font-style: italic !important;
 }
 
 /* HP preview banner — keep the ruby tint but flat */
