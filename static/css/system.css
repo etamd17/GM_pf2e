@@ -2022,4 +2022,314 @@ nav button:hover { background: transparent !important; }
     box-shadow: var(--shadow-2) !important;
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   26. Pathbuilder-feel polish on the player sheet (2026-05).
+   The user pasted a Pathbuilder screenshot and asked for the same
+   clean look. Pathbuilder's signature is: single orange accent for
+   every rollable affordance, flat hairline rows (no card chrome),
+   compact one-line stats, consistent row heights, no drop-shadows.
+   This keeps our layout (6-tab structure, sticky header, condition
+   auto-apply, the level-up flow we just shipped) but flattens the
+   visual chrome. ════════════════════════════════════════════════════ */
+
+/* ── 26a. Drop drop-shadows globally (Pathbuilder uses none).
+   Cards / modals already had shadow-1/2 from the design system. Pull
+   them down to zero except the one floating modal scrim. */
+.panel-card,
+.ability-block,
+.stat-box,
+.defense-stat,
+.skill-row,
+.choice-card,
+.spell-card,
+.spell-entry,
+.gen-card,
+.trk .combatant,
+.trk .hero-card,
+.trk .panel,
+.trk .hp-ribbon,
+.trk .hs-box,
+.feat-card,
+#dice-panel,
+.parchment-frame,
+.roll-toast {
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+.roll-toast { box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important; }  /* keep just enough float */
+
+/* ── 26b. Skill rows — Pathbuilder format ─────────────────────────────
+   Pathbuilder skill rows: small prof letter (U/T/E/M/L) on the left,
+   skill name + stat in caps, + numeric mod on the right. No card
+   around the row, just a thin hairline divider. Tight 28-px row
+   height. We use the existing .skill-row class so nothing else
+   changes. */
+.skill-row {
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    border-bottom: 1px solid var(--border-card) !important;
+    border-radius: 0 !important;
+    padding: 6px 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: var(--sp-2) !important;
+    box-shadow: none !important;
+    min-height: 28px !important;
+}
+.skill-row:last-child { border-bottom: none !important; }
+.skill-row:hover {
+    background: rgba(201, 163, 78, 0.06) !important;
+    border-bottom-color: var(--accent) !important;
+}
+.skill-row > div:first-child { flex: 1 1 auto; min-width: 0; gap: var(--sp-2); }
+.skill-row .skill-name,
+.skill-row span[class*="text-sm"] {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--text-on-cream) !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    line-height: 1.2 !important;
+}
+.skill-row .skill-stat,
+.skill-row span[class*="text-2xs"] {
+    font-size: 9px !important;
+    color: var(--text-on-cream-3) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.10em !important;
+    margin-left: var(--sp-2) !important;
+}
+.skill-row button[onclick^="rollSkill"] {
+    flex-shrink: 0 !important;
+    color: var(--accent) !important;
+    font-family: var(--font-display) !important;
+    font-variant-numeric: tabular-nums lining-nums !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    padding: 2px 6px !important;
+    background: transparent !important;
+    border: none !important;
+    text-shadow: none !important;
+}
+.skill-row button[onclick^="rollSkill"]:hover {
+    color: var(--accent-hover) !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Profession-letter chips — small flat squares, single accent on T+. */
+.prof-t, .prof-e, .prof-m, .prof-l, [class*="prof-"] {
+    width: 18px !important; height: 18px !important;
+    display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    border-radius: 3px !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+.prof-t { color: var(--accent)        !important; border: 1px solid var(--accent)         !important; background: rgba(201,163,78,0.10) !important; }
+.prof-e { color: var(--accent-hover)  !important; border: 1px solid var(--accent-hover)   !important; background: rgba(224,182,90,0.18) !important; }
+.prof-m { color: var(--ink-50)        !important; border: 1px solid var(--accent-hover)   !important; background: var(--accent)        !important; }
+.prof-l { color: var(--ink-50)        !important; border: 1px solid var(--ruby-200)       !important; background: var(--ruby-400)      !important; }
+.bg-gray-800.text-gray-500 { /* "U" untrained chip */
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    color: var(--text-on-cream-3) !important;
+}
+
+/* ── 26c. Ability tiles — Pathbuilder compact row ─────────────────────
+   Pathbuilder shows STR/DEX/CON/INT/WIS/CHA as a single horizontal
+   strip of 6 small tiles ~60px wide. We already have the structure;
+   tighten the visuals. */
+.ability-block {
+    background: transparent !important;
+    background-image: none !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-sm) !important;
+    padding: var(--sp-2) !important;
+    min-width: 56px !important;
+    width: 70px !important;
+    box-shadow: none !important;
+}
+.ability-block::before { content: none !important; display: none !important; }
+.ability-block:hover {
+    border-color: var(--accent) !important;
+    background: rgba(201, 163, 78, 0.06) !important;
+}
+.ability-block .mod {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: var(--accent) !important;
+    text-shadow: none !important;
+}
+.ability-block .label {
+    font-size: 9px !important;
+    color: var(--text-on-cream-3) !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    margin-top: 1px !important;
+}
+
+/* ── 26d. Tab bar — Pathbuilder text-tabs (no box) ────────────────────
+   Already mostly there; just tighten. */
+.tab-btn {
+    padding: var(--sp-2) var(--sp-3) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.14em !important;
+    border-bottom-width: 2px !important;
+    margin-right: var(--sp-2) !important;
+}
+
+/* ── 26e. Stats strip — single-row "TILE: 18 / TILE: +8" line ─────────
+   Already partially flattened; this just tunes the cell padding so
+   the row feels like Pathbuilder's compact stat band. */
+.stats-strip {
+    border-bottom: 1px solid var(--border-strong) !important;
+    background: var(--bg-page) !important;
+}
+.ss-block {
+    border-right: 1px solid var(--border-card) !important;
+    padding: var(--sp-2) var(--sp-3) !important;
+}
+.ss-lbl {
+    font-size: 9px !important;
+    letter-spacing: 0.16em !important;
+    color: var(--text-on-dark-3) !important;
+}
+.ss-val {
+    font-size: 18px !important;
+    color: var(--accent) !important;
+    text-shadow: none !important;
+}
+.ss-block:hover .ss-val { color: var(--accent-hover) !important; }
+
+/* ── 26f. Action toolbar — "Rest" / "Level Up" / "..." pills ──────────
+   Pathbuilder uses small grey rectangles, not gilt-filled buttons.
+   Demote our primary buttons to outline-on-dark with gilt text and
+   restore the gilt fill only on the truly-primary CTA (Long Rest is
+   a daily action, Level Up is a milestone). */
+.tb { padding: 4px 10px !important; font-size: 11px !important; letter-spacing: 0.06em !important; }
+.tb.primary, .tb.gilt {
+    background: transparent !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background-image: none !important;
+}
+.tb.primary:hover, .tb.gilt:hover {
+    background: var(--accent) !important;
+    color: var(--ink-950) !important;
+    border-color: var(--accent) !important;
+}
+
+/* ── 26g. Single accent: every rollable affordance is gilt ────────────
+   Pathbuilder uses one accent (orange) for every "click to roll"
+   affordance — saves, perception, initiative, hit bonus, damage,
+   spell DC, etc. Our system already does this for buttons; surface
+   the visual signal more aggressively in inline contexts. */
+.panel-card .text-amber-300,
+.panel-card .text-amber-400,
+.panel-card .text-amber-500,
+.panel-card .text-yellow-400,
+.panel-card .text-yellow-500 {
+    color: var(--accent) !important;
+}
+button[onclick^="rollSkill"],
+button[onclick^="rollAttack"],
+button[onclick^="rollDamage"],
+button[onclick^="rollSpell"],
+button[onclick^="rollInitiative"],
+.rollable-element { color: var(--accent) !important; }
+
+/* ── 26h. HP block + Shield gauge — flatter Pathbuilder feel ──────────
+   Drop the inset shadows / SVG flourish, keep the green/yellow/red HP
+   bar (functional state) but make the whole HP card a flat row. */
+.ss-block.hp-area {
+    background: transparent !important;
+    background-image: none !important;
+    border-right: none !important;
+}
+.hp-current { font-size: 22px !important; }
+
+/* ── 26i. Defense / saves grid — single line of stat tiles ────────────
+   Mirror the ability-tile treatment for the Combat tab's saves grid. */
+.defense-stat {
+    background: transparent !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-sm) !important;
+    padding: var(--sp-2) !important;
+    box-shadow: none !important;
+}
+.defense-stat .val { color: var(--accent) !important; font-size: 16px !important; }
+.defense-stat .lbl { font-size: 9px !important; }
+
+/* ── 26j. Trait pills — flat hairline pills ───────────────────────────
+   Pathbuilder uses a single pill style for traits. */
+.trait-pill, .condition-pill, .tagp, .tag-pill {
+    background: transparent !important;
+    background-image: none !important;
+    border: 1px solid var(--border-card) !important;
+    border-radius: 3px !important;
+    padding: 2px 7px !important;
+    font-size: 9px !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    color: var(--text-on-cream-2) !important;
+    font-weight: 600 !important;
+}
+
+/* ── 26k. Spell entry rows — flatten ──────────────────────────────────
+   Pathbuilder shows spells as one-line rows: name + cast button + tags.
+   Borders only on the row's bottom (rule line), not card edges. */
+.spell-entry {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid var(--border-card) !important;
+    border-left: 2px solid var(--border-card) !important;
+    border-radius: 0 !important;
+    padding: var(--sp-2) var(--sp-3) !important;
+    box-shadow: none !important;
+}
+.spell-entry:hover {
+    background: rgba(201, 163, 78, 0.05) !important;
+    border-left-color: var(--accent) !important;
+}
+
+/* ── 26l. Subdue the giant section headers inside cards ───────────────
+   Pathbuilder uses small uppercase labels for sections, not 24px H3s. */
+.panel-card h3,
+.panel-card h4 {
+    font-family: var(--font-display) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+    color: var(--accent) !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 0 var(--sp-2) !important;
+}
+.panel-card .section-header {
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
+    color: var(--accent) !important;
+    border-bottom: 1px solid var(--border-card) !important;
+    padding-bottom: var(--sp-1) !important;
+    margin-bottom: var(--sp-3) !important;
+}
+
+/* ── 26m. Final pass: drop ::first-letter drop-cap, neutralize banners */
+.char-name::first-letter {
+    font-size: inherit !important;
+    color: inherit !important;
+    padding: 0 !important;
+    line-height: inherit !important;
+    text-shadow: none !important;
+}
+.spell-card-title::first-letter {
+    font-size: inherit !important;
+    color: inherit !important;
+}
+
 /* End of system.css */
