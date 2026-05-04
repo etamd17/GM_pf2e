@@ -20,6 +20,7 @@ from class_matrix import MONK_PATH_CONFIG
 from class_matrix import SUBCLASS_DESCRIPTIONS
 from class_matrix import SPELL_ACTIONS, get_action_cost
 from class_matrix import SKILL_FEAT_PREREQS, check_feat_prereqs, RANK_VALUES
+from class_matrix import CLASS_LEVEL_FEATURES
 from pf2e_generator import RobustPF2eGenerator
 
 app = Flask(__name__)
@@ -8454,7 +8455,7 @@ def save_new_character():
 def player_levelup(pc_name):
     if pc_name in PARTY_LIBRARY: 
         pc = PARTY_LIBRARY[pc_name]
-        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies)
+        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=CLASS_LEVEL_FEATURES)
     return redirect(url_for('player_view'))
 
 @app.route('/api/submit_levelup/<pc_name>', methods=['POST'])

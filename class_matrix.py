@@ -1348,6 +1348,250 @@ CLASS_FEATURES = {
 PASSIVE_FEATURES = CLASS_FEATURES
 
 # =============================================================================
+# CLASS-SPECIFIC LEVEL-UP FEATURES + CHOICES
+# =============================================================================
+# This catalogs the per-level class features that the levelup wizard
+# should surface — both passive-info ("you gain X at this level") and
+# choices ("pick one of A/B/C"). Distinct from CLASS_PROGRESSION (which
+# only carries cumulative proficiency bumps) and CLASS_FEATURES (which
+# is mostly L1 features rendered on the sheet).
+#
+# Each entry: { name, type, desc, choices?, applies_passive? }
+#   type: "info" | "choice" | "skill_grant"
+#   choices: [{name, desc}]  - if type is "choice", the player must pick one
+#   applies_passive: True     - render as info-only, no pick required
+#
+# When wired to the wizard, choice-typed entries render as required
+# choice cards. Info-typed entries render as a small "you gained" pill.
+#
+# Sources: Player Core 1, Player Core 2, GM Core, Lost Omens books.
+# Keep entries terse — players read these inline at level-up time.
+# =============================================================================
+CLASS_LEVEL_FEATURES = {
+    "champion": {
+        3: [
+            {"name": "Divine Ally", "type": "choice",
+             "desc": "Pick the divine bond that empowers you.",
+             "choices": [
+                {"name": "Blade Ally", "desc": "Bond with a weapon. While wielded, it benefits from one rune of your choice (disrupting, ghost touch, returning, or shifting), and you can switch the rune as a free action once per day."},
+                {"name": "Steed Ally", "desc": "Gain a young animal companion that serves as your mount (horse, pony, riding dog, etc.)."},
+                {"name": "Shield Ally", "desc": "Your shield gains +2 Hardness, +5 HP, and +5 BT. Stacks with material upgrades."},
+             ]},
+        ],
+        7: [{"name": "Weapon Specialization", "type": "info", "desc": "+2 damage on weapons you're an expert with, +3 master, +4 legendary."}],
+        9: [{"name": "Juggernaut", "type": "info", "desc": "Your Fortitude reaches Master. On a successful Fort save, you treat it as a critical success."},
+            {"name": "Champion Expertise", "type": "info", "desc": "Class DC and spellcasting reach Expert."}],
+        11: [{"name": "Divine Will", "type": "info", "desc": "Your Will save reaches Master. On a successful Will save, you treat it as a critical success."},
+             {"name": "Exalt", "type": "info", "desc": "Your champion's reaction grows stronger — extra effects when you trigger it."}],
+        13: [{"name": "Weapon Mastery", "type": "info", "desc": "Master with simple/martial in your favored weapon group."},
+             {"name": "Armor Expertise", "type": "info", "desc": "Expert in light, medium, and heavy armor."}],
+        15: [{"name": "Greater Weapon Specialization", "type": "info", "desc": "Specialization damage doubles."}],
+        17: [{"name": "Champion Mastery", "type": "info", "desc": "Class DC and spellcasting reach Master."},
+             {"name": "Legendary Armor", "type": "info", "desc": "Legendary in your armor proficiencies."}],
+        19: [{"name": "Hero's Defiance", "type": "info", "desc": "When reduced to 0 HP, expend a Focus Point to fall to 1 HP instead."}],
+    },
+
+    "cleric": {
+        3: [{"name": "Second Doctrine", "type": "info",
+             "desc": "Cloistered: Reflex Expertise. Warpriest: Trained in martial weapons + simple-weapon expertise."}],
+        5: [{"name": "Domain Initiate (extra)", "type": "info",
+             "desc": "If your deity has multiple domains you can choose another. Otherwise, gain Cast a Spell focus spell tools."}],
+        7: [{"name": "Third Doctrine", "type": "info",
+             "desc": "Cloistered: Cleric Expertise (Expert spellcasting). Warpriest: Expert in simple/martial weapons + unarmed strikes."}],
+        9: [{"name": "Resolve", "type": "info",
+             "desc": "Will save reaches Master. On a successful Will save, you treat it as a critical success."}],
+        11: [{"name": "Fourth Doctrine", "type": "info",
+              "desc": "Cloistered: Lightning Reflexes (Expert Reflex). Warpriest: Lightning Reflexes + Expert spellcasting."}],
+        13: [{"name": "Divine Defense", "type": "info", "desc": "Expert in unarmored defense."},
+             {"name": "Weapon Specialization", "type": "info", "desc": "+2 damage with weapons you're an expert with."}],
+        15: [{"name": "Fifth Doctrine", "type": "info",
+              "desc": "Both subclasses: Master spellcasting (Spell Atk + DC)."}],
+        17: [{"name": "Final Doctrine", "type": "info",
+              "desc": "Cloistered: Legendary spellcaster, Master Will. Warpriest: Master Will, Final Doctrine spellcasting."}],
+        19: [{"name": "Miraculous Spell", "type": "info",
+              "desc": "Once per day, expend a slot two ranks below your max to cast a spell at your max rank."}],
+    },
+
+    "druid": {
+        3: [{"name": "Order's Will", "type": "info",
+             "desc": "Order-specific feature: Storm = Tempest Surge improvement, Wild = Wild Shape feat, Animal = companion mature, Leaf = Leaf Order's Cantrip."}],
+        5: [{"name": "Ability Boosts (4)", "type": "info", "desc": "Standard PF2e: 4 free boosts at L5/10/15/20."},
+            {"name": "Wild Empathy upgrade", "type": "info", "desc": "Your communication with animals improves; you can attempt Diplomacy on animals."}],
+        7: [{"name": "Expert Spellcaster", "type": "info", "desc": "Spell DC and spell attack rolls reach Expert."}],
+        9: [{"name": "Resolve", "type": "info", "desc": "Will save reaches Master."},
+            {"name": "Order Specific", "type": "info",
+             "desc": "Storm: Storm Retribution. Wild: Wild Shape advance. Animal: companion nimble/savage. Leaf: Goodberry advance."}],
+        11: [{"name": "Lightning Reflexes", "type": "info", "desc": "Reflex save reaches Expert."},
+             {"name": "Wild Order Magic / Class advance", "type": "info", "desc": "Order-specific spell advancement."}],
+        13: [{"name": "Weapon Specialization", "type": "info", "desc": "+2 damage with expert weapons."},
+             {"name": "Medium Armor Expertise", "type": "info", "desc": "Expert in light + medium armor."}],
+        15: [{"name": "Master Spellcaster", "type": "info", "desc": "Spell DC and spell attack reach Master."}],
+        17: [{"name": "Druid Order's Mastery", "type": "info", "desc": "Order capstone advancement (Storm Lord, Wild Shape mastery, etc.)"}],
+        19: [{"name": "Legendary Primal Spellcaster", "type": "info", "desc": "Spell DC and spell attack reach Legendary."},
+             {"name": "Hierophant", "type": "info", "desc": "Capstone — auto-success on first failed Will save per day."}],
+    },
+
+    "kineticist": {
+        3: [{"name": "Element Junction Choice", "type": "choice",
+             "desc": "If you have multiple elements (Dual / Multiple Gates), pick a Junction for one of them.",
+             "choices": [
+                {"name": "Earth Junction", "desc": "Increase max HP by your level when you Channel Earth."},
+                {"name": "Fire Junction", "desc": "Bonus persistent fire damage on impulses."},
+                {"name": "Air Junction", "desc": "+10 ft Speed while Channeling Air; ignore Difficult Terrain."},
+                {"name": "Water Junction", "desc": "Resist cold; bonus persistent cold damage."},
+                {"name": "Wood Junction", "desc": "Temp HP equal to twice your level when Channeling Wood."},
+                {"name": "Metal Junction", "desc": "Strikes from impulses gain Versatile (Slashing / Piercing)."},
+             ]}],
+        5: [{"name": "Specialty Impulse Slot", "type": "info", "desc": "You learn one impulse not from your gates' standard list — you can pick from any element you have access to."}],
+        7: [{"name": "Aura Junction", "type": "info", "desc": "You gain an elemental aura tied to one of your gates."}],
+        9: [{"name": "Lightning Reflexes / Gate's Threshold", "type": "info", "desc": "Reflex save advances to Expert (most kineticists)."}],
+        11: [{"name": "Impulse Mastery", "type": "info", "desc": "Class DC reaches Master; impulses scale further."}],
+        13: [{"name": "Skilled Kineticist", "type": "info", "desc": "Strike weapons related to your gate gain Master proficiency."}],
+        15: [{"name": "Greater Specialty Impulse", "type": "info", "desc": "A second specialty-slot impulse."}],
+        17: [{"name": "Legendary Kinetic Mastery", "type": "info", "desc": "Class DC reaches Legendary."}],
+        19: [{"name": "Apex Gate", "type": "info", "desc": "You can Channel two gates simultaneously, paying focus / overflow costs from either."}],
+    },
+
+    # ── Other classes — outline + most-asked features ─────────────────
+    "alchemist": {
+        3: [{"name": "Field Discovery", "type": "info",
+             "desc": "Your research field unlocks: Bomber bombs splash twice, Chirurgeon Healing Bomb, Mutagenist mutagens scale, Toxicologist injectors."}],
+        7: [{"name": "Iron Will / Field Expertise", "type": "info", "desc": "Will reaches Expert; field-specific feature unlocks."}],
+        9: [{"name": "Alchemical Alacrity", "type": "info", "desc": "Quick Alchemy creates 3 items in 1 action instead of 1."}],
+        11: [{"name": "Juggernaut", "type": "info", "desc": "Fort save reaches Master."}],
+    },
+
+    "barbarian": {
+        3: [{"name": "Deny Advantage", "type": "info",
+             "desc": "Higher-level enemies (or you, if higher-level than them) cannot make you off-guard with skill checks. Levels up at 13 to deny the off-guard from cover/cover hidden too."}],
+        5: [{"name": "Brutality", "type": "info", "desc": "Expert in martial weapons + simple weapons. Critical specialization on rage-Strikes."}],
+        7: [{"name": "Weapon Specialization", "type": "info", "desc": "Damage bonus when raging."}],
+        9: [{"name": "Lightning Reflexes / Raging Resistance", "type": "info", "desc": "Reflex save reaches Expert; instinct grants resistance while raging."}],
+    },
+
+    "bard": {
+        3: [{"name": "Signature Spells", "type": "info",
+             "desc": "Pick 1 spell of each rank you can cast as a Signature Spell — automatically heightens to any rank slot."}],
+        5: [{"name": "Lightning Reflexes / Bard Expertise", "type": "info", "desc": "Reflex Expert; muse-specific bonus."}],
+        9: [{"name": "Great Fortitude / Vigilant Senses", "type": "info", "desc": "Fort save Expert; Perception Master."}],
+    },
+
+    "fighter": {
+        3: [{"name": "Bravery", "type": "info",
+             "desc": "Your Will save advances. While Frightened, the value is reduced by 1 (min 0). Successes vs fear become critical successes."}],
+        5: [{"name": "Fighter Weapon Mastery", "type": "info",
+             "desc": "Pick a weapon group — gain Master in those weapons. Master in simple, advanced, and martial of one chosen group."}],
+        7: [{"name": "Battlefield Surveyor", "type": "info", "desc": "+2 to Perception for initiative."},
+            {"name": "Weapon Specialization", "type": "info", "desc": "+2 damage with expert weapons."}],
+        9: [{"name": "Combat Flexibility", "type": "info",
+             "desc": "Each day, pick one fighter feat of L8 or lower as a temporary feat for the day."}],
+        11: [{"name": "Armor Expertise", "type": "info", "desc": "Expert in unarmored, light, medium, heavy armor."},
+             {"name": "Fighter Expertise", "type": "info", "desc": "Class DC reaches Expert."}],
+        13: [{"name": "Weapon Legend", "type": "info", "desc": "Master in advanced weapons of your weapon group; Legendary in simple/martial of group."}],
+        15: [{"name": "Evasion / Improved Flexibility", "type": "info", "desc": "Reflex Master + auto-crit on success; Combat Flexibility now picks two feats."}],
+    },
+
+    "rogue": {
+        3: [{"name": "Surprise Attack improvement / Skill Feat", "type": "info",
+             "desc": "Rogue gets a skill feat at every level. At L3, your skill feat slot is granted."}],
+        5: [{"name": "Skill Mastery (Rogue)", "type": "info",
+             "desc": "Pick a skill you're trained in — become Expert."}],
+        7: [{"name": "Skill Increase + Weapon Tricks", "type": "info", "desc": "Standard skill feats + class-specific tricks."}],
+        9: [{"name": "Debilitating Strike", "type": "info",
+             "desc": "Sneak attacks can apply enfeebled, slowed, or off-guard."}],
+    },
+
+    "sorcerer": {
+        3: [{"name": "Signature Spells (Sorcerer)", "type": "info",
+             "desc": "Pick 1 spell per rank as Signature — auto-heightens to any rank slot."},
+            {"name": "Bloodline Spell (rank 2 known)", "type": "info",
+             "desc": "Your bloodline grants its rank-2 spell as a known spell — always available, doesn't count against repertoire."}],
+        5: [{"name": "Magical Fortitude / Bloodline Spell rank 3", "type": "info",
+             "desc": "Fort save Expert; bloodline grants its rank-3 spell automatically."}],
+        7: [{"name": "Expert Spellcaster", "type": "info", "desc": "Spell DC + attack reach Expert."}],
+    },
+
+    "wizard": {
+        3: [{"name": "Drain Bonded Item improvement", "type": "info",
+             "desc": "Your bonded item now lets you re-cast a prepared spell once per day per rank you can cast."}],
+        5: [{"name": "Lightning Reflexes / Bonded Focus", "type": "info", "desc": "Reflex Expert; focus pool tools advance."}],
+        7: [{"name": "Expert Spellcaster", "type": "info", "desc": "Spell DC + attack reach Expert."}],
+    },
+
+    "investigator": {
+        3: [{"name": "Skill Mastery (Investigator)", "type": "info",
+             "desc": "Pick a trained skill, advance to Expert. Investigator gets a skill feat every level (already granted)."}],
+        7: [{"name": "Trapfinder / Methodology", "type": "info", "desc": "Methodology-specific feature."}],
+    },
+
+    "magus": {
+        3: [{"name": "Hybrid Study (Spellstrike Variant)", "type": "info",
+             "desc": "Your hybrid study upgrades — Inexorable Iron, Laughing Shadow, Sparkling Targe, Starlit Span, or Twisting Tree gains its first advancement."}],
+        5: [{"name": "Lightning Reflexes / Spellstrike", "type": "info", "desc": "Reflex Expert; conflux spells."}],
+    },
+
+    "monk": {
+        3: [{"name": "Mystic Strikes", "type": "info", "desc": "Your unarmed Strikes count as magical for resistance/weakness. (Always-on.)"}],
+        5: [{"name": "Path to Perfection (Save Choice)", "type": "choice",
+             "desc": "Pick ONE save to advance to Master.",
+             "choices": [
+                {"name": "Fortitude", "desc": "Master Fortitude — resilient to body-affecting effects."},
+                {"name": "Reflex", "desc": "Master Reflex — superb at avoiding traps and AOEs."},
+                {"name": "Will", "desc": "Master Will — clear-minded against mental effects."},
+             ]}],
+        # Note: existing Monk Path to Perfection logic in app.py covers L7/L11/L15 distinct-then-revisit.
+    },
+
+    "ranger": {
+        3: [{"name": "Iron Will / Hunter's Edge upgrade", "type": "info",
+             "desc": "Will Expert; Hunter's Edge feature scales (Flurry, Outwit, or Precision)."}],
+    },
+
+    "summoner": {
+        3: [{"name": "Eidolon Boost", "type": "info",
+             "desc": "Your eidolon gains its first major upgrade (size growth, new feature, or stat boost depending on its type)."}],
+    },
+
+    "swashbuckler": {
+        3: [{"name": "Swashbuckler Style upgrade", "type": "info",
+             "desc": "Your style (Braggart, Fencer, Gymnast, Rascal, Wit) gains its first refinement."}],
+    },
+
+    "thaumaturge": {
+        3: [{"name": "Implement upgrade", "type": "info",
+             "desc": "Your primary implement (Amulet, Bell, Chalice, Lantern, Mirror, Regalia, Tome, Wand, Weapon) advances its first benefit."}],
+    },
+
+    "witch": {
+        3: [{"name": "Lesson", "type": "info",
+             "desc": "Your patron may grant a Lesson — pick a thematic mini-feature from your patron's lesson list."}],
+    },
+
+    "psychic": {
+        3: [{"name": "Subconscious Mind / Conscious Mind advance", "type": "info",
+             "desc": "Your subconscious-mind feature scales (e.g., Distant Grasp, Oscillating Wave)."}],
+    },
+
+    "oracle": {
+        3: [{"name": "Mystery Bonus / Curse Tier", "type": "info",
+             "desc": "Your mystery feature scales; your curse tier advances by your spellcasting progression."}],
+    },
+
+    "gunslinger": {
+        3: [{"name": "Way Skill / Slinger's Reload", "type": "info",
+             "desc": "Way-specific feature: Drifter, Pistolero, Sniper, or Vanguard ability scales."}],
+    },
+
+    # ── Rest of remaining classes — placeholder so the structure is in place.
+    # Add features here as needed; the wizard will surface them
+    # automatically once entries land. ────────────────────────────────
+    "animist":  {},
+    "commander":{},
+    "exemplar": {},
+    "guardian": {},
+}
+
+# =============================================================================
 # FEAT PREREQUISITE VALIDATION
 # =============================================================================
 # Skill feat → required skill + rank. Auto-generated from compendium + manual additions.

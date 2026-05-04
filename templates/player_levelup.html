@@ -169,6 +169,15 @@
            the page reads as one grouping (per Pathbuilder's layout). #}
         <div id="lvl-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);">
         
+        {# Class-specific level features (Pathfinder Player Core 1+2) —
+           rendered as either an info pill or a required choice card,
+           depending on the entry's `type`. Populated client-side from
+           classLevelFeatures[pcClass][targetLevel]. #}
+        <div id="step-classpicks" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Class Features (Level <span data-target-level></span>)</h2>
+            <div id="ui-class-picks" class="space-y-3"></div>
+        </div>
+
         <div id="step-classfeatures" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
             <h2 class="text-3xl font-bold text-white mb-2">Automatic Class Features</h2>
             <p class="text-gray-400 mb-8">These proficiency increases are applied automatically by your class at this level. No choices needed.</p>
@@ -344,6 +353,9 @@
         const monkPathConfig = {{ monk_path_config | tojson | safe }};
         const skillFeatPrereqs = {{ skill_feat_prereqs | tojson | safe }};
         const charProfs = {{ char_proficiencies | tojson | safe }};
+        // Class-specific level-up features and choices, keyed by
+        // class_lower → level → [{name, type, desc, choices?}]
+        const classLevelFeatures = {{ class_level_features | tojson | safe }};
         
         // Enrich skill feats with prerequisite data
         const RANK_MAP = {'untrained': 0, 'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8};
@@ -476,8 +488,15 @@
             const _isSpellbook = ['wizard','witch','magus'].includes(pcClass);
             const hasMagicThisLevel = state.spellCasters.length > 0 && (_newRankUnlocks || _isSpontaneous || _isSpellbook);
 
+            // Class-level features available at this level (PC1 + PC2 RAW).
+            // List drives the new "Class Features (Level N)" picks step.
+            const classLvlEntries = ((classLevelFeatures || {})[pcClass] || {})[targetLevel] || [];
+            state.class_level_features = classLvlEntries;
+            state.class_picks_selected = state.class_picks_selected || {};
+
             // Stash the visibility map so other helpers can read it.
             state.sections_visible = {
+                classpicks:    classLvlEntries.length > 0,
                 classfeatures: hasAutoBumps,    // Class Features step shows only when something auto-bumps
                 abilities:     !!reqs.ability_boosts,
                 skills:        !!reqs.skill_increase,
@@ -503,6 +522,7 @@
 
             if (reqs.ability_boosts) buildAbilitiesUI();
             buildSkillsUI();
+            buildClassPicksUI();
             // Restore Free-Archetype toggle from localStorage so it
             // survives reload of the same level-up page.
             try {
@@ -752,6 +772,7 @@
             if (!strip) return;
             const v = state.sections_visible || {};
             const sections = [
+                { id: 'classpicks',    label: 'Class Picks',    show: v.classpicks    },
                 { id: 'classfeatures', label: 'Class Features', show: v.classfeatures },
                 { id: 'abilities',     label: 'Abilities',      show: v.abilities     },
                 { id: 'skills',        label: 'Skills',         show: v.skills        },
@@ -785,8 +806,15 @@
             strip.querySelectorAll('.section-pip').forEach(p => {
                 const step = p.dataset.step;
                 const required = p.dataset.required === '1';
-                const chk = document.getElementById('chk-' + step);
-                const isError = chk && (chk.innerText || '').trim() === '!';
+                let isError = false;
+                if (step === 'classpicks') {
+                    // Class Picks: any choice-typed entry without a selection → incomplete.
+                    const entries = state.class_level_features || [];
+                    isError = entries.some(f => f.type === 'choice' && !state.class_picks_selected[f.name]);
+                } else {
+                    const chk = document.getElementById('chk-' + step);
+                    isError = chk && (chk.innerText || '').trim() === '!';
+                }
                 p.classList.remove('complete', 'incomplete', 'optional');
                 if (!required) p.classList.add('optional');
                 else if (isError) p.classList.add('incomplete');
@@ -1075,6 +1103,69 @@
             let key = "lore:" + name.toLowerCase();
             state.skill_increases_selected.push(key);
             buildSkillsUI();
+        }
+
+        // Build the Class Picks section — class-specific features from
+        // PC1 + PC2 + GMC. Each entry is either an info pill (you gain X)
+        // or a required choice card. Choices register on
+        // state.class_picks_selected[name] = chosen-option name.
+        function buildClassPicksUI() {
+            const ui = document.getElementById('ui-class-picks');
+            if (!ui) return;
+            const entries = state.class_level_features || [];
+            // Stamp the target-level number into any visible header
+            document.querySelectorAll('[data-target-level]').forEach(el => el.textContent = targetLevel);
+            if (!entries.length) { ui.innerHTML = ''; return; }
+            ui.innerHTML = entries.map((f, idx) => {
+                const safe = (f.name || '').replace(/"/g, '&quot;');
+                if (f.type === 'choice' && Array.isArray(f.choices)) {
+                    const picked = state.class_picks_selected[f.name];
+                    return `
+                    <div class="choice-card ${picked ? 'selected' : ''}" data-class-pick="${safe}">
+                        <div class="flex justify-between items-center w-full">
+                            <div style="flex:1; min-width:0;">
+                                <div class="subtitle ${picked ? 'text-green-400' : ''}">${picked ? 'Locked In' : 'Pick One *'}</div>
+                                <div class="title">${f.name}${picked ? ' — ' + picked : ''}</div>
+                                <div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px; line-height:1.4;">${(f.desc || '').replace(/</g,'&lt;')}</div>
+                            </div>
+                        </div>
+                        <div class="class-pick-options" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                            ${f.choices.map(c => `
+                                <button type="button" class="class-pick-opt ${picked === c.name ? 'active' : ''}"
+                                        data-pick-name="${(c.name||'').replace(/"/g,'&quot;')}"
+                                        title="${(c.desc || '').replace(/"/g,'&quot;')}"
+                                        style="padding:6px 12px; border-radius:var(--r-sm); background:${picked === c.name ? 'var(--accent)' : 'transparent'}; color:${picked === c.name ? 'var(--ink-950)' : 'var(--text-on-dark-2)'}; border:1px solid ${picked === c.name ? 'var(--accent)' : 'var(--border-strong)'}; font-size:11px; font-weight:600; cursor:pointer;">
+                                    ${c.name}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>`;
+                }
+                // info-only entry — just render a small "you gained X" pill
+                return `
+                <div class="choice-card" style="cursor:default;" data-class-pick-info="${safe}">
+                    <div class="flex justify-between items-center w-full">
+                        <div style="flex:1; min-width:0;">
+                            <div class="subtitle" style="color: var(--text-on-dark-3);">Class Feature</div>
+                            <div class="title">${f.name}</div>
+                            <div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px; line-height:1.4;">${(f.desc || '').replace(/</g,'&lt;')}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            // Wire choice buttons
+            ui.querySelectorAll('.class-pick-opt').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const card = btn.closest('[data-class-pick]');
+                    const pickName = card?.getAttribute('data-class-pick');
+                    const choiceName = btn.getAttribute('data-pick-name');
+                    if (!pickName || !choiceName) return;
+                    state.class_picks_selected[pickName] = choiceName;
+                    buildClassPicksUI();
+                    runValidation();
+                });
+            });
         }
 
         function buildFeatsUI() {
@@ -1787,6 +1878,11 @@
             if(!fValid) globalValid = false;
             if(state.spellCasters.length > 0 && !mValid) globalValid = false;
             if(!monkPathValid) globalValid = false;
+            // Class-level picks (PC1+PC2 features) — every choice-typed
+            // entry must have a selection.
+            const _cpEntries = state.class_level_features || [];
+            const cpValid = !_cpEntries.some(f => f.type === 'choice' && !state.class_picks_selected[f.name]);
+            if (!cpValid) globalValid = false;
 
             const btnF = document.getElementById('btn-finish');
             if(globalValid) {
@@ -1907,15 +2003,30 @@
                 }
             });
 
+            // Class-level picks (Divine Ally / Junction / Path-to-Perfection
+            // when surfaced via the new Class Picks step). Stored as feats
+            // tagged with type 'class_feature' so they show on the sheet's
+            // Feats tab and contribute to RECENT-PICKS history.
+            const cpFeats = [];
+            (state.class_level_features || []).forEach(f => {
+                if (f.type !== 'choice') return;
+                const choice = state.class_picks_selected[f.name];
+                if (!choice) return;
+                const composedName = f.name + ' — ' + choice;
+                const desc = (f.choices || []).find(c => c.name === choice)?.desc || '';
+                cpFeats.push([composedName, 'class_feature', targetLevel, desc]);
+            });
+
             const payload = {
                 new_level: targetLevel,
                 abilities: finalAbilities,
                 half_boosts: finalHalfs,
                 skills: finalSkills,
-                feats: finalFeats,
+                feats: finalFeats.concat(cpFeats),
                 spellCasters: finalCasters,
                 auto_bumps: state.auto_bumps || {},
-                monk_path_choice: state.monk_path_choice || null
+                monk_path_choice: state.monk_path_choice || null,
+                class_picks: state.class_picks_selected || {}
             };
 
             try {
