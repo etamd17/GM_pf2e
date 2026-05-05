@@ -429,22 +429,7 @@
         "current_hp": 10,
         "current_focus": 1,
         "conditions": {},
-        "prepared_spells": {
-            "0": {
-                "0": [
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-                ],
-                "1": [
-                    null,
-                    null,
-                    null
-                ]
-            }
-        },
+        "prepared_spells": {},
         "cast_prep": {},
         "shield_hp": 20,
         "temp_hp": 0,

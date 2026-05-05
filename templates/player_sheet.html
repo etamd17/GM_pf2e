@@ -1517,9 +1517,10 @@
             text-shadow: 0 1px 0 rgba(255,230,150,0.4);
         }
 
-        /* Prep Slots */
-        .prep-slot { min-height: 40px; border: 1px dashed rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; transition: all 0.2s; cursor: pointer; color: var(--text-muted); }
-        .prep-slot:hover { border-color: var(--color-ac); background: rgba(96,165,250,0.05); }
+        /* Prep Slots — empty state uses an amber dashed border so the player
+           reads "fill me" instead of skipping past flat-gray placeholder text. */
+        .prep-slot { min-height: 44px; border: 1.5px dashed rgba(251,191,36,0.32); display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s; cursor: pointer; color: var(--text-secondary); background: rgba(251,191,36,0.03); }
+        .prep-slot:hover { border-color: rgba(96,165,250,0.6); background: rgba(96,165,250,0.06); color: #93C5FD; }
         .prep-slot.filled { border: 1px solid rgba(96,165,250,0.35); background: rgba(96,165,250,0.05); color: #93C5FD; font-weight: bold; justify-content: space-between; padding: 0 0.5rem; }
         .prep-slot.expended { opacity: 0.45; border-style: solid; border-color: var(--border-subtle); background: rgba(18,17,26,0.5); }
         .prep-slot.drop-highlight { border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.05); }
@@ -1527,22 +1528,71 @@
         .prep-slot.drop-blocked { border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.06); cursor: not-allowed; }
         .prep-slot.font-slot { border-color: rgba(74,222,128,0.35); background: rgba(74,222,128,0.04); }
         .prep-slot.font-slot.filled { border-color: rgba(74,222,128,0.55); color: #86EFAC; }
-        /* Caster-type chip — color-coded by casting model so players can scan */
-        .caster-type-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 12px; font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
-        .caster-type-chip.prepared { background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.45); color: #93C5FD; }
-        .caster-type-chip.spontaneous { background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.45); color: #FCD34D; }
-        .caster-type-chip.focus { background: rgba(167,139,250,0.14); border: 1px solid rgba(167,139,250,0.45); color: #C4B5FD; }
-        .caster-type-chip.impulse { background: rgba(142,212,212,0.14); border: 1px solid rgba(142,212,212,0.45); color: #8ED4D4; }
-        .caster-type-chip.alchemical { background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.45); color: #86EFAC; }
-        .caster-type-chip.bounded { background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.45); color: #C4B5FD; }
-        .caster-type-chip.innate { background: rgba(244,114,182,0.12); border: 1px solid rgba(244,114,182,0.45); color: #F9A8D4; }
-        .caster-mental-model { font-family: var(--font-flavor); font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; max-width: 480px; }
+        /* Caster-type chip — promoted above title; color-coded by casting model.
+           Larger pill so the chip reads as the primary identifier, not a peer
+           tag to the tradition. Includes a leading glyph for icon-recognition. */
+        .caster-type-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 14px; font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+        .caster-type-chip.large { padding: 5px 14px; font-size: 12px; }
+        .caster-type-chip.prepared { background: rgba(96,165,250,0.16); border: 1px solid rgba(96,165,250,0.55); color: #93C5FD; box-shadow: inset 0 0 0 1px rgba(96,165,250,0.08); }
+        .caster-type-chip.spontaneous { background: rgba(251,191,36,0.16); border: 1px solid rgba(251,191,36,0.55); color: #FCD34D; box-shadow: inset 0 0 0 1px rgba(251,191,36,0.08); }
+        .caster-type-chip.focus { background: rgba(167,139,250,0.18); border: 1px solid rgba(167,139,250,0.55); color: #C4B5FD; box-shadow: inset 0 0 0 1px rgba(167,139,250,0.08); }
+        .caster-type-chip.impulse { background: rgba(142,212,212,0.18); border: 1px solid rgba(142,212,212,0.55); color: #8ED4D4; box-shadow: inset 0 0 0 1px rgba(142,212,212,0.08); }
+        .caster-type-chip.alchemical { background: rgba(74,222,128,0.16); border: 1px solid rgba(74,222,128,0.55); color: #86EFAC; }
+        .caster-type-chip.bounded { background: rgba(168,85,247,0.16); border: 1px solid rgba(168,85,247,0.55); color: #C4B5FD; }
+        .caster-type-chip.innate { background: rgba(244,114,182,0.16); border: 1px solid rgba(244,114,182,0.55); color: #F9A8D4; }
+        .caster-mental-model { font-family: var(--font-flavor); font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.45; max-width: 540px; font-style: italic; }
+        .caster-type-chip.prepared + .caster-mental-model { color: #93C5FD; }
+        .caster-type-chip.spontaneous ~ .caster-mental-model { color: #FCD34D; }
+        /* READY / NEEDS PREP badge */
+        .prep-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+        .prep-status-badge.ready { background: rgba(74,222,128,0.14); border: 1px solid rgba(74,222,128,0.5); color: #86EFAC; }
+        .prep-status-badge.needs-prep { background: rgba(251,191,36,0.14); border: 1px solid rgba(251,191,36,0.5); color: #FCD34D; }
+        .prep-status-badge.always-ready { background: rgba(74,222,128,0.10); border: 1px solid rgba(74,222,128,0.4); color: #86EFAC; }
+        /* Unified slot-pip primitive — used in headers, prep header, and global strip.
+           Three states: open (◻), prepared (◼), expended (✕). Color matches caster type. */
+        .slot-pip { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid currentColor; background: transparent; vertical-align: middle; position: relative; margin: 0 1px; cursor: pointer; transition: background 0.15s, opacity 0.15s; }
+        .slot-pip.filled { background: currentColor; }
+        .slot-pip.expended { background: transparent; opacity: 0.35; }
+        .slot-pip.expended::after { content: ""; position: absolute; left: 50%; top: 50%; width: 80%; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(45deg); }
+        .slot-pip.font::before { content: "+"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; line-height: 1; font-weight: 700; color: currentColor; opacity: 0.6; pointer-events: none; }
+        .slot-strip { display: inline-flex; gap: 2px; align-items: center; padding: 2px 6px; border-radius: 4px; background: var(--bg-raised); border: 1px solid var(--border-subtle); }
+        .slot-strip-label { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin-right: 4px; }
+        .slot-strip.prepared { color: #93C5FD; }
+        .slot-strip.spontaneous { color: #FCD34D; }
+        .slot-strip.font-extra { color: #86EFAC; }
+        /* Header global "spells today" strip */
+        .header-spells-today { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         /* Refocus button — distinguishes the activity from the +/- pip adjusters */
         .refocus-btn { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border-radius: 4px; background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.35); color: var(--color-spell); cursor: pointer; transition: background 0.15s; }
         .refocus-btn:hover { background: rgba(167,139,250,0.22); }
         .refocus-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         /* Cantrip "AT WILL" pill */
         .at-will-pill { display: inline-block; font-family: var(--font-display); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.35); color: #86EFAC; }
+        /* Cantrip selection grid — flat list, NOT slot drop-zones.
+           Cantrips are at-will; players select N each day, never expend them. */
+        .cantrip-pick { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 7px 10px; border-radius: 4px; background: var(--bg-raised); border: 1px solid var(--border-subtle); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+        .cantrip-pick:hover { border-color: rgba(96,165,250,0.4); }
+        .cantrip-pick.selected { background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.5); }
+        .cantrip-pick .pick-name { color: var(--text-primary); font-size: 13px; }
+        .cantrip-pick.selected .pick-name { color: #93C5FD; font-weight: 600; }
+        .cantrip-pick .pick-toggle { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; background: var(--border-subtle); color: var(--text-muted); }
+        .cantrip-pick.selected .pick-toggle { background: rgba(74,222,128,0.18); color: #86EFAC; }
+        /* Play / Prep view toggle in caster panel */
+        .caster-view-toggle { display: inline-flex; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+        .caster-view-toggle button { padding: 4px 12px; font-family: var(--font-display); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.15s; }
+        .caster-view-toggle button.active { background: rgba(96,165,250,0.12); color: #93C5FD; }
+        .caster-view-toggle button:hover:not(.active) { color: var(--text-secondary); }
+        /* Play view — combat-focused: prepared spells with big Cast buttons */
+        .play-view-rank { margin-bottom: 18px; }
+        .play-view-rank-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-subtle); }
+        .play-view-rank-header .rank-title { font-family: var(--font-display); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-secondary); }
+        .play-view-spell { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 4px; background: var(--bg-raised); border: 1px solid var(--border-subtle); margin-bottom: 6px; }
+        .play-view-spell.expended { opacity: 0.45; background: rgba(18,17,26,0.5); }
+        .play-view-spell .spell-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .play-view-spell.expended .spell-name { text-decoration: line-through; color: var(--text-muted); }
+        .play-view-cast-btn { padding: 6px 14px; border-radius: 4px; font-family: var(--font-display); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; cursor: pointer; transition: background 0.15s; background: rgba(167,139,250,0.18); border: 1px solid rgba(167,139,250,0.45); color: var(--color-spell); }
+        .play-view-cast-btn:hover { background: rgba(167,139,250,0.3); }
+        .play-view-cast-btn.expended { background: var(--border-subtle); color: var(--text-muted); border-color: var(--border-default); cursor: default; }
         /* Daily prep modal */
         .daily-prep-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 600; display: flex; align-items: center; justify-content: center; padding: 1rem; }
         .daily-prep-modal { background: linear-gradient(180deg, #1a1714 0%, #161310 100%); border: 1px solid #4a380a; border-radius: 12px; max-width: 1100px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -2487,6 +2537,14 @@
                         <button onclick="modifyFocus('increase')" class="resource-chip-btn" aria-label="Refocus">+</button>
                     </span>
                     {% endif %}
+                    {% if pc.spell_casters and pc.spell_dc > 0 %}
+                    {# C3: global "Spells Today" chip — slot pip strip per rank
+                       so the player sees availability without opening the magic tab. #}
+                    <span id="spells-today-chip" class="resource-chip no-print" title="Spell slots available across all ranks. Pip filled = ready, dim/✕ = expended.">
+                        <span class="resource-chip-lbl">Spells</span>
+                        <span id="spells-today-strip" class="header-spells-today" style="margin-left:4px;"></span>
+                    </span>
+                    {% endif %}
                     <span id="sustain-chip" class="sustain-chip no-print" aria-label="Spells currently being sustained">
                         <span class="sustain-chip-label">Sustain</span>
                         <span id="sustain-items"></span>
@@ -3423,47 +3481,65 @@
                         {% set _chip_class = 'prepared' %}{% set _chip_label = 'Prepared' %}
                         {% set _model = 'Choose your spells at dawn — drag each into a specific rank slot. Each cast expends that prepared copy until you long rest.' %}
                     {% endif %}
-                    <div class="bg-gray-900 p-4 border-b border-gray-700 flex flex-wrap justify-between items-center gap-3">
-                        <div>
-                            <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                <h3 class="text-xl font-header" style="color:var(--color-spell);">{{ caster.name }}</h3>
-                                <span class="caster-type-chip {{ _chip_class }}">{{ _chip_label }}</span>
-                                <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">{{ caster.tradition }}</span>
-                            </div>
-                            <div class="caster-mental-model">{{ _model }}</div>
-                            <div class="flex gap-3 items-center text-xs flex-wrap mt-2">
-                                {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
-                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>
-                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">DC {{ pc.spell_dc }}</span>
-                                {% endif %}
-                                {% if 'impulse' not in c_type_lower and 'focus' not in c_type_lower %}
-                                <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);">Cantrips at Rank {{ pc.cantrip_rank }}</span>
-                                {% endif %}
-                            </div>
+                    <div class="bg-gray-900 p-4 border-b border-gray-700">
+                        <!-- Row 1: chip is promoted ABOVE the caster name so the casting model
+                             reads as the primary identifier, not a peer tag. -->
+                        <div class="flex items-center gap-2 mb-2 flex-wrap">
+                            <span class="caster-type-chip large {{ _chip_class }}">{{ _chip_label }} Casting</span>
+                            <span id="prep-status-{{ caster_idx }}" class="prep-status-badge {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}needs-prep{% elif 'spontaneous' in c_type_lower %}always-ready{% else %}ready{% endif %}">
+                                {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}Status loading…
+                                {% elif 'spontaneous' in c_type_lower %}Always Ready
+                                {% elif 'focus' in c_type_lower %}{{ pc.current_focus }}/{{ pc.focus_max }} Focus
+                                {% else %}Ready{% endif %}
+                            </span>
                         </div>
-                        <div class="flex items-center gap-3 flex-wrap">
-                            {% if 'focus' in c_type_lower %}
-                            <div class="flex items-center gap-2 px-3 py-2 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);">
-                                <span class="font-header text-[9px] tracking-widest uppercase" style="color:var(--color-spell);">Focus {{ pc.current_focus }}/{{ pc.focus_max }}</span>
-                                <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust −1">◀</button>
-                                <span id="focus-pips" data-tradition="{{ (caster.tradition if caster and caster.tradition else 'arcane') | lower }}">
-                                    {% for i in range(pc.focus_max) %}
-                                    <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
-                                    {% endfor %}
-                                </span>
-                                <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust +1">▶</button>
+                        <!-- Row 2: title + tradition + stats -->
+                        <div class="flex flex-wrap justify-between items-start gap-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                    <h3 class="text-xl font-header" style="color:var(--color-spell);">{{ caster.name }}</h3>
+                                    <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);" title="Spell Tradition">{{ caster.tradition }}</span>
+                                </div>
+                                <div class="caster-mental-model">{{ _model }}</div>
+                                <div class="flex gap-3 items-center text-xs flex-wrap mt-2">
+                                    {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
+                                    <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>
+                                    <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">DC {{ pc.spell_dc }}</span>
+                                    {% endif %}
+                                    {% if 'impulse' not in c_type_lower and 'focus' not in c_type_lower %}
+                                    <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);" title="Cantrips auto-heighten to half your level, rounded up.">Cantrips at Rank {{ pc.cantrip_rank }}</span>
+                                    {% endif %}
+                                </div>
                             </div>
-                            <button onclick="doRefocus('{{ pc.class_name|lower }}', '{{ (caster.tradition or 'arcane')|lower }}')" class="no-print refocus-btn" title="Spend 10 minutes to restore 1 Focus Point">Refocus (10m)</button>
-                            <button onclick="openDailyPrepModal()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(74,222,128,0.10); border:1px solid rgba(74,222,128,0.3); color:#4ADE80;" title="Long Rest — restore all slots and focus">Long Rest</button>
-                            <button onclick="addFocusSpellManual()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add Spell</button>
-                            {% endif %}
-                            {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}
-                            <button onclick="openDailyPrepModal({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(74,222,128,0.10); border:1px solid rgba(74,222,128,0.3); color:#4ADE80;" title="Open daily preparation modal">Daily Prep</button>
-                            <button onclick="openSpellBrowse({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Learn Spell</button>
-                            {% endif %}
-                            {% if 'spontaneous' in c_type_lower %}
-                            <button onclick="openSignatureManager({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.3); color:#FCD34D;" title="Manage signature spells">Signatures</button>
-                            {% endif %}
+                            <div class="flex items-center gap-2 flex-wrap">
+                                {% if 'focus' in c_type_lower %}
+                                <div class="flex items-center gap-2 px-3 py-2 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);">
+                                    <span class="font-header text-[9px] tracking-widest uppercase" style="color:var(--color-spell);">Focus {{ pc.current_focus }}/{{ pc.focus_max }}</span>
+                                    <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust −1">◀</button>
+                                    <span id="focus-pips" data-tradition="{{ (caster.tradition if caster and caster.tradition else 'arcane') | lower }}">
+                                        {% for i in range(pc.focus_max) %}
+                                        <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
+                                        {% endfor %}
+                                    </span>
+                                    <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust +1">▶</button>
+                                </div>
+                                <button onclick="doRefocus('{{ pc.class_name|lower }}', '{{ (caster.tradition or 'arcane')|lower }}')" class="no-print refocus-btn" title="Spend 10 minutes to restore 1 Focus Point">Refocus (10m)</button>
+                                {# S4: Long Rest lives in the global header now — single source of truth. #}
+                                <button onclick="addFocusSpellManual()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add Spell</button>
+                                {% endif %}
+                                {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}
+                                <!-- Play / Prep view toggle (S1) — Play is the default; Prep opens
+                                     the modal where the spellbook + slot drop-zones live. -->
+                                <div class="caster-view-toggle no-print" id="view-toggle-{{ caster_idx }}">
+                                    <button class="active" onclick="setCasterView({{ caster_idx }}, 'play')">Play</button>
+                                    <button onclick="setCasterView({{ caster_idx }}, 'prep'); openDailyPrepModal({{ caster_idx }})">Prep</button>
+                                </div>
+                                <button onclick="openSpellBrowse({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Learn Spell</button>
+                                {% endif %}
+                                {% if 'spontaneous' in c_type_lower %}
+                                <button onclick="openSignatureManager({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.3); color:#FCD34D;" title="Manage signature spells">Signatures</button>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
 
@@ -3608,13 +3684,11 @@
                                     <div class="flex items-center gap-2 pr-2 truncate">
                                         <span class="text-sm font-bold truncate" style="color:var(--text-primary);">{{ sp.name }}</span>
                                         {% if sp.actions %}<span class="action-pips ml-1">{{ sp.actions }}</span>{% endif %}
-                                        {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell">S</span>{% endif %}
+                                        {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell — auto-heightens to higher slots. Edit via the Signatures button.">★</span>{% endif %}
                                         {% if sp.uses_per_day %}<span class="text-[9px] ml-1 px-1 rounded" style="background:rgba(244,114,182,0.12); border:1px solid rgba(244,114,182,0.3); color:#F9A8D4;" title="Per-day usage">{{ sp.uses_per_day }}/day</span>{% endif %}
                                     </div>
                                     <div class="flex items-center gap-2 shrink-0">
-                                        {% if 'spontaneous' in c_type_lower and 'bounded' not in c_type_lower and lvl.level > 0 %}
-                                        <button onclick="event.stopPropagation(); toggleSignature('{{ sp.name|replace("'", "\\'") }}')" class="no-print text-[9px] px-1.5 py-0.5 rounded transition-colors {% if sp.name in pc.signature_spells %}text-amber-400{% else %}text-gray-600 hover:text-amber-400{% endif %}" title="Toggle Signature">S</button>
-                                        {% endif %}
+                                        {# S3: inline signature toggle removed — single source of truth is the Signatures modal in the caster header. #}
                                         <button onclick="event.stopPropagation(); rollSpell('{{ sp.name|replace("'", "\\'") }}', event, {casterIdx: {{ caster_idx }}, rank: {{ lvl.level }} })" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">Cast</button>
                                     </div>
                                 </div>
@@ -3625,8 +3699,19 @@
                     </div>
 
                     {% else %}
-                    <!-- === PREPARED CASTER (Wizard/Cleric/Druid/Witch) === -->
-                    <div class="flex flex-col lg:flex-row" style="min-height:450px;">
+                    <!-- === PREPARED CASTER (Wizard/Cleric/Druid/Witch) ===
+                         Play view (default) shows just prepared spells with big Cast
+                         buttons + slot pips. Prep view opens the Daily Prep modal —
+                         the spellbook + drop-zones live there now. -->
+                    <div class="p-5" id="play-view-{{ caster_idx }}">
+                        <div id="play-view-body-{{ caster_idx }}">
+                            <div class="text-center italic py-8" style="color:var(--text-faint);">Loading prepared spells…</div>
+                        </div>
+                    </div>
+                    <!-- Legacy spellbook/prep split — hidden by default; the Daily Prep
+                         modal renders into this when opened. Kept in DOM so renderPrepUI
+                         has a stable target id. -->
+                    <div class="flex flex-col lg:flex-row hidden" id="prep-view-{{ caster_idx }}" style="min-height:450px;">
                         <!-- Spellbook (left) -->
                         <div class="w-full lg:w-5/12 p-5 border-b lg:border-b-0 lg:border-r border-gray-700" style="background:var(--bg-surface);">
                             <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:var(--text-secondary);">Spellbook — Drag to Prepare</h4>
@@ -5790,6 +5875,7 @@
                             body: JSON.stringify({expended_slots: window._expendedSlots})
                         });
                     } catch(e) {}
+                    try { renderSpellsTodayStrip(); } catch(_) {}
                 });
             });
 
@@ -5803,7 +5889,62 @@
             try {
                 if (typeof window.initDailyPrep === 'function') window.initDailyPrep();
             } catch(_) {}
+            try { renderSpellsTodayStrip(); } catch(_) {}
         });
+
+        // C3 — global "Spells Today" header strip. Renders one slot pip per
+        // slot per rank across all non-focus, non-impulse casters so the
+        // player sees availability without opening the magic tab.
+        function renderSpellsTodayStrip() {
+            const root = document.getElementById('spells-today-strip');
+            if (!root || typeof castersData === 'undefined') return;
+            const expended = window._expendedSlots || {};
+            const prep = window._preparedSpells || {};
+            let html = '';
+            castersData.forEach((c, cIdx) => {
+                const t = (c.type || '').toLowerCase();
+                if (t.includes('focus') || t.includes('impulse') || t.includes('alchemical')) return;
+                const isPrepared = t.includes('prepared') && !t.includes('spontaneous');
+                const stripClass = isPrepared ? 'slot-strip prepared' : 'slot-strip spontaneous';
+                (c.levels || []).forEach(lvl => {
+                    const r = parseInt(lvl.level, 10);
+                    if (r <= 0) return;
+                    const slots = (parseInt(lvl.slots, 10) || 0) + (parseInt(lvl.font_slots, 10) || 0);
+                    if (slots <= 0) return;
+                    let pips = '';
+                    for (let i = 0; i < slots; i++) {
+                        let cls = 'slot-pip';
+                        if (isPrepared) {
+                            const arr = (prep[cIdx] || prep[String(cIdx)] || {})[r] || [];
+                            const filled = !!arr[i];
+                            const expendKey = `c${cIdx}_l${r}_i${i}`;
+                            const cKey = `${cIdx}_${r}_${i}`;
+                            const isExpended = !!(window._castPrep && window._castPrep[cKey]);
+                            if (filled && isExpended) cls += ' expended';
+                            else if (filled) cls += ' filled';
+                        } else {
+                            const list = expended[`c${cIdx}_l${r}`] || [];
+                            if (list[i]) cls += ' expended';
+                            else cls += ' filled';
+                        }
+                        pips += `<span class="${cls}"></span>`;
+                    }
+                    html += `<span class="${stripClass}" title="${c.name} — Rank ${r}"><span class="slot-strip-label">R${r}</span>${pips}</span>`;
+                });
+            });
+            root.innerHTML = html || '<span class="text-[10px]" style="color:var(--text-muted);">none</span>';
+        }
+        // Refresh the strip whenever spell state changes.
+        (function watchSpellState() {
+            const _origSave = window._saveSpellState;
+            if (typeof _origSave === 'function') {
+                window._saveSpellState = async function() {
+                    const r = await _origSave.apply(this, arguments);
+                    try { renderSpellsTodayStrip(); } catch(_) {}
+                    return r;
+                };
+            }
+        })();
 
         async function _migrateLocalStorageSpellState() {
             let migrated = false;
@@ -7732,8 +7873,181 @@
         function initDailyPrep() {
             if (!castersData || castersData.length === 0) return;
             castersData.forEach((caster, idx) => {
-                if (caster.type.toLowerCase().includes('prepared')) renderPrepUI(idx, caster);
+                const t = (caster.type || '').toLowerCase();
+                if (t.includes('prepared') && !t.includes('spontaneous') && !t.includes('focus') && !t.includes('alchemical')) {
+                    renderPrepUI(idx, caster);
+                    renderPlayView(idx, caster);
+                    updatePrepStatusBadge(idx, caster);
+                }
             });
+        }
+
+        // Cantrip selection state (R1, R2). Cantrips are at-will, never expended,
+        // so they're a flat selection — NOT a slot list. Stored on _preparedSpells
+        // under key '0' as a deduped name array (same shape as ranked spells but
+        // no per-slot semantics).
+        function _getCantripSelection(cIdx) {
+            const ps = window._preparedSpells[cIdx] || {};
+            const arr = ps['0'] || [];
+            // Dedupe + drop nulls — cantrips are a set, not a slot list (R4).
+            return Array.from(new Set(arr.filter(Boolean)));
+        }
+        function _setCantripSelection(cIdx, names) {
+            if (!window._preparedSpells[cIdx]) window._preparedSpells[cIdx] = {};
+            window._preparedSpells[cIdx]['0'] = Array.from(new Set(names));
+            _saveSpellState();
+        }
+        function _cantripCapacity(caster) {
+            const cantripLvl = (caster.levels || []).find(l => parseInt(l.level, 10) === 0);
+            return cantripLvl ? parseInt(cantripLvl.slots, 10) || 0 : 0;
+        }
+        function toggleCantrip(cIdx, name) {
+            const caster = castersData[cIdx];
+            const cap = _cantripCapacity(caster);
+            const cur = _getCantripSelection(cIdx);
+            const idx = cur.indexOf(name);
+            if (idx >= 0) {
+                cur.splice(idx, 1);
+            } else {
+                if (cur.length >= cap) {
+                    showRollToast(name, '!', `Cantrip selection is full (${cur.length}/${cap}). Unpick another first.`, false, true, [], null);
+                    return;
+                }
+                cur.push(name);
+            }
+            _setCantripSelection(cIdx, cur);
+            renderPrepUI(cIdx, caster);
+            renderPlayView(cIdx, caster);
+            updatePrepStatusBadge(cIdx, caster);
+        }
+
+        // Play view (S1) — combat-focused: cantrips at-will + ranked prepared
+        // spells with big Cast buttons + slot pips. The spellbook + drop-zones
+        // are NOT here; they live in the Daily Prep modal.
+        function renderPlayView(cIdx, caster) {
+            const root = document.getElementById(`play-view-body-${cIdx}`);
+            if (!root) return;
+            const prep = _getPrepState(cIdx);
+            let html = '';
+
+            // Cantrips section — selected list, with At-Will pill and big Cast buttons.
+            const cantrips = _getCantripSelection(cIdx);
+            const cantripCap = _cantripCapacity(caster);
+            if (cantripCap > 0) {
+                html += `<div class="play-view-rank">
+                    <div class="play-view-rank-header">
+                        <span class="rank-title">Cantrips at Rank ${CANTRIP_RANK} <span class="at-will-pill ml-2">At Will</span></span>
+                        <span class="text-[10px]" style="color:var(--text-muted);">${cantrips.length}/${cantripCap} selected</span>
+                    </div>`;
+                if (cantrips.length === 0) {
+                    html += `<div class="text-xs italic" style="color:var(--text-muted);">No cantrips selected. Click <b>Prep</b> to choose ${cantripCap}.</div>`;
+                } else {
+                    cantrips.forEach(name => {
+                        const escName = name.replace(/'/g, "\\'");
+                        html += `<div class="play-view-spell" data-cantrip="${escName}">
+                            <div class="flex items-center gap-2">
+                                <span class="spell-name">${name}</span>
+                            </div>
+                            <button class="play-view-cast-btn" onclick="rollSpell('${escName}', event, null)">Cast</button>
+                        </div>`;
+                    });
+                }
+                html += `</div>`;
+            }
+
+            // Ranked prepared spells — by rank with slot pips and Cast/Undo per slot.
+            (caster.levels || []).forEach(lvl => {
+                const rank = parseInt(lvl.level, 10);
+                if (rank <= 0) return;
+                const slots = parseInt(lvl.slots, 10) || 0;
+                const fontSlots = parseInt(lvl.font_slots, 10) || 0;
+                const total = slots + fontSlots;
+                if (total <= 0) return;
+                const arr = prep[rank] || [];
+                let pipsHtml = '';
+                let castableHtml = '';
+                let availableCount = 0;
+                for (let i = 0; i < total; i++) {
+                    const isFont = i >= slots;
+                    const spellName = arr[i];
+                    const expendKey = `cast_prep_${pcName}_c${cIdx}_l${rank}_i${i}`;
+                    const isExpended = _isCastPrep(expendKey);
+                    let pipClass = 'slot-pip';
+                    if (isFont) pipClass += ' font';
+                    if (spellName && isExpended) pipClass += ' expended';
+                    else if (spellName) pipClass += ' filled';
+                    pipsHtml += `<span class="${pipClass}" title="${spellName ? (isExpended ? spellName + ' — expended' : spellName) : (isFont ? 'font slot — empty' : 'empty slot')}"></span>`;
+                    if (spellName) {
+                        if (!isExpended) availableCount++;
+                        const escName = spellName.replace(/'/g, "\\'");
+                        const heightenTag = (rank > 0) ? `<span class="text-[10px] ml-1 px-1.5 rounded" style="background:rgba(167,139,250,0.15); color:#B8A0FF;">↑${rank}</span>` : '';
+                        castableHtml += `<div class="play-view-spell ${isExpended ? 'expended' : ''}">
+                            <div class="flex items-center gap-2">
+                                <span class="spell-name">${spellName}</span>
+                                ${heightenTag}
+                                ${isFont ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px]" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); color:#86EFAC;" title="Cleric Divine Font slot">Font</span>' : ''}
+                            </div>
+                            ${isExpended
+                                ? `<button class="play-view-cast-btn expended" onclick="uncastSpell('${expendKey}', ${cIdx})" title="Restore this slot">Undo</button>`
+                                : `<button class="play-view-cast-btn" onclick="castPrepSpell('${escName}', '${expendKey}', ${cIdx}, ${rank})">Cast ↑${rank}</button>`}
+                        </div>`;
+                    }
+                }
+                const stripClass = fontSlots > 0 ? 'slot-strip prepared' : 'slot-strip prepared';
+                html += `<div class="play-view-rank">
+                    <div class="play-view-rank-header">
+                        <span class="rank-title">${lvl.label}</span>
+                        <span class="${stripClass}" title="${availableCount}/${total} available — pip filled = prepared, dim = used">
+                            <span class="slot-strip-label">Slots</span>${pipsHtml}
+                        </span>
+                    </div>
+                    ${castableHtml || `<div class="text-xs italic" style="color:var(--text-muted);">No spells prepared at this rank. Click <b>Prep</b>.</div>`}
+                </div>`;
+            });
+
+            root.innerHTML = html || `<div class="text-center italic py-8" style="color:var(--text-faint);">No spell ranks available.</div>`;
+        }
+
+        // Update the READY / NEEDS PREP badge on the caster header (C4)
+        function updatePrepStatusBadge(cIdx, caster) {
+            const badge = document.getElementById(`prep-status-${cIdx}`);
+            if (!badge) return;
+            const prep = _getPrepState(cIdx);
+            // Tally ranked slots filled vs total.
+            let filled = 0, total = 0;
+            (caster.levels || []).forEach(lvl => {
+                const r = parseInt(lvl.level, 10);
+                if (r <= 0) return;
+                const slots = (parseInt(lvl.slots, 10) || 0) + (parseInt(lvl.font_slots, 10) || 0);
+                total += slots;
+                const arr = prep[r] || [];
+                filled += arr.filter(Boolean).length;
+            });
+            const cantripCap = _cantripCapacity(caster);
+            const cantripsPicked = _getCantripSelection(cIdx).length;
+            badge.classList.remove('ready', 'needs-prep', 'always-ready');
+            if (total === 0 && cantripCap === 0) {
+                badge.classList.add('ready');
+                badge.textContent = 'Ready';
+            } else if (filled >= total && cantripsPicked >= cantripCap) {
+                badge.classList.add('ready');
+                badge.textContent = `Ready · ${filled}/${total} slots${cantripCap ? ` · ${cantripsPicked}/${cantripCap} cantrips` : ''}`;
+            } else {
+                badge.classList.add('needs-prep');
+                badge.textContent = `Needs Prep · ${filled}/${total} slots${cantripCap ? ` · ${cantripsPicked}/${cantripCap} cantrips` : ''}`;
+            }
+        }
+
+        // Play / Prep view toggle handler (S1) — UI hint only; the Prep button
+        // also opens the modal so the toggle just visually marks intent.
+        function setCasterView(cIdx, mode) {
+            const wrap = document.getElementById(`view-toggle-${cIdx}`);
+            if (!wrap) return;
+            wrap.querySelectorAll('button').forEach((b, i) => {
+                b.classList.toggle('active', (mode === 'play' && i === 0) || (mode === 'prep' && i === 1));
+            });
+            // The Play view is always the in-page body. The Prep button additionally
+            // opens the modal which already calls openDailyPrepModal().
         }
 
         function _getPrepState(cIdx) { return window._preparedSpells[cIdx] || {}; }
@@ -7760,7 +8074,37 @@
                 });
             });
 
+            // (R2) Cantrip section — flat selection, NOT slot drop-zones.
+            // Per PF2e cantrip rules: a prepared caster picks N cantrips per day;
+            // each chosen cantrip is at-will and cannot be expended.
+            const cantripLvl = (caster.levels || []).find(l => parseInt(l.level, 10) === 0);
+            if (cantripLvl) {
+                const cap = parseInt(cantripLvl.slots, 10) || 0;
+                const picked = _getCantripSelection(cIdx);
+                if (cap > 0 || (cantripLvl.spells || []).length > 0) {
+                    html += `<div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-secondary);">${cantripLvl.label} <span class="at-will-pill ml-1">At Will</span></span>
+                            <span class="text-[10px] font-bold" style="color:${picked.length >= cap ? '#86EFAC' : 'var(--text-muted)'};">${picked.length}/${cap} picked</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">`;
+                    (cantripLvl.spells || []).forEach(sp => {
+                        const isOn = picked.includes(sp.name);
+                        const escName = sp.name.replace(/'/g, "\\'");
+                        html += `<div class="cantrip-pick ${isOn ? 'selected' : ''}" onclick="toggleCantrip(${cIdx}, '${escName}')">
+                            <div class="flex items-center gap-2 truncate">
+                                <span class="pick-name truncate">${sp.name}</span>
+                                ${sp.actions ? `<span class="text-[9px] opacity-50" style="color:var(--color-spell);">${sp.actions}</span>` : ''}
+                            </div>
+                            <span class="pick-toggle">${isOn ? 'Picked' : 'Pick'}</span>
+                        </div>`;
+                    });
+                    html += `</div></div>`;
+                }
+            }
+
             caster.levels.forEach(lvl => {
+                if (parseInt(lvl.level, 10) === 0) return; // R1: cantrips handled above
                 let slots = lvl.slots;
                 let fontSlots = parseInt(lvl.font_slots || 0, 10);
                 let fontKind = (lvl.font_kind || '').toLowerCase(); // 'heal' | 'harm' | ''
@@ -7813,7 +8157,7 @@
                             <div class="flex items-center gap-1 shrink-0">
                                 ${isExpended
                                     ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:var(--border-subtle); color:var(--text-muted);">Undo</button>`
-                                    : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(167,139,250,0.15); color:var(--color-spell);">Cast</button>`
+                                    : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx}, ${lvl.level})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(167,139,250,0.15); color:var(--color-spell);">Cast</button>`
                                 }
                                 <button onclick="event.stopPropagation(); unprepSpell(${cIdx}, ${lvl.level}, ${i})" class="text-gray-600 hover:text-red-400 text-[10px]">×</button>
                             </div>
@@ -7928,6 +8272,7 @@
             prepState[lvlNum][slotIdx] = _dragSpellData.name;
             _setPrepState(cIdx, prepState);
             renderPrepUI(cIdx, castersData[cIdx]);
+            try { renderPlayView(cIdx, castersData[cIdx]); updatePrepStatusBadge(cIdx, castersData[cIdx]); } catch(_) {}
             _dragSpellData = null;
         }
         
@@ -7976,6 +8321,7 @@
             prepState[chosenRank][chosenIdx] = spellName;
             _setPrepState(cIdx, prepState);
             renderPrepUI(cIdx, castersData[cIdx]);
+            try { renderPlayView(cIdx, castersData[cIdx]); updatePrepStatusBadge(cIdx, castersData[cIdx]); } catch(_) {}
             return;
         }
         // Old fallback path kept for reference but unreachable above.
@@ -7999,24 +8345,35 @@
                 prepState[lvlNum][slotIdx] = null;
                 _setPrepState(cIdx, prepState);
                 renderPrepUI(cIdx, castersData[cIdx]);
+                renderPlayView(cIdx, castersData[cIdx]);
+                updatePrepStatusBadge(cIdx, castersData[cIdx]);
             }
         }
 
-        function castPrepSpell(spellName, expendKey, cIdx) {
-            rollSpell(spellName);
+        // R3: when casting from a prepared slot, append the slot rank to the
+        // spell name so the toast + GM broadcast show the actual heightened tier.
+        function castPrepSpell(spellName, expendKey, cIdx, slotRank) {
+            const labeled = (slotRank && slotRank > 0) ? `${spellName} (rank ${slotRank})` : spellName;
+            rollSpell(labeled);
             _setCastPrep(expendKey, true);
             renderPrepUI(cIdx, castersData[cIdx]);
+            renderPlayView(cIdx, castersData[cIdx]);
+            updatePrepStatusBadge(cIdx, castersData[cIdx]);
         }
 
         function uncastSpell(expendKey, cIdx) {
             _setCastPrep(expendKey, false);
             renderPrepUI(cIdx, castersData[cIdx]);
+            renderPlayView(cIdx, castersData[cIdx]);
+            updatePrepStatusBadge(cIdx, castersData[cIdx]);
         }
 
         function clearPrep(cIdx) {
             if(confirm("Clear all prepared spells for this class?")) {
                 _setPrepState(cIdx, {});
                 renderPrepUI(cIdx, castersData[cIdx]);
+                renderPlayView(cIdx, castersData[cIdx]);
+                updatePrepStatusBadge(cIdx, castersData[cIdx]);
             }
         }
 
