@@ -1638,7 +1638,27 @@
                 inset 0 0 0 1px rgba(224,182,90,0.1) !important;
             padding-left: 40px !important;
             position: relative;
+            color: #e8e3d0;
         }
+        /* The toast's inner Tailwind classes (text-gray-400, bg-gray-950)
+           were getting overridden by the parchment theme's auto-color
+           inheritance, leaving the formula line cream-on-cream and the
+           total/sub-text near-invisible. Force readable contrast inside. */
+        .roll-toast .text-3xl,
+        .roll-toast .roll-total-pop {
+            color: #f4ecd8 !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        }
+        .roll-toast .text-xs.font-mono,
+        .roll-toast pre, .roll-toast code {
+            background: #0a0805 !important;
+            color: #e8c46f !important;
+            border: 1px solid #4a380a !important;
+            font-family: ui-monospace, "SFMono-Regular", Menlo, monospace !important;
+        }
+        .roll-toast .text-gray-400 { color: #c8b896 !important; }
+        .roll-toast .text-gray-500, .roll-toast .text-gray-600 { color: #8a7a5a !important; }
+        .roll-toast .text-amber-500 { color: #e8c46f !important; }
         .roll-toast::before {
             /* Wax-seal rosette at the left — red disc with a gilt sigil */
             content: "";
@@ -2013,9 +2033,19 @@
             color: var(--gilt); font-size: 16px; cursor: pointer;
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             display: flex; align-items: center; justify-content: center;
-            transition: transform 0.15s;
+            transition: transform 0.15s, background 0.15s;
         }
-        .roll-history-btn:hover { transform: scale(1.08); }
+        /* Glyph-only buttons need an icon. Use ::before so the markup
+           stays empty (HTML is button-only) but the user sees a clear
+           affordance. Scroll-clock for history, speech-bubble for whisper. */
+        .roll-history-btn::before {
+            content: "⟳";
+            font-family: var(--font-display);
+            font-size: 18px;
+            line-height: 1;
+            color: var(--gilt);
+        }
+        .roll-history-btn:hover { transform: scale(1.08); background: var(--bg-raised); }
         .roll-history-panel {
             position: fixed; bottom: 60px; right: 18px; z-index: 800;
             width: 280px; max-height: 320px; overflow-y: auto;
@@ -2313,9 +2343,15 @@
             color: var(--gilt); cursor: pointer; font-size: 16px;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-            transition: transform 0.15s;
+            transition: transform 0.15s, background 0.15s;
         }
-        .whisper-fab:hover { transform: scale(1.08); }
+        .whisper-fab::before {
+            content: "✎";
+            font-size: 18px;
+            line-height: 1;
+            color: var(--gilt);
+        }
+        .whisper-fab:hover { transform: scale(1.08); background: var(--bg-raised); }
         .whisper-panel {
             position: fixed; bottom: 60px; right: 18px; z-index: 800;
             width: 320px; max-width: calc(100vw - 36px);
