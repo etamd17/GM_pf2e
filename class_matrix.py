@@ -314,13 +314,14 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "champion": {
         # L1 initial: perception=2, fort=4, ref=2, will=4, simple=2, martial=2, unarmed=2, all armor=2, unarmored=2, class_dc=2
-        3:  {"reflex": 4},                                                                  # Divine Ally era
+        # NB: Champion does NOT get Reflex Expert at L3 — that was a bug; their Reflex stays Trained until Greater Reflex at L13.
+        3:  {},                                                                              # Divine Ally — no proficiency change
         5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Expertise
         7:  {"perception": 4},                                                               # Vigilant Senses
         9:  {"fortitude": 6, "class_dc": 4},                                                # Juggernaut + Champion Expertise
         11: {"unarmored": 4, "light": 4, "medium": 4, "heavy": 4},                          # Armor Expertise
-        13: {"simple": 6, "martial": 6, "unarmed": 6},                                      # Weapon Mastery
-        15: {"will": 6, "reflex": 6},                                                       # Greater saves
+        13: {"reflex": 4, "simple": 6, "martial": 6, "unarmed": 6},                         # Greater Reflex + Weapon Mastery
+        15: {"will": 6},                                                                     # Greater Will (Master Will save)
         17: {"unarmored": 6, "light": 6, "medium": 6, "heavy": 6},                          # Armor Mastery
         19: {"perception": 6, "fortitude": 8},                                               # Hero's Defenses
     },

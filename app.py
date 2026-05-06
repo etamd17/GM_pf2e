@@ -2698,9 +2698,9 @@ class Character:
     def spell_attack(self):
         c_name = self.class_name.lower()
         is_kineticist = (c_name == "kineticist")
-        
+
         if not self.spell_casters and not is_kineticist: return 0
-        
+
         # Use auto-computed proficiency from CLASS_PROGRESSION
         if is_kineticist:
             prof = safe_int(self.proficiencies.get('class_dc', 2))
@@ -2711,14 +2711,37 @@ class Character:
                 c_type = (self.spell_casters[0].get("castingType") or self.spell_casters[0].get("spellcastingType") or "").lower() if self.spell_casters else ""
                 if "alchemical" in c_type: return 0
                 prof = 2  # Trained default
-            
-        key_options = BUILDER_DATA["classes"].get(c_name, {}).get("key_options", ["cha"])
-        subclass_info = SUBCLASS_MATRIX.get(self.subclass, {})
-        if "key_ability" in subclass_info:
-            key_options = [subclass_info["key_ability"]]
-            
-        key_mod = max([self.mods.get(stat, 0) for stat in key_options]) if key_options else 0
-        return self.level + prof + key_mod - self.get_status_penalty('cha')
+
+        # Casting ability comes from the spellCaster block, NOT the class's
+        # martial key_options. e.g. Champion's class key is STR/DEX (used for
+        # class DC), but their focus spells are CHA. Pathbuilder sets
+        # `ability` per spellCaster — read that first; only fall back to the
+        # class's key_options when no caster is present (kineticist).
+        key_mod = 0
+        ability_used = 'cha'
+        if self.raw_spellCasters:
+            ab = (self.raw_spellCasters[0].get('ability') or '').lower()
+            if ab in ('str', 'dex', 'con', 'int', 'wis', 'cha'):
+                ability_used = ab
+                key_mod = self.mods.get(ab, 0)
+            else:
+                # Tradition → ability fallback (per class casting ability conventions)
+                trad = (self.raw_spellCasters[0].get('magicTradition') or '').lower()
+                trad_default = {'arcane': 'int', 'divine': 'wis', 'occult': 'cha', 'primal': 'wis'}.get(trad)
+                if trad_default and c_name == 'champion':
+                    trad_default = 'cha'  # Champion divine focus uses CHA
+                if trad_default:
+                    ability_used = trad_default
+                    key_mod = self.mods.get(trad_default, 0)
+        if key_mod == 0 and is_kineticist:
+            key_options = BUILDER_DATA["classes"].get(c_name, {}).get("key_options", ["con"])
+            subclass_info = SUBCLASS_MATRIX.get(self.subclass, {})
+            if "key_ability" in subclass_info:
+                key_options = [subclass_info["key_ability"]]
+            key_mod = max([self.mods.get(stat, 0) for stat in key_options]) if key_options else 0
+            ability_used = key_options[0] if key_options else 'cha'
+
+        return self.level + prof + key_mod - self.get_status_penalty(ability_used)
 
     @property
     def spell_dc(self):
