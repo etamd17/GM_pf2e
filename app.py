@@ -1433,6 +1433,9 @@ class Character:
         
         self.raw_feats = build.get('feats') or []
         self.raw_spellCasters = build.get('spellCasters') or []
+        # Stash the raw build dict so downstream property getters (spell_attack
+        # for focus-only classes like Champion) can look up build.focus etc.
+        self._build_ref = build
         self.monk_paths = build.get('monk_paths', {})
         self.half_boosts = build.get('half_boosts') or []
         
@@ -2152,6 +2155,15 @@ class Character:
         if self.class_name.lower() in ['alchemist', 'inventor']:
             self.spell_casters.append({'name': 'Formula Book', 'type': 'Alchemical', 'levels': []})
 
+        # First pass: detect whether Pathbuilder has already exported a
+        # standalone "Cleric Font" caster block. If so, we skip the implicit
+        # font-extra inference on the main "Cleric" block to avoid double-
+        # counting the heal/harm slots.
+        pb_provides_font_caster = any(
+            'font' in (safe_str(c.get('name'), '').lower())
+            for c in self.raw_spellCasters
+        )
+
         for caster in self.raw_spellCasters:
             cast_type = safe_str(caster.get('castingType') or caster.get('spellcastingType'), 'Prepared')
             # Detect Bounded Spellcasting (archetype with 2 slots/rank cap).
@@ -2161,6 +2173,8 @@ class Character:
             is_bounded = ('bounded' in cast_type_lower) or ('bounded' in safe_str(caster.get('name'), '').lower())
             if is_bounded and 'bounded' not in cast_type_lower:
                 cast_type = ('Bounded ' + cast_type).strip()
+            caster_name_lower = safe_str(caster.get('name'), '').lower()
+            is_font_caster = 'font' in caster_name_lower
             c_info = {'name': safe_str(caster.get('name'), 'Spellcasting'), 'tradition': safe_str(caster.get('magicTradition'), 'Unknown'), 'type': cast_type, 'levels': []}
             slots_per_day = caster.get('perDay') or []
 
@@ -2168,11 +2182,17 @@ class Character:
             # PF2e Player Core: 4 at L1, 5 at L5, 6 at L15. Honor explicit
             # `divineFont`/`font_kind`/`fontExtra` if set, otherwise derive
             # from class + sanctification.
+            #
+            # IMPORTANT: when Pathbuilder already gives us a separate
+            # "* Font" caster block (Goel-style), do NOT also add inferred
+            # font slots to the main caster — that would double-count.
             font_extra = 0
             font_kind = ''
             font_at_rank = 0
             cls_lower_local = self.class_name.lower()
-            if cls_lower_local == 'cleric' and 'prepared' in cast_type_lower:
+            if (cls_lower_local == 'cleric' and 'prepared' in cast_type_lower
+                    and not pb_provides_font_caster
+                    and not is_font_caster):
                 lvl = self.level
                 font_extra = 6 if lvl >= 15 else (5 if lvl >= 5 else 4)
                 # Sanctification → font kind (heal vs harm). Default to heal.
@@ -2191,6 +2211,16 @@ class Character:
                 # Allow per-PC override
                 if isinstance(build.get('font_extra'), int):
                     font_extra = max(0, build['font_extra'])
+            # If Pathbuilder gave us a standalone Font caster, mark it so the
+            # UI renders it with the heal/harm-only badge + emerald slot pips.
+            if is_font_caster and 'prepared' in cast_type_lower:
+                # Determine kind from the name ("Harmful Font" vs "Healing Font")
+                # or from sanctification.
+                sanc_lower = safe_str(build.get('sanctification'), 'Holy').lower()
+                if 'harm' in caster_name_lower or 'unholy' in sanc_lower:
+                    c_info['_font_kind'] = 'harm'
+                else:
+                    c_info['_font_kind'] = 'heal'
 
             for lvl in range(11):
                 max_slots = safe_int(slots_per_day[lvl]) if lvl < len(slots_per_day) else 0
@@ -2218,7 +2248,16 @@ class Character:
                     if font_extra > 0 and lvl == font_at_rank:
                         level_entry['font_slots'] = font_extra
                         level_entry['font_kind'] = font_kind
+                    # Standalone Pathbuilder Font caster: re-tag slots so the UI
+                    # styles them as font (emerald, heal/harm-only) instead of
+                    # generic prepared slots.
+                    if is_font_caster and max_slots > 0 and c_info.get('_font_kind'):
+                        level_entry['slots'] = 0
+                        level_entry['font_slots'] = max_slots
+                        level_entry['font_kind'] = c_info['_font_kind']
                     c_info['levels'].append(level_entry)
+            # Strip the internal marker before appending.
+            c_info.pop('_font_kind', None)
             if c_info['levels']: self.spell_casters.append(c_info)
 
         # Kineticist impulses — shown as spontaneous-style (no prep needed)
@@ -2715,9 +2754,9 @@ class Character:
         # Casting ability comes from the spellCaster block, NOT the class's
         # martial key_options. e.g. Champion's class key is STR/DEX (used for
         # class DC), but their focus spells are CHA. Pathbuilder sets
-        # `ability` per spellCaster — read that first; only fall back to the
-        # class's key_options when no caster is present (kineticist).
-        key_mod = 0
+        # `ability` per spellCaster — read that first; for focus-only classes
+        # (Champion, Monk) Pathbuilder stores it under build.focus.{trad}.
+        key_mod = None
         ability_used = 'cha'
         if self.raw_spellCasters:
             ab = (self.raw_spellCasters[0].get('ability') or '').lower()
@@ -2733,13 +2772,40 @@ class Character:
                 if trad_default:
                     ability_used = trad_default
                     key_mod = self.mods.get(trad_default, 0)
-        if key_mod == 0 and is_kineticist:
+        if key_mod is None:
+            # No spellCasters block — try Pathbuilder's `focus` map. Shape:
+            #   focus: { divine: { cha: {...} }, primal: { wis: {...} } }
+            # The first matching {tradition: {ability: {...}}} wins.
+            focus_map = (self._build_ref or {}).get('focus') if hasattr(self, '_build_ref') else None
+            if isinstance(focus_map, dict):
+                for trad_key, ab_branch in focus_map.items():
+                    if isinstance(ab_branch, dict):
+                        for ab in ('str', 'dex', 'con', 'int', 'wis', 'cha'):
+                            if ab in ab_branch:
+                                ability_used = ab
+                                key_mod = self.mods.get(ab, 0)
+                                break
+                    if key_mod is not None:
+                        break
+        if key_mod is None:
+            # Class-specific defaults for focus-only casters with no PB hint.
+            CLASS_FOCUS_ABILITY = {
+                'champion': 'cha', 'monk':     'wis', 'ranger':   'wis',
+                'sorcerer': 'cha', 'bard':     'cha', 'oracle':   'cha',
+            }
+            ab = CLASS_FOCUS_ABILITY.get(c_name)
+            if ab:
+                ability_used = ab
+                key_mod = self.mods.get(ab, 0)
+        if key_mod is None and is_kineticist:
             key_options = BUILDER_DATA["classes"].get(c_name, {}).get("key_options", ["con"])
             subclass_info = SUBCLASS_MATRIX.get(self.subclass, {})
             if "key_ability" in subclass_info:
                 key_options = [subclass_info["key_ability"]]
             key_mod = max([self.mods.get(stat, 0) for stat in key_options]) if key_options else 0
             ability_used = key_options[0] if key_options else 'cha'
+        if key_mod is None:
+            key_mod = 0
 
         return self.level + prof + key_mod - self.get_status_penalty(ability_used)
 
