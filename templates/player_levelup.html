@@ -2111,6 +2111,12 @@
                 cpFeats.push([composedName, 'class_feature', targetLevel, desc]);
             });
 
+            // Forward Champion Divine Ally + Cleric/Champion Domain choice
+            // as top-level fields so the backend persists them on the build.
+            const divineAllyChoice = state.class_picks_selected['Divine Ally'] || '';
+            const domainChoice = state.class_picks_selected['Domain Initiate'] ||
+                                 state.class_picks_selected['Domain'] || '';
+
             const payload = {
                 new_level: targetLevel,
                 abilities: finalAbilities,
@@ -2120,18 +2126,40 @@
                 spellCasters: finalCasters,
                 auto_bumps: state.auto_bumps || {},
                 monk_path_choice: state.monk_path_choice || null,
-                class_picks: state.class_picks_selected || {}
+                class_picks: state.class_picks_selected || {},
+                divine_ally: divineAllyChoice,
+                chosen_domain: domainChoice
             };
 
             try {
                 const res = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 const data = await res.json();
-                if(data.success) {
+                if (data.success) {
                     if (isDrawerMode && window.parent !== window) {
                         window.parent.postMessage({ type: 'levelup_complete', name: pc.name }, '*');
                         return;
                     }
                     window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                    return;
+                }
+                // L3+L9+L13: validator returned a missing-slot list. Show it
+                // and offer a force-save option so homebrew/variant rules
+                // aren't blocked.
+                btn.disabled = false;
+                btn.innerText = 'Submit Level Up';
+                if (data.missing && data.missing.length) {
+                    const lines = data.missing.map(m => '  • ' + m).join('\n');
+                    if (confirm('Cannot finalize — missing required choices:\n\n' + lines + '\n\nSave anyway? (homebrew / variant rules)')) {
+                        const r2 = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.assign({}, payload, {force_save: true})) });
+                        const d2 = await r2.json();
+                        if (d2.success) {
+                            window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                            return;
+                        }
+                        alert(d2.error || 'Save failed.');
+                    }
+                } else if (data.error) {
+                    alert(data.error);
                 }
             } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
         }

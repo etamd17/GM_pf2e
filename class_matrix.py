@@ -259,6 +259,67 @@ SPELLS_KNOWN = {
 }
 
 # =============================================================================
+# AUTO-GRANTED FEATS BY CLASS / HERITAGE (Player Core / Player Core 2)
+# Used by save_new_character to mirror what Pathbuilder marks as "Awarded Feat"
+# entries — feats every PC of that class/heritage starts with at L1.
+# Each entry: name, type, level, optional ability(skill name), optional desc.
+# =============================================================================
+CLASS_AWARDED_FEATS = {
+    'champion':   [{'name': 'Shield Block', 'type': 'Awarded Feat', 'level': 1,
+                    'desc': 'You snap your shield in to ward off a blow.'},
+                   # Devotion Spells: every Champion gets Lay on Hands (holy) or Touch of the Void
+                   # (unholy). Defaults to Lay on Hands; sanctification handling overrides via the
+                   # builder if the chosen cause is unholy (Tyrant/Desecrator/Antipaladin).
+                   {'name': 'Lay on Hands', 'type': 'Focus Spell', 'level': 1,
+                    'desc': 'Heal a willing living target with a touch (1d6 per spell rank, +6 if undead).'}],
+    'cleric':     [{'name': 'Shield Block', 'type': 'Awarded Feat', 'level': 1}],
+    'druid':      [{'name': 'Shield Block', 'type': 'Awarded Feat', 'level': 1}],
+    'fighter':    [{'name': 'Shield Block', 'type': 'Awarded Feat', 'level': 1},
+                   {'name': 'Attack of Opportunity', 'type': 'Class Feature', 'level': 1}],
+    'monk':       [],
+    'wizard':     [],
+    'sorcerer':   [],
+    'bard':       [],
+    'rogue':      [],
+    'ranger':     [],
+    'witch':      [],
+    'oracle':     [],
+    'magus':      [],
+    'summoner':   [],
+    'investigator': [],
+    'kineticist': [],
+    'barbarian':  [],
+    'thaumaturge':[],
+    'animist':    [],
+    'inventor':   [],
+    'gunslinger': [],
+    'swashbuckler':[],
+    'psychic':    [],
+}
+
+# Subclass/order/cause-specific awarded feats (e.g. Storm Druid's Storm Born)
+SUBCLASS_AWARDED_FEATS = {
+    # Druid orders
+    'Storm':      [{'name': 'Storm Born', 'type': 'Awarded Feat', 'level': 1,
+                    'desc': "You ignore concealment from fog/precipitation; you don't take environmental Perception/ranged-attack penalties from precipitation."}],
+    # Champion causes — Lay on Hands etc. handled via SUBCLASS_MATRIX[*].focus_spell
+    # Cleric doctrine
+    'Warpriest':  [],
+    'Cloistered Cleric': [],
+}
+
+# Heritage-granted feats (e.g. Hold-Scarred Orc grants Diehard)
+HERITAGE_AWARDED_FEATS = {
+    'Hold-Scarred Orc':     [{'name': 'Diehard', 'type': 'Awarded Feat', 'level': 1,
+                              'desc': 'You die from dying at value 5 instead of 4.'}],
+    'Versatile Human':      [],   # Bonus general feat handled separately (player picks)
+    'Skilled Heritage Human':[],  # Bonus skill — chosen
+    'Wintertouched Human':  [],
+    'Half-Elf':             [],
+    'Half-Orc':             [],
+}
+
+# =============================================================================
 # PER-CLASS LEVEL PROGRESSION
 # Each entry: level -> {proficiency_key: new_minimum_rank}
 # These are the AUTOMATIC proficiency bumps from class features.
@@ -650,8 +711,8 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "druid": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, light=2, medium=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"perception": 4, "fortitude": 4},                                              # Alertness (L3) + Great Fortitude
-        5:  {"reflex": 4},                                                                   # Lightning Reflexes
+        3:  {"perception": 4},                                                               # Alertness (L3 only — Fort Expertise moved to L5 per Remaster Player Core)
+        5:  {"fortitude": 4, "reflex": 4},                                                  # Fortitude Expertise (Great Fortitude) + Lightning Reflexes
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
         9:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (simple + unarmed)
         11: {"will": 6, "unarmored": 4, "light": 4, "medium": 4},                           # Druid's Resolve (Master Will) + Armor Expertise
@@ -838,6 +899,22 @@ rogue_prog = {
     19: {"general_feat": 1, "skill_feat": 1, "skill_increase": 1},
     20: {"class_feat": 1, "skill_feat": 1, "skill_increase": 1, "ability_boosts": 4}
 }
+
+def get_progression_table(class_name):
+    """Return the per-level feat/skill-increase requirement table for a class.
+    Used by the level-up validator to confirm the player picked everything
+    they're owed at this level."""
+    cn = (class_name or '').lower()
+    if cn == 'rogue':
+        return rogue_prog
+    if cn == 'investigator':
+        return investigator_prog
+    return base_prog
+
+def get_required_slots_at_level(class_name, level):
+    """Return {slot_name: count} of choices the player MUST make at this level."""
+    table = get_progression_table(class_name)
+    return dict(table.get(level, {}))
 
 # Investigator: skill feats at EVERY level (Skillful Lessons at odd levels), skill increase at EVERY level starting L2
 investigator_prog = {

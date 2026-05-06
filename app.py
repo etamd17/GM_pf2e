@@ -15,7 +15,8 @@ import threading
 from functools import wraps
 
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
-from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES
+from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES, get_required_slots_at_level
+from class_matrix import CLASS_AWARDED_FEATS, SUBCLASS_AWARDED_FEATS, HERITAGE_AWARDED_FEATS
 from class_matrix import MONK_PATH_CONFIG
 from class_matrix import SUBCLASS_DESCRIPTIONS
 from class_matrix import SPELL_ACTIONS, get_action_cost
@@ -1311,6 +1312,13 @@ class Character:
         self.subclass = safe_str(build.get('subclass'), '')
         self.ancestry = safe_str(build.get('ancestry'), 'Unknown Ancestry')
         
+        # Strip Pathbuilder placeholder entries from `specials` so downstream
+        # logic (subclass detection, domain detection, label rendering) doesn't
+        # pick them up. Common placeholders: "Not Selected", "—", "None".
+        _PLACEHOLDER_SPECIALS = {'not selected', '—', 'none', '', 'select one'}
+        if isinstance(build.get('specials'), list):
+            build['specials'] = [s for s in build['specials']
+                                 if isinstance(s, str) and s.lower().strip() not in _PLACEHOLDER_SPECIALS]
         # Auto-detect subclass from Pathbuilder 'specials' array if not set
         if not self.subclass:
             specials = build.get('specials') or []
@@ -1428,6 +1436,9 @@ class Character:
         else:
             self.signature_map = {}
             self.signature_spells = list(_raw_sig)
+        # Champion Divine Ally choice (L3): "Blade Ally" | "Steed Ally" | "Shield Ally"
+        # Persisted on the build so it shows on the sheet + survives reloads.
+        self.divine_ally = safe_str(build.get('divine_ally'), '')
         self.session_notes = build.get('session_notes') or []
         self.expended_slots = build.get('expended_slots') or {}
         
@@ -8646,6 +8657,26 @@ def save_new_character():
     if bg_data.get('feat'):
         feats_arr.append([bg_data['feat'], "Background Feat", 1, "Granted automatically by your background."])
 
+    # L5 + L11 + L12: auto-grant class-awarded, subclass-awarded, and
+    # heritage-awarded feats. Pathbuilder marks these as "Awarded Feat" in
+    # exports; from-scratch builds were skipping them.
+    UNHOLY_CHAMPION_CAUSES = {'Tyrant', 'Desecrator', 'Antipaladin'}
+    def _append_grant(g):
+        # For unholy Champion causes, swap Lay on Hands → Touch of the Void.
+        if (g.get('name') == 'Lay on Hands' and class_name.lower() == 'champion'
+                and subclass_name in UNHOLY_CHAMPION_CAUSES):
+            g = {**g, 'name': 'Touch of the Void',
+                 'desc': 'Inflict void damage on a living touched target (1d6 per spell rank).'}
+        existing_names = {(f[0] if isinstance(f, list) else None) for f in feats_arr}
+        if g.get('name') and g['name'] not in existing_names:
+            feats_arr.append([g['name'], g.get('type', 'Awarded Feat'), g.get('level', 1), g.get('desc', '')])
+    for g in CLASS_AWARDED_FEATS.get(class_name.lower(), []):
+        _append_grant(g)
+    for g in SUBCLASS_AWARDED_FEATS.get(subclass_name, []):
+        _append_grant(g)
+    for g in HERITAGE_AWARDED_FEATS.get(heritage_name, []):
+        _append_grant(g)
+
     heritage_desc = ""
     ancestry_key = "unknown"
     for a_key, h_list in BUILDER_DATA["heritages"].items():
@@ -8855,6 +8886,102 @@ def player_levelup(pc_name):
         return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf)
     return redirect(url_for('player_view'))
 
+def _count_feats_at_level(feats, level, slot_type):
+    """Count Pathbuilder feat entries that satisfy a given progression slot
+    at this level. Handles `Class Feat`, `Ancestry Feat`, `Skill Feat`,
+    `General Feat`, and class-specific labels (`Kineticist Feat`,
+    `Champion Feat`, etc.).
+
+    Versatile Human's "Natural Ambition" counts as both an ancestry feat AND
+    grants a bonus class feat in a child entry — the child entry covers the
+    class_feat slot independently."""
+    SLOT_TYPE_MAP = {
+        'class_feat':    {'class feat', 'kineticist feat', 'champion feat',
+                          'cleric feat', 'druid feat', 'fighter feat',
+                          'wizard feat', 'rogue feat', 'bard feat',
+                          'sorcerer feat', 'monk feat', 'ranger feat',
+                          'witch feat', 'oracle feat', 'magus feat',
+                          'summoner feat', 'investigator feat',
+                          'swashbuckler feat', 'psychic feat',
+                          'alchemist feat', 'animist feat', 'thaumaturge feat',
+                          'barbarian feat', 'inventor feat', 'gunslinger feat'},
+        'ancestry_feat': {'ancestry feat', 'heritage'},
+        'skill_feat':    {'skill feat'},
+        'general_feat':  {'general feat'},
+    }
+    accepted = SLOT_TYPE_MAP.get(slot_type, set())
+    n = 0
+    for ft in (feats or []):
+        if not isinstance(ft, list) or len(ft) < 4:
+            continue
+        ft_type = (ft[2] or '').strip().lower() if len(ft) > 2 else ''
+        ft_lvl = ft[3] if len(ft) > 3 else None
+        # L6: Versatile Human "Natural Ambition" / "Skilled Heritage" etc. can
+        # add a *child* feat at the same level (PB src='childChoice'). These
+        # are bonus feats granted by another feat — they fill the slot they
+        # belong to, but must not be double-counted toward the parent's slot.
+        # We accept them: a child class-feat at L1 satisfies the class_feat
+        # slot for L1 (so a PC with Versatile Human + Natural Ambition + class
+        # feat gets credit for class_feat=1 even if their "main" L1 class feat
+        # came from the child).
+        if ft_type in accepted and ft_lvl == level:
+            n += 1
+    return n
+
+def _new_skill_increases_at_level(build, new_level):
+    """Crude check: did the level-up apply a new skill increase?
+    Compares the previous proficiencies snapshot against the current."""
+    history = (build.get('level_history') or {}).get(str(new_level), {})
+    prev = history.get('previous_proficiencies') or {}
+    cur = build.get('proficiencies') or {}
+    STANDARD_SKILLS = {'acrobatics', 'arcana', 'athletics', 'crafting',
+                       'deception', 'diplomacy', 'intimidation', 'medicine',
+                       'nature', 'occultism', 'performance', 'religion',
+                       'society', 'stealth', 'survival', 'thievery'}
+    bumps = 0
+    for sk in STANDARD_SKILLS:
+        if (cur.get(sk, 0) or 0) > (prev.get(sk, 0) or 0):
+            bumps += 1
+    # Lore skills also count
+    for k, v in cur.items():
+        if k.startswith('lore') and (v or 0) > (prev.get(k, 0) or 0):
+            bumps += 1
+    return bumps
+
+def _missing_progression_for_level(build, new_level):
+    """Returns a list of human-readable strings describing required choices
+    that haven't been made for this level. Empty list = ready to save."""
+    cls = build.get('class', '')
+    expected = get_required_slots_at_level(cls, new_level)
+    feats = build.get('feats') or []
+    missing = []
+    for slot, count in expected.items():
+        if slot == 'skill_increase':
+            actual = _new_skill_increases_at_level(build, new_level)
+            if actual < count:
+                missing.append(f"{count - actual} skill increase(s)")
+            continue
+        if slot == 'ability_boosts':
+            # Ability boosts are validated separately by the wizard form
+            # against `build.abilities`; skip here.
+            continue
+        actual = _count_feats_at_level(feats, new_level, slot)
+        if actual < count:
+            label = slot.replace('_', ' ')
+            missing.append(f"{count - actual} {label}(s) at level {new_level}")
+
+    # L2: Champion Divine Ally must be chosen at L3
+    if cls.lower() == 'champion' and new_level == 3 and not build.get('divine_ally'):
+        missing.append('Divine Ally choice (Blade / Steed / Shield)')
+
+    # L6: Versatile Human grants a bonus general feat at L1.
+    if new_level == 1 and (build.get('heritage', '') or '').lower() == 'versatile human':
+        general_count = _count_feats_at_level(feats, 1, 'general_feat')
+        if general_count < 1:
+            missing.append('1 bonus general feat from Versatile Human heritage')
+
+    return missing
+
 @app.route('/api/submit_levelup/<pc_name>', methods=['POST'])
 def submit_levelup(pc_name):
     data = request.json
@@ -8887,8 +9014,43 @@ def submit_levelup(pc_name):
         build['half_boosts'] = data['half_boosts']
     
     if 'feats' in data: build['feats'] = data['feats']
-    
+
+    # Champion Divine Ally choice (L3 only). Stored on the build so it shows
+    # on the sheet and survives reloads.
+    if 'divine_ally' in data and data['divine_ally']:
+        build['divine_ally'] = data['divine_ally']
+
+    # L10: Domain Initiate cascade — when Cleric/Champion takes Domain Initiate
+    # the wizard sends `chosen_domain`. Stored as a child entry on the feat
+    # itself so Character.__init__'s domain resolver picks it up via the same
+    # path it uses for Pathbuilder imports.
+    chosen_domain = data.get('chosen_domain')
+    if chosen_domain and 'feats' in data:
+        for ft in build['feats']:
+            if isinstance(ft, list) and len(ft) >= 1 and ft[0] == 'Domain Initiate':
+                # Store the domain in slot 4 (extra) so the resolver picks it up.
+                while len(ft) < 7:
+                    ft.append(None)
+                ft[4] = chosen_domain.lower()
+                ft[5] = 'childChoice'
+                break
+
     if 'proficiencies' not in build: build['proficiencies'] = {}
+
+    # ---- L3+L9+L13: REQUIRED-PROGRESSION VALIDATOR ----------------
+    # Reject the level-up if any feat slot or skill increase mandated by the
+    # class progression at this level is missing. Returns 400 with a list of
+    # what's missing so the wizard can highlight the gaps. Pass `force=true`
+    # to override (homebrew / variant rules).
+    if not data.get('force_save'):
+        missing = _missing_progression_for_level(build, new_level)
+        if missing:
+            return jsonify({
+                "success": False,
+                "missing": missing,
+                "error": "Level-up is missing required choices: " + ", ".join(missing)
+                         + ". Pass force_save=true to override."
+            }), 400
 
     # Normalize Pathbuilder camelCase proficiency keys to snake_case
     PB_KEY_MAP = {'classDC': 'class_dc', 'castingArcane': 'spell_attack', 'castingDivine': 'spell_attack',
