@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.db-journal
+venv/
+.env
+
+# Local-only Pathbuilder PC exports — used for verifying class progressions
+# and calculation fixes. PCs reach the live site through the in-app
+# JSON-upload + character-creator flow, NOT via the repo.
+party_data/*.json
+!party_data/portraits/
