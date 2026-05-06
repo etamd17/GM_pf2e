@@ -1537,16 +1537,37 @@ class Character:
         cumulative_bumps = get_class_proficiency_at_level(cls_lower, self.level, subclass=self.subclass)
         for key, val in cumulative_bumps.items():
             self._class_profs[key] = max(self._class_profs.get(key, 0), val)
-        
-        # Merge into self.proficiencies (upgrade only — never downgrade)
+
+        # Merge into self.proficiencies. For SAVE proficiencies (fort/ref/will)
+        # we trust the Pathbuilder export verbatim — PB's number IS the correct
+        # number per their tables, including any heritage/feat-granted bumps
+        # we don't model. For other combat profs we still take max so feats
+        # like Armor Proficiency can lift unmodeled values up.
+        #
+        # The PB export is the source of truth. Falling through to max(saved,
+        # computed) bakes in stale class-progression values from the buggy era
+        # (e.g., Champion L3 reflex=4 from when class_matrix had a phantom L3
+        # bump). We honor PB's exported value when present and only fill in
+        # from CLASS_PROGRESSION when PB didn't send one.
+        TRUST_PB_PROF_KEYS = {'fortitude', 'reflex', 'will'}
         COMBAT_PROF_KEYS = {'fortitude', 'reflex', 'will', 'perception', 'ac',
                             'unarmored', 'light', 'medium', 'heavy',
                             'unarmed', 'simple', 'martial', 'advanced',
                             'class_dc', 'spell_attack', 'spell_dc'}
+        # PB-imported PCs always have a `proficiencies` block; from-scratch
+        # builds may not. Detect "PB-shaped" by presence of the camelCase
+        # casting* keys or attributes block.
+        is_pb_shaped = bool(build.get('attributes')) or any(
+            k in (build.get('proficiencies') or {})
+            for k in ('castingArcane', 'castingDivine', 'castingOccult', 'castingPrimal', 'classDC')
+        )
         for key in COMBAT_PROF_KEYS:
             computed = self._class_profs.get(key, 0)
-            if computed > 0:
-                current = safe_int(self.proficiencies.get(key, 0))
+            current = safe_int(self.proficiencies.get(key, 0))
+            if key in TRUST_PB_PROF_KEYS and is_pb_shaped and key in (build.get('proficiencies') or {}):
+                # Trust PB's value verbatim for saves — don't bump above it.
+                self.proficiencies[key] = current
+            elif computed > 0:
                 self.proficiencies[key] = max(current, computed)
         
         # Compute AC proficiency from best armor proficiency the character actually uses.
