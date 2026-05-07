@@ -1329,7 +1329,56 @@
         let dragStart = { x: 0, y: 0, viewX: 0, viewY: 0, tokenX: 0, tokenY: 0 };
         let draggingToken = null;
         let dragTokenOffset = { x: 0, y: 0 }; // Track visual offset during drag
-        let selectedToken = null;
+
+        // Selection — single-token API kept (`selectedToken`) for back-compat
+        // with code that just wants the primary; multi-token selection lives
+        // in `selectedTokenIds`. Always go through the helpers below to keep
+        // the two in sync.
+        let selectedToken = null;            // primary id (single-select compat)
+        let selectedTokenIds = new Set();    // every selected id
+        function _isSelected(id) { return selectedTokenIds.has(id); }
+        function _setSelection(id) {
+            selectedTokenIds = new Set();
+            if (id) selectedTokenIds.add(id);
+            selectedToken = id || null;
+        }
+        function _clearSelection() {
+            selectedTokenIds.clear();
+            selectedToken = null;
+        }
+        function _toggleSelection(id) {
+            if (!id) return;
+            if (selectedTokenIds.has(id)) {
+                selectedTokenIds.delete(id);
+                if (selectedToken === id) {
+                    // Pick a remaining one as primary, or clear.
+                    selectedToken = [...selectedTokenIds].pop() || null;
+                }
+            } else {
+                selectedTokenIds.add(id);
+                selectedToken = id;
+            }
+        }
+        function _addManyToSelection(ids) {
+            for (const id of ids) {
+                selectedTokenIds.add(id);
+                selectedToken = id;  // last one becomes primary
+            }
+        }
+        function _replaceSelection(ids) {
+            selectedTokenIds = new Set(ids);
+            selectedToken = ids.length ? ids[ids.length - 1] : null;
+        }
+
+        // Box-select state — only active in select-tool mode when the GM
+        // mouse-downs on empty space. Coords are in map space so the box
+        // stays correctly placed across pan/zoom mid-drag (rare, but cheap).
+        let isBoxSelecting = false;
+        let boxSelectStart = null;   // {x, y} in map coords
+        let boxSelectEnd = null;     // {x, y} in map coords
+        let _boxStartScreen = null;  // {x, y} in screen coords for click-vs-drag detection
+        let _multiDragStart = null;  // Map<id, {x, y}> token positions captured at drag start
+
         let contextToken = null;
         
         // Wall drawing state
@@ -1852,7 +1901,27 @@
             drawWallPreview();
             drawCalibrationPoints();
             drawRuler();
+            drawSelectionBox();
             _endLayer();
+        }
+
+        function drawSelectionBox() {
+            // Foundry-style marquee. Drawn in map space (already inside the
+            // viewport transform), so scaling stays consistent under zoom.
+            if (!isBoxSelecting || !boxSelectStart || !boxSelectEnd) return;
+            const x1 = Math.min(boxSelectStart.x, boxSelectEnd.x);
+            const y1 = Math.min(boxSelectStart.y, boxSelectEnd.y);
+            const x2 = Math.max(boxSelectStart.x, boxSelectEnd.x);
+            const y2 = Math.max(boxSelectStart.y, boxSelectEnd.y);
+            ctx.save();
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.10)';
+            ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.5 / zoom;
+            ctx.setLineDash([6 / zoom, 4 / zoom]);
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            ctx.setLineDash([]);
+            ctx.restore();
         }
 
         // ===========================================
@@ -2558,12 +2627,15 @@
             for (const token of (mapState.tokens || [])) {
                 const size = token.size || 1;
 
-                // Apply drag offset if this token is being dragged; otherwise
-                // use the animated position (linear slide tween).
+                // Apply drag offset to every token in the active multi-drag,
+                // not just the click target. _multiDragStart is populated in
+                // onMouseDown with each selected token's pre-drag position so
+                // the offset preserves relative spacing during the drag.
                 let tokenX, tokenY;
-                if (draggingToken && draggingToken.id === token.id) {
-                    tokenX = dragStart.tokenX + dragTokenOffset.x;
-                    tokenY = dragStart.tokenY + dragTokenOffset.y;
+                if (draggingToken && _multiDragStart && _multiDragStart.has(token.id)) {
+                    const start = _multiDragStart.get(token.id);
+                    tokenX = start.x + dragTokenOffset.x;
+                    tokenY = start.y + dragTokenOffset.y;
                 } else {
                     const [ax, ay] = _getAnimatedPosition(token);
                     tokenX = ax;
@@ -2577,7 +2649,9 @@
                 const hiddenFromPlayers = token.visible_to_players === false;
                 // Check if this is the active combatant
                 const isActive = isActiveCombatant(token);
-                const isSelected = selectedToken === token.id;
+                // Multi-select compat: every member of selectedTokenIds gets
+                // the gold ring, not just the primary.
+                const isSelected = _isSelected(token.id);
                 
                 // Pulse effect for active combatant
                 if (isActive) {
@@ -2875,10 +2949,29 @@
             } else if (currentTool === 'select') {
                 const token = getTokenAtPoint(mapX, mapY);
                 if (token) {
-                    selectedToken = token.id;
+                    // Click-on-token selection rules:
+                    //   • Click an unselected token → replace selection.
+                    //   • Click an already-selected token in a multi-select →
+                    //     keep the multi-selection so a drag moves all of them.
+                    //   The shift modifier is reserved for moving through walls
+                    //     (existing behavior in onMouseUp), so we don't overload
+                    //     it for additive selection here — Q3 spec is box-drag-only.
+                    if (!_isSelected(token.id)) {
+                        _setSelection(token.id);
+                    } else {
+                        // Promote to primary so visuals follow the click target.
+                        selectedToken = token.id;
+                    }
                     draggingToken = token;
                     dragStart = { x: e.clientX, y: e.clientY, tokenX: token.x, tokenY: token.y };
                     dragTokenOffset = { x: 0, y: 0 }; // Reset offset
+                    // Capture every selected token's start position so a
+                    // multi-drag can move them in lockstep on mouseup.
+                    _multiDragStart = new Map();
+                    for (const id of selectedTokenIds) {
+                        const t = (mapState.tokens || []).find(tt => tt.id === id);
+                        if (t) _multiDragStart.set(id, { x: t.x, y: t.y });
+                    }
                     showTokenDetails(token);
                 } else {
                     // GM click on empty space in select mode: if they click
@@ -2918,10 +3011,15 @@
                         }).then(ok => { if (ok) removeTemplateById(hitTmpl.id); });
                         return;
                     }
-                    selectedToken = null;
+                    // Click on truly empty space in select mode: begin a
+                    // box-drag selection. If the mouse barely moves before
+                    // mouseup, treat it as a click-to-deselect instead.
                     draggingToken = null;
-                    isDragging = true;
-                    dragStart = { x: e.clientX, y: e.clientY, viewX, viewY };
+                    isBoxSelecting = true;
+                    boxSelectStart = { x: mapX, y: mapY };
+                    boxSelectEnd   = { x: mapX, y: mapY };
+                    _boxStartScreen = { x: e.clientX, y: e.clientY };
+                    markDirty('overlay');
                 }
                 render();
             } else if (currentTool === 'token') {
@@ -2987,6 +3085,11 @@
                 templatePreview.dx = mapX;
                 templatePreview.dy = mapY;
                 render();
+            } else if (isBoxSelecting) {
+                // Update the box-select rectangle. Only the overlay layer
+                // needs to repaint; bg/fog/tokens are unchanged.
+                boxSelectEnd = { x: mapX, y: mapY };
+                markDirty('overlay');
             } else if (draggingToken) {
                 // Calculate new grid position based on drag
                 const dx = e.clientX - dragStart.x;
@@ -2994,13 +3097,16 @@
                 const newX = dragStart.tokenX + Math.round(dx / zoom / gs);
                 const newY = dragStart.tokenY + Math.round(dy / zoom / gs);
 
-                // Store offset for rendering (don't modify token directly - SSE will reset it)
+                // Store offset for rendering. The single-token path uses
+                // dragTokenOffset; multi-drag has every selected token render
+                // via the same offset (drawTokens checks `_isMultiDragging`).
                 dragTokenOffset = {
                     x: newX - dragStart.tokenX,
                     y: newY - dragStart.tokenY
                 };
 
-                // Show movement preview
+                // Show movement preview for the primary; multi-select shows
+                // the same delta but no per-token movement budgets.
                 showMovementPreview(e.clientX, e.clientY, draggingToken, dragStart.tokenX, dragStart.tokenY, newX, newY);
 
                 render();
@@ -3121,13 +3227,63 @@
                 templateAnchor = null;
                 templatePreview = null;
             }
+            if (isBoxSelecting) {
+                // Click-vs-drag detection: if the mouse barely moved between
+                // mousedown and mouseup, treat the gesture as a click on
+                // empty space and clear the selection. Otherwise commit the
+                // box: every token whose center falls inside becomes selected.
+                const sx = _boxStartScreen ? _boxStartScreen.x : e.clientX;
+                const sy = _boxStartScreen ? _boxStartScreen.y : e.clientY;
+                const moved = Math.hypot(e.clientX - sx, e.clientY - sy) > 4;
+                if (!moved) {
+                    // Click-to-deselect: clear selection AND collapse the
+                    // token-details pane so empty-space click is a clean
+                    // "I'm done" gesture.
+                    _clearSelection();
+                    closeTokenDetails();
+                    markDirty('tokens', 'overlay');
+                } else {
+                    // Compute box bounds in map space.
+                    const x1 = Math.min(boxSelectStart.x, boxSelectEnd.x);
+                    const y1 = Math.min(boxSelectStart.y, boxSelectEnd.y);
+                    const x2 = Math.max(boxSelectStart.x, boxSelectEnd.x);
+                    const y2 = Math.max(boxSelectStart.y, boxSelectEnd.y);
+                    const gs = mapState.grid_size || 70;
+                    const ox = mapState.grid_offset_x || 0;
+                    const oy = mapState.grid_offset_y || 0;
+                    const ids = [];
+                    for (const t of (mapState.tokens || [])) {
+                        const size = t.size || 1;
+                        const cx = t.x * gs + ox + (gs * size) / 2;
+                        const cy = t.y * gs + oy + (gs * size) / 2;
+                        if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) {
+                            ids.push(t.id);
+                        }
+                    }
+                    if (ids.length > 0) {
+                        _replaceSelection(ids);
+                        // Show details for the last one (primary) — most
+                        // useful "what did I just grab" preview.
+                        const t = (mapState.tokens || []).find(tt => tt.id === selectedToken);
+                        if (t) showTokenDetails(t);
+                    } else {
+                        _clearSelection();
+                    }
+                    markDirty('tokens', 'overlay');
+                }
+                isBoxSelecting = false;
+                boxSelectStart = boxSelectEnd = null;
+                _boxStartScreen = null;
+            }
+
             if (draggingToken && (dragTokenOffset.x !== 0 || dragTokenOffset.y !== 0)) {
                 // Calculate final position from start + offset
                 const finalX = dragStart.tokenX + dragTokenOffset.x;
                 const finalY = dragStart.tokenY + dragTokenOffset.y;
 
-                // Wall collision gate — reject the move unless Shift was
-                // held. The preview already warned the GM.
+                // Wall collision gate (primary token only — multi-drag uses
+                // the same delta for everyone, so testing the primary's
+                // collision is the simplest signal). Shift overrides.
                 const gs = mapState.grid_size || 70;
                 const ox = mapState.grid_offset_x || 0;
                 const oy = mapState.grid_offset_y || 0;
@@ -3143,8 +3299,9 @@
                     dragTokenOffset = { x: 0, y: 0 };
                     render();
                 } else {
-                    // Accumulate spent feet into the token's turn budget so
-                    // the next preview shows how much is left.
+                    // Accumulate spent feet into the primary's turn budget.
+                    // Multi-select moves don't consume movement on the others
+                    // (it's a GM repositioning gesture, not in-character action).
                     const dxg = Math.abs(finalX - dragStart.tokenX);
                     const dyg = Math.abs(finalY - dragStart.tokenY);
                     const diag = Math.min(dxg, dyg);
@@ -3154,13 +3311,24 @@
                     ft += countDifficultTerrainCells(dragStart.tokenX, dragStart.tokenY, finalX, finalY) * 5;
                     draggingToken.movement_used_this_turn = (draggingToken.movement_used_this_turn || 0) + ft;
 
-                    // Save token position to server
-                    moveToken(draggingToken.id, finalX, finalY);
+                    // Single-select: just move the dragged token.
+                    // Multi-select: every selected token moves by the same
+                    // (deltaX, deltaY) in grid units, captured at drag start.
+                    const dX = finalX - dragStart.tokenX;
+                    const dY = finalY - dragStart.tokenY;
+                    if (selectedTokenIds.size > 1 && _multiDragStart && _multiDragStart.size > 1) {
+                        for (const [id, start] of _multiDragStart.entries()) {
+                            moveToken(id, start.x + dX, start.y + dY);
+                        }
+                    } else {
+                        moveToken(draggingToken.id, finalX, finalY);
+                    }
                 }
             }
 
             draggingToken = null;
             dragTokenOffset = { x: 0, y: 0 };
+            _multiDragStart = null;
             hideMovementPreview();
 
             isDragging = false;
@@ -3227,11 +3395,43 @@
                 if (isPlacingTemplate) { isPlacingTemplate = false; templateAnchor = null; templatePreview = null; render(); }
                 // Clear any visible ruler measurement on a second Escape tap.
                 if (!isRulering && rulerStart) { rulerStart = rulerEnd = null; render(); }
+                // Esc also cancels an in-flight box-select and clears the
+                // current selection — keeps the GM unstuck without a
+                // second click.
+                if (isBoxSelecting) {
+                    isBoxSelecting = false;
+                    boxSelectStart = boxSelectEnd = _boxStartScreen = null;
+                    markDirty('overlay');
+                }
+                if (selectedTokenIds.size > 0) {
+                    _clearSelection();
+                    markDirty('tokens');
+                }
                 hideContextMenu();
                 return;
             }
             if (e.key === 'Enter' && isDrawingWall) {
                 finishWall();
+                return;
+            }
+            // Bulk delete: Delete or Backspace removes every selected token
+            // (GM only — the route is gm_required server-side anyway).
+            // Guarded against firing while typing in an input/textarea so
+            // backspace in a damage field doesn't wipe the map.
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                const tag = (e.target && e.target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea') return;
+                if (selectedTokenIds.size === 0) return;
+                e.preventDefault();
+                const ids = [...selectedTokenIds];
+                const label = ids.length === 1 ? 'this token' : `${ids.length} tokens`;
+                floatConfirm(`Remove ${label}?`, {
+                    title: 'Delete tokens', confirmLabel: 'Delete', danger: true,
+                }).then(ok => {
+                    if (!ok) return;
+                    for (const id of ids) removeToken(id);
+                    _clearSelection();
+                });
                 return;
             }
             // Tool hotkeys — bail if a text input is focused (floatingEditor
@@ -4230,7 +4430,7 @@
         
         function closeTokenDetails() {
             document.getElementById('token-details').classList.add('hidden');
-            selectedToken = null;
+            _clearSelection();
             render();
         }
         
@@ -4261,7 +4461,7 @@
                 const hpPct = token.max_hp > 0 ? (token.hp || 0) / token.max_hp : 1;
                 const hpClass = hpPct > 0.5 ? 'healthy' : hpPct > 0.25 ? 'wounded' : 'critical';
                 const isActive = i === (currentTurnIndex % sorted.length);
-                const isSelected = selectedToken === token.id;
+                const isSelected = _isSelected(token.id);
                 const isDead = (token.hp || 0) <= 0 && token.max_hp > 0;
                 
                 // Build condition dots with tooltips
@@ -4317,7 +4517,7 @@
         }
         
         function selectCombatant(tokenId, openModal = false) {
-            selectedToken = tokenId;
+            _setSelection(tokenId);
             const token = mapState.tokens.find(t => t.id === tokenId);
             if (token) {
                 if (openModal) {
@@ -5406,29 +5606,18 @@
         }
 
         function getTemplateAtPoint(mx, my) {
+            // Hit-test the template's center HANDLE (not its full footprint).
+            // The full-area test was a UX trap: clicking inside a Bless
+            // emanation to box-select tokens would offer to remove the
+            // template instead. The handle is a ~16px disc at the origin
+            // where the source/name label is drawn, matching Foundry's
+            // "click the dot to edit" affordance.
             const tmpls = mapState.templates || [];
-            const gs = mapState.grid_size || 70;
+            const HANDLE_R = 16 / Math.max(0.25, zoom);
             for (let i = tmpls.length - 1; i >= 0; i--) {
                 const t = tmpls[i];
                 const { cx, cy } = _templateFootprint(t);
-                if (t.type === 'burst' || t.type === 'emanation') {
-                    if (Math.hypot(mx - cx, my - cy) <= (t.radius || 2) * gs) return t;
-                } else if (t.type === 'cone') {
-                    const dist = Math.hypot(mx - cx, my - cy);
-                    if (dist <= (t.length || 4) * gs) {
-                        const ang = Math.atan2(my - cy, mx - cx) * 180 / Math.PI;
-                        const diff = ((ang - (t.direction || 0) + 540) % 360) - 180;
-                        if (Math.abs(diff) <= (t.angle || 90) / 2) return t;
-                    }
-                } else if (t.type === 'line') {
-                    // Project point onto line segment
-                    const dirRad = (t.direction || 0) * Math.PI / 180;
-                    const lx = Math.cos(dirRad), ly = Math.sin(dirRad);
-                    const px = mx - cx, py = my - cy;
-                    const along = px * lx + py * ly;
-                    const perp = Math.abs(-px * ly + py * lx);
-                    if (along >= 0 && along <= (t.length || 4) * gs && perp <= (t.width || 1) * gs / 2) return t;
-                }
+                if (Math.hypot(mx - cx, my - cy) <= HANDLE_R) return t;
             }
             return null;
         }
