@@ -15,28 +15,158 @@
             color: #e0e0e0;
         }
         
-        /* ===== LAYOUT ===== */
+        /* ===== LAYOUT =====
+           Three-column grid: left rail (tools), map area, right sidebar
+           (combat/tokens). The rail replaces the old bottom toolbar so the
+           map gets the full vertical space. */
         #app {
             display: grid;
-            grid-template-rows: 1fr auto;
-            grid-template-columns: 1fr minmax(0, 320px);
+            grid-template-rows: 1fr;
+            grid-template-columns: 52px 1fr minmax(0, 320px);
             height: 100vh;
             width: 100vw;
             overflow: hidden;
         }
-        
-        #map-area {
+
+        #left-rail {
             grid-row: 1;
             grid-column: 1;
+            background: #161616;
+            border-right: 1px solid #2a2a2a;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            padding: 6px 0;
+            gap: 0;
+            overflow-y: auto;
+            overflow-x: visible;
+        }
+        #left-rail::-webkit-scrollbar { width: 4px; }
+        #left-rail::-webkit-scrollbar-thumb { background: #333; }
+
+        .rail-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 4px 0;
+        }
+        .rail-divider {
+            margin: 4px 8px;
+            height: 1px;
+            background: #2a2a2a;
+        }
+
+        .rail-btn {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            color: #aaa;
+            cursor: pointer;
+            transition: background 0.12s, color 0.12s, border-color 0.12s;
+        }
+        .rail-btn:hover { background: #1f1f1f; color: #fff; border-color: #333; }
+        .rail-btn.active { background: #1e3a5f; color: #fff; border-color: #3b82f6; }
+        .rail-btn.danger:hover { background: #4a1818; color: #fca5a5; border-color: #7f1d1d; }
+        .rail-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+        .rail-btn[data-fill] svg { fill: currentColor; }
+
+        /* Hover tooltip — shows the tool name + hotkey beside the rail. */
+        .rail-btn::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translate(8px, -50%);
+            background: #0d0d0d;
+            color: #ddd;
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #2a2a2a;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.12s;
+            z-index: 80;
+        }
+        .rail-btn:hover::after { opacity: 1; }
+
+        /* Tool flyout — slides out to the right of the rail when an active
+           tool has options (size, type, color, etc.). Contains all the
+           original dropdowns/inputs so the existing JS keeps using their IDs. */
+        #tool-flyout {
+            position: fixed;
+            left: 56px;
+            top: 12px;
+            min-width: 180px;
+            background: #181818;
+            border: 1px solid #2a2a2a;
+            border-radius: 0 8px 8px 0;
+            padding: 10px 12px;
+            z-index: 60;
+            display: none;
+            box-shadow: 4px 4px 16px rgba(0,0,0,0.4);
+        }
+        #tool-flyout.active { display: block; }
+        #tool-flyout .flyout-pane { display: none; }
+        #tool-flyout .flyout-pane.active { display: flex; flex-direction: column; gap: 8px; }
+        #tool-flyout .flyout-title {
+            font-size: 10px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+        #tool-flyout .flyout-row { display: flex; align-items: center; gap: 6px; }
+        #tool-flyout label { font-size: 10px; color: #888; min-width: 38px; }
+        #tool-flyout select,
+        #tool-flyout input[type="text"],
+        #tool-flyout input[type="number"] {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            color: #ddd;
+            padding: 4px 6px;
+            font-size: 11px;
+            min-width: 0;
+            flex: 1;
+        }
+        #tool-flyout input[type="color"] {
+            width: 30px; height: 24px; border: 1px solid #3a3a3a; border-radius: 4px;
+            padding: 0; background: #2a2a2a; cursor: pointer;
+        }
+        #tool-flyout button {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            color: #ddd;
+            padding: 5px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        #tool-flyout button:hover { background: #333; border-color: #555; }
+        #tool-flyout button.danger { background: #4a1818; border-color: #7f1d1d; color: #fca5a5; }
+        #tool-flyout button.danger:hover { background: #7f1d1d; color: #fff; }
+
+        #map-area {
+            grid-row: 1;
+            grid-column: 2;
             position: relative;
             overflow: hidden;
             background: #111;
             min-width: 0; /* Prevent grid blowout */
         }
-        
+
         #right-sidebar {
-            grid-row: 1 / 3;
-            grid-column: 2;
+            grid-row: 1;
+            grid-column: 3;
             background: #1a1a1a;
             border-left: 1px solid #333;
             display: flex;
@@ -45,25 +175,11 @@
             width: 320px;
             max-width: 320px;
         }
-        
-        #bottom-toolbar {
-            grid-row: 2;
-            grid-column: 1;
-            background: #1a1a1a;
-            border-top: 1px solid #333;
-            padding: 8px 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            overflow-x: auto;
-            overflow-y: hidden;
-            scrollbar-width: thin;
-            scrollbar-color: #555 #1a1a1a;
-            min-width: 0; /* Allow shrinking */
-        }
-        #bottom-toolbar::-webkit-scrollbar { height: 4px; }
-        #bottom-toolbar::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
-        #bottom-toolbar::-webkit-scrollbar-track { background: transparent; }
+
+        /* Legacy bottom-toolbar styles kept so any third-party CSS that
+           still references .toolbar-group / .tool-btn doesn't break. The
+           markup itself was removed in favor of the rail. */
+        .toolbar-group, .toolbar-group-label { display: none; }
         
         /* ===== CANVAS LAYERS ===== */
         /* Layered rendering: each layer is a viewport-size <canvas> stacked
@@ -987,102 +1103,151 @@
             </div>
         </div>
         
-        <!-- Bottom Toolbar -->
-        <div id="bottom-toolbar">
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Tools</span>
-                <button class="tool-btn active" id="tool-select" onclick="setTool('select')">Select</button>
-                <button class="tool-btn" id="tool-pan" onclick="setTool('pan')">Pan</button>
+        <!-- Left Rail (replaces bottom toolbar). Each `data-tool` button
+             flips currentTool; `data-action` buttons fire one-shot actions
+             (Add Party, ambient cycle, map-menu popover). The `data-tip`
+             attribute drives the hover tooltip and embeds the hotkey. -->
+        <aside id="left-rail">
+            <div class="rail-section">
+                <button class="rail-btn active" id="tool-select" data-tool="select" data-tip="Select (V)">
+                    <svg viewBox="0 0 24 24"><path d="M5 3l14 9-7 1-3 7z"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-pan" data-tool="pan" data-tip="Pan (H)">
+                    <svg viewBox="0 0 24 24"><path d="M9 5v6M9 11V8.5a1.5 1.5 0 013 0V11M12 11V8a1.5 1.5 0 013 0v3M15 11V9.5a1.5 1.5 0 013 0V14a6 6 0 01-6 6h-1.5a4 4 0 01-3.4-1.9L4.5 14a1.5 1.5 0 012.5-1.6L9 14"/></svg>
+                </button>
             </div>
-            
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Tokens</span>
-                <select class="tool-select" id="token-size-select" style="width: 80px;">
-                    <option value="1">Medium</option>
-                    <option value="2">Large</option>
-                    <option value="3">Huge</option>
-                    <option value="4">Gargantuan</option>
-                </select>
-                <button class="tool-btn" id="tool-token" onclick="setTool('token')">Place</button>
-                <button class="tool-btn" onclick="addPartyToMap()">Add Party</button>
-                <button class="tool-btn" id="tool-spawn" onclick="setTool('spawn')">Set Spawn</button>
+            <div class="rail-divider"></div>
+
+            <div class="rail-section">
+                <button class="rail-btn" id="tool-token" data-tool="token" data-tip="Place Token (T)">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-wall" data-tool="wall" data-tip="Draw Wall (W)">
+                    <svg viewBox="0 0 24 24"><path d="M3 8h6v8H3zM9 8h6v8H9zM15 8h6v8h-6zM6 4h6v4H6zM12 4h6v4h-6z"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-note" data-tool="note" data-tip="GM Note Pin (N)">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s7-7.5 7-13a7 7 0 10-14 0c0 5.5 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-terrain" data-tool="terrain" data-tip="Difficult Terrain (D)">
+                    <svg viewBox="0 0 24 24"><path d="M3 17l4-6 4 4 4-7 6 9"/><path d="M3 21h18"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-light" data-tool="light" data-tip="Place Light (L)">
+                    <svg viewBox="0 0 24 24"><path d="M12 2c2 4 4 5 4 8a4 4 0 11-8 0c0-3 2-4 4-8z"/><path d="M10 18h4M11 21h2"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-ruler" data-tool="ruler" data-tip="Ruler (R)">
+                    <svg viewBox="0 0 24 24"><path d="M4 14L14 4l6 6L10 20z"/><path d="M7 11l1 1M9 9l1 1M11 7l1 1M13 13l1 1M15 11l1 1M17 9l1 1"/></svg>
+                </button>
+                <button class="rail-btn" id="tool-template" data-tool="template" data-tip="AOE Template (A)">
+                    <svg viewBox="0 0 24 24"><path d="M12 3l9 18H3z"/></svg>
+                </button>
             </div>
-            
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Walls</span>
-                <select class="tool-select" id="wall-type-select" onchange="setWallType(this.value)">
-                    <option value="normal">Normal</option>
-                    <option value="terrain">Terrain</option>
-                    <option value="invisible">Invisible</option>
-                    <option value="ethereal">Ethereal</option>
-                    <option value="door">Door</option>
-                    <option value="secret_door">Secret Door</option>
-                </select>
-                <button class="tool-btn" id="tool-wall" onclick="setTool('wall')">Draw</button>
-                <button class="tool-btn" onclick="borderMap()">Border</button>
+            <div class="rail-divider"></div>
+
+            <div class="rail-section">
+                <button class="rail-btn" id="tool-spawn" data-tool="spawn" data-tip="Set Party Spawn (P)">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+                </button>
+                <button class="rail-btn" data-action="addParty" data-tip="Add Party at Spawn">
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19a6 6 0 0112 0M14 19a4 4 0 017 0"/></svg>
+                </button>
+                <button class="rail-btn" id="rail-ambient" data-action="cycleAmbient" data-tip="Ambient: Bright">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M4.5 19.5l2-2M17.5 6.5l2-2"/></svg>
+                </button>
+            </div>
+            <div class="rail-divider"></div>
+
+            <div class="rail-section">
+                <button class="rail-btn" data-action="mapMenu" data-tip="Map Menu (Load / Upload / Calibrate / Grid)">
+                    <svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v16M15 6v16"/></svg>
+                </button>
+                <button class="rail-btn danger" data-action="clearMenu" data-tip="Clear / Reset Menu">
+                    <svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M7 7l1 13a2 2 0 002 2h4a2 2 0 002-2l1-13"/></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Tool flyout — appears next to the rail when the active tool has
+             options. Each pane keeps the original dropdown/input IDs so the
+             rest of the JS (token-size-select, wall-type-select, etc.) keeps
+             working unchanged. The flyout is shown only when its tool is
+             active; switching tools swaps the active pane. -->
+        <div id="tool-flyout">
+            <div class="flyout-pane" data-pane="token">
+                <div class="flyout-title">Token</div>
+                <div class="flyout-row">
+                    <label for="token-size-select">Size</label>
+                    <select id="token-size-select">
+                        <option value="1">Medium</option>
+                        <option value="2">Large</option>
+                        <option value="3">Huge</option>
+                        <option value="4">Gargantuan</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Notes</span>
-                <button class="tool-btn" id="tool-note" onclick="setTool('note')">Pin</button>
+            <div class="flyout-pane" data-pane="wall">
+                <div class="flyout-title">Wall</div>
+                <div class="flyout-row">
+                    <label for="wall-type-select">Type</label>
+                    <select id="wall-type-select" onchange="setWallType(this.value)">
+                        <option value="normal">Normal</option>
+                        <option value="terrain">Terrain</option>
+                        <option value="invisible">Invisible</option>
+                        <option value="ethereal">Ethereal</option>
+                        <option value="door">Door</option>
+                        <option value="secret_door">Secret Door</option>
+                    </select>
+                </div>
+                <button onclick="borderMap()">Border map (auto-wall)</button>
             </div>
 
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Terrain</span>
-                <button class="tool-btn" id="tool-terrain" onclick="setTool('terrain')">Difficult</button>
+            <div class="flyout-pane" data-pane="light">
+                <div class="flyout-title">Light source</div>
+                <div class="flyout-row">
+                    <label for="light-preset-select">Preset</label>
+                    <select id="light-preset-select">
+                        <option value="torch">Torch</option>
+                        <option value="candle">Candle</option>
+                        <option value="lantern">Lantern</option>
+                        <option value="bullseye">Bullseye</option>
+                        <option value="daylight">Daylight</option>
+                    </select>
+                </div>
+                <button class="danger" onclick="clearAllLights()">Clear all lights</button>
             </div>
-            
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Lighting</span>
-                <select class="tool-select" id="ambient-select" onchange="setAmbient(this.value)" title="Ambient light level">
+
+            <div class="flyout-pane" data-pane="template">
+                <div class="flyout-title">AOE template</div>
+                <div class="flyout-row">
+                    <label for="template-type-select">Shape</label>
+                    <select id="template-type-select">
+                        <option value="burst">Burst</option>
+                        <option value="emanation">Emanation</option>
+                        <option value="cone">Cone</option>
+                        <option value="line">Line</option>
+                    </select>
+                </div>
+                <div class="flyout-row">
+                    <label for="template-size-input">Size</label>
+                    <input type="number" id="template-size-input" min="1" max="40" value="4">
+                </div>
+                <div class="flyout-row">
+                    <label for="template-color-input">Color</label>
+                    <input type="color" id="template-color-input" value="#ef4444">
+                </div>
+                <button class="danger" onclick="clearAllTemplates()">Clear all templates</button>
+            </div>
+
+            <!-- Hidden ambient select kept so existing setAmbient() callers
+                 still find the element. The rail button is the user-facing
+                 control now. -->
+            <div class="flyout-pane" data-pane="_hidden" style="display: none !important;">
+                <select id="ambient-select" onchange="setAmbient(this.value)">
                     <option value="bright">Bright</option>
                     <option value="dim">Dim</option>
                     <option value="dark">Dark</option>
                 </select>
-                <select class="tool-select" id="light-preset-select" title="Light source to place">
-                    <option value="torch">Torch</option>
-                    <option value="candle">Candle</option>
-                    <option value="lantern">Lantern</option>
-                    <option value="bullseye">Bullseye</option>
-                    <option value="daylight">Daylight</option>
-                </select>
-                <button class="tool-btn" id="tool-light" onclick="setTool('light')" title="Click map to place a light">Place Light</button>
-                <button class="tool-btn" onclick="clearAllLights()" title="Remove every light from the map">Clear</button>
-            </div>
-            
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Measure</span>
-                <button class="tool-btn" id="tool-ruler" onclick="setTool('ruler')" title="Drag to measure distance (PF2e diagonals)">Ruler</button>
-            </div>
-
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Templates</span>
-                <select class="tool-select" id="template-type-select" title="AOE template shape" onchange="setTool('template')">
-                    <option value="burst">Burst</option>
-                    <option value="emanation">Emanation</option>
-                    <option value="cone">Cone</option>
-                    <option value="line">Line</option>
-                </select>
-                <input type="number" id="template-size-input" min="1" max="40" value="4" title="Radius/length (squares)"
-                       style="width: 52px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 4px; padding: 2px 6px; font-size: 11px;">
-                <input type="color" id="template-color-input" value="#ef4444" title="Template color"
-                       style="width: 28px; height: 24px; border: 1px solid var(--border-default); border-radius: 4px; padding: 0; background: var(--bg-surface); cursor: pointer;">
-                <button class="tool-btn" id="tool-template" onclick="setTool('template')" title="Click map to place template">Place</button>
-                <button class="tool-btn" onclick="clearAllTemplates()" title="Remove every template">Clear</button>
-            </div>
-
-            <div class="toolbar-group">
-                <span class="toolbar-group-label">Map</span>
-                <button class="tool-btn" onclick="showMapModal()">Load</button>
-                <button class="tool-btn" onclick="showUploadModal()">Upload</button>
-                <button class="tool-btn" id="btn-calibrate" onclick="startCalibration()">Calibrate</button>
-                <button class="tool-btn" onclick="showGridModal()">Grid</button>
-            </div>
-            
-            <div style="margin-left: auto; display: flex; gap: 4px;">
-                <button class="tool-btn" onclick="clearExplored()">Reset Fog</button>
-                <button class="tool-btn" onclick="clearMap()">Clear Map</button>
-                <button class="tool-btn danger" onclick="resetAll()">Reset All</button>
+                <button id="btn-calibrate" onclick="startCalibration()">Calibrate</button>
             </div>
         </div>
     </div>
@@ -1754,6 +1919,11 @@
             mapState.ambient_light = ambient;
             const ambientSelect = document.getElementById('ambient-select');
             if (ambientSelect) ambientSelect.value = ambient;
+
+            // Wire the left rail. One delegated listener handles every button.
+            const rail = document.getElementById('left-rail');
+            if (rail) rail.addEventListener('click', _railClick);
+            _refreshAmbientButton();
         }
         
         function resizeCanvas() {
@@ -1801,13 +1971,15 @@
                 if (mapState.image && (!mapImage || !mapImage.src.includes(mapState.image))) {
                     loadMapImage(mapState.image);
                 }
-                // Sync ambient-light dropdown from the refreshed state.
+                // Sync ambient-light dropdown from the refreshed state, and
+                // tint the rail's ambient button to match.
                 const rawAmbient = mapState.ambient_light || mapState.lighting || 'bright';
                 const ambient = rawAmbient === 'darkness' ? 'dark' : rawAmbient;
                 lightingMode = ambient;
                 mapState.ambient_light = ambient;
                 const as = document.getElementById('ambient-select');
                 if (as) as.value = ambient;
+                _refreshAmbientButton();
                 updateCombatantList();
                 render();
             });
@@ -3028,6 +3200,22 @@
             }
         }
         
+        // Tool hotkeys — single-letter, only fire when no input has focus
+        // (so typing a token name doesn't switch tools mid-prompt) and
+        // when no modifier keys are held (Cmd-V is paste, not Select).
+        const _TOOL_HOTKEYS = {
+            v: 'select',
+            h: 'pan',
+            t: 'token',
+            w: 'wall',
+            n: 'note',
+            d: 'terrain',
+            l: 'light',
+            r: 'ruler',
+            a: 'template',
+            p: 'spawn',
+        };
+
         function onKeyDown(e) {
             if (e.key === 'Escape') {
                 if (isDrawingWall) {
@@ -3040,8 +3228,29 @@
                 // Clear any visible ruler measurement on a second Escape tap.
                 if (!isRulering && rulerStart) { rulerStart = rulerEnd = null; render(); }
                 hideContextMenu();
-            } else if (e.key === 'Enter' && isDrawingWall) {
+                return;
+            }
+            if (e.key === 'Enter' && isDrawingWall) {
                 finishWall();
+                return;
+            }
+            // Tool hotkeys — bail if a text input is focused (floatingEditor
+            // popovers, sidebar HP inputs, etc.) or any modifier is held.
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+            const tag = (e.target && e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+            const k = (e.key || '').toLowerCase();
+            const tool = _TOOL_HOTKEYS[k];
+            if (tool) {
+                e.preventDefault();
+                setTool(tool);
+                return;
+            }
+            // 'b' cycles ambient — short for "brightness". Avoids clashing
+            // with the tool letters above.
+            if (k === 'b') {
+                e.preventDefault();
+                cycleAmbient();
             }
         }
         
@@ -3217,14 +3426,36 @@
             }
         }
 
+        // Set of tools that have an options flyout next to the rail. Other
+        // tools (select, pan, note, terrain, ruler, spawn) just change the
+        // active mode and don't show a flyout.
+        const TOOLS_WITH_FLYOUT = new Set(['token', 'wall', 'light', 'template']);
+
         function setTool(tool) {
             currentTool = tool;
-            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+
+            // Rail active state: clear all data-tool buttons, mark the new one.
+            document.querySelectorAll('.rail-btn[data-tool]').forEach(btn => btn.classList.remove('active'));
             const btn = document.getElementById(`tool-${tool}`);
             if (btn) btn.classList.add('active');
 
+            // Map-area cursor class (drives CSS .tool-pan/.tool-token/etc cursors).
             const area = document.getElementById('map-area');
             area.className = `tool-${tool}`;
+
+            // Flyout: show the matching pane if the tool has options.
+            const flyout = document.getElementById('tool-flyout');
+            const panes = flyout ? flyout.querySelectorAll('.flyout-pane') : [];
+            panes.forEach(p => p.classList.remove('active'));
+            if (flyout) {
+                if (TOOLS_WITH_FLYOUT.has(tool)) {
+                    const pane = flyout.querySelector(`.flyout-pane[data-pane="${tool}"]`);
+                    if (pane) pane.classList.add('active');
+                    flyout.classList.add('active');
+                } else {
+                    flyout.classList.remove('active');
+                }
+            }
 
             // Cancel wall drawing when switching tools
             if (tool !== 'wall' && isDrawingWall) {
@@ -3239,9 +3470,102 @@
                 templatePreview = null;
             }
         }
-        
+
         function setWallType(type) {
             wallType = type;
+        }
+
+        // Rail event delegation — one listener handles every button regardless
+        // of whether it's a `data-tool` (mode switch) or `data-action`
+        // (one-shot like Add Party / Map menu / ambient cycle). Wire-up
+        // happens in init().
+        function _railClick(e) {
+            const btn = e.target.closest('.rail-btn');
+            if (!btn) return;
+            const tool = btn.dataset.tool;
+            const action = btn.dataset.action;
+            if (tool) {
+                setTool(tool);
+                return;
+            }
+            if (action === 'addParty')      { addPartyToMap(); return; }
+            if (action === 'cycleAmbient')  { cycleAmbient(); return; }
+            if (action === 'mapMenu')       { showMapMenu(btn); return; }
+            if (action === 'clearMenu')     { showClearMenu(btn); return; }
+        }
+
+        // Ambient cycles bright → dim → dark → bright. The icon stays the
+        // same but the data-tip + button color shift so the GM sees
+        // current ambient at a glance.
+        const _AMBIENT_ORDER = ['bright', 'dim', 'dark'];
+        function cycleAmbient() {
+            const cur = (mapState.ambient_light || 'bright');
+            const next = _AMBIENT_ORDER[(_AMBIENT_ORDER.indexOf(cur) + 1) % _AMBIENT_ORDER.length];
+            setAmbient(next);
+            _refreshAmbientButton();
+        }
+        function _refreshAmbientButton() {
+            const btn = document.getElementById('rail-ambient');
+            if (!btn) return;
+            const cur = mapState.ambient_light || 'bright';
+            const label = cur.charAt(0).toUpperCase() + cur.slice(1);
+            btn.dataset.tip = `Ambient: ${label} (click to cycle)`;
+            // Tint the button to match the current ambient so it's a glanceable status.
+            btn.style.color = cur === 'bright' ? '#fbbf24' : cur === 'dim' ? '#94a3b8' : '#475569';
+        }
+
+        // Map menu — popover with Load / Upload / Calibrate / Grid options.
+        async function showMapMenu(anchorEl) {
+            const r = anchorEl?.getBoundingClientRect();
+            const anchor = r ? { x: r.right, y: r.top } : undefined;
+            const result = await floatingEditor({
+                title: 'Map',
+                fields: [{
+                    key: 'action', label: 'Action', type: 'select',
+                    options: [
+                        { value: 'load',      label: 'Load existing map' },
+                        { value: 'upload',    label: 'Upload new map' },
+                        { value: 'calibrate', label: 'Calibrate grid (click two intersections)' },
+                        { value: 'grid',      label: 'Grid settings (size + offset)' },
+                    ],
+                    autofocus: true,
+                }],
+                confirmLabel: 'Open',
+                anchor,
+            });
+            if (!result) return;
+            if (result.action === 'load')      showMapModal();
+            else if (result.action === 'upload')   showUploadModal();
+            else if (result.action === 'calibrate') startCalibration();
+            else if (result.action === 'grid')     showGridModal();
+        }
+
+        // Clear / reset menu — fog reset, full map clear, full reset. Each
+        // route already has its own danger confirm (floatConfirm), so this
+        // popover just dispatches.
+        async function showClearMenu(anchorEl) {
+            const r = anchorEl?.getBoundingClientRect();
+            const anchor = r ? { x: r.right, y: r.top } : undefined;
+            const result = await floatingEditor({
+                title: 'Clear / Reset',
+                message: 'Each option asks for a final confirmation.',
+                fields: [{
+                    key: 'action', label: 'Target', type: 'select',
+                    options: [
+                        { value: 'fog', label: 'Reset fog only (re-fog explored cells)' },
+                        { value: 'map', label: 'Clear map (tokens + walls + terrain + fog)' },
+                        { value: 'all', label: 'Reset everything (and reload page)' },
+                    ],
+                    autofocus: true,
+                }],
+                confirmLabel: 'Run',
+                danger: true,
+                anchor,
+            });
+            if (!result) return;
+            if (result.action === 'fog')      clearExplored();
+            else if (result.action === 'map') clearMap();
+            else if (result.action === 'all') resetAll();
         }
         
         // ===========================================
