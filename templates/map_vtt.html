@@ -65,7 +65,34 @@
         #bottom-toolbar::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
         #bottom-toolbar::-webkit-scrollbar-track { background: transparent; }
         
-        /* ===== CANVAS ===== */
+        /* ===== CANVAS LAYERS ===== */
+        /* Layered rendering: each layer is a viewport-size <canvas> stacked
+           absolutely at the same origin. Pan/zoom is applied per-layer via
+           ctx.translate/scale (not CSS transform) so existing draw helpers
+           keep working. Dirty flags drive a single rAF scheduler so only the
+           layers whose inputs changed are repainted each frame.
+           bg → map image + grid + walls + terrain + spawn + GM notes
+           fog → fog of war + light glows
+           tokens → AOE templates, tokens, range rings, movement range
+           overlay → ruler, wall-draw preview, calibration markers */
+        #map-stack {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; /* events bubble to #map-area */
+        }
+        .map-layer {
+            position: absolute;
+            top: 0; left: 0;
+            transform-origin: 0 0;
+            pointer-events: none;
+        }
+        /* Top-most layer accepts pointer events; the others are background
+           pixels only. Mouse handlers live on #map-area, which still gets
+           the event because pointer-events bubbles up. */
+        #layer-overlay { pointer-events: auto; }
+        /* Legacy alias kept so #map-canvas {...} rules in third-party CSS
+           still target the topmost layer. */
         #map-canvas {
             position: absolute;
             transform-origin: 0 0;
@@ -726,13 +753,130 @@
             stroke-width: 3;
             stroke-dasharray: 8 4;
         }
+
+        /* ===== FLOATING EDITOR ===== */
+        /* Tiny popover that replaces native prompt()/confirm(). Anchored to a
+           screen-space point (mouse, button, token center) and self-positions
+           to stay on-screen. Single Esc cancels, Enter on an input confirms. */
+        .float-editor {
+            position: fixed;
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 8px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.04) inset;
+            padding: 12px 14px;
+            min-width: 220px;
+            max-width: 320px;
+            z-index: 1100;
+            font-size: 12px;
+            color: #ddd;
+            animation: float-pop-in 0.12s ease-out;
+        }
+        .float-editor.danger { border-color: #7f1d1d; }
+        @keyframes float-pop-in {
+            from { opacity: 0; transform: scale(0.96); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+
+        .float-editor-title {
+            font-weight: 600;
+            font-size: 12px;
+            color: #fff;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .float-editor-message {
+            color: #bbb;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+        .float-editor-row { margin-bottom: 8px; }
+        .float-editor-row label {
+            display: block;
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 3px;
+        }
+        .float-editor-row input[type="text"],
+        .float-editor-row input[type="number"],
+        .float-editor-row select,
+        .float-editor-row textarea {
+            width: 100%;
+            padding: 6px 8px;
+            background: #252525;
+            border: 1px solid #3a3a3a;
+            border-radius: 5px;
+            color: #fff;
+            font-size: 12px;
+            outline: none;
+            font-family: inherit;
+        }
+        .float-editor-row input[type="text"]:focus,
+        .float-editor-row input[type="number"]:focus,
+        .float-editor-row select:focus,
+        .float-editor-row textarea:focus { border-color: #3b82f6; }
+        .float-editor-row textarea { resize: vertical; min-height: 56px; }
+        .float-editor-row.checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .float-editor-row.checkbox label {
+            margin: 0;
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 12px;
+            color: #ddd;
+            cursor: pointer;
+        }
+
+        .float-editor-actions {
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+        .float-editor-btn {
+            padding: 6px 12px;
+            border: 1px solid #3a3a3a;
+            background: #2a2a2a;
+            color: #ddd;
+            border-radius: 5px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.1s, border-color 0.1s;
+        }
+        .float-editor-btn:hover { background: #333; border-color: #555; }
+        .float-editor-btn.primary {
+            background: #2563eb;
+            border-color: #3b82f6;
+            color: #fff;
+        }
+        .float-editor-btn.primary:hover { background: #1d4ed8; }
+        .float-editor-btn.danger {
+            background: #7f1d1d;
+            border-color: #991b1b;
+            color: #fff;
+        }
+        .float-editor-btn.danger:hover { background: #991b1b; }
     </style>
 </head>
 <body>
     <div id="app">
         <!-- Map Area -->
         <div id="map-area" class="tool-select">
-            <canvas id="map-canvas"></canvas>
+            <!-- Stacked render layers. Order = bottom→top. The top-most one
+                 is `layer-overlay` and also doubles as the legacy
+                 `#map-canvas` so existing mouse handlers keep finding it. -->
+            <div id="map-stack">
+                <canvas id="layer-bg" class="map-layer"></canvas>
+                <canvas id="layer-fog" class="map-layer"></canvas>
+                <canvas id="layer-tokens" class="map-layer"></canvas>
+                <canvas id="layer-overlay" class="map-layer" data-legacy-id="map-canvas"></canvas>
+            </div>
             
             <!-- Top Navigation -->
             <div id="top-nav">
@@ -832,7 +976,7 @@
                             <button class="range-btn" onclick="setActiveRange('60 ft', 60, 'rgba(239, 68, 68, 0.6)')">60</button>
                             <button class="range-btn" onclick="setActiveRange('100 ft', 100, 'rgba(239, 68, 68, 0.6)')">100</button>
                             <button class="range-btn" onclick="setActiveRange('120 ft', 120, 'rgba(239, 68, 68, 0.6)')">120</button>
-                            <button class="range-btn" onclick="(function(){const v=prompt('Range in feet'); if(v) setActiveRange(v+' ft', parseInt(v), 'rgba(168, 85, 247, 0.7)');})()">+</button>
+                            <button class="range-btn" onclick="addCustomRange(event)">+</button>
                             <button class="range-btn" onclick="clearActiveRanges()" style="background: var(--danger-500); color: #fff;">Clear</button>
                         </div>
                     </div>
@@ -1173,14 +1317,393 @@
         // Movement preview state
         let showingMovementPreview = false;
         let movementStartToken = null;
+
+        // ===========================================
+        // FLOATING EDITOR — replaces native prompt()/confirm()
+        // ===========================================
+        // One floating popover at a time. Opening a second closes the first.
+        // Anchored to a screen-space point; auto-flips to stay on-screen.
+        // Esc cancels, Enter on a non-textarea input confirms. Backdrop click
+        // cancels too. Returns a Promise that resolves to the values dict on
+        // confirm or null on cancel.
+        let _floatEditorEl = null;
+        let _floatEditorOnKey = null;
+        let _floatEditorOnDocClick = null;
+
+        function closeFloatEditor() {
+            if (_floatEditorEl) {
+                _floatEditorEl.remove();
+                _floatEditorEl = null;
+            }
+            if (_floatEditorOnKey) {
+                document.removeEventListener('keydown', _floatEditorOnKey, true);
+                _floatEditorOnKey = null;
+            }
+            if (_floatEditorOnDocClick) {
+                document.removeEventListener('mousedown', _floatEditorOnDocClick, true);
+                _floatEditorOnDocClick = null;
+            }
+        }
+
+        function _escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function floatingEditor(opts) {
+            // opts: {
+            //   anchor: {x, y}            // screen coords (clientX/Y)
+            //   title?: string
+            //   message?: string          // plain text shown above fields
+            //   fields?: [                // optional, omit for confirm-only
+            //     { key, label, type:'text'|'number'|'textarea'|'select'|'checkbox',
+            //       value?, placeholder?, options?: [{value,label}], min?, max?,
+            //       autofocus?: bool }
+            //   ]
+            //   confirmLabel?: string     // default 'OK'
+            //   cancelLabel?: string      // default 'Cancel'
+            //   danger?: bool             // styles confirm red, ringed border
+            // }
+            // Returns Promise<values|null>. values keys match field.key.
+            closeFloatEditor();
+
+            return new Promise((resolve) => {
+                const fields = opts.fields || [];
+                const confirmLabel = opts.confirmLabel || 'OK';
+                // Allow callers to pass cancelLabel: null to hide the Cancel
+                // button entirely — useful for informational popovers.
+                const cancelLabel = (opts.cancelLabel === null || opts.cancelLabel === false)
+                    ? null
+                    : (opts.cancelLabel || 'Cancel');
+                const danger = !!opts.danger;
+
+                const el = document.createElement('div');
+                el.className = 'float-editor' + (danger ? ' danger' : '');
+
+                let html = '';
+                if (opts.title) {
+                    html += `<div class="float-editor-title">${_escapeHtml(opts.title)}</div>`;
+                }
+                if (opts.message) {
+                    html += `<div class="float-editor-message">${_escapeHtml(opts.message)}</div>`;
+                }
+                for (const f of fields) {
+                    const id = `_fe_${f.key}`;
+                    const val = f.value != null ? _escapeHtml(f.value) : '';
+                    const ph = f.placeholder ? `placeholder="${_escapeHtml(f.placeholder)}"` : '';
+                    if (f.type === 'textarea') {
+                        html += `<div class="float-editor-row">
+                            <label for="${id}">${_escapeHtml(f.label || f.key)}</label>
+                            <textarea id="${id}" data-key="${f.key}" ${ph}>${val}</textarea>
+                        </div>`;
+                    } else if (f.type === 'select') {
+                        const opts2 = (f.options || []).map(o => {
+                            const ov = typeof o === 'string' ? o : o.value;
+                            const ol = typeof o === 'string' ? o : (o.label || o.value);
+                            const sel = String(ov) === String(f.value) ? ' selected' : '';
+                            return `<option value="${_escapeHtml(ov)}"${sel}>${_escapeHtml(ol)}</option>`;
+                        }).join('');
+                        html += `<div class="float-editor-row">
+                            <label for="${id}">${_escapeHtml(f.label || f.key)}</label>
+                            <select id="${id}" data-key="${f.key}">${opts2}</select>
+                        </div>`;
+                    } else if (f.type === 'checkbox') {
+                        const checked = f.value ? ' checked' : '';
+                        html += `<div class="float-editor-row checkbox">
+                            <input type="checkbox" id="${id}" data-key="${f.key}"${checked}>
+                            <label for="${id}">${_escapeHtml(f.label || f.key)}</label>
+                        </div>`;
+                    } else {
+                        const t = f.type === 'number' ? 'number' : 'text';
+                        const minMax = (f.min != null ? ` min="${f.min}"` : '') + (f.max != null ? ` max="${f.max}"` : '');
+                        html += `<div class="float-editor-row">
+                            <label for="${id}">${_escapeHtml(f.label || f.key)}</label>
+                            <input type="${t}" id="${id}" data-key="${f.key}" value="${val}" ${ph}${minMax}>
+                        </div>`;
+                    }
+                }
+                const cancelBtnHtml = cancelLabel != null
+                    ? `<button class="float-editor-btn" data-action="cancel">${_escapeHtml(cancelLabel)}</button>`
+                    : '';
+                html += `<div class="float-editor-actions">
+                    ${cancelBtnHtml}
+                    <button class="float-editor-btn ${danger ? 'danger' : 'primary'}" data-action="confirm">${_escapeHtml(confirmLabel)}</button>
+                </div>`;
+                el.innerHTML = html;
+                document.body.appendChild(el);
+
+                // Position: anchor at opts.anchor (screen coords). Offset so
+                // the editor opens just below+right; flip to stay in viewport.
+                const ax = (opts.anchor && opts.anchor.x) || (window.innerWidth / 2);
+                const ay = (opts.anchor && opts.anchor.y) || (window.innerHeight / 2);
+                const margin = 8;
+                el.style.left = '0px';  // measure first
+                el.style.top  = '0px';
+                const rect = el.getBoundingClientRect();
+                let x = ax + 12, y = ay + 12;
+                if (x + rect.width  > window.innerWidth  - margin) x = ax - rect.width  - 12;
+                if (y + rect.height > window.innerHeight - margin) y = ay - rect.height - 12;
+                if (x < margin) x = margin;
+                if (y < margin) y = margin;
+                el.style.left = `${x}px`;
+                el.style.top  = `${y}px`;
+
+                _floatEditorEl = el;
+
+                // Collect field values
+                const collect = () => {
+                    const out = {};
+                    for (const f of fields) {
+                        const node = el.querySelector(`[data-key="${f.key}"]`);
+                        if (!node) continue;
+                        if (f.type === 'checkbox') out[f.key] = !!node.checked;
+                        else if (f.type === 'number') {
+                            const n = parseFloat(node.value);
+                            out[f.key] = isFinite(n) ? n : null;
+                        } else out[f.key] = node.value;
+                    }
+                    return out;
+                };
+
+                const finish = (values) => {
+                    closeFloatEditor();
+                    resolve(values);
+                };
+
+                const cancelBtnEl = el.querySelector('[data-action="cancel"]');
+                if (cancelBtnEl) cancelBtnEl.addEventListener('click', () => finish(null));
+                el.querySelector('[data-action="confirm"]').addEventListener('click', () => finish(collect()));
+
+                // Keyboard: Esc cancels, Enter confirms (except in textarea).
+                _floatEditorOnKey = (ev) => {
+                    if (ev.key === 'Escape') {
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        finish(null);
+                    } else if (ev.key === 'Enter') {
+                        const tag = (ev.target.tagName || '').toLowerCase();
+                        if (tag === 'textarea' && !ev.metaKey && !ev.ctrlKey) return;
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        finish(collect());
+                    }
+                };
+                document.addEventListener('keydown', _floatEditorOnKey, true);
+
+                // Backdrop click (anywhere outside the editor) cancels.
+                _floatEditorOnDocClick = (ev) => {
+                    if (!el.contains(ev.target)) {
+                        finish(null);
+                    }
+                };
+                // Defer one tick so the click that opened the editor isn't
+                // counted as the first outside-click.
+                setTimeout(() => {
+                    if (_floatEditorOnDocClick) {
+                        document.addEventListener('mousedown', _floatEditorOnDocClick, true);
+                    }
+                }, 0);
+
+                // Autofocus
+                const focusable = fields.find(f => f.autofocus) || fields[0];
+                if (focusable) {
+                    const node = el.querySelector(`[data-key="${focusable.key}"]`);
+                    if (node) {
+                        node.focus();
+                        if (node.select) try { node.select(); } catch (_) {}
+                    }
+                } else {
+                    el.querySelector('[data-action="confirm"]').focus();
+                }
+            });
+        }
+
+        // Convenience wrappers — match prompt()/confirm() ergonomics.
+        async function floatPrompt(message, defaultValue, opts = {}) {
+            const anchor = opts.anchor || _lastInteractionPoint();
+            const result = await floatingEditor({
+                anchor,
+                title: opts.title,
+                message,
+                fields: [{ key: 'value', label: opts.label || '', type: opts.type || 'text',
+                           value: defaultValue, autofocus: true,
+                           placeholder: opts.placeholder, min: opts.min, max: opts.max }],
+                confirmLabel: opts.confirmLabel,
+                cancelLabel: opts.cancelLabel,
+            });
+            if (result == null) return null;
+            const v = result.value;
+            return (opts.type === 'number') ? v : (typeof v === 'string' ? v : '');
+        }
+        async function floatConfirm(message, opts = {}) {
+            const anchor = opts.anchor || _lastInteractionPoint();
+            const result = await floatingEditor({
+                anchor,
+                title: opts.title,
+                message,
+                confirmLabel: opts.confirmLabel || 'Confirm',
+                cancelLabel: opts.cancelLabel || 'Cancel',
+                danger: opts.danger,
+            });
+            return result != null;
+        }
+
+        // Track the last mouse/click position so floatPrompt/floatConfirm have
+        // a sensible anchor when the caller didn't pass one (e.g. toolbar
+        // buttons). Updated on every mousemove globally.
+        let _lastMouseX = window.innerWidth / 2;
+        let _lastMouseY = window.innerHeight / 2;
+        document.addEventListener('mousemove', (e) => {
+            _lastMouseX = e.clientX;
+            _lastMouseY = e.clientY;
+        }, true);
+        function _lastInteractionPoint() {
+            return { x: _lastMouseX, y: _lastMouseY };
+        }
         
+        // ===========================================
+        // LAYERED CANVAS RENDERING
+        // ===========================================
+        // Four overlapping <canvas> elements stacked at the same origin. Each
+        // owns part of the visual: changes to one don't force the others to
+        // redraw. A single rAF scheduler walks the dirty flags so multiple
+        // markDirty() calls in the same tick coalesce into one paint.
+        //
+        // Layer ownership:
+        //   bg      → map image, grid, difficult terrain, walls, spawn, GM notes
+        //   fog     → fog of war overlay, light glows
+        //   tokens  → AOE templates, tokens (incl. HP bar / condition icons /
+        //             flanking ring), movement range circle, range rings
+        //   overlay → ruler line, wall-draw preview, calibration crosshairs
+        //
+        // Existing draw helpers reference a global `ctx`. Rather than thread
+        // it through every signature, _drawXLayer() points the global at the
+        // right context before invoking helpers and restores it after.
+        const layers = {
+            bg:      { canvas: null, ctx: null, dirty: true },
+            fog:     { canvas: null, ctx: null, dirty: true },
+            tokens:  { canvas: null, ctx: null, dirty: true },
+            overlay: { canvas: null, ctx: null, dirty: true },
+        };
+        let _renderScheduled = false;
+
+        function markDirty(...names) {
+            for (const n of names) {
+                if (layers[n]) layers[n].dirty = true;
+            }
+            _scheduleRender();
+        }
+        function markAllDirty() {
+            for (const k of Object.keys(layers)) layers[k].dirty = true;
+            _scheduleRender();
+        }
+        function _scheduleRender() {
+            if (_renderScheduled) return;
+            _renderScheduled = true;
+            requestAnimationFrame(_renderTick);
+        }
+        function _renderTick() {
+            _renderScheduled = false;
+
+            // No map loaded — show placeholder on bg, blank everything else.
+            if (!mapImage || !mapImage.complete) {
+                if (layers.bg.dirty) {
+                    const c = layers.bg.canvas, x = layers.bg.ctx;
+                    x.clearRect(0, 0, c.width, c.height);
+                    x.fillStyle = '#111';
+                    x.fillRect(0, 0, c.width, c.height);
+                    x.fillStyle = '#444';
+                    x.font = '16px system-ui';
+                    x.textAlign = 'center';
+                    x.fillText('No map loaded. Use Map → Load or Upload.', c.width/2, c.height/2);
+                    layers.bg.dirty = false;
+                }
+                for (const k of ['fog','tokens','overlay']) {
+                    if (!layers[k].dirty) continue;
+                    const c = layers[k].canvas, x = layers[k].ctx;
+                    x.clearRect(0, 0, c.width, c.height);
+                    layers[k].dirty = false;
+                }
+                document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+                return;
+            }
+
+            // Clear the dirty flag BEFORE the draw runs. Otherwise a draw
+            // helper that calls markDirty(...) for "next frame" (e.g. token
+            // tween or active-combatant pulse) would have its dirty=true
+            // immediately overwritten by the post-draw cleanup.
+            if (layers.bg.dirty)      { layers.bg.dirty = false;      _drawBgLayer(); }
+            if (layers.fog.dirty)     { layers.fog.dirty = false;     _drawFogLayer(); }
+            if (layers.tokens.dirty)  { layers.tokens.dirty = false;  _drawTokensLayer(); }
+            if (layers.overlay.dirty) { layers.overlay.dirty = false; _drawOverlayLayer(); }
+
+            document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+        }
+
+        // Helpers point the global `ctx` at the layer being drawn so the
+        // existing draw helpers (drawWalls, drawTokens, etc.) keep working
+        // unchanged. Each layer applies the same pan/zoom transform.
+        function _beginLayer(layerName) {
+            const L = layers[layerName];
+            ctx = L.ctx;
+            ctx.clearRect(0, 0, L.canvas.width, L.canvas.height);
+            ctx.save();
+            ctx.translate(viewX, viewY);
+            ctx.scale(zoom, zoom);
+        }
+        function _endLayer() {
+            ctx.restore();
+        }
+
+        function _drawBgLayer() {
+            _beginLayer('bg');
+            ctx.drawImage(mapImage, 0, 0);
+            drawGrid();
+            drawDifficultTerrain();
+            drawWalls();
+            drawSpawnPoint();
+            drawGMNotes();
+            _endLayer();
+        }
+        function _drawFogLayer() {
+            _beginLayer('fog');
+            drawExploredFog();
+            drawLights();
+            _endLayer();
+        }
+        function _drawTokensLayer() {
+            _beginLayer('tokens');
+            drawTemplates();
+            drawTokens();
+            if (selectedToken) {
+                drawMovementRange();
+                drawRangeRings();
+            }
+            _endLayer();
+        }
+        function _drawOverlayLayer() {
+            _beginLayer('overlay');
+            drawWallPreview();
+            drawCalibrationPoints();
+            drawRuler();
+            _endLayer();
+        }
+
         // ===========================================
         // INITIALIZATION
         // ===========================================
         function init() {
-            canvas = document.getElementById('map-canvas');
-            ctx = canvas.getContext('2d');
-            
+            // Topmost layer doubles as the legacy `canvas` so existing mouse
+            // handlers (which use canvas.getBoundingClientRect()) keep working.
+            for (const name of Object.keys(layers)) {
+                const el = document.getElementById('layer-' + name);
+                layers[name].canvas = el;
+                layers[name].ctx = el.getContext('2d');
+            }
+            canvas = layers.overlay.canvas;
+            ctx = layers.overlay.ctx;
+
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
             
@@ -1235,9 +1758,12 @@
         
         function resizeCanvas() {
             const area = document.getElementById('map-area');
-            canvas.width = area.clientWidth;
-            canvas.height = area.clientHeight;
-            render();
+            const w = area.clientWidth, h = area.clientHeight;
+            for (const k of Object.keys(layers)) {
+                layers[k].canvas.width = w;
+                layers[k].canvas.height = h;
+            }
+            markAllDirty();
         }
         
         function loadMapImage(filename) {
@@ -1385,75 +1911,15 @@
         }
         
         // ===========================================
-        // RENDERING
+        // RENDERING (compatibility shim)
         // ===========================================
+        // Old code calls render() liberally — keep that working by funnelling
+        // every call through markAllDirty(). The scheduler then redraws each
+        // layer at most once per frame regardless of how many render() calls
+        // pile up. Callers that know they only mutated tokens (or only fog)
+        // can call markDirty('tokens') directly to skip the bg/walls repaint.
         function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (!mapImage || !mapImage.complete) {
-                ctx.fillStyle = '#111';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#444';
-                ctx.font = '16px system-ui';
-                ctx.textAlign = 'center';
-                ctx.fillText('No map loaded. Use Map → Load or Upload.', canvas.width/2, canvas.height/2);
-                return;
-            }
-            
-            ctx.save();
-            ctx.translate(viewX, viewY);
-            ctx.scale(zoom, zoom);
-            
-            // Draw map image
-            ctx.drawImage(mapImage, 0, 0);
-            
-            // Draw grid
-            drawGrid();
-            
-            // Draw difficult terrain
-            drawDifficultTerrain();
-            
-            // Draw explored fog overlay (dimmed areas)
-            drawExploredFog();
-            
-            // Draw walls (GM sees all walls)
-            drawWalls();
-
-            // Draw wall preview if drawing
-            drawWallPreview();
-
-            // Draw light sources: bright/dim rings + marker, plus a soft glow
-            // in dim/dark ambient so the GM can preview the player view.
-            drawLights();
-
-            // Draw spawn point
-            drawSpawnPoint();
-
-            // Draw GM-only note pins (never sent to players)
-            drawGMNotes();
-
-            // Draw calibration points if calibrating
-            drawCalibrationPoints();
-
-            // Draw AOE templates (under tokens so creatures are visible)
-            drawTemplates();
-
-            // Draw tokens
-            drawTokens();
-
-            // Draw movement range if token selected
-            if (selectedToken) {
-                drawMovementRange();
-                drawRangeRings();
-            }
-
-            // Draw ruler on top of everything so it's always legible
-            drawRuler();
-
-            ctx.restore();
-
-            // Update status bar
-            document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+            markAllDirty();
         }
         
         function drawGrid() {
@@ -2012,9 +2478,12 @@
                 drawConditionIcons(token, cx, cy, r);
             }
             
-            // Request animation frame for active token pulse OR active tween.
+            // Keep the tokens layer animating while a tween is in flight or
+            // an active-combatant pulse is rendering. We dirty just the tokens
+            // layer — bg/fog/overlay don't change frame-to-frame for these
+            // animations, so we skip their repaint.
             if (_anyTokenAnimating() || (mapState.tokens || []).some(t => isActiveCombatant(t))) {
-                requestAnimationFrame(render);
+                markDirty('tokens');
             }
         }
         
@@ -2177,7 +2646,23 @@
             _activeRanges = [];
             render();
         }
-        
+
+        async function addCustomRange(ev) {
+            // Anchor the popover at the + button so the GM doesn't lose
+            // their place. Falls back to last-mouse if no event was passed.
+            const anchor = ev && ev.clientX != null
+                ? { x: ev.clientX, y: ev.clientY }
+                : undefined;
+            const ft = await floatPrompt('Range in feet', '', {
+                title: 'Custom range', type: 'number', min: 5,
+                placeholder: 'e.g. 60', anchor,
+            });
+            if (ft == null) return;
+            const n = parseInt(ft, 10);
+            if (!isFinite(n) || n <= 0) return;
+            setActiveRange(`${n} ft`, n, 'rgba(168, 85, 247, 0.7)');
+        }
+
         function isActiveCombatant(token) {
             const sortedTokens = getSortedCombatants();
             if (sortedTokens.length === 0) return false;
@@ -2228,7 +2713,7 @@
                     // on a secret-door icon, let them Seek with a selected PC.
                     const hitWall = getDoorIconAtPoint(mapX, mapY);
                     if (hitWall) {
-                        handleDoorClick(hitWall);
+                        handleDoorClick(hitWall, e);
                         return;
                     }
                     // GM click on a note pin: open edit dialog
@@ -2243,14 +2728,22 @@
                     const hitLight = getLightAtPoint(mapX, mapY);
                     if (hitLight) {
                         const label = hitLight.name || hitLight.preset || 'light';
-                        if (confirm(`Remove this ${label}?`)) removeLightById(hitLight.id);
+                        // onMouseDown is sync; fire-and-forget the popover and
+                        // return so we don't fall through to pan-drag setup.
+                        floatConfirm(`Remove this ${label}?`, {
+                            title: 'Remove light', confirmLabel: 'Remove', danger: true,
+                            anchor: { x: e.clientX, y: e.clientY },
+                        }).then(ok => { if (ok) removeLightById(hitLight.id); });
                         return;
                     }
                     // GM click on a template: offer to remove it.
                     const hitTmpl = getTemplateAtPoint(mapX, mapY);
                     if (hitTmpl) {
                         const label = hitTmpl.source || hitTmpl.name || hitTmpl.type;
-                        if (confirm(`Remove ${label}?`)) removeTemplateById(hitTmpl.id);
+                        floatConfirm(`Remove ${label}?`, {
+                            title: 'Remove template', confirmLabel: 'Remove', danger: true,
+                            anchor: { x: e.clientX, y: e.clientY },
+                        }).then(ok => { if (ok) removeTemplateById(hitTmpl.id); });
                         return;
                     }
                     selectedToken = null;
@@ -2599,16 +3092,23 @@
             return null;
         }
 
-        async function handleDoorClick(wall) {
+        async function handleDoorClick(wall, ev) {
             // Non-secret doors: simple open/close toggle, as before.
             // Shift-click promotes a regular door to a secret door (prompts
             // for DC). Lets the GM retrofit existing doors without redrawing.
+            const anchor = ev && ev.clientX != null
+                ? { x: ev.clientX, y: ev.clientY }
+                : undefined;
             if (!wall.secret) {
-                if (event && event.shiftKey) {
-                    const dcStr = prompt('Convert to SECRET door. Hidden DC (blank to cancel)?', '20');
-                    if (dcStr === null || dcStr.trim() === '') return;
+                if (ev && ev.shiftKey) {
+                    const dcStr = await floatPrompt(
+                        'Hidden DC (Perception to find this door):',
+                        '20',
+                        { title: 'Convert to secret door', type: 'number', min: 0, anchor }
+                    );
+                    if (dcStr == null) return;
                     const dc = parseInt(dcStr, 10);
-                    if (!dc) return;
+                    if (!isFinite(dc) || dc <= 0) return;
                     await fetch('/api/map/wall/set_secret', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2624,20 +3124,31 @@
                 return;
             }
 
-            // Secret door: offer Seek (roll a PC's Perception vs hidden DC),
-            // or simple toggle (already revealed), or reveal-to-everyone.
+            // Secret door: build a select with every PC + a toggle option.
+            // Cancelled or no choice = no-op. The select removes the old
+            // free-text prompt where typo'ing a name silently failed.
             const discovered = (wall.discovered_by || []).join(', ') || '(none yet)';
-            const choice = prompt(
-                `Secret Door\n` +
-                `DC: ${wall.hidden_dc || '?'}\n` +
-                `Discovered by: ${discovered}\n\n` +
-                `Enter a PC name to roll Seek, "open" to toggle, or blank to cancel:`,
-                ''
-            );
-            if (choice === null || !choice.trim()) return;
-            const pick = choice.trim();
+            const pcs = (mapState.tokens || []).filter(t => t.is_pc);
+            const options = [
+                { value: '__toggle__', label: wall.open ? 'Close door' : 'Open / reveal door' },
+                ...pcs.map(p => ({
+                    value: p.id,
+                    label: `Seek with ${p.pc_name || p.name || p.assigned_player || p.id}`,
+                })),
+            ];
+            const result = await floatingEditor({
+                title: 'Secret door',
+                message: `DC ${wall.hidden_dc || '?'} — Discovered: ${discovered}`,
+                fields: [{
+                    key: 'action', label: 'Action', type: 'select',
+                    options, value: '__toggle__', autofocus: true,
+                }],
+                confirmLabel: 'Go',
+                anchor,
+            });
+            if (!result) return;
 
-            if (pick.toLowerCase() === 'open') {
+            if (result.action === '__toggle__') {
                 await fetch('/api/map/wall/toggle_door', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2646,32 +3157,33 @@
                 return;
             }
 
-            // Find a token matching that PC name
-            const match = (mapState.tokens || []).find(t =>
-                t.is_pc && ((t.pc_name === pick) || (t.name === pick) || (t.assigned_player === pick))
-            );
-            if (!match) {
-                alert(`No PC token found for "${pick}".`);
-                return;
-            }
-
+            // result.action is a token id — server resolves discoverer/etc.
             const res = await fetch('/api/map/wall/seek', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: wall.id, token_id: match.id })
+                body: JSON.stringify({ id: wall.id, token_id: result.action })
             }).then(r => r.json()).catch(() => null);
 
             if (!res || !res.success) {
-                alert('Seek failed: ' + (res?.error || 'unknown error'));
+                await floatingEditor({
+                    title: 'Seek failed',
+                    message: res?.error || 'Server error — see console.',
+                    confirmLabel: 'OK', cancelLabel: null, danger: true, anchor,
+                });
                 return;
             }
-            const msg = `${res.discoverer}: 1d20 (${res.roll}) + ${res.modifier} = ${res.total} vs DC ${res.dc} — ${res.degree.toUpperCase()}${res.revealed ? ' — REVEALED!' : ''}`;
-            alert(msg);
+            await floatingEditor({
+                title: res.revealed ? 'Door revealed!' : 'Seek result',
+                message: `${res.discoverer}: 1d20 (${res.roll}) + ${res.modifier} = ${res.total} vs DC ${res.dc} — ${res.degree.toUpperCase()}`,
+                confirmLabel: 'OK', cancelLabel: null, anchor,
+            });
         }
 
         async function placeGMNote(mapX, mapY) {
-            const text = prompt('Note text:');
-            if (text === null) return;
+            const text = await floatPrompt('Note text:', '', {
+                title: 'GM Note', type: 'text', placeholder: 'Visible only to you'
+            });
+            if (text == null) return;
             await fetch('/api/map/note/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2686,8 +3198,10 @@
         }
 
         async function editGMNote(note) {
-            const text = prompt('Edit note (blank to delete):', note.text || '');
-            if (text === null) return;
+            const text = await floatPrompt('Edit note (blank to delete):', note.text || '', {
+                title: 'Edit Note'
+            });
+            if (text == null) return;
             if (text.trim() === '') {
                 await fetch('/api/map/note/remove', {
                     method: 'POST',
@@ -2779,9 +3293,11 @@
             if (wallType === 'secret_door') {
                 apiType = 'door';
                 secret = true;
-                const dcStr = prompt('Hidden DC for this secret door (Perception to find)?', '20');
-                if (dcStr === null) { cancelWall(); return; }
-                hiddenDc = parseInt(dcStr, 10);
+                const dc = await floatPrompt('Hidden DC for this secret door (Perception to find)?', 20, {
+                    title: 'Secret Door', type: 'number', min: 1, max: 60
+                });
+                if (dc == null) { cancelWall(); return; }
+                hiddenDc = parseInt(dc, 10);
                 if (!isFinite(hiddenDc) || hiddenDc < 0) hiddenDc = 20;
             }
 
@@ -2836,20 +3352,23 @@
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
-            
+
             const gridX = Math.floor((mapX - ox) / gs);
             const gridY = Math.floor((mapY - oy) / gs);
-            
-            const name = prompt('Token name:');
-            if (!name) return;
-            
+
+            const name = await floatPrompt('Token name:', '', {
+                title: 'Place Token', placeholder: 'e.g. Goblin'
+            });
+            if (!name || !name.trim()) return;
+            const trimmedName = name.trim();
+
             const size = parseInt(document.getElementById('token-size-select').value) || 1;
             
             await fetch('/api/map/token/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name,
+                    name: trimmedName,
                     x: gridX,
                     y: gridY,
                     color: '#3b82f6',
@@ -3109,20 +3628,39 @@
         }
         
         function isFlankingPair(pc1, pc2, enemy) {
-            // Check if pc1 and pc2 are on opposite sides of enemy
-            // Simple check: they're roughly opposite (180° ± 45°)
+            // PF2e flanking: two allies threaten the same target from
+            // squares on opposite sides AND can draw an unblocked line
+            // between themselves through the target's space. The old
+            // implementation skipped the LOS check, so flanking would
+            // trigger across walls or through open doors that closed.
             const dx1 = pc1.x - enemy.x;
             const dy1 = pc1.y - enemy.y;
             const dx2 = pc2.x - enemy.x;
             const dy2 = pc2.y - enemy.y;
-            
+
             // Must be adjacent (within 1 square)
             if (Math.abs(dx1) > 1 || Math.abs(dy1) > 1) return false;
             if (Math.abs(dx2) > 1 || Math.abs(dy2) > 1) return false;
-            
-            // Check if opposite (dot product negative = opposite direction)
+
+            // Opposite sides: dot product of the offset vectors is negative.
             const dot = dx1 * dx2 + dy1 * dy2;
-            return dot < 0;
+            if (dot >= 0) return false;
+
+            // Wall-LOS check from flanker to flanker. Same wall raycast
+            // used everywhere else, so secret/closed doors and normal
+            // walls all break flanking; ethereal/invisible/open doors
+            // do not.
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const s1 = pc1.size || 1, s2 = pc2.size || 1;
+            const x1 = pc1.x * gs + ox + (gs * s1) / 2;
+            const y1 = pc1.y * gs + oy + (gs * s1) / 2;
+            const x2 = pc2.x * gs + ox + (gs * s2) / 2;
+            const y2 = pc2.y * gs + oy + (gs * s2) / 2;
+            if (isBlockedByWalls(x1, y1, x2, y2, mapState.walls || [])) return false;
+
+            return true;
         }
         
         function checkAllFlanking() {
@@ -3130,30 +3668,39 @@
             enemies.forEach(e => checkFlankingStatus(e));
         }
         
-        function contextAction(action) {
+        async function contextAction(action) {
             if (!contextToken) return;
-            
-            switch (action) {
-                case 'damage':
-                    const dmg = prompt('Damage amount:');
-                    if (dmg) applyDamageWithDying(contextToken.id, parseInt(dmg));
-                    break;
-                case 'heal':
-                    const heal = prompt('Heal amount:');
-                    if (heal) applyHeal(contextToken.id, parseInt(heal));
-                    break;
-                case 'visible':
-                    toggleVisibility(contextToken.id);
-                    break;
-                case 'details':
-                    showTokenDetails(contextToken);
-                    break;
-                case 'remove':
-                    removeToken(contextToken.id);
-                    break;
-            }
-            
+            // Capture the token now — closing the context menu clears
+            // contextToken, and the floatPrompt awaits long enough for
+            // that to happen.
+            const tok = contextToken;
             hideContextMenu();
+
+            if (action === 'damage') {
+                const result = await floatingEditor({
+                    title: `Damage ${tok.name}`,
+                    fields: [
+                        { key: 'amount', label: 'Damage', type: 'number', min: 0, autofocus: true },
+                        { key: 'crit',   label: 'Critical hit (×2 Dying on drop)', type: 'checkbox' },
+                    ],
+                    confirmLabel: 'Apply',
+                    danger: true,
+                });
+                if (!result || !result.amount) return;
+                applyDamageWithDying(tok.id, parseInt(result.amount), !!result.crit);
+            } else if (action === 'heal') {
+                const amount = await floatPrompt('Heal amount', '', {
+                    title: `Heal ${tok.name}`, type: 'number', confirmLabel: 'Apply',
+                });
+                if (amount == null || !parseInt(amount)) return;
+                applyHeal(tok.id, parseInt(amount));
+            } else if (action === 'visible') {
+                toggleVisibility(tok.id);
+            } else if (action === 'details') {
+                showTokenDetails(tok);
+            } else if (action === 'remove') {
+                removeToken(tok.id);
+            }
         }
         
         async function applyDamage(tokenId, amount) {
@@ -3504,9 +4051,11 @@
             
             const newHp = Math.max(0, Math.min(token.max_hp || 100, (token.hp || 0) + delta));
             
-            // Use dying system for damage at 0 HP
+            // Use dying system for damage at 0 HP. Pass tokenId — the
+            // earlier signature-mismatch (token object) silently dropped
+            // the update because mapState.tokens.find never matched.
             if (delta < 0 && newHp === 0 && token.hp > 0) {
-                applyDamageWithDying(token, -delta);
+                applyDamageWithDying(tokenId, -delta);
             } else {
                 await fetch('/api/map/token/update', {
                     method: 'POST',
@@ -3670,24 +4219,31 @@
             });
         }
         
-        async function applyDamageWithDying(tokenId, amount) {
+        async function applyDamageWithDying(tokenId, amount, isCrit = false) {
+            // PF2e dying rules:
+            //   • Drop to 0 from above 0 → Dying 1 (or Dying 2 on a crit) +
+            //     existing Wounded value, plus Unconscious.
+            //   • Take damage while already Dying → Dying +1 (or +2 on a crit).
+            //   • Dying 4 = Dead.
+            // The crit flag is opt-in; current callers default to non-crit.
             const token = mapState.tokens.find(t => t.id === tokenId);
             if (!token) return;
-            
+
             let newHp = (token.hp || 0) - amount;
             let conditions = token.conditions || {};
             if (typeof conditions !== 'object') conditions = {};
-            
-            // Check if this knocks to 0 or below
+
+            const dyingInc = isCrit ? 2 : 1;
+
             if (newHp <= 0 && token.hp > 0) {
-                // Just dropped to 0
+                // Just dropped to 0 from a positive HP value.
                 newHp = 0;
                 const wounded = conditions['Wounded'] || 0;
-                conditions['Dying'] = 1 + wounded;
+                conditions['Dying'] = dyingInc + wounded;
                 conditions['Unconscious'] = true;
             } else if (newHp < 0 && conditions['Dying']) {
-                // Already dying, taking more damage increases dying
-                conditions['Dying'] = Math.min(4, (conditions['Dying'] || 0) + 1);
+                // Already dying — bump value, possibly to Dead.
+                conditions['Dying'] = Math.min(4, (conditions['Dying'] || 0) + dyingInc);
                 if (conditions['Dying'] >= 4) {
                     conditions['Dead'] = true;
                 }
@@ -3863,7 +4419,9 @@
         }
         
         async function clearAllWalls() {
-            if (!confirm('Clear all walls? This cannot be undone.')) return;
+            if (!await floatConfirm('Clear all walls? This cannot be undone.', {
+                title: 'Clear walls', confirmLabel: 'Clear all', danger: true,
+            })) return;
             
             await fetch('/api/map/walls/clear', {
                 method: 'POST',
@@ -4188,7 +4746,9 @@
         }
 
         async function clearAllLights() {
-            if (!confirm('Remove every placed light?')) return;
+            if (!await floatConfirm('Remove every placed light from the map?', {
+                title: 'Clear lights', confirmLabel: 'Clear all', danger: true,
+            })) return;
             try {
                 await fetch('/api/map/light/clear', { method: 'POST' });
             } catch(_) {}
@@ -4589,7 +5149,9 @@
         }
 
         async function clearAllTemplates() {
-            if (!confirm('Remove every template?')) return;
+            if (!await floatConfirm('Remove every template?', {
+                title: 'Clear templates', confirmLabel: 'Clear all', danger: true,
+            })) return;
             try {
                 await fetch('/api/map/template/clear', { method: 'POST' });
             } catch(_) {}
@@ -4629,7 +5191,9 @@
         // CLEAR / RESET FUNCTIONS
         // ===========================================
         async function clearMap() {
-            if (!confirm('Clear all tokens, walls, and terrain from the map?')) return;
+            if (!await floatConfirm('Clear all tokens, walls, and terrain from the map?', {
+                title: 'Clear map', confirmLabel: 'Clear', danger: true,
+            })) return;
             
             // Clear tokens
             for (const token of [...(mapState.tokens || [])]) {
@@ -4659,7 +5223,9 @@
         }
         
         async function resetAll() {
-            if (!confirm('Reset EVERYTHING? This will clear the map and reload the page.')) return;
+            if (!await floatConfirm('Reset EVERYTHING? This will clear the map and reload the page.', {
+                title: 'Reset all', confirmLabel: 'Reset', danger: true,
+            })) return;
             
             await clearMap();
             

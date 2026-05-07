@@ -9864,10 +9864,14 @@ def _tokens_visible_to_owners(all_tokens, owners, walls, lights, ambient, grid_s
 
 def _segment_blocked(x1, y1, x2, y2, walls):
     """True if any LOS-blocking wall segment intersects the line from
-    (x1,y1) to (x2,y2). Doors that are open (open=True) don't block."""
+    (x1,y1) to (x2,y2). Doors that are open (open=True) don't block.
+    Invisible walls block movement only, never vision — used for map
+    borders and similar guard rails. Ethereal walls block neither."""
     for w in walls:
         wtype = w.get('type', 'normal')
         if wtype == 'ethereal':
+            continue
+        if wtype == 'invisible':
             continue
         if wtype == 'door' and w.get('open'):
             continue
@@ -10511,11 +10515,11 @@ def broadcast_roll():
 # --- CHARACTER API ---
 
 @app.route('/api/character/<name>')
-def get_character_api(n):
+def get_character_api(name):
     """Get character data by name."""
     # Check party library
     for pc in PARTY_LIBRARY.values():
-        if pc.name.lower() == n.lower():
+        if pc.name.lower() == name.lower():
             return jsonify({
                 'success': True,
                 'character': {
@@ -10532,9 +10536,8 @@ def get_character_api(n):
     return jsonify({'success': False, 'error': 'Character not found'})
 
 @app.route('/api/creature/<name>')
-def get_creature_api(n):
+def get_creature_api(name):
     """Get full creature data by name (from encounter or monster library)."""
-    name = n
     # Check active encounter
     for c in ACTIVE_ENCOUNTER:
         if c.name.lower() == name.lower() or (hasattr(c, 'instance_id') and c.instance_id == name):
