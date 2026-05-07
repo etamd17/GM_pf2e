@@ -180,6 +180,108 @@
            still references .toolbar-group / .tool-btn doesn't break. The
            markup itself was removed in favor of the rail. */
         .toolbar-group, .toolbar-group-label { display: none; }
+
+        /* ===== TOKEN EDITOR PANEL =====
+           Right-sidebar editor for a single selected token (or a bulk panel
+           when N>1 tokens are selected). Each input carries data-token-id
+           and data-field; change/blur fires _onTokenFieldChange which POSTs
+           the partial update to /api/map/token/update. */
+        .token-edit-grid {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            gap: 6px 8px;
+            align-items: center;
+            font-size: 11px;
+        }
+        .token-edit-grid > label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .token-edit-grid input[type="text"],
+        .token-edit-grid input[type="number"],
+        .token-edit-grid select {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            color: #ddd;
+            padding: 4px 6px;
+            font-size: 11px;
+        }
+        .token-edit-grid input:focus,
+        .token-edit-grid select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .token-edit-grid input[type="color"] {
+            width: 36px; height: 24px; padding: 0;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .token-edit-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .token-edit-row .token-edit-sep {
+            color: #666;
+            font-weight: bold;
+        }
+        .token-edit-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #aaa;
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+        .token-edit-check input { margin: 0; }
+
+        .bulk-btn {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            color: #ddd;
+            padding: 6px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            flex: 1 1 auto;
+        }
+        .bulk-btn:hover { background: #333; border-color: #555; }
+        .bulk-btn.danger { background: #4a1818; border-color: #7f1d1d; color: #fca5a5; }
+        .bulk-btn.danger:hover { background: #7f1d1d; color: #fff; }
+        .bulk-token-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 8px;
+            background: #252525;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .bulk-token-row .bulk-token-hp { color: #aaa; font-variant-numeric: tabular-nums; }
+
+        /* Template targeting panel (Q5) */
+        .target-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 8px;
+            background: #252525;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 3px;
+            cursor: pointer;
+        }
+        .target-row.targeted { background: #3a1f1f; border: 1px solid #7f1d1d; }
+        .target-row .target-hp { color: #aaa; font-variant-numeric: tabular-nums; }
         
         /* ===== CANVAS LAYERS ===== */
         /* Layered rendering: each layer is a viewport-size <canvas> stacked
@@ -1062,44 +1164,19 @@
                 </div>
             </div>
             
+            <!-- Token / multi-select / template-target panel.
+                 Single-select: editable form (name, HP, AC, speed, vision,
+                 senses, color, size, player, visibility, initiative).
+                 Multi-select: bulk action panel.
+                 Template-target: list of tokens checked into the template's
+                 effect, plus damage entry. JS swaps the body via showTokenDetails
+                 / _renderBulkPanel / _renderTargetPanel. -->
             <div id="token-details" class="hidden">
                 <div class="detail-header">
-                    <span id="detail-name">Token Name</span>
-                    <button onclick="closeTokenDetails()" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px;">×</button>
+                    <span id="detail-title">Token</span>
+                    <button onclick="closeTokenDetails()" class="detail-close" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px;">×</button>
                 </div>
-                <div class="detail-content">
-                    <div class="stat-grid">
-                        <div class="stat-box">
-                            <div class="stat-label">HP</div>
-                            <div class="stat-value" id="detail-hp">--</div>
-                        </div>
-                        <div class="stat-box">
-                            <div class="stat-label">AC</div>
-                            <div class="stat-value" id="detail-ac">--</div>
-                        </div>
-                        <div class="stat-box">
-                            <div class="stat-label">Speed</div>
-                            <div class="stat-value" id="detail-speed">--</div>
-                        </div>
-                    </div>
-                    <div id="detail-conditions"></div>
-                    <div id="detail-range-panel" style="margin: 8px 0; padding: 8px; background: var(--bg-raised); border: 1px solid var(--border-default); border-radius: 6px;">
-                        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">RANGE RINGS</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                            <button class="range-btn" onclick="setActiveRange('Reach', 5, 'rgba(250, 204, 21, 0.75)')">Reach 5</button>
-                            <button class="range-btn" onclick="setActiveRange('Reach 10', 10, 'rgba(250, 204, 21, 0.6)')">Reach 10</button>
-                            <button class="range-btn" onclick="setActiveRange('30 ft', 30, 'rgba(239, 68, 68, 0.6)')">30</button>
-                            <button class="range-btn" onclick="setActiveRange('60 ft', 60, 'rgba(239, 68, 68, 0.6)')">60</button>
-                            <button class="range-btn" onclick="setActiveRange('100 ft', 100, 'rgba(239, 68, 68, 0.6)')">100</button>
-                            <button class="range-btn" onclick="setActiveRange('120 ft', 120, 'rgba(239, 68, 68, 0.6)')">120</button>
-                            <button class="range-btn" onclick="addCustomRange(event)">+</button>
-                            <button class="range-btn" onclick="clearActiveRanges()" style="background: var(--danger-500); color: #fff;">Clear</button>
-                        </div>
-                    </div>
-                    <div id="detail-abilities">
-                        <!-- Abilities/attacks listed here -->
-                    </div>
-                </div>
+                <div id="detail-body" class="detail-content"></div>
             </div>
         </div>
         
@@ -1187,6 +1264,15 @@
 
             <div class="flyout-pane" data-pane="wall">
                 <div class="flyout-title">Wall</div>
+                <div class="flyout-row">
+                    <label for="wall-shape-select">Shape</label>
+                    <select id="wall-shape-select" onchange="setWallShape(this.value)" title="Polyline = click each point. Drag shapes commit on mouseup.">
+                        <option value="polyline">Polyline (click points)</option>
+                        <option value="line">Line (drag)</option>
+                        <option value="rect">Rectangle (drag)</option>
+                        <option value="freehand">Freehand (drag)</option>
+                    </select>
+                </div>
                 <div class="flyout-row">
                     <label for="wall-type-select">Type</label>
                     <select id="wall-type-select" onchange="setWallType(this.value)">
@@ -1379,11 +1465,106 @@
         let _boxStartScreen = null;  // {x, y} in screen coords for click-vs-drag detection
         let _multiDragStart = null;  // Map<id, {x, y}> token positions captured at drag start
 
+        // ===========================================
+        // TEMPLATE TARGETING (Q5)
+        // ===========================================
+        // When the GM left-clicks a template's center handle in select mode,
+        // we enter "targeting" mode: subsequent clicks on tokens toggle them
+        // in/out of the target set and the sidebar shows an Apply Damage form.
+        // Esc, the Done button, or selecting a different tool exits targeting.
+        let targetingTemplate = null;        // template object or null
+        let targetedTokenIds = new Set();    // ids that will receive damage on Apply
+        function _isTargeting() { return !!targetingTemplate; }
+        function enterTargeting(tmpl) {
+            targetingTemplate = tmpl;
+            targetedTokenIds = new Set();
+            // Clear regular selection so the gold ring doesn't compete with
+            // the red target ring.
+            _clearSelection();
+            const panel = document.getElementById('token-details');
+            if (panel) panel.classList.remove('hidden');
+            _renderTargetPanel();
+            markDirty('tokens');
+        }
+        function exitTargeting() {
+            targetingTemplate = null;
+            targetedTokenIds = new Set();
+            const panel = document.getElementById('token-details');
+            if (panel) panel.classList.add('hidden');
+            markDirty('tokens');
+        }
+        function _toggleTargetToken(id) {
+            if (!id || !_isTargeting()) return;
+            if (targetedTokenIds.has(id)) targetedTokenIds.delete(id);
+            else targetedTokenIds.add(id);
+            _renderTargetPanel();
+            markDirty('tokens');
+        }
+
+        // ===========================================
+        // UNDO STACK (Q4)
+        // ===========================================
+        // Per-action undo for GM mutations: token move/add/remove, wall add/
+        // remove, light add/remove, template add/remove, and bulk variants.
+        // Each entry is {label, undo} where undo is an async fn that fires
+        // the inverse server call. Recording is opt-out via {undo:false} on
+        // any wrapped helper so callers (e.g. multi-move) can coalesce many
+        // actions into one undo entry.
+        const _undoStack = [];
+        const _UNDO_LIMIT = 50;
+        function pushUndo(undoFn, label) {
+            _undoStack.push({ undo: undoFn, label: label || 'action' });
+            while (_undoStack.length > _UNDO_LIMIT) _undoStack.shift();
+        }
+        function _undoStackSize() { return _undoStack.length; }
+        async function performUndo() {
+            const entry = _undoStack.pop();
+            if (!entry) {
+                _showUndoToast('Nothing to undo');
+                return;
+            }
+            try {
+                _showUndoToast(`Undo: ${entry.label}`);
+                await entry.undo();
+            } catch (err) {
+                console.error('[undo] failed', err);
+                _showUndoToast('Undo failed (see console)');
+            }
+        }
+        // Tiny transient toast — not a full UI component, just a brief
+        // confirmation so the GM knows the keypress did something.
+        function _showUndoToast(msg) {
+            let el = document.getElementById('_undo-toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = '_undo-toast';
+                el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#ddd;padding:6px 14px;border:1px solid #333;border-radius:6px;font-size:12px;z-index:1000;pointer-events:none;transition:opacity 0.3s;';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            el.style.opacity = '1';
+            clearTimeout(el._t);
+            el._t = setTimeout(() => { el.style.opacity = '0'; }, 1400);
+        }
+
         let contextToken = null;
         
-        // Wall drawing state
+        // Wall drawing state. The polyline path uses wallPoints (click each
+        // vertex). Drag-based shapes (line/rect/freehand) use wallDragStart/
+        // wallDragEnd in map coords; freehand also accumulates intermediate
+        // points along the path.
         let wallPoints = [];
         let isDrawingWall = false;
+        let wallShape = 'polyline';            // 'polyline' | 'line' | 'rect' | 'freehand'
+        let wallDragStart = null;              // {x, y} in map coords
+        let wallDragEnd = null;
+        let wallFreehandPoints = [];           // [[x, y], ...] recorded along the drag
+
+        function setWallShape(s) {
+            wallShape = s;
+            // Switching shape mid-draw is jarring; cancel any in-progress.
+            if (isDrawingWall) cancelWall();
+        }
 
         // Ruler state — while active: start is the drag-origin in map pixels,
         // end follows the mouse. Nothing persisted; purely visual.
@@ -2528,27 +2709,54 @@
         }
         
         function drawWallPreview() {
-            if (!isDrawingWall || wallPoints.length === 0) return;
-            
-            ctx.beginPath();
-            ctx.moveTo(wallPoints[0][0], wallPoints[0][1]);
-            for (let i = 1; i < wallPoints.length; i++) {
-                ctx.lineTo(wallPoints[i][0], wallPoints[i][1]);
-            }
-            
+            if (!isDrawingWall) return;
+            ctx.save();
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
             ctx.lineWidth = 4 / zoom;
-            ctx.setLineDash([8/zoom, 4/zoom]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            
-            // Draw points
-            for (const pt of wallPoints) {
+
+            if (wallShape === 'polyline') {
+                if (wallPoints.length === 0) { ctx.restore(); return; }
+                ctx.setLineDash([8/zoom, 4/zoom]);
                 ctx.beginPath();
-                ctx.arc(pt[0], pt[1], 6/zoom, 0, Math.PI * 2);
-                ctx.fillStyle = '#fff';
-                ctx.fill();
+                ctx.moveTo(wallPoints[0][0], wallPoints[0][1]);
+                for (let i = 1; i < wallPoints.length; i++) {
+                    ctx.lineTo(wallPoints[i][0], wallPoints[i][1]);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+                // Vertex dots — let the GM see where their next click lands.
+                for (const pt of wallPoints) {
+                    ctx.beginPath();
+                    ctx.arc(pt[0], pt[1], 6/zoom, 0, Math.PI * 2);
+                    ctx.fillStyle = '#fff';
+                    ctx.fill();
+                }
+            } else if (wallShape === 'line' && wallDragStart && wallDragEnd) {
+                ctx.setLineDash([8/zoom, 4/zoom]);
+                ctx.beginPath();
+                ctx.moveTo(wallDragStart.x, wallDragStart.y);
+                ctx.lineTo(wallDragEnd.x, wallDragEnd.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            } else if (wallShape === 'rect' && wallDragStart && wallDragEnd) {
+                const x1 = Math.min(wallDragStart.x, wallDragEnd.x);
+                const y1 = Math.min(wallDragStart.y, wallDragEnd.y);
+                const x2 = Math.max(wallDragStart.x, wallDragEnd.x);
+                const y2 = Math.max(wallDragStart.y, wallDragEnd.y);
+                ctx.setLineDash([8/zoom, 4/zoom]);
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                ctx.setLineDash([]);
+            } else if (wallShape === 'freehand' && wallFreehandPoints.length >= 2) {
+                ctx.setLineDash([6/zoom, 3/zoom]);
+                ctx.beginPath();
+                ctx.moveTo(wallFreehandPoints[0][0], wallFreehandPoints[0][1]);
+                for (let i = 1; i < wallFreehandPoints.length; i++) {
+                    ctx.lineTo(wallFreehandPoints[i][0], wallFreehandPoints[i][1]);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
             }
+            ctx.restore();
         }
         
         function drawSpawnPoint() {
@@ -2679,6 +2887,18 @@
                     ctx.strokeStyle = '#f97316';
                     ctx.lineWidth = 3/zoom;
                     ctx.setLineDash([6/zoom, 4/zoom]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Targeting ring (Q5) — red dashed band around tokens picked
+                // as Apply-Damage targets while the GM has a template open.
+                if (targetedTokenIds.has(token.id)) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r + 9/zoom, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#ef4444';
+                    ctx.lineWidth = 3/zoom;
+                    ctx.setLineDash([5/zoom, 4/zoom]);
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
@@ -2947,6 +3167,24 @@
                 dragStart = { x: e.clientX, y: e.clientY, viewX, viewY };
                 document.getElementById('map-area').classList.add('dragging');
             } else if (currentTool === 'select') {
+                // While targeting a template, clicks on tokens toggle them
+                // in/out of the target set (Q5). Clicks on another template
+                // handle switch the targeted template. Empty-space clicks are
+                // ignored — Esc or the Done button exits targeting.
+                if (_isTargeting()) {
+                    const tok = getTokenAtPoint(mapX, mapY);
+                    if (tok) {
+                        _toggleTargetToken(tok.id);
+                        return;
+                    }
+                    const hit = getTemplateAtPoint(mapX, mapY);
+                    if (hit && hit.id !== targetingTemplate.id) {
+                        enterTargeting(hit);
+                        return;
+                    }
+                    // Empty-space click while targeting — keep mode active.
+                    return;
+                }
                 const token = getTokenAtPoint(mapX, mapY);
                 if (token) {
                     // Click-on-token selection rules:
@@ -3001,14 +3239,20 @@
                         }).then(ok => { if (ok) removeLightById(hitLight.id); });
                         return;
                     }
-                    // GM click on a template: offer to remove it.
+                    // GM click on a template handle: enter targeting mode.
+                    // Shift+click bypasses targeting and goes straight to
+                    // remove (the old behavior — keeps fast cleanup).
                     const hitTmpl = getTemplateAtPoint(mapX, mapY);
                     if (hitTmpl) {
-                        const label = hitTmpl.source || hitTmpl.name || hitTmpl.type;
-                        floatConfirm(`Remove ${label}?`, {
-                            title: 'Remove template', confirmLabel: 'Remove', danger: true,
-                            anchor: { x: e.clientX, y: e.clientY },
-                        }).then(ok => { if (ok) removeTemplateById(hitTmpl.id); });
+                        if (e.shiftKey) {
+                            const label = hitTmpl.source || hitTmpl.name || hitTmpl.type;
+                            floatConfirm(`Remove ${label}?`, {
+                                title: 'Remove template', confirmLabel: 'Remove', danger: true,
+                                anchor: { x: e.clientX, y: e.clientY },
+                            }).then(ok => { if (ok) removeTemplateById(hitTmpl.id); });
+                        } else {
+                            enterTargeting(hitTmpl);
+                        }
                         return;
                     }
                     // Click on truly empty space in select mode: begin a
@@ -3025,7 +3269,17 @@
             } else if (currentTool === 'token') {
                 placeToken(mapX, mapY);
             } else if (currentTool === 'wall') {
-                addWallPoint(mapX, mapY);
+                if (wallShape === 'polyline') {
+                    addWallPoint(mapX, mapY);
+                } else {
+                    // Drag-based shapes: capture start, mark drawing, let
+                    // mousemove update the preview, mouseup commits.
+                    wallDragStart = { x: mapX, y: mapY };
+                    wallDragEnd   = { x: mapX, y: mapY };
+                    wallFreehandPoints = wallShape === 'freehand' ? [[mapX, mapY]] : [];
+                    isDrawingWall = true;
+                    markDirty('overlay');
+                }
             } else if (currentTool === 'terrain') {
                 toggleDifficultTerrain(mapX, mapY);
             } else if (currentTool === 'spawn') {
@@ -3089,6 +3343,19 @@
                 // Update the box-select rectangle. Only the overlay layer
                 // needs to repaint; bg/fog/tokens are unchanged.
                 boxSelectEnd = { x: mapX, y: mapY };
+                markDirty('overlay');
+            } else if (isDrawingWall && wallShape !== 'polyline' && wallDragStart) {
+                // Update the drag-based wall preview. Freehand also accumulates
+                // points along the path so the eventual commit follows the
+                // hand-drawn shape; sample only when we move ~8 px to keep
+                // point count reasonable.
+                wallDragEnd = { x: mapX, y: mapY };
+                if (wallShape === 'freehand' && wallFreehandPoints.length > 0) {
+                    const last = wallFreehandPoints[wallFreehandPoints.length - 1];
+                    if (Math.hypot(mapX - last[0], mapY - last[1]) > 8) {
+                        wallFreehandPoints.push([mapX, mapY]);
+                    }
+                }
                 markDirty('overlay');
             } else if (draggingToken) {
                 // Calculate new grid position based on drag
@@ -3212,6 +3479,38 @@
                 // so the measurement stays drawn.
                 isRulering = false;
             }
+            // Drag-based wall commit (Q7). Polyline still finishes via Enter.
+            if (isDrawingWall && wallShape !== 'polyline' && wallDragStart && wallDragEnd) {
+                let points = null;
+                let closed = false;
+                if (wallShape === 'line') {
+                    // Reject zero-length flicks.
+                    if (Math.hypot(wallDragEnd.x - wallDragStart.x, wallDragEnd.y - wallDragStart.y) > 4) {
+                        points = [[wallDragStart.x, wallDragStart.y], [wallDragEnd.x, wallDragEnd.y]];
+                    }
+                } else if (wallShape === 'rect') {
+                    const x1 = Math.min(wallDragStart.x, wallDragEnd.x);
+                    const y1 = Math.min(wallDragStart.y, wallDragEnd.y);
+                    const x2 = Math.max(wallDragStart.x, wallDragEnd.x);
+                    const y2 = Math.max(wallDragStart.y, wallDragEnd.y);
+                    if ((x2 - x1) > 4 && (y2 - y1) > 4) {
+                        points = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+                        closed = true;
+                    }
+                } else if (wallShape === 'freehand') {
+                    if (wallFreehandPoints.length >= 2) {
+                        points = wallFreehandPoints.slice();
+                    }
+                }
+                isDrawingWall = false;
+                wallDragStart = wallDragEnd = null;
+                wallFreehandPoints = [];
+                if (points) {
+                    _commitWall(points, closed);
+                } else {
+                    markDirty('overlay');
+                }
+            }
             if (isPlacingTemplate && templateAnchor && templatePreview) {
                 const gs = mapState.grid_size || 70;
                 const dx = templatePreview.dx - templateAnchor.x;
@@ -3311,15 +3610,22 @@
                     ft += countDifficultTerrainCells(dragStart.tokenX, dragStart.tokenY, finalX, finalY) * 5;
                     draggingToken.movement_used_this_turn = (draggingToken.movement_used_this_turn || 0) + ft;
 
-                    // Single-select: just move the dragged token.
-                    // Multi-select: every selected token moves by the same
-                    // (deltaX, deltaY) in grid units, captured at drag start.
+                    // Single-select: just move the dragged token (its own
+                    // undo recording).
+                    // Multi-select: gather every (old → new) pair, push a
+                    // SINGLE group undo, then fire the moves with undo
+                    // recording disabled. One Ctrl-Z reverts the whole group.
                     const dX = finalX - dragStart.tokenX;
                     const dY = finalY - dragStart.tokenY;
                     if (selectedTokenIds.size > 1 && _multiDragStart && _multiDragStart.size > 1) {
+                        const moves = [];
                         for (const [id, start] of _multiDragStart.entries()) {
-                            moveToken(id, start.x + dX, start.y + dY);
+                            moves.push({ id, oldX: start.x, oldY: start.y, newX: start.x + dX, newY: start.y + dY });
                         }
+                        pushUndo(async () => {
+                            for (const m of moves) await moveToken(m.id, m.oldX, m.oldY, { undo: false });
+                        }, `Move ${moves.length} tokens`);
+                        for (const m of moves) moveToken(m.id, m.newX, m.newY, { undo: false });
                     } else {
                         moveToken(draggingToken.id, finalX, finalY);
                     }
@@ -3395,15 +3701,17 @@
                 if (isPlacingTemplate) { isPlacingTemplate = false; templateAnchor = null; templatePreview = null; render(); }
                 // Clear any visible ruler measurement on a second Escape tap.
                 if (!isRulering && rulerStart) { rulerStart = rulerEnd = null; render(); }
-                // Esc also cancels an in-flight box-select and clears the
-                // current selection — keeps the GM unstuck without a
-                // second click.
+                // Esc also cancels an in-flight box-select, exits template
+                // targeting, and clears the current selection — keeps the
+                // GM unstuck from any modal-ish state.
                 if (isBoxSelecting) {
                     isBoxSelecting = false;
                     boxSelectStart = boxSelectEnd = _boxStartScreen = null;
                     markDirty('overlay');
                 }
-                if (selectedTokenIds.size > 0) {
+                if (_isTargeting()) {
+                    exitTargeting();
+                } else if (selectedTokenIds.size > 0) {
                     _clearSelection();
                     markDirty('tokens');
                 }
@@ -3412,6 +3720,18 @@
             }
             if (e.key === 'Enter' && isDrawingWall) {
                 finishWall();
+                return;
+            }
+            // Ctrl-Z / Cmd-Z: undo the most recent action. Bypass when an
+            // input/textarea has focus (browser's own undo handles those).
+            // Shift+Cmd-Z is reserved for redo (not yet implemented).
+            const k = (e.key || '').toLowerCase();
+            const isUndo = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && k === 'z';
+            if (isUndo) {
+                const tag = (e.target && e.target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea') return;
+                e.preventDefault();
+                performUndo();
                 return;
             }
             // Bulk delete: Delete or Backspace removes every selected token
@@ -3429,7 +3749,26 @@
                     title: 'Delete tokens', confirmLabel: 'Delete', danger: true,
                 }).then(ok => {
                     if (!ok) return;
-                    for (const id of ids) removeToken(id);
+                    // Snapshot all tokens for a single group-undo entry, then
+                    // delete with per-token undo recording disabled.
+                    const snaps = [];
+                    for (const id of ids) {
+                        const t = (mapState.tokens || []).find(tt => tt.id === id);
+                        if (t) snaps.push({ ...t });
+                    }
+                    Promise.all(ids.map(id => removeToken(id, { undo: false }))).then(() => {
+                        if (snaps.length > 0) {
+                            pushUndo(async () => {
+                                for (const snap of snaps) {
+                                    await fetch('/api/map/token/add', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(snap),
+                                    });
+                                }
+                            }, `Restore ${snaps.length} tokens`);
+                        }
+                    });
                     _clearSelection();
                 });
                 return;
@@ -3439,7 +3778,7 @@
             if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
             const tag = (e.target && e.target.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-            const k = (e.key || '').toLowerCase();
+            // `k` already declared above for the Ctrl-Z check.
             const tool = _TOOL_HOTKEYS[k];
             if (tool) {
                 e.preventDefault();
@@ -3825,7 +4164,7 @@
                 if (!isFinite(hiddenDc) || hiddenDc < 0) hiddenDc = 20;
             }
 
-            await fetch('/api/map/wall/add', {
+            const res = await fetch('/api/map/wall/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -3835,16 +4174,65 @@
                     secret: secret,
                     hidden_dc: hiddenDc,
                 })
-            });
+            }).then(r => r.json()).catch(() => null);
+            if (res && res.success && res.wall && res.wall.id) {
+                const id = res.wall.id;
+                pushUndo(() => fetch('/api/map/wall/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id }),
+                }), 'Add wall');
+            }
 
             cancelWall();
         }
         
         function cancelWall() {
             wallPoints = [];
+            wallDragStart = wallDragEnd = null;
+            wallFreehandPoints = [];
             isDrawingWall = false;
             document.getElementById('drawing-status').classList.remove('active');
             render();
+        }
+
+        // Shared commit path for drag-based wall shapes (line / rect /
+        // freehand). The polyline path goes through finishWall which has
+        // its own DC prompt and undo recording. Keep this in sync if the
+        // payload schema or undo behavior changes.
+        async function _commitWall(points, closed) {
+            if (!Array.isArray(points) || points.length < 2) {
+                markDirty('overlay');
+                return;
+            }
+            let apiType = wallType;
+            let secret = false;
+            let hiddenDc = 0;
+            if (wallType === 'secret_door') {
+                apiType = 'door';
+                secret = true;
+                const dc = await floatPrompt('Hidden DC for this secret door (Perception to find)?', 20, {
+                    title: 'Secret Door', type: 'number', min: 1, max: 60
+                });
+                if (dc == null) { markDirty('overlay'); return; }
+                hiddenDc = parseInt(dc, 10);
+                if (!isFinite(hiddenDc) || hiddenDc < 0) hiddenDc = 20;
+            }
+            const res = await fetch('/api/map/wall/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    points, type: apiType, closed, secret, hidden_dc: hiddenDc,
+                }),
+            }).then(r => r.json()).catch(() => null);
+            if (res && res.success && res.wall && res.wall.id) {
+                const id = res.wall.id;
+                pushUndo(() => fetch('/api/map/wall/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id }),
+                }), 'Add wall');
+            }
         }
         
         async function borderMap() {
@@ -3887,8 +4275,8 @@
             const trimmedName = name.trim();
 
             const size = parseInt(document.getElementById('token-size-select').value) || 1;
-            
-            await fetch('/api/map/token/add', {
+
+            const res = await fetch('/api/map/token/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -3898,19 +4286,33 @@
                     color: '#3b82f6',
                     size: size
                 })
-            });
+            }).then(r => r.json()).catch(() => null);
+            if (res && res.success && res.token && res.token.id) {
+                const id = res.token.id;
+                pushUndo(() => removeToken(id, { undo: false }), `Place ${trimmedName}`);
+            }
         }
         
-        async function moveToken(tokenId, x, y) {
+        async function moveToken(tokenId, x, y, opts = {}) {
+            // Capture pre-move position for undo. Skip when {undo:false} so
+            // group movers (multi-token drag) can record one entry covering
+            // every affected token.
+            if (opts.undo !== false) {
+                const t = (mapState.tokens || []).find(tt => tt.id === tokenId);
+                if (t && (t.x !== x || t.y !== y)) {
+                    const oldX = t.x, oldY = t.y, label = `Move ${t.name}`;
+                    pushUndo(() => moveToken(tokenId, oldX, oldY, { undo: false }), label);
+                }
+            }
             await fetch('/api/map/token/move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: tokenId, x, y })
             });
-            
+
             // Update explored cells based on new PC positions
             updateExplored();
-            
+
             // Check flanking after any token move
             checkAndApplyFlanking();
         }
@@ -3975,16 +4377,18 @@
         }
         
         async function addPartyToMap() {
-            // Cluster party members in a 2x2 formation around spawn point
-            const offsets = [[0, 0], [1, 0], [0, 1], [1, 1], [2, 0], [2, 1]]; // Up to 6 PCs
-            
+            // Cluster party members in a 2x2 formation around spawn point.
+            // Capture every newly-created id so undo can rip them all back
+            // out as one entry instead of N separate stack entries.
+            const offsets = [[0, 0], [1, 0], [0, 1], [1, 1], [2, 0], [2, 1]];
+            const placed = [];
             for (let i = 0; i < partyList.length; i++) {
                 const pc = partyList[i];
                 const spawnX = mapState.spawn_point?.x ?? 2;
                 const spawnY = mapState.spawn_point?.y ?? 2;
                 const offset = offsets[i] || [i % 3, Math.floor(i / 3)];
-                
-                await fetch('/api/map/token/add', {
+
+                const res = await fetch('/api/map/token/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4000,7 +4404,13 @@
                         speed: pc.speed || 25,
                         assigned_player: pc.name
                     })
-                });
+                }).then(r => r.json()).catch(() => null);
+                if (res && res.success && res.token && res.token.id) placed.push(res.token.id);
+            }
+            if (placed.length > 0) {
+                pushUndo(async () => {
+                    for (const id of placed) await removeToken(id, { undo: false });
+                }, `Place party (${placed.length})`);
             }
         }
         
@@ -4265,46 +4675,399 @@
             });
         }
         
-        async function removeToken(tokenId) {
+        async function removeToken(tokenId, opts = {}) {
+            // Snapshot the token before removal so undo can re-add it. The
+            // restored token will get a fresh server-side id, but that's
+            // fine — undo restores the *visual state*, not the exact id.
+            let snapshot = null;
+            if (opts.undo !== false) {
+                const t = (mapState.tokens || []).find(tt => tt.id === tokenId);
+                if (t) snapshot = { ...t };
+            }
             await fetch('/api/map/token/remove', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: tokenId })
             });
+            if (snapshot) {
+                pushUndo(async () => {
+                    await fetch('/api/map/token/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(snapshot),
+                    });
+                }, `Restore ${snapshot.name}`);
+            }
         }
         
         // ===========================================
-        // TOKEN DETAILS PANEL
+        // TOKEN DETAILS PANEL (Q2)
         // ===========================================
+        // Single entry point that decides which mode to render. Multi-select
+        // shows a bulk panel; single-select shows an editable form. Template
+        // targeting (Q5) is rendered via showTargetPanel and short-circuits
+        // selection-driven rendering until the GM exits targeting.
         async function showTokenDetails(token) {
+            // Targeting mode owns the panel — don't override.
+            if (typeof targetingTemplate !== 'undefined' && targetingTemplate) {
+                _renderTargetPanel();
+                return;
+            }
             const panel = document.getElementById('token-details');
             panel.classList.remove('hidden');
-            
-            // Basic info from token
-            document.getElementById('detail-name').textContent = token.name;
-            document.getElementById('detail-hp').textContent = `${token.hp || 0}/${token.max_hp || 0}`;
-            document.getElementById('detail-ac').textContent = token.ac || '--';
-            document.getElementById('detail-speed').textContent = token.speed ? `${token.speed}ft` : '--';
-            
-            // Build conditions display
-            let conditionsHtml = buildConditionsHtml(token);
-            document.getElementById('detail-conditions').innerHTML = conditionsHtml;
-            
-            // Fetch full creature data
-            document.getElementById('detail-abilities').innerHTML = '<div style="color: #666; font-size: 11px;">Loading...</div>';
-            
+
+            if (selectedTokenIds.size > 1) {
+                _renderBulkPanel();
+                return;
+            }
+
+            document.getElementById('detail-title').textContent = token.name;
+            const body = document.getElementById('detail-body');
+            body.innerHTML = _renderTokenEditForm(token);
+            // Wire change/blur handlers for every editable field.
+            body.querySelectorAll('[data-field]').forEach(input => {
+                const ev = (input.type === 'checkbox' || input.tagName === 'SELECT')
+                    ? 'change' : 'blur';
+                input.addEventListener(ev, _onTokenFieldChange);
+            });
+            // Lazy-load creature stats / strikes / abilities into the bottom
+            // of the panel. Doesn't block the form being usable.
+            _loadCreatureDetails(token);
+        }
+
+        function _renderTokenEditForm(t) {
+            // Note: data-token-id captures the current id so a later SSE
+            // update that swaps the token won't mis-route field saves.
+            const e = _escapeHtml;
+            const id = t.id;
+            return `
+                <div class="token-edit-grid">
+                    <label>Name</label>
+                    <input type="text" data-token-id="${id}" data-field="name" value="${e(t.name || '')}">
+
+                    <label>HP</label>
+                    <div class="token-edit-row">
+                        <input type="number" data-token-id="${id}" data-field="hp" value="${t.hp || 0}" min="0" style="flex:1;">
+                        <span class="token-edit-sep">/</span>
+                        <input type="number" data-token-id="${id}" data-field="max_hp" value="${t.max_hp || 0}" min="0" style="flex:1;">
+                    </div>
+
+                    <label>AC</label>
+                    <input type="number" data-token-id="${id}" data-field="ac" value="${t.ac || 10}" min="0">
+
+                    <label>Speed</label>
+                    <input type="number" data-token-id="${id}" data-field="speed" value="${t.speed || 25}" min="0" step="5">
+
+                    <label>Init</label>
+                    <input type="number" data-token-id="${id}" data-field="initiative" value="${t.initiative != null ? t.initiative : ''}" placeholder="—">
+
+                    <label>Size</label>
+                    <select data-token-id="${id}" data-field="size">
+                        <option value="1" ${t.size === 1 || !t.size ? 'selected' : ''}>Medium</option>
+                        <option value="2" ${t.size === 2 ? 'selected' : ''}>Large</option>
+                        <option value="3" ${t.size === 3 ? 'selected' : ''}>Huge</option>
+                        <option value="4" ${t.size === 4 ? 'selected' : ''}>Gargantuan</option>
+                    </select>
+
+                    <label>Color</label>
+                    <input type="color" data-token-id="${id}" data-field="color" value="${e(t.color || '#3b82f6')}">
+
+                    <label>Vision</label>
+                    <input type="number" data-token-id="${id}" data-field="vision_radius" value="${t.vision_radius || 0}" min="0" title="Squares of sight (5 ft each)">
+
+                    <label>Senses</label>
+                    <div class="token-edit-row">
+                        <label class="token-edit-check"><input type="checkbox" data-token-id="${id}" data-field="darkvision" ${t.darkvision ? 'checked' : ''}>Darkvision</label>
+                        <label class="token-edit-check"><input type="checkbox" data-token-id="${id}" data-field="low_light_vision" ${t.low_light_vision ? 'checked' : ''}>Low-light</label>
+                    </div>
+
+                    <label>Player</label>
+                    <input type="text" data-token-id="${id}" data-field="assigned_player" value="${e(t.assigned_player || '')}" placeholder="(none)">
+
+                    <label>Visible</label>
+                    <label class="token-edit-check" style="font-size: 11px;"><input type="checkbox" data-token-id="${id}" data-field="visible_to_players" ${t.visible_to_players !== false ? 'checked' : ''}> Players can see</label>
+                </div>
+
+                <div id="detail-conditions" style="margin-top: 12px;">${buildConditionsHtml(t)}</div>
+
+                <div id="detail-range-panel" style="margin: 8px 0; padding: 8px; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 6px;">
+                    <div style="font-size: 10px; color: #888; margin-bottom: 4px;">RANGE RINGS</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        <button class="range-btn" onclick="setActiveRange('Reach', 5, 'rgba(250, 204, 21, 0.75)')">Reach 5</button>
+                        <button class="range-btn" onclick="setActiveRange('Reach 10', 10, 'rgba(250, 204, 21, 0.6)')">Reach 10</button>
+                        <button class="range-btn" onclick="setActiveRange('30 ft', 30, 'rgba(239, 68, 68, 0.6)')">30</button>
+                        <button class="range-btn" onclick="setActiveRange('60 ft', 60, 'rgba(239, 68, 68, 0.6)')">60</button>
+                        <button class="range-btn" onclick="setActiveRange('120 ft', 120, 'rgba(239, 68, 68, 0.6)')">120</button>
+                        <button class="range-btn" onclick="addCustomRange(event)">+</button>
+                        <button class="range-btn" onclick="clearActiveRanges()" style="background: #7f1d1d; color: #fff;">Clear</button>
+                    </div>
+                </div>
+
+                <div id="detail-abilities" style="margin-top: 12px;">
+                    <div style="color: #666; font-size: 11px;">Loading stats…</div>
+                </div>
+            `;
+        }
+
+        function _onTokenFieldChange(ev) {
+            const el = ev.target;
+            const id = el.dataset.tokenId;
+            const field = el.dataset.field;
+            if (!id || !field) return;
+            let value;
+            if (el.type === 'checkbox') {
+                value = !!el.checked;
+            } else if (el.type === 'number') {
+                if (el.value === '' && field === 'initiative') {
+                    value = null;  // allow clearing initiative
+                } else {
+                    const n = parseInt(el.value, 10);
+                    value = isFinite(n) ? n : 0;
+                }
+            } else {
+                value = el.value;
+            }
+            // Bypass undo recording for incremental field edits — the rapid
+            // changes (typing in a text input) would flood the stack. The
+            // user can right-click and use Apply Damage / Heal which IS
+            // undo-tracked, or revert manually.
+            fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, [field]: value }),
+            }).catch(() => {});
+        }
+
+        async function _loadCreatureDetails(token) {
+            const abilEl = document.getElementById('detail-abilities');
+            if (!abilEl) return;
             try {
                 const res = await fetch(`/api/creature/${encodeURIComponent(token.name)}`);
                 const data = await res.json();
-                
                 if (data.success) {
-                    document.getElementById('detail-abilities').innerHTML = buildCreatureAbilitiesHtml(data.creature);
+                    abilEl.innerHTML = buildCreatureAbilitiesHtml(data.creature);
                 } else {
-                    document.getElementById('detail-abilities').innerHTML = '<div style="color: #666; font-size: 11px;">No detailed stats available</div>';
+                    abilEl.innerHTML = '<div style="color: #666; font-size: 11px;">No detailed stats available</div>';
                 }
             } catch (e) {
-                document.getElementById('detail-abilities').innerHTML = '<div style="color: #666; font-size: 11px;">Could not load stats</div>';
+                abilEl.innerHTML = '<div style="color: #666; font-size: 11px;">Could not load stats</div>';
             }
+        }
+
+        function _renderBulkPanel() {
+            const tokens = (mapState.tokens || []).filter(t => selectedTokenIds.has(t.id));
+            document.getElementById('detail-title').textContent = `${tokens.length} tokens selected`;
+            const body = document.getElementById('detail-body');
+            body.innerHTML = `
+                <div style="font-size: 11px; color: #888; margin-bottom: 8px;">
+                    Bulk actions affect every selected token.
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 3px; margin-bottom: 12px; max-height: 200px; overflow-y: auto;">
+                    ${tokens.map(t => `
+                        <div class="bulk-token-row">
+                            <span>${_escapeHtml(t.name)}</span>
+                            <span class="bulk-token-hp">${t.hp || 0}/${t.max_hp || 0}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button class="bulk-btn" onclick="bulkApplyDamage()">Damage all</button>
+                    <button class="bulk-btn" onclick="bulkApplyHeal()">Heal all</button>
+                    <button class="bulk-btn" onclick="bulkToggleVisibility()">Toggle visible</button>
+                    <button class="bulk-btn danger" onclick="bulkDelete()">Delete all</button>
+                </div>
+            `;
+        }
+
+        async function bulkApplyDamage() {
+            const ids = [...selectedTokenIds];
+            if (ids.length === 0) return;
+            const result = await floatingEditor({
+                title: `Damage ${ids.length} tokens`,
+                fields: [
+                    { key: 'amount', label: 'Damage', type: 'number', min: 0, autofocus: true },
+                    { key: 'crit',   label: 'Critical hit (each crit drops to 0 → Dying 2)', type: 'checkbox' },
+                ],
+                confirmLabel: 'Apply',
+                danger: true,
+            });
+            if (!result || !result.amount) return;
+            const amount = parseInt(result.amount, 10);
+            for (const id of ids) applyDamageWithDying(id, amount, !!result.crit);
+        }
+
+        async function bulkApplyHeal() {
+            const ids = [...selectedTokenIds];
+            if (ids.length === 0) return;
+            const v = await floatPrompt('Heal amount', '', {
+                title: `Heal ${ids.length} tokens`, type: 'number', confirmLabel: 'Apply',
+            });
+            if (v == null || !parseInt(v, 10)) return;
+            const amount = parseInt(v, 10);
+            for (const id of ids) applyHeal(id, amount);
+        }
+
+        function bulkToggleVisibility() {
+            // Flip every selected token's visible-to-players bit. Picks the
+            // dominant value as the source so a mixed selection ends up
+            // uniformly hidden (more useful than alternating per-token).
+            const ids = [...selectedTokenIds];
+            if (ids.length === 0) return;
+            const tokens = (mapState.tokens || []).filter(t => ids.includes(t.id));
+            const visibleCount = tokens.filter(t => t.visible_to_players !== false).length;
+            const newValue = visibleCount > tokens.length / 2 ? false : true;
+            for (const t of tokens) {
+                fetch('/api/map/token/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: t.id, visible_to_players: newValue }),
+                });
+            }
+        }
+
+        function _renderTargetPanel() {
+            // Sidebar pane shown while a template is in targeting mode.
+            // Lists currently-targeted tokens (click on map to toggle), shows
+            // a damage entry, and offers Done/Delete actions.
+            if (!_isTargeting()) return;
+            const t = targetingTemplate;
+            const title = t.source || t.name || `${t.type} template`;
+            document.getElementById('detail-title').textContent = `Targeting: ${title}`;
+            const body = document.getElementById('detail-body');
+            const targets = (mapState.tokens || []).filter(tk => targetedTokenIds.has(tk.id));
+            const inFootprint = _tokensInTemplate(t);
+            const inFootprintNotTargeted = inFootprint.filter(tk => !targetedTokenIds.has(tk.id));
+            body.innerHTML = `
+                <div style="font-size: 11px; color: #888; margin-bottom: 8px;">
+                    Click tokens on the map to add or remove them as targets.
+                </div>
+                <div style="font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px;">
+                    Targeted (${targets.length})
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; max-height: 160px; overflow-y: auto;">
+                    ${targets.length === 0
+                      ? '<div style="font-size: 11px; color: #666; padding: 4px;">No tokens targeted yet.</div>'
+                      : targets.map(tk => `
+                        <div class="target-row targeted" onclick="_toggleTargetToken('${tk.id}')">
+                            <span>${_escapeHtml(tk.name)}</span>
+                            <span class="target-hp">${tk.hp || 0}/${tk.max_hp || 0} <span style="color:#666;">×</span></span>
+                        </div>
+                      `).join('')}
+                </div>
+                ${inFootprintNotTargeted.length > 0 ? `
+                    <div style="font-size: 10px; color: #888; margin-bottom: 4px;">
+                        Inside footprint (click to add):
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px;">
+                        ${inFootprintNotTargeted.map(tk => `
+                            <div class="target-row" onclick="_toggleTargetToken('${tk.id}')">
+                                <span>${_escapeHtml(tk.name)}</span>
+                                <span class="target-hp">${tk.hp || 0}/${tk.max_hp || 0}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;">
+                    <button class="bulk-btn" onclick="applyTargetedDamage()">Apply damage…</button>
+                    <button class="bulk-btn" onclick="exitTargeting()">Done</button>
+                    <button class="bulk-btn danger" onclick="deleteTargetingTemplate()">Delete template</button>
+                </div>
+            `;
+        }
+
+        function _tokensInTemplate(t) {
+            // Return tokens whose center falls inside the template footprint.
+            // Mirrors getTemplateAtPoint's geometry but for full-area tests.
+            const tokens = mapState.tokens || [];
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const { cx, cy } = _templateFootprint(t);
+            const out = [];
+            for (const tk of tokens) {
+                const size = tk.size || 1;
+                const tx = tk.x * gs + ox + (gs * size) / 2;
+                const ty = tk.y * gs + oy + (gs * size) / 2;
+                const dx = tx - cx, dy = ty - cy;
+                let inside = false;
+                if (t.type === 'burst' || t.type === 'emanation') {
+                    inside = Math.hypot(dx, dy) <= (t.radius || 2) * gs;
+                } else if (t.type === 'cone') {
+                    const dist = Math.hypot(dx, dy);
+                    if (dist <= (t.length || 4) * gs) {
+                        const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+                        const diff = ((ang - (t.direction || 0) + 540) % 360) - 180;
+                        inside = Math.abs(diff) <= (t.angle || 90) / 2;
+                    }
+                } else if (t.type === 'line') {
+                    const dirRad = (t.direction || 0) * Math.PI / 180;
+                    const lx = Math.cos(dirRad), ly = Math.sin(dirRad);
+                    const along = dx * lx + dy * ly;
+                    const perp  = Math.abs(-dx * ly + dy * lx);
+                    inside = along >= 0 && along <= (t.length || 4) * gs && perp <= (t.width || 1) * gs / 2;
+                }
+                if (inside) out.push(tk);
+            }
+            return out;
+        }
+
+        async function applyTargetedDamage() {
+            if (!_isTargeting() || targetedTokenIds.size === 0) return;
+            const ids = [...targetedTokenIds];
+            const result = await floatingEditor({
+                title: `Damage ${ids.length} target${ids.length > 1 ? 's' : ''}`,
+                fields: [
+                    { key: 'amount', label: 'Damage', type: 'number', min: 0, autofocus: true },
+                    { key: 'half',   label: 'Half on save (apply half to listed targets)', type: 'checkbox' },
+                    { key: 'crit',   label: 'Critical hit (Dying +2 if dropped)', type: 'checkbox' },
+                ],
+                confirmLabel: 'Apply',
+                danger: true,
+            });
+            if (!result || !result.amount) return;
+            const dmg = result.half ? Math.floor(parseInt(result.amount, 10) / 2) : parseInt(result.amount, 10);
+            for (const id of ids) applyDamageWithDying(id, dmg, !!result.crit);
+        }
+
+        async function deleteTargetingTemplate() {
+            const t = targetingTemplate;
+            if (!t) return;
+            const ok = await floatConfirm(`Remove ${t.source || t.type}?`, {
+                title: 'Remove template', confirmLabel: 'Remove', danger: true,
+            });
+            if (!ok) return;
+            removeTemplateById(t.id);
+            exitTargeting();
+        }
+
+        async function bulkDelete() {
+            const ids = [...selectedTokenIds];
+            if (ids.length === 0) return;
+            const ok = await floatConfirm(`Delete ${ids.length} tokens?`, {
+                title: 'Delete tokens', confirmLabel: 'Delete', danger: true,
+            });
+            if (!ok) return;
+            // Snapshot every token before deletion so undo can re-add them
+            // as one entry. Each removeToken call gets {undo:false} to skip
+            // its individual undo recording.
+            const snaps = [];
+            for (const id of ids) {
+                const t = (mapState.tokens || []).find(tt => tt.id === id);
+                if (t) snaps.push({ ...t });
+            }
+            for (const id of ids) await removeToken(id, { undo: false });
+            if (snaps.length > 0) {
+                pushUndo(async () => {
+                    for (const snap of snaps) {
+                        await fetch('/api/map/token/add', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(snap),
+                        });
+                    }
+                }, `Restore ${snaps.length} tokens`);
+            }
+            _clearSelection();
         }
         
         function buildConditionsHtml(token) {
@@ -4881,7 +5644,8 @@
                 const gridX = Math.floor((mapX - ox) / gs);
                 const gridY = Math.floor((mapY - oy) / gs);
                 
-                await fetch('/api/map/token/add', {
+                const dropName = draggingCreature.name;
+                const res = await fetch('/api/map/token/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4897,8 +5661,12 @@
                         speed: draggingCreature.speed,
                         assigned_player: draggingCreature.type === 'pc' ? draggingCreature.name : null
                     })
-                });
-                
+                }).then(r => r.json()).catch(() => null);
+                if (res && res.success && res.token && res.token.id) {
+                    const id = res.token.id;
+                    pushUndo(() => removeToken(id, { undo: false }), `Drop ${dropName}`);
+                }
+
                 draggingCreature = null;
             });
         }
@@ -4923,12 +5691,34 @@
             `).join('');
         }
         
-        async function deleteWall(wallId) {
+        async function deleteWall(wallId, opts = {}) {
+            // Snapshot the wall so undo can re-add it. The new id will differ
+            // but the geometry/type/door state are preserved.
+            let snap = null;
+            if (opts.undo !== false) {
+                const w = (mapState.walls || []).find(ww => ww.id === wallId);
+                if (w) snap = { ...w };
+            }
             await fetch('/api/map/wall/remove', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: wallId })
             });
+            if (snap) {
+                pushUndo(async () => {
+                    await fetch('/api/map/wall/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            points: snap.points,
+                            type: snap.type,
+                            closed: !!snap.closed,
+                            secret: !!snap.secret,
+                            hidden_dc: snap.hidden_dc || 0,
+                        }),
+                    });
+                }, 'Restore wall');
+            }
         }
         
         async function toggleDoor(wallId) {
@@ -5246,20 +6036,28 @@
         async function placeLight(mapX, mapY) {
             // Place a light of the currently-selected preset at the map pixel
             // coords the GM clicked. The server echoes the full light back
-            // (including a generated id) and the map_state SSE broadcast
-            // brings it into every connected client.
+            // (including a generated id); we capture it for undo.
             const presetEl = document.getElementById('light-preset-select');
             const preset = presetEl ? presetEl.value : 'torch';
             try {
-                await fetch('/api/map/light/add', {
+                const res = await fetch('/api/map/light/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ preset, x: mapX, y: mapY })
-                });
+                }).then(r => r.json());
+                if (res && res.success && res.light && res.light.id) {
+                    const id = res.light.id;
+                    pushUndo(() => removeLightById(id, { undo: false }), `Place ${preset}`);
+                }
             } catch(_) {}
         }
 
-        async function removeLightById(id) {
+        async function removeLightById(id, opts = {}) {
+            let snap = null;
+            if (opts.undo !== false) {
+                const L = (mapState.lights || []).find(l => l.id === id);
+                if (L) snap = { ...L };
+            }
             try {
                 await fetch('/api/map/light/remove', {
                     method: 'POST',
@@ -5267,6 +6065,20 @@
                     body: JSON.stringify({ id })
                 });
             } catch(_) {}
+            if (snap) {
+                pushUndo(async () => {
+                    await fetch('/api/map/light/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            preset: snap.preset, x: snap.x, y: snap.y,
+                            color: snap.color, bright: snap.bright, dim: snap.dim,
+                            attached_to: snap.attached_to || null,
+                            name: snap.name,
+                        }),
+                    });
+                }, `Restore ${snap.preset || 'light'}`);
+            }
         }
 
         async function clearAllLights() {
@@ -5643,15 +6455,25 @@
                 payload.attached_to = selectedToken;
             }
             try {
-                await fetch('/api/map/template/add', {
+                const res = await fetch('/api/map/template/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
-                });
+                }).then(r => r.json());
+                if (res && res.success && res.template && res.template.id) {
+                    const id = res.template.id;
+                    pushUndo(() => removeTemplateById(id, { undo: false }),
+                             `Place ${payload.source || payload.type}`);
+                }
             } catch(_) {}
         }
 
-        async function removeTemplateById(id) {
+        async function removeTemplateById(id, opts = {}) {
+            let snap = null;
+            if (opts.undo !== false) {
+                const t = (mapState.templates || []).find(tt => tt.id === id);
+                if (t) snap = { ...t };
+            }
             try {
                 await fetch('/api/map/template/remove', {
                     method: 'POST',
@@ -5659,6 +6481,21 @@
                     body: JSON.stringify({ id })
                 });
             } catch(_) {}
+            if (snap) {
+                pushUndo(async () => {
+                    await fetch('/api/map/template/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: snap.type, x: snap.x, y: snap.y,
+                            radius: snap.radius, length: snap.length, width: snap.width,
+                            angle: snap.angle, direction: snap.direction,
+                            color: snap.color, name: snap.name, source: snap.source,
+                            attached_to: snap.attached_to || null,
+                        }),
+                    });
+                }, `Restore ${snap.source || snap.type}`);
+            }
         }
 
         async function clearAllTemplates() {
