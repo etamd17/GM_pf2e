@@ -1,0 +1,38 @@
+{
+  "ac": 24,
+  "class_dc": 24,
+  "fort": 15,
+  "hp": 104,
+  "key_proficiencies": {
+    "advanced": 0,
+    "class_dc": 2,
+    "fortitude": 4,
+    "heavy": 0,
+    "light": 2,
+    "martial": 0,
+    "medium": 2,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 2,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmed": 2,
+    "unarmored": 2,
+    "will": 4
+  },
+  "level": 8,
+  "mods": {
+    "cha": 0,
+    "con": 3,
+    "dex": 4,
+    "int": 1,
+    "str": 0,
+    "wis": 4
+  },
+  "name": "Kyle",
+  "perception": 16,
+  "ref": 16,
+  "spell_attack": 16,
+  "spell_dc": 26,
+  "will": 16
+}

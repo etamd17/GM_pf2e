@@ -1,0 +1,38 @@
+{
+  "ac": 15,
+  "class_dc": 17,
+  "fort": 4,
+  "hp": 22,
+  "key_proficiencies": {
+    "advanced": 0,
+    "class_dc": 2,
+    "fortitude": 2,
+    "heavy": 0,
+    "light": 0,
+    "martial": 0,
+    "medium": 0,
+    "perception": 2,
+    "reflex": 2,
+    "simple": 2,
+    "spell_attack": 2,
+    "spell_dc": 2,
+    "unarmed": 2,
+    "unarmored": 2,
+    "will": 4
+  },
+  "level": 1,
+  "mods": {
+    "cha": 0,
+    "con": 1,
+    "dex": 1,
+    "int": 0,
+    "str": 3,
+    "wis": 4
+  },
+  "name": "Go'el Thrall",
+  "perception": 7,
+  "ref": 4,
+  "spell_attack": 7,
+  "spell_dc": 17,
+  "will": 9
+}
