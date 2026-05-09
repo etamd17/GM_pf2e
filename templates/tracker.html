@@ -1228,7 +1228,10 @@ function renderInitList() {
 
         // Role label
         let roleLabel = '';
-        if (isActive) roleLabel = `<span class="k active">ACTIVE</span>`;
+        if (c.is_hazard) {
+            const ht = (c.hazard_type === 'complex') ? 'COMPLEX HAZARD' : 'HAZARD';
+            roleLabel = `<span class="k" style="background:#7c2d12;color:#fdba74;">${ht}</span>`;
+        } else if (isActive) roleLabel = `<span class="k active">ACTIVE</span>`;
         else if (c.delaying) roleLabel = `<span class="k delay">DELAYING</span>`;
         else roleLabel = c.is_pc ? `<span class="k pc">PC</span>` : `<span class="k">ENEMY</span>`;
 
@@ -1239,7 +1242,17 @@ function renderInitList() {
         if (isHidden) hiddenBadge = ' · <span class="k hidden" title="Players see ??? and no HP/conditions">HIDDEN</span>';
 
         let subText = '';
-        if (c.is_pc) subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''}`;
+        if (c.is_hazard) {
+            // Hazard subText: stealth/disable DCs + status flags. Routine
+            // text shows below the row (in c-cond) so it doesn't overflow.
+            const dcParts = [];
+            if (c.stealth_dc) dcParts.push(`Stealth DC ${c.stealth_dc}`);
+            if (c.disable_dc) dcParts.push(`Disable DC ${c.disable_dc}`);
+            const status = c.disabled ? ' · <span class="k" style="background:#1f2937;color:#9ca3af;">DISABLED</span>'
+                         : c.triggered ? ' · <span class="k" style="background:#7f1d1d;color:#fca5a5;">TRIGGERED</span>'
+                         : '';
+            subText = `${roleLabel} · Lvl ${c.level}${dcParts.length ? ' · ' + dcParts.join(' / ') : ''}${status}`;
+        } else if (c.is_pc) subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''}`;
         else subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}${hiddenBadge}`;
         if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span>`;
 
@@ -1289,11 +1302,32 @@ function renderInitList() {
             </div>
             <div class="c-cond">
                 ${condsHtml}
+                ${c.is_hazard && (c.trigger || c.routine) ? `
+                    <div style="font-size:10px;color:#fdba74;margin-top:4px;line-height:1.3;">
+                        ${c.trigger ? `<div><b>Trigger:</b> ${escapeHtml(c.trigger)}</div>` : ''}
+                        ${c.routine ? `<div><b>Routine:</b> ${escapeHtml(c.routine)}</div>` : ''}
+                    </div>
+                ` : ''}
             </div>
             <div class="c-act">
-                ${ewHtml}
-                ${delayHtml}
-                ${c.is_pc ? '' : `<button class="act-btn vis ${isHidden ? 'on-hidden' : ''}" onclick="toggleVisibility('${c.instance_id}')" title="${isHidden ? 'Reveal to players' : 'Hide from players (name + HP + conditions masked)'}">${isHidden ? 'Reveal' : 'Hide'}</button>`}
+                ${c.is_hazard ? `
+                    ${c.disabled ? '' : `<button class="act-btn" style="background:#7f1d1d;border-color:#991b1b;color:#fca5a5;"
+                        onclick="hazardTrigger('${c.instance_id}')"
+                        title="Fire the hazard's routine — logged to combat log">Trigger</button>`}
+                    ${c.triggered || c.disabled ? '' : `<button class="act-btn"
+                        onclick="hazardDisable('${c.instance_id}')"
+                        title="Mark hazard disabled (Thievery / Disable Device success)">Disable</button>`}
+                    ${(c.triggered || c.disabled) ? `<button class="act-btn"
+                        onclick="hazardReset('${c.instance_id}')"
+                        title="Re-arm hazard (clears triggered + disabled)">Reset</button>` : ''}
+                    <button class="act-btn vis ${isHidden ? 'on-hidden' : ''}"
+                        onclick="toggleVisibility('${c.instance_id}')"
+                        title="${isHidden ? 'Reveal to players' : 'Hide from players until a PC spots it'}">${isHidden ? 'Reveal' : 'Hide'}</button>
+                ` : `
+                    ${ewHtml}
+                    ${delayHtml}
+                    ${c.is_pc ? '' : `<button class="act-btn vis ${isHidden ? 'on-hidden' : ''}" onclick="toggleVisibility('${c.instance_id}')" title="${isHidden ? 'Reveal to players' : 'Hide from players (name + HP + conditions masked)'}">${isHidden ? 'Reveal' : 'Hide'}</button>`}
+                `}
                 <button class="act-btn del" onclick="removeCombatant('${c.instance_id}')">Remove</button>
             </div>
         </div>`;
@@ -1689,6 +1723,24 @@ function _commitPD(id, inputId) {
 
 function setPD(id)   { _commitPD(id, 'pd-' + id); }
 function setPDAP(id) { _commitPD(id, 'pd-ap-' + id); }
+
+// Hazard actions (#12). Server-side at /api/hazard/<id>/{trigger,disable,reset}.
+// All three are GM-only POSTs that emit a combat-log entry and re-broadcast
+// the encounter; the SSE listener will re-render this row with the new
+// triggered/disabled flags so the buttons reshape automatically.
+function hazardTrigger(id) { apiPostRaw('/api/hazard/' + id + '/trigger', {}); }
+function hazardDisable(id) { apiPostRaw('/api/hazard/' + id + '/disable', {}); }
+function hazardReset(id)   { apiPostRaw('/api/hazard/' + id + '/reset',   {}); }
+
+// Inline HTML escaper used by the hazard routine display in renderCombatant.
+// Keep small + dependency-free so it lives next to the other tracker
+// helpers rather than pulling in a string library.
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 function eliteWeak(id, mode) {
     const fd = new FormData();

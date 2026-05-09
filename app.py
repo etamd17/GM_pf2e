@@ -62,6 +62,9 @@ GM_API_PREFIXES = (
     '/api/monster_search', '/api/stage_encounter', '/api/party_stats',
     '/api/monster_statblock/', '/api/combatant_stats/',
     '/api/toggle_combatant_visibility/',
+    # Hazard actions (Trigger/Disable/Reset) are GM-only. Players see
+    # the resulting combat-log entry but can't fire the routine.
+    '/api/hazard/',
     # /api/tracker_state returns raw combatant data (AC, HP, strikes, saves,
     # and visible_to_players). It's only consumed by templates/tracker.html
     # which is GM-only, so gate it here. /api/player_state is the sanitized
@@ -4253,6 +4256,17 @@ def _get_tracker_state():
                 # GM-side flag: when False the player SSE feed masks this
                 # combatant. The tracker UI renders an eye icon off this.
                 'visible_to_players': getattr(c, 'visible_to_players', True),
+                # Hazard-specific fields the tracker uses to render the
+                # Trigger / Disable buttons + display routine text. Always
+                # emitted so the client can branch on `is_hazard`.
+                'is_hazard': getattr(c, 'is_hazard', False),
+                'hazard_type': getattr(c, 'hazard_type', ''),
+                'stealth_dc': getattr(c, 'stealth_dc', 0),
+                'disable_dc': getattr(c, 'disable_dc', 0),
+                'trigger': getattr(c, 'trigger', ''),
+                'routine': getattr(c, 'routine', ''),
+                'disabled': getattr(c, 'disabled', False),
+                'triggered': getattr(c, 'triggered', False),
             }
             hp_pct = (c.current_hp / c.hp * 100) if c.hp > 0 else 0
             entry['hp_pct'] = round(hp_pct)
@@ -5973,6 +5987,58 @@ def reenter_initiative(instance_id):
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
+
+# ---------------------------------------------------------------------------
+# Hazards (#12)
+# ---------------------------------------------------------------------------
+# Hazards live in ACTIVE_ENCOUNTER alongside monsters and PCs but expose two
+# extra GM actions: "Trigger" (fire the routine, log it, mark triggered) and
+# "Disable" (mark inert — Thievery / Disable Device success). Both are
+# idempotent fire-and-forget POSTs from the tracker buttons.
+def _find_hazard_combatant(instance_id):
+    for c in ACTIVE_ENCOUNTER:
+        if c.instance_id == instance_id and getattr(c, 'is_hazard', False):
+            return c
+    return None
+
+@app.route('/api/hazard/<instance_id>/trigger', methods=['POST'])
+@gm_required
+def hazard_trigger(instance_id):
+    h = _find_hazard_combatant(instance_id)
+    if not h:
+        return jsonify({'success': False, 'error': 'hazard not found'}), 404
+    h.triggered = True
+    routine = (h.routine or '').strip() or '(GM describes effect)'
+    _combat_log(f"⚠ Hazard triggered — {h.name}: {routine}", 'critical')
+    _broadcast_encounter_state()
+    return jsonify({'success': True})
+
+@app.route('/api/hazard/<instance_id>/disable', methods=['POST'])
+@gm_required
+def hazard_disable(instance_id):
+    h = _find_hazard_combatant(instance_id)
+    if not h:
+        return jsonify({'success': False, 'error': 'hazard not found'}), 404
+    h.disabled = True
+    _combat_log(f"Hazard disabled — {h.name}", 'system')
+    _broadcast_encounter_state()
+    return jsonify({'success': True})
+
+@app.route('/api/hazard/<instance_id>/reset', methods=['POST'])
+@gm_required
+def hazard_reset(instance_id):
+    """Re-arm a hazard (clears triggered + disabled). Useful for
+    multi-fire complex hazards or for replaying an encounter."""
+    h = _find_hazard_combatant(instance_id)
+    if not h:
+        return jsonify({'success': False, 'error': 'hazard not found'}), 404
+    h.triggered = False
+    h.disabled = False
+    _combat_log(f"Hazard reset — {h.name}", 'system')
+    _broadcast_encounter_state()
+    return jsonify({'success': True})
+
+
 @app.route('/api/save_encounter', methods=['POST'])
 def save_encounter():
     name = request.form.get('encounter_name')
@@ -6202,6 +6268,67 @@ def api_monster_search():
     results.sort(key=lambda r: (r['level'], r['name']))
     return jsonify({"results": results[:40]})
 
+def _make_hazard_combatant(entry):
+    """Construct a hazard "combatant" from an encounter-builder entry.
+
+    Hazards aren't in MONSTER_LIBRARY — they're created inline from the
+    builder form. The tracker still iterates ACTIVE_ENCOUNTER like a
+    flat list so we duck-type a Monster-shaped object: same fields the
+    tracker reads (instance_id, name, level, is_pc=False, hp, ac, saves,
+    initiative, conditions...) plus hazard-specific fields the tracker
+    UI gates on (is_hazard, hazard_type, stealth_dc, disable_dc,
+    trigger, routine, disabled).
+
+    Simple hazards default to hp=0 — they fire once, no HP bar. Complex
+    hazards may take damage; the GM enters HP via the tracker.
+    """
+    name = (entry.get('name') or 'Hazard').strip()
+    level = int(entry.get('level') or 1)
+    hazard_type = entry.get('hazard_type') or 'simple'
+    h = type('Hazard', (), {})()
+    h.instance_id = str(uuid.uuid4())
+    h.name = name
+    h.level = level
+    h.is_pc = False
+    h.is_hazard = True
+    h.hazard_type = 'complex' if hazard_type == 'complex' else 'simple'
+    h.stealth_dc = int(entry.get('stealth_dc') or 0)
+    h.disable_dc = int(entry.get('disable_dc') or 0)
+    h.trigger = (entry.get('trigger') or '').strip()
+    h.routine = (entry.get('routine') or '').strip()
+    h.disabled = False
+    h.triggered = False
+    # Combatant-shaped fields. Hazards have no AC/saves by default;
+    # complex hazards with HP can be set via the tracker if needed.
+    h.hp = int(entry.get('hp') or 0)
+    h.current_hp = h.hp
+    h.ac = 0
+    h.base_ac = 0
+    h.fort = 0
+    h.ref = 0
+    h.will = 0
+    h.base_fort = 0
+    h.base_ref = 0
+    h.base_will = 0
+    h.perception = 0
+    h.base_perception = 0
+    h.speed = 0
+    h.initiative = 0
+    h.elite_weak = 0
+    h.delaying = False
+    h.visible_to_players = True
+    h.conditions = {}
+    h.persistent_damage = ''
+    h.immunities = []
+    h.resistances = []
+    h.weaknesses = []
+    h.traits = ['hazard', h.hazard_type]
+    h.strikes = []
+    h.actions = []
+    h.notes = ''
+    return h
+
+
 @app.route('/api/stage_encounter', methods=['POST'])
 def api_stage_encounter():
     """Load a staged encounter directly into the active tracker."""
@@ -6210,17 +6337,26 @@ def api_stage_encounter():
     monsters = data.get('monsters', [])
     add_party = data.get('add_party', False)
     clear_first = data.get('clear_first', True)
-    
+
     if clear_first:
         ACTIVE_ENCOUNTER.clear()
         TURN_INDEX = 0
         ROUND_NUMBER = 1
-    
-    # Add monsters
+
+    # Add monsters + hazards. Hazards arrive with is_hazard=True and a
+    # path of '__hazard__<name>'; they're constructed inline rather than
+    # looked up in MONSTER_LIBRARY.
     for entry in monsters:
         path = entry.get('path')
         count = entry.get('count', 1)
         elite_weak = entry.get('elite_weak', 0)
+        if entry.get('is_hazard') or (isinstance(path, str) and path.startswith('__hazard__')):
+            for i in range(count):
+                h = _make_hazard_combatant(entry)
+                if count > 1:
+                    h.name = f"{h.name} {i+1}"
+                ACTIVE_ENCOUNTER.append(h)
+            continue
         for i in range(count):
             if path in MONSTER_LIBRARY:
                 new_c = copy.deepcopy(MONSTER_LIBRARY[path])
@@ -6230,14 +6366,14 @@ def api_stage_encounter():
                 if elite_weak != 0:
                     new_c.apply_elite_weak(elite_weak)
                 ACTIVE_ENCOUNTER.append(new_c)
-    
+
     # Add party if requested
     if add_party:
         for pc_name, pc in PARTY_LIBRARY.items():
             new_c = copy.deepcopy(pc)
             new_c.instance_id = str(uuid.uuid4())
             ACTIVE_ENCOUNTER.append(new_c)
-    
+
     return jsonify({"success": True, "combatant_count": len(ACTIVE_ENCOUNTER)})
 
 @app.route('/api/party_stats')
