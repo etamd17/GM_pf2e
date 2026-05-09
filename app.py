@@ -6278,15 +6278,22 @@ def api_monster_statblock(instance_id):
 @app.route('/generator')
 @gm_required
 def dm_generator():
-    party_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
+    # Honor explicit ?biome / ?level overrides so a refresh-after-tweak
+    # restores the GM's chosen context. Default biome was previously
+    # hardcoded "City", which silently overrode every initial card on
+    # page load — the GM had to click reroll-all to get the biome they
+    # actually picked.
+    default_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
+    party_level = request.args.get('level', type=int) or default_level
+    biome = request.args.get('biome', 'City')
     gen_types = ['npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event']
     data = {}
     for k in gen_types:
         try:
-            data[k] = getattr(pf2e_gen, f'get_{k}')(level=party_level, biome="City")
+            data[k] = getattr(pf2e_gen, f'get_{k}')(level=party_level, biome=biome)
         except AttributeError:
             data[k] = f"<em>Generator '{k}' not available.</em>"
-    return render_template('generator.html', data=data, current_level=party_level)
+    return render_template('generator.html', data=data, current_level=party_level, current_biome=biome)
 
 @app.route('/api/generate/<element_type>', methods=['POST'])
 def api_generate(element_type):

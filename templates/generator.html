@@ -63,20 +63,15 @@
         <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.08]" style="background:#191920;">
                 <label class="text-[10px] text-base-400 font-semibold uppercase tracking-wider">Level</label>
-                <input type="number" id="gen-level" value="{{ current_level }}" min="1" max="20" class="w-12 text-center rounded px-1.5 py-1 text-xs font-mono text-base-200 focus:outline-none focus:border-accent-500/40" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.10);">
+                <input type="number" id="gen-level" value="{{ current_level }}" min="1" max="20" onchange="_genUpdateUrl()" class="w-12 text-center rounded px-1.5 py-1 text-xs font-mono text-base-200 focus:outline-none focus:border-accent-500/40" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.10);">
             </div>
             <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.08]" style="background:#191920;">
                 <label class="text-[10px] text-base-400 font-semibold uppercase tracking-wider">Biome</label>
-                <select id="gen-biome" class="rounded px-2 py-1 text-xs text-base-200 focus:outline-none focus:border-accent-500/40" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.10);">
-                    <option value="City">City</option>
-                    <option value="Forest">Forest</option>
-                    <option value="Dungeon">Dungeon</option>
-                    <option value="Desert">Desert</option>
-                    <option value="Swamp">Swamp</option>
-                    <option value="Mountains">Mountains</option>
-                    <option value="Coastal">Coastal</option>
-                    <option value="Arctic">Arctic</option>
-                    <option value="Underground">Underground</option>
+                <select id="gen-biome" onchange="_genUpdateUrl()" class="rounded px-2 py-1 text-xs text-base-200 focus:outline-none focus:border-accent-500/40" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.10);">
+                    {% set biomes = ['City', 'Forest', 'Dungeon', 'Desert', 'Swamp', 'Mountains', 'Coastal', 'Arctic', 'Underground'] %}
+                    {% for b in biomes %}
+                    <option value="{{ b }}" {% if b == current_biome %}selected{% endif %}>{{ b }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <button onclick="rerollAll()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors" style="background:#52A8A8;">
@@ -147,6 +142,20 @@ function rerollAll() {
     icon.classList.add('spin-anim');
     const types = ['npc','tavern','shop','loot','magic_item','puzzle','quest','encounter','weather','trap','rumor','settlement','treasure_hoard','random_event'];
     types.forEach(t => rerollSingle(t, null));
+}
+
+// Sync the URL ?level / ?biome with the inputs so a refresh restores
+// the GM's chosen context (the server-rendered initial cards already
+// honor these query params). Use replaceState so we don't pollute
+// browser history with every dropdown change.
+function _genUpdateUrl() {
+    const lvl = document.getElementById('gen-level').value;
+    const bio = document.getElementById('gen-biome').value;
+    const u = new URL(location.href);
+    u.searchParams.set('level', lvl);
+    u.searchParams.set('biome', bio);
+    history.replaceState(null, '', u.toString());
+    rerollAll();
 }
 </script>
 {% endblock %}
