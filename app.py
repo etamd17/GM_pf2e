@@ -10125,10 +10125,11 @@ def add_map_token():
     # Default vision: 6 squares (30ft) for PCs, 0 for monsters (GM controls monster visibility)
     default_vision = 6 if data.get('is_pc', False) else 0
     
-    # Auto-detect senses + Hero Points from character data for PCs.
+    # Auto-detect senses + Hero Points + portrait from character data for PCs.
     has_darkvision = data.get('darkvision', False)
     has_low_light = data.get('low_light_vision', False)
     default_hero_points = 1  # PF2e: PCs start each session with 1 HP, max 3
+    default_portrait = data.get('portrait') or ''
     pc_name = data.get('pc_name') or data.get('name')
     if data.get('is_pc') and pc_name:
         for lib_name, pc in PARTY_LIBRARY.items():
@@ -10141,6 +10142,11 @@ def add_map_token():
                 # Pull current Hero Points from the PC sheet so the token
                 # reflects what the player is sitting on.
                 default_hero_points = max(0, min(3, getattr(pc, 'hero_points', 1)))
+                # Portrait file lives in party_data/portraits/<safe_name>.<ext>
+                # served via /portraits/<filename>. The Character class stores
+                # just the filename, so the same URL pattern works on the map.
+                if not default_portrait:
+                    default_portrait = getattr(pc, 'portrait', '') or ''
                 break
 
     token = {
@@ -10168,6 +10174,9 @@ def add_map_token():
         'hero_points': max(0, min(3, int(data.get('hero_points', default_hero_points)))) if data.get('is_pc') else 0,
         'actions_used_this_turn': int(data.get('actions_used_this_turn', 0)),
         'strikes_this_turn': int(data.get('strikes_this_turn', 0)),
+        # Portrait filename (served from /portraits/<name>). Empty string
+        # falls back to the colored-circle + initials renderer.
+        'portrait': default_portrait,
     }
     
     with MAP_LOCK:
@@ -10254,6 +10263,12 @@ def update_map_token():
                     token['actions_used_this_turn'] = max(0, min(3, int(data['actions_used_this_turn'])))
                 if 'strikes_this_turn' in data:
                     token['strikes_this_turn'] = max(0, int(data['strikes_this_turn']))
+                if 'portrait' in data:
+                    # Empty string clears, restoring the colored-circle
+                    # renderer for this token. No format check beyond
+                    # truthiness — the file may not exist yet (race) but
+                    # the canvas falls back gracefully on image load error.
+                    token['portrait'] = (data['portrait'] or '')
                 break
         else:
             return jsonify({'success': False, 'error': 'Token not found'}), 404

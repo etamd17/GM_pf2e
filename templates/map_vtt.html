@@ -2182,6 +2182,14 @@
             // the order they're added (later = drawn on top).
             const root = new PIXI.Container();
             const circle = new PIXI.Graphics();
+            // Portrait sprite: starts hidden, gets a texture assigned the
+            // first time we see a portrait URL we haven't loaded yet. Mask
+            // is a Graphics circle that the sprite is clipped against.
+            const portrait = new PIXI.Sprite();
+            portrait.anchor.set(0.5);
+            portrait.visible = false;
+            const portraitMask = new PIXI.Graphics();
+            portrait.mask = portraitMask;
             const label = new PIXI.Text({
                 text: '',
                 style: {
@@ -2203,9 +2211,35 @@
                 },
             });
             mapText.anchor.set(0, 0.5);
-            root.addChild(circle, label, hpBar, heroPipsContainer, actionPipsContainer, mapText);
-            return { root, circle, label, hpBar, heroPips: heroPipsContainer,
-                     actionPips: actionPipsContainer, mapText };
+            // Order: circle (color fill) → portrait (above, masked) →
+            // mask (logically attached, doesn't render itself) → label,
+            // hpBar, pips, mapText layered above the portrait.
+            root.addChild(circle, portraitMask, portrait, label, hpBar,
+                          heroPipsContainer, actionPipsContainer, mapText);
+            return { root, circle, portrait, portraitMask, label, hpBar,
+                     heroPips: heroPipsContainer,
+                     actionPips: actionPipsContainer, mapText,
+                     _portraitUrl: null };
+        }
+
+        function _pixiLoadPortraitTexture(url) {
+            // Lazy-load via PIXI.Assets, dedup by URL. On success or failure
+            // the cache entry's state flips and we kick markDirty('tokens')
+            // so the sync function re-applies the now-loaded texture.
+            const e = _portraitTexCache.get(url);
+            if (e && e.state === 'ok')   return e.texture || null;
+            if (e)                       return null;  // loading or err
+            const entry = { state: 'loading', texture: null };
+            _portraitTexCache.set(url, entry);
+            PIXI.Assets.load(url).then(tex => {
+                entry.state = 'ok';
+                entry.texture = tex;
+                markDirty('tokens');
+            }).catch(err => {
+                entry.state = 'err';
+                console.warn('[pixi-portrait] failed', url, err);
+            });
+            return null;
         }
 
         function _pixiUpdateTokenSprite(s, t, gs, ox, oy) {
@@ -2238,10 +2272,41 @@
             s.circle.circle(0, 0, r).fill(fillHex);
             s.circle.circle(0, 0, r).stroke({ color: ringHex, width: ringWidth, alignment: 1 });
 
+            // Portrait sprite — shown when token.portrait resolves to a
+            // loaded texture; falls back to the colored circle + initials
+            // when absent or still loading. The circular mask is sized to
+            // (r-2) so the colored ring is still visible behind the image.
+            const portraitUrl = t.portrait ? `/portraits/${t.portrait}` : null;
+            if (portraitUrl) {
+                const tex = _pixiLoadPortraitTexture(portraitUrl);
+                if (tex) {
+                    if (s._portraitUrl !== portraitUrl) {
+                        s.portrait.texture = tex;
+                        s._portraitUrl = portraitUrl;
+                    }
+                    // Aspect-fit cover: scale so the smaller image dim equals
+                    // the inner-circle diameter, then center.
+                    const dia = (r - 2) * 2;
+                    const tw = tex.width || dia, th = tex.height || dia;
+                    const scale = Math.max(dia / tw, dia / th);
+                    s.portrait.scale.set(scale);
+                    s.portrait.visible = true;
+                    s.portraitMask.clear();
+                    s.portraitMask.circle(0, 0, r - 2).fill(0xffffff);
+                } else {
+                    s.portrait.visible = false;
+                }
+            } else {
+                s.portrait.visible = false;
+                s._portraitUrl = null;
+            }
+
             // Initials. PIXI Text is expensive to update; skip if unchanged.
+            // Hide initials when a portrait is shown so it doesn't overlay.
             const initials = (t.name || '').split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
             if (s.label.text !== initials) s.label.text = initials;
             s.label.style.fontSize = Math.max(12, r * 0.5);
+            s.label.visible = !s.portrait.visible;
 
             // HP bar
             s.hpBar.clear();
@@ -2301,6 +2366,35 @@
                     s.mapText.position.set(0, 0);
                 }
             }
+        }
+
+        // Portrait caches. Two separate Maps because canvas needs an
+        // HTMLImageElement and PIXI needs a PIXI.Texture; the underlying
+        // bytes are the same (browser HTTP cache de-dupes the network
+        // fetch) but the in-memory handles differ. Both helpers
+        // markDirty('tokens') on successful load so the next frame
+        // picks up the image without waiting for further state changes.
+        const _portraitImgCache = new Map();   // url → {state, img}
+        const _portraitTexCache = new Map();   // url → {state, texture}
+        function _getPortraitImage(url) {
+            if (!url) return null;
+            const e = _portraitImgCache.get(url);
+            if (e && e.state === 'ok') return e.img;
+            if (e) return null;
+            const entry = { state: 'loading', img: null };
+            _portraitImgCache.set(url, entry);
+            const img = new Image();
+            img.onload = () => {
+                entry.state = 'ok';
+                entry.img = img;
+                markDirty('tokens');
+            };
+            img.onerror = () => {
+                entry.state = 'err';
+                console.warn('[portrait] failed to load', url);
+            };
+            img.src = url;
+            return null;
         }
 
         function _hexToInt(hex) {
@@ -3143,13 +3237,36 @@
                     ctx.stroke();
                 }
                 
-                // Token circle — render with reduced opacity when hidden
+                // Token circle — render with reduced opacity when hidden.
+                // If a portrait is set and loaded, paint it inside the
+                // circle; otherwise fall back to the color fill. The
+                // portrait clip uses (r-2) so the colored ring is still
+                // visible as a thin border behind the image.
                 ctx.save();
                 if (hiddenFromPlayers) ctx.globalAlpha = 0.55;
                 ctx.beginPath();
                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                 ctx.fillStyle = token.color || (token.is_pc ? '#22c55e' : '#ef4444');
                 ctx.fill();
+                if (token.portrait) {
+                    const img = _getPortraitImage(`/portraits/${token.portrait}`);
+                    if (img) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+                        ctx.clip();
+                        // Aspect-fit cover: scale image so the smaller dim
+                        // matches the circle diameter; center horizontally
+                        // and vertically.
+                        const dia = (r - 2) * 2;
+                        const iw = img.naturalWidth || dia;
+                        const ih = img.naturalHeight || dia;
+                        const scale = Math.max(dia / iw, dia / ih);
+                        const dw = iw * scale, dh = ih * scale;
+                        ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+                        ctx.restore();
+                    }
+                }
                 ctx.restore();
 
                 // Flanking indicator (orange dashed ring for flanked enemies)
@@ -3189,13 +3306,22 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
                 
-                // Initials
-                ctx.fillStyle = '#fff';
-                ctx.font = `bold ${Math.max(12, r * 0.5)}px system-ui`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const initials = token.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-                ctx.fillText(initials, cx, cy);
+                // Initials — drawn only when no portrait covers the circle.
+                // (When a portrait is loaded the image fills the disc, and
+                // initials over it look like graffiti.) Re-check the cache
+                // entry rather than threading a flag down from the fill
+                // step — same lookup, no double work because the cache
+                // entry was just touched.
+                const _hasPortrait = token.portrait
+                    && (_portraitImgCache.get(`/portraits/${token.portrait}`) || {}).state === 'ok';
+                if (!_hasPortrait) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `bold ${Math.max(12, r * 0.5)}px system-ui`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const initials = token.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                    ctx.fillText(initials, cx, cy);
+                }
                 
                 // HP bar
                 if (token.max_hp > 0) {
