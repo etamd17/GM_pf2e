@@ -1,0 +1,104 @@
+        <div id="tab-core" data-print-title="Core &amp; Skills" class="tab-content sheet-page active space-y-6">
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div class="xl:col-span-1 space-y-6">
+                    <div class="panel-card">
+                        <h3 class="section-header">Character Details</h3>
+                        <div class="space-y-1">
+                            {% if pc.deity != 'None' and pc.deity != 'Not set' %}
+                            <div class="skill-row" style="padding:4px 8px;">
+                                <span class="ds-label">Deity</span>
+                                <span class="text-sm font-bold text-white">{{ pc.deity }}{% if pc.sanctification != 'Neutral' %} <span class="text-gray-500 text-[10px]">({{ pc.sanctification }})</span>{% endif %}</span>
+                            </div>
+                            {% endif %}
+                            {% if pc.senses %}
+                            <div class="skill-row" style="padding:4px 8px;">
+                                <span class="ds-label">Senses</span>
+                                <span class="text-sm text-gray-300">{{ pc.senses | join(', ') }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="ds-surface-sunken px-3 py-2">
+                                <span class="ds-label block mb-1">Languages</span>
+                                <span class="text-xs leading-tight text-gray-400">{{ pc.languages | join(', ') }}</span>
+                            </div>
+
+                            {% set active_mods = [] %}
+                            {% for sel, type_dict in pc.rule_modifiers.items() %}
+                                {% for m_type, val_list in type_dict.items() %}
+                                    {% if val_list %}
+                                        {% set _ = active_mods.append(1) %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            {% if active_mods %}
+                            <div class="rule-engine-chip" title="Automatic: your feats and features are currently adjusting {{ active_mods|length }} stat{{ 's' if active_mods|length != 1 else '' }}. The sheet rolls with these baked in — no need to track the math.">
+                                <span class="rule-engine-label">&#x2726; Rule Engine</span>
+                                <span class="rule-engine-count">{{ active_mods|length }} active</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-2">
+                    <div class="panel-card h-full">
+                        <div class="flex justify-between items-end mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
+                            <h3 class="section-header" style="border:none; margin:0; padding:0;">Skills</h3>
+                            
+                            {% set perc_val = pc.proficiencies.get('perception', 2) %}
+                            {% set perc_let = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_val, 'U') %}
+                            
+                            <div class="skill-row group" style="padding:var(--space-sm) var(--space-md);">
+                                <span class="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold mr-2 leading-none
+                                    {% if perc_let == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                    {% elif perc_let == 'T' %} prof-t
+                                    {% elif perc_let == 'E' %} prof-e
+                                    {% elif perc_let == 'M' %} prof-m
+                                    {% else %} prof-l {% endif %}">
+                                    {{ perc_let }}
+                                </span>
+                                <span class="ds-label mr-2">Perception</span>
+                                <button onclick="rollSkill('Perception', {{ pc.perception }})"
+                                        class="text-lg font-bold {{ accent_color }} hover:text-amber-300 transition-colors"
+                                        aria-label="Roll Perception +{{ pc.perception }}"
+                                        title="{{ pc.perception_breakdown }}">+{{ pc.perception }}</button>
+                            </div>
+                        </div>
+
+                        <div class="skill-row mb-4 group">
+                            <span class="ds-label tracking-widest">Initiative (Perception + Bonuses)</span>
+                            <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})"
+                                    class="text-lg font-bold text-white group-hover:text-amber-300 transition-colors"
+                                    aria-label="Roll Initiative +{{ pc.initiative_mod }}"
+                                    title="Initiative — typically Perception ({{ pc.perception_breakdown }})">+{{ pc.initiative_mod }}</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                            {% for skill in pc.skills %}
+                            <div class="skill-row w-full group" data-roll-name="{{ skill.name }}" data-roll-mod="{{ skill.total | int }}">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] w-5 h-5 flex items-center justify-center rounded font-bold
+                                        {% if skill.prof_letter == 'U' %} bg-gray-800 text-gray-500 border border-gray-700
+                                        {% elif skill.prof_letter == 'T' %} prof-t
+                                        {% elif skill.prof_letter == 'E' %} prof-e
+                                        {% elif skill.prof_letter == 'M' %} prof-m
+                                        {% else %} prof-l {% endif %}">
+                                        {{ skill.prof_letter }}
+                                    </span>
+                                    <div>
+                                        <span class="text-sm block leading-tight group-hover:text-amber-400 transition-colors" style="color:var(--text-primary);">{{ skill.name }}</span>
+                                        <span class="uppercase" style="font-size:var(--text-2xs); color:var(--text-muted);">{{ skill.stat }}</span>
+                                    </div>
+                                </div>
+                                <button onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})"
+                                        class="text-lg font-bold font-mono {{ stat_color }} group-hover:text-amber-400 transition-colors px-2"
+                                        aria-label="Roll {{ skill.name }} {{ skill.total }}"
+                                        title="{{ skill.name }} {{ skill.total }} — {{ skill.breakdown }}">
+                                    {{ skill.total }}{% if skill.penalty %}<span class="penalty-tag">−{{ skill.penalty }}</span>{% endif %}
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>

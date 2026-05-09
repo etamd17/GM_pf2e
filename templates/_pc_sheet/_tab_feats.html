@@ -1,0 +1,103 @@
+        <div id="tab-feats" data-print-title="Feats" class="tab-content sheet-page space-y-4">
+
+            {# Class cheat-sheet (Wave 2 #12) — pulled from a static dictionary
+               below. Closed by default to stay out of the way. #}
+            <details id="class-cheatsheet" class="class-cheatsheet" data-class="{{ pc.class_name|lower }}" data-subclass="{{ (pc.subclass or '')|lower }}">
+                <summary>Class Quick Reference — {{ pc.class_name }}{% if pc.subclass %} ({{ pc.subclass }}){% endif %}</summary>
+                <div id="class-cheatsheet-body" class="class-cheatsheet-body">Loading…</div>
+            </details>
+
+            <!-- ANCESTRY FEATURES -->
+            {% if pc.ancestry_features %}
+            <div class="mb-6">
+                <h3 class="section-header">Ancestry -- {{ pc.ancestry }}</h3>
+                {% for feat in pc.ancestry_features %}
+                <div class="panel-card mb-2" style="padding:var(--space-md);">
+                    <div class="flex items-center gap-2 mb-1">
+                        {{ action_pips(feat.get('actions')) }}
+                        <h4 class="font-header text-sm" style="color:var(--accent-gold-light);">{{ feat.name }}</h4>
+                        <span class="text-[9px] font-header uppercase tracking-wider" style="color:var(--text-muted);">{{ feat.type|title }}</span>
+                    </div>
+                    <p class="text-sm" style="color:var(--text-primary);">{{ feat.desc }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- CLASS FEATURES — Core abilities with toggles -->
+            {% if pc.class_features %}
+            <div class="mb-6">
+                <h3 class="section-header">Class Features -- {{ pc.class_name }}</h3>
+                
+                {% for feat in pc.class_features %}
+                <div class="panel-card mb-3 relative overflow-hidden" style="padding:var(--space-md);" id="feature-{{ feat.name|replace(' ', '-') }}">
+                    <!-- Action cost badge -->
+                    {% if feat.get('actions') %}
+                    <span class="absolute top-3 right-3" title="{{ feat.type|title }}">{{ action_pips(feat.actions) }}</span>
+                    {% endif %}
+                    
+                    <div class="flex items-center gap-3 mb-2">
+                        <!-- Toggle button for toggleable features -->
+                        {% if feat.type == 'toggle' %}
+                        <button onclick="toggleFeature('{{ feat.name }}')" 
+                                id="toggle-btn-{{ feat.name|replace(' ', '-') }}"
+                                class="shrink-0 w-12 h-7 rounded-full transition-all relative no-print"
+                                style="{% if feat.name in pc.active_toggles %}background: rgba(167,139,250,0.2); border: 1px solid rgba(167,139,250,0.4);{% else %}background: var(--bg-raised); border: 1px solid var(--border-strong);{% endif %}">
+                            <span class="absolute top-0.5 w-6 h-6 rounded-full transition-all"
+                                  style="{% if feat.name in pc.active_toggles %}left: 22px; background: var(--color-spell);{% else %}left: 2px; background: var(--text-faint);{% endif %}"></span>
+                        </button>
+                        {% elif feat.type == 'reaction' %}
+                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-sm" style="background: rgba(196,181,253,0.1); border: 1px solid rgba(196,181,253,0.2); color: #C4B5FD;"></span>
+                        {% elif feat.type == 'action' %}
+                        <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-header text-xs" style="background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); color: var(--color-spell);"></span>
+                        {% endif %}
+                        
+                        <div class="flex-1">
+                            <h4 class="font-header text-base" style="color: {% if feat.type == 'toggle' and feat.name in pc.active_toggles %}var(--color-spell){% else %}var(--text-primary){% endif %};">
+                                {{ feat.name }}
+                                {% if feat.type == 'toggle' and feat.name in pc.active_toggles %}
+                                <span class="text-xs ml-2 px-2 py-0.5 rounded" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.25); color: var(--color-spell);">ACTIVE</span>
+                                {% endif %}
+                            </h4>
+                            <span class="text-[10px] font-header uppercase tracking-wider" style="color: var(--text-faint);">{{ feat.type|title }} · Level {{ feat.level }}</span>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm leading-relaxed" style="color: var(--text-primary);">{{ feat.desc }}</p>
+                    
+                    {% if feat.get('toggle_effects') and feat.type == 'toggle' %}
+                    <div class="mt-3 pt-2 flex flex-wrap gap-2" style="border-top: 1px solid var(--border-subtle);">
+                        {% for effect_key, effect_val in feat.toggle_effects.items() %}
+                        <span class="font-header text-[10px] tracking-wider px-2 py-1 rounded" 
+                              style="{% if feat.name in pc.active_toggles %}background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); color: var(--color-spell);{% else %}background: var(--border-subtle); border: 1px solid var(--border-subtle); color: var(--text-faint);{% endif %}">
+                            {{ effect_key|replace('_', ' ')|title }}: {% if effect_val is number %}{% if effect_val > 0 %}+{% endif %}{{ effect_val }}{% else %}{{ effect_val }}{% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- REGULAR FEATS -->
+            <div class="panel-card mb-4">
+                <h3 class="section-header">Character Feats</h3>
+            </div>
+            {% for feat in pc.feats %}
+            <div class="panel-card relative overflow-hidden group">
+                <div class="absolute top-0 right-0 bg-gray-900 border-b border-l border-gray-700 text-gray-500 px-3 py-1 rounded-bl text-[10px] uppercase font-bold">Lvl {{ feat.level|default('1') }}</div>
+                <div class="flex justify-between items-start mb-3">
+                    <h4 class="text-lg font-bold text-amber-500">{{ feat.name }}</h4>
+                    <button onclick="rollFeature('{{ feat.name|replace("'", "\\'") }}')" class="bg-purple-900/40 hover:bg-purple-800 text-purple-300 border border-purple-900/50 px-3 py-1 rounded text-xs font-bold transition-transform transform hover:scale-105 opacity-0 group-hover:opacity-100 mt-1" aria-label="Send {{ feat.name }} description to GM">
+                        Send to GM
+                    </button>
+                </div>
+                <div class="text-sm text-gray-400 foundry-content leading-relaxed">{{ feat.desc|safe }}</div>
+                <input type="text" class="feat-note-input no-print" data-feat-note="{{ feat.name }}"
+                       placeholder="Personal note — tracking counters, house rulings, etc." aria-label="Note for {{ feat.name }}">
+            </div>
+            {% else %}
+            <div class="panel-card italic text-center" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">No feat chosen at this level. The page awaits.</div>
+            {% endfor %}
+        </div>

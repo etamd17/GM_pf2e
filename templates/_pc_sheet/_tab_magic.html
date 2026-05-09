@@ -1,0 +1,365 @@
+        <div id="tab-magic" data-print-title="Magic &amp; Spells" class="tab-content sheet-page space-y-6">
+            {% if pc.spell_casters %}
+                <!-- Spell Search -->
+                <div class="no-print flex items-center gap-2 mb-2">
+                    <input type="text" id="spell-search" placeholder="Search spells..." oninput="_onSpellSearchInput('spell-search')" class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
+                    <select id="spell-rank-filter" onchange="filterSpells(document.getElementById('spell-search').value)" class="rounded px-2 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
+                        <option value="">All Ranks</option>
+                        <option value="0">Cantrips</option>
+                        {% for i in range(1, 11) %}
+                        <option value="{{ i }}">Rank {{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                {% for caster in pc.spell_casters %}
+                {% set caster_idx = loop.index0 %}
+                {% set c_type_lower = caster.type | lower %}
+                <div class="panel-card overflow-hidden mb-6" style="padding:0;">
+                    
+                    <!-- Caster Header -->
+                    {% set _ct = c_type_lower %}
+                    {% if 'spontaneous' in _ct and 'bounded' in _ct %}
+                        {% set _chip_class = 'bounded' %}{% set _chip_label = 'Bounded Spontaneous' %}
+                        {% set _model = 'Limited repertoire — cast any known spell from a slot of its rank or higher.' %}
+                    {% elif 'spontaneous' in _ct %}
+                        {% set _chip_class = 'spontaneous' %}{% set _chip_label = 'Spontaneous' %}
+                        {% set _model = 'Cast any spell from your repertoire on the fly. Each cast spends a slot of that rank or higher; signature spells auto-heighten.' %}
+                    {% elif 'focus' in _ct %}
+                        {% set _chip_class = 'focus' %}{% set _chip_label = 'Focus' %}
+                        {% set _model = 'Spend 1 Focus Point per cast. Refocus (10 min) restores 1 point; max 3 in pool. Auto-heightened to half level.' %}
+                    {% elif 'impulse' in _ct %}
+                        {% set _chip_class = 'impulse' %}{% set _chip_label = 'Impulse' %}
+                        {% set _model = 'Impulses are magical but not spells. Use them while your kinetic aura is active — no slots, no daily prep.' %}
+                    {% elif 'alchemical' in _ct %}
+                        {% set _chip_class = 'alchemical' %}{% set _chip_label = 'Alchemical' %}
+                        {% set _model = 'Craft items with infused reagents during daily prep. Items work like spells but use the Formula Book.' %}
+                    {% elif 'innate' in _ct %}
+                        {% set _chip_class = 'innate' %}{% set _chip_label = 'Innate' %}
+                        {% set _model = 'Granted by ancestry or items. Each entry tells you how often it can be cast — usually once per day.' %}
+                    {% else %}
+                        {% set _chip_class = 'prepared' %}{% set _chip_label = 'Prepared' %}
+                        {% set _model = 'Choose your spells at dawn — drag each into a specific rank slot. Each cast expends that prepared copy until you long rest.' %}
+                    {% endif %}
+                    <div class="bg-gray-900 p-4 border-b border-gray-700">
+                        <!-- Row 1: chip is promoted ABOVE the caster name so the casting model
+                             reads as the primary identifier, not a peer tag. -->
+                        <div class="flex items-center gap-2 mb-2 flex-wrap">
+                            <span class="caster-type-chip large {{ _chip_class }}">{{ _chip_label }} Casting</span>
+                            <span id="prep-status-{{ caster_idx }}" class="prep-status-badge {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}needs-prep{% elif 'spontaneous' in c_type_lower %}always-ready{% else %}ready{% endif %}">
+                                {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}Status loading…
+                                {% elif 'spontaneous' in c_type_lower %}Always Ready
+                                {% elif 'focus' in c_type_lower %}{{ pc.current_focus }}/{{ pc.focus_max }} Focus
+                                {% else %}Ready{% endif %}
+                            </span>
+                        </div>
+                        <!-- Row 2: title + tradition + stats -->
+                        <div class="flex flex-wrap justify-between items-start gap-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                    <h3 class="text-xl font-header" style="color:var(--color-spell);">{{ caster.name }}</h3>
+                                    <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);" title="Spell Tradition">{{ caster.tradition }}</span>
+                                </div>
+                                <div class="caster-mental-model">{{ _model }}</div>
+                                <div class="flex gap-3 items-center text-xs flex-wrap mt-2">
+                                    {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
+                                    <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>
+                                    <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">DC {{ pc.spell_dc }}</span>
+                                    {% endif %}
+                                    {% if 'impulse' not in c_type_lower and 'focus' not in c_type_lower %}
+                                    <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);" title="Cantrips auto-heighten to half your level, rounded up.">Cantrips at Rank {{ pc.cantrip_rank }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                {% if 'focus' in c_type_lower %}
+                                <div class="flex items-center gap-2 px-3 py-2 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);">
+                                    <span class="font-header text-[9px] tracking-widest uppercase" style="color:var(--color-spell);">Focus {{ pc.current_focus }}/{{ pc.focus_max }}</span>
+                                    <button onclick="modifyFocus('decrease')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust −1">◀</button>
+                                    <span id="focus-pips" data-tradition="{{ (caster.tradition if caster and caster.tradition else 'arcane') | lower }}">
+                                        {% for i in range(pc.focus_max) %}
+                                        <span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>
+                                        {% endfor %}
+                                    </span>
+                                    <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust +1">▶</button>
+                                </div>
+                                <button onclick="doRefocus('{{ pc.class_name|lower }}', '{{ (caster.tradition or 'arcane')|lower }}')" class="no-print refocus-btn" title="Spend 10 minutes to restore 1 Focus Point">Refocus (10m)</button>
+                                {# S4: Long Rest lives in the global header now — single source of truth. #}
+                                <button onclick="addFocusSpellManual()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add Spell</button>
+                                {% endif %}
+                                {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}
+                                <!-- Play / Prep view toggle (S1) — Play is the default; Prep opens
+                                     the modal where the spellbook + slot drop-zones live. -->
+                                <div class="caster-view-toggle no-print" id="view-toggle-{{ caster_idx }}">
+                                    <button class="active" onclick="setCasterView({{ caster_idx }}, 'play')">Play</button>
+                                    <button onclick="setCasterView({{ caster_idx }}, 'prep'); openDailyPrepModal({{ caster_idx }})">Prep</button>
+                                </div>
+                                <button onclick="openSpellBrowse({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Learn Spell</button>
+                                {% endif %}
+                                {% if 'spontaneous' in c_type_lower %}
+                                <button onclick="openSignatureManager({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.3); color:#FCD34D;" title="Manage signature spells">Signatures</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if 'impulse' in c_type_lower %}
+                    <!-- === KINETICIST IMPULSE CASTER (grouped by element gate) === -->
+                    <div class="p-5 space-y-2" id="impulse-container-{{ caster_idx }}">
+                        <div class="text-center italic py-4" style="color:var(--text-faint);">Grouping impulses by element...</div>
+                    </div>
+                    <script>
+                    (function() {
+                        var casterIdx = {{ caster_idx }};
+                        var tradition = '{{ caster.tradition }}';
+                        var casterType = '{{ caster.type }}';
+                        var container = document.getElementById('impulse-container-' + casterIdx);
+
+                        /* Collect all impulses from all levels */
+                        var allImpulses = [];
+                        {% for lvl in caster.levels %}
+                        {% for sp in lvl.spells %}
+                        allImpulses.push({
+                            name: {{ sp.name | tojson | safe }},
+                            actions: {{ sp.actions | tojson | safe if sp.actions else 'null' }},
+                            level: {{ lvl.level }},
+                            label: {{ lvl.label | tojson | safe }}
+                        });
+                        {% endfor %}
+                        {% endfor %}
+
+                        /* Element detection by keyword matching */
+                        function detectElement(spellName) {
+                            var n = spellName.toLowerCase();
+                            if (/fire|flame|burn|scorch|ignit|thermal|blaz/.test(n)) return 'Fire';
+                            if (/water|tidal|ocean|aqua|torrent|mist|rain|ice|frost|winter|sleet|cold/.test(n)) return 'Water';
+                            if (/earth|stone|rock|tremor/.test(n)) return 'Earth';
+                            if (/air|wind|gust|aerial|cyclone|breez|lightning|thunder|electr/.test(n)) return 'Air';
+                            if (/wood|timber|vine|thorn|leaf|root|branch|forest|plant/.test(n)) return 'Wood';
+                            if (/metal|iron|steel|ore|alloy|carapace/.test(n)) return 'Metal';
+                            return 'Universal';
+                        }
+
+                        var elementConfig = {
+                            'Fire':      { color: '#ef4444', icon: '\uD83D\uDD25' },
+                            'Water':     { color: '#3b82f6', icon: '\uD83D\uDCA7' },
+                            'Earth':     { color: '#a16207', icon: '\uD83E\uDEA8' },
+                            'Air':       { color: '#a78bfa', icon: '\uD83C\uDF2C\uFE0F' },
+                            'Metal':     { color: '#9ca3af', icon: '\u2699\uFE0F' },
+                            'Wood':      { color: '#22c55e', icon: '\uD83C\uDF3F' },
+                            'Universal': { color: '#8ED4D4', icon: '\u2728' }
+                        };
+
+                        /* Group impulses by detected element */
+                        var groups = {};
+                        allImpulses.forEach(function(sp) {
+                            var el = detectElement(sp.name);
+                            if (!groups[el]) groups[el] = [];
+                            groups[el].push(sp);
+                        });
+
+                        /* Sort each group by level, then alphabetically */
+                        Object.keys(groups).forEach(function(el) {
+                            groups[el].sort(function(a, b) {
+                                if (a.level !== b.level) return a.level - b.level;
+                                return a.name.localeCompare(b.name);
+                            });
+                        });
+
+                        /* Render in canonical element order */
+                        var order = ['Fire', 'Water', 'Earth', 'Air', 'Metal', 'Wood', 'Universal'];
+                        var html = '';
+
+                        order.forEach(function(element) {
+                            var spells = groups[element];
+                            if (!spells || spells.length === 0) return;
+                            var cfg = elementConfig[element];
+
+                            html += '<div style="margin-top:6px;">';
+                            html += '<div style="font-size:10px; font-weight:700; color:' + cfg.color + '; text-transform:uppercase; letter-spacing:0.08em; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:8px;">';
+                            html += cfg.icon + ' ' + element;
+                            html += '</div>';
+                            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">';
+
+                            spells.forEach(function(sp) {
+                                var nameEsc = sp.name.replace(/'/g, "\\'");
+                                var nameAttr = sp.name.toLowerCase().replace(/"/g, '&quot;');
+                                html += '<div class="flex justify-between items-center p-3 rounded cursor-pointer hover:bg-gray-700 transition-colors spell-rank-' + sp.level + ' spell-entry" ';
+                                html += 'data-spell-name="' + nameAttr + '" data-spell-rank="' + sp.level + '" ';
+                                html += 'data-impulse-element="' + element.toLowerCase() + '" ';
+                                html += 'onclick="openSpellCard(\'' + nameEsc + '\', ' + sp.level + ', \'' + tradition + '\', \'' + casterType + '\')" ';
+                                html += 'style="background:var(--bg-raised); border:1px solid var(--border-subtle); border-left:3px solid ' + cfg.color + ';">';
+
+                                html += '<div class="flex items-center gap-2 pr-2 truncate">';
+                                html += '<span class="text-sm font-bold truncate" style="color:var(--text-primary);">' + sp.name + '</span>';
+                                if (sp.actions) {
+                                    html += '<span class="action-pips ml-1">' + sp.actions + '</span>';
+                                }
+                                html += '<span class="text-[9px] font-header uppercase tracking-wider ml-1" style="color:var(--text-muted);">' + sp.label + '</span>';
+                                html += '</div>';
+
+                                html += '<div class="flex items-center gap-2 shrink-0">';
+                                html += '<button onclick="event.stopPropagation(); rollSpell(\'' + nameEsc + '\', event)" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:' + cfg.color + '1a; border:1px solid ' + cfg.color + '33; color:' + cfg.color + ';">Cast</button>';
+                                html += '</div>';
+
+                                html += '</div>';
+                            });
+
+                            html += '</div></div>';
+                        });
+
+                        if (html === '') {
+                            html = '<div class="text-center italic py-4" style="color:var(--text-faint);">No impulses found.</div>';
+                        }
+
+                        container.innerHTML = html;
+                    })();
+                    </script>
+
+                    {% elif 'spontaneous' in c_type_lower or 'focus' in c_type_lower %}
+                    <!-- === SPONTANEOUS / FOCUS CASTER === -->
+                    <div class="p-5 space-y-5">
+                        {% for lvl in caster.levels %}
+                        <div>
+                            <div class="spell-rank-header">
+                                <span>
+                                    {{ lvl.label }}
+                                    {% if lvl.level == 0 %}<span class="rank-count">(Rank {{ pc.cantrip_rank }})</span> <span class="at-will-pill ml-1">At Will</span>{% endif %}
+                                </span>
+                                {% if lvl.level > 0 and lvl.slots > 0 and 'focus' not in c_type_lower %}
+                                <div class="flex gap-1 items-center px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
+                                    <span class="font-header text-[11px] tracking-widest uppercase mr-1" style="color:var(--text-muted);">Slots</span>
+                                    {% for i in range(lvl.slots) %}
+                                    <input type="checkbox" data-caster-idx="{{ caster_idx }}" data-spell-level="{{ lvl.level }}" data-slot-idx="{{ i }}" class="spell-slot-cb w-3.5 h-3.5 accent-amber-500 cursor-pointer">
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {% for sp in lvl.spells %}
+                                <div class="flex justify-between items-center p-3 rounded cursor-pointer hover:bg-gray-700 transition-colors spell-rank-{{ lvl.level }} spell-entry"
+                                     data-spell-name="{{ sp.name|lower }}" data-spell-rank="{{ lvl.level }}"
+                                     onclick="openSpellCard('{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, '{{ caster.tradition }}', '{{ caster.type }}')"
+                                     style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
+                                    <div class="flex items-center gap-2 pr-2 truncate">
+                                        <span class="text-sm font-bold truncate" style="color:var(--text-primary);">{{ sp.name }}</span>
+                                        {% if sp.actions %}<span class="action-pips ml-1">{{ sp.actions }}</span>{% endif %}
+                                        {% if sp.name in pc.signature_spells %}<span class="text-amber-400 text-xs ml-1" title="Signature Spell — auto-heightens to higher slots. Edit via the Signatures button.">★</span>{% endif %}
+                                        {% if sp.uses_per_day %}<span class="text-[9px] ml-1 px-1 rounded" style="background:rgba(244,114,182,0.12); border:1px solid rgba(244,114,182,0.3); color:#F9A8D4;" title="Per-day usage">{{ sp.uses_per_day }}/day</span>{% endif %}
+                                    </div>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        {# S3: inline signature toggle removed — single source of truth is the Signatures modal in the caster header. #}
+                                        <button onclick="event.stopPropagation(); rollSpell('{{ sp.name|replace("'", "\\'") }}', event, {casterIdx: {{ caster_idx }}, rank: {{ lvl.level }} })" class="px-3 py-1 rounded text-xs font-bold transition-colors shrink-0" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">Cast</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% else %}
+                    <!-- === PREPARED CASTER (Wizard/Cleric/Druid/Witch) ===
+                         Play view (default) shows just prepared spells with big Cast
+                         buttons + slot pips. Prep view opens the Daily Prep modal —
+                         the spellbook + drop-zones live there now. -->
+                    <div class="p-5" id="play-view-{{ caster_idx }}">
+                        <div id="play-view-body-{{ caster_idx }}">
+                            <div class="text-center italic py-8" style="color:var(--text-faint);">Loading prepared spells…</div>
+                        </div>
+                    </div>
+                    <!-- Legacy spellbook/prep split — hidden by default; the Daily Prep
+                         modal renders into this when opened. Kept in DOM so renderPrepUI
+                         has a stable target id. -->
+                    <div class="flex flex-col lg:flex-row hidden" id="prep-view-{{ caster_idx }}" style="min-height:450px;">
+                        <!-- Spellbook (left) -->
+                        <div class="w-full lg:w-5/12 p-5 border-b lg:border-b-0 lg:border-r border-gray-700" style="background:var(--bg-surface);">
+                            <h4 class="font-header text-xs tracking-wider uppercase mb-4" style="color:var(--text-secondary);">Spellbook — Drag to Prepare</h4>
+                            <div class="space-y-4 max-h-[550px] overflow-y-auto custom-scrollbar pr-2">
+                                {% for lvl in caster.levels %}
+                                <div>
+                                    <div class="spell-rank-header" style="font-size:11px;">
+                                        <span>{{ lvl.label }}{% if lvl.level == 0 %} <span class="rank-count">(Rank {{ pc.cantrip_rank }})</span> <span class="at-will-pill ml-1">At Will</span>{% endif %}</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1.5">
+                                        {% for sp in lvl.spells %}
+                                        <div class="flex justify-between items-center p-2 rounded cursor-grab hover:bg-gray-700 transition-colors spell-rank-{{ lvl.level }} spell-entry"
+                                             draggable="true"
+                                             data-spell-name="{{ sp.name }}" data-spell-level="{{ lvl.level }}" data-caster-idx="{{ caster_idx }}"
+                                             ondragstart="onSpellDragStart(event, '{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, {{ caster_idx }})"
+                                             onclick="openSpellCard('{{ sp.name|replace('\'','\\\'') }}', {{ lvl.level }}, '{{ caster.tradition }}', '{{ caster.type }}')"
+                                             style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
+                                            <div class="flex items-center gap-2 truncate pr-2">
+                                                <span class="text-[9px] opacity-40 cursor-grab" style="color:var(--text-muted);">&#x2630;</span>
+                                                <span class="text-xs font-bold truncate" style="color:var(--text-primary);">{{ sp.name }}</span>
+                                                {% if sp.actions %}<span class="text-[10px] ml-1 opacity-60" style="color:var(--color-spell);">{{ sp.actions }}</span>{% endif %}
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button onclick="event.stopPropagation(); prepareSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="px-2 py-1 rounded text-[10px] font-bold transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">
+                                                    + Prep
+                                                </button>
+                                                <button onclick="event.stopPropagation(); forgetSpell({{ caster_idx }}, {{ lvl.level }}, '{{ sp.name|replace('\'','\\\'') }}')" class="no-print px-1.5 py-1 rounded text-[10px] text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Forget this spell">&times;</button>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Daily Prep (right) -->
+                        <div class="w-full lg:w-7/12 p-5" style="background:var(--bg-raised);">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-header text-xs tracking-wider uppercase" style="color:var(--color-spell);">Daily Preparations</h4>
+                                <button onclick="clearPrep({{ caster_idx }})" class="no-print font-header text-[9px] tracking-wider uppercase transition-colors" style="color:var(--text-muted);">Clear All</button>
+                            </div>
+                            <p class="text-xs mb-4" style="color:var(--text-muted);">Drag spells from your spellbook. Heightened spells show their effective rank.</p>
+                            {% if pc.class_name|lower == 'witch' %}
+                            <div class="text-[11px] mb-3 px-3 py-2 rounded" style="background:rgba(196,181,253,0.08); border-left:3px solid #C4B5FD; color:#DDD6FE;">
+                                <b>Familiar required.</b> Your patron grants your spells through your familiar — if you don't have it during daily prep, you lose access to your hex cantrip and your daily slots.
+                            </div>
+                            {% endif %}
+                            
+                            <div class="space-y-5 max-h-[550px] overflow-y-auto custom-scrollbar pr-2" id="prep-ui-{{ caster_idx }}">
+                                <div class="text-center italic py-8" style="color:var(--text-faint);">Loading preparation slots...</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="panel-card p-10 text-center">
+                    <div class="italic" style="color:var(--text-muted);">This character does not possess spellcasting abilities.</div>
+                </div>
+            {% endif %}
+            
+            <!-- Browse / Learn Spell Modal -->
+            <div id="spell-browse-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+                <div class="parchment-frame rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col" style="background:var(--bg-surface);">
+                    <div class="p-4 flex justify-between items-center" style="border-bottom:1px solid var(--border-default);">
+                        <h3 class="font-header text-lg" style="color:var(--color-spell);">Browse Spells</h3>
+                        <button onclick="document.getElementById('spell-browse-modal').classList.add('hidden')" class="text-xl" style="color:var(--text-muted);">&times;</button>
+                    </div>
+                    <div class="p-4 flex gap-2 flex-wrap" style="border-bottom:1px solid var(--border-subtle);">
+                        {# Must not be id="spell-search" — that ID is already used by the main spell list filter
+                           above, and getElementById returns the FIRST match. When this browse modal's input used
+                           the same ID, typing here silently read from the other input, so results never updated. #}
+                        <input type="text" id="spell-browse-search" oninput="_onSpellSearchInput('spell-browse-search')" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-primary); min-width:150px;">
+                        <select id="spell-level-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-secondary);">
+                            <option value="">All Ranks</option>
+                            {% for i in range(11) %}<option value="{{ i }}">{% if i == 0 %}Cantrips{% else %}Rank {{ i }}{% endif %}</option>{% endfor %}
+                        </select>
+                        <select id="spell-trad-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-secondary);">
+                            <option value="">All Traditions</option>
+                            <option value="arcane">Arcane</option>
+                            <option value="divine">Divine</option>
+                            <option value="occult">Occult</option>
+                            <option value="primal">Primal</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 custom-scrollbar" id="spell-browse-list" style="max-height:55vh;"></div>
+                </div>
+            </div>
+        </div>

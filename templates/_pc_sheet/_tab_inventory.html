@@ -1,0 +1,167 @@
+        <div id="tab-inventory" data-print-title="Inventory" class="tab-content sheet-page space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="panel-card">
+                    <div class="flex justify-between items-center mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
+                        <h3 class="section-header" style="border:none; margin:0; padding:0;">Wealth & Inventory</h3>
+                        <div class="flex items-center gap-2">
+                            {# Invested chip (Wave 2 #24) — PF2e caps invested
+                               magic items at 10. Players track via local
+                               toggle (no backend yet). Star toggle per item
+                               below in JS. #}
+                            <span id="invested-chip" class="invested-chip no-print" title="Invested magic items (PF2e cap: 10)">
+                                <span style="opacity:0.7;">Invested</span>
+                                <span class="invested-chip-num"><span id="invested-count">0</span>/10</span>
+                            </span>
+                            <button onclick="saveWealth()" id="btn-wealth" class="action-btn">
+                                Save Coins
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-3 mb-6">
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-cyan-200 font-bold uppercase mb-1">PP</label>
+                            <input type="number" id="coin-pp" value="{{ pc.pp }}" class="w-full bg-gray-950 text-cyan-100 font-mono text-center rounded border border-cyan-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-yellow-400 font-bold uppercase mb-1">GP</label>
+                            <input type="number" id="coin-gp" value="{{ pc.gp }}" class="w-full bg-gray-950 text-yellow-200 font-mono text-center rounded border border-yellow-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">SP</label>
+                            <input type="number" id="coin-sp" value="{{ pc.sp }}" class="w-full bg-gray-950 text-gray-300 font-mono text-center rounded border border-gray-600 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
+                            <label class="block text-[10px] text-orange-400 font-bold uppercase mb-1">CP</label>
+                            <input type="number" id="coin-cp" value="{{ pc.cp }}" class="w-full bg-gray-950 text-orange-300 font-mono text-center rounded border border-orange-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        </div>
+                    </div>
+
+                    {# ───────────────────────────────────────────────────
+                       Bulk / Encumbrance meter. PF2e: carrying > (5 + Str)
+                       Bulk = encumbered (clumsy 1, -10 ft Speed). > (10 + Str)
+                       is the hard cap. Raw total_bulk is already the integer
+                       Bulk count; light_bulk_remainder shows partial L items.
+                       Pathbuilder surfaces this so players catch encumbrance
+                       before it bites them mid-encounter — same idea here.
+                       ─────────────────────────────────────────────────── #}
+                    {% set enc_pct = (pc.total_bulk / pc.max_bulk_limit * 100) if pc.max_bulk_limit else 0 %}
+                    {% set enc_pct = enc_pct if enc_pct <= 100 else 100 %}
+                    {% set bulk_tone = 'var(--red)' if pc.total_bulk > pc.max_bulk_limit else ('#F59E0B' if pc.is_encumbered else 'var(--gold)') %}
+                    {% set bulk_label = 'OVERLOADED' if pc.total_bulk > pc.max_bulk_limit else ('ENCUMBERED' if pc.is_encumbered else 'LIGHT LOAD') %}
+                    <div class="mb-6 p-3 rounded" style="background:var(--bg-raised); border:1px solid var(--border-default);" title="Encumbered at {{ pc.encumbered_limit }}B (Clumsy 1, −10 ft Speed). Max carry {{ pc.max_bulk_limit }}B.">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <span class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-muted);">Bulk</span>
+                                <span class="font-mono text-sm font-bold" style="color:{{ bulk_tone }};">
+                                    {{ pc.total_bulk }}{% if pc.light_bulk_remainder %} + {{ pc.light_bulk_remainder }}L{% endif %}
+                                    <span class="opacity-60">/ {{ pc.max_bulk_limit }}</span>
+                                </span>
+                            </div>
+                            <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded"
+                                  style="background:{{ bulk_tone }}22; color:{{ bulk_tone }}; border:1px solid {{ bulk_tone }}55;">
+                                {{ bulk_label }}
+                            </span>
+                        </div>
+                        <div class="relative w-full h-2 rounded-full overflow-hidden" style="background:var(--bg-input);">
+                            <div class="h-full transition-all" style="width:{{ enc_pct }}%; background:{{ bulk_tone }};"></div>
+                            {# Encumbered threshold tick #}
+                            {% if pc.max_bulk_limit %}
+                            <div class="absolute top-0 bottom-0 w-px" style="left:{{ (pc.encumbered_limit / pc.max_bulk_limit * 100)|round(0) }}%; background:rgba(255,255,255,0.4);" title="Encumbered threshold ({{ pc.encumbered_limit }}B)"></div>
+                            {% endif %}
+                        </div>
+                        <div class="flex justify-between mt-1 text-[9px]" style="color:var(--text-faint);">
+                            <span>0</span>
+                            <span>Enc {{ pc.encumbered_limit }}B</span>
+                            <span>Max {{ pc.max_bulk_limit }}B</span>
+                        </div>
+                        {% if pc.is_encumbered %}
+                        <div class="mt-2 text-[10px]" style="color:#F59E0B; font-family:var(--font-display); letter-spacing:0.08em; text-transform:uppercase;">
+                            Encumbered — Clumsy 1 · −10 ft Speed (drop items to recover)
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <input type="search" id="inv-filter" class="inv-filter no-print"
+                           placeholder="Filter gear…" aria-label="Filter inventory"
+                           oninput="filterInventory(this.value)">
+                    <div id="inv-list" class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                        {% for item in pc.equipment %}
+                        {% set raw_bulk = item.bulk|string|upper %}
+                        {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
+                        <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group inv-item" data-inv-name="{{ item.name|lower }}">
+                            <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
+                            <button class="invested-toggle no-print mr-2" data-item-name="{{ item.name }}" title="Toggle: invested magic item (counts toward 10/day cap)" aria-label="Toggle invested for {{ item.name }}" style="background:transparent; color:var(--t4); font-size:14px; padding:0 4px; cursor:pointer;"></button>
+                            <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2 {% if display_bulk == 'L' %}text-amber-600{% elif display_bulk|int > 0 %}text-amber-500{% endif %}">{{ display_bulk }}B</span>
+                            <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
+                            <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">×</button>
+                        </div>
+                        {% else %}
+                        <div class="text-center italic p-4 rounded border" style="background:var(--bg-input); border-color:var(--border-subtle); color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">The pack hangs light — no burden carried here.</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="add-item-name" placeholder="Item Name" class="flex-1 bg-gray-950 border border-gray-700 rounded p-2 text-sm text-gray-200 focus:border-amber-500 outline-none">
+                        <input type="number" id="add-item-qty" value="1" class="w-16 bg-gray-950 border border-gray-700 rounded p-2 text-sm text-gray-200 text-center focus:border-amber-500 outline-none" title="Quantity">
+                        <button onclick="addInvItem()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-4 py-2 rounded shadow-lg transition-colors text-sm">Add</button>
+                    </div>
+                    <details class="group">
+                        <summary class="text-[9px] font-header tracking-wider uppercase cursor-pointer" style="color:var(--text-muted);">▸ Quick Add Common Items</summary>
+                        <div class="flex flex-wrap gap-1 mt-2">
+                            {% for qitem in ['Adventurer\'s Pack', 'Bedroll', 'Rope (50ft)', 'Torch', 'Rations (1 day)', 'Waterskin', 'Healing Potion (Minor)', 'Antidote (Lesser)', 'Thieves\' Tools', 'Disguise Kit', 'Healer\'s Tools', 'Repair Kit', 'Climbing Kit', 'Writing Set', 'Lantern (Hooded)', 'Oil (1 pint)', 'Crowbar', 'Grappling Hook', 'Manacles', 'Signal Whistle', 'Caltrops'] %}
+                            <button onclick="quickAddItem('{{ qitem|replace("'", "\\'") }}')" class="text-[9px] px-2 py-1 rounded transition-colors" style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary);">{{ qitem }}</button>
+                            {% endfor %}
+                        </div>
+                    </details>
+                </div>
+
+                <div class="panel-card flex flex-col">
+                    <div class="flex justify-between items-center mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
+                        <h3 class="section-header" style="border:none; margin:0; padding:0;">Campaign Notes</h3>
+                        <div class="flex items-center gap-2">
+                            <span id="notes-autosave-status" class="text-[10px] italic" style="color:var(--text-faint);"></span>
+                            <button onclick="saveNotes()" id="btn-notes" class="action-btn">
+                                Save Notes
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="pc-notes" class="w-full flex-1 min-h-[300px] bg-gray-950 border border-gray-700 rounded p-4 text-gray-300 text-sm focus:outline-none focus:border-amber-500 custom-scrollbar leading-relaxed" placeholder="Jot down important names, loot, or lore here..." oninput="scheduleAutoSave()">{{ pc.notes }}</textarea>
+                    
+                    <div class="mt-4 pt-3 border-t border-gray-700 flex justify-between items-center">
+                        <span class="text-[10px] text-gray-600">Auto-saves after you stop typing</span>
+                        <button onclick="exportCharacter()" class="bg-gray-900 hover:bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1.5">
+                            Export Character JSON
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Session Journal -->
+                <div class="panel-card">
+                    <div class="flex justify-between items-center mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
+                        <h3 class="section-header" style="border:none; margin:0; padding:0;">Session Journal</h3>
+                        <span style="font-size:var(--text-2xs); color:var(--text-muted);">{{ pc.session_notes | length }} entries</span>
+                    </div>
+                    
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="new-session-note" placeholder="What happened this session..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-raised); border:1px solid var(--border-default); color:var(--text-primary);" onkeydown="if(event.key==='Enter')addSessionNote()">
+                        <button onclick="addSessionNote()" class="font-header text-[9px] tracking-wider uppercase px-3 py-2 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add</button>
+                    </div>
+                    
+                    <div class="journal-page space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                        {% for note in pc.session_notes | reverse %}
+                        {% set note_idx = pc.session_notes | length - loop.index %}
+                        <div class="journal-entry flex justify-between items-start group">
+                            <div class="flex-1">
+                                <span class="journal-date font-header">{{ note.date }}</span>
+                                <p class="journal-text">{{ note.text }}</p>
+                            </div>
+                            <button onclick="deleteSessionNote({{ note_idx }})" class="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" style="color:var(--text-muted);" title="Delete">×</button>
+                        </div>
+                        {% else %}
+                        <div class="journal-empty text-center py-4 italic text-sm">No chronicle yet. Entries from each session will gather here.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
