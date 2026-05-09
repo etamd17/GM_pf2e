@@ -10649,6 +10649,45 @@ def get_creature_api(name):
     # Check party library
     for pc in PARTY_LIBRARY.values():
         if pc.name.lower() == name.lower():
+            # Project the PC's computed `attacks` (from class_matrix +
+            # PB import + ABP + rule_modifiers) into the same {name,
+            # bonus, damage} contract the map's rollStrike() expects.
+            # Each entry also carries the full MAP cascade (no MAP / -5
+            # / -10) so the sheet can offer the second/third strike
+            # buttons without doing the math client-side.
+            pc_strikes = []
+            try:
+                for atk in (pc.attacks or []):
+                    strikes_arr = atk.get('strikes') or []
+                    first = strikes_arr[0] if strikes_arr else {}
+                    pc_strikes.append({
+                        'name': atk.get('name', ''),
+                        'bonus': first.get('mod', 0),
+                        'damage': atk.get('damage', ''),
+                        'traits': atk.get('traits', []),
+                        'map_strikes': [
+                            {'mod': s.get('mod', 0), 'label': s.get('label', ''),
+                             'map_label': s.get('map_label', '')}
+                            for s in strikes_arr
+                        ],
+                    })
+            except Exception as e:
+                print(f"[creature_api] PC strike projection failed for {pc.name}: {e}")
+
+            # Project feats into the same {name, description} shape the map
+            # sheet's "abilities" section expects. PCs don't have monster-
+            # style action blocks, but feats are the closest analog and
+            # players want to see what they can do.
+            pc_actions = []
+            try:
+                for f in (pc.feats or [])[:25]:  # cap to avoid 100+ feat sheets
+                    pc_actions.append({
+                        'name': f.get('name', ''),
+                        'description': f.get('desc', ''),
+                    })
+            except Exception:
+                pass
+
             return jsonify({
                 'success': True,
                 'creature': {
@@ -10662,8 +10701,8 @@ def get_creature_api(name):
                     'fort': pc.fort if hasattr(pc, 'fort') else 0,
                     'ref': pc.ref if hasattr(pc, 'ref') else 0,
                     'will': pc.will if hasattr(pc, 'will') else 0,
-                    'strikes': [],  # PC strikes would need different handling
-                    'actions': [],
+                    'strikes': pc_strikes,
+                    'actions': pc_actions,
                     'immunities': [],
                     'resistances': [],
                     'weaknesses': [],

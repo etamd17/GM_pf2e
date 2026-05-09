@@ -1008,6 +1008,10 @@
             color: #bbb;
             line-height: 1.4;
             margin-bottom: 10px;
+            /* Preserve \n in multi-line messages (Recall Knowledge result,
+               etc.) without forcing callers to use HTML breaks. Long lines
+               still wrap normally. */
+            white-space: pre-line;
         }
         .float-editor-row { margin-bottom: 8px; }
         .float-editor-row label {
@@ -1355,6 +1359,7 @@
             </div>
         </div>
         <div class="context-divider"></div>
+        <div class="context-item" onclick="contextAction('recall')">Recall Knowledge…</div>
         <div class="context-item" onclick="contextAction('visible')">Toggle Visibility</div>
         <div class="context-item" onclick="contextAction('details')">View Details</div>
         <div class="context-divider"></div>
@@ -4632,9 +4637,130 @@
                 toggleVisibility(tok.id);
             } else if (action === 'details') {
                 showTokenDetails(tok);
+            } else if (action === 'recall') {
+                rollRecallKnowledge(tok);
             } else if (action === 'remove') {
                 removeToken(tok.id);
             }
+        }
+
+        // Recall Knowledge (Q5 of Week 2). Backend is /api/recall_knowledge/
+        // <instance_id>: takes pc_name + optional skill, rolls d20 + skill,
+        // determines degree of success vs the creature's level-derived DC,
+        // and returns the revealed info tier. Map UI: pick a PC + skill,
+        // dispatch, show the rolled outcome.
+        async function rollRecallKnowledge(tok) {
+            // PCs can't be the target — RK is "what do I know about this
+            // monster". Block with a clear message rather than silently
+            // ignoring the click.
+            if (tok.is_pc) {
+                await floatingEditor({
+                    title: 'Recall Knowledge',
+                    message: 'PCs aren’t valid Recall Knowledge targets. Right-click a creature.',
+                    confirmLabel: 'OK', cancelLabel: null,
+                });
+                return;
+            }
+            // Need a server instance_id for the backend route to find the
+            // target in ACTIVE_ENCOUNTER. Map tokens have it set when the
+            // GM dragged the creature from the encounter sidebar.
+            if (!tok.instance_id) {
+                await floatingEditor({
+                    title: 'Recall Knowledge',
+                    message: `${tok.name} isn’t in the active encounter. Drag it from the sidebar (or run "Sync Encounter") so it has an instance_id.`,
+                    confirmLabel: 'OK', cancelLabel: null, danger: true,
+                });
+                return;
+            }
+            // Pre-fetch suggested skill + DC so the chooser shows them as
+            // defaults. Failure here just means we drop the suggestion.
+            let suggested = '';
+            let suggestedDc = 0;
+            try {
+                const meta = await fetch(`/api/recall_knowledge_info/${tok.instance_id}`).then(r => r.json());
+                if (meta && meta.success !== false) {
+                    suggested = meta.suggested_skill || meta.skill || '';
+                    suggestedDc = meta.dc || 0;
+                }
+            } catch (_) {}
+
+            // Eligible PCs for the roll: every PC token currently on the
+            // map (so this is restricted to "characters present at the
+            // table"). Falls back to PARTY_LIBRARY entries we have via
+            // partyList if no PC tokens are placed.
+            const pcTokens = (mapState.tokens || []).filter(t => t.is_pc);
+            const pcChoices = pcTokens.length > 0
+                ? pcTokens.map(t => ({ value: t.name, label: t.name }))
+                : (partyList || []).map(p => ({ value: p.name, label: p.name }));
+            if (pcChoices.length === 0) {
+                await floatingEditor({
+                    title: 'Recall Knowledge',
+                    message: 'No PCs available. Place a party token on the map first.',
+                    confirmLabel: 'OK', cancelLabel: null, danger: true,
+                });
+                return;
+            }
+
+            const skillOptions = ['', 'Arcana', 'Religion', 'Nature', 'Occultism', 'Society', 'Crafting', 'Medicine']
+                .map(s => ({ value: s, label: s || `Auto (${suggested || 'detect from traits'})` }));
+
+            const choice = await floatingEditor({
+                title: `Recall Knowledge: ${tok.name}`,
+                message: suggestedDc ? `Suggested skill: ${suggested || 'auto'} (DC ${suggestedDc})` : '',
+                fields: [
+                    { key: 'pc_name', label: 'PC', type: 'select', options: pcChoices,
+                      value: pcChoices[0].value, autofocus: true },
+                    { key: 'skill', label: 'Skill', type: 'select', options: skillOptions, value: '' },
+                ],
+                confirmLabel: 'Roll',
+            });
+            if (!choice || !choice.pc_name) return;
+
+            let result;
+            try {
+                const res = await fetch(`/api/recall_knowledge/${tok.instance_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pc_name: choice.pc_name, skill: choice.skill || '' }),
+                }).then(r => r.json());
+                result = res.result || res;
+            } catch (e) {
+                await floatingEditor({
+                    title: 'Recall Knowledge failed',
+                    message: 'Server error. See console.', danger: true,
+                    confirmLabel: 'OK', cancelLabel: null,
+                });
+                return;
+            }
+            if (!result || !result.degree) {
+                await floatingEditor({
+                    title: 'Recall Knowledge failed',
+                    message: 'No result returned (target may not be in the active encounter).',
+                    danger: true, confirmLabel: 'OK', cancelLabel: null,
+                });
+                return;
+            }
+
+            const lines = [
+                `${result.pc_name} rolled ${result.skill}: 1d20 (${result.d20}) + ${result.modifier} = ${result.total} vs DC ${result.dc}`,
+                `Degree: ${result.degree_label}`,
+            ];
+            if (result.revealed_info && result.revealed_info.length > 0) {
+                lines.push('');
+                lines.push('Revealed:');
+                for (const info of result.revealed_info) {
+                    lines.push(`  • ${info}`);
+                }
+            } else if (result.degree === 'failure') {
+                lines.push('No information recalled.');
+            }
+
+            await floatingEditor({
+                title: `Recall Knowledge: ${tok.name}`,
+                message: lines.join('\n'),
+                confirmLabel: 'OK', cancelLabel: null,
+                danger: result.degree === 'critical_failure',
+            });
         }
         
         async function applyDamage(tokenId, amount) {
@@ -5352,32 +5478,65 @@
             }
         }
         
-        function nextTurn() {
+        async function nextTurn() {
             const sorted = getSortedCombatants();
             if (sorted.length === 0) return;
-            
-            // End of current turn - decrement conditions for current creature
+
+            // End of current turn — decrement Frightened, resolve Persistent
+            // Damage (deal damage + DC 15 flat). decrementTurnEndConditions
+            // returns a {amount, flat, cleared} summary if PD fired so we
+            // can surface it as a toast before the next turn's banner.
             const currentCreature = sorted[currentTurnIndex % sorted.length];
+            let pdOutcome = null;
             if (currentCreature) {
-                decrementTurnEndConditions(currentCreature);
+                pdOutcome = await decrementTurnEndConditions(currentCreature);
             }
-            
+            if (pdOutcome) {
+                _showPersistentDamageToast(currentCreature, pdOutcome);
+            }
+
             currentTurnIndex++;
-            
+
             if (currentTurnIndex >= sorted.length) {
                 currentTurnIndex = 0;
                 roundNumber++;
             }
-            
+
             // Start of new turn - show notification with reminders
             const newCreature = sorted[currentTurnIndex % sorted.length];
             if (newCreature) {
                 showTurnNotification(newCreature);
                 checkFlankingStatus(newCreature);
             }
-            
+
             updateCombatantList();
             render();
+        }
+
+        function _showPersistentDamageToast(token, outcome) {
+            // Brief auto-dismissing toast — separate from the standard
+            // floatingEditor because we don't want to gate the turn flow on
+            // the GM clicking OK, and the new-turn notification is about to
+            // overlap. 4.5s is enough to read the line.
+            const el = document.createElement('div');
+            const cleared = outcome.cleared;
+            const ringColor = cleared ? '#22c55e' : '#dc2626';
+            el.style.cssText =
+                'position:fixed;top:80px;right:340px;z-index:600;' +
+                'background:rgba(0,0,0,0.95);border:2px solid ' + ringColor + ';' +
+                'padding:10px 14px;border-radius:8px;font-size:12px;' +
+                'animation:slide-in 0.3s ease-out;max-width:260px;';
+            el.innerHTML =
+                `<div style="font-size:11px;color:#888;">${_escapeHtml(token.name)}: persistent damage</div>` +
+                `<div style="font-size:14px;font-weight:bold;margin-top:2px;">Took ${outcome.amount} damage</div>` +
+                `<div style="font-size:11px;color:${cleared ? '#86efac' : '#fca5a5'};">` +
+                `Flat ${outcome.flat} vs DC 15 → ${cleared ? 'cleared' : 'continues'}</div>`;
+            document.body.appendChild(el);
+            setTimeout(() => {
+                el.style.transition = 'opacity 0.3s';
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 4500);
         }
         
         function showTurnNotification(token) {
@@ -5396,9 +5555,17 @@
                 reminders.push(`️ Take ${conditions['Persistent Damage']} persistent damage, then flat check DC 15 to end`);
             }
             
-            // Dying check reminder
+            // Dying check reminder + one-click Recovery roll. The button
+            // dismisses the notification first so the rolled-result popover
+            // isn't stacked behind it.
             if (conditions['Dying']) {
-                reminders.push(`💀 Dying ${conditions['Dying']} - Recovery check required (DC 10 + dying value)`);
+                const d = conditions['Dying'];
+                reminders.push(
+                    `💀 Dying ${d} (DC ${10 + d}) ` +
+                    `<button onclick="dismissTurnNotification(); rollDyingRecovery('${token.id}')" ` +
+                    `style="margin-left:6px;padding:2px 10px;background:#7f1d1d;border:1px solid #991b1b;` +
+                    `border-radius:4px;color:#fca5a5;font-size:11px;cursor:pointer;">Roll Recovery</button>`
+                );
             }
             
             // Frightened/Sickened reminder (will decrement at end)
@@ -5429,22 +5596,45 @@
         }
         
         async function decrementTurnEndConditions(token) {
-            // Decrement Frightened, Sickened at end of turn
+            // Tick down per-turn conditions on the outgoing creature, plus
+            // resolve Persistent Damage per RAW (deal damage, then flat 15
+            // to end). Returns the persistent-damage outcome so nextTurn
+            // can summarize it before the new turn's notification.
             let conditions = token.conditions || {};
-            if (typeof conditions !== 'object' || Array.isArray(conditions)) return;
-            
+            if (typeof conditions !== 'object' || Array.isArray(conditions)) return null;
+
             let changed = false;
-            
-            // Frightened decreases by 1 at end of turn
+            let pdOutcome = null;
+
+            // Frightened decreases by 1 at end of turn (PF2e RAW).
             if (conditions['Frightened'] && typeof conditions['Frightened'] === 'number') {
                 conditions['Frightened']--;
                 if (conditions['Frightened'] <= 0) delete conditions['Frightened'];
                 changed = true;
             }
-            
-            // Note: Sickened doesn't auto-decrement - you need to retch (spend action, Fortitude save)
-            // But we'll flag it for GM awareness
-            
+
+            // Sickened: no auto-decrement (Retch is an action). We still
+            // surface it on the next-turn notification.
+
+            // Persistent Damage (PF2e Player Core p.444):
+            //   "At the end of your turn, take the listed damage, then attempt
+            //    a flat check (DC 15) — success ends the persistent damage."
+            // The amount lives on conditions['Persistent Damage'] as a number.
+            // Damage type isn't tracked at the token level (it's on the PC's
+            // persistent_damage list, but tokens only carry the count). We
+            // apply the damage via the standard dying flow so a drop to 0
+            // still triggers Dying.
+            if (conditions['Persistent Damage'] && typeof conditions['Persistent Damage'] === 'number') {
+                const pdAmount = conditions['Persistent Damage'];
+                const flat = Math.floor(Math.random() * 20) + 1;
+                const cleared = flat >= 15;
+                pdOutcome = { amount: pdAmount, flat, cleared };
+                if (cleared) {
+                    delete conditions['Persistent Damage'];
+                }
+                changed = true;
+            }
+
             if (changed) {
                 await fetch('/api/map/token/update', {
                     method: 'POST',
@@ -5455,54 +5645,131 @@
                     })
                 });
             }
+
+            // Apply the persistent damage AFTER the conditions update so
+            // applyDamageWithDying's fetch sees the cleared condition (if
+            // it was cleared) and doesn't re-deal next round.
+            if (pdOutcome && pdOutcome.amount > 0) {
+                await applyDamageWithDying(token.id, pdOutcome.amount);
+            }
+            return pdOutcome;
         }
         
         // ===========================================
         // DYING / WOUNDED AUTOMATION
         // ===========================================
-        async function handleDyingCheck(token, success, critSuccess = false) {
+        async function handleDyingCheck(token, success, critSuccess = false, critFailure = false) {
+            // PF2e Recovery Save outcomes:
+            //   crit success → dying -2 (wake at 0 HP if reaches 0)
+            //   success      → dying -1 (wake at 0 HP if reaches 0; gain Wounded)
+            //   failure      → dying +1
+            //   crit failure → dying +2 (Dying 4 = Dead)
+            // The earlier signature only accepted (success, critSuccess) and
+            // silently treated crit fail as a regular fail, dropping a step
+            // off PF2e RAW. Now critFailure is explicit.
             let conditions = token.conditions || {};
             if (typeof conditions !== 'object') conditions = {};
-            
+
             const dying = conditions['Dying'] || 0;
             const wounded = conditions['Wounded'] || 0;
-            
-            if (critSuccess) {
-                // Crit success: reduce dying by 2
+
+            if (critFailure) {
+                const newDying = dying + 2;
+                if (newDying >= 4) {
+                    conditions['Dead'] = true;
+                    delete conditions['Dying'];
+                } else {
+                    conditions['Dying'] = newDying;
+                }
+            } else if (critSuccess) {
                 const newDying = Math.max(0, dying - 2);
                 if (newDying === 0) {
                     delete conditions['Dying'];
-                    // Gain wounded
                     conditions['Wounded'] = wounded + 1;
-                    // Wake up at 0 HP
+                    // Wake at 0 HP — Unconscious clears
+                    delete conditions['Unconscious'];
                 } else {
                     conditions['Dying'] = newDying;
                 }
             } else if (success) {
-                // Success: reduce dying by 1
                 const newDying = dying - 1;
                 if (newDying <= 0) {
                     delete conditions['Dying'];
                     conditions['Wounded'] = wounded + 1;
+                    delete conditions['Unconscious'];
                 } else {
                     conditions['Dying'] = newDying;
                 }
             } else {
-                // Failure: increase dying by 1
                 const newDying = dying + 1;
                 if (newDying >= 4) {
-                    // Death
                     conditions['Dead'] = true;
                     delete conditions['Dying'];
                 } else {
                     conditions['Dying'] = newDying;
                 }
             }
-            
+
             await fetch('/api/map/token/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: token.id, conditions })
+            });
+        }
+
+        // PF2e Recovery Save: flat 1d20 vs DC (10 + dying value). On nat 1
+        // bumps a degree down, on nat 20 bumps a degree up. Used by the
+        // Roll Recovery button on the turn-start notification.
+        async function rollDyingRecovery(tokenId) {
+            const token = (mapState.tokens || []).find(t => t.id === tokenId);
+            if (!token) return;
+            const conditions = token.conditions || {};
+            const dying = conditions['Dying'] || 0;
+            if (dying <= 0) return;
+            const dc = 10 + dying;
+            const roll = Math.floor(Math.random() * 20) + 1;
+            // Degree of success: 10+ over → crit, 10+ under → crit fail.
+            // Then bump one step for nat 20 / nat 1.
+            let degreeIdx;  // 0=critFail 1=fail 2=success 3=critSuccess
+            if (roll >= dc + 10) degreeIdx = 3;
+            else if (roll >= dc) degreeIdx = 2;
+            else if (roll > dc - 10) degreeIdx = 1;
+            else degreeIdx = 0;
+            if (roll === 20) degreeIdx = Math.min(3, degreeIdx + 1);
+            else if (roll === 1) degreeIdx = Math.max(0, degreeIdx - 1);
+
+            const labels = ['crit failure', 'failure', 'success', 'crit success'];
+            const label = labels[degreeIdx];
+
+            await handleDyingCheck(
+                token,
+                /*success*/    degreeIdx >= 2,
+                /*critSuccess*/ degreeIdx === 3,
+                /*critFailure*/ degreeIdx === 0,
+            );
+
+            // Re-read the token to compute the post-roll status — handleDyingCheck
+            // mutates server state, but we've sent the update fire-and-forget so
+            // the local mapState may not reflect it yet. Compute the expected
+            // post-state for the toast.
+            const oldDying = dying;
+            const woundedNow = conditions['Wounded'] || 0;
+            let newDying = oldDying;
+            if (degreeIdx === 3) newDying = Math.max(0, oldDying - 2);
+            else if (degreeIdx === 2) newDying = oldDying - 1;
+            else if (degreeIdx === 0) newDying = oldDying + 2;
+            else newDying = oldDying + 1;
+            let outcome;
+            if (newDying <= 0) outcome = `Stable! Wounded ${woundedNow + 1}.`;
+            else if (newDying >= 4) outcome = `DEAD.`;
+            else outcome = `Dying ${newDying}.`;
+
+            await floatingEditor({
+                title: `${token.name}: Recovery Save`,
+                message: `1d20 = ${roll} vs DC ${dc} → ${label.toUpperCase()}. ${outcome}`,
+                confirmLabel: 'OK',
+                cancelLabel: null,
+                danger: degreeIdx <= 1,
             });
         }
         
