@@ -4,50 +4,135 @@
 
 {% block extra_head %}
 <style>
+    /* Masonry layout — variable-height cards flow into 1/2/3/4 columns. */
     .masonry { column-count: 1; column-gap: 1rem; }
-    @media (min-width: 768px) { .masonry { column-count: 2; } }
+    @media (min-width: 768px)  { .masonry { column-count: 2; } }
     @media (min-width: 1280px) { .masonry { column-count: 3; } }
     @media (min-width: 1536px) { .masonry { column-count: 4; } }
     .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
 
-    .gen-content b, .gen-content strong { color: #8ED4D4; }
-    .gen-content ul { list-style-type: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
+    /* Generated-content typography. The legacy version had bold in teal,
+       italics muted, and undifferentiated body — every card looked like
+       a wall of text. Here the headline (first <strong>) gets visible
+       weight, body is base-200 for contrast, hints/flavor stay muted,
+       and lists indent properly so the GM can skim a result in a beat. */
+    .gen-content {
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: #d8d8e6;        /* base-200 */
+    }
+    .gen-content > p:first-child > strong:first-child,
+    .gen-content > b:first-child,
+    .gen-content > strong:first-child {
+        display: inline-block;
+        font-family: 'Cinzel', serif;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        color: #ededf4;        /* base-100 — headline pop */
+        margin-bottom: 2px;
+    }
+    .gen-content b, .gen-content strong { color: #8ED4D4; font-weight: 700; }
+    .gen-content em, .gen-content i { color: #9494b0; font-style: italic; }
+    .gen-content ul { list-style-type: disc; padding-left: 1.1rem; margin: 0.35rem 0; }
     .gen-content li { margin-bottom: 0.15rem; }
-    .gen-content em { color: #9494b0; }
-    .gen-content hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 0.5rem 0; }
+    .gen-content hr { border: none; border-top: 1px dashed rgba(255,255,255,0.08); margin: 0.5rem 0; }
+    .gen-content p { margin: 0.25rem 0; }
+    .gen-content p + p { margin-top: 0.5rem; }
 
     @keyframes spin-dice { 100% { transform: rotate(360deg); } }
-    .spin-anim { animation: spin-dice 0.35s ease-in-out; }
+    .spin-anim { animation: spin-dice 0.4s ease-in-out; }
+
+    /* Subtle pulse during reroll instead of a bare opacity fade — gives
+       the GM a clear "loading" signal so they don't think the click missed. */
+    @keyframes gen-pulse {
+        0%, 100% { opacity: 0.55; }
+        50%      { opacity: 0.30; }
+    }
+    .gen-content.rerolling { animation: gen-pulse 0.7s ease-in-out infinite; }
 
     .gen-card {
         background: #191920;
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 0.5rem;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px;
         overflow: hidden;
-        transition: border-color 0.2s;
+        transition: border-color 0.2s, transform 0.15s;
     }
-    .gen-card:hover { border-color: rgba(142,212,212,0.25); }
+    .gen-card:hover {
+        border-color: rgba(142,212,212,0.22);
+        transform: translateY(-1px);
+    }
     .gen-card-header {
-        padding: 0.6rem 0.75rem;
+        padding: 9px 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
         background: #24242e;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .gen-card-body { padding: 0.75rem; }
-    .reroll-btn {
-        background: #24242e;
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 0.25rem;
-        padding: 2px 6px;
-        cursor: pointer;
-        opacity: 0.6;
-        transition: opacity 0.2s;
+    .gen-card-title {
+        font-family: 'Cinzel', serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8ED4D4;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .gen-card-title .glyph {
+        color: #6b6b8a;
         font-size: 14px;
         line-height: 1;
+        width: 14px;
+        text-align: center;
     }
-    .reroll-btn:hover { opacity: 1; }
+    .gen-card-body { padding: 11px 12px 12px; }
+
+    .reroll-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 3px 6px;
+        cursor: pointer;
+        opacity: 0.55;
+        transition: opacity 0.15s, border-color 0.15s, color 0.15s;
+        font-size: 14px;
+        line-height: 1;
+        color: #b8b8cc;
+    }
+    .reroll-btn:hover {
+        opacity: 1;
+        border-color: rgba(142,212,212,0.25);
+        color: #8ED4D4;
+    }
+
+    /* Toolbar contextual chips (Level / Biome / Reroll All) */
+    .gen-toolbar-chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px 7px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: #191920;
+    }
+    .gen-toolbar-chip label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6b6b8a;
+        font-weight: 700;
+    }
+    .gen-toolbar-input {
+        background: #0d0d12;
+        border: 1px solid rgba(255,255,255,0.10);
+        color: #d8d8e6;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+    .gen-toolbar-input:focus { outline: none; border-color: rgba(142,212,212,0.35); }
 </style>
 {% endblock %}
 
@@ -58,57 +143,68 @@
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-4 border-b border-white/[0.06]">
         <div>
             <h1 class="font-display text-accent-300 text-xl tracking-wide mb-1">Generators</h1>
-            <p class="text-base-500 text-xs">Randomized PF2E content scaled to party level and biome</p>
+            <p class="text-base-500 text-xs">Random PF2e content scaled to party level &amp; biome. Click any reroll &mdash; or hit <strong style="color:#b8b8cc;">Reroll All</strong> to refresh the whole table.</p>
         </div>
-        <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.08]" style="background:#191920;">
-                <label class="text-[10px] text-base-400 font-semibold uppercase tracking-wider">Level</label>
-                <input type="number" id="gen-level" value="{{ current_level }}" min="1" max="20" onchange="_genUpdateUrl()" class="w-12 text-center rounded px-1.5 py-1 text-xs font-mono text-base-200 focus:outline-none focus:border-accent-500/40" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.10);">
+        <div class="flex items-center gap-2 flex-wrap">
+            <div class="gen-toolbar-chip">
+                <label for="gen-level">Level</label>
+                <input type="number" id="gen-level" value="{{ current_level }}" min="1" max="20" onchange="_genUpdateUrl()" class="gen-toolbar-input w-12 text-center font-mono">
             </div>
-            <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.08]" style="background:#191920;">
-                <label class="text-[10px] text-base-400 font-semibold uppercase tracking-wider">Biome</label>
-                <select id="gen-biome" onchange="_genUpdateUrl()" class="rounded px-2 py-1 text-xs text-base-200 focus:outline-none focus:border-accent-500/40" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.10);">
+            <div class="gen-toolbar-chip">
+                <label for="gen-biome">Biome</label>
+                <select id="gen-biome" onchange="_genUpdateUrl()" class="gen-toolbar-input">
                     {% set biomes = ['City', 'Forest', 'Dungeon', 'Desert', 'Swamp', 'Mountains', 'Coastal', 'Arctic', 'Underground'] %}
                     {% for b in biomes %}
                     <option value="{{ b }}" {% if b == current_biome %}selected{% endif %}>{{ b }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button onclick="rerollAll()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors" style="background:#52A8A8;">
-                <span id="all-dice-icon" class="text-sm">&#x2684;</span> Reroll All
+            <button onclick="rerollAll()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors" style="background:#3F8888; color:#dff2f2; border:1px solid rgba(142,212,212,0.3);" onmouseover="this.style.background='#52A8A8'" onmouseout="this.style.background='#3F8888'">
+                <span id="all-dice-icon" class="text-base">&#x2684;</span> Reroll All
             </button>
         </div>
     </div>
 
-    {# ── Generator Cards ── #}
+    {# ── Generator Cards ──────────────────────────────────────────────
+       Ordered top-to-bottom by frequency-of-use at the table:
+         1. Combat & moment-to-moment (encounter / event / weather / hazard / puzzle)
+         2. NPCs & narrative (npc / rumor / quest)
+         3. Places (settlement / tavern / shop)
+         4. Treasure (loot / magic item / hoard)
+       Masonry packs them into 2-4 columns; first-column-first means the
+       most-used cards are immediately to the eye on page load.
+    ──────────────────────────────────────────────────────────────────── #}
     <div class="masonry">
 
-        {% macro gen_card(id, title, icon_char) %}
+        {% macro gen_card(id, title, glyph) %}
         <div class="masonry-item gen-card">
             <div class="gen-card-header">
-                <span class="text-xs font-semibold text-accent-300 flex items-center gap-1.5">
-                    <span class="text-base-500 text-sm">{{ icon_char | safe }}</span> {{ title }}
+                <span class="gen-card-title">
+                    <span class="glyph">{{ glyph | safe }}</span>{{ title }}
                 </span>
                 <button onclick="rerollSingle('{{ id }}', this)" class="reroll-btn" title="Reroll">&#x2684;</button>
             </div>
-            <div id="content-{{ id }}" class="gen-card-body text-xs text-base-300 leading-relaxed gen-content">{{ data[id] | safe }}</div>
+            <div id="content-{{ id }}" class="gen-card-body gen-content">{{ data[id] | safe }}</div>
         </div>
         {% endmacro %}
 
-        {{ gen_card('npc', 'Random NPC', '&#9823;') }}
-        {{ gen_card('tavern', 'Tavern', '&#9738;') }}
-        {{ gen_card('shop', 'Shop', '&#9878;') }}
-        {{ gen_card('loot', 'Loot', '&#9830;') }}
-        {{ gen_card('magic_item', 'Magic Item', '&#10038;') }}
-        {{ gen_card('puzzle', 'Puzzle / Hazard', '&#9881;') }}
-        {{ gen_card('quest', 'Quest Hook', '&#9758;') }}
-        {{ gen_card('encounter', 'Encounter', '&#9876;') }}
-        {{ gen_card('weather', 'Weather', '&#9729;') }}
-        {{ gen_card('trap', 'Trap / Hazard', '&#9888;') }}
-        {{ gen_card('rumor', 'Rumor', '&#9993;') }}
-        {{ gen_card('settlement', 'Settlement', '&#9962;') }}
-        {{ gen_card('treasure_hoard', 'Treasure Hoard', '&#9733;') }}
-        {{ gen_card('random_event', 'Random Event', '&#9889;') }}
+        {{ gen_card('encounter',      'Encounter',       '&#9876;') }}
+        {{ gen_card('random_event',   'Random Event',    '&#9889;') }}
+        {{ gen_card('weather',        'Weather',         '&#9729;') }}
+        {{ gen_card('trap',           'Trap / Hazard',   '&#9888;') }}
+        {{ gen_card('puzzle',         'Puzzle',          '&#9881;') }}
+
+        {{ gen_card('npc',            'Random NPC',      '&#9823;') }}
+        {{ gen_card('rumor',          'Rumor',           '&#9993;') }}
+        {{ gen_card('quest',          'Quest Hook',      '&#9758;') }}
+
+        {{ gen_card('settlement',     'Settlement',      '&#9962;') }}
+        {{ gen_card('tavern',         'Tavern',          '&#9738;') }}
+        {{ gen_card('shop',           'Shop',            '&#9878;') }}
+
+        {{ gen_card('loot',           'Loot',            '&#9830;') }}
+        {{ gen_card('magic_item',     'Magic Item',      '&#10038;') }}
+        {{ gen_card('treasure_hoard', 'Treasure Hoard',  '&#9733;') }}
 
     </div>
 </div>
@@ -122,6 +218,8 @@ async function rerollSingle(type, btn) {
     }
     const level = document.getElementById('gen-level').value;
     const biome = document.getElementById('gen-biome').value;
+    const el = document.getElementById(`content-${type}`);
+    if (el) el.classList.add('rerolling');
     try {
         const res = await fetch(`/api/generate/${type}`, {
             method: 'POST',
@@ -129,10 +227,14 @@ async function rerollSingle(type, btn) {
             body: JSON.stringify({level, biome})
         });
         const data = await res.json();
-        const el = document.getElementById(`content-${type}`);
-        el.style.opacity = '0.4';
-        setTimeout(() => { el.innerHTML = data.html; el.style.opacity = '1'; }, 120);
-    } catch(e) { console.error('Gen error:', e); }
+        if (el) {
+            el.innerHTML = data.html;
+            el.classList.remove('rerolling');
+        }
+    } catch (e) {
+        console.error('Gen error:', e);
+        if (el) el.classList.remove('rerolling');
+    }
 }
 
 function rerollAll() {

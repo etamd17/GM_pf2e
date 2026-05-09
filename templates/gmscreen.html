@@ -5,20 +5,145 @@
 {% block extra_head %}
 <style>
     /* Masonry layout support */
-    .masonry { column-count: 1; column-gap: 1.5rem; }
+    .masonry { column-count: 1; column-gap: 1rem; }
     @media (min-width: 768px) { .masonry { column-count: 2; } }
     @media (min-width: 1280px) { .masonry { column-count: 3; } }
-    .masonry-item { break-inside: avoid; margin-bottom: 1.5rem; }
+    .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
 
-    /* Table styling for GM Screen */
-    .masonry-item th, .masonry-item td { border-bottom: 1px solid #374151; padding: 0.5rem; text-align: left; }
-    .masonry-item th { color: #d97706; font-family: 'Cinzel', serif; font-size: 0.875rem; }
-    .masonry-item tr:last-child td { border-bottom: none; }
+    /* ── GM-screen reference card system ─────────────────────────────────
+       The page is at-the-table reference, not a settings dashboard. Cards
+       need to be (a) high contrast, (b) immediately scannable by header,
+       (c) consistent with the rest of the app's design system (teal
+       accent + base-* grays from base.html — NOT the legacy amber/gray
+       Tailwind defaults that the old version used).
+    ──────────────────────────────────────────────────────────────────── */
+    .gm-ref-card {
+        background: #191920;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px;
+        padding: 16px 18px;
+        transition: border-color 0.15s;
+    }
+    .gm-ref-card:hover { border-color: rgba(142,212,212,0.18); }
 
-    /* NEW: Striped tables for better readability */
-    .striped-table tbody tr:nth-child(even) { background-color: rgba(55, 65, 81, 0.3); }
+    .gm-ref-header {
+        font-family: 'Cinzel', serif;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8ED4D4;                 /* accent-300 */
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(142,212,212,0.18);
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .gm-ref-header .sub {
+        font-family: 'Inter', sans-serif;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: #6b6b8a;                 /* base-500 */
+        text-transform: uppercase;
+    }
 
-    /* Hide the default webkit disclosure triangle for details */
+    /* Reference tables — denser stripe + better column hierarchy */
+    .gm-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+    .gm-table th {
+        text-align: left; padding: 6px 10px;
+        font-family: 'Cinzel', serif;
+        font-size: 10px; font-weight: 700;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        color: #8ED4D4;
+        border-bottom: 1px solid rgba(142,212,212,0.18);
+        background: rgba(13,13,18,0.6);
+    }
+    .gm-table td {
+        padding: 6px 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        color: #d8d8e6;                 /* base-200 */
+        vertical-align: top;
+    }
+    .gm-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.025); }
+    .gm-table tbody tr:hover td { background: rgba(142,212,212,0.04); }
+    .gm-table tr:last-child td { border-bottom: none; }
+    .gm-table .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #ededf4; }
+    .gm-table .pos { color: #fca5a5; }   /* danger-300 */
+    .gm-table .neg { color: #86efac; }   /* success-300 */
+    .gm-table .heal { color: #86efac; font-weight: 700; }
+    .gm-table .hurt { color: #fca5a5; font-weight: 700; }
+
+    /* Conditions: always-visible compact rows. The previous design used
+       <details> collapsibles, which is exactly wrong for at-the-table
+       reference — when frightened comes up, the GM wants to read the
+       text RIGHT NOW, not click to expand. */
+    .gm-cond { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: baseline; }
+    .gm-cond dt {
+        font-family: 'Cinzel', serif;
+        font-weight: 700;
+        font-size: 12px;
+        color: #fca5a5;                 /* danger-300 — conditions are bad news */
+        white-space: nowrap;
+        padding: 4px 0;
+    }
+    .gm-cond dd {
+        margin: 0;
+        padding: 4px 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #b8b8cc;                 /* base-300 */
+    }
+    .gm-cond dt + dd { border-top: 1px dotted rgba(255,255,255,0.04); }
+    .gm-cond dt:first-child + dd { border-top: none; }
+    .gm-cond dt:not(:first-child) { border-top: 1px dotted rgba(255,255,255,0.04); }
+
+    .gm-callout-row {
+        display: flex; gap: 8px; align-items: baseline;
+        font-size: 13px; padding: 4px 0;
+        color: #d8d8e6;
+    }
+    .gm-callout-row .label { color: #8ED4D4; font-weight: 700; min-width: 110px; flex-shrink: 0; }
+
+    /* Compendium search — quieter chrome, brand palette */
+    .gm-search-wrap { background: #191920; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+    .gm-search-input {
+        width: 100%; background: #0d0d12; border: 1px solid rgba(255,255,255,0.10);
+        color: #ededf4; border-radius: 6px;
+        padding: 9px 12px; font-size: 13px;
+        font-family: 'Inter', sans-serif;
+    }
+    .gm-search-input:focus { outline: none; border-color: rgba(142,212,212,0.4); }
+    .gm-cat-btn {
+        padding: 8px 14px; font-size: 11px; font-weight: 700;
+        letter-spacing: 0.04em; text-transform: uppercase;
+        background: #24242e; border: 1px solid rgba(255,255,255,0.08);
+        color: #b8b8cc; border-radius: 6px;
+        cursor: pointer; transition: all 0.15s;
+        font-family: 'Inter', sans-serif;
+    }
+    .gm-cat-btn:hover { border-color: rgba(142,212,212,0.3); color: #ededf4; }
+    .gm-cat-btn.active { background: rgba(142,212,212,0.12); border-color: rgba(142,212,212,0.4); color: #8ED4D4; }
+
+    /* Result cards from compendium search — typed by category */
+    .gm-result-card { background: #24242e; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .gm-result-card:hover { border-color: rgba(142,212,212,0.3); background: #2e2e3c; }
+    .gm-result-name { font-size: 13px; font-weight: 700; color: #ededf4; }
+    .gm-result-desc { font-size: 11px; color: #8888a0; line-height: 1.4; margin-top: 4px;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .gm-type-badge {
+        font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 9999px;
+        letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .gm-type-badge.spell { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .gm-type-badge.feat  { background: rgba(224,176,80,0.15);  color: #e0b050; }
+    .gm-type-badge.item  { background: rgba(94,234,212,0.12);  color: #5eead4; }
+
+    /* Hide the default webkit disclosure triangle for details (still used
+       by the checks-drawer panes; kept for back-compat). */
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
 
@@ -174,112 +299,109 @@
 
 {% block content %}
 
-<!-- Compendium Search Panel -->
-<div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5 mb-6">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-header text-amber-500">Compendium Search</h2>
-        <span class="text-[10px] text-gray-600 uppercase tracking-widest font-bold">Feats · Spells · Equipment</span>
+<!-- ── Page intro + Compendium Search ────────────────────────────────── -->
+<div class="mb-5 pb-4 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+    <div>
+        <h1 class="font-display text-accent-300 text-xl tracking-wide mb-1">GM Screen</h1>
+        <p class="text-base-500 text-xs">Rules reference — DCs, conditions, and combat math at a glance. Press <kbd class="px-1 py-0.5 rounded text-[10px]" style="background:#24242e;border:1px solid rgba(255,255,255,0.10);color:#b8b8cc;font-family:'JetBrains Mono',monospace;">C</kbd> for the checks drawer.</p>
     </div>
-    <div class="flex gap-3 mb-4">
-        <div class="flex-1 relative">
-            <input type="text" id="comp-search" placeholder="Search by name... (e.g. Fireball, Shield Block, Flaming Rune)" autocomplete="off"
-                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded-md pl-4 pr-3 py-2.5 text-sm focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-gray-600">
-        </div>
-        <div class="flex gap-1">
-            <button onclick="setCompCat('all')" id="cat-all" class="comp-cat-btn bg-amber-900/40 text-amber-400 border-amber-700 px-3 py-2 rounded text-xs font-bold border transition-colors">All</button>
-            <button onclick="setCompCat('spells')" id="cat-spells" class="comp-cat-btn bg-gray-900 text-gray-400 border-gray-700 px-3 py-2 rounded text-xs font-bold border transition-colors hover:border-gray-500">Spells</button>
-            <button onclick="setCompCat('feats')" id="cat-feats" class="comp-cat-btn bg-gray-900 text-gray-400 border-gray-700 px-3 py-2 rounded text-xs font-bold border transition-colors hover:border-gray-500">Feats</button>
-            <button onclick="setCompCat('equipment')" id="cat-equipment" class="comp-cat-btn bg-gray-900 text-gray-400 border-gray-700 px-3 py-2 rounded text-xs font-bold border transition-colors hover:border-gray-500">Items</button>
+</div>
+
+<div class="gm-search-wrap mb-5">
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="font-display text-accent-300 text-sm tracking-wider uppercase">Compendium Search</h2>
+        <span class="text-[10px] text-base-500 uppercase tracking-widest font-semibold">Feats · Spells · Equipment</span>
+    </div>
+    <div class="flex flex-col sm:flex-row gap-2 mb-3">
+        <input type="text" id="comp-search" placeholder="Search by name... (e.g. Fireball, Shield Block, Flaming Rune)" autocomplete="off" class="gm-search-input flex-1">
+        <div class="flex gap-1.5">
+            <button onclick="setCompCat('all')"       id="cat-all"       class="gm-cat-btn active">All</button>
+            <button onclick="setCompCat('spells')"    id="cat-spells"    class="gm-cat-btn">Spells</button>
+            <button onclick="setCompCat('feats')"     id="cat-feats"     class="gm-cat-btn">Feats</button>
+            <button onclick="setCompCat('equipment')" id="cat-equipment" class="gm-cat-btn">Items</button>
         </div>
     </div>
     <div id="comp-results" class="hidden">
-        <div id="comp-results-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-4"></div>
+        <div id="comp-results-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></div>
     </div>
-    <div id="comp-detail" class="hidden bg-gray-900 rounded-lg border border-gray-700 p-6 mt-4">
+    <div id="comp-detail" class="hidden mt-4 p-5 rounded-lg" style="background:#0d0d12;border:1px solid rgba(255,255,255,0.08);">
         <div class="flex justify-between items-start mb-3">
             <div>
-                <h3 id="comp-detail-name" class="text-2xl font-header text-white"></h3>
-                <div id="comp-detail-meta" class="flex gap-2 mt-1"></div>
+                <h3 id="comp-detail-name" class="font-display text-base-100 text-xl"></h3>
+                <div id="comp-detail-meta" class="flex flex-wrap gap-1.5 mt-2"></div>
             </div>
-            <button onclick="document.getElementById('comp-detail').classList.add('hidden')" class="text-gray-500 hover:text-white text-lg">×</button>
+            <button onclick="document.getElementById('comp-detail').classList.add('hidden')" class="text-base-500 hover:text-base-100 text-lg leading-none">&times;</button>
         </div>
-        <div id="comp-detail-body" class="text-sm text-gray-300 leading-relaxed vault-content"></div>
+        <div id="comp-detail-body" class="text-sm text-base-300 leading-relaxed vault-content"></div>
     </div>
 </div>
 
 <div class="masonry">
     
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Difficulty Classes by Level</h2>
-        <div class="flex gap-4">
-            <table class="w-full text-sm striped-table">
-                <thead><tr><th>Level</th><th>DC</th></tr></thead>
-                <tbody>
-                    <tr><td>0</td><td>14</td></tr>
-                    <tr><td>1</td><td>15</td></tr>
-                    <tr><td>2</td><td>16</td></tr>
-                    <tr><td>3</td><td>18</td></tr>
-                    <tr><td>4</td><td>19</td></tr>
-                    <tr><td>5</td><td>20</td></tr>
-                    <tr><td>6</td><td>22</td></tr>
-                    <tr><td>7</td><td>23</td></tr>
-                    <tr><td>8</td><td>24</td></tr>
-                    <tr><td>9</td><td>26</td></tr>
-                    <tr><td>10</td><td>27</td></tr>
-                </tbody>
-            </table>
-            <table class="w-full text-sm striped-table">
-                <thead><tr><th>Level</th><th>DC</th></tr></thead>
-                <tbody>
-                    <tr><td>11</td><td>28</td></tr>
-                    <tr><td>12</td><td>30</td></tr>
-                    <tr><td>13</td><td>31</td></tr>
-                    <tr><td>14</td><td>32</td></tr>
-                    <tr><td>15</td><td>34</td></tr>
-                    <tr><td>16</td><td>35</td></tr>
-                    <tr><td>17</td><td>36</td></tr>
-                    <tr><td>18</td><td>38</td></tr>
-                    <tr><td>19</td><td>39</td></tr>
-                    <tr><td>20</td><td>40</td></tr>
-                    <tr><td>21+</td><td>42+</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="mt-4 pt-3 border-t border-gray-700 text-xs text-gray-400">
-            <p><strong class="text-gray-200">DC Adjustments:</strong> Incredibly Easy (-10), Very Easy (-5), Easy (-2), Hard (+2), Very Hard (+5), Incredibly Hard (+10).</p>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">DCs by Level <span class="sub">level &rarr; DC</span></h2>
+        <table class="gm-table" style="font-size:12px;">
+            <thead><tr><th>Lvl</th><th>DC</th><th>Lvl</th><th>DC</th></tr></thead>
+            <tbody>
+                <tr><td>0</td><td class="num">14</td><td>11</td><td class="num">28</td></tr>
+                <tr><td>1</td><td class="num">15</td><td>12</td><td class="num">30</td></tr>
+                <tr><td>2</td><td class="num">16</td><td>13</td><td class="num">31</td></tr>
+                <tr><td>3</td><td class="num">18</td><td>14</td><td class="num">32</td></tr>
+                <tr><td>4</td><td class="num">19</td><td>15</td><td class="num">34</td></tr>
+                <tr><td>5</td><td class="num">20</td><td>16</td><td class="num">35</td></tr>
+                <tr><td>6</td><td class="num">22</td><td>17</td><td class="num">36</td></tr>
+                <tr><td>7</td><td class="num">23</td><td>18</td><td class="num">38</td></tr>
+                <tr><td>8</td><td class="num">24</td><td>19</td><td class="num">39</td></tr>
+                <tr><td>9</td><td class="num">26</td><td>20</td><td class="num">40</td></tr>
+                <tr><td>10</td><td class="num">27</td><td>21+</td><td class="num">42+</td></tr>
+            </tbody>
+        </table>
+        <div class="mt-3 pt-3 text-[12px] text-base-300" style="border-top:1px solid rgba(255,255,255,0.06);">
+            <div class="text-[10px] text-base-500 uppercase tracking-widest font-semibold mb-1">Adjust by difficulty</div>
+            <div class="grid grid-cols-3 gap-x-3 gap-y-1 font-mono text-[11px]">
+                <div>Incredibly easy <span class="neg">&minus;10</span></div>
+                <div>Very easy <span class="neg">&minus;5</span></div>
+                <div>Easy <span class="neg">&minus;2</span></div>
+                <div>Hard <span class="pos">+2</span></div>
+                <div>Very hard <span class="pos">+5</span></div>
+                <div>Incredibly hard <span class="pos">+10</span></div>
+            </div>
         </div>
     </div>
 
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Simple DCs</h2>
-        <table class="w-full text-sm mb-6 striped-table">
-            <thead><tr><th>Proficiency</th><th>DC</th></tr></thead>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Simple DCs <span class="sub">by proficiency</span></h2>
+        <table class="gm-table mb-4">
+            <thead><tr><th>Rank</th><th>DC</th></tr></thead>
             <tbody>
-                <tr><td>Untrained</td><td>10</td></tr>
-                <tr><td>Trained</td><td>15</td></tr>
-                <tr><td>Expert</td><td>20</td></tr>
-                <tr><td>Master</td><td>30</td></tr>
-                <tr><td>Legendary</td><td>40</td></tr>
+                <tr><td>Untrained</td><td class="num">10</td></tr>
+                <tr><td>Trained</td><td class="num">15</td></tr>
+                <tr><td>Expert</td><td class="num">20</td></tr>
+                <tr><td>Master</td><td class="num">30</td></tr>
+                <tr><td>Legendary</td><td class="num">40</td></tr>
             </tbody>
         </table>
 
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Treat Wounds</h2>
-        <table class="w-full text-sm striped-table">
-            <thead><tr><th>Proficiency</th><th>DC</th><th>Healing</th></tr></thead>
+        <h2 class="gm-ref-header">Treat Wounds <span class="sub">10 min</span></h2>
+        <table class="gm-table">
+            <thead><tr><th>Rank</th><th>DC</th><th>Heal</th></tr></thead>
             <tbody>
-                <tr><td>Trained</td><td>15</td><td><span class="text-green-400 font-bold">2d8</span></td></tr>
-                <tr><td>Expert</td><td>20</td><td><span class="text-green-400 font-bold">2d8 + 10</span></td></tr>
-                <tr><td>Master</td><td>30</td><td><span class="text-green-400 font-bold">2d8 + 30</span></td></tr>
-                <tr><td>Legendary</td><td>40</td><td><span class="text-green-400 font-bold">2d8 + 50</span></td></tr>
+                <tr><td>Trained</td><td class="num">15</td><td><span class="heal">2d8</span></td></tr>
+                <tr><td>Expert</td><td class="num">20</td><td><span class="heal">2d8 + 10</span></td></tr>
+                <tr><td>Master</td><td class="num">30</td><td><span class="heal">2d8 + 30</span></td></tr>
+                <tr><td>Legendary</td><td class="num">40</td><td><span class="heal">2d8 + 50</span></td></tr>
             </tbody>
         </table>
-        <p class="text-xs text-gray-400 mt-2 italic">Critical Success: Increase healing by <span class="text-green-400 font-bold">2d8</span>.<br>Critical Failure: Target takes <span class="text-red-400 font-bold">1d8 damage</span>.</p>
+        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+            Crit Success: heal +<span class="heal">2d8</span>.
+            &nbsp;Crit Failure: target takes <span class="hurt">1d8</span> damage.
+        </p>
     </div>
 
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Combat Maneuvers</h2>
-        <table class="w-full text-sm striped-table">
-            <thead><tr><th>Action</th><th>Skill</th><th>Target DC</th></tr></thead>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Combat Maneuvers</h2>
+        <table class="gm-table">
+            <thead><tr><th>Action</th><th>Skill</th><th>vs DC</th></tr></thead>
             <tbody>
                 <tr><td>Grapple</td><td>Athletics</td><td>Fortitude</td></tr>
                 <tr><td>Shove</td><td>Athletics</td><td>Fortitude</td></tr>
@@ -288,127 +410,114 @@
                 <tr><td>Demoralize</td><td>Intimidation</td><td>Will</td></tr>
             </tbody>
         </table>
-        <p class="text-xs text-gray-400 mt-2 italic">Most target the creature's DC (10 + their modifier). Attack traits apply MAP.</p>
+        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+            Target DC = 10 + relevant defense modifier. Each maneuver carries the <strong>attack</strong> trait, so MAP applies (&minus;5 / &minus;10, or &minus;4 / &minus;8 if agile).
+        </p>
     </div>
 
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Common Conditions</h2>
-        
-        <details class="group bg-gray-900/50 rounded border border-gray-700 mb-2 p-2 cursor-pointer transition-colors hover:bg-gray-700/50">
-            <summary class="font-bold text-red-400 select-none list-none flex justify-between items-center text-sm">
-                Off-Guard (Flat-Footed)
-                <span class="text-gray-500 text-xs transition-transform group-open:rotate-180">▼</span>
-            </summary>
-            <div class="mt-2 text-gray-300 text-xs leading-relaxed border-t border-gray-700 pt-2">Takes a –2 circumstance penalty to AC.</div>
-        </details>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Common Conditions <span class="sub">always-visible</span></h2>
+        <dl class="gm-cond">
+            <dt>Off-Guard</dt>
+            <dd>&minus;2 circumstance to AC. (Replaces "flat-footed" from old PF2e.)</dd>
 
-        <details class="group bg-gray-900/50 rounded border border-gray-700 mb-2 p-2 cursor-pointer transition-colors hover:bg-gray-700/50">
-            <summary class="font-bold text-red-400 select-none list-none flex justify-between items-center text-sm">
-                Frightened [X]
-                <span class="text-gray-500 text-xs transition-transform group-open:rotate-180">▼</span>
-            </summary>
-            <div class="mt-2 text-gray-300 text-xs leading-relaxed border-t border-gray-700 pt-2">Takes a status penalty equal to X to all checks and DCs. Decreases by 1 at the end of your turn.</div>
-        </details>
+            <dt>Frightened X</dt>
+            <dd>Status penalty equal to X on every check &amp; DC. Decreases by 1 at end of turn.</dd>
 
-        <details class="group bg-gray-900/50 rounded border border-gray-700 mb-2 p-2 cursor-pointer transition-colors hover:bg-gray-700/50">
-            <summary class="font-bold text-red-400 select-none list-none flex justify-between items-center text-sm">
-                Sickened [X]
-                <span class="text-gray-500 text-xs transition-transform group-open:rotate-180">▼</span>
-            </summary>
-            <div class="mt-2 text-gray-300 text-xs leading-relaxed border-t border-gray-700 pt-2">Takes a status penalty equal to X to all checks and DCs. Cannot willingly ingest anything. Spend an action retching (Fort save vs effect DC) to reduce.</div>
-        </details>
+            <dt>Sickened X</dt>
+            <dd>Status &minus;X to checks &amp; DCs. Can't willingly ingest. Spend 1 action to retch (Fort save vs effect DC) to reduce by 1 (or 2 on crit).</dd>
 
-        <details class="group bg-gray-900/50 rounded border border-gray-700 mb-2 p-2 cursor-pointer transition-colors hover:bg-gray-700/50">
-            <summary class="font-bold text-red-400 select-none list-none flex justify-between items-center text-sm">
-                Prone
-                <span class="text-gray-500 text-xs transition-transform group-open:rotate-180">▼</span>
-            </summary>
-            <div class="mt-2 text-gray-300 text-xs leading-relaxed border-t border-gray-700 pt-2">Off-Guard. Take a –2 circumstance penalty to attack rolls. Only move action allowed is Crawl. Standing up costs 1 action.</div>
-        </details>
+            <dt>Prone</dt>
+            <dd>Off-Guard. Attack rolls take &minus;2 circumstance. Only move available is Crawl. Stand = 1 action.</dd>
 
-        <details class="group bg-gray-900/50 rounded border border-gray-700 mb-2 p-2 cursor-pointer transition-colors hover:bg-gray-700/50">
-            <summary class="font-bold text-red-400 select-none list-none flex justify-between items-center text-sm">
-                Concealed / Hidden
-                <span class="text-gray-500 text-xs transition-transform group-open:rotate-180">▼</span>
-            </summary>
-            <div class="mt-2 text-gray-300 text-xs leading-relaxed border-t border-gray-700 pt-2">
-                <strong class="text-amber-500">Concealed:</strong> DC 5 flat check to target.<br><br>
-                <strong class="text-amber-500">Hidden:</strong> Off-Guard to you. DC 11 flat check to target. You know their space.<br><br>
-                <strong class="text-amber-500">Undetected:</strong> Off-Guard to you. You do not know their space. Must guess square to attack (DC 11 flat check).
-            </div>
-        </details>
+            <dt>Slowed X</dt>
+            <dd>Lose X actions at the start of your turn. Stunned X also makes you Slowed during recovery.</dd>
+
+            <dt>Stunned X</dt>
+            <dd>Lose actions at start of turn (up to your normal 3); Stunned reduces by amount lost. Also blocks reactions.</dd>
+
+            <dt>Wounded X</dt>
+            <dd>Increase Dying value by X+1 if you go down again. Removed by full Treat Wounds + 10-min rest, or Long Rest.</dd>
+
+            <dt>Concealed</dt>
+            <dd>Attacker rolls a DC 5 flat check before damage; failure = miss.</dd>
+
+            <dt>Hidden</dt>
+            <dd>Off-Guard to you. DC 11 flat check before damage. You know the target's square.</dd>
+
+            <dt>Undetected</dt>
+            <dd>Off-Guard to you. You don't know the square — must Seek or guess (DC 11 flat).</dd>
+        </dl>
     </div>
 
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Dying & Recovery</h2>
-        <p class="text-sm mb-3">When reduced to 0 HP, move your initiative to directly before the creature that downed you, and gain <strong>Dying 1</strong> (or Dying 2 if critical hit/failure).</p>
-        <ul class="text-sm space-y-2 mb-3">
-            <li><strong class="text-red-400">Recovery Check:</strong> Flat check DC 10 + current Dying value.</li>
-            <ul class="list-disc pl-5 text-gray-400 text-xs mt-1 space-y-1">
-                <li><strong>Crit Success:</strong> Dying <span class="text-green-400">decreases by 2</span>.</li>
-                <li><strong>Success:</strong> Dying <span class="text-green-400">decreases by 1</span>.</li>
-                <li><strong>Failure:</strong> Dying <span class="text-red-400">increases by 1</span>.</li>
-                <li><strong>Crit Failure:</strong> Dying <span class="text-red-400">increases by 2</span>.</li>
-            </ul>
-        </ul>
-        <p class="text-sm">When Dying reaches 0, you lose Dying and gain <strong>Wounded 1</strong> (or increase Wounded by 1). If you take damage while Dying, increase Dying by 1 (or 2 for a crit). <br><br><strong>Dead</strong> at Dying 4.</p>
-    </div>
-    
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Elite & Weak Adjustments</h2>
-        <div class="space-y-4 text-sm">
-            <div class="bg-gray-900/50 p-3 rounded border border-gray-700">
-                <strong class="text-amber-500 block mb-2">Elite Adjustment (+1 Level)</strong>
-                <ul class="list-disc pl-5 text-gray-300 text-xs space-y-1">
-                    <li><span class="text-green-400 font-bold">+2</span> to AC, Saves, Attacks, DCs, Perception, Skills</li>
-                    <li><span class="text-green-400 font-bold">+2</span> to Damage rolls</li>
-                    <li><span class="text-green-400 font-bold">+10 to 30 HP</span> (based on level)</li>
-                </ul>
-            </div>
-            <div class="bg-gray-900/50 p-3 rounded border border-gray-700">
-                <strong class="text-amber-500 block mb-2">Weak Adjustment (-1 Level)</strong>
-                <ul class="list-disc pl-5 text-gray-300 text-xs space-y-1">
-                    <li><span class="text-red-400 font-bold">-2</span> to AC, Saves, Attacks, DCs, Perception, Skills</li>
-                    <li><span class="text-red-400 font-bold">-2</span> to Damage rolls</li>
-                    <li><span class="text-red-400 font-bold">-10 to 30 HP</span> (based on level)</li>
-                </ul>
-            </div>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Dying &amp; Recovery</h2>
+        <div class="text-sm text-base-200 mb-3 leading-relaxed">
+            At 0 HP: move initiative to just before the attacker, gain <strong style="color:#fca5a5;">Dying 1</strong> (or 2 on crit hit / crit failure on the save).
         </div>
+        <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2">Recovery — DC 10 + Dying</div>
+        <table class="gm-table mb-3" style="font-size:12px;">
+            <tbody>
+                <tr><td><strong>Crit Success</strong></td><td><span class="heal">Dying &minus;2</span></td></tr>
+                <tr><td><strong>Success</strong></td><td><span class="heal">Dying &minus;1</span></td></tr>
+                <tr><td><strong>Failure</strong></td><td><span class="hurt">Dying +1</span></td></tr>
+                <tr><td><strong>Crit Failure</strong></td><td><span class="hurt">Dying +2</span></td></tr>
+            </tbody>
+        </table>
+        <p class="text-[12px] text-base-300 leading-relaxed">
+            Dying back to 0 &rarr; clear Dying, gain <strong style="color:#e0b050;">Wounded 1</strong> (or +1 if already Wounded).
+            Damage while Dying = Dying +1 (or +2 on crit). <strong style="color:#fca5a5;">Dead</strong> at Dying 4.
+        </p>
     </div>
     
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Undead & Void Healing</h2>
-        <ul class="text-sm space-y-3 text-gray-300">
-            <li><strong class="text-red-400 block mb-1">Immunities</strong> Death effects, disease, poison, unconscious.</li>
-            <li><strong class="text-amber-500 block mb-1">Void Healing</strong> Healed by <span class="text-green-400 font-bold">void (negative)</span> energy. Damaged by <span class="text-red-400 font-bold">vitality (positive)</span> energy.</li>
-            <li><strong class="text-gray-400 block mb-1">Destroyed</strong> Automatically destroyed at 0 HP. (Do not use Dying rules for basic undead).</li>
-        </ul>
-    </div>
-
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Material Hardness</h2>
-        <table class="w-full text-sm striped-table">
-            <thead><tr><th>Material (Thin)</th><th>Hardness</th><th>HP (BT)</th></tr></thead>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Elite &amp; Weak Adjustments</h2>
+        <table class="gm-table" style="font-size:12px;">
+            <thead><tr><th></th><th style="color:#86efac;">Elite (+1 lvl)</th><th style="color:#fca5a5;">Weak (&minus;1 lvl)</th></tr></thead>
             <tbody>
-                <tr><td>Wood</td><td>5</td><td>20 (10)</td></tr>
-                <tr><td>Stone</td><td>14</td><td>50 (25)</td></tr>
-                <tr><td>Iron / Steel</td><td>9</td><td>36 (18)</td></tr>
+                <tr><td>AC / Saves / Attacks / DCs / Perception / Skills</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
+                <tr><td>Damage rolls</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
+                <tr><td>HP (scaled by level)</td><td><span class="heal">+10 to 30</span></td><td><span class="hurt">&minus;10 to 30</span></td></tr>
             </tbody>
         </table>
-        <p class="text-xs text-gray-400 mt-2">Broken Threshold (BT) is half max HP. When broken, an item takes penalties and cannot be used normally.</p>
+        <p class="text-[11px] text-base-500 italic mt-2">Apply to a single creature, not the whole encounter. Recompute XP at the new effective level.</p>
+    </div>
+    
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Undead &amp; Void Healing</h2>
+        <div class="gm-callout-row"><span class="label">Immunities</span><span>Death effects, disease, poison, unconscious.</span></div>
+        <div class="gm-callout-row"><span class="label">Void Healing</span><span>Healed by <strong style="color:#86efac;">void</strong> (negative). Damaged by <strong style="color:#fca5a5;">vitality</strong> (positive).</span></div>
+        <div class="gm-callout-row"><span class="label">Destroyed</span><span>Auto-destroyed at 0 HP — Dying rules don't apply to basic undead.</span></div>
     </div>
 
-    <div class="masonry-item bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-5">
-        <h2 class="text-xl font-header text-amber-500 mb-4 border-b border-gray-700 pb-2">Cover</h2>
-        <table class="w-full text-sm striped-table">
-            <thead><tr><th>Type</th><th>AC/Reflex Bonus</th><th>Stealth</th></tr></thead>
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Material Hardness <span class="sub">thin / typical</span></h2>
+        <table class="gm-table">
+            <thead><tr><th>Material</th><th>Hard</th><th>HP (BT)</th></tr></thead>
             <tbody>
-                <tr><td>Lesser</td><td>+1 Circ.</td><td>No</td></tr>
-                <tr><td>Standard</td><td>+2 Circ.</td><td>Yes</td></tr>
-                <tr><td>Greater</td><td>+4 Circ.</td><td>Yes</td></tr>
+                <tr><td>Wood</td><td class="num">5</td><td class="num">20 (10)</td></tr>
+                <tr><td>Stone</td><td class="num">14</td><td class="num">50 (25)</td></tr>
+                <tr><td>Iron / Steel</td><td class="num">9</td><td class="num">36 (18)</td></tr>
             </tbody>
         </table>
-        <p class="text-xs text-gray-400 mt-2">Creatures provide Lesser Cover. Standard cover allows the Take Cover action to upgrade to Greater Cover.</p>
+        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+            Broken Threshold = half max HP. Past BT, items take penalties and can't be used normally.
+        </p>
+    </div>
+
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Cover</h2>
+        <table class="gm-table">
+            <thead><tr><th>Type</th><th>AC / Ref</th><th>Stealth</th></tr></thead>
+            <tbody>
+                <tr><td>Lesser</td><td><span class="num">+1</span> circ</td><td>&mdash;</td></tr>
+                <tr><td>Standard</td><td><span class="num">+2</span> circ</td><td>yes</td></tr>
+                <tr><td>Greater</td><td><span class="num">+4</span> circ</td><td>yes</td></tr>
+            </tbody>
+        </table>
+        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+            Creatures grant Lesser. Take Cover (1 action) upgrades Lesser&rarr;Standard or Standard&rarr;Greater while you stay in cover.
+        </p>
     </div>
 
 </div>
@@ -419,28 +528,20 @@
     const compInput = document.getElementById('comp-search');
     const compResultsWrap = document.getElementById('comp-results');
     const compResultsList = document.getElementById('comp-results-list');
-    
-    const typeColors = {
-        'spell': { bg: 'bg-blue-900/30', border: 'border-blue-800/50', text: 'text-blue-300', badge: 'bg-blue-800 text-blue-200' },
-        'feat':  { bg: 'bg-amber-900/20', border: 'border-amber-800/50', text: 'text-amber-300', badge: 'bg-amber-800 text-amber-200' },
-        'item':  { bg: 'bg-green-900/20', border: 'border-green-800/50', text: 'text-green-300', badge: 'bg-green-800 text-green-200' }
-    };
-    
+
     function setCompCat(cat) {
         compCat = cat;
-        document.querySelectorAll('.comp-cat-btn').forEach(b => {
-            b.className = 'comp-cat-btn bg-gray-900 text-gray-400 border-gray-700 px-3 py-2 rounded text-xs font-bold border transition-colors hover:border-gray-500';
-        });
+        document.querySelectorAll('.gm-cat-btn').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById(`cat-${cat}`);
-        if (btn) btn.className = 'comp-cat-btn bg-amber-900/40 text-amber-400 border-amber-700 px-3 py-2 rounded text-xs font-bold border transition-colors';
+        if (btn) btn.classList.add('active');
         doCompSearch();
     }
-    
+
     compInput.addEventListener('input', () => {
         clearTimeout(compTimeout);
         compTimeout = setTimeout(doCompSearch, 250);
     });
-    
+
     async function doCompSearch() {
         const q = compInput.value.trim();
         if (q.length < 2) { compResultsWrap.classList.add('hidden'); return; }
@@ -448,59 +549,58 @@
             const res = await fetch(`/api/compendium_search?q=${encodeURIComponent(q)}&cat=${compCat}`);
             const data = await res.json();
             if (!data.results || data.results.length === 0) {
-                compResultsList.innerHTML = '<div class="col-span-full text-center text-gray-600 text-sm italic py-4">No results found</div>';
+                compResultsList.innerHTML = '<div class="col-span-full text-center text-base-500 text-sm italic py-4">No results found</div>';
             } else {
                 compResultsList.innerHTML = data.results.map(r => {
-                    const c = typeColors[r.type] || typeColors['item'];
-                    const lvl = r.level !== null && r.level !== undefined ? `Lv ${r.level}` : '';
-                    const desc = r.desc ? r.desc.substring(0, 120) + (r.desc.length > 120 ? '...' : '') : '';
+                    const lvl = (r.level !== null && r.level !== undefined) ? `Lv ${r.level}` : '';
+                    const desc = r.desc ? r.desc.substring(0, 140) + (r.desc.length > 140 ? '…' : '') : '';
                     return `
-                    <button onclick="showCompDetail('${esc(r.name)}', '${r.type}')" class="${c.bg} border ${c.border} rounded-lg p-3 text-left hover:brightness-125 transition-all cursor-pointer">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="font-bold ${c.text} text-sm">${esc(r.name)}</span>
-                            ${lvl ? `<span class="text-[10px] ${c.badge} px-1.5 py-0.5 rounded font-bold">${lvl}</span>` : ''}
-                            <span class="text-[10px] text-gray-600 uppercase font-bold">${r.type}</span>
+                    <button onclick="showCompDetail('${esc(r.name)}', '${r.type}')" class="gm-result-card">
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
+                            <span class="gm-result-name">${esc(r.name)}</span>
+                            <span class="gm-type-badge ${r.type}">${r.type}</span>
+                            ${lvl ? `<span class="text-[10px] text-base-500 font-mono">${lvl}</span>` : ''}
                         </div>
-                        ${desc ? `<div class="text-xs text-gray-500 leading-snug line-clamp-2">${esc(desc)}</div>` : ''}
+                        ${desc ? `<div class="gm-result-desc">${esc(desc)}</div>` : ''}
                     </button>`;
                 }).join('');
             }
             compResultsWrap.classList.remove('hidden');
         } catch (e) { console.error(e); }
     }
-    
+
     async function showCompDetail(name, type) {
         try {
             const res = await fetch(`/api/compendium_detail?name=${encodeURIComponent(name)}&type=${type}`);
             const data = await res.json();
             if (data.error) return;
-            
-            const c = typeColors[type] || typeColors['item'];
+
             document.getElementById('comp-detail-name').innerText = data.name;
-            
-            let metaHtml = `<span class="text-[10px] ${c.badge} px-2 py-0.5 rounded font-bold uppercase">${type}</span>`;
-            if (data.level !== null && data.level !== undefined) metaHtml += `<span class="text-[10px] bg-gray-800 text-gray-300 px-2 py-0.5 rounded font-bold border border-gray-700">Level ${data.level}</span>`;
+
+            let metaHtml = `<span class="gm-type-badge ${type}">${type}</span>`;
+            const tagPill = (txt) => `<span class="text-[10px] px-2 py-0.5 rounded font-medium" style="background:#24242e;border:1px solid rgba(255,255,255,0.08);color:#b8b8cc;">${esc(txt)}</span>`;
+            if (data.level !== null && data.level !== undefined) metaHtml += tagPill(`Level ${data.level}`);
             if (data.traditions) {
                 try {
                     const trads = JSON.parse(data.traditions);
-                    if (Array.isArray(trads) && trads.length > 0) metaHtml += trads.map(t => `<span class="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">${t}</span>`).join('');
+                    if (Array.isArray(trads)) metaHtml += trads.map(tagPill).join('');
                 } catch(e) {}
             }
             if (data.traits) {
                 try {
                     const traits = JSON.parse(data.traits);
-                    if (Array.isArray(traits) && traits.length > 0) metaHtml += traits.map(t => `<span class="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">${t}</span>`).join('');
+                    if (Array.isArray(traits)) metaHtml += traits.map(tagPill).join('');
                 } catch(e) {}
             }
-            if (data.category) metaHtml += `<span class="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">${data.category}</span>`;
-            
+            if (data.category) metaHtml += tagPill(data.category);
+
             document.getElementById('comp-detail-meta').innerHTML = metaHtml;
-            document.getElementById('comp-detail-body').innerHTML = data.description || '<p class="text-gray-500 italic">No description available.</p>';
+            document.getElementById('comp-detail-body').innerHTML = data.description || '<p class="text-base-500 italic">No description available.</p>';
             document.getElementById('comp-detail').classList.remove('hidden');
             document.getElementById('comp-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } catch (e) { console.error(e); }
     }
-    
+
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     /* ──────────────── GM Checks Cheat-Sheet Drawer ──────────────── */
