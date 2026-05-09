@@ -10102,9 +10102,10 @@ def add_map_token():
     # Default vision: 6 squares (30ft) for PCs, 0 for monsters (GM controls monster visibility)
     default_vision = 6 if data.get('is_pc', False) else 0
     
-    # Auto-detect senses from character data for PCs
+    # Auto-detect senses + Hero Points from character data for PCs.
     has_darkvision = data.get('darkvision', False)
     has_low_light = data.get('low_light_vision', False)
+    default_hero_points = 1  # PF2e: PCs start each session with 1 HP, max 3
     pc_name = data.get('pc_name') or data.get('name')
     if data.get('is_pc') and pc_name:
         for lib_name, pc in PARTY_LIBRARY.items():
@@ -10114,8 +10115,11 @@ def add_map_token():
                     has_darkvision = True
                 if any('low-light' in s.lower() for s in senses):
                     has_low_light = True
+                # Pull current Hero Points from the PC sheet so the token
+                # reflects what the player is sitting on.
+                default_hero_points = max(0, min(3, getattr(pc, 'hero_points', 1)))
                 break
-    
+
     token = {
         'id': str(uuid.uuid4())[:8],
         'name': data.get('name', 'Token'),
@@ -10134,6 +10138,13 @@ def add_map_token():
         'assigned_player': data.get('assigned_player'),  # Player name who can control this token
         'darkvision': has_darkvision,
         'low_light_vision': has_low_light,
+        # PF2e action-economy state (Week 3). Action pips reset to 3 on turn
+        # change (handled client-side via the encounter_update SSE listener).
+        # Hero Points only meaningful for PCs but the field exists on every
+        # token so updates have a uniform shape.
+        'hero_points': max(0, min(3, int(data.get('hero_points', default_hero_points)))) if data.get('is_pc') else 0,
+        'actions_used_this_turn': int(data.get('actions_used_this_turn', 0)),
+        'strikes_this_turn': int(data.get('strikes_this_turn', 0)),
     }
     
     with MAP_LOCK:
@@ -10210,6 +10221,16 @@ def update_map_token():
                 if 'conditions' in data: token['conditions'] = data['conditions']  # Can be dict or list
                 if 'ac' in data: token['ac'] = int(data['ac'])
                 if 'speed' in data: token['speed'] = int(data['speed'])
+                if 'darkvision' in data: token['darkvision'] = bool(data['darkvision'])
+                if 'low_light_vision' in data: token['low_light_vision'] = bool(data['low_light_vision'])
+                # Week 3 fields: Hero Points clamp to PF2e's 0-3 range; action
+                # economy fields are reset to 0 by the client on turn change.
+                if 'hero_points' in data:
+                    token['hero_points'] = max(0, min(3, int(data['hero_points'])))
+                if 'actions_used_this_turn' in data:
+                    token['actions_used_this_turn'] = max(0, min(3, int(data['actions_used_this_turn'])))
+                if 'strikes_this_turn' in data:
+                    token['strikes_this_turn'] = max(0, int(data['strikes_this_turn']))
                 break
         else:
             return jsonify({'success': False, 'error': 'Token not found'}), 404
@@ -10265,6 +10286,12 @@ def sync_tokens_from_encounter():
                     pc = PARTY_LIBRARY[combatant.name]
                     speed = getattr(pc, 'speed', 25)
                 
+                # Pull Hero Points from PARTY_LIBRARY for PCs so the token
+                # reflects current sheet state. Action-economy fields start
+                # at 0 (no actions spent yet this turn).
+                hp_count = 1
+                if combatant.is_pc and combatant.name in PARTY_LIBRARY:
+                    hp_count = max(0, min(3, getattr(PARTY_LIBRARY[combatant.name], 'hero_points', 1)))
                 token = {
                     'id': str(uuid.uuid4())[:8],
                     'name': combatant.name,
@@ -10282,6 +10309,9 @@ def sync_tokens_from_encounter():
                     'assigned_player': combatant.name if combatant.is_pc else None,
                     'visible_to_players': True,
                     'initiative': getattr(combatant, 'initiative', 0),
+                    'hero_points': hp_count if combatant.is_pc else 0,
+                    'actions_used_this_turn': 0,
+                    'strikes_this_turn': 0,
                 }
                 ACTIVE_MAP['tokens'].append(token)
                 added += 1

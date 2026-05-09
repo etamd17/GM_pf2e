@@ -1127,6 +1127,7 @@
             <div class="sidebar-header">
                 <span> Combat</span>
                 <div style="display: flex; gap: 4px;">
+                    <button class="tool-btn small" onclick="awardHeroPointToAll()" title="Give every PC token +1 Hero Point (capped at 3)">+1 HP·all</button>
                     <button class="tool-btn small" onclick="rollAllInitiative()"> Roll Init</button>
                     <button class="tool-btn small" onclick="nextTurn()">Next →</button>
                 </div>
@@ -2281,8 +2282,14 @@
                     const key = `${newRound}:${newTurn}`;
                     if (typeof newTurn === 'number' && _lastTurnKey !== key) {
                         _lastTurnKey = key;
+                        // Per-turn budgets reset for everyone (movement,
+                        // actions used, strikes for MAP). Local-only — no
+                        // server roundtrip; the next save_map_state from
+                        // any token mutation will carry these zeros.
                         for (const t of (mapState.tokens || [])) {
                             if (t.movement_used_this_turn) t.movement_used_this_turn = 0;
+                            if (t.actions_used_this_turn) t.actions_used_this_turn = 0;
+                            if (t.strikes_this_turn) t.strikes_this_turn = 0;
                         }
                         render();
                     }
@@ -2937,14 +2944,77 @@
                     const barH = 6/zoom;
                     const barX = cx - barW/2;
                     const barY = cy + r + 4/zoom;
-                    
+
                     ctx.fillStyle = '#333';
                     ctx.fillRect(barX, barY, barW, barH);
-                    
+
                     ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
                     ctx.fillRect(barX, barY, barW * hpPct, barH);
                 }
-                
+
+                // Action-economy pips for the active combatant (Week 3).
+                // Three pips above the token: blue+ringed = action remaining,
+                // dark = action spent. To the right: MAP indicator that
+                // shows -5 after one strike, -10 after two. Both are
+                // sidebar-clickable; the canvas display is read-only so
+                // the GM doesn't accidentally spend actions while panning.
+                if (isActive) {
+                    const used = Math.max(0, Math.min(3, token.actions_used_this_turn || 0));
+                    const apipR = 5 / zoom;
+                    const apipGap = 8 / zoom;
+                    const apipsTotal = 3;
+                    const apipsW = apipR * 2 * apipsTotal + apipGap * (apipsTotal - 1);
+                    const apipsStartX = cx - apipsW / 2 + apipR;
+                    const apipsY = cy - r - 12/zoom;
+                    for (let i = 0; i < apipsTotal; i++) {
+                        const px = apipsStartX + i * (apipR * 2 + apipGap);
+                        const spent = i < used;
+                        ctx.beginPath();
+                        ctx.arc(px, apipsY, apipR, 0, Math.PI * 2);
+                        ctx.fillStyle = spent ? '#1a1a1a' : '#3b82f6';
+                        ctx.fill();
+                        ctx.strokeStyle = spent ? '#374151' : '#60a5fa';
+                        ctx.lineWidth = 1.5 / zoom;
+                        ctx.stroke();
+                    }
+                    const strikes = token.strikes_this_turn || 0;
+                    if (strikes > 0) {
+                        const mapText = strikes >= 2 ? 'MAP -10' : 'MAP -5';
+                        ctx.font = `bold ${11/zoom}px system-ui`;
+                        ctx.fillStyle = strikes >= 2 ? '#ef4444' : '#f59e0b';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(mapText, apipsStartX + apipsW + 6/zoom, apipsY);
+                    }
+                }
+
+                // Hero Points pip strip — PCs only. Three slots, gold for
+                // owned, hollow gray for empty. PF2e caps at 3. Sits below
+                // the HP bar (or below the token if no HP bar). The strip
+                // and pips don't accept clicks here — adjust via the
+                // sidebar's +/− buttons.
+                if (token.is_pc) {
+                    const hpCount = Math.max(0, Math.min(3, token.hero_points || 0));
+                    const pipR = 4 / zoom;
+                    const pipGap = 6 / zoom;
+                    const pipsTotal = 3;
+                    const pipsW = pipR * 2 * pipsTotal + pipGap * (pipsTotal - 1);
+                    const pipsStartX = cx - pipsW / 2 + pipR;
+                    const baseY = (token.max_hp > 0)
+                        ? (cy + r + 4/zoom + 6/zoom + 8/zoom)
+                        : (cy + r + 8/zoom);
+                    for (let i = 0; i < pipsTotal; i++) {
+                        const px = pipsStartX + i * (pipR * 2 + pipGap);
+                        ctx.beginPath();
+                        ctx.arc(px, baseY, pipR, 0, Math.PI * 2);
+                        ctx.fillStyle = i < hpCount ? '#fbbf24' : '#1a1a1a';
+                        ctx.fill();
+                        ctx.strokeStyle = i < hpCount ? '#fbbf24' : '#3a3a3a';
+                        ctx.lineWidth = 1 / zoom;
+                        ctx.stroke();
+                    }
+                }
+
                 // Condition icons (small circles around edge)
                 drawConditionIcons(token, cx, cy, r);
             }
@@ -4790,7 +4860,7 @@
         async function toggleVisibility(tokenId) {
             const token = mapState.tokens.find(t => t.id === tokenId);
             if (!token) return;
-            
+
             await fetch('/api/map/token/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -4798,6 +4868,170 @@
                     id: tokenId,
                     visible_to_players: !token.visible_to_players
                 })
+            });
+        }
+
+        // Hero Points (Week 3). PF2e: PCs hold 0-3 points; spend for reroll
+        // (+1 = avoid death) or contribute to group goals. The pip strip on
+        // the canvas is read-only; mutations go through this helper from
+        // the sidebar +/− buttons or the bulk-award.
+        async function adjustHeroPoints(tokenId, delta) {
+            const t = (mapState.tokens || []).find(tt => tt.id === tokenId);
+            if (!t) return;
+            const next = Math.max(0, Math.min(3, (t.hero_points || 0) + delta));
+            if (next === (t.hero_points || 0)) return;
+            // Optimistic update so the canvas pip strip reflects the change
+            // before the SSE round-trip — feels instant under the GM's
+            // finger. The server-broadcast will reconcile if it disagrees.
+            t.hero_points = next;
+            markDirty('tokens');
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tokenId, hero_points: next }),
+            });
+            // Re-render the sidebar form input value if it's open on this token.
+            const inp = document.querySelector(`[data-token-id="${tokenId}"][data-field="hero_points"]`);
+            if (inp) inp.value = String(next);
+        }
+
+        async function awardHeroPointToAll() {
+            const pcs = (mapState.tokens || []).filter(t => t.is_pc);
+            if (pcs.length === 0) return;
+            // Award one Hero Point to every PC token (capped at 3). Common
+            // GM action between sessions or after a clutch moment.
+            for (const t of pcs) {
+                const cur = t.hero_points || 0;
+                if (cur >= 3) continue;
+                t.hero_points = cur + 1;  // optimistic
+            }
+            markDirty('tokens');
+            await Promise.all(pcs.map(t =>
+                fetch('/api/map/token/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: t.id, hero_points: Math.min(3, t.hero_points) }),
+                })
+            ));
+            _showHeroPointToast(`+1 Hero Point to ${pcs.length} PC${pcs.length === 1 ? '' : 's'}`);
+        }
+
+        function _showHeroPointToast(msg) {
+            const el = document.createElement('div');
+            el.style.cssText =
+                'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);' +
+                'background:rgba(0,0,0,0.9);color:#fbbf24;padding:8px 16px;' +
+                'border:1px solid #fbbf24;border-radius:6px;font-size:12px;z-index:1000;' +
+                'pointer-events:none;transition:opacity 0.3s;';
+            el.textContent = msg;
+            document.body.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 1800);
+        }
+
+        // ===========================================
+        // 3-ACTION ECONOMY (Week 3)
+        // ===========================================
+        // Sidebar row that renders below the active combatant's HP bar.
+        // Three pip buttons (click any to "spend up to" that pip), a Strike
+        // bumper that increments strikes_this_turn (for MAP display), and a
+        // Reset button. Both fields zero out automatically on turn change
+        // (handled in the encounter_update SSE listener).
+        function _buildActionEconomyRow(token) {
+            const used = Math.max(0, Math.min(3, token.actions_used_this_turn || 0));
+            const strikes = token.strikes_this_turn || 0;
+            const tokenId = token.id;
+            // Each pip: click sets actions_used to (i + 1). Clicking the
+            // last spent pip again unspends one (toggle behavior).
+            let pipsHtml = '';
+            for (let i = 0; i < 3; i++) {
+                const spent = i < used;
+                const bg = spent ? '#1a1a1a' : '#3b82f6';
+                const border = spent ? '#374151' : '#60a5fa';
+                pipsHtml += `<button onclick="event.stopPropagation();spendActionPip('${tokenId}', ${i})"
+                    title="${spent ? 'Click to unspend this action' : 'Click to spend this action'}"
+                    style="width:18px;height:18px;padding:0;border-radius:50%;
+                    background:${bg};border:1.5px solid ${border};cursor:pointer;"></button>`;
+            }
+            const mapText = strikes >= 2 ? 'MAP -10' : (strikes >= 1 ? 'MAP -5' : '');
+            const mapColor = strikes >= 2 ? '#ef4444' : '#f59e0b';
+            return `
+                <div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid #2a2a2a;">
+                    <div style="display:flex;gap:4px;">${pipsHtml}</div>
+                    <button onclick="event.stopPropagation();bumpStrike('${tokenId}')"
+                        title="Bump strike counter for MAP cascade"
+                        style="font-size:10px;padding:2px 6px;background:#3a1f1f;border:1px solid #7f1d1d;
+                        border-radius:4px;color:#fca5a5;cursor:pointer;">+Strike</button>
+                    ${mapText ? `<span style="font-size:10px;font-weight:bold;color:${mapColor};">${mapText}</span>` : ''}
+                    <button onclick="event.stopPropagation();resetActions('${tokenId}')"
+                        title="Reset actions and strikes (turn-end)"
+                        style="font-size:10px;padding:2px 6px;background:#1f1f1f;border:1px solid #3a3a3a;
+                        border-radius:4px;color:#aaa;cursor:pointer;margin-left:auto;">Reset</button>
+                </div>
+            `;
+        }
+
+        async function spendActionPip(tokenId, idx) {
+            const t = (mapState.tokens || []).find(tt => tt.id === tokenId);
+            if (!t) return;
+            const cur = t.actions_used_this_turn || 0;
+            // Toggle: clicking the last-spent pip unspends one; clicking any
+            // higher pip spends up to + including it. Clicking an already-
+            // spent earlier pip un-spends down to that index.
+            let next;
+            if (cur === idx + 1) {
+                next = idx;
+            } else {
+                next = idx + 1;
+            }
+            t.actions_used_this_turn = next;  // optimistic
+            markDirty('tokens');
+            updateCombatantList();
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: tokenId, actions_used_this_turn: next }),
+            });
+        }
+
+        async function bumpStrike(tokenId) {
+            const t = (mapState.tokens || []).find(tt => tt.id === tokenId);
+            if (!t) return;
+            const next = (t.strikes_this_turn || 0) + 1;
+            t.strikes_this_turn = next;
+            // A strike is also an action; if the GM hasn't spent one yet
+            // for this strike, spend one now. Capped at 3.
+            const used = t.actions_used_this_turn || 0;
+            if (used < 3) {
+                t.actions_used_this_turn = used + 1;
+            }
+            markDirty('tokens');
+            updateCombatantList();
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: tokenId,
+                    strikes_this_turn: next,
+                    actions_used_this_turn: t.actions_used_this_turn,
+                }),
+            });
+        }
+
+        async function resetActions(tokenId) {
+            const t = (mapState.tokens || []).find(tt => tt.id === tokenId);
+            if (!t) return;
+            t.actions_used_this_turn = 0;
+            t.strikes_this_turn = 0;
+            markDirty('tokens');
+            updateCombatantList();
+            await fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: tokenId,
+                    actions_used_this_turn: 0,
+                    strikes_this_turn: 0,
+                }),
             });
         }
         
@@ -4912,6 +5146,15 @@
 
                     <label>Visible</label>
                     <label class="token-edit-check" style="font-size: 11px;"><input type="checkbox" data-token-id="${id}" data-field="visible_to_players" ${t.visible_to_players !== false ? 'checked' : ''}> Players can see</label>
+
+                    ${t.is_pc ? `
+                    <label>Hero Pts</label>
+                    <div class="token-edit-row">
+                        <button onclick="adjustHeroPoints('${id}', -1)" class="hp-btn dmg" title="Spend / lose Hero Point">−</button>
+                        <input type="number" data-token-id="${id}" data-field="hero_points" value="${t.hero_points || 0}" min="0" max="3" style="flex:1; text-align:center;">
+                        <button onclick="adjustHeroPoints('${id}', 1)" class="hp-btn heal" title="Award Hero Point">+</button>
+                    </div>
+                    ` : ''}
                 </div>
 
                 <div id="detail-conditions" style="margin-top: 12px;">${buildConditionsHtml(t)}</div>
@@ -5396,6 +5639,7 @@
                                 <div class="hp-bar-fill ${hpClass}" style="width: ${Math.max(0, hpPct * 100)}%"></div>
                             </div>
                             ${condDots}
+                            ${isActive ? _buildActionEconomyRow(token) : ''}
                         </div>
                         <div class="combatant-init" title="Initiative">${token.initiative || '--'}</div>
                     </div>
