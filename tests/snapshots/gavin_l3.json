@@ -9,7 +9,7 @@
   "attacks": [
     {
       "damage": "1d4 + 2B",
-      "first_strike": 8,
+      "first_strike": 7,
       "name": "Fist",
       "traits": [
         "agile",

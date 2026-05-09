@@ -742,18 +742,23 @@ CLASS_PROGRESSION = {
     },
     # -------------------------------------------------------------------------
     # DRUID (Player Core p.134) — AoN verified
+    # Verified against Kyle L10 Pathbuilder export 2026-05-09: PB shows
+    # simple=2 / unarmed=2 / light=2 / medium=2 at L10, so the "Weapon
+    # Expertise" bump that legacy PF2e Druids had at L9 is NOT in
+    # Remaster — Druid leans on spells and orders, not weapon prof.
     # -------------------------------------------------------------------------
     "druid": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, light=2, medium=2, unarmored=2, spell_attack=2, spell_dc=2
         3:  {"perception": 4},                                                               # Alertness (L3 only — Fort Expertise moved to L5 per Remaster Player Core)
         5:  {"fortitude": 4, "reflex": 4},                                                  # Fortitude Expertise (Great Fortitude) + Lightning Reflexes
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        9:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (simple + unarmed)
-        11: {"will": 6, "unarmored": 4, "light": 4, "medium": 4},                           # Druid's Resolve (Master Will) + Armor Expertise
-        13: {},                                                                              # Weapon Specialization
+        # L9: nothing class-wide in Remaster. (Pre-Remaster Druids had a
+        # Weapon Expertise bump here; Remaster removed it.)
+        11: {"will": 6},                                                                     # Druid's Resolve (Master Will). Armor Expertise is feat-driven, not class-baseline in Remaster.
+        13: {},                                                                              # Weapon Specialization (damage only — no prof bump)
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
         17: {"will": 8, "fortitude": 6},                                                     # Legendary Will + Greater Fortitude (Master)
-        19: {"spell_attack": 8, "spell_dc": 8, "unarmored": 6, "light": 6, "medium": 6},   # Legendary Spellcaster + Armor Mastery
+        19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
     },
     # -------------------------------------------------------------------------
     # KINETICIST (Rage of Elements) — AoN verified

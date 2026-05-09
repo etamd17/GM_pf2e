@@ -9,7 +9,7 @@
   "attacks": [
     {
       "damage": "1d12 + 4S",
-      "first_strike": 10,
+      "first_strike": 9,
       "name": "Bastard Sword",
       "traits": [
         "two-hand-d12"
@@ -17,7 +17,7 @@
     },
     {
       "damage": "1d4 + 4P",
-      "first_strike": 10,
+      "first_strike": 9,
       "name": "Dagger",
       "traits": [
         "agile",
@@ -28,13 +28,13 @@
     },
     {
       "damage": "1d4 + 4B",
-      "first_strike": 10,
+      "first_strike": 9,
       "name": "Fist",
       "traits": []
     },
     {
       "damage": "1d6 + 4P",
-      "first_strike": 10,
+      "first_strike": 9,
       "name": "Javelin",
       "traits": [
         "thrown"
@@ -42,7 +42,7 @@
     },
     {
       "damage": "1d8 + 4P",
-      "first_strike": 10,
+      "first_strike": 9,
       "name": "Trident",
       "traits": [
         "thrown-20"

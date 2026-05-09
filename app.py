@@ -1388,6 +1388,13 @@ class Character:
         
         self.name = safe_str(build.get('name'), 'Unknown Hero')
         self.level = safe_int(build.get('level'), 1)
+        # Automatic Bonus Progression is a PF2e *variant* rule (CRB Gamemastery
+        # Guide). Pathbuilder doesn't apply it, so vanilla PF2e rolls were
+        # silently inflating by +1 AC at L5+, +1/+2/+3 attacks at L2/L10/L16,
+        # +1 dmg die at L4+. Default OFF so the engine matches PB out of
+        # the box; opt in per-PC by setting `"abp_enabled": true` in the
+        # build dict (or globally with the GM_PF2E_ABP env var).
+        self.abp_enabled = bool(build.get('abp_enabled', False)) or os.environ.get('GM_PF2E_ABP', '').lower() in ('1', 'true', 'yes')
         self.class_name = safe_str(build.get('class'), 'Unknown Class')
         self.subclass = safe_str(build.get('subclass'), '')
         self.ancestry = safe_str(build.get('ancestry'), 'Unknown Ancestry')
@@ -2288,19 +2295,29 @@ class Character:
         }
 
         attributes = build.get('attributes') or {}
-        anc_hp = safe_int(attributes.get('ancestryhp'), 8)
-        cls_hp = safe_int(attributes.get('classhp'), 8)
-        
-        # Cross-reference against known correct values from DB
-        # BUILDER dicts use title case keys; try multiple formats
-        for anc_key in [self.ancestry, self.ancestry.lower(), self.ancestry.title()]:
-            if anc_key in BUILDER_ANCESTRIES and BUILDER_ANCESTRIES[anc_key].get('hp'):
-                anc_hp = safe_int(BUILDER_ANCESTRIES[anc_key]['hp'], anc_hp)
-                break
-        for cls_key in [self.class_name, self.class_name.lower(), self.class_name.title()]:
-            if cls_key in BUILDER_CLASSES and BUILDER_CLASSES[cls_key].get('hp'):
-                cls_hp = safe_int(BUILDER_CLASSES[cls_key]['hp'], cls_hp)
-                break
+        # Pathbuilder exports `ancestryhp` / `classhp` directly. When PB
+        # provides a non-zero value, trust it: PB knows about Awakened Animal
+        # variants, lineage HP swaps, etc. that the BUILDER tables don't
+        # encode. The lookup below only fills in missing values for builds
+        # that don't carry the attributes block (e.g. legacy non-PB imports).
+        anc_hp = safe_int(attributes.get('ancestryhp'), 0)
+        cls_hp = safe_int(attributes.get('classhp'), 0)
+
+        if anc_hp <= 0:
+            for anc_key in [self.ancestry, self.ancestry.lower(), self.ancestry.title()]:
+                if anc_key in BUILDER_ANCESTRIES and BUILDER_ANCESTRIES[anc_key].get('hp'):
+                    anc_hp = safe_int(BUILDER_ANCESTRIES[anc_key]['hp'], 0)
+                    break
+            if anc_hp <= 0:
+                anc_hp = 8  # last-resort default
+
+        if cls_hp <= 0:
+            for cls_key in [self.class_name, self.class_name.lower(), self.class_name.title()]:
+                if cls_key in BUILDER_CLASSES and BUILDER_CLASSES[cls_key].get('hp'):
+                    cls_hp = safe_int(BUILDER_CLASSES[cls_key]['hp'], 0)
+                    break
+            if cls_hp <= 0:
+                cls_hp = 8  # last-resort default
         bonus_hp = safe_int(attributes.get('bonushp'), 0)
         bonus_hp_per_level = safe_int(attributes.get('bonushpPerLevel'), 0)
         
@@ -2836,21 +2853,34 @@ class Character:
     @property
     def highest_buff(self): return max([safe_int(v) for k, v in self.active_effects.items() if v] or [0])
 
+    def _abp(self, bonus_type):
+        """ABP bonus, gated by the per-PC opt-in flag. Returns 0 unless
+        Automatic Bonus Progression is enabled for this character.
+
+        ``devastating_attacks`` has a baseline of 1 die regardless of level
+        when ABP is OFF — that's just "the weapon's normal damage die",
+        which the attack code uses as a multiplier. When ABP is OFF we
+        return 0 so the attack code's ``or 1`` fallback yields exactly 1
+        die (vanilla weapon damage)."""
+        if not self.abp_enabled:
+            return 0
+        return get_abp_bonus(self.level, bonus_type)
+
     @property
     def base_ac(self):
         """AC without condition penalties or buffs — used by tracker to detect debuffs."""
         prof_val = safe_int(self.proficiencies.get('ac'), 2)
         effective_dex = min(self.mods.get('dex', 0), self.ac_dex_cap)
         prof_bonus = prof_val + self.level if prof_val > 0 else 0
-        abp_ac = get_abp_bonus(self.level, 'defense_potency')
+        abp_ac = self._abp('defense_potency')
         return 10 + self.ac_item + effective_dex + prof_bonus + abp_ac + self.get_rule_mod('ac')
 
     @property
-    def ac(self): 
+    def ac(self):
         prof_val = safe_int(self.proficiencies.get('ac'), 2)
         effective_dex = min(self.mods.get('dex', 0), self.ac_dex_cap)
         prof_bonus = prof_val + self.level if prof_val > 0 else 0
-        abp_ac = get_abp_bonus(self.level, 'defense_potency')
+        abp_ac = self._abp('defense_potency')
         base_ac = 10 + self.ac_item + effective_dex + prof_bonus + abp_ac
         circ_pen = 2 if (self.conditions.get('prone') or self.conditions.get('off_guard')) else 0
         shield_bonus = self.shield_ac_bonus if self.shield_raised else 0
@@ -2860,7 +2890,7 @@ class Character:
     def _calc_save(self, stat_key, prof_key):
         prof_val = safe_int(self.proficiencies.get(prof_key), 2)
         base = self.mods.get(stat_key, 0) if prof_val == 0 else self.mods.get(stat_key, 0) + self.level + prof_val
-        abp_save = get_abp_bonus(self.level, 'save_potency')
+        abp_save = self._abp('save_potency')
         return base + abp_save - self.get_status_penalty(stat_key) + self.highest_buff + self.get_rule_mod(prof_key) + self.get_rule_mod('saving-throw')
 
     @property
@@ -2880,7 +2910,7 @@ class Character:
         if prof_val > 0:
             parts.append(f"{prof_letter} +{prof_val}")
             parts.append(f"Lvl +{self.level}")
-        abp = get_abp_bonus(self.level, 'save_potency') if prof_key != 'perception' else get_abp_bonus(self.level, 'perception_potency')
+        abp = self._abp('save_potency') if prof_key != 'perception' else self._abp('perception_potency')
         if abp:
             parts.append(f"ABP +{abp}")
         sp = self.get_status_penalty(stat_key)
@@ -2906,7 +2936,7 @@ class Character:
     def perception(self):
         prof_val = safe_int(self.proficiencies.get('perception'), 2)
         base = self.mods.get('wis', 0) if prof_val == 0 else self.mods.get('wis', 0) + self.level + prof_val
-        abp_perc = get_abp_bonus(self.level, 'perception_potency')
+        abp_perc = self._abp('perception_potency')
         return base + abp_perc - self.get_status_penalty('wis') + self.highest_buff + self.get_rule_mod('perception')
 
     @property
@@ -3086,8 +3116,8 @@ class Character:
     @property
     def attacks(self):
         res = []
-        abp_hit = get_abp_bonus(self.level, 'attack_potency')
-        abp_dice = get_abp_bonus(self.level, 'devastating_attacks') or 1
+        abp_hit = self._abp('attack_potency')
+        abp_dice = self._abp('devastating_attacks') or 1
         
         for w in self._raw_weapons:
             traits = w.get('traits', [])

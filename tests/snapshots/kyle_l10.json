@@ -1,5 +1,5 @@
 {
-  "ac": 19,
+  "ac": 26,
   "ac_item": 1,
   "active_armor_penalty": 0,
   "active_speed_penalty": 0,
@@ -8,8 +8,8 @@
   "armor_str_req": 0,
   "attacks": [
     {
-      "damage": "1d4B",
-      "first_strike": 8,
+      "damage": "1d4 + 1B",
+      "first_strike": 16,
       "name": "Fist",
       "traits": [
         "agile",
@@ -19,8 +19,8 @@
       ]
     },
     {
-      "damage": "1d4B",
-      "first_strike": 5,
+      "damage": "1d4 + 1B",
+      "first_strike": 13,
       "name": "Staff",
       "traits": [
         "monk",
@@ -30,8 +30,8 @@
   ],
   "background": "Stargazer (Nature)",
   "class": "Druid",
-  "class_dc": 19,
-  "current_hp": 41,
+  "class_dc": 27,
+  "current_hp": 138,
   "deity": "Not set",
   "feats": [
     {
@@ -78,83 +78,161 @@
       "level": 3,
       "name": "Toughness",
       "type": "General Feat"
+    },
+    {
+      "level": 4,
+      "name": "Additional Lore",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 4,
+      "name": "Mature Beastmaster Companion",
+      "type": "Class Feat"
+    },
+    {
+      "level": 5,
+      "name": "Scurry!",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 6,
+      "name": "Advanced Elemental Spell",
+      "type": "Class Feat"
+    },
+    {
+      "level": 6,
+      "name": "Godless Healing",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 7,
+      "name": "Incredible Initiative",
+      "type": "General Feat"
+    },
+    {
+      "level": 8,
+      "name": "Advanced First Aid",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 8,
+      "name": "Beastmaster's Trance",
+      "type": "Class Feat"
+    },
+    {
+      "level": 9,
+      "name": "Additional Lore",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 9,
+      "name": "Awakened Animal Lore",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 10,
+      "name": "Thunderclap Spell",
+      "type": "Class Feat"
+    },
+    {
+      "level": 10,
+      "name": "Ward Medic",
+      "type": "Skill Feat"
     }
   ],
-  "focus_max": 1,
-  "fort": 9,
+  "focus_max": 3,
+  "fort": 18,
   "heritage": "Climbing Animal",
   "hero_points": 1,
-  "hp": 41,
+  "hp": 138,
   "immunities": [],
-  "initiative_mod": 11,
+  "initiative_mod": 21,
   "languages": [
     "Azlanti",
     "Common",
     "Fey",
     "Wildsong"
   ],
-  "level": 3,
+  "level": 10,
   "mods": {
     "cha": 0,
-    "con": 2,
-    "dex": 3,
-    "int": 0,
-    "str": 0,
-    "wis": 4
+    "con": 4,
+    "dex": 4,
+    "int": 2,
+    "str": 1,
+    "wis": 5
   },
   "name": "Kyle",
-  "perception": 11,
+  "perception": 19,
   "proficiencies": {
     "ac": 2,
     "acrobatics": 2,
     "advanced": 0,
-    "arcana": 0,
+    "arcana": 2,
     "athletics": 0,
     "castingArcane": 0,
     "castingDivine": 0,
     "castingOccult": 0,
-    "castingPrimal": 2,
+    "castingPrimal": 4,
     "classDC": 2,
     "class_dc": 2,
     "computers": 0,
     "crafting": 0,
     "deception": 0,
-    "diplomacy": 0,
+    "diplomacy": 2,
     "fortitude": 4,
     "heavy": 0,
     "intimidation": 0,
     "light": 2,
     "lore:astronomy": 2,
+    "lore:awakened animal": 6,
+    "lore:azlanti": 6,
     "martial": 0,
-    "medicine": 4,
+    "medicine": 6,
     "medium": 2,
     "nature": 2,
     "occultism": 0,
     "perception": 4,
     "performance": 0,
     "piloting": 0,
-    "reflex": 2,
-    "religion": 2,
+    "reflex": 4,
+    "religion": 6,
     "simple": 2,
-    "society": 0,
-    "spell_attack": 2,
-    "spell_dc": 2,
+    "society": 2,
+    "spell_attack": 4,
+    "spell_dc": 4,
     "stealth": 0,
-    "survival": 0,
+    "survival": 2,
     "thievery": 2,
     "unarmed": 2,
     "unarmored": 2,
     "will": 4
   },
-  "ref": 8,
+  "ref": 18,
   "rule_modifiers": {
+    "healing-received": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        5
+      ]
+    },
     "hp": {
       "circumstance": [],
       "item": [],
       "status": [],
       "untyped": [
-        3
+        10
       ]
+    },
+    "initiative": {
+      "circumstance": [
+        2
+      ],
+      "item": [],
+      "status": [],
+      "untyped": []
     },
     "{item|_id}-damage": {
       "circumstance": [],
@@ -183,25 +261,25 @@
       "name": "Acrobatics",
       "penalty": 0,
       "stat": "DEX",
-      "total": "+8"
+      "total": "+16"
     },
     {
       "name": "Arcana",
       "penalty": 0,
       "stat": "INT",
-      "total": "+0"
+      "total": "+14"
     },
     {
       "name": "Athletics",
       "penalty": 0,
       "stat": "STR",
-      "total": "+0"
+      "total": "+1"
     },
     {
       "name": "Crafting",
       "penalty": 0,
       "stat": "INT",
-      "total": "+0"
+      "total": "+2"
     },
     {
       "name": "Deception",
@@ -213,7 +291,7 @@
       "name": "Diplomacy",
       "penalty": 0,
       "stat": "CHA",
-      "total": "+0"
+      "total": "+12"
     },
     {
       "name": "Intimidation",
@@ -225,25 +303,37 @@
       "name": "Lore: Astronomy",
       "penalty": 0,
       "stat": "INT",
-      "total": "+5"
+      "total": "+14"
+    },
+    {
+      "name": "Lore: Awakened Animal",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+18"
+    },
+    {
+      "name": "Lore: Azlanti",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+18"
     },
     {
       "name": "Medicine",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+11"
+      "total": "+21"
     },
     {
       "name": "Nature",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+9"
+      "total": "+17"
     },
     {
       "name": "Occultism",
       "penalty": 0,
       "stat": "INT",
-      "total": "+0"
+      "total": "+2"
     },
     {
       "name": "Performance",
@@ -255,37 +345,37 @@
       "name": "Religion",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+9"
+      "total": "+21"
     },
     {
       "name": "Society",
       "penalty": 0,
       "stat": "INT",
-      "total": "+0"
+      "total": "+14"
     },
     {
       "name": "Stealth",
       "penalty": 0,
       "stat": "DEX",
-      "total": "+3"
+      "total": "+4"
     },
     {
       "name": "Survival",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+4"
+      "total": "+17"
     },
     {
       "name": "Thievery",
       "penalty": 0,
       "stat": "DEX",
-      "total": "+8"
+      "total": "+16"
     }
   ],
   "speed": 20,
-  "spell_attack": 9,
-  "spell_dc": 19,
+  "spell_attack": 19,
+  "spell_dc": 29,
   "stealth_penalty": 0,
   "subclass": "Storm",
-  "will": 11
+  "will": 19
 }

@@ -1,5 +1,5 @@
 {
-  "ac": 20,
+  "ac": 27,
   "ac_item": 4,
   "active_armor_penalty": 0,
   "active_speed_penalty": 0,
@@ -8,16 +8,16 @@
   "armor_str_req": 14,
   "attacks": [
     {
-      "damage": "1d12 + 3S",
-      "first_strike": 8,
+      "damage": "1d12 + 4S",
+      "first_strike": 18,
       "name": "Bastard Sword",
       "traits": [
         "two-hand-d12"
       ]
     },
     {
-      "damage": "1d4 + 3P",
-      "first_strike": 8,
+      "damage": "1d4 + 4P",
+      "first_strike": 18,
       "name": "Dagger",
       "traits": [
         "agile",
@@ -27,14 +27,14 @@
       ]
     },
     {
-      "damage": "1d4 + 3B",
-      "first_strike": 8,
+      "damage": "1d4 + 4B",
+      "first_strike": 18,
       "name": "Fist",
       "traits": []
     },
     {
-      "damage": "1d6 + 3B",
-      "first_strike": 8,
+      "damage": "1d6 + 4B",
+      "first_strike": 18,
       "name": "Morningstar",
       "traits": [
         "versatile-p"
@@ -43,8 +43,8 @@
   ],
   "background": "Scion of Slayers",
   "class": "Cleric",
-  "class_dc": 19,
-  "current_hp": 39,
+  "class_dc": 27,
+  "current_hp": 132,
   "deity": "Rathathiel",
   "feats": [
     {
@@ -86,37 +86,92 @@
       "level": 3,
       "name": "Armor Proficiency",
       "type": "General Feat"
+    },
+    {
+      "level": 4,
+      "name": "Assurance",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 4,
+      "name": "Channel Smite",
+      "type": "Class Feat"
+    },
+    {
+      "level": 5,
+      "name": "Mask of Power",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 6,
+      "name": "Assurance",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 6,
+      "name": "Expanded Domain Initiate",
+      "type": "Class Feat"
+    },
+    {
+      "level": 7,
+      "name": "Toughness",
+      "type": "General Feat"
+    },
+    {
+      "level": 8,
+      "name": "Advanced Domain",
+      "type": "Class Feat"
+    },
+    {
+      "level": 8,
+      "name": "Sacred Defense",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 9,
+      "name": "Mask of Pain",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 10,
+      "name": "Battle Prayer",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 10,
+      "name": "Replenishment of War",
+      "type": "Class Feat"
     }
   ],
-  "focus_max": 1,
-  "fort": 8,
+  "focus_max": 3,
+  "fort": 17,
   "heritage": "Hold-Scarred Orc",
   "hero_points": 1,
-  "hp": 39,
+  "hp": 132,
   "immunities": [],
-  "initiative_mod": 9,
+  "initiative_mod": 19,
   "languages": [
     "Common",
     "Orcish"
   ],
-  "level": 3,
+  "level": 10,
   "mods": {
     "cha": 0,
-    "con": 1,
-    "dex": 1,
+    "con": 3,
+    "dex": 3,
     "int": 0,
-    "str": 3,
-    "wis": 4
+    "str": 4,
+    "wis": 5
   },
   "name": "Go'el Thrall",
-  "perception": 9,
+  "perception": 19,
   "proficiencies": {
     "ac": 2,
     "acrobatics": 0,
     "advanced": 0,
     "arcana": 0,
     "athletics": 2,
-    "castingArcane": 0,
+    "castingArcane": 2,
     "castingDivine": 2,
     "castingOccult": 0,
     "castingPrimal": 0,
@@ -132,30 +187,30 @@
     "light": 2,
     "lore:aslanti": 2,
     "lore:fiend": 2,
-    "lore:undead": 2,
-    "lore:vampire": 4,
-    "martial": 2,
+    "lore:undead": 6,
+    "lore:vampire": 6,
+    "martial": 4,
     "medicine": 2,
     "medium": 2,
     "nature": 0,
     "occultism": 0,
-    "perception": 2,
+    "perception": 4,
     "performance": 0,
     "piloting": 0,
     "reflex": 2,
-    "religion": 4,
-    "simple": 2,
+    "religion": 6,
+    "simple": 4,
     "society": 0,
     "spell_attack": 2,
     "spell_dc": 2,
     "stealth": 0,
     "survival": 0,
     "thievery": 0,
-    "unarmed": 2,
+    "unarmed": 4,
     "unarmored": 2,
-    "will": 4
+    "will": 6
   },
-  "ref": 6,
+  "ref": 15,
   "rule_modifiers": {
     "arcana": {
       "circumstance": [],
@@ -165,6 +220,14 @@
       ],
       "status": [],
       "untyped": []
+    },
+    "hp": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        10
+      ]
     },
     "{item|_id}-damage": {
       "circumstance": [],
@@ -188,7 +251,7 @@
       "name": "Acrobatics",
       "penalty": 0,
       "stat": "DEX",
-      "total": "+1"
+      "total": "+3"
     },
     {
       "name": "Arcana",
@@ -200,7 +263,7 @@
       "name": "Athletics",
       "penalty": 0,
       "stat": "STR",
-      "total": "+8"
+      "total": "+16"
     },
     {
       "name": "Crafting",
@@ -224,43 +287,43 @@
       "name": "Intimidation",
       "penalty": 0,
       "stat": "CHA",
-      "total": "+5"
+      "total": "+12"
     },
     {
       "name": "Lore: Aslanti",
       "penalty": 0,
       "stat": "INT",
-      "total": "+5"
+      "total": "+12"
     },
     {
       "name": "Lore: Fiend",
       "penalty": 0,
       "stat": "INT",
-      "total": "+5"
+      "total": "+12"
     },
     {
       "name": "Lore: Undead",
       "penalty": 0,
       "stat": "INT",
-      "total": "+5"
+      "total": "+16"
     },
     {
       "name": "Lore: Vampire",
       "penalty": 0,
       "stat": "INT",
-      "total": "+7"
+      "total": "+16"
     },
     {
       "name": "Medicine",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+9"
+      "total": "+17"
     },
     {
       "name": "Nature",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+4"
+      "total": "+5"
     },
     {
       "name": "Occultism",
@@ -278,7 +341,7 @@
       "name": "Religion",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+11"
+      "total": "+21"
     },
     {
       "name": "Society",
@@ -290,25 +353,25 @@
       "name": "Stealth",
       "penalty": 0,
       "stat": "DEX",
-      "total": "-1"
+      "total": "+1"
     },
     {
       "name": "Survival",
       "penalty": 0,
       "stat": "WIS",
-      "total": "+4"
+      "total": "+5"
     },
     {
       "name": "Thievery",
       "penalty": 0,
       "stat": "DEX",
-      "total": "+1"
+      "total": "+3"
     }
   ],
   "speed": 25,
-  "spell_attack": 9,
-  "spell_dc": 19,
+  "spell_attack": 17,
+  "spell_dc": 27,
   "stealth_penalty": 2,
   "subclass": "Warpriest",
-  "will": 11
+  "will": 21
 }

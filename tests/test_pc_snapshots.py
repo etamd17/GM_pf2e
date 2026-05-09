@@ -33,7 +33,17 @@ PARTY_FIXTURES = {
     "kyle_l3":     "Kyle.json",
 }
 
+# L10 ground-truth fixtures — committed to the repo (NOT party_data, which
+# is gitignored). These come from the players' Pathbuilder builds mapped
+# all the way to L10 so we can lock down the rules engine across the
+# whole progression curve, not just where the live party currently sits.
+L10_FIXTURES = {
+    "goel_l10": "goel_l10.json",
+    "kyle_l10": "kyle_l10.json",
+}
+
 _PARTY_DIR = Path(__file__).resolve().parent.parent / "party_data"
+_FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 @pytest.fixture(scope="module")
@@ -46,9 +56,23 @@ def Character():
 
 @pytest.mark.parametrize("snap_key,filename", sorted(PARTY_FIXTURES.items()))
 def test_pc_snapshot(Character, snap_key, filename):
-    """For each PC: import the PB JSON, build a Character, snapshot."""
+    """For each PC at the live-session level (~L3): import the PB JSON,
+    build a Character, snapshot."""
     path = _PARTY_DIR / filename
     assert path.exists(), f"missing party_data fixture: {path}"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    pc = Character(data, file_path=str(path))
+    payload = serialize_character(pc)
+    assert_matches_snapshot(snap_key, payload)
+
+
+@pytest.mark.parametrize("snap_key,filename", sorted(L10_FIXTURES.items()))
+def test_pc_snapshot_l10(Character, snap_key, filename):
+    """Snapshot the L10 builds. These fixtures come from each player's
+    full progression mapped through L10, so they exercise feats and
+    proficiency-rank tracks the L3 fixtures don't reach."""
+    path = _FIXTURES_DIR / filename
+    assert path.exists(), f"missing L10 fixture: {path}"
     data = json.loads(path.read_text(encoding="utf-8"))
     pc = Character(data, file_path=str(path))
     payload = serialize_character(pc)
