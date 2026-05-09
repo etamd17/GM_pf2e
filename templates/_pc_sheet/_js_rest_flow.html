@@ -1,0 +1,92 @@
+        // === D15: Themed rest flow ===
+        // Replaces native confirm + alert with a "night falls" parchment
+        // modal. Built on the shared .parchment-frame look. The modal is
+        // injected on demand (no hidden DOM baseline cost) and removed on
+        // close. Single CSS transition handles the fade-in; no loops.
+        function _buildRestModal(kind, payload, resolve) {
+            const overlay = document.createElement('div');
+            overlay.className = 'rest-modal-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(180deg, rgba(8,10,20,0.92) 0%, rgba(2,4,10,0.96) 100%);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;transition:opacity 0.2s ease;';
+            const glyph = kind === 'confirm' ? '' : '';
+            const title = kind === 'confirm' ? 'Night Falls' : 'Dawn Breaks';
+            const intro = kind === 'confirm'
+                ? 'You make camp and settle in for a long rest. Tending spells, salves, and a warded watch will consume the hours until morning.'
+                : 'The sun crests the ridge. You rise rested — preparations made, spells inscribed, vigor restored.';
+            const list = kind === 'confirm'
+                ? [
+                    'HP recovered: Con modifier × level (min 1/level)',
+                    'Focus Points restored',
+                    'Spell slots refreshed (prepared spells cleared)',
+                    'Fatigued, Frightened, Sickened, Stunned cleared',
+                    'Clumsy, Enfeebled, Slowed, Stupefied cleared',
+                    'Wounded removed · Drained reduces by 1',
+                    'Doomed persists · Hero Points unchanged'
+                  ]
+                : payload.bullets;
+            overlay.innerHTML = `
+                <div class="parchment-frame" style="max-width:480px;width:100%;background:linear-gradient(180deg, #1a1613 0%, #120f0c 100%);border-radius:var(--radius-lg);padding:28px 24px 20px;position:relative;">
+                    <div style="text-align:center;margin-bottom:10px;">
+                        <span style="display:inline-block;font-size:38px;line-height:1;color:${kind==='confirm'?'#8a7de0':'#e0b65a'};text-shadow:0 0 18px ${kind==='confirm'?'rgba(138,125,224,0.4)':'rgba(224,182,90,0.5)'};">${glyph}</span>
+                    </div>
+                    <h3 style="font-family:'Cinzel',serif;font-size:18px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#f0d88a;text-align:center;margin:0 0 12px 0;text-shadow:0 1px 0 rgba(0,0,0,0.5);">${title}</h3>
+                    <p style="font-family:var(--font-flavor, Alegreya, Georgia, serif);font-size:14px;color:#cfc4a8;text-align:center;line-height:1.55;margin:0 0 14px 0;">${intro}</p>
+                    <ul style="list-style:none;padding:0;margin:0 0 18px 0;font-family:var(--font-flavor, Alegreya, Georgia, serif);font-size:13px;color:#b8ad92;">
+                        ${list.map(item => `<li style="padding:3px 0 3px 20px;position:relative;"><span style="position:absolute;left:0;color:var(--gilt);font-size:10px;"></span>${item}</li>`).join('')}
+                    </ul>
+                    <div style="display:flex;gap:10px;justify-content:center;">
+                        ${kind === 'confirm'
+                            ? '<button class="tb rest-cancel">Stay Watchful</button><button class="tb gilt rest-confirm">Make Camp</button>'
+                            : '<button class="tb gilt rest-ack">Greet the Day</button>'}
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+            function teardown(v) {
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 180);
+                resolve(v);
+            }
+            const cancel = overlay.querySelector('.rest-cancel');
+            const confirmBtn = overlay.querySelector('.rest-confirm');
+            const ack = overlay.querySelector('.rest-ack');
+            if (cancel) cancel.onclick = () => teardown(false);
+            if (confirmBtn) confirmBtn.onclick = () => teardown(true);
+            if (ack) ack.onclick = () => teardown(true);
+            overlay.addEventListener('click', e => { if (e.target === overlay) teardown(false); });
+        }
+        function restConfirm() {
+            return new Promise(resolve => _buildRestModal('confirm', null, resolve));
+        }
+        function restAnnounce(bullets) {
+            return new Promise(resolve => _buildRestModal('announce', { bullets }, resolve));
+        }
+
+        async function takeLongRest() {
+            const ok = await restConfirm();
+            if (!ok) return;
+            try {
+                // Clear all spell state (server handles clearing via long_rest endpoint)
+                window._expendedSlots = {};
+                window._preparedSpells = {};
+                window._castPrep = {};
+
+                const res = await fetch(`/api/long_rest/${pcNameEncoded}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    const r = data.restored;
+                    const conSign = r.con_mod >= 0 ? '+' : '';
+                    const hpMsg = r.hp_regained > 0
+                        ? `HP: +${r.hp_regained} recovered (Con ${conSign}${r.con_mod} × level ⇒ ${r.hp_per_level}/lvl) → ${r.hp}/${r.hp_max}`
+                        : `HP: already full (${r.hp}/${r.hp_max})`;
+                    const bullets = [
+                        hpMsg,
+                        `Focus: ${r.focus} restored`,
+                        'Spell slots refreshed'
+                    ];
+                    if (r.drained > 0) bullets.push(`Drained: reduced to ${r.drained}`);
+                    if (r.doomed > 0) bullets.push(`Doomed: still ${r.doomed} — a night's rest will not lift it`);
+                    await restAnnounce(bullets);
+                    window.location.reload();
+                }
+            } catch(e) { console.error('Long rest error:', e); }
+        }
