@@ -339,6 +339,7 @@ def _combat_log(msg, log_type='action'):
 
     # Push to any SSE subscribers so clients can react without polling
     try:
+        _bump_perf('combat_log_total')
         sse_broadcast('combat_log', entry, player_filter=_player_filter)
     except Exception:
         pass
@@ -507,6 +508,7 @@ def sse_broadcast(event_type, data, *, player_filter=None):
         If omitted, all subscribers receive `data` unchanged.
     """
     global _sse_last_cleanup
+    _bump_perf('sse_emit_total')
     gm_msg = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
     # Pre-compute the player-facing payload once; all player subscribers share it.
@@ -563,6 +565,32 @@ _PC_BROADCAST_LOCK = threading.Lock()
 _PC_BROADCAST_TIMER = None
 _PC_BROADCAST_DELAY = 0.05
 
+# Encounter-state broadcast coalescing — same pattern as the PC-state
+# debouncer above. The GM's cycle_turn handler emits a chain of mutations
+# (frightened tick, slowed tick, raise-shield expiry, persistent damage,
+# round/turn advance) and would otherwise multi-broadcast within ~5ms.
+# We collapse those into one frame so subscribers see one consistent state.
+_ENC_BROADCAST_PENDING = False
+_ENC_BROADCAST_LOCK = threading.Lock()
+_ENC_BROADCAST_TIMER = None
+_ENC_BROADCAST_DELAY = 0.05
+
+# Simple counters used by /api/perf so the GM can spot broadcast storms at
+# the table. Cheap to maintain (a single int increment per fire).
+_PERF_COUNTERS = {
+    'sse_emit_total': 0,
+    'pc_broadcast_total': 0,
+    'pc_broadcast_coalesced': 0,
+    'enc_broadcast_total': 0,
+    'enc_broadcast_coalesced': 0,
+    'combat_log_total': 0,
+}
+_PERF_COUNTERS_LOCK = threading.Lock()
+
+def _bump_perf(key, delta=1):
+    with _PERF_COUNTERS_LOCK:
+        _PERF_COUNTERS[key] = _PERF_COUNTERS.get(key, 0) + delta
+
 def _flush_pc_broadcasts():
     global _PC_BROADCAST_TIMER
     with _PC_BROADCAST_LOCK:
@@ -581,7 +609,10 @@ def _broadcast_pc_state(pc_name):
     global _PC_BROADCAST_TIMER
     if pc_name not in PARTY_LIBRARY:
         return
+    _bump_perf('pc_broadcast_total')
     with _PC_BROADCAST_LOCK:
+        if pc_name in _PC_BROADCAST_PENDING:
+            _bump_perf('pc_broadcast_coalesced')
         _PC_BROADCAST_PENDING.add(pc_name)
         if _PC_BROADCAST_TIMER is None:
             t = threading.Timer(_PC_BROADCAST_DELAY, _flush_pc_broadcasts)
@@ -640,8 +671,43 @@ def _do_broadcast_pc_state(pc_name):
         }
     sse_broadcast('pc_update', payload)
 
+def _flush_enc_broadcast():
+    global _ENC_BROADCAST_TIMER, _ENC_BROADCAST_PENDING
+    with _ENC_BROADCAST_LOCK:
+        if not _ENC_BROADCAST_PENDING:
+            _ENC_BROADCAST_TIMER = None
+            return
+        _ENC_BROADCAST_PENDING = False
+        _ENC_BROADCAST_TIMER = None
+    try:
+        _do_broadcast_encounter_state()
+    except Exception as e:
+        print(f"[SSE FLUSH] encounter: {e}")
+
 def _broadcast_encounter_state():
-    """Broadcast the full encounter state to all SSE clients.
+    """Queue an encounter-state broadcast. Coalesced inside a
+    {_ENC_BROADCAST_DELAY}s window — handlers like cycle_turn that mutate
+    several combatants in sequence collapse into one frame.
+
+    The tracker-state cache is invalidated synchronously here (not in the
+    deferred flush) so a follow-up GET to /api/tracker_state sees the new
+    state immediately even if the SSE frame is still pending.
+    """
+    global _ENC_BROADCAST_TIMER, _ENC_BROADCAST_PENDING
+    _bump_perf('enc_broadcast_total')
+    _invalidate_tracker_cache()
+    with _ENC_BROADCAST_LOCK:
+        if _ENC_BROADCAST_PENDING:
+            _bump_perf('enc_broadcast_coalesced')
+        _ENC_BROADCAST_PENDING = True
+        if _ENC_BROADCAST_TIMER is None:
+            t = threading.Timer(_ENC_BROADCAST_DELAY, _flush_enc_broadcast)
+            t.daemon = True
+            _ENC_BROADCAST_TIMER = t
+            t.start()
+
+def _do_broadcast_encounter_state():
+    """Build and emit the encounter-state SSE frame (uncoalesced).
 
     GM subscribers receive the raw payload (every combatant's name, HP, and
     conditions). Player subscribers receive a filtered payload where any NPC
@@ -4093,6 +4159,20 @@ def health_check():
         'sse_connections': sse_subscriber_count(),
     })
 
+@app.route('/api/perf')
+def perf_metrics():
+    """Lightweight perf snapshot for at-the-table debugging. Returns SSE
+    subscriber count + lifetime broadcast counters + a coalesced-rate hint
+    so the GM can spot a broadcast storm if the table feels sluggish."""
+    with _PERF_COUNTERS_LOCK:
+        snap = dict(_PERF_COUNTERS)
+    pc_total = max(1, snap.get('pc_broadcast_total', 0))
+    enc_total = max(1, snap.get('enc_broadcast_total', 0))
+    snap['sse_connections'] = sse_subscriber_count()
+    snap['pc_coalesce_rate'] = round(snap.get('pc_broadcast_coalesced', 0) / pc_total, 3)
+    snap['enc_coalesce_rate'] = round(snap.get('enc_broadcast_coalesced', 0) / enc_total, 3)
+    return jsonify(snap)
+
 CAMPAIGN_DEFAULT = {
     'name': 'Untitled Campaign',
     'tagline': '',
@@ -6908,52 +6988,97 @@ def player_view():
     _sync_party_from_disk()
     return render_template('player_view.html', party=list(PARTY_LIBRARY.values()))
 
+_PARTY_DIR_MTIME_CACHE = {}  # filename -> last-seen mtime
+_PARTY_DIR_LISTING_MTIME = 0  # mtime of PARTY_DIR itself, to skip listdir
+
 def _sync_party_from_disk():
-    """Ensure PARTY_LIBRARY matches what's on disk. Adds missing characters, removes deleted ones."""
+    """Ensure PARTY_LIBRARY matches what's on disk. Adds missing characters,
+    removes deleted ones.
+
+    Optimized for the steady-state case where 5 concurrent clients hit the
+    landing page during a single live session: a per-file mtime cache lets
+    us skip the JSON parse when nothing on disk has changed. The directory's
+    own mtime gates the listdir so the common 'no churn' case is a single
+    stat() call.
+    """
+    global _PARTY_DIR_LISTING_MTIME
     if not os.path.exists(PARTY_DIR): return
-    
+
+    try:
+        dir_mtime = os.stat(PARTY_DIR).st_mtime
+    except OSError as e:
+        print(f"[SYNC ERROR] Failed to stat party directory: {e}")
+        return
+
+    # Fast path: directory mtime unchanged AND we've cached at least one file
+    # already → nothing was added/removed/touched, library is current.
+    if _PARTY_DIR_MTIME_CACHE and dir_mtime == _PARTY_DIR_LISTING_MTIME:
+        return
+
     try:
         disk_files = {f for f in os.listdir(PARTY_DIR) if f.endswith('.json')}
     except OSError as e:
         print(f"[SYNC ERROR] Failed to list party directory: {e}")
         return
-    
+
     disk_names = set()
     load_errors = []
-    
+
     for f in disk_files:
         file_path = os.path.join(PARTY_DIR, f)
+        try:
+            file_mtime = os.stat(file_path).st_mtime
+        except OSError:
+            file_mtime = 0
+        prev_mtime = _PARTY_DIR_MTIME_CACHE.get(f)
+
+        # Per-file fast path: if mtime hasn't changed AND we already have the
+        # PC loaded, just collect its name(s) for the disk_names set so the
+        # delete-pass below doesn't drop it. We can't extract the name without
+        # opening the file, so probe PARTY_LIBRARY by file_path first.
+        if prev_mtime == file_mtime:
+            for name, pc in PARTY_LIBRARY.items():
+                if getattr(pc, 'file_path', None) == f:
+                    disk_names.add(name)
+            continue
+
         data, err = safe_load_json_file(file_path)
         if err:
             load_errors.append(f"[SYNC ERROR] {f}: {err}")
             continue
-            
+
         try:
             if isinstance(data, list):
                 for item in data:
                     name = (item.get('build') or item).get('name')
-                    if name: 
+                    if name:
                         disk_names.add(name)
                         if name not in PARTY_LIBRARY:
                             PARTY_LIBRARY[name] = Character(item, f)
             else:
                 name = (data.get('build') or data).get('name')
-                if name: 
+                if name:
                     disk_names.add(name)
                     if name not in PARTY_LIBRARY:
                         PARTY_LIBRARY[name] = Character(data, f)
+            _PARTY_DIR_MTIME_CACHE[f] = file_mtime
         except Exception as e:
             load_errors.append(f"[SYNC ERROR] Failed to load character from {f}: {e}")
-    
+
     # Log any errors encountered
     for err in load_errors:
         print(err)
-    
+
     # Remove characters from memory that were deleted from disk
     for name in list(PARTY_LIBRARY.keys()):
         if name not in disk_names:
             del PARTY_LIBRARY[name]
-    
+    # Drop mtime entries for files that no longer exist
+    for cached in list(_PARTY_DIR_MTIME_CACHE.keys()):
+        if cached not in disk_files:
+            _PARTY_DIR_MTIME_CACHE.pop(cached, None)
+
+    _PARTY_DIR_LISTING_MTIME = dir_mtime
     _build_pc_file_cache()
 
 @app.route('/player/sheet/<pc_name>')
