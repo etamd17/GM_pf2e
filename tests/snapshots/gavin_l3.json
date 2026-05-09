@@ -1,0 +1,276 @@
+{
+  "ac": 18,
+  "ac_item": 1,
+  "active_armor_penalty": 0,
+  "active_speed_penalty": 0,
+  "ancestry": "Human",
+  "armor_name": "Leather Armor",
+  "armor_str_req": 0,
+  "attacks": [
+    {
+      "damage": "1d4 + 2B",
+      "first_strike": 8,
+      "name": "Fist",
+      "traits": [
+        "agile",
+        "finesse",
+        "nonlethal",
+        "unarmed"
+      ]
+    }
+  ],
+  "background": "Energy Scarred",
+  "class": "Kineticist",
+  "class_dc": 19,
+  "current_hp": 44,
+  "deity": "Not set",
+  "feats": [
+    {
+      "level": 1,
+      "name": "Burning Jet",
+      "type": "Class Feat"
+    },
+    {
+      "level": 1,
+      "name": "Flying Flame",
+      "type": "Kineticist Feat"
+    },
+    {
+      "level": 1,
+      "name": "Incredible Initiative",
+      "type": "General Feat"
+    },
+    {
+      "level": 1,
+      "name": "Natural Ambition",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 1,
+      "name": "Scorching Column",
+      "type": "Kineticist Feat"
+    },
+    {
+      "level": 1,
+      "name": "Versatile Blasts",
+      "type": "Class Feat"
+    },
+    {
+      "level": 1,
+      "name": "Versatile Human",
+      "type": "Heritage"
+    },
+    {
+      "level": 2,
+      "name": "Cat Fall",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 2,
+      "name": "Weapon Infusion",
+      "type": "Class Feat"
+    },
+    {
+      "level": 3,
+      "name": "Armor Proficiency",
+      "type": "General Feat"
+    }
+  ],
+  "focus_max": 0,
+  "fort": 11,
+  "heritage": "Versatile Human",
+  "hero_points": 1,
+  "hp": 44,
+  "immunities": [],
+  "initiative_mod": 8,
+  "languages": [
+    "Common",
+    "Pyric"
+  ],
+  "level": 3,
+  "mods": {
+    "cha": 0,
+    "con": 4,
+    "dex": 2,
+    "int": 0,
+    "str": 2,
+    "wis": 1
+  },
+  "name": "Gavin",
+  "perception": 6,
+  "proficiencies": {
+    "ac": 2,
+    "acrobatics": 4,
+    "advanced": 0,
+    "arcana": 0,
+    "athletics": 0,
+    "castingArcane": 0,
+    "castingDivine": 0,
+    "castingOccult": 0,
+    "castingPrimal": 0,
+    "classDC": 2,
+    "class_dc": 2,
+    "computers": 0,
+    "crafting": 0,
+    "deception": 0,
+    "diplomacy": 0,
+    "fortitude": 4,
+    "heavy": 2,
+    "intimidation": 0,
+    "light": 2,
+    "lore:fire": 2,
+    "martial": 0,
+    "medicine": 0,
+    "medium": 2,
+    "nature": 2,
+    "occultism": 0,
+    "perception": 2,
+    "performance": 0,
+    "piloting": 0,
+    "reflex": 4,
+    "religion": 0,
+    "simple": 2,
+    "society": 0,
+    "stealth": 2,
+    "survival": 2,
+    "thievery": 0,
+    "unarmed": 2,
+    "unarmored": 2,
+    "will": 4
+  },
+  "ref": 9,
+  "rule_modifiers": {
+    "initiative": {
+      "circumstance": [
+        2
+      ],
+      "item": [],
+      "status": [],
+      "untyped": []
+    },
+    "{item|_id}-damage": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        1
+      ]
+    }
+  },
+  "senses": [],
+  "shield_ac_bonus": 2,
+  "shield_bt": 10,
+  "shield_hardness": 5,
+  "shield_max_hp": 20,
+  "size": "Medium",
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+9"
+    },
+    {
+      "name": "Arcana",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Athletics",
+      "penalty": 0,
+      "stat": "STR",
+      "total": "+2"
+    },
+    {
+      "name": "Crafting",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Deception",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Diplomacy",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Intimidation",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Lore: Fire",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+5"
+    },
+    {
+      "name": "Medicine",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+1"
+    },
+    {
+      "name": "Nature",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+6"
+    },
+    {
+      "name": "Occultism",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Performance",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Religion",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+1"
+    },
+    {
+      "name": "Society",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Stealth",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+7"
+    },
+    {
+      "name": "Survival",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+6"
+    },
+    {
+      "name": "Thievery",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+2"
+    }
+  ],
+  "speed": 25,
+  "spell_attack": 9,
+  "spell_dc": 19,
+  "stealth_penalty": 0,
+  "subclass": "Single Gate",
+  "will": 8
+}

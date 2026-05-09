@@ -1612,7 +1612,34 @@ class Character:
         
         self.rule_modifiers = {}
         self.senses = []
-        
+
+        # Pathbuilder ancestry/heritage capabilities ride in build['specials']
+        # (filtered to a clean list higher up). Orcs land "Darkvision" here,
+        # Strix get "Low-Light Vision", etc. The rule engine and feat-text
+        # parser below cover senses granted by feats, but they MISS senses
+        # that come from ancestry/heritage alone — which is exactly the
+        # darkvision case for Go'el (Orc) and Kyle (Awakened Animal).
+        # Without this pass, the map tool's "PC has darkvision" probe
+        # (see add_map_token) returns false for ancestry-darkvision PCs,
+        # so their tokens behave as if blind in dark ambient.
+        _SPECIAL_SENSE_MAP = {
+            'darkvision':           'Darkvision',
+            'greater darkvision':   'Greater Darkvision',
+            'low-light vision':     'Low-Light Vision',
+            'low-light':            'Low-Light Vision',
+            'echolocation':         'Echolocation',
+            'scent':                'Scent',
+            'tremorsense':          'Tremorsense',
+            'thoughtsense':         'Thoughtsense',
+            'wavesense':            'Wavesense',
+        }
+        for _sp in (build.get('specials') or []):
+            if not isinstance(_sp, str):
+                continue
+            _label = _SPECIAL_SENSE_MAP.get(_sp.lower().strip())
+            if _label and _label not in self.senses:
+                self.senses.append(_label)
+
         def add_mod(sel, m_type, val):
             if sel not in self.rule_modifiers: self.rule_modifiers[sel] = {'circumstance': [], 'status': [], 'item': [], 'untyped': []}
             if m_type not in self.rule_modifiers[sel]: m_type = 'untyped'
@@ -2010,6 +2037,49 @@ class Character:
         if not any(w.get('name') == 'Fist' for w in self._raw_weapons):
             self._raw_weapons.insert(0, {'name': 'Fist', 'attack_stat': 'str', 'damage': '1d4 B', 'traits': ['agile', 'finesse', 'nonlethal', 'unarmed']})
 
+        # Pathbuilder weapons export `die` ('d8'), `damageType` ('S'), `prof`
+        # ('martial'), and `display` ('Bastard Sword (2h)'). They DO NOT
+        # export `damage`, `traits`, `is_two_handed`, or `prof_val` — the
+        # fields the attacks() property needs. Without this enrichment,
+        # every PB-imported weapon falls back to `1d4` damage, no traits,
+        # and trained proficiency, regardless of the actual weapon. That's
+        # what made Amadeus's Bastard Sword display as "1d4 + 4" instead
+        # of "1d12 + 4" in the snapshot tests.
+        for _w in self._raw_weapons:
+            if not isinstance(_w, dict):
+                continue
+            # `damage` from PB's `die` + `damageType`. PB pre-bakes the
+            # two-hand-d{N} swap into `die` if the weapon is wielded 2h
+            # (Bastard Sword 2h → die='d12'), so we don't have to do that
+            # math here.
+            if not _w.get('damage'):
+                _pb_die = str(_w.get('die') or '').strip()
+                _pb_type = str(_w.get('damageType') or '').strip()
+                if _pb_die:
+                    _w['damage'] = f"1{_pb_die} {_pb_type}".strip()
+            # `traits` — look up by canonical name in BUILDER_WEAPONS so
+            # finesse/agile/two-hand-d12/etc. all flow through.
+            _name = str(_w.get('name') or '').strip().lower()
+            if not _w.get('traits') and _name:
+                _ref = next((bw for bw in BUILDER_WEAPONS
+                             if str(bw.get('name','')).strip().lower() == _name), None)
+                if _ref:
+                    _w['traits'] = _ref.get('traits') or []
+                    if not _w.get('damage'):
+                        _w['damage'] = _ref.get('damage', '1d4')
+            # 2-handed wielding flag: PB tags the display string. The
+            # attacks() property uses this to swap d8 → two-hand-d{N}.
+            _disp = str(_w.get('display') or '').lower()
+            if '(2h)' in _disp or 'two-hand' in _disp or 'two-handed' in _disp:
+                _w['is_two_handed'] = True
+            # prof_val — PB stores the category in `prof`; map to the
+            # PC's actual rank in that category. Without this, a Fighter
+            # at L5 would still hit at trained rather than expert.
+            if not _w.get('prof_val'):
+                _pb_prof = str(_w.get('prof') or '').lower().strip()
+                if _pb_prof in ('simple', 'martial', 'advanced', 'unarmed'):
+                    _w['prof_val'] = safe_int(self.proficiencies.get(_pb_prof), 2)
+
         self.equipment = []
         for eq in (build.get('equipment') or []):
             if isinstance(eq, list) and len(eq) >= 2: 
@@ -2083,6 +2153,17 @@ class Character:
                     base_speed_penalty = table_speed_penalty
                 if not self.armor_traits:
                     self.armor_traits = _a_info.get('traits') or []
+                # ac_dex_cap follows the same Pathbuilder-omits-it pattern.
+                # PB never exports this field, so it lands as 99 (the "no
+                # cap" sentinel from line 2048). Without this fallback,
+                # the AC formula at line 2690 took the full DEX mod even
+                # in heavy/medium armor — Amadeus's chain mail AC came
+                # out 1 too high (21 vs PB's own acTotal of 20). Only
+                # tighten the cap; never widen it past what PB explicitly
+                # set, in case the GM overrode the cap on a magical item.
+                table_dex_cap = safe_int(_a_info.get('dex_cap'), 99)
+                if self.ac_dex_cap >= 99 and 0 <= table_dex_cap < 99:
+                    self.ac_dex_cap = table_dex_cap
         
         # BUILDER_ARMOR's str_req is stored as a *score* (e.g. chain mail
         # is 14). Pathbuilder-exported armor_str_req, when present, is

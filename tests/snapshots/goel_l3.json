@@ -1,0 +1,314 @@
+{
+  "ac": 20,
+  "ac_item": 4,
+  "active_armor_penalty": 0,
+  "active_speed_penalty": 0,
+  "ancestry": "Orc",
+  "armor_name": "Chain Mail",
+  "armor_str_req": 14,
+  "attacks": [
+    {
+      "damage": "1d12 + 3S",
+      "first_strike": 9,
+      "name": "Bastard Sword",
+      "traits": [
+        "two-hand-d12"
+      ]
+    },
+    {
+      "damage": "1d4 + 3P",
+      "first_strike": 9,
+      "name": "Dagger",
+      "traits": [
+        "agile",
+        "finesse",
+        "thrown-10",
+        "versatile-s"
+      ]
+    },
+    {
+      "damage": "1d4 + 3B",
+      "first_strike": 9,
+      "name": "Fist",
+      "traits": []
+    },
+    {
+      "damage": "1d6 + 3B",
+      "first_strike": 9,
+      "name": "Morningstar",
+      "traits": [
+        "versatile-p"
+      ]
+    }
+  ],
+  "background": "Scion of Slayers",
+  "class": "Cleric",
+  "class_dc": 19,
+  "current_hp": 39,
+  "deity": "Rathathiel",
+  "feats": [
+    {
+      "level": 1,
+      "name": "Diehard",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 1,
+      "name": "Dubious Knowledge",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 1,
+      "name": "Hold-Scarred Orc",
+      "type": "Heritage"
+    },
+    {
+      "level": 1,
+      "name": "Orc Warmask",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 1,
+      "name": "Shield Block",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 2,
+      "name": "Additional Lore",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 2,
+      "name": "Domain Initiate",
+      "type": "Class Feat"
+    },
+    {
+      "level": 3,
+      "name": "Armor Proficiency",
+      "type": "General Feat"
+    }
+  ],
+  "focus_max": 1,
+  "fort": 8,
+  "heritage": "Hold-Scarred Orc",
+  "hero_points": 1,
+  "hp": 39,
+  "immunities": [],
+  "initiative_mod": 9,
+  "languages": [
+    "Common",
+    "Orcish"
+  ],
+  "level": 3,
+  "mods": {
+    "cha": 0,
+    "con": 1,
+    "dex": 1,
+    "int": 0,
+    "str": 3,
+    "wis": 4
+  },
+  "name": "Go'el Thrall",
+  "perception": 9,
+  "proficiencies": {
+    "ac": 2,
+    "acrobatics": 0,
+    "advanced": 0,
+    "arcana": 0,
+    "athletics": 2,
+    "castingArcane": 0,
+    "castingDivine": 2,
+    "castingOccult": 0,
+    "castingPrimal": 0,
+    "classDC": 2,
+    "class_dc": 2,
+    "computers": 0,
+    "crafting": 0,
+    "deception": 0,
+    "diplomacy": 0,
+    "fortitude": 4,
+    "heavy": 2,
+    "intimidation": 2,
+    "light": 2,
+    "lore:aslanti": 2,
+    "lore:fiend": 2,
+    "lore:undead": 2,
+    "lore:vampire": 4,
+    "martial": 2,
+    "medicine": 2,
+    "medium": 2,
+    "nature": 0,
+    "occultism": 0,
+    "perception": 2,
+    "performance": 0,
+    "piloting": 0,
+    "reflex": 2,
+    "religion": 4,
+    "simple": 2,
+    "society": 0,
+    "spell_attack": 2,
+    "spell_dc": 2,
+    "stealth": 0,
+    "survival": 0,
+    "thievery": 0,
+    "unarmed": 2,
+    "unarmored": 2,
+    "will": 4
+  },
+  "ref": 6,
+  "rule_modifiers": {
+    "arcana": {
+      "circumstance": [],
+      "item": [
+        1,
+        1
+      ],
+      "status": [],
+      "untyped": []
+    },
+    "{item|_id}-damage": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        1
+      ]
+    }
+  },
+  "senses": [
+    "Darkvision"
+  ],
+  "shield_ac_bonus": 2,
+  "shield_bt": 10,
+  "shield_hardness": 5,
+  "shield_max_hp": 20,
+  "size": "Medium",
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    },
+    {
+      "name": "Arcana",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+1"
+    },
+    {
+      "name": "Athletics",
+      "penalty": 0,
+      "stat": "STR",
+      "total": "+8"
+    },
+    {
+      "name": "Crafting",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Deception",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Diplomacy",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Intimidation",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+5"
+    },
+    {
+      "name": "Lore: Aslanti",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+5"
+    },
+    {
+      "name": "Lore: Fiend",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+5"
+    },
+    {
+      "name": "Lore: Undead",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+5"
+    },
+    {
+      "name": "Lore: Vampire",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+7"
+    },
+    {
+      "name": "Medicine",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+9"
+    },
+    {
+      "name": "Nature",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+4"
+    },
+    {
+      "name": "Occultism",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Performance",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Religion",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+11"
+    },
+    {
+      "name": "Society",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Stealth",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "-1"
+    },
+    {
+      "name": "Survival",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+4"
+    },
+    {
+      "name": "Thievery",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    }
+  ],
+  "speed": 25,
+  "spell_attack": 9,
+  "spell_dc": 19,
+  "stealth_penalty": 2,
+  "subclass": "Warpriest",
+  "will": 11
+}
