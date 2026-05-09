@@ -3478,7 +3478,7 @@
             {% if pc.spell_casters %}
                 <!-- Spell Search -->
                 <div class="no-print flex items-center gap-2 mb-2">
-                    <input type="text" id="spell-search" placeholder="Search spells..." oninput="filterSpells(this.value)" class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
+                    <input type="text" id="spell-search" placeholder="Search spells..." oninput="_onSpellSearchInput('spell-search')" class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
                     <select id="spell-rank-filter" onchange="filterSpells(document.getElementById('spell-search').value)" class="rounded px-2 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
                         <option value="">All Ranks</option>
                         <option value="0">Cantrips</option>
@@ -3822,7 +3822,7 @@
                         {# Must not be id="spell-search" — that ID is already used by the main spell list filter
                            above, and getElementById returns the FIRST match. When this browse modal's input used
                            the same ID, typing here silently read from the other input, so results never updated. #}
-                        <input type="text" id="spell-browse-search" oninput="filterBrowseSpells()" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-primary); min-width:150px;">
+                        <input type="text" id="spell-browse-search" oninput="_onSpellSearchInput('spell-browse-search')" placeholder="Search spells..." class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-primary); min-width:150px;">
                         <select id="spell-level-filter" onchange="filterBrowseSpells()" class="rounded px-2 py-2 text-xs font-header" style="background:var(--bg-base); border:1px solid var(--border-default); color:var(--text-secondary);">
                             <option value="">All Ranks</option>
                             {% for i in range(11) %}<option value="{{ i }}">{% if i == 0 %}Cantrips{% else %}Rank {{ i }}{% endif %}</option>{% endfor %}
@@ -5404,12 +5404,13 @@
         function filterBrowseSpells() {
             // Use the browse modal's dedicated input; the main list has its own
             // "spell-search" input, so reading by that ID would return the wrong one.
-            const q = (document.getElementById('spell-browse-search').value || '').toLowerCase();
+            // Shared matcher with the prepared-list filter (_matchesSpellName).
+            const q = ((document.getElementById('spell-browse-search')?.value) || '').toLowerCase().trim();
             const lvl = document.getElementById('spell-level-filter').value;
             const trad = document.getElementById('spell-trad-filter').value;
-            
+
             let filtered = allSpells.filter(s => {
-                if (q && !s.name.toLowerCase().includes(q)) return false;
+                if (!_matchesSpellName(s.name, q)) return false;
                 if (lvl !== '' && s.level != parseInt(lvl)) return false;
                 if (trad && (!s.traditions || !s.traditions.includes(trad))) return false;
                 return true;
@@ -5762,17 +5763,62 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
-        // Spell search/filter
+        // ─────────────────────────────────────────────────────────────
+        //  Spell search + chip-filter — shared helpers
+        // ─────────────────────────────────────────────────────────────
+        // The Magic tab has TWO independent filter mechanisms — the text
+        // search at the top (filterSpells) and the chip row that appears
+        // below it (initSpellFilters → applyFilters). Before this dedup
+        // they fought each other: filterSpells hid spells by mutating
+        // `style.display` directly, never setting `data-search-hidden`,
+        // while applyFilters tried to read that flag to compose with
+        // search results. Toggling a chip would un-hide spells that the
+        // search had hidden. The browse-spells modal had its own
+        // matching logic that always re-filtered the full source list.
+        //
+        // This module unifies the three on:
+        //   _matchesSpellName(name, q): lowercase substring match
+        //   _applySpellVisibility(el): single source of truth that ANDs
+        //     dataset.searchHidden + dataset.filterHidden
+        //   _spellSearchDebounced(): shared 180ms debounce wrapping both
+        //     text inputs so we don't walk 50+ DOM nodes on every keystroke
+        function _matchesSpellName(name, q) {
+            if (!q) return true;
+            return (name || '').toLowerCase().includes(q);
+        }
+        function _applySpellVisibility(el) {
+            const hidden = el.dataset.searchHidden === '1' || el.dataset.filterHidden === '1';
+            el.style.display = hidden ? 'none' : '';
+        }
+
         function filterSpells(query) {
             const q = (query || '').toLowerCase().trim();
             const rankFilter = document.getElementById('spell-rank-filter')?.value || '';
             document.querySelectorAll('.spell-entry').forEach(el => {
                 const name = el.dataset.spellName || '';
                 const rank = el.dataset.spellRank || '';
-                const matchesName = !q || name.includes(q);
+                const matchesName = _matchesSpellName(name, q);
                 const matchesRank = !rankFilter || rank === rankFilter;
-                el.style.display = (matchesName && matchesRank) ? '' : 'none';
+                el.dataset.searchHidden = (matchesName && matchesRank) ? '0' : '1';
+                _applySpellVisibility(el);
             });
+        }
+
+        // Debounced wrapper for the text inputs. Both spell-search inputs
+        // (prepared list + browse modal) call this to avoid filtering on
+        // every keystroke; 180ms feels instant but skips the per-character
+        // walk over 50+ entries.
+        let _spellSearchTimer = null;
+        function _onSpellSearchInput(targetId) {
+            clearTimeout(_spellSearchTimer);
+            _spellSearchTimer = setTimeout(() => {
+                if (targetId === 'spell-browse-search') {
+                    filterBrowseSpells();
+                } else {
+                    const v = document.getElementById('spell-search')?.value || '';
+                    filterSpells(v);
+                }
+            }, 180);
         }
 
         function switchTab(tabId) {
@@ -10237,20 +10283,26 @@
             chips.appendChild(clear);
             wrap.insertBefore(chips, search.nextSibling);
             function applyFilters() {
+                // Both this chip-filter and filterSpells (the text search)
+                // now write dataset flags and call _applySpellVisibility,
+                // so composition is "shown only if neither flag hides it."
+                // Previously this branch tried to set style.display
+                // directly while reading dataset.searchHidden that
+                // filterSpells never actually set — toggling chips would
+                // un-hide spells the search had hidden.
                 const filters = FILTERS.filter(f => active.has(f.id));
                 document.querySelectorAll('.spell-entry').forEach(el => {
                     if (!filters.length) {
-                        el.dataset.filterHidden = '';
-                        if (el.style.display === 'none' && !el.dataset.searchHidden) el.style.display = '';
+                        el.dataset.filterHidden = '0';
+                        _applySpellVisibility(el);
                         return;
                     }
-                    // Pull cached desc + heuristic match.
                     const name = (el.getAttribute('data-spell-name') || '').toLowerCase();
                     const desc = ((window._spellDescCache && (window._spellDescCache[name] || {}).desc) || '').toLowerCase();
                     const text = name + ' ' + desc + ' ' + (el.textContent || '').toLowerCase();
                     const matchAll = filters.every(f => f.match.test(text));
-                    if (matchAll) { el.dataset.filterHidden = ''; if (!el.dataset.searchHidden) el.style.display = ''; }
-                    else { el.dataset.filterHidden = '1'; el.style.display = 'none'; }
+                    el.dataset.filterHidden = matchAll ? '0' : '1';
+                    _applySpellVisibility(el);
                 });
             }
         })();
