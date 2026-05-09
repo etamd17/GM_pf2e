@@ -1171,6 +1171,23 @@
                     <div id="wall-list"></div>
                     <button class="tool-btn small" style="width: 100%; margin-top: 8px;" onclick="clearAllWalls()">🗑 Clear All Walls</button>
                 </div>
+
+                <!-- Combat Log (Audit #10). Server-side log already exists at
+                     /api/combat_log; this panel is a viewer + clear control
+                     mirroring the tracker's. Auto-scrolls on new entries. -->
+                <div class="section-header" onclick="toggleSection('combat-log')">
+                    <span>Combat Log</span>
+                    <span id="combat-log-count" style="font-size: 10px;">0</span>
+                </div>
+                <div id="combat-log-panel" class="section-content" style="display: none; max-height: 240px;">
+                    <div id="combat-log-body" style="font-size: 11px; line-height: 1.4; max-height: 200px; overflow-y: auto; padding: 4px; background: #181818; border-radius: 4px;">
+                        <div style="text-align:center; padding:14px; color:#666; font-style:italic;">No combat events yet.</div>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-top:6px;">
+                        <button class="tool-btn small" style="flex:1;" onclick="copyCombatLog()">Copy</button>
+                        <button class="tool-btn small danger" style="flex:1;" onclick="clearCombatLog()">Clear</button>
+                    </div>
+                </div>
             </div>
             
             <!-- Token / multi-select / template-target panel.
@@ -2514,6 +2531,7 @@
             populateCreaturePanel();
             updateWallList();
             updateCombatantList();
+            refreshCombatLog();
 
             // Setup creature drag and drop
             setupCreatureDragDrop();
@@ -2654,8 +2672,86 @@
                 const roll = JSON.parse(e.data);
                 showDiceRollNotification(roll);
             });
-            
+
+            // Combat log — append entries on the fly from SSE. Initial
+            // load happens via refreshCombatLog() called from init().
+            evtSource.addEventListener('combat_log', (e) => {
+                try {
+                    const entry = JSON.parse(e.data);
+                    if (entry && entry.msg) _appendCombatLogEntry(entry);
+                } catch(_) {}
+            });
+
             evtSource.onerror = () => console.log('SSE reconnecting...');
+        }
+
+        // ===========================================
+        // COMBAT LOG (#10)
+        // ===========================================
+        // Backend (/api/combat_log + SSE 'combat_log' events) was already in
+        // place via the tracker. This panel mirrors the tracker's UI in the
+        // map's right sidebar so the GM doesn't have to switch tools to
+        // see what just happened. Auto-scrolls; capped at 200 entries
+        // matching the server.
+        const _COMBAT_LOG_COLORS = {
+            turn: '#5EADAD', damage: '#ef4444', heal: '#22c55e',
+            critical: '#dc2626', condition: '#a78bfa', system: '#fbbf24',
+            action: '#cbd5e1',
+        };
+        let _combatLogCache = [];
+        function _renderCombatLog() {
+            const el = document.getElementById('combat-log-body');
+            const ct = document.getElementById('combat-log-count');
+            if (!el) return;
+            if (ct) ct.textContent = String(_combatLogCache.length);
+            if (_combatLogCache.length === 0) {
+                el.innerHTML = '<div style="text-align:center;padding:14px;color:#666;font-style:italic;">No combat events yet.</div>';
+                return;
+            }
+            el.innerHTML = _combatLogCache.map(e => {
+                const color = _COMBAT_LOG_COLORS[e.type] || '#cbd5e1';
+                const time = e.time || '';
+                return `<div style="color:${color}; padding: 2px 0;">
+                    <span style="color:#666; font-size: 10px; margin-right: 6px;">${_escapeHtml(time)}</span>
+                    ${_escapeHtml(e.msg)}
+                </div>`;
+            }).join('');
+            el.scrollTop = el.scrollHeight;
+        }
+        function _appendCombatLogEntry(entry) {
+            if (!entry || !entry.msg) return;
+            _combatLogCache.push(entry);
+            if (_combatLogCache.length > 200) _combatLogCache.shift();
+            _renderCombatLog();
+        }
+        async function refreshCombatLog() {
+            try {
+                const res = await fetch('/api/combat_log').then(r => r.json());
+                _combatLogCache = (res.log || []).filter(e => e && e.msg);
+                _renderCombatLog();
+            } catch (_) {}
+        }
+        async function copyCombatLog() {
+            try {
+                const text = _combatLogCache.map(e => `[${e.time}] ${e.msg}`).join('\n');
+                await navigator.clipboard.writeText(text);
+                _showHeroPointToast('Combat log copied');
+            } catch (e) {
+                console.warn('[combat-log] copy failed', e);
+            }
+        }
+        async function clearCombatLog() {
+            const ok = await floatConfirm('Clear the entire combat log? This affects all viewers.', {
+                title: 'Clear log', confirmLabel: 'Clear', danger: true,
+            });
+            if (!ok) return;
+            try {
+                await fetch('/api/combat_log/clear', { method: 'POST' });
+                _combatLogCache = [];
+                _renderCombatLog();
+            } catch (e) {
+                console.warn('[combat-log] clear failed', e);
+            }
         }
         
         function showDiceRollNotification(roll) {
@@ -6478,7 +6574,8 @@
             const panels = {
                 'turn-order': 'combatant-list',
                 'creatures': 'creature-panel',
-                'walls': 'walls-panel'
+                'walls': 'walls-panel',
+                'combat-log': 'combat-log-panel',
             };
             const panelId = panels[section];
             if (!panelId) return;

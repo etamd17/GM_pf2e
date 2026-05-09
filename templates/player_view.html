@@ -164,6 +164,19 @@
     </div>
 </div>
 
+<!-- COMBAT LOG (read-only for players; the GM controls clear/copy elsewhere). -->
+<div class="mt-6">
+    <div class="card">
+        <button onclick="togglePlayerLog()" class="w-full flex justify-between items-center px-4 py-3 text-left text-xs uppercase tracking-wider font-bold text-gray-400 hover:bg-gray-800 transition-colors">
+            <span>Combat Log <span id="player-log-count" class="text-gray-600">0</span></span>
+            <span id="player-log-arrow" class="text-xs">▾</span>
+        </button>
+        <div id="player-log-body" class="hidden px-4 pb-4 max-h-64 overflow-y-auto" style="font-size: 12px; line-height: 1.4; background: #181818;">
+            <div class="text-center py-4 text-gray-600 italic">No combat events yet.</div>
+        </div>
+    </div>
+</div>
+
 <!-- IMPORT MODAL -->
 <div id="import-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="rounded-xl w-full max-w-lg p-6" style="background:#24242e; border:1px solid rgba(255,255,255,0.08)">
@@ -256,6 +269,57 @@
         _sseReconnectTries = 0;
     }
 
+    // Combat log (read-only player view). Backend pre-filters out
+    // GM-only entries (secret rolls, hidden NPC names) via the
+    // _player_filter set on _combat_log() server-side, so we just
+    // render whatever comes through.
+    const _PLAYER_LOG_COLORS = {
+        turn: '#5EADAD', damage: '#ef4444', heal: '#22c55e',
+        critical: '#dc2626', condition: '#a78bfa', system: '#fbbf24',
+        action: '#cbd5e1',
+    };
+    let _playerLogCache = [];
+    function _renderPlayerLog() {
+        const body = document.getElementById('player-log-body');
+        const count = document.getElementById('player-log-count');
+        if (!body) return;
+        if (count) count.textContent = String(_playerLogCache.length);
+        if (_playerLogCache.length === 0) {
+            body.innerHTML = '<div class="text-center py-4 text-gray-600 italic">No combat events yet.</div>';
+            return;
+        }
+        body.innerHTML = _playerLogCache.map(e => {
+            const color = _PLAYER_LOG_COLORS[e.type] || '#cbd5e1';
+            const time = (e.time || '').replace(/[<>"&]/g, '');
+            const msg  = (e.msg  || '').replace(/[<>]/g, '');
+            return `<div style="color:${color}; padding: 2px 0;">
+                <span style="color:#666; font-size: 10px; margin-right: 6px;">${time}</span>${msg}
+            </div>`;
+        }).join('');
+        body.scrollTop = body.scrollHeight;
+    }
+    function _appendPlayerLogEntry(entry) {
+        if (!entry || !entry.msg) return;
+        _playerLogCache.push(entry);
+        if (_playerLogCache.length > 200) _playerLogCache.shift();
+        _renderPlayerLog();
+    }
+    function togglePlayerLog() {
+        const body = document.getElementById('player-log-body');
+        const arrow = document.getElementById('player-log-arrow');
+        if (!body) return;
+        body.classList.toggle('hidden');
+        if (arrow) arrow.textContent = body.classList.contains('hidden') ? '▾' : '▴';
+    }
+    async function refreshPlayerLog() {
+        try {
+            const res = await fetch('/api/combat_log').then(r => r.json());
+            _playerLogCache = (res.log || []).filter(e => e && e.msg);
+            _renderPlayerLog();
+        } catch(_) {}
+    }
+    refreshPlayerLog();
+
     function connectSSE() {
         try {
             if (evtSrc) { try { evtSrc.close(); } catch(_){} }
@@ -276,6 +340,16 @@
                     const myName = localStorage.getItem('pf2e_my_char') || '';
                     if (!h.recipients.includes('all') && !h.recipients.includes(myName)) return;
                     showHandoutPopup(h);
+                } catch(err) {}
+            });
+            // Combat log — server filters out PD-only entries before
+            // broadcast to players, so anything received here is
+            // already player-safe.
+            evtSrc.addEventListener('combat_log', e => {
+                _markSseAlive();
+                try {
+                    const entry = JSON.parse(e.data);
+                    if (entry && entry.msg) _appendPlayerLogEntry(entry);
                 } catch(err) {}
             });
             evtSrc.onerror = () => {
