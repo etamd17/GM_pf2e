@@ -10,3 +10,6 @@ venv/
 # JSON-upload + character-creator flow, NOT via the repo.
 party_data/*.json
 !party_data/portraits/
+
+# GM-authored campaign intro metadata — local content, not repo state.
+campaign.json

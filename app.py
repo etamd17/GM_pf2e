@@ -162,6 +162,7 @@ PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
 ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters') 
 OBSIDIAN_DIR = os.path.join(DATA_DIR, 'obsidian_vault')
 MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
+CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
@@ -4092,10 +4093,96 @@ def health_check():
         'sse_connections': sse_subscriber_count(),
     })
 
+CAMPAIGN_DEFAULT = {
+    'name': 'Untitled Campaign',
+    'tagline': '',
+    'intro': '',
+    'session_number': 1,
+    'next_session_at': '',
+    'last_recap': '',
+}
+
+def _load_campaign_config():
+    """Read campaign.json, falling back to defaults. Always returns the full schema."""
+    cfg = dict(CAMPAIGN_DEFAULT)
+    if os.path.exists(CAMPAIGN_FILE):
+        data, err = safe_load_json_file(CAMPAIGN_FILE)
+        if data and isinstance(data, dict):
+            for k in CAMPAIGN_DEFAULT:
+                if k in data and data[k] is not None:
+                    cfg[k] = data[k]
+    return cfg
+
+def _save_campaign_config(updates):
+    """Merge updates into the stored campaign config and persist. Returns the merged dict."""
+    cfg = _load_campaign_config()
+    for k in CAMPAIGN_DEFAULT:
+        if k in updates and updates[k] is not None:
+            cfg[k] = updates[k]
+    if 'session_number' in cfg:
+        try:
+            cfg['session_number'] = max(1, int(cfg['session_number']))
+        except (TypeError, ValueError):
+            cfg['session_number'] = 1
+    try:
+        with open(CAMPAIGN_FILE, 'w', encoding='utf-8') as fp:
+            json.dump(cfg, fp, indent=2, ensure_ascii=False)
+    except OSError as e:
+        print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
+    return cfg
+
 @app.route('/')
 def index():
-    """Root redirects to player hub (public). GMs go to /gm."""
-    return redirect('/player')
+    """Campaign intro / 'join session' lobby.
+
+    Players land here, see campaign metadata + the party roster, and pick the
+    PC they're playing this session — that sets session.player_name (used for
+    map-token assignment + combat-log filtering) and bounces them into the
+    player hub. Already-joined players see a 'continue' tile instead of the
+    full picker. The GM gets an Enter button that drops them straight into
+    /gm.
+    """
+    _sync_party_from_disk()
+    is_gm = _is_gm()
+    return render_template(
+        'campaign_intro.html',
+        campaign=_load_campaign_config(),
+        party=list(PARTY_LIBRARY.values()),
+        current_player=session.get('player_name'),
+        is_gm=is_gm,
+    )
+
+@app.route('/api/campaign', methods=['GET', 'POST'])
+def api_campaign():
+    """GET is public (intro screen reads it); POST is GM-only (edit form)."""
+    if request.method == 'GET':
+        return jsonify(_load_campaign_config())
+    if not _is_gm():
+        return jsonify({'success': False, 'error': 'GM authentication required'}), 403
+    data = request.json or {}
+    cfg = _save_campaign_config(data)
+    return jsonify({'success': True, 'campaign': cfg})
+
+@app.route('/api/join_campaign', methods=['POST'])
+def api_join_campaign():
+    """Player picks a PC tile on the intro screen → session.player_name is set
+    so the rest of the app (map auth, combat-log filter, my-char bar) knows
+    who they are. Validates against PARTY_LIBRARY so a stale tile from a
+    cached page can't poison the session with a bogus name."""
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'No character selected'}), 400
+    if name not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'Unknown character'}), 404
+    session['player_name'] = name
+    return jsonify({'success': True, 'name': name})
+
+@app.route('/api/leave_campaign', methods=['POST'])
+def api_leave_campaign():
+    """Clear the joined-as state so the next visit shows the picker again."""
+    session.pop('player_name', None)
+    return jsonify({'success': True})
 
 @app.route('/party')
 @gm_required

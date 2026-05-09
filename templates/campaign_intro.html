@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ campaign.name }} - PF2E Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+            base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#2e2e3c', 600:'#42425a', 500:'#6b6b8a', 400:'#9494b0', 300:'#b8b8cc', 200:'#d8d8e6', 100:'#ededf4' },
+            accent:  { 300:'#8ED4D4', 400:'#6BBFBF', 500:'#52A8A8', 600:'#3F8888' },
+            gold:    { 300:'#e0b050', 400:'#c89620' },
+            danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' }
+        }, fontFamily: { display:['Cinzel','serif'], sans:['Inter','system-ui','sans-serif'] } } } }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
+        body { font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#ededf4; min-height:100vh; }
+        .font-display { font-family:'Cinzel',serif; }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
+
+        .stage {
+            position:relative;
+            min-height:100vh;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(94,173,173,0.06), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(224,176,80,0.04), transparent 50%),
+                #0d0d12;
+        }
+        .panel { background:#191920; border:1px solid rgba(255,255,255,0.06); border-radius:14px; }
+        .pc-tile {
+            background:#191920;
+            border:1px solid rgba(255,255,255,0.07);
+            border-radius:12px;
+            padding:18px 14px 14px;
+            cursor:pointer;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+            position:relative;
+            text-align:center;
+        }
+        .pc-tile:hover { transform:translateY(-3px); border-color:rgba(142,212,212,0.35); box-shadow:0 10px 28px rgba(0,0,0,0.45); }
+        .pc-tile.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.25), 0 8px 22px rgba(0,0,0,0.45); }
+        .pc-tile .portrait-frame {
+            width:88px; height:88px; border-radius:50%;
+            margin:0 auto 12px;
+            background:#24242e;
+            border:2px solid rgba(255,255,255,0.08);
+            display:flex; align-items:center; justify-content:center;
+            overflow:hidden;
+            position:relative;
+        }
+        .pc-tile.is-current .portrait-frame { border-color:rgba(224,176,80,0.6); }
+        .pc-tile .portrait-frame img { width:100%; height:100%; object-fit:cover; }
+        .pc-tile .pc-initial { font-family:'Cinzel',serif; font-size:30px; font-weight:700; color:#8ED4D4; }
+        .pc-tile .lvl-badge {
+            position:absolute; top:8px; right:10px;
+            font-family:'Cinzel',serif; font-size:10px; font-weight:700;
+            background:rgba(15,15,20,0.85); color:#8ED4D4;
+            padding:3px 7px; border-radius:4px;
+            border:1px solid rgba(142,212,212,0.25);
+        }
+        .pc-tile .pc-name { font-family:'Cinzel',serif; font-size:15px; color:#ededf4; font-weight:600; }
+        .pc-tile .pc-meta { font-size:11px; color:#9494b0; margin-top:2px; }
+        .pc-tile .pc-cta {
+            margin-top:10px; font-size:10.5px; font-weight:600;
+            color:#8ED4D4; text-transform:uppercase; letter-spacing:0.08em;
+            opacity:0.65; transition:opacity 0.15s;
+        }
+        .pc-tile:hover .pc-cta { opacity:1; }
+        .pc-tile.is-current .pc-cta { color:#e0b050; opacity:1; }
+
+        .btn-primary {
+            font-family:'Cinzel',serif; font-weight:600; letter-spacing:0.06em;
+            background:#3F8888; color:#dff2f2;
+            padding:10px 22px; border-radius:6px; font-size:12px;
+            text-transform:uppercase; border:1px solid rgba(142,212,212,0.3);
+            transition:background 0.15s, transform 0.1s;
+            cursor:pointer;
+        }
+        .btn-primary:hover { background:#52A8A8; }
+        .btn-primary:active { transform:scale(0.98); }
+        .btn-ghost {
+            font-size:11px; font-weight:500;
+            background:transparent; border:1px solid rgba(255,255,255,0.10);
+            color:#b8b8cc; padding:8px 14px; border-radius:6px;
+            transition:border-color 0.15s, color 0.15s;
+            cursor:pointer;
+        }
+        .btn-ghost:hover { border-color:rgba(142,212,212,0.35); color:#ededf4; }
+        .btn-gold {
+            font-family:'Cinzel',serif; font-weight:600; letter-spacing:0.06em;
+            background:rgba(224,176,80,0.12); color:#e0b050;
+            padding:10px 22px; border-radius:6px; font-size:12px;
+            text-transform:uppercase; border:1px solid rgba(224,176,80,0.35);
+            transition:background 0.15s;
+            cursor:pointer;
+        }
+        .btn-gold:hover { background:rgba(224,176,80,0.22); }
+
+        .field-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#6b6b8a; font-weight:600; margin-bottom:4px; display:block; }
+        .field-input {
+            width:100%; padding:8px 10px; border-radius:6px;
+            background:#0d0d12; color:#ededf4;
+            border:1px solid rgba(255,255,255,0.10);
+            font-size:13px; font-family:'Inter',sans-serif;
+        }
+        .field-input:focus { outline:none; border-color:rgba(142,212,212,0.4); }
+        textarea.field-input { resize:vertical; min-height:64px; font-family:'Inter',sans-serif; }
+
+        .toast {
+            position:fixed; top:18px; right:18px;
+            background:#24242e; border:1px solid rgba(255,255,255,0.10);
+            border-radius:8px; padding:10px 14px;
+            font-size:12px; color:#ededf4;
+            box-shadow:0 8px 24px rgba(0,0,0,0.5);
+            z-index:200;
+            transform:translateX(110%); opacity:0;
+            transition:transform 0.25s, opacity 0.25s;
+        }
+        .toast.show { transform:translateX(0); opacity:1; }
+        .toast.error { border-color:rgba(239,68,68,0.45); color:#fca5a5; }
+        .toast.ok { border-color:rgba(94,173,173,0.4); color:#8ED4D4; }
+    </style>
+</head>
+<body class="stage">
+
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-16">
+
+        {# ── Hero ── #}
+        <header class="text-center mb-10 md:mb-14">
+            <div class="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full" style="background:rgba(224,176,80,0.08); border:1px solid rgba(224,176,80,0.25);">
+                <span class="text-[10px] font-semibold text-gold-300 uppercase tracking-widest" id="session-pill">Session {{ campaign.session_number }}</span>
+                {% if campaign.next_session_at %}
+                <span class="text-base-600 text-xs">|</span>
+                <span class="text-[10px] text-base-400 font-medium">Next: <span id="next-session-text">{{ campaign.next_session_at }}</span></span>
+                {% endif %}
+            </div>
+
+            <h1 class="font-display text-3xl md:text-5xl tracking-wide mb-3" style="color:#8ED4D4;" id="campaign-name">{{ campaign.name }}</h1>
+
+            {% if campaign.tagline %}
+            <p class="text-base-300 text-sm md:text-base italic" id="campaign-tagline" style="max-width:640px; margin:0 auto;">{{ campaign.tagline }}</p>
+            {% else %}
+            <p class="text-base-300 text-sm italic hidden" id="campaign-tagline"></p>
+            {% endif %}
+        </header>
+
+        {# ── Last time / intro ── #}
+        {% if campaign.last_recap or campaign.intro %}
+        <div class="grid grid-cols-1 {% if campaign.last_recap and campaign.intro %}md:grid-cols-2{% endif %} gap-4 mb-10">
+            {% if campaign.last_recap %}
+            <section class="panel p-5">
+                <h2 class="font-display text-accent-300 text-sm tracking-wider uppercase mb-2">Last Session</h2>
+                <p class="text-base-300 text-sm leading-relaxed whitespace-pre-line" id="recap-text">{{ campaign.last_recap }}</p>
+            </section>
+            {% endif %}
+            {% if campaign.intro %}
+            <section class="panel p-5">
+                <h2 class="font-display text-accent-300 text-sm tracking-wider uppercase mb-2">The Tale</h2>
+                <p class="text-base-300 text-sm leading-relaxed whitespace-pre-line" id="intro-text">{{ campaign.intro }}</p>
+            </section>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ── Already-joined banner ── #}
+        {% if current_player %}
+        <div class="panel p-4 mb-6 flex items-center justify-between" style="border-color:rgba(224,176,80,0.35);">
+            <div>
+                <div class="text-[10px] text-gold-300 uppercase tracking-widest font-semibold mb-0.5">Currently joined</div>
+                <div class="text-base-100 text-sm font-medium">Playing as <strong style="color:#e0b050;">{{ current_player }}</strong></div>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/player/sheet/{{ current_player|urlencode }}" class="btn-gold">Open Sheet</a>
+                <a href="/player" class="btn-ghost">Player Hub</a>
+                <button onclick="leaveCampaign()" class="btn-ghost">Switch Character</button>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Party tiles ── #}
+        <section class="mb-10">
+            <div class="flex items-end justify-between mb-4">
+                <div>
+                    <h2 class="font-display text-accent-300 text-sm tracking-wider uppercase">{% if current_player %}The Party{% else %}Choose Your Character{% endif %}</h2>
+                    <p class="text-base-500 text-xs mt-1">{% if current_player %}Tap a different tile to switch.{% else %}Pick the hero you'll play this session.{% endif %}</p>
+                </div>
+                <a href="/player/builder" class="btn-ghost">+ New Character</a>
+            </div>
+
+            {% if party %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="party-grid">
+                {% for pc in party %}
+                <button class="pc-tile {% if current_player == pc.name %}is-current{% endif %}"
+                        data-pc-name="{{ pc.name }}"
+                        onclick="joinAs({{ pc.name|tojson }})"
+                        title="Join as {{ pc.name }}">
+                    <span class="lvl-badge">L{{ pc.level }}</span>
+                    <div class="portrait-frame">
+                        {% if pc.portrait %}
+                            <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                                 style="object-position: {{ pc.portrait_focus_x | default(50) }}% {{ pc.portrait_focus_y | default(50) }}%;">
+                        {% else %}
+                            <span class="pc-initial">{{ pc.name[0] }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="pc-name">{{ pc.name }}</div>
+                    <div class="pc-meta">{{ pc.ancestry }} {{ pc.class_name }}</div>
+                    <div class="pc-cta">{% if current_player == pc.name %}Continue{% else %}Join as {{ pc.name }}{% endif %}</div>
+                </button>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="panel p-8 text-center">
+                <p class="text-base-400 text-sm mb-3">No characters yet.</p>
+                <a href="/player/builder" class="btn-primary">Create the First</a>
+            </div>
+            {% endif %}
+        </section>
+
+        {# ── GM strip ── #}
+        <section class="panel p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="text-[10px] uppercase tracking-widest font-semibold" style="color:#9494b0;">Game Master</span>
+                {% if is_gm %}
+                <span class="text-[10px] uppercase tracking-widest font-semibold" style="color:#e0b050;">authenticated</span>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                {% if is_gm %}
+                    <button onclick="toggleEdit()" class="btn-ghost" id="edit-toggle-btn">Edit Intro</button>
+                    <a href="/gm" class="btn-primary">Enter Campaign</a>
+                    <a href="/gm/logout" class="btn-ghost">Sign Out</a>
+                {% else %}
+                    <a href="/gm/login?next=/gm" class="btn-ghost">GM Sign In</a>
+                {% endif %}
+            </div>
+        </section>
+
+        {# ── GM-only edit form (collapsed by default) ── #}
+        {% if is_gm %}
+        <section id="edit-panel" class="panel p-5 mt-4 hidden">
+            <h3 class="font-display text-accent-300 text-sm uppercase tracking-wider mb-4">Edit Campaign Intro</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="field-label" for="edit-name">Campaign Name</label>
+                    <input type="text" id="edit-name" class="field-input" value="{{ campaign.name }}">
+                </div>
+                <div>
+                    <label class="field-label" for="edit-session">Session #</label>
+                    <input type="number" id="edit-session" class="field-input" value="{{ campaign.session_number }}" min="1" max="999">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="field-label" for="edit-tagline">Tagline</label>
+                    <input type="text" id="edit-tagline" class="field-input" value="{{ campaign.tagline }}" placeholder="A one-line hook for the campaign...">
+                </div>
+                <div>
+                    <label class="field-label" for="edit-next">Next Session</label>
+                    <input type="text" id="edit-next" class="field-input" value="{{ campaign.next_session_at }}" placeholder="e.g. Sat 5/16, 7pm">
+                </div>
+                <div></div>
+                <div>
+                    <label class="field-label" for="edit-recap">Last Session Recap</label>
+                    <textarea id="edit-recap" class="field-input" rows="5" placeholder="What happened last time...">{{ campaign.last_recap }}</textarea>
+                </div>
+                <div>
+                    <label class="field-label" for="edit-intro">Setting / The Tale</label>
+                    <textarea id="edit-intro" class="field-input" rows="5" placeholder="The world, the stakes, the prologue...">{{ campaign.intro }}</textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="toggleEdit()" class="btn-ghost">Cancel</button>
+                <button onclick="saveCampaign()" class="btn-primary">Save</button>
+            </div>
+        </section>
+        {% endif %}
+
+        <div class="text-center mt-10">
+            <a href="/player" class="text-[11px] text-base-500 hover:text-base-300 transition-colors">Skip to player hub &rarr;</a>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+<script>
+    function showToast(msg, kind) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast ' + (kind || 'ok') + ' show';
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.className = 'toast'; }, 2400);
+    }
+
+    async function joinAs(name) {
+        try {
+            const res = await fetch('/api/join_campaign', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                showToast(data.error || 'Could not join', 'error');
+                return;
+            }
+            // Mirror the legacy "my character" pointer used by the player
+            // hub so the welcome bar/star resolve to the freshly joined PC
+            // without a second click.
+            try { localStorage.setItem('pf2e_my_char', name); } catch(_) {}
+            // Also let the map's player view skip its name-prompt.
+            try { localStorage.setItem('pf2e_player_name', name); } catch(_) {}
+            location.href = '/player/sheet/' + encodeURIComponent(name);
+        } catch (e) {
+            showToast('Network error', 'error');
+        }
+    }
+
+    async function leaveCampaign() {
+        try {
+            await fetch('/api/leave_campaign', {method: 'POST'});
+            try { localStorage.removeItem('pf2e_my_char'); } catch(_) {}
+            location.reload();
+        } catch (e) {
+            showToast('Network error', 'error');
+        }
+    }
+
+    function toggleEdit() {
+        const panel = document.getElementById('edit-panel');
+        if (!panel) return;
+        panel.classList.toggle('hidden');
+    }
+
+    async function saveCampaign() {
+        const payload = {
+            name: document.getElementById('edit-name').value.trim() || 'Untitled Campaign',
+            session_number: parseInt(document.getElementById('edit-session').value, 10) || 1,
+            tagline: document.getElementById('edit-tagline').value.trim(),
+            next_session_at: document.getElementById('edit-next').value.trim(),
+            last_recap: document.getElementById('edit-recap').value,
+            intro: document.getElementById('edit-intro').value,
+        };
+        try {
+            const res = await fetch('/api/campaign', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                showToast(data.error || 'Save failed', 'error');
+                return;
+            }
+            showToast('Saved', 'ok');
+            // Re-render the visible bits inline so the GM sees their edit
+            // without a full reload (which would re-collapse this panel).
+            const c = data.campaign;
+            document.getElementById('campaign-name').textContent = c.name;
+            const tg = document.getElementById('campaign-tagline');
+            if (c.tagline) { tg.textContent = c.tagline; tg.classList.remove('hidden'); }
+            else { tg.classList.add('hidden'); }
+            document.getElementById('session-pill').textContent = 'Session ' + c.session_number;
+            const nx = document.getElementById('next-session-text');
+            if (nx) nx.textContent = c.next_session_at || '';
+            const recapEl = document.getElementById('recap-text');
+            if (recapEl) recapEl.textContent = c.last_recap;
+            const introEl = document.getElementById('intro-text');
+            if (introEl) introEl.textContent = c.intro;
+        } catch (e) {
+            showToast('Network error', 'error');
+        }
+    }
+</script>
+</body>
+</html>
