@@ -1,0 +1,87 @@
+{
+  "1": {
+    "ancestry_feat": 1,
+    "class_feat": 1
+  },
+  "10": {
+    "ability_boosts": 4,
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "11": {
+    "general_feat": 1,
+    "skill_increase": 1
+  },
+  "12": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "13": {
+    "ancestry_feat": 1,
+    "skill_increase": 1
+  },
+  "14": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "15": {
+    "ability_boosts": 4,
+    "general_feat": 1,
+    "skill_increase": 1
+  },
+  "16": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "17": {
+    "ancestry_feat": 1,
+    "skill_increase": 1
+  },
+  "18": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "19": {
+    "general_feat": 1,
+    "skill_increase": 1
+  },
+  "2": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "20": {
+    "ability_boosts": 4,
+    "class_feat": 1,
+    "skill_feat": 1,
+    "skill_increase": 1
+  },
+  "3": {
+    "general_feat": 1,
+    "skill_increase": 1
+  },
+  "4": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "5": {
+    "ability_boosts": 4,
+    "ancestry_feat": 1,
+    "skill_increase": 1
+  },
+  "6": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "7": {
+    "general_feat": 1,
+    "skill_increase": 1
+  },
+  "8": {
+    "class_feat": 1,
+    "skill_feat": 1
+  },
+  "9": {
+    "ancestry_feat": 1,
+    "skill_increase": 1
+  }
+}

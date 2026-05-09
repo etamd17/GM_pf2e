@@ -1,0 +1,136 @@
+{
+  "1": {},
+  "10": {
+    "fortitude": 4,
+    "reflex": 4,
+    "spell_attack": 4,
+    "spell_dc": 4
+  },
+  "11": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmed": 4
+  },
+  "12": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmed": 4
+  },
+  "13": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmed": 4,
+    "unarmored": 4
+  },
+  "14": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmed": 4,
+    "unarmored": 4
+  },
+  "15": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmed": 4,
+    "unarmored": 4
+  },
+  "16": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmed": 4,
+    "unarmored": 4
+  },
+  "17": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "18": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "19": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 8,
+    "spell_dc": 8,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "2": {},
+  "20": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 4,
+    "spell_attack": 8,
+    "spell_dc": 8,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "3": {},
+  "4": {},
+  "5": {
+    "fortitude": 4
+  },
+  "6": {
+    "fortitude": 4
+  },
+  "7": {
+    "fortitude": 4,
+    "spell_attack": 4,
+    "spell_dc": 4
+  },
+  "8": {
+    "fortitude": 4,
+    "spell_attack": 4,
+    "spell_dc": 4
+  },
+  "9": {
+    "fortitude": 4,
+    "reflex": 4,
+    "spell_attack": 4,
+    "spell_dc": 4
+  }
+}

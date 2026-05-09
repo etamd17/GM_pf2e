@@ -1,0 +1,132 @@
+{
+  "1": {},
+  "10": {
+    "fortitude": 4,
+    "perception": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "will": 6
+  },
+  "11": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "will": 6
+  },
+  "12": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "will": 6
+  },
+  "13": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "14": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "15": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmored": 4,
+    "will": 6
+  },
+  "16": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmored": 4,
+    "will": 6
+  },
+  "17": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmored": 4,
+    "will": 8
+  },
+  "18": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 6,
+    "spell_dc": 6,
+    "unarmored": 4,
+    "will": 8
+  },
+  "19": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 8,
+    "spell_dc": 8,
+    "unarmored": 4,
+    "will": 8
+  },
+  "2": {},
+  "20": {
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 4,
+    "spell_attack": 8,
+    "spell_dc": 8,
+    "unarmored": 4,
+    "will": 8
+  },
+  "3": {
+    "fortitude": 4
+  },
+  "4": {
+    "fortitude": 4
+  },
+  "5": {
+    "fortitude": 4,
+    "perception": 4
+  },
+  "6": {
+    "fortitude": 4,
+    "perception": 4
+  },
+  "7": {
+    "fortitude": 4,
+    "perception": 4,
+    "spell_attack": 4,
+    "spell_dc": 4
+  },
+  "8": {
+    "fortitude": 4,
+    "perception": 4,
+    "spell_attack": 4,
+    "spell_dc": 4
+  },
+  "9": {
+    "fortitude": 4,
+    "perception": 4,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "will": 6
+  }
+}

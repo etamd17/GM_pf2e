@@ -9538,7 +9538,16 @@ def submit_levelup(pc_name):
     # This is the authoritative source: even if the frontend doesn't send auto_bumps,
     # the server applies the correct proficiency increases from CLASS_PROGRESSION.
     class_name = build.get('class', '').lower()
-    subclass_name = build.get('subclass', '')
+    # Subclass detection: PB exports never populate `build['subclass']` —
+    # the field is auto-detected from `build['specials']` at Character
+    # construction time and stored on the live PC object. Fall back to
+    # that when the build dict is empty so subclass-specific progressions
+    # (Warpriest doctrines, Ruffian armor scaling) actually fire on
+    # PB-imported PCs. Persist back into the build dict so the saved
+    # JSON carries it forward and future loads don't have to re-detect.
+    subclass_name = build.get('subclass', '') or getattr(PARTY_LIBRARY.get(pc_name), 'subclass', '') or ''
+    if subclass_name and not build.get('subclass'):
+        build['subclass'] = subclass_name
     cumulative_bumps = get_class_proficiency_at_level(class_name, new_level, subclass=subclass_name)
     for b_key, b_val in cumulative_bumps.items():
         if b_key in ['fortitude', 'reflex', 'will', 'perception', 'ac', 'unarmored', 'light', 'medium', 'heavy', 'unarmed', 'simple', 'martial', 'advanced', 'class_dc', 'spell_attack', 'spell_dc']:

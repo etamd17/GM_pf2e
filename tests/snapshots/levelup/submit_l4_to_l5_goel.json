@@ -1,0 +1,74 @@
+{
+  "feat_count": 10,
+  "level": 5,
+  "proficiencies": {
+    "martial": 2,
+    "perception": 4
+  },
+  "spell_casters": [
+    {
+      "name": "Cleric",
+      "perDay": [
+        5,
+        3,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Cleric Font",
+      "perDay": [
+        5,
+        3,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Scion of Slayers",
+      "perDay": [
+        5,
+        3,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Mask of Power",
+      "perDay": [
+        5,
+        3,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

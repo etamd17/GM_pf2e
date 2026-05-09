@@ -1,0 +1,174 @@
+{
+  "1": {},
+  "10": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "perception": 6,
+    "will": 4
+  },
+  "11": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 4,
+    "light": 4,
+    "medium": 4,
+    "perception": 6,
+    "unarmored": 4,
+    "will": 4
+  },
+  "12": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 4,
+    "light": 4,
+    "medium": 4,
+    "perception": 6,
+    "unarmored": 4,
+    "will": 4
+  },
+  "13": {
+    "advanced": 4,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 4,
+    "light": 4,
+    "martial": 6,
+    "medium": 4,
+    "perception": 6,
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 4,
+    "will": 4
+  },
+  "14": {
+    "advanced": 4,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 4,
+    "light": 4,
+    "martial": 6,
+    "medium": 4,
+    "perception": 6,
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 4,
+    "will": 4
+  },
+  "15": {
+    "advanced": 4,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 4,
+    "light": 4,
+    "martial": 6,
+    "medium": 4,
+    "perception": 6,
+    "reflex": 6,
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 4,
+    "will": 4
+  },
+  "16": {
+    "advanced": 4,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 4,
+    "light": 4,
+    "martial": 6,
+    "medium": 4,
+    "perception": 6,
+    "reflex": 6,
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 4,
+    "will": 4
+  },
+  "17": {
+    "advanced": 4,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 6,
+    "light": 6,
+    "martial": 6,
+    "medium": 6,
+    "perception": 6,
+    "reflex": 6,
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 6,
+    "will": 4
+  },
+  "18": {
+    "advanced": 4,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 6,
+    "light": 6,
+    "martial": 6,
+    "medium": 6,
+    "perception": 6,
+    "reflex": 6,
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 6,
+    "will": 4
+  },
+  "19": {
+    "advanced": 6,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 6,
+    "light": 6,
+    "martial": 8,
+    "medium": 6,
+    "perception": 6,
+    "reflex": 6,
+    "simple": 8,
+    "unarmed": 8,
+    "unarmored": 6,
+    "will": 4
+  },
+  "2": {},
+  "20": {
+    "advanced": 6,
+    "class_dc": 4,
+    "fortitude": 6,
+    "heavy": 6,
+    "light": 6,
+    "martial": 8,
+    "medium": 6,
+    "perception": 6,
+    "reflex": 6,
+    "simple": 8,
+    "unarmed": 8,
+    "unarmored": 6,
+    "will": 4
+  },
+  "3": {
+    "will": 4
+  },
+  "4": {
+    "will": 4
+  },
+  "5": {
+    "will": 4
+  },
+  "6": {
+    "will": 4
+  },
+  "7": {
+    "perception": 6,
+    "will": 4
+  },
+  "8": {
+    "perception": 6,
+    "will": 4
+  },
+  "9": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "perception": 6,
+    "will": 4
+  }
+}
