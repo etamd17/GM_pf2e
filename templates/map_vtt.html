@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VTT Map - GM View</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PixiJS Phase 1 (feature-flagged via ?pixi=1). Loaded eagerly so the
+         renderer is ready by the time _initPixi() fires from init(). When
+         the flag is off, the script still loads but no PIXI app is created. -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { 
@@ -2074,14 +2078,24 @@
             _endLayer();
         }
         function _drawTokensLayer() {
+            // PIXI feature flag (Phase 1): when on, PIXI handles tokens, but
+            // templates / range rings / movement range stay on canvas because
+            // those haven't been migrated yet. We still call _beginLayer
+            // to clear the canvas and apply the transform, draw the canvas-
+            // owned bits, then ask PIXI to sync sprites from mapState.
             _beginLayer('tokens');
             drawTemplates();
-            drawTokens();
+            if (!_USE_PIXI_TOKENS) {
+                drawTokens();
+            }
             if (selectedToken) {
                 drawMovementRange();
                 drawRangeRings();
             }
             _endLayer();
+            if (_USE_PIXI_TOKENS) {
+                _pixiSyncTokens();
+            }
         }
         function _drawOverlayLayer() {
             _beginLayer('overlay');
@@ -2090,6 +2104,243 @@
             drawRuler();
             drawSelectionBox();
             _endLayer();
+        }
+
+        // ===========================================
+        // PIXIJS PHASE 1 (feature-flagged via ?pixi=1)
+        // ===========================================
+        // Migrates ONLY the token rendering layer from 2D canvas to PixiJS.
+        // bg / fog / overlay stay on canvas. The PIXI canvas is layered ABOVE
+        // the canvas tokens-layer (which is cleared each frame when PIXI is
+        // on) and BELOW the overlay (so the marquee / ruler / wall preview
+        // still draws on top). PIXI canvas has pointer-events:none so all
+        // interactions still hit the overlay layer's handlers — no event-
+        // routing changes for Phase 1.
+        //
+        // Phase 1 sprite scope: circle, initials, HP bar, selection ring
+        // (gold for selected / blue for active combatant), Hero Points pip
+        // strip, and active-combatant action pips + MAP indicator. Out of
+        // scope for Phase 1 (still rendered on canvas via the existing
+        // drawTokens path when flag is OFF, and not rendered at all when
+        // ON): pulse animation on active combatant, condition icons,
+        // flanking ring, range rings, movement-range circle, token tween.
+        // Phase 2 will fill those in.
+        const _USE_PIXI_TOKENS = new URLSearchParams(location.search).get('pixi') === '1';
+        let _pixiApp = null;
+        let _pixiTokensLayer = null;     // PIXI.Container that holds every token sprite
+        const _pixiTokenSprites = new Map();  // tokenId → {root, circle, label, hpBar, hpFill, heroPips[], actionPips[], mapText}
+
+        async function _initPixi() {
+            if (!_USE_PIXI_TOKENS) return;
+            if (typeof PIXI === 'undefined') {
+                console.error('[pixi] PIXI not loaded; CDN may have failed');
+                return;
+            }
+            const layer = layers.tokens.canvas;
+            try {
+                _pixiApp = new PIXI.Application();
+                await _pixiApp.init({
+                    width: layer.width,
+                    height: layer.height,
+                    backgroundAlpha: 0,
+                    antialias: true,
+                    resolution: window.devicePixelRatio || 1,
+                    autoDensity: true,
+                });
+            } catch (err) {
+                console.error('[pixi] init failed', err);
+                _pixiApp = null;
+                return;
+            }
+            // Insert the PIXI canvas right after the tokens canvas so it
+            // stacks above tokens but below overlay.
+            const pixiCanvas = _pixiApp.canvas;
+            pixiCanvas.id = 'pixi-tokens';
+            pixiCanvas.className = 'map-layer';
+            pixiCanvas.style.position = 'absolute';
+            pixiCanvas.style.top = '0';
+            pixiCanvas.style.left = '0';
+            pixiCanvas.style.pointerEvents = 'none';
+            layer.parentNode.insertBefore(pixiCanvas, layer.nextSibling);
+
+            _pixiTokensLayer = new PIXI.Container();
+            _pixiApp.stage.addChild(_pixiTokensLayer);
+            // Initial paint
+            markDirty('tokens');
+        }
+
+        function _pixiResize(w, h) {
+            if (!_pixiApp) return;
+            try {
+                _pixiApp.renderer.resize(w, h);
+            } catch (_) {}
+        }
+
+        function _pixiBuildTokenSprite() {
+            // Construct the static parts once; per-frame updates only mutate
+            // values via `_pixiUpdateTokenSprite`. Children are stacked in
+            // the order they're added (later = drawn on top).
+            const root = new PIXI.Container();
+            const circle = new PIXI.Graphics();
+            const label = new PIXI.Text({
+                text: '',
+                style: {
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontSize: 14, fontWeight: 'bold',
+                    fill: 0xffffff, align: 'center',
+                },
+            });
+            label.anchor.set(0.5);
+            const hpBar = new PIXI.Graphics();
+            const heroPipsContainer = new PIXI.Container();
+            const actionPipsContainer = new PIXI.Container();
+            const mapText = new PIXI.Text({
+                text: '',
+                style: {
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontSize: 11, fontWeight: 'bold',
+                    fill: 0xf59e0b, align: 'left',
+                },
+            });
+            mapText.anchor.set(0, 0.5);
+            root.addChild(circle, label, hpBar, heroPipsContainer, actionPipsContainer, mapText);
+            return { root, circle, label, hpBar, heroPips: heroPipsContainer,
+                     actionPips: actionPipsContainer, mapText };
+        }
+
+        function _pixiUpdateTokenSprite(s, t, gs, ox, oy) {
+            const size = t.size || 1;
+            // Honor active drag offsets so sprites move with the cursor.
+            let tx, ty;
+            if (draggingToken && _multiDragStart && _multiDragStart.has(t.id)) {
+                const start = _multiDragStart.get(t.id);
+                tx = start.x + dragTokenOffset.x;
+                ty = start.y + dragTokenOffset.y;
+            } else {
+                const [ax, ay] = _getAnimatedPosition(t);
+                tx = ax;
+                ty = ay;
+            }
+            const cx = tx * gs + ox + (gs * size) / 2;
+            const cy = ty * gs + oy + (gs * size) / 2;
+            const r = (gs * size) / 2 - 4;
+
+            s.root.position.set(cx, cy);
+            s.root.alpha = (t.visible_to_players === false) ? 0.55 : 1;
+
+            const fillHex = _hexToInt(t.color || (t.is_pc ? '#22c55e' : '#ef4444'));
+            const isSelected = _isSelected(t.id);
+            const isActive = isActiveCombatant(t);
+            const ringHex = isSelected ? 0xfbbf24 : (isActive ? 0x3b82f6 : 0xffffff);
+            const ringWidth = isSelected ? 4 : (isActive ? 3 : 2);
+
+            s.circle.clear();
+            s.circle.circle(0, 0, r).fill(fillHex);
+            s.circle.circle(0, 0, r).stroke({ color: ringHex, width: ringWidth, alignment: 1 });
+
+            // Initials. PIXI Text is expensive to update; skip if unchanged.
+            const initials = (t.name || '').split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+            if (s.label.text !== initials) s.label.text = initials;
+            s.label.style.fontSize = Math.max(12, r * 0.5);
+
+            // HP bar
+            s.hpBar.clear();
+            if (t.max_hp > 0) {
+                const hpPct = Math.max(0, (t.hp || 0) / t.max_hp);
+                const barW = gs * size - 8;
+                const barH = 6;
+                const barX = -barW / 2;
+                const barY = r + 4;
+                s.hpBar.rect(barX, barY, barW, barH).fill(0x333333);
+                const fillColor = hpPct > 0.5 ? 0x22c55e : (hpPct > 0.25 ? 0xf59e0b : 0xef4444);
+                if (hpPct > 0) {
+                    s.hpBar.rect(barX, barY, barW * hpPct, barH).fill(fillColor);
+                }
+            }
+
+            // Hero Points pip strip — PCs only. Three slots.
+            s.heroPips.removeChildren().forEach(c => c.destroy());
+            if (t.is_pc) {
+                const hpCount = Math.max(0, Math.min(3, t.hero_points || 0));
+                const pipR = 4, pipGap = 6, total = 3;
+                const pipsW = pipR * 2 * total + pipGap * (total - 1);
+                const startX = -pipsW / 2 + pipR;
+                const baseY = (t.max_hp > 0) ? (r + 4 + 6 + 8) : (r + 8);
+                for (let i = 0; i < total; i++) {
+                    const px = startX + i * (pipR * 2 + pipGap);
+                    const g = new PIXI.Graphics();
+                    g.circle(px, baseY, pipR).fill(i < hpCount ? 0xfbbf24 : 0x1a1a1a);
+                    g.circle(px, baseY, pipR).stroke({ color: i < hpCount ? 0xfbbf24 : 0x3a3a3a, width: 1 });
+                    s.heroPips.addChild(g);
+                }
+            }
+
+            // Action pips + MAP indicator on the active combatant.
+            s.actionPips.removeChildren().forEach(c => c.destroy());
+            s.mapText.text = '';
+            if (isActive) {
+                const used = Math.max(0, Math.min(3, t.actions_used_this_turn || 0));
+                const pipR = 5, pipGap = 8, total = 3;
+                const pipsW = pipR * 2 * total + pipGap * (total - 1);
+                const startX = -pipsW / 2 + pipR;
+                const baseY = -r - 12;
+                for (let i = 0; i < total; i++) {
+                    const px = startX + i * (pipR * 2 + pipGap);
+                    const spent = i < used;
+                    const g = new PIXI.Graphics();
+                    g.circle(px, baseY, pipR).fill(spent ? 0x1a1a1a : 0x3b82f6);
+                    g.circle(px, baseY, pipR).stroke({ color: spent ? 0x374151 : 0x60a5fa, width: 1.5 });
+                    s.actionPips.addChild(g);
+                }
+                const strikes = t.strikes_this_turn || 0;
+                if (strikes > 0) {
+                    s.mapText.text = strikes >= 2 ? 'MAP -10' : 'MAP -5';
+                    s.mapText.style.fill = strikes >= 2 ? 0xef4444 : 0xf59e0b;
+                    s.mapText.position.set(startX + pipsW + 6, baseY);
+                } else {
+                    s.mapText.position.set(0, 0);
+                }
+            }
+        }
+
+        function _hexToInt(hex) {
+            // Accept '#rrggbb' / '#rgb'. Falls back to white on parse failure.
+            const h = (hex || '').replace('#', '');
+            if (h.length === 3) {
+                return parseInt(h.split('').map(c => c + c).join(''), 16);
+            }
+            const n = parseInt(h, 16);
+            return isFinite(n) ? n : 0xffffff;
+        }
+
+        function _pixiSyncTokens() {
+            if (!_pixiApp || !_pixiTokensLayer) return;
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            // Apply the same pan/zoom transform the canvas layers get.
+            _pixiTokensLayer.position.set(viewX, viewY);
+            _pixiTokensLayer.scale.set(zoom, zoom);
+
+            const seen = new Set();
+            for (const t of (mapState.tokens || [])) {
+                seen.add(t.id);
+                let s = _pixiTokenSprites.get(t.id);
+                if (!s) {
+                    s = _pixiBuildTokenSprite();
+                    _pixiTokensLayer.addChild(s.root);
+                    _pixiTokenSprites.set(t.id, s);
+                }
+                _pixiUpdateTokenSprite(s, t, gs, ox, oy);
+            }
+            // Drop sprites for tokens that no longer exist.
+            for (const [id, s] of _pixiTokenSprites) {
+                if (!seen.has(id)) {
+                    _pixiTokensLayer.removeChild(s.root);
+                    s.root.destroy({ children: true });
+                    _pixiTokenSprites.delete(id);
+                }
+            }
         }
 
         function drawSelectionBox() {
@@ -2156,13 +2407,20 @@
             
             // Setup SSE
             setupSSE();
-            
+
+            // PixiJS Phase 1 — only fires if ?pixi=1 is in the URL. Async
+            // because we may need to wait for the renderer to init; runs
+            // off the critical path so canvas tokens still render while
+            // PIXI is warming up. Sync is triggered by markDirty('tokens')
+            // from inside _initPixi.
+            _initPixi();
+
             // Populate UI
             populateConditionMenu();
             populateCreaturePanel();
             updateWallList();
             updateCombatantList();
-            
+
             // Setup creature drag and drop
             setupCreatureDragDrop();
             
@@ -2189,6 +2447,8 @@
                 layers[k].canvas.width = w;
                 layers[k].canvas.height = h;
             }
+            // PixiJS Phase 1: keep the WebGL renderer in sync with viewport.
+            _pixiResize(w, h);
             markAllDirty();
         }
         
