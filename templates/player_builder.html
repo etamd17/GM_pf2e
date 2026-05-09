@@ -1524,10 +1524,68 @@
             } else { aInfo.textContent = ''; }
         }
 
+        function _builderValidationWarnings() {
+            // Surface obvious prereq mismatches the picker doesn't currently
+            // gate. PF2e feat prereqs are written in natural language ("you
+            // are a goblin", "Half-Orc heritage"), so a real parser would
+            // need a feat-prereq table. This pattern check covers the most
+            // common case: an ancestry word in a selected feat's name that
+            // doesn't match the chosen ancestry. False-positive risk is low
+            // (ancestry words are distinctive) and false-negative risk is
+            // bounded — feats whose prereqs aren't in their name still
+            // slip through, but the GM/player will spot those at the table.
+            if (!state.ancestry) return [];
+            const ancestryWords = [
+                'human', 'elf', 'dwarf', 'gnome', 'halfling', 'goblin',
+                'orc', 'half-orc', 'half-elf', 'leshy', 'kobold', 'catfolk',
+                'ratfolk', 'tengu', 'kitsune', 'lizardfolk', 'tiefling',
+                'aasimar', 'changeling', 'fetchling', 'azarketi', 'hobgoblin',
+                'sprite', 'strix', 'ghoran', 'awakened animal', 'conrasu',
+                'shisk', 'grippli', 'gnoll', 'poppet', 'goloma', 'anadi',
+                'android', 'automaton', 'kashrishi', 'nagaji', 'vanara',
+                'vishkanya', 'fleshwarp', 'beastkin', 'skeleton', 'undine',
+            ];
+            const myAnc = state.ancestry.toLowerCase().replace(/-/g, ' ').replace(/_/g, ' ');
+            const warnings = [];
+            const allFeatNames = [];
+            if (state.ancFeat) allFeatNames.push({ slot: 'Ancestry feat', name: state.ancFeat });
+            if (state.background) allFeatNames.push({ slot: 'Background', name: state.background });
+            for (const [k, v] of Object.entries(state.clsFeats || {})) {
+                if (typeof v === 'string') allFeatNames.push({ slot: 'Class feat', name: v });
+                else if (v && v.name) allFeatNames.push({ slot: 'Class feat', name: v.name });
+            }
+            for (const e of allFeatNames) {
+                const lname = (e.name || '').toLowerCase();
+                for (const word of ancestryWords) {
+                    if (lname.includes(word) && myAnc !== word && myAnc.indexOf(word) < 0) {
+                        warnings.push(
+                            `${e.slot} "<b>${esc(e.name)}</b>" appears to be a ${word} option, but your ancestry is ${state.ancestry}.`
+                        );
+                    }
+                }
+            }
+            return warnings;
+        }
+
         function renderBuilderReview() {
             const ui = document.getElementById('ui-builder-review');
             let html = '';
-            
+
+            // Validation warnings — non-blocking nudges. See
+            // _builderValidationWarnings for the heuristic.
+            const warnings = _builderValidationWarnings();
+            if (warnings.length > 0) {
+                html += `<div class="mb-6 p-4 rounded border border-amber-500/40 bg-amber-500/10">
+                    <h4 class="text-sm font-bold text-amber-400 uppercase mb-2">Heads up — possible prereq mismatch</h4>
+                    <ul class="list-disc pl-6 text-amber-200 text-sm space-y-1">
+                        ${warnings.map(w => `<li>${w}</li>`).join('')}
+                    </ul>
+                    <div class="text-xs text-gray-400 mt-2">
+                        These are heuristic warnings, not hard errors. PF2e prereqs are written in natural language; this check matches obvious ancestry words in feat names. If a flagged feat is actually valid, ignore the warning.
+                    </div>
+                </div>`;
+            }
+
             // Identity
             let name = document.getElementById('inp-name').value || 'Unnamed';
             let deity = document.getElementById('inp-deity').value || 'None';

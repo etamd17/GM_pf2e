@@ -13,6 +13,12 @@
             <input type="number" id="builder-party-level" value="{{ party_level }}" min="1" max="20" onchange="recalcXP()"
                 class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-amber-500">
         </div>
+        <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-3 py-2 rounded"
+             title="PF2e GM Core encounter thresholds are scaled per PC: ±10 / 15 / 20 / 30 / 40 from the 4-player baseline.">
+            <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Party Size:</label>
+            <input type="number" id="builder-party-size" value="{{ party_size }}" min="1" max="8" onchange="recalcXP()"
+                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-amber-500">
+        </div>
     </div>
 </div>
 
@@ -184,7 +190,21 @@
 <script>
     let staged = []; // [{path, name, level, count, elite_weak, hp, ac}]
     let searchTimeout = null;
-    const xpMap = {'-4':10,'-3':15,'-2':20,'-1':30,'0':40,'1':60,'2':80,'3':120,'4':160};
+    // Encounter math constants come from class_matrix.py via the template
+    // context so the same values drive both the encounter builder and the
+    // tracker's diff_label calculation.
+    const xpMap = (function() {
+        const raw = {{ xp_by_diff | tojson }};
+        const out = {};
+        for (const [k, v] of Object.entries(raw)) out[String(k)] = v;
+        return out;
+    })();
+    const DIFFICULTY_TIERS = {{ difficulty_tiers | tojson }};
+    function _thresholdFor(tierName, partySize) {
+        const t = DIFFICULTY_TIERS.find(t => t.name === tierName);
+        if (!t) return Infinity;
+        return t.base + t.per_extra * (Math.max(1, partySize) - 4);
+    }
 
     // --- SEARCH ---
     // Shared runner so level/trait inputs can call it without the keyboard event.
@@ -364,6 +384,7 @@
     let _lastTier = 'Empty';
     function recalcXP() {
         const partyLevel = parseInt(document.getElementById('builder-party-level').value) || 1;
+        const partySize = parseInt(document.getElementById('builder-party-size').value) || 4;
         let totalXP = 0;
         staged.forEach(s => {
             let effectiveLevel = s.level + s.elite_weak;
@@ -374,15 +395,25 @@
 
         document.getElementById('xp-total').innerText = totalXP;
 
-        // PF2E GM Core p.74 thresholds (4-player party)
-        let label, color, barColor, pct;
-        if (totalXP === 0) { label = 'Empty'; color = 'text-gray-400'; barColor = '#64748B'; pct = 0; }
-        else if (totalXP < 40) { label = 'Trivial'; color = 'text-gray-400'; barColor = '#64748B'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 60) { label = 'Low'; color = 'text-green-400'; barColor = '#34D399'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 80) { label = 'Moderate'; color = 'text-yellow-400'; barColor = '#FBBF24'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 120) { label = 'Severe'; color = 'text-orange-500'; barColor = '#F97316'; pct = (totalXP / 200) * 100; }
-        else if (totalXP < 160) { label = 'Extreme'; color = 'text-red-500 font-bold'; barColor = '#EF4444'; pct = (totalXP / 200) * 100; }
-        else { label = 'Impossible'; color = 'text-red-600 font-bold'; barColor = '#DC2626'; pct = Math.min((totalXP / 200) * 100, 100); }
+        // PF2E GM Core p.74 thresholds, scaled by party size via the
+        // shared DIFFICULTY_TIERS table (class_matrix.ENCOUNTER_DIFFICULTY).
+        // Bar fills proportionally up to "Extreme + 25%" so an Impossible
+        // encounter still shows beyond the bar's right edge.
+        const tT = _thresholdFor('Trivial',  partySize);
+        const tL = _thresholdFor('Low',      partySize);
+        const tM = _thresholdFor('Moderate', partySize);
+        const tS = _thresholdFor('Severe',   partySize);
+        const tE = _thresholdFor('Extreme',  partySize);
+        const barCap = tE * 1.25;
+        let label, color, barColor;
+        if (totalXP === 0)        { label = 'Empty';      color = 'text-gray-400';        barColor = '#64748B'; }
+        else if (totalXP < tT)    { label = 'Trivial';    color = 'text-gray-400';        barColor = '#64748B'; }
+        else if (totalXP < tL)    { label = 'Low';        color = 'text-green-400';       barColor = '#34D399'; }
+        else if (totalXP < tM)    { label = 'Moderate';   color = 'text-yellow-400';      barColor = '#FBBF24'; }
+        else if (totalXP < tS)    { label = 'Severe';     color = 'text-orange-500';      barColor = '#F97316'; }
+        else if (totalXP < tE)    { label = 'Extreme';    color = 'text-red-500 font-bold';  barColor = '#EF4444'; }
+        else                       { label = 'Impossible'; color = 'text-red-600 font-bold';  barColor = '#DC2626'; }
+        const pct = Math.min((totalXP / barCap) * 100, 100);
 
         const diffEl = document.getElementById('xp-difficulty');
         diffEl.innerText = label;

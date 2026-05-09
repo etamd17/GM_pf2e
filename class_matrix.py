@@ -40,6 +40,40 @@ def validate_skill_rank(rank, character_level):
     return False
 
 # =============================================================================
+# ENCOUNTER XP — single source of truth for the encounter builder + tracker
+# =============================================================================
+# PF2e GM Core p.74. The XP value of a creature depends on its level relative
+# to the party. ENCOUNTER_XP_BY_DIFF maps (creature_level - party_level)
+# clamped to [-4, 4] to the XP value for ONE creature at that diff.
+ENCOUNTER_XP_BY_DIFF = {
+    -4: 10, -3: 15, -2: 20, -1: 30,
+     0: 40,
+     1: 60,  2: 80,  3: 120, 4: 160,
+}
+
+# Encounter difficulty thresholds (4-player baseline) and per-extra-PC scaling.
+# `base` is the XP at which a 4-player encounter just hits this difficulty;
+# `per_extra` is the +/- adjustment per PC above/below 4. So a 5-player
+# Severe is 120 + 30 = 150 XP; a 3-player Severe is 120 - 30 = 90 XP.
+ENCOUNTER_DIFFICULTY = [
+    {"name": "Trivial",  "base": 40,  "per_extra": 10},
+    {"name": "Low",      "base": 60,  "per_extra": 15},
+    {"name": "Moderate", "base": 80,  "per_extra": 20},
+    {"name": "Severe",   "base": 120, "per_extra": 30},
+    {"name": "Extreme",  "base": 160, "per_extra": 40},
+]
+
+def encounter_threshold(name, party_size=4):
+    """Return the XP threshold for a given difficulty at a given party size.
+    Anything at-or-above the next tier's threshold gets the next-tier label.
+    Below "Trivial" is just "Trivial-or-lower"."""
+    party_size = max(1, int(party_size or 4))
+    for entry in ENCOUNTER_DIFFICULTY:
+        if entry["name"] == name:
+            return entry["base"] + entry["per_extra"] * (party_size - 4)
+    return None
+
+# =============================================================================
 # ANCESTRY DATA - Speeds, sizes, HP, senses, languages
 # =============================================================================
 ANCESTRY_SPEEDS = {

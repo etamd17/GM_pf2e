@@ -1645,19 +1645,50 @@ function addConditionAP(id) {
     try { sel.selectedIndex = 0; } catch(_) {}
 }
 
-function setPD(id) {
-    const input = document.getElementById('pd-' + id);
+// Persistent-damage validation. PF2e RAW format is "<dice> <type>"
+// (e.g. "1d6 fire", "2d4 cold", "5 bleed"). The server didn't reject
+// malformed strings, so a typo like "1d 6 fier" silently parsed as
+// nothing and the damage just stopped happening end-of-turn — exactly
+// the kind of failure the GM doesn't notice mid-combat. Validate at the
+// input now: dice notation OR a flat number, then at least one type
+// word. Blank clears the condition (so we still allow empty).
+const _PD_RE = /^\s*(\d+(d\d+)?(\s*[+-]\s*\d+)?)\s+([A-Za-z][A-Za-z ]*)\s*$/;
+function _validatePersistentDamage(raw) {
+    const s = (raw || '').trim();
+    if (!s) return { ok: true, value: '' };  // empty clears
+    if (_PD_RE.test(s)) return { ok: true, value: s };
+    return {
+        ok: false,
+        value: s,
+        error: 'Format: <dice> <type> — e.g. "1d6 fire", "2d4 cold", "5 bleed"',
+    };
+}
+function _markPDInputError(input, msg) {
+    if (!input) return;
+    input.style.outline = msg ? '2px solid #ef4444' : '';
+    input.title = msg || '';
+}
+function _commitPD(id, inputId) {
+    const input = document.getElementById(inputId);
+    const v = _validatePersistentDamage(input?.value);
+    if (!v.ok) {
+        _markPDInputError(input, v.error);
+        // Surface to the user too; tooltip alone is easy to miss.
+        if (typeof showToast === 'function') {
+            showToast(v.error, 'error');
+        } else {
+            alert(v.error);
+        }
+        return;
+    }
+    _markPDInputError(input, '');
     const fd = new FormData();
-    fd.append('persistent_damage', input?.value || '');
+    fd.append('persistent_damage', v.value);
     apiPost('/api/set_persistent_damage/' + id, fd, null);
 }
 
-function setPDAP(id) {
-    const input = document.getElementById('pd-ap-' + id);
-    const fd = new FormData();
-    fd.append('persistent_damage', input?.value || '');
-    apiPost('/api/set_persistent_damage/' + id, fd, null);
-}
+function setPD(id)   { _commitPD(id, 'pd-' + id); }
+function setPDAP(id) { _commitPD(id, 'pd-ap-' + id); }
 
 function eliteWeak(id, mode) {
     const fd = new FormData();

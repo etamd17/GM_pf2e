@@ -1273,22 +1273,32 @@ def _sort_encounter():
     else: TURN_INDEX = 0
 
 def calculate_encounter_xp(encounter, party_level):
-    xp_map = { -4: 10, -3: 15, -2: 20, -1: 30, 0: 40, 1: 60, 2: 80, 3: 120, 4: 160 }
+    """Total XP value of the non-PC creatures in `encounter` against
+    a party of the given level. Single source of truth lives in
+    class_matrix.ENCOUNTER_XP_BY_DIFF."""
+    from class_matrix import ENCOUNTER_XP_BY_DIFF
     total_xp = 0
     for c in encounter:
         if not c.is_pc:
             lvl_diff = max(-4, min(4, c.level - party_level))
-            total_xp += xp_map.get(lvl_diff, 160 if lvl_diff > 4 else 10)
+            total_xp += ENCOUNTER_XP_BY_DIFF.get(lvl_diff, 160 if lvl_diff > 4 else 10)
     return total_xp
 
-def get_difficulty_label(xp):
-    """PF2E encounter difficulty (GM Core p.74, 4-player party)."""
-    if xp < 40: return "Trivial", "text-gray-400"
-    elif xp < 60: return "Low", "text-green-400"
-    elif xp < 80: return "Moderate", "text-yellow-400"
-    elif xp < 120: return "Severe", "text-orange-500"
-    elif xp < 160: return "Extreme", "text-red-600 font-bold"
-    else: return "Impossible", "text-red-600 font-bold animate-pulse"
+def get_difficulty_label(xp, party_size=None):
+    """PF2E encounter difficulty (GM Core p.74). Thresholds scale with
+    party size — a 5-player Severe is 150 XP, a 3-player Severe is 90.
+    party_size defaults to the actual PARTY_LIBRARY count if not given."""
+    from class_matrix import ENCOUNTER_DIFFICULTY
+    if party_size is None:
+        party_size = max(1, len(PARTY_LIBRARY) or 4)
+    th = {t["name"]: t["base"] + t["per_extra"] * (party_size - 4)
+          for t in ENCOUNTER_DIFFICULTY}
+    if   xp < th["Trivial"]:   return "Trivial",    "text-gray-400"
+    elif xp < th["Low"]:       return "Low",        "text-green-400"
+    elif xp < th["Moderate"]:  return "Moderate",   "text-yellow-400"
+    elif xp < th["Severe"]:    return "Severe",     "text-orange-500"
+    elif xp < th["Extreme"]:   return "Extreme",    "text-red-600 font-bold"
+    else:                      return "Impossible", "text-red-600 font-bold animate-pulse"
 
 class Character:
     def __init__(self, data, file_path=""):
@@ -6100,7 +6110,20 @@ def gm_screen():
 def encounter_builder():
     sorted_party = sorted(PARTY_LIBRARY.values(), key=lambda p: p.name)
     party_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
-    return render_template('encounter_builder.html', party=sorted_party, party_level=party_level)
+    # Default party size from PARTY_LIBRARY; the template surfaces a numeric
+    # override input so the GM can model "what if a guest joins" or "down to
+    # 3 PCs tonight" without changing the canonical roster.
+    party_size = max(1, len(PARTY_LIBRARY) or 4)
+    # Single source of truth for encounter math (lives in class_matrix).
+    # Pass the constants down so the template's recalcXP() can scale per
+    # party size instead of hardcoding the 4-player numbers.
+    from class_matrix import ENCOUNTER_XP_BY_DIFF, ENCOUNTER_DIFFICULTY
+    return render_template('encounter_builder.html',
+                           party=sorted_party,
+                           party_level=party_level,
+                           party_size=party_size,
+                           xp_by_diff=ENCOUNTER_XP_BY_DIFF,
+                           difficulty_tiers=ENCOUNTER_DIFFICULTY)
 
 @app.route('/api/monster_search')
 def api_monster_search():

@@ -61,7 +61,7 @@
     <!-- CHARACTERS -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
         {% for pc in party %}
-        <div class="card p-5 block relative">
+        <div class="card p-5 block relative" data-char-name="{{ pc.name }}">
             <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0"></a>
             <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson }}?1:0.3">&#9733;</button>
             <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.15); opacity:0.3;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3">&times;</button>
@@ -201,11 +201,33 @@
     function clearMyChar() { localStorage.removeItem('pf2e_my_char'); document.getElementById('my-char-bar').classList.add('hidden'); }
     function loadMyChar() {
         const name = localStorage.getItem('pf2e_my_char');
-        if (name) {
-            document.getElementById('my-char-bar').classList.remove('hidden');
-            document.getElementById('my-char-name').textContent = name;
-            document.getElementById('my-char-link').href = '/player/sheet/' + encodeURIComponent(name);
+        if (!name) return;
+        // Validate against the server-rendered roster: if the GM deleted
+        // this character (or it was renamed), the localStorage entry will
+        // hang around forever and the sheet/map links resolve to 404
+        // pages. Compare against the data-char-name attributes the server
+        // emits on each roster card; if the name isn't there, clear the
+        // bad entry and surface a one-time prompt to pick another.
+        const roster = [...document.querySelectorAll('[data-char-name]')]
+            .map(el => el.getAttribute('data-char-name'));
+        if (roster.length > 0 && !roster.includes(name)) {
+            localStorage.removeItem('pf2e_my_char');
+            const bar = document.getElementById('my-char-bar');
+            if (bar) bar.classList.add('hidden');
+            // Soft notice — toast that fades, doesn't block.
+            const toast = document.createElement('div');
+            toast.style.cssText =
+                'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+                'background:rgba(127,29,29,0.95);color:#fca5a5;padding:8px 14px;' +
+                'border:1px solid #991b1b;border-radius:6px;font-size:12px;z-index:1000;';
+            toast.textContent = `"${name}" is no longer in the roster — pick a character below.`;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 4000);
+            return;
         }
+        document.getElementById('my-char-bar').classList.remove('hidden');
+        document.getElementById('my-char-name').textContent = name;
+        document.getElementById('my-char-link').href = '/player/sheet/' + encodeURIComponent(name);
     }
     loadMyChar();
 
