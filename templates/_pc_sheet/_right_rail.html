@@ -1,0 +1,23 @@
+    {# ── Center stats rail (3-column layout, wide viewports only) ─────
+       Layout per user request: HP / Shield / AC / Saves / Abilities all
+       live UNDER the character name (in the existing .stats-strip and
+       .ability-row-wrap blocks, which are now visible on wide too).
+       This rail is now SKILLS ONLY so the full skill list is visible
+       without scrolling fighting the rest of the stats. #}
+    <aside id="stats-rail" class="no-print" aria-label="Skills" data-pc-name="{{ pc.name }}">
+        <div class="stats-rail-section sr-skills">
+            <div class="sr-head">Skills</div>
+            {% for skill in pc.skills %}
+            <div class="sr-row sr-row-roll sr-skill-row" onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})" role="button" tabindex="0" title="{{ skill.breakdown }}">
+                <span class="sr-skill-prof
+                    {% if skill.prof_letter == 'U' %} sr-prof-u
+                    {% elif skill.prof_letter == 'T' %} prof-t
+                    {% elif skill.prof_letter == 'E' %} prof-e
+                    {% elif skill.prof_letter == 'M' %} prof-m
+                    {% else %} prof-l {% endif %}">{{ skill.prof_letter }}</span>
+                <span class="sr-skill-name">{{ skill.name }}</span>
+                <span class="sr-val accent">{{ skill.total }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </aside>

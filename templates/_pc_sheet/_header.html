@@ -1,0 +1,339 @@
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- CHARACTER HEADER — DDB-style sticky header                     -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="char-header w-full" style="position:relative;">
+
+        {# Connection-status pip (P2 #19) — lives in the dead space top-left
+           of the sticky header. Green = SSE alive, amber = stale, red = dead.
+           Idle cost: zero (single static element, painted by SSE handler). #}
+        <span id="conn-pip" class="conn-pip no-print" data-state="alive" title="Live connection to GM screen">
+            <span class="conn-pip-dot"></span><span id="conn-pip-label">live</span>
+        </span>
+
+        <!-- ROW 1 — Identity + Actions (Design C topbar) -->
+        <div class="max-w-6xl mx-auto px-4 md:px-6 pt-2 pb-1">
+            <div class="flex flex-wrap justify-between items-center gap-3">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <a href="/player" class="transition-colors" style="color:var(--t3); font-size:18px; line-height:1;" title="Back to roster">&#8592;</a>
+                    <!-- Portrait — heraldic medallion with gilt ring.
+                         Clicking uploads; right-click (or long-press) re-frames an
+                         existing portrait without re-uploading the file. -->
+                    <div class="portrait-circle"
+                         onclick="document.getElementById('portrait-upload').click()"
+                         oncontextmenu="event.preventDefault(); if ({{ 'true' if pc.portrait else 'false' }}) openPortraitRecenter();"
+                         title="Click: upload portrait · Right-click: re-frame focus">
+                        {% if pc.portrait %}
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                             style="object-position: {{ pc.portrait_focus_x }}% {{ pc.portrait_focus_y }}%;">
+                        {% else %}
+                        <span class="font-header" style="font-size:22px;">{{ pc.name[0] }}</span>
+                        {% endif %}
+                        <input type="file" id="portrait-upload" class="hidden" accept="image/*" onchange="uploadPortrait(this)">
+                        {# Class monogram — three-letter small-cap instead of a
+                           color-emoji. Reads as a heraldic badge; matches the
+                           Cinzel heading hierarchy. Fighter-family classes
+                           keep the  dingbat (typographic, not emoji). #}
+                        <div class="portrait-badge" style="font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.08em;">
+                            {% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h1 class="char-name font-header flex items-center gap-2 flex-wrap">
+                            {{ pc.name }}
+                            <span class="char-level-badge">Level {{ pc.level }}</span>
+                            {# HP chip removed — the under-name vital strip
+                               (Hit Points block) is right below this and
+                               shows the same number with a gauge. No need
+                               to duplicate. #}
+                        </h1>
+                        <p class="char-subtitle">{{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} <span class="sub-orn" aria-hidden="true"></span> {{ pc.subclass }}{% endif %} <span class="sub-orn" aria-hidden="true"></span> {{ pc.size }}</p>
+                    </div>
+                    {% if pc.status_penalty > 0 %}<span class="px-2 py-0.5 rounded" style="background:rgba(196,60,60,0.1); border:1px solid rgba(196,60,60,0.2); color:var(--red-b); font-size:11px; font-weight:600;">Debuffed -{{ pc.status_penalty }}</span>{% endif %}
+                    {% if pc.active_toggles %}<span class="px-2 py-0.5 rounded" style="background:rgba(90,142,232,0.1); border:1px solid rgba(90,142,232,0.2); color:var(--blue); font-size:11px; font-weight:600;">{{ pc.active_toggles | join(', ') }}</span>{% endif %}
+                </div>
+                {# ─── Action toolbar — Demiplane-style ──────────────────
+                   Identity sits left (already rendered above). On the right
+                   we keep ONLY the high-frequency player actions visible:
+                   Hero / Focus chips, Long Rest, Level Up, and a single
+                   overflow-menu (⋯) button that hides the rest (Map, Print,
+                   PDF, Undo Level, custom-dice roller, theme toggle, etc.)
+                   so the toolbar stops looking like a settings panel. #}
+                <div class="flex gap-3 flex-wrap mobile-actions items-center">
+                    <span class="resource-chip no-print" title="Hero Points (max 3) — spend to reroll or stave off death">
+                        <span class="resource-chip-lbl">Hero</span>
+                        <button onclick="modifyHero('decrease')" class="resource-chip-btn" aria-label="Lose hero point">−</button>
+                        <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips">
+                            {% for i in range(3) %}<span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>{% endfor %}
+                        </span>
+                        <span id="current-hero" style="display:none;">{{ pc.hero_points }}</span>
+                        <button onclick="modifyHero('increase')" class="resource-chip-btn" aria-label="Gain hero point">+</button>
+                    </span>
+                    {% if pc.focus_max > 0 %}
+                    <span class="resource-chip no-print" title="Focus Pool ({{ pc.current_focus }}/{{ pc.focus_max }}) — spent by focus spells, restored by Refocus">
+                        <span class="resource-chip-lbl">Focus</span>
+                        <button onclick="modifyFocus('decrease')" class="resource-chip-btn" aria-label="Spend focus">−</button>
+                        <span id="header-focus-pips" data-tradition="{{ (pc.spell_casters[0].tradition if pc.spell_casters else 'arcane') | lower }}" class="resource-chip-pips">
+                            {% for i in range(pc.focus_max) %}<span class="focus-pip {% if i < pc.current_focus %}filled{% else %}empty{% endif %}"></span>{% endfor %}
+                        </span>
+                        <button onclick="modifyFocus('increase')" class="resource-chip-btn" aria-label="Refocus">+</button>
+                    </span>
+                    {% endif %}
+                    {% if pc.spell_casters and pc.spell_dc > 0 %}
+                    {# C3: global "Spells Today" chip — slot pip strip per rank
+                       so the player sees availability without opening the magic tab. #}
+                    <span id="spells-today-chip" class="resource-chip no-print" title="Spell slots available across all ranks. Pip filled = ready, dim/✕ = expended.">
+                        <span class="resource-chip-lbl">Spells</span>
+                        <span id="spells-today-strip" class="header-spells-today" style="margin-left:4px;"></span>
+                    </span>
+                    {% endif %}
+                    <span id="sustain-chip" class="sustain-chip no-print" aria-label="Spells currently being sustained">
+                        <span class="sustain-chip-label">Sustain</span>
+                        <span id="sustain-items"></span>
+                    </span>
+                    {# Pathbuilder-style proactive condition picker — was
+                       previously discoverable only through the condition
+                       strip (which only appears when conditions are active).
+                       Now players can apply a condition before it kicks in. #}
+                    <button onclick="openConditionPicker()" class="tb no-print" title="Add a condition (Frightened, Sickened, Off-Guard, etc.)">+ Condition</button>
+                    <button onclick="takeLongRest()" class="tb gilt" title="Take a long rest — recover Con mod × level HP, refresh focus & spell slots, clear short-term conditions">Long Rest</button>
+                    {# Single Level Up button. The print-only fallback link
+                       was a duplicate-on-screen because my .tb display:inline-flex
+                       !important rule beat its inline display:none, so it's
+                       now consolidated into the one drawer-opening button. #}
+                    {# Level Up = full-page wizard. The drawer was a UX dead-end
+                       (you couldn't see the rest of the sheet anyway). Direct
+                       link sends the player to the dedicated /player/levelup
+                       page with proper step navigation. #}
+                    <a href="/player/levelup/{{ pc.name | urlencode }}" class="tb primary no-print" style="text-decoration:none;">Level Up</a>
+
+                    {# Overflow — everything secondary lives behind this button. #}
+                    <span class="relative no-print" style="display:inline-block;">
+                        <button class="overflow-menu-btn" onclick="togglePlayerOverflow(event)" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">⋯</button>
+                        <div id="player-overflow-menu" class="overflow-menu" role="menu">
+                            <div style="display:flex; gap:6px; padding: var(--sp-2) var(--sp-4); align-items:center;">
+                                <input type="text" id="custom-dice" placeholder="2d6+4" class="hp-input" style="flex:1; min-width:0; font-size:12px;" aria-label="Custom dice notation">
+                                <button onclick="rollCustomDice()" class="tb" style="padding:4px 10px; font-size:11px;">Roll</button>
+                            </div>
+                            <button onclick="rollInitiativeFromSheet(); closePlayerOverflow();" role="menuitem">Roll initiative</button>
+                            <a href="/map" role="menuitem">Open map</a>
+                            <div class="sep"></div>
+                            {% if pc.level > 1 %}<button onclick="revertLevel(); closePlayerOverflow();" id="btn-revert" role="menuitem">Undo last level-up</button>{% endif %}
+                            <button onclick="window.print(); closePlayerOverflow();" role="menuitem">Print sheet</button>
+                            <a href="/api/export_pdf/{{ pc.name|urlencode }}" role="menuitem">Download PDF</a>
+                            <div class="sep"></div>
+                            <button onclick="cyclePlayerTheme(); closePlayerOverflow();" role="menuitem">Cycle theme</button>
+                        </div>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2 — Ability Scores (Design C accented cards) -->
+        <div class="ability-row-wrap">
+            {% set ab_keys = ['str','dex','con','int','wis','cha'] %}
+            {% for stat in pc.ability_display %}
+            {% set ab_key = ab_keys[loop.index0] if loop.index0 < 6 else '' %}
+            <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
+                 class="ability-block group rollable-element"
+                 data-ab="{{ ab_key }}"
+                 data-roll-name="{{ stat.label }} Check"
+                 data-roll-mod="{{ stat.mod|replace('+', '')|replace(' (½)', '') }}"
+                 title="Click to roll {{ stat.label }} check">
+                <span class="label">{{ stat.label }}</span>
+                <span class="mod">{{ stat.mod|safe }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- ROW 3 — Stats strip (AC / Speed / Perception / Class DC / HP) -->
+        <div class="stats-strip">
+            <!-- AC (just the number + shield badge — actions live in HP/Shield zone) -->
+            <div id="ac-block" class="ss-block {% if pc.shield_raised %}shield-raised{% endif %}" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
+                <div class="ss-lbl">Armor Class</div>
+                <div class="ss-val {% if pc.shield_raised %}shield-raised{% endif %}" data-ac-wrap>
+                    <span id="ac-current" data-ac-live>{{ pc.ac }}</span>
+                    <span id="ac-shield-bonus" class="ac-shield-bonus" {% if not pc.shield_raised or pc.shield_ac_bonus <= 0 %}style="display:none;"{% endif %}>+{{ pc.shield_ac_bonus }} SHIELD</span>
+                </div>
+            </div>
+
+            <!-- Speed -->
+            <div class="ss-block" title="Speed">
+                <div class="ss-lbl">Speed</div>
+                <div class="ss-val">{{ pc.active_speed }}<span style="font-size:11px; color:var(--t3);">ft</span></div>
+                {% if pc.active_speed != pc.base_speed %}<div class="ss-sub" style="color:var(--red-b);">Base {{ pc.base_speed }}</div>{% endif %}
+            </div>
+
+            <!-- Perception (Proposal 4: rank dot) -->
+            {% set perc_rank = pc.proficiencies.get('perception', 2) %}
+            {% set perc_rank_label = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_rank, 'T') %}
+            {% set perc_rank_color = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(perc_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" role="button" tabindex="0" aria-label="Roll Perception +{{ pc.perception }}" title="{{ pc.perception_breakdown }}">
+                <div class="ss-lbl">Perception</div>
+                <div class="ss-val">+{{ pc.perception }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
+            </div>
+
+            <!-- Class DC -->
+            <div class="ss-block" title="Class DC (used for class features, e.g. an Alchemist's Quick Alchemy)">
+                <div class="ss-lbl">Class DC</div>
+                <div class="ss-val">{{ pc.class_dc }}</div>
+            </div>
+
+            {# Spell DC gets its own strip block when the character casts — no longer
+               buried as a sub-label under Class DC where casters kept missing it. #}
+            {% if pc.spell_dc > 0 %}
+            <div class="ss-block" title="Spell DC (target DC for enemies saving against your spells)">
+                <div class="ss-lbl">Spell DC</div>
+                <div class="ss-val">{{ pc.spell_dc }}</div>
+                {% if pc.spell_attack is defined and pc.spell_attack != 0 %}
+                <div class="ss-sub">Spell Atk +{{ pc.spell_attack }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Fort/Ref/Will (compact saves in strip — Proposal 4: rank dots) -->
+            {% set fort_rank = pc.proficiencies.get('fortitude', 2) %}
+            {% set fort_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(fort_rank, 'T') %}
+            {% set fort_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(fort_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" role="button" tabindex="0" aria-label="Roll Fortitude save +{{ pc.fort }}" title="{{ pc.fort_breakdown }}">
+                <div class="ss-lbl">Fort</div>
+                <div class="ss-val">+{{ pc.fort }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ fort_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ fort_rc }};">{{ fort_rl }}</span></div>
+            </div>
+            {% set ref_rank = pc.proficiencies.get('reflex', 2) %}
+            {% set ref_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ref_rank, 'T') %}
+            {% set ref_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(ref_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" role="button" tabindex="0" aria-label="Roll Reflex save +{{ pc.ref }}" title="{{ pc.ref_breakdown }}">
+                <div class="ss-lbl">Reflex</div>
+                <div class="ss-val">+{{ pc.ref }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ ref_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ ref_rc }};">{{ ref_rl }}</span></div>
+            </div>
+            {% set will_rank = pc.proficiencies.get('will', 2) %}
+            {% set will_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(will_rank, 'T') %}
+            {% set will_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(will_rank, '#4a9696') %}
+            <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" role="button" tabindex="0" aria-label="Roll Will save +{{ pc.will }}" title="{{ pc.will_breakdown }}">
+                <div class="ss-lbl">Will</div>
+                <div class="ss-val">+{{ pc.will }}</div>
+                <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ will_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ will_rc }};">{{ will_rl }}</span></div>
+            </div>
+
+            <!-- HP block -->
+            <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}" style="flex:2.2; min-width:240px;">
+                <div class="ss-lbl">Hit Points</div>
+                {# Dying widget (Wave 2 #4) — only renders when current_hp == 0,
+                   driven by the dying/wounded values that already exist in the
+                   condition tracker. Shows the recovery DC and a one-click
+                   recovery flat-check button. #}
+                <div id="dying-widget" class="dying-widget no-print {% if pc.current_hp == 0 %}active{% endif %}" aria-live="polite">
+                    <div class="dying-widget-title"> Dying <span id="dying-val">{{ pc.conditions.get('dying', 0) }}</span> · Wounded <span id="wounded-val">{{ pc.conditions.get('wounded', 0) }}</span></div>
+                    <div class="dying-widget-row">
+                        <button onclick="rollRecoveryCheck()" class="recovery" title="Recovery flat check: DC 10 + Dying value. Success: Dying −1. Crit success: Dying −2 + conscious. Failure: Dying +1. Crit failure: Dying +2.">Recovery Check</button>
+                        <button onclick="adjustDying(-1)" title="Reduce Dying (e.g., after taking 2 actions to remove)">−1 Dying</button>
+                        <button onclick="adjustDying(1)" title="Increase Dying (took damage while dying, or failed save)">+1 Dying</button>
+                        <button onclick="callForHeal()" title="Broadcast 'I need healing!' to the GM">Call for Help</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-center gap-3">
+                    {# Damage (−) lives on the LEFT now: reads left-to-right as
+                       "take X damage then see HP result". Heal on the right.
+                       32×32 buttons clear the touch-target threshold for
+                       in-person play with shaking hands / cold pizza grease. #}
+                    <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:32px; height:32px; padding:0; font-size:16px;">−</button>
+                    <div style="text-align:center; min-width:96px;">
+                        <div>
+                            <span id="current-hp" class="hp-current" style="font-size:26px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
+                            <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
+                            <span id="temp-hp-chip" class="no-print" style="color:var(--blue); font-size:11px; font-weight:700; margin-left:6px; {% if pc.temp_hp <= 0 %}display:none;{% endif %}"
+                                  title="Temporary HP (drains first on damage)">+<span id="temp-hp-val">{{ pc.temp_hp }}</span> tmp</span>
+                        </div>
+                        {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+                        <div class="hp-gauge hp-gauge-bar" style="margin-top:3px;">
+                            <div class="hp-gauge-fill {% if pc.current_hp == 0 %}dead{% elif hp_pct <= 25 %}low{% elif hp_pct <= 50 %}mid{% else %}high{% endif %}" style="width:{{ hp_pct|int }}%"></div>
+                        </div>
+                    </div>
+                    <button class="hp-btn heal" onclick="applyHPChange('heal')" title="Heal" style="width:32px; height:32px; padding:0; font-size:16px;">+</button>
+                </div>
+                <div class="flex items-center justify-center gap-1 no-print flex-wrap" style="margin-top:4px;">
+                    <input type="number" class="hp-input" id="hp-change-input" placeholder="0" min="0" style="width:56px;">
+                    {# Temp HP quick-add. Player types a value in the main HP
+                       input and clicks ✚T — applies PF2e "take max" stacking.
+                       Long-press / right-click clears the pool. #}
+                    <button id="temp-hp-btn" onclick="addTempHP(event)" oncontextmenu="clearTempHP(event)" title="Grant temporary HP (right-click to clear)"
+                            style="padding:3px 8px; font-size:10px; border-radius:4px; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; cursor:pointer; font-weight:700; letter-spacing:0.04em;">
+                        +<span style="font-size:9px;">TMP</span>
+                    </button>
+                </div>
+
+                {# Shield Raise / Block / Reaction — moved here from AC block.
+                   These belong in the HP/defensive-action zone, not riding
+                   shotgun next to the AC number. #}
+                <div class="flex items-center justify-center gap-1 no-print flex-wrap" style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-card);">
+                    <button data-shield-btn onclick="toggleShield()" title="Raise Shield (+{{ pc.shield_ac_bonus }} AC, 1 action, lasts until start of your next turn)"
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
+                        Shield {% if pc.shield_raised %}· Raised{% else %}· Raise{% endif %}
+                    </button>
+                    <button onclick="useShieldBlock()" title="Shield Block (reaction): the shield prevents Hardness damage, then absorbs leftover."
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold); letter-spacing:0.06em; text-transform:uppercase; font-weight:700;">
+                        Block
+                    </button>
+                    <button id="reaction-chip" onclick="useReaction()"
+                            title="PF2e: 1 reaction per round, refreshed at the start of your turn. Click to toggle if you spend it on AoO, Shield Warden, etc."
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; border:1px solid rgba(90,142,232,0.35); letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.reaction_used %}background:rgba(220,38,38,0.12); border-color:rgba(220,38,38,0.4); color:#fca5a5;{% else %}background:rgba(90,142,232,0.12); color:#93C5FD;{% endif %}">
+                        <span id="reaction-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
+                    </button>
+                </div>
+                {# Shield durability mini-gauge — only shown when the PC
+                   actually has a shield configured. Shows HP/max, a bar, and
+                   the current state (Raised / Lowered / Broken / Destroyed). #}
+                {% if pc.shield_max_hp > 0 %}
+                {% set sh_pct = (pc.shield_hp / pc.shield_max_hp * 100) if pc.shield_max_hp > 0 else 0 %}
+                <div id="shield-gauge" class="no-print flex items-center justify-center gap-1 flex-wrap" style="margin-top:4px; font-size:10px;">
+                    <span style="font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#93C5FD;">Shield</span>
+                    <span id="shield-hp-text" style="font-weight:700; color:#c8c8d4;">{{ pc.shield_hp }}/{{ pc.shield_max_hp }}</span>
+                    {# SVG quartered-shield meter.
+                       - The fill height is driven by --shield-fill so JS only
+                         sets one CSS var rather than rebuilding any DOM.
+                       - Broken / destroyed states show crack paths.
+                       - The whole thing is 22×26px, scales as SVG, no raster. #}
+                    <span id="shield-svg-wrap"
+                          class="shield-svg {% if pc.shield_destroyed %}destroyed{% elif pc.shield_broken %}broken{% endif %}"
+                          style="--shield-fill: {{ sh_pct|int }}%;"
+                          aria-hidden="true">
+                        <svg viewBox="0 0 22 26" width="22" height="26" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <clipPath id="sh-heater-clip">
+                                    <path d="M1,1 L21,1 L21,13 Q21,21 11,25 Q1,21 1,13 Z"/>
+                                </clipPath>
+                            </defs>
+                            <!-- back plate -->
+                            <path d="M1,1 L21,1 L21,13 Q21,21 11,25 Q1,21 1,13 Z"
+                                  fill="rgba(30,35,50,0.75)" stroke="#93C5FD" stroke-width="0.8"/>
+                            <!-- vitality fill, bottom-up -->
+                            <rect class="shield-fill-rect" x="0" y="0" width="22" height="26"
+                                  clip-path="url(#sh-heater-clip)"/>
+                            <!-- heraldic quartering (faint cross lines) -->
+                            <path d="M11,1 L11,25 M1,12 L21,12" stroke="rgba(224,182,90,0.22)" stroke-width="0.4" fill="none"/>
+                            <!-- crack paths (hidden unless broken/destroyed) -->
+                            <g class="shield-cracks" stroke="#1a1208" stroke-width="0.6" fill="none" opacity="0">
+                                <path d="M7,4 L10,10 L8,14 L12,20"/>
+                                <path d="M14,6 L13,11 L16,17"/>
+                            </g>
+                        </svg>
+                    </span>
+                    <span id="shield-state-lbl" style="font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:{% if pc.shield_destroyed %}#ef4444{% elif pc.shield_broken %}#eab308{% elif pc.shield_raised %}#93C5FD{% else %}var(--t3){% endif %};">
+                        {% if pc.shield_destroyed %}Destroyed{% elif pc.shield_broken %}Broken{% elif pc.shield_raised %}Raised · H{{ pc.shield_hardness }}{% else %}H{{ pc.shield_hardness }}{% endif %}
+                    </span>
+                    {# Phase 11: Repair Shield — full repair on one click.
+                       Tooltip flags the 10-minute downtime cost so players
+                       don't fire this mid-combat thinking it's free. #}
+                    <button id="shield-repair-btn" type="button" onclick="repairShield()" class="no-print"
+                            title="Requires 10 min downtime (Repair activity — Crafting check)"
+                            {% if pc.shield_hp >= pc.shield_max_hp %}disabled style="opacity:0.35; cursor:not-allowed;"{% endif %}
+                            style="margin-left:4px; padding:1px 6px; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3); cursor:pointer;">
+                        Repair
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>

@@ -1,0 +1,138 @@
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- UNIFIED CONDITION & PENALTY BAR (Proposal 1)                   -->
+    <!-- Consolidates old status penalty bar + condition strip into one  -->
+    <!-- prominent, always-visible banner. Penalty breakdowns inline.    -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    {% set has_any_condition = pc.conditions.get('frightened', 0) > 0 or pc.conditions.get('sickened', 0) > 0 or pc.conditions.get('enfeebled', 0) > 0 or pc.conditions.get('clumsy', 0) > 0 or pc.conditions.get('drained', 0) > 0 or pc.conditions.get('stupefied', 0) > 0 or pc.conditions.get('wounded', 0) > 0 or pc.conditions.get('doomed', 0) > 0 or pc.conditions.get('stunned', 0) > 0 or pc.conditions.get('slowed', 0) > 0 or pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) or pc.conditions.get('dying', 0) > 0 %}
+    <div class="no-print" id="condition-strip"
+         style="{% if has_any_condition %}background:var(--red-d); border-bottom:2px solid var(--red);{% else %}background:transparent;{% endif %} transition:background 0.3s, border-color 0.3s; {% if not has_any_condition %}display:none;{% endif %}">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-2">
+            {# Penalty breakdown line — shows per-stat penalty summary #}
+            {% if pc.status_penalty > 0 %}
+            <div style="font-size:12px; font-weight:600; color:#fca5a5; margin-bottom:4px; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:center;">
+                <span class="rubric" data-tint="rubric" style="margin-right:2px;">Penalties Active</span>
+                <span>All checks &minus;{{ pc.status_penalty }}
+                    ({% if pc.conditions.get('frightened', 0) > 0 %}Frightened {{ pc.conditions.frightened }}{% endif %}{% if pc.conditions.get('sickened', 0) > 0 %}{% if pc.conditions.get('frightened', 0) > 0 %}, {% endif %}Sickened {{ pc.conditions.sickened }}{% endif %})</span>
+                {% if pc.conditions.get('enfeebled', 0) > 0 %}<span style="color:#fca5a5;">· STR checks &minus;{{ pc.conditions.enfeebled }} (Enfeebled)</span>{% endif %}
+                {% if pc.conditions.get('clumsy', 0) > 0 %}<span style="color:#fca5a5;">· DEX/AC &minus;{{ pc.conditions.clumsy }} (Clumsy)</span>{% endif %}
+                {% if pc.conditions.get('drained', 0) > 0 %}<span style="color:#fca5a5;">· CON checks &minus;{{ pc.conditions.drained }}, HP &minus;{{ pc.conditions.drained * pc.level }} (Drained)</span>{% endif %}
+                {% if pc.conditions.get('stupefied', 0) > 0 %}<span style="color:#fca5a5;">· INT/WIS/CHA &minus;{{ pc.conditions.stupefied }} (Stupefied)</span>{% endif %}
+                {% if pc.conditions.get('prone', false) or pc.conditions.get('off_guard', false) %}<span style="color:#fca5a5;">· AC &minus;2 ({% if pc.conditions.get('off_guard', false) %}Off-Guard{% endif %}{% if pc.conditions.get('prone', false) %}{% if pc.conditions.get('off_guard', false) %}, {% endif %}Prone{% endif %})</span>{% endif %}
+            </div>
+            {% endif %}
+            {# Condition pills row — interactive +/- and toggles.
+               title= carries the full PF2e rule text for hover tooltips. #}
+            {% set cond_rules = {
+                'frightened': 'You take a status penalty equal to your frightened value to all your checks and DCs. At the end of each of your turns, your frightened value decreases by 1.',
+                'sickened':   'You take a status penalty equal to your sickened value to all your checks and DCs. You can\'t willingly ingest anything. Spend a single action to retch (DC 15 + sickened value Fortitude save) to reduce by 1, or 2 by critical success.',
+                'enfeebled':  'You take a status penalty equal to your enfeebled value to Strength-based rolls and DCs, including Strength-based melee damage.',
+                'clumsy':     'You take a status penalty equal to your clumsy value to Dexterity-based checks and DCs, including AC, Reflex saves, ranged attack rolls, and Dexterity skills.',
+                'drained':    'You take a status penalty equal to your drained value to Constitution-based checks (including Fortitude saves). You lose HP equal to your level times your drained value; your maximum HP is also reduced by this amount until the condition ends.',
+                'stupefied':  'You take a status penalty equal to your stupefied value to Intelligence-, Wisdom-, and Charisma-based checks and DCs, including Will saves, spell attack rolls, and spell DCs. Casting a spell requires a flat check DC 5 + stupefied value or the spell is lost.',
+                'stunned':    'You can\'t act while stunned. Stunned usually has a value; when you regain actions, you lose that many (Stunned 1 loses 1 action next turn). Stunned overrides slowed; reduce by the number of actions lost.',
+                'slowed':     'You lose a number of actions each turn equal to your slowed value (usually to a minimum of 1 action remaining for slowed 1–2).',
+                'wounded':    'Your wounded value increases each time you are reduced to 0 HP. When you gain dying, increase it by your wounded value + 1. Wounded ends when you are fully healed (returned to full HP and rest).',
+                'doomed':     'Increase the dying value at which you die by your doomed value reduced from the base (i.e. you die at dying 4 − doomed). Reduce doomed by 1 each time you get a full night\'s rest.',
+                'dying':      'You are unconscious and near death. On your turn, attempt a recovery check (DC 10 + dying value). Success: reduce dying by 1 (crit success by 2). Failure: dying increases by 1 (crit failure by 2). At dying 4 (or lower if doomed), you die. When you recover, you gain wounded 1 (or +1 if already wounded).',
+                'prone':      'You\'re lying on the ground. You take a −2 status penalty to attack rolls and can only act with movement actions that allow you to Crawl or Stand. You have AC +2 vs. ranged, −2 vs. melee, and are Off-Guard.',
+                'off_guard':  'You are distracted or unable to focus on defense. You take a −2 status penalty to AC.',
+                'concealed':  'While concealed from a creature, you are difficult to see. The creature must succeed at a DC 5 flat check when targeting you with an attack, spell, or other effect; failure means you\'re missed.',
+                'hidden':     'While hidden from a creature, that creature knows the space you\'re in but cannot see you. Attacks against you require a DC 11 flat check; failure misses.'
+            } %}
+            <div class="flex flex-wrap gap-2 items-center">
+                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed', 'dying'] %}
+                {% set cval = pc.conditions.get(cond, 0) %}
+                {% set sev_class = 'cond-crit' if (cval >= 3 or (cond == 'dying' and cval >= 2)) else ('cond-warn' if cval >= 2 else '') %}
+                <div class="condition-pill {{ sev_class }}" id="cond-wrap-{{ cond }}" data-cond-name="{{ cond }}"
+                     style="{% if cval == 0 %}display:none;{% endif %}"
+                     title="{{ cond|replace('_',' ')|title }} {{ cval }} — {{ cond_rules.get(cond, '') }}">
+                    <button onclick="adjustCondition('{{ cond }}', -1)" title="Reduce">−</button>
+                    <span style="font-size:11px;">{{ cond|upper }}</span>
+                    <span class="cond-val" id="cond-val-{{ cond }}">{{ cval }}</span>
+                    <button onclick="adjustCondition('{{ cond }}', 1)" title="Increase">+</button>
+                </div>
+                {% endfor %}
+                {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
+                {% set cval = pc.conditions.get(cond, false) %}
+                <button onclick="toggleBoolCondition('{{ cond }}')" id="cond-btn-{{ cond }}" class="condition-toggle {% if cval %}active{% endif %}"
+                        title="{{ cond|replace('_',' ')|title }} — {{ cond_rules.get(cond, '') }}">
+                    {{ cond|replace('_','-')|upper }}
+                </button>
+                {% endfor %}
+                <button onclick="openConditionAdder()" class="action-btn ml-auto" style="font-size:11px; padding:3px 10px; {% if has_any_condition %}color:#fca5a5; border-color:rgba(252,165,165,0.3);{% endif %}" title="Add/manage conditions">+ Condition</button>
+            </div>
+        </div>
+    </div>
+
+    {# ═══════════════════════════════════════════════════════════════
+       PERSISTENT DAMAGE BANNER (Phase 5 — no auto-roll)
+       Shows one row per active persistent-damage entry. Each row offers
+       a "Take N" self-damage button (player enters damage they rolled)
+       and a "Roll DC 15 Flat Check" button (server-side RNG; on 15+ the
+       entry is removed automatically). Per user: DO NOT auto-roll.
+    ═══════════════════════════════════════════════════════════════ #}
+    {% set _pd_list = pc.persistent_damage or [] %}
+    <div class="no-print" id="pd-strip"
+         style="background:rgba(239,68,68,0.08); border-bottom:1px solid rgba(239,68,68,0.25); {% if not _pd_list %}display:none;{% endif %}">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-2">
+            <div style="display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center;">
+                <span class="rubric" data-tint="rubric">Persistent Damage</span>
+                <div id="pd-list" style="display:flex; flex-wrap:wrap; gap:6px;">
+                    {% for e in _pd_list %}
+                    <div class="pd-entry" data-pd-idx="{{ loop.index0 }}" style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); font-size:11px;">
+                        <strong style="color:#fca5a5;">{{ e.damage }}{% if e.type %} {{ e.type }}{% endif %}</strong>
+                        {% if e.source %}<span style="color:var(--t3); font-size:10px;">({{ e.source }})</span>{% endif %}
+                        <input type="number" class="pd-take-input" placeholder="dmg" min="0" style="width:48px; padding:2px 4px; font-size:10px; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1);">
+                        <button onclick="pdTakeDamage({{ loop.index0 }})" title="Apply the rolled damage to your HP"
+                                style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-weight:700;">Take</button>
+                        <button onclick="pdFlatCheck({{ loop.index0 }})" title="Roll DC 15 flat check — success ends the effect"
+                                style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; font-weight:700;">DC 15</button>
+                        <button onclick="pdRemove({{ loop.index0 }})" title="Remove (treated / immunity / ended)"
+                                style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">×</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button onclick="pdAddPrompt()" class="ml-auto" title="Add a new persistent-damage source"
+                        style="padding:3px 10px; font-size:11px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid rgba(239,68,68,0.3); color:#fca5a5;">
+                    + Persistent
+                </button>
+            </div>
+        </div>
+    </div>
+    {# Always-visible "+ Persistent" add button when no entries (tucked into cond-adder would be cleaner, but we keep it inline for discoverability). #}
+    <div class="no-print" id="pd-addbar" style="{% if _pd_list %}display:none;{% endif %} background:transparent; border-bottom:1px solid var(--border-subtle);">
+        <div class="max-w-6xl mx-auto px-4 md:px-6 py-1" style="display:flex; justify-content:flex-end;">
+            <button onclick="pdAddPrompt()" title="Add a new persistent-damage source"
+                    style="padding:2px 8px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">
+                + Persistent Damage
+            </button>
+        </div>
+    </div>
+
+    {# ═══════════════════════════════════════════════════════════════
+       EXPLORATION ACTIVITY DROPDOWN (Phase 10 — item 12)
+       Visible out of combat. When a player picks Search / Scout / etc.
+       the GM screen + party view get a live banner showing who's doing
+       what. We intentionally do NOT apply mechanical effects — the GM
+       resolves the rules at the table.
+    ═══════════════════════════════════════════════════════════════ #}
+    <div class="no-print" id="explore-strip"
+         style="background:rgba(34,197,94,0.05); border-bottom:1px solid rgba(34,197,94,0.15);">
+        <div class="max-w-6xl mx-auto px-4 md:px-6" style="padding-top:3px; padding-bottom:3px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="rubric" data-tint="verdigris">Exploration</span>
+            <select id="exploration-select" onchange="setExplorationActivity(this.value)"
+                    title="What are you doing while the party travels?"
+                    style="padding:3px 8px; font-size:11px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1); min-width:200px;">
+                <option value="">Loading…</option>
+            </select>
+            <span id="exploration-tip" style="font-size:10px; color:var(--t3); font-style:italic;"></span>
+            {# Treat Wounds quick-button (Wave 2 #6) — most-rolled exploration
+               skill. Picks a target party member, rolls Medicine, dispatches
+               to GM with the proposed healing amount. GM applies. #}
+            <button id="treat-wounds-btn" class="tb no-print" onclick="openTreatWounds()"
+                    style="margin-left:auto; padding:3px 10px; font-size:11px;"
+                    title="Treat Wounds — roll Medicine to heal an ally (10 minutes per use)">
+                 Treat Wounds
+            </button>
+        </div>
+    </div>

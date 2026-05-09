@@ -1,0 +1,122 @@
+    <!-- Roll Result Toast Container -->
+    <div id="roll-toast-container" class="fixed top-6 right-6 z-[200] flex flex-col gap-3 pointer-events-none w-80"></div>
+
+    <!-- Equipment Browser Modal -->
+    <div id="equip-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+        <div class="parchment-frame rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" style="background:var(--surface-raised);">
+            <div class="bg-gray-900 px-5 py-3 border-b border-gray-700 flex justify-between items-center shrink-0">
+                <h2 id="equip-modal-title" class="text-lg font-header text-amber-500">Equipment Browser</h2>
+                <button onclick="document.getElementById('equip-modal').classList.add('hidden')" class="text-gray-500 hover:text-white text-xl">&times;</button>
+            </div>
+            <div class="px-5 py-3 border-b border-gray-700/50 bg-gray-900/50 flex gap-3 items-center shrink-0">
+                <input type="text" id="equip-search" placeholder="Search..." class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50">
+                <div id="equip-cat-btns" class="flex gap-1"></div>
+            </div>
+            <div class="flex-1 flex overflow-hidden">
+                <div id="equip-list" class="w-1/2 overflow-y-auto custom-scrollbar border-r border-gray-700 p-3 space-y-2"></div>
+                <div id="equip-detail" class="w-1/2 overflow-y-auto custom-scrollbar p-5">
+                    <div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select an item to view details.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Dice Roller Panel -->
+    <div id="dice-widget" class="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+        <div id="dice-panel" class="hidden bg-gray-800 rounded-lg shadow-2xl mb-4 w-80 overflow-hidden flex flex-col transform transition-all origin-bottom-right border border-gray-700">
+            <div class="bg-gray-900 p-3 border-b border-gray-700 flex justify-between items-center">
+                <span class="font-header text-amber-500 text-sm">Dice Roller</span>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] text-gray-500 uppercase tracking-wide mr-0.5">Render</span>
+                    <!-- Primary toggle: ON = animate the dice, OFF = just show total + breakdown -->
+                    <button id="btn-dice-render-toggle" onclick="toggleDiceRender()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Toggle dice animation. OFF skips the bouncing/3D roll and just shows the total + breakdown, like it worked before.">ON</button>
+                    <!-- Secondary style picker: 3D physics vs 2D sprite. Disabled when render is OFF. -->
+                    <button id="btn-dice-render-style" onclick="toggleDiceStyle()" class="text-[10px] px-2 py-0.5 rounded border transition-colors" title="Animation style — 3D physics or 2D sprite. Only applies when render is ON.">2D</button>
+                    <!-- Legacy back-compat shim for any inline code still calling the old id -->
+                    <button id="btn-toggle-3d" onclick="toggleDiceMode()" class="hidden" aria-hidden="true" tabindex="-1">3D</button>
+                    <button onclick="toggleDicePanel()" class="text-gray-400 hover:text-white text-xl leading-none ml-1">&times;</button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="bg-gray-950 rounded border border-gray-700 p-3 mb-4 text-center min-h-[85px] flex flex-col justify-center items-center shadow-inner">
+                    <div id="dice-total" class="text-4xl font-header text-amber-400 leading-none">--</div>
+                    <div id="dice-breakdown" class="text-xs text-gray-500 mt-2 font-mono">Roll the bones...</div>
+                </div>
+                <div class="grid grid-cols-4 gap-2 mb-4">
+                    <button onclick="quickDie(4)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d4</button>
+                    <button onclick="quickDie(6)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d6</button>
+                    <button onclick="quickDie(8)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d8</button>
+                    <button onclick="quickDie(10)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d10</button>
+                    <button onclick="quickDie(12)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d12</button>
+                    <button onclick="quickDie(20)" class="col-span-2 bg-amber-900/40 hover:bg-amber-800/60 text-amber-400 py-1.5 rounded font-bold text-sm border border-amber-900/50 transition-colors">d20</button>
+                    <button onclick="quickDie(100)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 py-1.5 rounded font-bold text-sm border border-gray-600 transition-colors">d100</button>
+                </div>
+                <div class="mb-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-2">Quick Rolls</div>
+                    {# Quick-rolls grid — unified ivory treatment. Previous
+                       red/blue/purple coloring for Fort/Ref/Will gave them
+                       unequal emphasis; they're peer saves, so render them
+                       the same. Gilt hover is the only call-to-action tint. #}
+                    <div class="grid grid-cols-3 gap-1">
+                        <button onclick="rollSkill('Perception', {{ pc.perception }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Perc +{{ pc.perception }}</button>
+                        <button onclick="rollSkill('Fort Save', {{ pc.fort }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Fort +{{ pc.fort }}</button>
+                        <button onclick="rollSkill('Ref Save', {{ pc.ref }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Ref +{{ pc.ref }}</button>
+                        <button onclick="rollSkill('Will Save', {{ pc.will }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Will +{{ pc.will }}</button>
+                        <button onclick="rollSkill('Initiative', {{ pc.initiative_mod }})" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Init +{{ pc.initiative_mod }}</button>
+                        <button onclick="rollFlat()" class="tb" style="font-family:var(--font-display); font-size:10px; padding:4px 6px;">Flat Check</button>
+                    </div>
+                </div>
+                <form class="flex gap-2" onsubmit="event.preventDefault(); customDiceRoll();">
+                    <input type="text" id="custom-dice-input" placeholder="e.g. 2d6+4" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:border-amber-500 text-center font-mono">
+                    <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-sm font-bold transition-colors shadow-md border-none">Roll</button>
+                </form>
+            </div>
+        </div>
+        <button onclick="toggleDicePanel()" class="d20-fab z-[100]" aria-label="Dice roller" title="Dice roller">
+            <svg viewBox="0 0 56 56" width="44" height="44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs>
+                    <linearGradient id="d20-stone" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#d4a746"/>
+                        <stop offset="50%" stop-color="#8a6712"/>
+                        <stop offset="100%" stop-color="#3a2a08"/>
+                    </linearGradient>
+                    <linearGradient id="d20-face" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#3a2a08"/>
+                        <stop offset="100%" stop-color="#1a1208"/>
+                    </linearGradient>
+                </defs>
+                <!-- icosahedron silhouette -->
+                <polygon points="28,4 52,18 52,40 28,52 4,40 4,18"
+                         fill="url(#d20-stone)" stroke="#4a380a" stroke-width="1.5"/>
+                <!-- top triangle face (carved) -->
+                <polygon points="28,8 48,20 28,28 8,20"
+                         fill="url(#d20-face)" stroke="#2a1e06" stroke-width="0.8"/>
+                <!-- bottom-left face -->
+                <polygon points="8,20 28,28 18,46 8,40"
+                         fill="#2a1c06" opacity="0.55"/>
+                <!-- bottom-right face -->
+                <polygon points="48,20 28,28 38,46 48,40"
+                         fill="#1a1208" opacity="0.65"/>
+                <!-- carved "20" -->
+                <text x="28" y="22" text-anchor="middle"
+                      font-family="Cinzel, serif" font-weight="700" font-size="11"
+                      fill="#e8c46f" stroke="#1a1208" stroke-width="0.3">20</text>
+            </svg>
+        </button>
+        <button id="roll-history-btn" class="roll-history-btn no-print" onclick="toggleRollHistory()" aria-label="Recent rolls" title="Recent rolls"></button>
+        <button id="whisper-fab" class="whisper-fab no-print" onclick="toggleWhisper()" aria-label="Whisper to GM" title="Whisper to GM (private message)"></button>
+        <div id="whisper-panel" class="whisper-panel no-print" role="dialog" aria-label="Whisper to GM">
+            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt); margin-bottom:6px;"> Whisper to GM</div>
+            <textarea id="whisper-text" placeholder="Private question, plan, or roleplay note for the GM…" maxlength="800"></textarea>
+            <div class="whisper-panel-actions">
+                <span class="whisper-panel-status" id="whisper-status">Sent privately — GM only</span>
+                <div style="display:flex; gap:6px;">
+                    <button class="tb" onclick="closeWhisper()" style="padding:3px 8px; font-size:11px;">Cancel</button>
+                    <button class="tb gilt" onclick="sendWhisper()" style="padding:3px 10px; font-size:11px;">Send</button>
+                </div>
+            </div>
+        </div>
+        <div id="roll-history-panel" class="roll-history-panel no-print" aria-live="polite" role="log" aria-label="Recent rolls history">
+            <div class="roll-history-empty">No rolls yet this session.</div>
+        </div>
+    </div>
