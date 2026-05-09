@@ -1,0 +1,118 @@
+        // ========================================================
+        // DAILY PREP MODAL — one-shot prep flow after Long Rest
+        // ========================================================
+        async function openDailyPrepModal(focusCasterIdx) {
+            // If focusCasterIdx is omitted, auto-pick the first prepared caster.
+            let target = focusCasterIdx;
+            if (typeof target !== 'number') {
+                for (let i = 0; i < castersData.length; i++) {
+                    const t = (castersData[i].type || '').toLowerCase();
+                    if (t.includes('prepared') && !t.includes('spontaneous') && !t.includes('focus') && !t.includes('alchemical')) {
+                        target = i; break;
+                    }
+                }
+            }
+            if (typeof target !== 'number') {
+                // No prepared caster — offer Long Rest only.
+                if (confirm('No prepared caster to plan. Take a Long Rest now (restore HP, slots, focus, hero point)?')) {
+                    await fetch('/api/daily_prep/' + pcNameEncoded, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({heal_full: true})
+                    });
+                    window.location.reload();
+                }
+                return;
+            }
+            const caster = castersData[target];
+            const overlay = document.createElement('div');
+            overlay.className = 'daily-prep-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+            // Build spellbook column (all known spells, grouped by base rank).
+            let spellbookHtml = '';
+            (caster.levels || []).forEach(lvl => {
+                const list = lvl.spells || [];
+                if (!list.length) return;
+                spellbookHtml += `<div class="mb-3"><div class="font-header text-[10px] uppercase tracking-wider mb-1" style="color:var(--text-muted);">${lvl.label}</div>`;
+                list.forEach(sp => {
+                    spellbookHtml += `<div class="flex justify-between items-center p-2 rounded mb-1 cursor-grab spell-rank-${lvl.level}" draggable="true"
+                        ondragstart="onSpellDragStart(event, '${sp.name.replace(/'/g,"\\'")}', ${lvl.level}, ${target})"
+                        style="background:var(--bg-raised);border:1px solid var(--border-subtle);">
+                        <span class="text-xs">${sp.name}</span>
+                        ${sp.actions ? `<span class="text-[10px] opacity-60" style="color:var(--color-spell);">${sp.actions}</span>` : ''}
+                    </div>`;
+                });
+                spellbookHtml += '</div>';
+            });
+
+            overlay.innerHTML = `
+                <div class="daily-prep-modal">
+                    <div class="daily-prep-header">
+                        <div>
+                            <h2 class="font-header text-xl" style="color:#4ADE80;">Daily Preparation</h2>
+                            <div class="text-xs" style="color:var(--text-muted);">Drag from your spellbook into rank slots. Heightening goes UP only.</div>
+                        </div>
+                        <button onclick="this.closest('.daily-prep-overlay').remove()" class="text-2xl" style="color:var(--text-muted);">x</button>
+                    </div>
+                    <div class="daily-prep-body">
+                        <div class="daily-prep-spellbook">
+                            <div class="font-header text-xs uppercase tracking-wider mb-2" style="color:var(--text-secondary);">Spellbook</div>
+                            ${spellbookHtml || '<div class="italic" style="color:var(--text-muted);">No spells learned.</div>'}
+                        </div>
+                        <div class="daily-prep-slots">
+                            <div class="font-header text-xs uppercase tracking-wider mb-2" style="color:#4ADE80;">Slots — drag to fill</div>
+                            <div id="daily-prep-ui-${target}"></div>
+                        </div>
+                    </div>
+                    <div class="daily-prep-footer">
+                        <label class="text-xs flex items-center gap-2" style="color:var(--text-muted);"><input type="checkbox" id="dp-heal-full" checked> Heal to full HP</label>
+                        <div class="flex gap-2">
+                            <button onclick="this.closest('.daily-prep-overlay').remove()" class="font-header text-[10px] uppercase tracking-wider px-3 py-2 rounded" style="background:var(--border-subtle);color:var(--text-secondary);">Cancel</button>
+                            <button id="dp-long-rest" class="font-header text-[10px] uppercase tracking-wider px-3 py-2 rounded" style="background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#4ADE80;">Long Rest & Save Prep</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            // Render the same prep UI into the modal slot div.
+            const modalSlots = overlay.querySelector(`#daily-prep-ui-${target}`);
+            // Temporarily reuse renderPrepUI by swapping the regular ui id pointer
+            const existingUI = document.getElementById(`prep-ui-${target}`);
+            const placeholder = document.createElement('div');
+            if (existingUI && existingUI.parentNode) {
+                existingUI.parentNode.replaceChild(placeholder, existingUI);
+            }
+            modalSlots.id = `prep-ui-${target}`;
+            renderPrepUI(target, caster);
+
+            overlay.querySelector('#dp-long-rest').addEventListener('click', async () => {
+                const heal = overlay.querySelector('#dp-heal-full').checked;
+                // Save current prep state first
+                await _saveSpellState();
+                // Long rest — but DON'T clear prepared_spells; we just set them.
+                // The /api/daily_prep clears them, so we instead call a no-clear variant.
+                // Actually we call daily_prep AFTER preserving the prep we just chose.
+                // Simplest: call daily_prep, then re-save the prep we want kept.
+                const prepToKeep = JSON.parse(JSON.stringify(window._preparedSpells || {}));
+                await fetch('/api/daily_prep/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({heal_full: heal})
+                });
+                // Re-apply the prep the player just chose.
+                window._preparedSpells = prepToKeep;
+                window._castPrep = {};
+                window._expendedSlots = {};
+                await _saveSpellState();
+                window.location.reload();
+            });
+            // On close, restore the original ui-prep div so the magic tab keeps working
+            const restore = () => {
+                modalSlots.id = `daily-prep-ui-${target}`;
+                if (placeholder.parentNode) placeholder.parentNode.replaceChild(existingUI || placeholder, placeholder);
+            };
+            const obs = new MutationObserver(() => {
+                if (!document.body.contains(overlay)) { restore(); obs.disconnect(); }
+            });
+            obs.observe(document.body, { childList: true });
+        }

@@ -1,0 +1,78 @@
+        let browseActiveCasterIdx = 0;
+
+        // BROWSE SPELLS MODAL
+        function openSpellBrowse(casterIdx) {
+            browseActiveCasterIdx = casterIdx;
+            document.getElementById('spell-browse-modal').classList.remove('hidden');
+            filterBrowseSpells();
+        }
+        
+        function filterBrowseSpells() {
+            // Use the browse modal's dedicated input; the main list has its own
+            // "spell-search" input, so reading by that ID would return the wrong one.
+            // Shared matcher with the prepared-list filter (_matchesSpellName).
+            const q = ((document.getElementById('spell-browse-search')?.value) || '').toLowerCase().trim();
+            const lvl = document.getElementById('spell-level-filter').value;
+            const trad = document.getElementById('spell-trad-filter').value;
+
+            let filtered = allSpells.filter(s => {
+                if (!_matchesSpellName(s.name, q)) return false;
+                if (lvl !== '' && s.level != parseInt(lvl)) return false;
+                if (trad && (!s.traditions || !s.traditions.includes(trad))) return false;
+                return true;
+            }).slice(0, 60);
+            
+            const list = document.getElementById('spell-browse-list');
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="text-center italic py-8" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">No incantation answers these bindings.</div>';
+                return;
+            }
+            list.innerHTML = filtered.map(s => `
+                <div class="flex justify-between items-center p-2 rounded mb-1 hover:bg-gray-700 transition-colors" style="border:1px solid var(--border-subtle);">
+                    <div>
+                        <span class="text-sm font-bold" style="color:var(--text-primary);">${s.name}</span>
+                        <span class="font-header text-[9px] ml-2" style="color:var(--text-muted);">${s.level === 0 ? 'CTRP' : 'R' + s.level}</span>
+                        ${s.traditions.map(t => `<span class="text-[11px] ml-1 px-1 rounded" style="background:rgba(167,139,250,0.08); color:var(--color-spell);">${t}</span>`).join('')}
+                    </div>
+                    <button onclick="learnSpellFromBrowse('${s.name.replace(/'/g,"\\'")}', ${s.level}, ${JSON.stringify(s.traditions||[]).replace(/"/g,'&quot;')})" class="font-header text-[9px] px-3 py-1 rounded transition-colors" style="background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); color:#4ADE80;">+ Learn</button>
+                </div>
+            `).join('');
+        }
+        
+        async function learnSpellFromBrowse(name, level, traditions) {
+            try {
+                const payload = {name, level, caster_idx: browseActiveCasterIdx, traditions: traditions || []};
+                let res = await fetch('/api/learn_spell/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                let data = await res.json();
+                if (!data.success && data.tradition_mismatch) {
+                    // Offer override (multiclass dedications, granted spells, etc.)
+                    if (confirm(`${data.error}\n\nLearn anyway? (e.g. multiclass dedication grants this)`)) {
+                        payload.force = true;
+                        res = await fetch('/api/learn_spell/' + pcNameEncoded, {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(payload)
+                        });
+                        data = await res.json();
+                    } else {
+                        return;
+                    }
+                }
+                if (data.success) { window.location.reload(); }
+                else if (data.error) { alert(data.error); }
+            } catch(e) { console.error(e); }
+        }
+
+        async function forgetSpell(casterIdx, level, name) {
+            if (!confirm(`Remove "${name}" from your spellbook? Any prepared slots holding it will be cleared.`)) return;
+            try {
+                const res = await fetch('/api/forget_spell/' + pcNameEncoded, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, level, caster_idx: casterIdx})
+                });
+                const data = await res.json();
+                if (data.success) { window.location.reload(); }
+            } catch(e) { console.error(e); }
+        }
