@@ -5157,23 +5157,35 @@
 
         async function awardHeroPointToAll() {
             const pcs = (mapState.tokens || []).filter(t => t.is_pc);
-            if (pcs.length === 0) return;
-            // Award one Hero Point to every PC token (capped at 3). Common
-            // GM action between sessions or after a clutch moment.
+            if (pcs.length === 0) {
+                _showHeroPointToast('No PC tokens on the map');
+                return;
+            }
+            // Award one Hero Point to every PC token (capped at 3). Track
+            // who actually got bumped so the toast reflects reality —
+            // saying "+1 to 4 PCs" when 3 were already capped misleads.
+            const awarded = [];
             for (const t of pcs) {
                 const cur = t.hero_points || 0;
                 if (cur >= 3) continue;
                 t.hero_points = cur + 1;  // optimistic
+                awarded.push(t);
+            }
+            if (awarded.length === 0) {
+                _showHeroPointToast('All PCs already at max Hero Points (3)');
+                return;
             }
             markDirty('tokens');
-            await Promise.all(pcs.map(t =>
+            await Promise.all(awarded.map(t =>
                 fetch('/api/map/token/update', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: t.id, hero_points: Math.min(3, t.hero_points) }),
                 })
             ));
-            _showHeroPointToast(`+1 Hero Point to ${pcs.length} PC${pcs.length === 1 ? '' : 's'}`);
+            const skipped = pcs.length - awarded.length;
+            const skipNote = skipped > 0 ? ` (${skipped} already at max)` : '';
+            _showHeroPointToast(`+1 Hero Point to ${awarded.length} PC${awarded.length === 1 ? '' : 's'}${skipNote}`);
         }
 
         function _showHeroPointToast(msg) {
@@ -5994,6 +6006,24 @@
             let pdOutcome = null;
             if (currentCreature) {
                 pdOutcome = await decrementTurnEndConditions(currentCreature);
+                // Reset per-turn action economy on the outgoing creature.
+                // The encounter_update SSE listener already handles the
+                // tracker-driven path; map-side nextTurn() doesn't trigger
+                // that, so without this the action pips stay spent into
+                // the next round. Keep server + local in sync via one fetch.
+                if (currentCreature.actions_used_this_turn || currentCreature.strikes_this_turn) {
+                    currentCreature.actions_used_this_turn = 0;
+                    currentCreature.strikes_this_turn = 0;
+                    fetch('/api/map/token/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: currentCreature.id,
+                            actions_used_this_turn: 0,
+                            strikes_this_turn: 0,
+                        }),
+                    }).catch(() => {});
+                }
             }
             if (pdOutcome) {
                 _showPersistentDamageToast(currentCreature, pdOutcome);
