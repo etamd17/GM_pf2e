@@ -4344,59 +4344,20 @@ def gm_logout():
 @app.route('/gm')
 @gm_required
 def gm_hub():
-    """GM Dashboard hub — links to all GM tools."""
-    party_count = len(PARTY_LIBRARY)
-    monster_count = len(MONSTER_LIBRARY)
-    encounter_count = len(ACTIVE_ENCOUNTER)
-    return f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>GM Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {{ font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#e8e8f0; }}
-        .font-display {{ font-family:'Cinzel',serif; }}
-        .gm-card {{ background:#24242e; border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:20px; transition:all 0.2s; }}
-        .gm-card:hover {{ border-color:rgba(94,173,173,0.2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
-    </style></head>
-    <body class="min-h-screen flex items-center justify-center p-6">
-    <div class="max-w-2xl w-full">
-        <div class="text-center mb-10">
-            <h1 class="font-display text-2xl tracking-wide mb-2" style="color:#7DC4C4;">Game Master</h1>
-            <p class="text-xs" style="color:#50506a;">Dashboard &amp; Tools</p>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
-            <a href="/party" class="gm-card block">
-                <div class="font-semibold text-sm mb-1" style="color:#7DC4C4;">Party View</div>
-                <p class="text-xs" style="color:#8080a0;">HP, conditions, spells at a glance</p>
-                <span class="text-[10px] mt-2 block" style="color:#50506a;">{party_count} characters loaded</span>
-            </a>
-            <a href="/tracker" class="gm-card block">
-                <div class="font-semibold text-sm mb-1" style="color:#d4a244;">Encounter Tracker</div>
-                <p class="text-xs" style="color:#8080a0;">Initiative, turns, HP, and conditions</p>
-                <span class="text-[10px] mt-2 block" style="color:#50506a;">{encounter_count} combatants active</span>
-            </a>
-            <a href="/encounter_builder" class="gm-card block">
-                <div class="font-semibold text-sm mb-1" style="color:#FBBF24;">Encounter Builder</div>
-                <p class="text-xs" style="color:#8080a0;">Search monsters, build balanced encounters</p>
-                <span class="text-[10px] mt-2 block" style="color:#50506a;">{monster_count} monsters in library</span>
-            </a>
-            <a href="/gmscreen" class="gm-card block">
-                <div class="font-semibold text-sm mb-1" style="color:#a78bfa;">GM Screen</div>
-                <p class="text-xs" style="color:#8080a0;">Quick reference tables and rules</p>
-            </a>
-            <a href="/generator" class="gm-card block">
-                <div class="font-semibold text-sm mb-1" style="color:#4ade80;">Generator</div>
-                <p class="text-xs" style="color:#8080a0;">NPCs, loot, and encounter ideas</p>
-            </a>
-            <a href="/player" class="gm-card block">
-                <div class="font-semibold text-sm mb-1" style="color:#fca5a5;">Player Hub</div>
-                <p class="text-xs" style="color:#8080a0;">View what your players see</p>
-            </a>
-        </div>
-        <div class="text-center">
-            <a href="/gm/logout" class="text-xs font-medium" style="color:#50506a;">Logout</a>
-        </div>
-    </div></body></html>'''
+    """GM Dashboard hub — links to all GM tools.
+
+    Renders templates/gm_hub.html. Pulls campaign metadata so the hub can
+    surface session number, next-session date, and tagline at the top —
+    same context the campaign-intro lobby shows the players, but here it
+    serves as a "what state is the table in" reminder for the GM.
+    """
+    return render_template(
+        'gm_hub.html',
+        party_count=len(PARTY_LIBRARY),
+        monster_count=len(MONSTER_LIBRARY),
+        encounter_count=len(ACTIVE_ENCOUNTER),
+        campaign=_load_campaign_config(),
+    )
 
 @app.route('/tracker')
 @gm_required
