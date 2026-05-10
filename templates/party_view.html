@@ -110,8 +110,33 @@
         width: 11px; height: 11px;
         border-radius: 50%;
     }
-    .hero-pip.active   { background: #e0b050; border: 1.5px solid #e0b050; }
-    .hero-pip.inactive { background: transparent; border: 1.5px solid rgba(224,176,80,0.3); }
+    .hero-pip.active   { background: var(--gilt-300); border: 1.5px solid var(--gilt-300); }
+    .hero-pip.inactive { background: transparent; border: 1.5px solid rgba(201,163,78,0.3); }
+
+    .hero-adjust-btn {
+        width: 18px; height: 18px;
+        border: 1px solid rgba(201,163,78,0.35);
+        background: transparent;
+        color: var(--gilt-200);
+        border-radius: var(--r-sm);
+        font-size: 11px; font-weight: 700; line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+    }
+    .hero-adjust-btn:hover {
+        background: rgba(201,163,78,0.12);
+        border-color: var(--gilt-200);
+        color: var(--gilt-100);
+    }
+    .hero-adjust-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    .hero-adjust-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
 
     .slot-pip {
         display: inline-block;
@@ -423,13 +448,15 @@
 
             <!-- Hero pts + conditions in a compact row -->
             <div class="flex items-center gap-3 flex-wrap">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 hero-row" data-pc="{{ pc.name|e }}">
                     <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Hero</span>
                     <span class="hero-pips flex gap-1">
                         {% for i in range(3) %}
                         <span class="hero-pip {% if i < pc.hero_points %}active{% else %}inactive{% endif %}"></span>
                         {% endfor %}
                     </span>
+                    <button type="button" class="hero-adjust-btn hero-decrease" title="Spend / revoke hero point" aria-label="Decrease hero points" {% if pc.hero_points <= 0 %}disabled{% endif %}>&minus;</button>
+                    <button type="button" class="hero-adjust-btn hero-increase" title="Award hero point" aria-label="Award hero point" {% if pc.hero_points >= 3 %}disabled{% endif %}>+</button>
                 </div>
                 <div class="conditions-row flex flex-wrap gap-1 ml-auto" {% if not pc.conditions %}style="display:none;"{% endif %}>
                     {% for cond, val in pc.conditions.items() %}
@@ -809,7 +836,32 @@
         pips.forEach((pip, i) => {
             pip.className = 'hero-pip ' + (i < heroPoints ? 'active' : 'inactive');
         });
+        const inc = card.querySelector('.hero-increase');
+        const dec = card.querySelector('.hero-decrease');
+        if (inc) inc.disabled = heroPoints >= 3;
+        if (dec) dec.disabled = heroPoints <= 0;
     }
+
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.hero-adjust-btn');
+        if (!btn) return;
+        const row = btn.closest('.hero-row');
+        const pcName = row && row.dataset.pc;
+        if (!pcName) return;
+        const action = btn.classList.contains('hero-increase') ? 'increase' : 'decrease';
+        btn.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('action', action);
+            const r = await fetch('/api/adjust_hero/' + encodeURIComponent(pcName), { method: 'POST', body: fd });
+            const j = await r.json();
+            if (j && j.success) {
+                const card = row.closest('.pc-card');
+                if (card) updateHeroPoints(card, j.current_hero);
+            }
+        } catch(_) {}
+        finally { btn.disabled = false; }
+    });
 
     function updateSpellSlots(card, expended) {
         if (!expended) return;

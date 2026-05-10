@@ -313,6 +313,22 @@
 .trk .nm-sub .k.pc { color:var(--t-teal); }
 .trk .nm-sub .k.active { color:var(--t-gold); }
 .trk .nm-sub .k.delay { color:var(--t-t2); }
+/* Reaction indicator — RXN means available, RXN ✗ means spent.
+   Buttons so the GM can flip in one click without leaving the row. */
+button.k.rxn-ready, button.k.rxn-spent {
+  font: inherit; cursor: pointer; padding: 1px 6px; border-radius: 3px;
+  letter-spacing: .5px; line-height: 1; vertical-align: baseline;
+}
+button.k.rxn-ready {
+  color: var(--t-gold); border: 1px solid rgba(200,168,78,0.35);
+  background: rgba(200,168,78,0.08);
+}
+button.k.rxn-ready:hover { background: rgba(200,168,78,0.16); }
+button.k.rxn-spent {
+  color: var(--t-t3); border: 1px dashed rgba(255,255,255,0.18);
+  background: transparent; opacity: .85;
+}
+button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1; }
 .trk .nm-sub .k.hidden {
   color:var(--t-gold); letter-spacing:.6px;
   padding:1px 5px; border:1px solid rgba(200,168,78,0.35);
@@ -505,6 +521,31 @@
   font-size:10px; font-weight:700;
 }
 .trk .pd-row button:hover { background:rgba(200,168,78,0.22); }
+.trk .pd-row select {
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:3px 6px; border-radius:4px; font-size:10px;
+}
+
+/* Per-entry rendering for PC structured persistent damage. Each entry
+   gets its own DC 15 flat-check Roll button and an x to remove. */
+.trk .pd-list { display: flex; flex-direction: column; gap: 3px; }
+.trk .pd-entry {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(168,58,58,0.06);
+  border: 1px solid rgba(168,58,58,0.25);
+  padding: 3px 6px; border-radius: 4px;
+  font-size: 11px;
+}
+.trk .pd-entry .pd-lbl { font-size: 9px; color: var(--ruby-200); font-weight: 700; letter-spacing: .8px; }
+.trk .pd-entry .pd-text { flex: 1; color: var(--text-on-dark); font-family: var(--font-mono); font-size: 11px; }
+.trk .pd-entry .pd-src { color: var(--text-on-dark-3); font-size: 10px; font-style: italic; font-family: var(--font-ui); }
+.trk .pd-entry .act-btn {
+  background: rgba(200,168,78,0.10); color: var(--t-gold);
+  border: 1px solid rgba(200,168,78,0.35);
+  padding: 2px 8px; font-size: 10px; font-weight: 700;
+  border-radius: 3px; cursor: pointer;
+}
+.trk .pd-entry .act-btn:hover { background: rgba(200,168,78,0.22); border-color: var(--t-gold); }
 
 .trk .c-act { display:flex; flex-direction:column; gap:3px; align-items:stretch; }
 .trk .ew-row { display:flex; gap:2px; justify-content:center; }
@@ -648,6 +689,36 @@
   margin-bottom:8px; display:inline-flex; align-items:center; gap:5px;
 }
 .trk .rk-btn:hover { background:rgba(200,168,78,0.22); }
+
+/* Dying recovery widget — compact inline DC display + dual-roll path
+   (site rolls or player reports their physical d20 result). Lives in
+   the active-panel reminder strip. */
+.trk .recovery-widget {
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-style: normal; font-family: var(--font-ui);
+  font-size: 11px; letter-spacing: .02em; color: var(--text-on-dark);
+}
+.trk .recovery-widget b { color: var(--ruby-200); }
+.trk .recovery-widget .act-btn {
+  background: rgba(200,168,78,0.10); color: var(--t-gold);
+  border: 1px solid rgba(200,168,78,0.40);
+  padding: 2px 8px; font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; border-radius: 3px;
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+}
+.trk .recovery-widget .act-btn:hover {
+  background: rgba(200,168,78,0.22);
+  border-color: var(--t-gold); color: var(--gilt-100);
+}
+.trk .recovery-widget .rec-result {
+  width: 44px; padding: 2px 4px; font-size: 11px;
+  background: var(--bg-input); color: var(--text-on-dark);
+  border: 1px solid var(--border-strong); border-radius: 3px;
+  font-family: var(--font-mono); text-align: center;
+}
+.trk .recovery-widget .rec-result:focus {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
 
 .trk .defense-row {
   display:grid; grid-template-columns: auto 1fr; gap:6px 10px; align-items:baseline;
@@ -1371,7 +1442,12 @@ function renderInitList() {
                          : c.triggered ? ' · <span class="k triggered">TRIGGERED</span>'
                          : '';
             subText = `${roleLabel} · Lvl ${c.level}${dcParts.length ? ' · ' + dcParts.join(' / ') : ''}${status}`;
-        } else if (c.is_pc) subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''}`;
+        } else if (c.is_pc) {
+            const reactionTag = c.reaction_used
+                ? `<button type="button" class="k rxn-spent" onclick="event.stopPropagation();toggleReaction('${c.name.replace(/'/g,"\\'")}',false)" title="Reaction spent — click to restore">RXN ✗</button>`
+                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();toggleReaction('${c.name.replace(/'/g,"\\'")}',true)" title="Reaction available — click to mark spent (AoO, Shield Block, etc.)">RXN</button>`;
+            subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''} · ${reactionTag}`;
+        }
         else subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}${hiddenBadge}`;
         if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span>`;
 
@@ -1590,12 +1666,56 @@ function renderActivePanel() {
         <button onclick="addConditionAP('${c.instance_id}')">+ Add</button>
     </div>`;
 
-    // Persistent damage inline
-    html += `<div class="pd-row" style="margin-top:6px;">
-        <span class="pd-lbl">PD</span>
-        <input type="text" id="pd-ap-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire">
-        <button onclick="setPDAP('${c.instance_id}')">Set</button>
-    </div>`;
+    // Persistent damage. PCs use structured list[dict]; monsters keep the
+    // legacy free-text string. For PCs the GM gets per-entry roll/remove
+    // buttons (DC 15 flat check ends the entry on success).
+    html += `<div class="pd-block" style="margin-top:6px;">`;
+    if (c.is_pc) {
+        const pdList = Array.isArray(c.persistent_damage_list) ? c.persistent_damage_list : [];
+        if (pdList.length) {
+            html += `<div class="pd-list">`;
+            pdList.forEach((e, i) => {
+                const label = `${e.damage || '?'}${e.type ? ' ' + e.type : ''}`;
+                html += `<div class="pd-entry">
+                    <span class="pd-lbl">PD</span>
+                    <span class="pd-text">${escapeHtml(label)}${e.source ? ` <span class="pd-src">(${escapeHtml(e.source)})</span>` : ''}</span>
+                    <button class="act-btn" onclick="rollPersistentFlatCheck('${escapeHtml(c.name)}', ${i})" title="Roll DC 15 flat check — on success the persistent damage ends">Roll DC 15</button>
+                    <button class="act-btn" onclick="removePersistentDamage('${escapeHtml(c.name)}', ${i})" title="Remove without rolling (e.g. cleansed by a spell)">×</button>
+                </div>`;
+            });
+            html += `</div>`;
+        }
+        html += `<div class="pd-row pd-add" style="margin-top:4px;">
+            <span class="pd-lbl">+ PD</span>
+            <input type="text" id="pd-dmg-${c.instance_id}" placeholder="1d6" style="width:60px;">
+            <select id="pd-type-${c.instance_id}">
+                <option value="">untyped</option>
+                <option value="bleed">bleed</option>
+                <option value="fire">fire</option>
+                <option value="cold">cold</option>
+                <option value="acid">acid</option>
+                <option value="electricity">electricity</option>
+                <option value="sonic">sonic</option>
+                <option value="poison">poison</option>
+                <option value="positive">positive</option>
+                <option value="negative">negative</option>
+                <option value="force">force</option>
+                <option value="mental">mental</option>
+                <option value="bludgeoning">bludgeoning</option>
+                <option value="piercing">piercing</option>
+                <option value="slashing">slashing</option>
+            </select>
+            <input type="text" id="pd-src-${c.instance_id}" placeholder="source (optional)" style="width:140px;">
+            <button onclick="addPersistentDamage('${escapeHtml(c.name)}','${c.instance_id}')">Add</button>
+        </div>`;
+    } else {
+        html += `<div class="pd-row">
+            <span class="pd-lbl">PD</span>
+            <input type="text" id="pd-ap-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire">
+            <button onclick="setPDAP('${c.instance_id}')">Set</button>
+        </div>`;
+    }
+    html += `</div>`;
 
     // Strikes — render inline MAP−5 / MAP−10 (and agile variants) alongside
     // the primary attack so the GM doesn't have to subtract in their head when
@@ -1684,13 +1804,30 @@ function renderActivePanel() {
         });
     }
 
-    // End-of-turn reminder
-    const reminders = [];
-    if (c.persistent_damage) reminders.push(`Take <b>${c.persistent_damage}</b> persistent damage, then DC 15 flat check.`);
-    if (c.conditions && c.conditions.frightened > 0) reminders.push(`Frightened decreases by 1 at end of turn.`);
-    if (c.conditions && c.conditions.dying > 0) reminders.push(`Dying — Recovery DC ${10 + (c.conditions.dying || 0)} at end of turn.`);
-    if (reminders.length) {
-        html += `<div class="reminder"><b>End-of-turn:</b> ${reminders.join(' · ')}</div>`;
+    // Turn-bound reminders. Dying recovery is start-of-turn (PF2e Remaster
+    // Player Core p.404); persistent damage + frightened tick at end-of-turn.
+    const startReminders = [];
+    const endReminders = [];
+    if (c.conditions && c.conditions.dying > 0) {
+        const dyingVal = c.conditions.dying;
+        const dc = 10 + dyingVal;
+        const idSafe = c.instance_id;
+        startReminders.push(
+            `<span class="recovery-widget" data-id="${idSafe}" data-dc="${dc}" data-dying="${dyingVal}">
+                Dying ${dyingVal} — Recovery flat check <b>DC ${dc}</b>
+                <button type="button" class="act-btn rec-roll" onclick="rollRecovery('${idSafe}')" title="Roll on site (uses our d20)">Roll</button>
+                <input type="number" class="rec-result" min="1" max="20" placeholder="d20" title="If the player rolled physical dice, enter the result here">
+                <button type="button" class="act-btn rec-apply" onclick="applyRecovery('${idSafe}')" title="Apply the entered d20 result">Apply</button>
+            </span>`
+        );
+    }
+    if (c.persistent_damage) endReminders.push(`Take <b>${c.persistent_damage}</b> persistent damage, then DC 15 flat check.`);
+    if (c.conditions && c.conditions.frightened > 0) endReminders.push(`Frightened decreases by 1 at end of turn.`);
+    if (startReminders.length) {
+        html += `<div class="reminder"><b>Start-of-turn:</b> ${startReminders.join(' · ')}</div>`;
+    }
+    if (endReminders.length) {
+        html += `<div class="reminder"><b>End-of-turn:</b> ${endReminders.join(' · ')}</div>`;
     }
 
     document.getElementById('ap-body').innerHTML = html;
@@ -1843,6 +1980,36 @@ function _commitPD(id, inputId) {
 function setPD(id)   { _commitPD(id, 'pd-' + id); }
 function setPDAP(id) { _commitPD(id, 'pd-ap-' + id); }
 
+// PC structured persistent damage — uses the typed endpoints so each entry
+// keeps its own damage/type/source and gets its own DC 15 flat check.
+function addPersistentDamage(pcName, instanceId) {
+    const dmg = (document.getElementById('pd-dmg-' + instanceId) || {}).value || '';
+    const typ = (document.getElementById('pd-type-' + instanceId) || {}).value || '';
+    const src = (document.getElementById('pd-src-' + instanceId) || {}).value || '';
+    if (!dmg.trim()) return;
+    fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ damage: dmg, type: typ, source: src }),
+    }).then(r => r.json()).then(j => {
+        if (!j || !j.success) return;
+        const dEl = document.getElementById('pd-dmg-' + instanceId);
+        const sEl = document.getElementById('pd-src-' + instanceId);
+        if (dEl) dEl.value = '';
+        if (sEl) sEl.value = '';
+    }).catch(() => {});
+}
+function removePersistentDamage(pcName, idx) {
+    fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/remove/' + idx, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    }).catch(() => {});
+}
+function rollPersistentFlatCheck(pcName, idx) {
+    fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/flat_check/' + idx, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    }).catch(() => {});
+}
+
 // Hazard actions (#12). Server-side at /api/hazard/<id>/{trigger,disable,reset}.
 // All three are GM-only POSTs that emit a combat-log entry and re-broadcast
 // the encounter; the SSE listener will re-render this row with the new
@@ -1865,6 +2032,61 @@ function eliteWeak(id, mode) {
     const fd = new FormData();
     fd.append('mode', mode);
     apiPost('/api/toggle_elite_weak/' + id, fd, null);
+}
+
+function toggleReaction(pcName, used) {
+    fetch('/api/set_reaction/' + encodeURIComponent(pcName), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ used: !!used })
+    }).catch(() => {});
+}
+
+function rollRecovery(instanceId) {
+    fetch('/api/recovery_check/' + encodeURIComponent(instanceId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    }).then(r => r.json()).then(j => {
+        if (!j || !j.success) return;
+        _showRecoveryToast(j);
+    }).catch(() => {});
+}
+function applyRecovery(instanceId) {
+    const widget = document.querySelector(`.recovery-widget[data-id="${instanceId}"]`);
+    if (!widget) return;
+    const input = widget.querySelector('.rec-result');
+    const v = parseInt(input && input.value, 10);
+    if (!v || v < 1 || v > 20) {
+        input && input.focus();
+        return;
+    }
+    fetch('/api/recovery_check/' + encodeURIComponent(instanceId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ d20: v })
+    }).then(r => r.json()).then(j => {
+        if (!j || !j.success) return;
+        if (input) input.value = '';
+        _showRecoveryToast(j);
+    }).catch(() => {});
+}
+function _showRecoveryToast(j) {
+    const labels = {crit_success:'CRIT SUCCESS', success:'SUCCESS', failure:'FAILURE', crit_failure:'CRIT FAIL'};
+    const colors = {crit_success:'var(--gilt-200)', success:'#9bc06f', failure:'var(--ruby-200)', crit_failure:'var(--ruby-300)'};
+    const label = labels[j.degree] || j.degree;
+    const status = j.died ? `<span style="color:var(--ruby-300);font-weight:700;"> · DEAD</span>` : ` → Dying ${j.dying}`;
+    const t = document.createElement('div');
+    t.style.cssText = `
+        position:fixed; top:60px; right:16px; z-index:9999;
+        background:var(--bg-card); border:1px solid var(--border-strong);
+        color:var(--text-on-dark); padding:10px 14px; border-radius:4px;
+        font-size:13px; box-shadow:var(--shadow-2); max-width:320px;
+    `;
+    t.innerHTML = `<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:${colors[j.degree]};font-weight:700;margin-bottom:2px;">Recovery — ${label}</div>
+        Rolled <b>${j.d20}</b> vs DC ${j.dc}${status}`;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.transition='opacity .3s'; t.style.opacity='0'; setTimeout(() => t.remove(), 320); }, 4000);
 }
 
 function removeCombatant(id) {
@@ -2292,10 +2514,13 @@ function connectSSE() {
             ssEnc.forEach((src, i) => {
                 const dst = cur[i];
                 if (!dst) return;
-                if (typeof src.current_hp === 'number') dst.current_hp = src.current_hp;
-                if (typeof src.max_hp === 'number')     dst.max_hp     = src.max_hp;
-                if (src.conditions)                     dst.conditions = src.conditions;
-                if (typeof src.hp_status === 'string')  dst.hp_status  = src.hp_status;
+                if (typeof src.current_hp === 'number')    dst.current_hp    = src.current_hp;
+                if (typeof src.max_hp === 'number')        dst.max_hp        = src.max_hp;
+                if (src.conditions)                        dst.conditions    = src.conditions;
+                if (typeof src.hp_status === 'string')     dst.hp_status     = src.hp_status;
+                if (typeof src.reaction_used === 'boolean') dst.reaction_used = src.reaction_used;
+                if (typeof src.hero_points === 'number')   dst.hero_points   = src.hero_points;
+                if (Array.isArray(src.persistent_damage_list)) dst.persistent_damage_list = src.persistent_damage_list;
             });
             STATE.round = sse.round ?? STATE.round;
             STATE.turn_index = sse.turn_index ?? STATE.turn_index;

@@ -737,6 +737,13 @@ def _do_broadcast_encounter_state():
                 entry['current_hp'] = c.current_hp
                 entry['max_hp'] = c.hp
                 entry['hp_pct'] = round(pct * 100)
+                entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+                entry['hero_points'] = int(getattr(c, 'hero_points', 0) or 0)
+                entry['persistent_damage_list'] = [
+                    {'damage': e.get('damage', ''), 'type': e.get('type', ''), 'source': e.get('source', '')}
+                    for e in (getattr(c, 'persistent_damage', []) or [])
+                    if isinstance(e, dict)
+                ]
             else:
                 pct = c.current_hp / c.hp if c.hp > 0 else 0
                 if c.current_hp == 0:
@@ -1232,7 +1239,8 @@ def _do_persist_pc_combat_state(pc_name):
 #
 # Fields mirrored on the encounter tracker so initiative HUD stays fresh:
 _TRACKER_MIRRORED_FIELDS = (
-    'current_hp', 'current_focus', 'hero_points', 'temp_hp',
+    'current_hp', 'current_focus', 'hero_points', 'temp_hp', 'reaction_used',
+    'persistent_damage',
 )
 
 def _sync_tracker_from_pc(pc_name, *, conditions=True):
@@ -4460,6 +4468,17 @@ def _get_tracker_state():
                 entry['spell_dc'] = getattr(c, 'spell_dc', 0)
                 entry['focus_pool'] = getattr(c, 'focus_max', 0)
                 entry['focus_current'] = getattr(c, 'current_focus', 0)
+                entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+                entry['hero_points'] = int(getattr(c, 'hero_points', 0) or 0)
+                # Raw structured persistent-damage entries — the active panel
+                # uses this to render per-entry roll/remove buttons. The
+                # `persistent_damage` field above remains the joined string
+                # used by the small initiative row.
+                entry['persistent_damage_list'] = [
+                    {'damage': e.get('damage', ''), 'type': e.get('type', ''), 'source': e.get('source', '')}
+                    for e in (getattr(c, 'persistent_damage', []) or [])
+                    if isinstance(e, dict)
+                ]
             else:
                 entry['strikes'] = [{'name': s['name'], 'hit': f"+{s['bonus']}" if s['bonus'] >= 0 else str(s['bonus']), 'damage': s['damage']} for s in getattr(c, 'strikes', [])]
                 entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
@@ -5663,6 +5682,67 @@ def toggle_condition(instance_id):
             break
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
+
+@app.route('/api/recovery_check/<instance_id>', methods=['POST'])
+def recovery_check(instance_id):
+    """PF2e Remaster recovery check: flat check vs DC 10 + current dying value.
+    The site never forces a roll — players can roll physical dice and POST
+    {"d20": <result>}; we apply the degree-of-success math. POST without a d20
+    rolls server-side. Crit success/fail bumps dying by 2; nat 1 / nat 20
+    shift degree by one step. Dying 0 clears unconscious and adds wounded."""
+    import random as _r
+    data = request.get_json(silent=True) or {}
+    try:
+        d20 = int(data.get('d20')) if data.get('d20') not in (None, '', 0) else _r.randint(1, 20)
+    except (TypeError, ValueError):
+        d20 = _r.randint(1, 20)
+    d20 = max(1, min(20, d20))
+    target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
+    if not target:
+        return jsonify({"success": False, "error": "Combatant not found"}), 404
+    dying = int(target.conditions.get('dying', 0) or 0)
+    if dying <= 0:
+        return jsonify({"success": False, "error": "Not dying"}), 400
+    dc = 10 + dying
+    # Degree-of-success ladder, with nat 1 / nat 20 stepping by one
+    if d20 >= dc + 10: degree = 'crit_success'
+    elif d20 >= dc:    degree = 'success'
+    elif d20 <= dc - 10: degree = 'crit_failure'
+    else:              degree = 'failure'
+    # Step by 1 for natural 1/20
+    order = ['crit_failure', 'failure', 'success', 'crit_success']
+    if d20 == 20: degree = order[min(len(order) - 1, order.index(degree) + 1)]
+    elif d20 == 1: degree = order[max(0, order.index(degree) - 1)]
+    delta = {'crit_success': -2, 'success': -1, 'failure': 1, 'crit_failure': 2}[degree]
+    new_dying = max(0, dying + delta)
+    doomed = int(target.conditions.get('doomed', 0) or 0)
+    death_threshold = max(1, 4 - doomed)
+    died = new_dying >= death_threshold
+    if died:
+        new_dying = death_threshold
+    target.conditions['dying'] = new_dying
+    if new_dying == 0 and dying > 0:
+        target.conditions['wounded'] = int(target.conditions.get('wounded', 0) or 0) + 1
+    if target.is_pc and target.name in PARTY_LIBRARY:
+        PARTY_LIBRARY[target.name].conditions['dying'] = target.conditions['dying']
+        PARTY_LIBRARY[target.name].conditions['wounded'] = target.conditions['wounded']
+        _broadcast_pc_state(target.name)
+        _persist_pc_combat_state(target.name)
+    label = degree.replace('_', ' ').title()
+    msg = f"{target.name}: Recovery DC {dc} → rolled {d20} → {label} ({'died' if died else f'Dying {new_dying}'})"
+    _combat_log(msg, 'condition', degree=degree)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({
+        "success": True,
+        "d20": d20,
+        "dc": dc,
+        "degree": degree,
+        "delta": delta,
+        "dying": new_dying,
+        "died": died,
+        "wounded": target.conditions['wounded'],
+    })
 
 @app.route('/api/set_persistent_damage/<instance_id>', methods=['POST'])
 def set_persistent_damage(instance_id):
