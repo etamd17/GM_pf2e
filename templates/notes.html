@@ -1,0 +1,587 @@
+{% extends "base.html" %}
+{% block title %}Notes — {{ current.title if current else 'Vault' }}{% endblock %}
+
+{% block extra_head %}
+.notes-shell {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr) 260px;
+    gap: var(--sp-3);
+    height: calc(100vh - 80px);
+    align-items: stretch;
+}
+@media (max-width: 1100px) {
+    .notes-shell { grid-template-columns: 240px minmax(0, 1fr); }
+    .notes-meta { display: none; }
+}
+@media (max-width: 720px) {
+    .notes-shell { grid-template-columns: 1fr; height: auto; }
+    .notes-tree-pane { max-height: 40vh; }
+}
+
+.notes-tree-pane, .notes-content-pane, .notes-meta {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.notes-tree-pane { padding: var(--sp-3); overflow-y: auto; }
+.notes-content-pane { padding: var(--sp-4) var(--sp-5); overflow-y: auto; }
+.notes-meta { padding: var(--sp-3); overflow-y: auto; }
+
+/* ── Tree ───────────────────────────────────────────────────────────────── */
+.notes-search {
+    display: flex; gap: var(--sp-1);
+    margin-bottom: var(--sp-2);
+}
+.notes-search input {
+    flex: 1; min-width: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    color: var(--text-on-dark);
+    padding: 6px 8px;
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    font-family: var(--font-ui);
+}
+.notes-search input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+.notes-rules-toggle {
+    font-size: 10px;
+    color: var(--text-on-dark-3);
+    display: flex; align-items: center; gap: 4px;
+    margin-bottom: var(--sp-2);
+    cursor: pointer;
+    user-select: none;
+}
+.notes-rules-toggle input { accent-color: var(--gilt-300); }
+
+.notes-tree { font-size: 12px; line-height: 1.55; }
+.notes-tree details { margin: 0; }
+.notes-tree summary {
+    cursor: pointer; padding: 2px 4px; border-radius: var(--r-sm);
+    color: var(--text-on-dark-2);
+    list-style: none;
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+}
+.notes-tree summary::-webkit-details-marker { display: none; }
+.notes-tree summary::before {
+    content: "▸"; display: inline-block; width: 10px; margin-right: 4px;
+    color: var(--text-on-dark-3);
+    transition: transform 0.12s;
+}
+.notes-tree details[open] > summary::before { transform: rotate(90deg); }
+.notes-tree summary:hover { background: rgba(201,163,78,0.06); color: var(--text-on-dark); }
+.notes-tree .nt-children { padding-left: var(--sp-3); border-left: 1px dashed var(--border-card); margin-left: 6px; }
+.notes-tree a.nt-leaf {
+    display: block;
+    padding: 2px 4px;
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark-2);
+    text-decoration: none;
+    font-size: 11.5px;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+.notes-tree a.nt-leaf:hover { background: rgba(201,163,78,0.08); color: var(--gilt-200); }
+.notes-tree a.nt-leaf.active { background: rgba(201,163,78,0.18); color: var(--gilt-100); border: 1px solid rgba(201,163,78,0.4); }
+.notes-tree a.nt-leaf.canvas { color: var(--text-on-dark-3); font-style: italic; }
+
+/* ── Search results overlay ────────────────────────────────────────────── */
+.notes-search-results {
+    background: var(--bg-card-2);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-sm);
+    padding: var(--sp-2);
+    margin-bottom: var(--sp-2);
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.nsr-hit { display: block; padding: 6px 4px; border-radius: var(--r-sm); color: var(--text-on-dark-2); text-decoration: none; }
+.nsr-hit:hover { background: rgba(201,163,78,0.08); color: var(--gilt-200); }
+.nsr-hit .nsr-title { font-weight: 600; font-size: 12px; color: var(--text-on-dark); }
+.nsr-hit .nsr-path { font-size: 10px; color: var(--text-on-dark-3); font-family: var(--font-mono); }
+.nsr-hit .nsr-snippet { font-size: 11px; color: var(--text-on-dark-3); margin-top: 2px; line-height: 1.4; }
+.nsr-hit .nsr-snippet mark { background: rgba(201,163,78,0.30); color: var(--gilt-100); padding: 0 2px; border-radius: 2px; }
+
+/* ── Content ───────────────────────────────────────────────────────────── */
+.note-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--sp-3); flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-rule);
+    padding-bottom: var(--sp-2);
+    margin-bottom: var(--sp-3);
+}
+.note-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--gilt-100);
+    margin: 0;
+}
+.note-breadcrumb {
+    font-size: 10px; color: var(--text-on-dark-3);
+    font-family: var(--font-mono); letter-spacing: 0.02em;
+    margin-bottom: 2px;
+}
+.note-actions { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+.note-actions button, .note-actions a {
+    background: rgba(201,163,78,0.10);
+    border: 1px solid rgba(201,163,78,0.40);
+    color: var(--gilt-200);
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.note-actions button:hover, .note-actions a:hover {
+    background: rgba(201,163,78,0.22); border-color: var(--accent); color: var(--gilt-100);
+}
+.note-actions button.danger { color: var(--ruby-100); border-color: rgba(168,58,58,0.40); background: rgba(168,58,58,0.10); }
+
+/* Markdown body styling */
+.note-body { font-family: var(--font-flavor); font-size: 14.5px; line-height: 1.7; color: var(--text-on-dark); }
+.note-body h1, .note-body h2, .note-body h3, .note-body h4 { font-family: var(--font-display); color: var(--gilt-100); margin: var(--sp-5) 0 var(--sp-2); }
+.note-body h1 { font-size: 22px; border-bottom: 1px solid var(--border-rule); padding-bottom: 4px; }
+.note-body h2 { font-size: 18px; }
+.note-body h3 { font-size: 15px; color: var(--gilt-200); }
+.note-body h4 { font-size: 13px; color: var(--gilt-200); text-transform: uppercase; letter-spacing: 0.06em; }
+.note-body p { margin: 0 0 var(--sp-3); }
+.note-body ul, .note-body ol { margin: 0 0 var(--sp-3); padding-left: var(--sp-5); }
+.note-body li { margin: 2px 0; }
+.note-body table { border-collapse: collapse; margin: var(--sp-2) 0 var(--sp-3); font-size: 13px; width: 100%; font-family: var(--font-ui); }
+.note-body th { text-align: left; padding: 6px 10px; background: var(--bg-card-2); color: var(--gilt-200); font-family: var(--font-display); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 2px solid var(--border-rule); }
+.note-body td { padding: 5px 10px; border-bottom: 1px solid var(--border-card); color: var(--text-on-dark-2); vertical-align: top; }
+.note-body code { background: var(--bg-card-2); padding: 1px 5px; border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--gilt-100); }
+.note-body pre { background: var(--bg-page); border: 1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-3); overflow-x: auto; }
+.note-body pre code { background: transparent; padding: 0; }
+.note-body hr { border: none; border-top: 1px solid var(--border-rule); margin: var(--sp-5) 0; }
+.note-body blockquote { border-left: 3px solid var(--accent); padding: 2px var(--sp-3); margin: var(--sp-2) 0; color: var(--text-on-dark-2); font-style: italic; }
+.note-body img.note-embed-img { max-width: 100%; border-radius: var(--r-sm); border: 1px solid var(--border-card); margin: var(--sp-2) 0; }
+
+/* Wikilinks */
+.wikilink {
+    color: var(--gilt-200);
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(201,163,78,0.4);
+    padding: 0 2px;
+    transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+.wikilink:hover { color: var(--gilt-100); border-bottom-color: var(--accent); background: rgba(201,163,78,0.08); }
+.wikilink-broken { color: var(--text-on-dark-3); font-style: italic; border-bottom: 1px dotted var(--text-on-dark-3); cursor: not-allowed; }
+.wikilink-embed { color: var(--accent); }
+
+/* Tags */
+.note-tag {
+    display: inline-block;
+    background: var(--bg-card-2); color: var(--text-on-dark-2);
+    border: 1px solid var(--border-card);
+    padding: 1px 7px; border-radius: 999px;
+    font-size: 11px; font-family: var(--font-mono);
+    margin: 0 2px;
+}
+
+/* Callouts */
+.cal {
+    margin: var(--sp-3) 0;
+    padding: var(--sp-2) var(--sp-3);
+    border-left: 3px solid var(--accent);
+    background: rgba(201,163,78,0.06);
+    border-radius: var(--r-sm);
+}
+.cal-h { font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gilt-200); margin-bottom: 4px; }
+.cal.cal-warning { border-left-color: var(--ruby-200); background: rgba(168,58,58,0.06); }
+.cal.cal-warning .cal-h { color: var(--ruby-100); }
+.cal.cal-danger { border-left-color: var(--ruby-300); background: rgba(168,58,58,0.10); }
+.cal.cal-danger .cal-h { color: var(--ruby-100); }
+.cal.cal-info, .cal.cal-tip { border-left-color: var(--ink-400); background: rgba(154,145,122,0.06); }
+.cal.cal-info .cal-h, .cal.cal-tip .cal-h { color: var(--ink-300); }
+.cal.cal-quote { font-style: italic; }
+
+/* ── Frontmatter + backlinks (right pane) ─────────────────────────────── */
+.notes-meta-section { margin-bottom: var(--sp-4); }
+.notes-meta-h {
+    font-family: var(--font-display);
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--gilt-200); margin-bottom: var(--sp-2);
+}
+.notes-meta-row { display: flex; justify-content: space-between; gap: var(--sp-2); padding: 3px 0; border-bottom: 1px dashed var(--border-card); font-size: 11px; }
+.notes-meta-row:last-child { border-bottom: none; }
+.notes-meta-key { color: var(--text-on-dark-3); font-family: var(--font-mono); }
+.notes-meta-val { color: var(--text-on-dark); text-align: right; max-width: 60%; word-break: break-word; }
+.notes-backlink { display: block; padding: 6px 4px; border-radius: var(--r-sm); color: var(--text-on-dark-2); text-decoration: none; font-size: 11px; }
+.notes-backlink:hover { background: rgba(201,163,78,0.08); color: var(--gilt-200); }
+.notes-backlink .nbl-title { font-weight: 600; color: var(--text-on-dark); }
+.notes-backlink .nbl-path { font-size: 9px; color: var(--text-on-dark-3); font-family: var(--font-mono); }
+
+/* ── Editor (Phase 4) ─────────────────────────────────────────────────── */
+.notes-editor { display: none; flex-direction: column; gap: var(--sp-2); height: 100%; }
+.notes-editor textarea {
+    flex: 1; min-height: 50vh;
+    width: 100%;
+    background: var(--bg-input);
+    color: var(--text-on-dark);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    padding: var(--sp-3);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    resize: vertical;
+    tab-size: 4;
+}
+.notes-editor textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.notes-editor-foot { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--text-on-dark-3); }
+.notes-editor-status { font-family: var(--font-mono); }
+.notes-editor-status.ok { color: var(--success); }
+.notes-editor-status.dirty { color: var(--gilt-200); }
+.notes-editor-status.err { color: var(--ruby-100); }
+
+.notes-editor.active { display: flex; }
+.note-body.editing { display: none; }
+.note-template-banner {
+    background: rgba(168,58,58,0.10);
+    border: 1px solid rgba(168,58,58,0.40);
+    color: var(--ruby-100);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    margin-bottom: var(--sp-3);
+}
+
+/* Empty state */
+.notes-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; min-height: 50vh;
+    color: var(--text-on-dark-3); text-align: center;
+    padding: var(--sp-5);
+}
+.notes-empty h2 { color: var(--gilt-200); font-family: var(--font-display); margin-bottom: var(--sp-2); }
+.notes-empty code { background: var(--bg-card-2); padding: 2px 6px; border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--gilt-100); border: 1px solid var(--border-card); }
+{% endblock %}
+
+{% block content %}
+{% if not vault.available %}
+<div class="notes-empty">
+    {% if vault.reason == 'permission' %}
+        <h2>Vault permission denied</h2>
+        <p style="font-size:12px; max-width:560px; line-height:1.6;">{{ vault.detail }}</p>
+        <p style="margin-top:var(--sp-3); font-size:12px;">Symlink: <code>{{ vault.symlink_path }}</code></p>
+        <p style="font-size:12px;">Resolves to: <code>{{ vault.vault_root }}</code></p>
+    {% elif vault.reason == 'io' %}
+        <h2>Vault read error</h2>
+        <p style="font-size:12px; max-width:560px;">{{ vault.detail }}</p>
+        <p style="margin-top:var(--sp-3); font-size:12px;">Symlink: <code>{{ vault.symlink_path }}</code></p>
+    {% else %}
+        <h2>Vault not available</h2>
+        <p>The Obsidian vault symlink is missing or broken. Expected at:</p>
+        <p><code>{{ vault.symlink_path }}</code></p>
+        <p style="margin-top:var(--sp-3); font-size:12px;">Create the symlink with:<br>
+            <code>ln -s ~/Documents/&lt;your vault&gt; obsidian_vault</code>
+        </p>
+    {% endif %}
+</div>
+{% else %}
+<div class="notes-shell">
+    {# ── LEFT: tree + search ─────────────────────────────────────── #}
+    <aside class="notes-tree-pane">
+        <div class="notes-search">
+            <input type="text" id="notes-search-input" placeholder="Search vault…" autocomplete="off">
+        </div>
+        <label class="notes-rules-toggle">
+            <input type="checkbox" id="notes-include-rules"> Include zzrules/ (16k SRD notes)
+        </label>
+        <div id="notes-search-results" class="notes-search-results" style="display:none;"></div>
+        <div id="notes-tree" class="notes-tree" data-current="{{ current_path or '' }}"></div>
+    </aside>
+
+    {# ── CENTER: content ─────────────────────────────────────────── #}
+    <main class="notes-content-pane">
+        {% if not_found %}
+            <div class="notes-empty">
+                <h2>Note not found</h2>
+                <p><code>{{ current_path }}</code></p>
+                <p>Pick a note from the tree, or check the path.</p>
+            </div>
+        {% elif current %}
+            <div class="note-head">
+                <div>
+                    <div class="note-breadcrumb">{{ current.rel_path }}</div>
+                    <h1 class="note-title">{{ current.title }}</h1>
+                </div>
+                <div class="note-actions">
+                    <button type="button" id="note-edit-btn" onclick="enterEditMode()" title="Edit this note">Edit</button>
+                    <button type="button" id="note-save-btn" onclick="saveNote()" style="display:none;" title="Save (⌘S)">Save</button>
+                    <button type="button" id="note-cancel-btn" onclick="exitEditMode(false)" style="display:none;" title="Discard changes">Cancel</button>
+                </div>
+            </div>
+
+            {% if current.is_template %}
+            <div class="note-template-banner">
+                ⚠ Template — this file contains Templater syntax (<code>&lt;%* tp.* %&gt;</code>) that
+                only Obsidian can execute. Open in Obsidian to use the template.
+            </div>
+            {% endif %}
+
+            <article id="note-body" class="note-body">{{ current.html|safe }}</article>
+
+            {# Edit-mode editor (Phase 4) #}
+            <div id="note-editor" class="notes-editor" data-mtime="{{ current.mtime }}" data-path="{{ current.rel_path }}">
+                <textarea id="note-editor-textarea" spellcheck="false">{{ current.raw }}</textarea>
+                <div class="notes-editor-foot">
+                    <span class="notes-editor-status" id="note-editor-status">Loaded.</span>
+                    <span style="opacity:0.6;">⌘S to save · ESC to cancel</span>
+                </div>
+            </div>
+        {% else %}
+            <div class="notes-empty">
+                <h2>Pick a note</h2>
+                <p>Browse the tree on the left or use search.</p>
+                <p style="margin-top:var(--sp-3); font-size:12px;">Vault: <code>{{ vault.vault_root }}</code></p>
+            </div>
+        {% endif %}
+    </main>
+
+    {# ── RIGHT: frontmatter + backlinks ───────────────────────────── #}
+    <aside class="notes-meta">
+        {% if current and current.frontmatter %}
+        <div class="notes-meta-section">
+            <div class="notes-meta-h">Frontmatter</div>
+            {% for k, v in current.frontmatter.items() %}
+            <div class="notes-meta-row">
+                <span class="notes-meta-key">{{ k }}</span>
+                <span class="notes-meta-val">
+                    {%- if v is mapping -%}
+                        {{ v|tojson }}
+                    {%- elif v is iterable and v is not string -%}
+                        {{ v|join(', ') }}
+                    {%- else -%}
+                        {{ v }}
+                    {%- endif -%}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="notes-meta-section">
+            <div class="notes-meta-h">Backlinks</div>
+            <div id="notes-backlinks">
+                <div style="font-size:11px; color:var(--text-on-dark-3); font-style:italic;">Loading…</div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script>
+(function() {
+    const includeRulesCheckbox = document.getElementById('notes-include-rules');
+    const searchInput = document.getElementById('notes-search-input');
+    const searchResults = document.getElementById('notes-search-results');
+    const treeEl = document.getElementById('notes-tree');
+    const currentPath = treeEl.dataset.current;
+
+    // ── Tree ───────────────────────────────────────────────────
+    function renderTree(nodes, depth = 0) {
+        if (!nodes.length) return '';
+        let html = '';
+        nodes.forEach(n => {
+            if (n.kind === 'dir') {
+                const open = currentPath && currentPath.startsWith(n.path + '/');
+                html += `<details ${open ? 'open' : ''}>`;
+                html += `<summary>${escapeHtml(n.name)}</summary>`;
+                html += `<div class="nt-children">${renderTree(n.children || [], depth + 1)}</div>`;
+                html += `</details>`;
+            } else {
+                const isActive = currentPath === n.path;
+                const cls = (n.kind === 'canvas' ? 'canvas' : '') + (isActive ? ' active' : '');
+                const label = n.name.replace(/\.md$/, '');
+                const href = n.kind === 'canvas'
+                    ? `#`
+                    : `/gm/notes/view/${encodeURIComponent(n.path)}`;
+                const title = n.kind === 'canvas' ? 'Canvas — open in Obsidian' : '';
+                html += `<a class="nt-leaf ${cls}" href="${href}" title="${escapeAttr(title)}">${escapeHtml(label)}${n.kind === 'canvas' ? ' 🗒' : ''}</a>`;
+            }
+        });
+        return html;
+    }
+    async function loadTree() {
+        const includeRules = includeRulesCheckbox.checked;
+        const r = await fetch(`/api/notes/tree?include_rules=${includeRules ? 1 : 0}`);
+        const j = await r.json();
+        treeEl.innerHTML = renderTree(j.tree || []);
+    }
+    includeRulesCheckbox.addEventListener('change', loadTree);
+    loadTree();
+
+    // ── Search (debounced) ──────────────────────────────────────
+    let searchTimer = null;
+    function highlight(snippet, q) {
+        if (!q || !snippet) return escapeHtml(snippet || '');
+        const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        return escapeHtml(snippet).replace(re, '<mark>$1</mark>');
+    }
+    async function runSearch() {
+        const q = searchInput.value.trim();
+        if (q.length < 2) {
+            searchResults.style.display = 'none';
+            searchResults.innerHTML = '';
+            return;
+        }
+        const includeRules = includeRulesCheckbox.checked;
+        const r = await fetch(`/api/notes/search?q=${encodeURIComponent(q)}&include_rules=${includeRules ? 1 : 0}`);
+        const j = await r.json();
+        const hits = j.hits || [];
+        if (!hits.length) {
+            searchResults.innerHTML = `<div style="font-size:11px;color:var(--text-on-dark-3);font-style:italic;">No matches.</div>`;
+        } else {
+            searchResults.innerHTML = hits.map(h => `
+                <a class="nsr-hit" href="/gm/notes/view/${encodeURIComponent(h.path)}">
+                    <div class="nsr-title">${escapeHtml(h.title)}</div>
+                    <div class="nsr-path">${escapeHtml(h.path)} · ${h.kind}</div>
+                    ${h.snippet ? `<div class="nsr-snippet">${highlight(h.snippet, q)}</div>` : ''}
+                </a>
+            `).join('');
+        }
+        searchResults.style.display = 'block';
+    }
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(runSearch, 250);
+    });
+
+    // ── Backlinks ──────────────────────────────────────────────
+    async function loadBacklinks() {
+        const path = currentPath;
+        const wrap = document.getElementById('notes-backlinks');
+        if (!wrap) return;
+        if (!path) {
+            wrap.innerHTML = `<div style="font-size:11px;color:var(--text-on-dark-3);font-style:italic;">No note selected.</div>`;
+            return;
+        }
+        const includeRules = includeRulesCheckbox.checked;
+        const r = await fetch(`/api/notes/backlinks?path=${encodeURIComponent(path)}&include_rules=${includeRules ? 1 : 0}`);
+        const j = await r.json();
+        const items = j.backlinks || [];
+        if (!items.length) {
+            wrap.innerHTML = `<div style="font-size:11px;color:var(--text-on-dark-3);font-style:italic;">No backlinks yet.</div>`;
+            return;
+        }
+        wrap.innerHTML = items.map(it => `
+            <a class="notes-backlink" href="/gm/notes/view/${encodeURIComponent(it.path)}">
+                <div class="nbl-title">${escapeHtml(it.title)}</div>
+                <div class="nbl-path">${escapeHtml(it.path)}</div>
+                ${it.snippet ? `<div style="font-size:11px;color:var(--text-on-dark-3);margin-top:2px;">${escapeHtml(it.snippet)}</div>` : ''}
+            </a>
+        `).join('');
+    }
+    if (currentPath) loadBacklinks();
+
+    // ── Editor (Phase 4) ──────────────────────────────────────
+    const editor = document.getElementById('note-editor');
+    const noteBody = document.getElementById('note-body');
+    const editBtn = document.getElementById('note-edit-btn');
+    const saveBtn = document.getElementById('note-save-btn');
+    const cancelBtn = document.getElementById('note-cancel-btn');
+    const statusEl = document.getElementById('note-editor-status');
+    const textarea = document.getElementById('note-editor-textarea');
+    let originalRaw = textarea ? textarea.value : '';
+    let dirty = false;
+
+    window.enterEditMode = function() {
+        if (!editor) return;
+        editor.classList.add('active');
+        if (noteBody) noteBody.classList.add('editing');
+        if (editBtn) editBtn.style.display = 'none';
+        if (saveBtn) saveBtn.style.display = '';
+        if (cancelBtn) cancelBtn.style.display = '';
+        statusEl.textContent = 'Editing.'; statusEl.className = 'notes-editor-status';
+        dirty = false;
+        originalRaw = textarea.value;
+        if (textarea) textarea.focus();
+    };
+    window.exitEditMode = function(saved) {
+        if (!editor) return;
+        if (!saved && dirty && !confirm('Discard changes?')) return;
+        editor.classList.remove('active');
+        if (noteBody) noteBody.classList.remove('editing');
+        if (editBtn) editBtn.style.display = '';
+        if (saveBtn) saveBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (!saved) textarea.value = originalRaw;
+        dirty = false;
+    };
+    window.saveNote = async function() {
+        if (!editor || !textarea) return;
+        const path = editor.dataset.path;
+        const mtime = parseFloat(editor.dataset.mtime);
+        statusEl.textContent = 'Saving…'; statusEl.className = 'notes-editor-status';
+        try {
+            const r = await fetch('/api/notes/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, body: textarea.value, mtime }),
+            });
+            if (r.status === 409) {
+                statusEl.textContent = 'Conflict — disk changed since you opened. Reload to see the new version.';
+                statusEl.className = 'notes-editor-status err';
+                return;
+            }
+            const j = await r.json();
+            if (!j.success) {
+                statusEl.textContent = 'Save failed: ' + (j.error || 'unknown');
+                statusEl.className = 'notes-editor-status err';
+                return;
+            }
+            // Live update the rendered body and stamp the new mtime
+            if (noteBody) noteBody.innerHTML = j.html;
+            editor.dataset.mtime = j.mtime;
+            originalRaw = textarea.value;
+            dirty = false;
+            statusEl.textContent = 'Saved · mtime ' + new Date(j.mtime * 1000).toLocaleTimeString();
+            statusEl.className = 'notes-editor-status ok';
+            window.exitEditMode(true);
+        } catch (e) {
+            statusEl.textContent = 'Save failed: ' + e;
+            statusEl.className = 'notes-editor-status err';
+        }
+    };
+    if (textarea) {
+        textarea.addEventListener('input', () => {
+            dirty = true;
+            statusEl.textContent = 'Unsaved.'; statusEl.className = 'notes-editor-status dirty';
+        });
+        document.addEventListener('keydown', (e) => {
+            if (!editor.classList.contains('active')) return;
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                window.saveNote();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                window.exitEditMode(false);
+            }
+        });
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -491,6 +491,7 @@
                     </a>
                     <p class="text-xs text-base-400 mt-0.5 truncate">
                         {{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} &middot; {{ pc.subclass }}{% endif %}
+                        <a class="pc-note-link hidden ml-1" data-pc-note-for="{{ pc.name|e }}" href="#" title="Open this PC's note in the vault">📝</a>
                     </p>
                 </div>
             </div>
@@ -970,6 +971,26 @@
         return Array.from(document.querySelectorAll('.pc-card[data-pc-name]'))
             .map(c => c.dataset.pcName).filter(Boolean);
     }
+
+    /* ──────────────── Per-PC vault-note link ────────────────
+       After load, ask the notes service which PCs have a vault note named
+       after them. Decorate the matching cards with a 📝 link. */
+    (async function decoratePcNoteLinks() {
+        const names = _partyNames();
+        if (!names.length) return;
+        try {
+            const r = await fetch('/api/notes/exists?names=' + encodeURIComponent(names.join(',')));
+            const j = await r.json();
+            const matches = j.matches || {};
+            document.querySelectorAll('a.pc-note-link').forEach(a => {
+                const target = a.dataset.pcNoteFor;
+                const path = matches[target];
+                if (!path) return;
+                a.href = '/gm/notes/view/' + encodeURIComponent(path);
+                a.classList.remove('hidden');
+            });
+        } catch(_) {}
+    })();
     window.toggleLootDistribute = function() {
         const fly = document.getElementById('loot-distribute-flyout');
         if (!fly) return;

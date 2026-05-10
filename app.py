@@ -4386,13 +4386,25 @@ def gm_hub():
     surface session number, next-session date, and tagline at the top —
     same context the campaign-intro lobby shows the players, but here it
     serves as a "what state is the table in" reminder for the GM.
+
+    Also renders an excerpt of `Now Playing.md` from the Obsidian vault if
+    available — turns the hub into a real session-prep dashboard rather
+    than just a navigation index.
     """
+    from services import notes as _notes
+    now_playing = None
+    try:
+        if _notes.vault_status().get('available'):
+            now_playing = _notes.render_excerpt('Now Playing.md', max_chars=2400)
+    except (FileNotFoundError, _notes.NotePathError):
+        now_playing = None
     return render_template(
         'gm_hub.html',
         party_count=len(PARTY_LIBRARY),
         monster_count=len(MONSTER_LIBRARY),
         encounter_count=len(ACTIVE_ENCOUNTER),
         campaign=_load_campaign_config(),
+        now_playing=now_playing,
     )
 
 @app.route('/tracker')
@@ -6620,8 +6632,193 @@ def delete_encounter():
 
 @app.route('/gmscreen')
 @gm_required
-def gm_screen(): 
+def gm_screen():
     return render_template('gmscreen.html')
+
+
+# =============================================================================
+# OBSIDIAN VAULT INTEGRATION  (Phases 1-4)
+# =============================================================================
+# Read-mostly view of the user's Obsidian vault (symlinked at obsidian_vault/).
+# The 16k+ zzrules/ subtree is filtered out by default — it duplicates the
+# content already exposed at /gmscreen and would drown the GM's actual
+# campaign notes. Toggleable via ?include_rules=1 on every endpoint.
+from services import notes as notes_service
+
+
+@app.route('/gm/notes/')
+@app.route('/gm/notes')
+@gm_required
+def notes_home():
+    status = notes_service.vault_status()
+    return render_template('notes.html', vault=status, current_path=None, current=None)
+
+
+@app.route('/gm/notes/view/<path:rel_path>')
+@gm_required
+def notes_view(rel_path):
+    status = notes_service.vault_status()
+    if not status['available']:
+        return render_template('notes.html', vault=status, current_path=None, current=None)
+    include_rules = request.args.get('include_rules') == '1'
+    try:
+        rendered = notes_service.render(rel_path, include_rules=include_rules)
+    except notes_service.NotePathError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError:
+        return render_template('notes.html', vault=status, current_path=rel_path, current=None,
+                               not_found=True)
+    return render_template('notes.html', vault=status, current_path=rel_path, current=rendered)
+
+
+@app.route('/api/notes/tree')
+@gm_required
+def api_notes_tree():
+    include_rules = request.args.get('include_rules') == '1'
+    return jsonify({"tree": notes_service.tree(include_rules=include_rules)})
+
+
+@app.route('/api/notes/search')
+@gm_required
+def api_notes_search():
+    q = request.args.get('q', '').strip()
+    include_rules = request.args.get('include_rules') == '1'
+    if not q:
+        return jsonify({"hits": []})
+    hits = notes_service.search(q, include_rules=include_rules, limit=50)
+    return jsonify({
+        "hits": [
+            {"path": h.rel_path, "title": h.title, "snippet": h.snippet, "kind": h.kind}
+            for h in hits
+        ]
+    })
+
+
+@app.route('/api/notes/backlinks')
+@gm_required
+def api_notes_backlinks():
+    rel_path = request.args.get('path', '').strip()
+    include_rules = request.args.get('include_rules') == '1'
+    if not rel_path:
+        return jsonify({"backlinks": []})
+    return jsonify({"backlinks": notes_service.backlinks(rel_path, include_rules=include_rules)})
+
+
+@app.route('/api/notes/render')
+@gm_required
+def api_notes_render():
+    rel_path = request.args.get('path', '').strip()
+    include_rules = request.args.get('include_rules') == '1'
+    excerpt = request.args.get('excerpt') == '1'
+    if not rel_path:
+        return jsonify({"error": "path required"}), 400
+    try:
+        if excerpt:
+            r = notes_service.render_excerpt(rel_path, include_rules=include_rules)
+        else:
+            r = notes_service.render(rel_path, include_rules=include_rules)
+    except notes_service.NotePathError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({
+        "path": r.rel_path,
+        "title": r.title,
+        "html": r.html,
+        "frontmatter": r.frontmatter,
+        "mtime": r.mtime,
+        "is_template": r.is_template,
+    })
+
+
+@app.route('/api/notes/raw')
+@gm_required
+def api_notes_raw():
+    """Return the raw markdown for the editor."""
+    rel_path = request.args.get('path', '').strip()
+    if not rel_path:
+        return jsonify({"error": "path required"}), 400
+    try:
+        r = notes_service.render(rel_path)
+    except notes_service.NotePathError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"path": r.rel_path, "raw": r.raw, "mtime": r.mtime})
+
+
+@app.route('/api/notes/save', methods=['POST'])
+@gm_required
+def api_notes_save():
+    """Save a note. Body: {path, body, mtime?}. If mtime is provided and the
+    on-disk file changed since, the request is rejected with 409 so the
+    editor can show the conflict."""
+    data = request.get_json(silent=True) or {}
+    rel_path = (data.get('path') or '').strip()
+    body = data.get('body')
+    expected_mtime = data.get('mtime')
+    if not rel_path:
+        return jsonify({"error": "path required"}), 400
+    if body is None:
+        return jsonify({"error": "body required"}), 400
+    try:
+        r = notes_service.save(rel_path, body, expected_mtime=expected_mtime)
+    except notes_service.NotePathError as e:
+        return jsonify({"error": str(e)}), 400
+    except notes_service.NoteConflict as e:
+        return jsonify({"error": "conflict", "detail": str(e)}), 409
+    return jsonify({
+        "success": True,
+        "path": r.rel_path,
+        "title": r.title,
+        "html": r.html,
+        "mtime": r.mtime,
+    })
+
+
+@app.route('/api/notes/asset/<path:rel_path>')
+@gm_required
+def api_notes_asset(rel_path):
+    """Stream an attachment (image, etc.) from the vault."""
+    status = notes_service.vault_status()
+    if not status['available']:
+        return ('', 404)
+    try:
+        p = notes_service._safe_join(rel_path)
+    except notes_service.NotePathError:
+        return ('', 400)
+    if not p.is_file():
+        return ('', 404)
+    # send_from_directory needs the dir + filename split, not a single Path.
+    return send_from_directory(p.parent, p.name)
+
+
+@app.route('/api/notes/health')
+@gm_required
+def api_notes_health():
+    return jsonify(notes_service.vault_status())
+
+
+@app.route('/api/notes/exists')
+@gm_required
+def api_notes_exists():
+    """Batch-resolve note titles. `?names=Kyle,Romi+Bracken` returns a map
+    `{name: rel_path_or_null}`. Used by party_view (per-PC notes link) and
+    the tracker (per-monster prep notes link). Always excludes zzrules so
+    SRD entries don't masquerade as the GM's own prep."""
+    names_param = request.args.get('names', '')
+    out = {}
+    for raw in names_param.split(','):
+        n = raw.strip()
+        if not n:
+            continue
+        try:
+            out[n] = notes_service.note_exists(n, include_rules=False)
+        except Exception:
+            out[n] = None
+    return jsonify({"matches": out})
+
+
 
 @app.route('/encounter_builder')
 @gm_required

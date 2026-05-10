@@ -45,6 +45,47 @@
                 </div>
             </header>
 
+            {% if now_playing %}
+            {# ── Now Playing dashboard from Obsidian vault ── #}
+            <div class="now-playing-card"
+                 style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); margin-bottom: var(--sp-5); padding: var(--sp-4) var(--sp-5); position: relative;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); margin-bottom:var(--sp-2);">
+                    <h2 style="font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: var(--gilt-100); margin: 0;">{{ now_playing.title }}</h2>
+                    <a href="/gm/notes/view/{{ now_playing.rel_path|urlencode }}"
+                       style="font-size: 10px; letter-spacing:.12em; text-transform:uppercase; color: var(--text-on-dark-3); font-family: var(--font-display); text-decoration: none; padding: 4px 8px; border: 1px solid var(--border-card); border-radius: var(--r-sm);"
+                       title="Open the full note in the Notes browser">
+                        Open in Notes →
+                    </a>
+                </div>
+                <div class="np-body">{{ now_playing.html|safe }}</div>
+            </div>
+            <style>
+                .now-playing-card .np-body {
+                    font-family: var(--font-flavor);
+                    font-size: 13.5px;
+                    line-height: 1.6;
+                    color: var(--text-on-dark-2);
+                }
+                .now-playing-card .np-body h1, .now-playing-card .np-body h2, .now-playing-card .np-body h3 { font-family: var(--font-display); color: var(--gilt-200); margin: var(--sp-3) 0 var(--sp-1); font-size: 13px; letter-spacing: 0.04em; }
+                .now-playing-card .np-body p { margin: 0 0 var(--sp-2); }
+                .now-playing-card .np-body ul { padding-left: var(--sp-4); margin: 0 0 var(--sp-2); }
+                .now-playing-card .np-body table { font-size: 12px; width: 100%; border-collapse: collapse; }
+                .now-playing-card .np-body th, .now-playing-card .np-body td { padding: 3px 8px; text-align: left; }
+                .now-playing-card .np-body th { color: var(--gilt-200); border-bottom: 1px solid var(--border-card); font-family: var(--font-display); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+                .now-playing-card .np-body td { color: var(--text-on-dark); border-bottom: 1px dashed var(--border-card); }
+                .now-playing-card .np-body hr { border: none; border-top: 1px dashed var(--border-card); margin: var(--sp-2) 0; }
+                .now-playing-card .np-body .wikilink { color: var(--gilt-200); text-decoration: none; border-bottom: 1px dashed rgba(201,163,78,0.4); }
+                .now-playing-card .np-body .wikilink:hover { color: var(--gilt-100); }
+                .now-playing-card .np-body .wikilink-broken { color: var(--text-on-dark-3); font-style: italic; border-bottom: 1px dotted var(--text-on-dark-3); }
+                .now-playing-card .np-body .cal { margin: var(--sp-2) 0; padding: var(--sp-1) var(--sp-3); border-left: 3px solid var(--accent); background: rgba(201,163,78,0.06); border-radius: var(--r-sm); font-size: 12px; }
+                .now-playing-card .np-body .cal.cal-warning { border-left-color: var(--ruby-200); background: rgba(168,58,58,0.06); }
+                .now-playing-card .np-body .cal-h { font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gilt-200); margin-bottom: 2px; }
+                .now-playing-card .np-body .cal.cal-warning .cal-h { color: var(--ruby-100); }
+                .now-playing-card .np-body strong { color: var(--text-on-dark); }
+                .now-playing-card:hover .np-body .wikilink { color: var(--gilt-100); }
+            </style>
+            {% endif %}
+
             {# ── Tool grid ── #}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
 

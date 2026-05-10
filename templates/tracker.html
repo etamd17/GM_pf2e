@@ -601,6 +601,20 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .ae-pip.spent:hover { opacity: 0.8; color: var(--t-gold); border-color: rgba(200,168,78,0.30); }
 .trk .ae-pip.ae-rxn { font-size: 12px; }
 
+/* Vault-note link in the active panel header — only renders when a
+   matching note exists in obsidian_vault/. Hidden by default; the
+   resolver flips it visible after a successful name lookup. */
+.trk a.active-note-link {
+  display: inline-block;
+  font-size: 11px; line-height: 1;
+  margin-left: 8px;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity var(--t-fast), transform var(--t-fast);
+}
+.trk a.active-note-link:hover { opacity: 1; transform: scale(1.15); }
+.trk a.active-note-link.hidden { display: none; }
+
 .trk .pd-row { display:flex; gap:3px; align-items:center; margin-top:3px; width:100%; }
 .trk .pd-row .pd-lbl { font-size:9px; color:var(--t-gold); font-weight:700; letter-spacing:.8px; flex-shrink:0; }
 .trk .pd-row input {
@@ -1726,11 +1740,13 @@ function renderActivePanel() {
 
     let html = '';
 
-    // Top: portrait + title
+    // Top: portrait + title.  Vault note link is stubbed and populated
+    // post-render by _decorateActiveNoteLink (so we don't block the row
+    // render on a fetch every turn).
     html += `<div class="hero-top">
         <div class="hero-port ${portCls}">${initials(c.name)}</div>
         <div class="hero-ttl">
-            <div class="hnm">${c.name}${eliteTag}</div>
+            <div class="hnm">${c.name}${eliteTag}<a class="active-note-link hidden" data-note-for="${escapeHtml(c.name)}" href="#" title="Open vault note for ${escapeHtml(c.name)}" target="_blank">📝</a></div>
             ${c.is_pc
                 ? `<div class="role">${[c.ancestry, c.class_name, c.subclass].filter(Boolean).join(' · ') || 'A soul at war with the dark.'}</div>`
                 : (c.creature_type ? `<div class="role">${c.creature_type}</div>` : '')}
@@ -2011,6 +2027,44 @@ function renderActivePanel() {
     }
 
     document.getElementById('ap-body').innerHTML = html;
+    _decorateActiveNoteLink();
+}
+
+/* Vault-note resolution cache (name → rel_path | null). One fetch per
+   unique combatant name across the session; the cache survives SSE
+   re-renders so a new turn doesn't re-fetch a name we already resolved. */
+const _noteResolveCache = new Map();
+const _noteResolveInflight = new Map();
+async function _resolveNotePath(name) {
+    if (_noteResolveCache.has(name)) return _noteResolveCache.get(name);
+    if (_noteResolveInflight.has(name)) return _noteResolveInflight.get(name);
+    const p = (async () => {
+        try {
+            const r = await fetch('/api/notes/exists?names=' + encodeURIComponent(name));
+            const j = await r.json();
+            const path = j.matches ? (j.matches[name] || null) : null;
+            _noteResolveCache.set(name, path);
+            return path;
+        } catch (_) {
+            _noteResolveCache.set(name, null);
+            return null;
+        } finally {
+            _noteResolveInflight.delete(name);
+        }
+    })();
+    _noteResolveInflight.set(name, p);
+    return p;
+}
+function _decorateActiveNoteLink() {
+    document.querySelectorAll('.active-note-link').forEach(async a => {
+        const name = a.dataset.noteFor;
+        if (!name) return;
+        const path = await _resolveNotePath(name);
+        if (path) {
+            a.href = '/gm/notes/view/' + encodeURIComponent(path);
+            a.classList.remove('hidden');
+        }
+    });
 }
 
 function renderMeta() {
