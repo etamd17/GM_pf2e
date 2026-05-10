@@ -3321,4 +3321,336 @@ kbd.key, .kbd {
     outline-offset: 2px;
 }
 
+/* ── 31. Persistent Notes drawer ─────────────────────────────────────────
+   Right-edge slide-out vault reference rendered in base.html, available
+   on every GM page so the GM can flip between tracker / builder /
+   generator without losing the note they were on. The dimensional
+   pattern matches the gmscreen Checks drawer so muscle memory carries. */
+
+.notes-drawer {
+    position: fixed;
+    top: 56px; right: 0; bottom: 0;
+    width: var(--nd-width, 480px);
+    max-width: 96vw;
+    z-index: 250;
+    display: flex;
+    pointer-events: none;
+    transform: translateX(calc(100% - 36px));
+    transition: transform var(--t-base) cubic-bezier(.4, 0, .2, 1);
+}
+.notes-drawer.open { transform: translateX(0); }
+@media (max-width: 720px) {
+    .notes-drawer { width: 100vw; }
+}
+
+/* Edge tab — vertical "Notes" handle that's always visible. */
+.notes-drawer-tab {
+    flex: 0 0 36px;
+    width: 36px;
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-right: none;
+    border-radius: var(--r-md) 0 0 var(--r-md);
+    color: var(--gilt-200);
+    cursor: pointer;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3) 0;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.notes-drawer-tab:hover {
+    background: var(--bg-card-2);
+    color: var(--gilt-100);
+}
+.notes-drawer-tab .ndt-glyph { font-size: 16px; line-height: 1; }
+.notes-drawer-tab .ndt-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gilt-200);
+    user-select: none;
+}
+.notes-drawer.open .notes-drawer-tab {
+    border-color: var(--gilt-400);
+    background: var(--bg-card-2);
+}
+
+/* Panel — the actual drawer body */
+.notes-drawer-panel {
+    flex: 1;
+    min-width: 0;
+    background: linear-gradient(180deg, var(--bg-card), var(--bg-page));
+    border: 1px solid var(--accent);
+    border-right: none;
+    border-radius: var(--r-md) 0 0 var(--r-md);
+    margin-left: -1px;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Drag-to-resize handle on the left edge of the panel. */
+.ndp-resize-handle {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 4px;
+    cursor: ew-resize;
+    background: transparent;
+    transition: background var(--t-fast);
+    z-index: 5;
+}
+.ndp-resize-handle:hover, .notes-drawer.resizing .ndp-resize-handle {
+    background: var(--accent);
+}
+
+/* Head — search + close + back/pop-out */
+.ndp-head {
+    flex-shrink: 0;
+    display: flex;
+    gap: var(--sp-1);
+    align-items: center;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--border-rule);
+    background: var(--bg-card);
+}
+.ndp-head input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    color: var(--text-on-dark);
+    padding: 5px 8px;
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    font-family: var(--font-ui);
+}
+.ndp-head input[type="text"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+.ndp-head .nd-btn {
+    width: 28px; height: 28px;
+    background: var(--bg-card-2);
+    border: 1px solid var(--border-strong);
+    color: var(--gilt-200);
+    border-radius: var(--r-sm);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+.ndp-head .nd-btn:hover { background: rgba(201,163,78,0.18); color: var(--gilt-100); }
+
+/* Recent strip — small horizontal pill row above tree/results */
+.ndp-recent {
+    flex-shrink: 0;
+    display: flex;
+    gap: var(--sp-1);
+    padding: var(--sp-1) var(--sp-3);
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border-card);
+    background: var(--bg-card);
+}
+.ndp-recent .nd-recent-pill {
+    flex-shrink: 0;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--bg-card-2);
+    border: 1px solid var(--border-card);
+    color: var(--text-on-dark-2);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-ui);
+}
+.ndp-recent .nd-recent-pill:hover { background: rgba(201,163,78,0.12); color: var(--gilt-100); border-color: var(--accent); }
+.ndp-recent .nd-recent-pill.active { background: rgba(201,163,78,0.18); color: var(--gilt-100); border-color: var(--accent); }
+
+/* Body container */
+.ndp-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--sp-2) var(--sp-3);
+}
+
+/* Tree (compact) */
+.nd-tree { font-size: 12px; line-height: 1.55; }
+.nd-tree details { margin: 0; }
+.nd-tree summary {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark-2);
+    list-style: none;
+    font-family: var(--font-display);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.nd-tree summary::-webkit-details-marker { display: none; }
+.nd-tree summary::before {
+    content: "▸";
+    display: inline-block;
+    width: 10px;
+    margin-right: 4px;
+    color: var(--text-on-dark-3);
+    transition: transform 0.12s;
+}
+.nd-tree details[open] > summary::before { transform: rotate(90deg); }
+.nd-tree summary:hover { background: rgba(201,163,78,0.06); color: var(--text-on-dark); }
+.nd-tree .nt-children {
+    padding-left: var(--sp-3);
+    border-left: 1px dashed var(--border-card);
+    margin-left: 6px;
+}
+.nd-tree a.nt-leaf {
+    display: block;
+    padding: 2px 4px;
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark-2);
+    text-decoration: none;
+    font-size: 11.5px;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+.nd-tree a.nt-leaf:hover { background: rgba(201,163,78,0.08); color: var(--gilt-200); }
+.nd-tree a.nt-leaf.active {
+    background: rgba(201,163,78,0.18);
+    color: var(--gilt-100);
+    border: 1px solid rgba(201,163,78,0.4);
+}
+
+/* Search results */
+.nd-search-results { font-size: 12px; }
+.nd-search-results .nsr-hit {
+    display: block;
+    padding: var(--sp-1) var(--sp-2);
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark-2);
+    text-decoration: none;
+    margin-bottom: 2px;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+.nd-search-results .nsr-hit:hover { background: rgba(201,163,78,0.08); color: var(--gilt-200); }
+.nd-search-results .nsr-title { font-weight: 600; font-size: 12px; color: var(--text-on-dark); }
+.nd-search-results .nsr-path { font-size: 10px; color: var(--text-on-dark-3); font-family: var(--font-mono); }
+.nd-search-results .nsr-snippet { font-size: 11px; color: var(--text-on-dark-3); margin-top: 2px; line-height: 1.4; }
+.nd-search-results .nsr-snippet mark { background: rgba(201,163,78,0.30); color: var(--gilt-100); padding: 0 2px; border-radius: 2px; }
+
+/* Note view (in-drawer rendering) */
+.nd-note-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    height: 100%;
+}
+.nd-note-head {
+    flex-shrink: 0;
+    padding-bottom: var(--sp-1);
+    border-bottom: 1px dashed var(--border-card);
+}
+.nd-breadcrumb {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-on-dark-3);
+    letter-spacing: 0.02em;
+    margin-bottom: 2px;
+    word-break: break-all;
+}
+.nd-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--gilt-100);
+    letter-spacing: 0.04em;
+}
+.nd-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    font-family: var(--font-flavor);
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-on-dark);
+}
+.nd-body h1, .nd-body h2, .nd-body h3, .nd-body h4 {
+    font-family: var(--font-display);
+    color: var(--gilt-200);
+    margin: var(--sp-3) 0 var(--sp-1);
+}
+.nd-body h1 { font-size: 14px; border-bottom: 1px solid var(--border-card); padding-bottom: 2px; }
+.nd-body h2 { font-size: 13px; }
+.nd-body h3 { font-size: 12px; }
+.nd-body p { margin: 0 0 var(--sp-2); }
+.nd-body ul, .nd-body ol { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); }
+.nd-body li { margin: 1px 0; }
+.nd-body table { border-collapse: collapse; font-size: 11px; width: 100%; margin: var(--sp-2) 0; font-family: var(--font-ui); }
+.nd-body th { text-align: left; padding: 4px 6px; background: var(--bg-card-2); color: var(--gilt-200); font-family: var(--font-display); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border-rule); }
+.nd-body td { padding: 3px 6px; border-bottom: 1px solid var(--border-card); color: var(--text-on-dark-2); vertical-align: top; }
+.nd-body code { background: var(--bg-card-2); padding: 1px 4px; border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 11px; color: var(--gilt-100); }
+.nd-body pre { background: var(--bg-page); border: 1px solid var(--border-card); border-radius: var(--r-sm); padding: var(--sp-2); overflow-x: auto; font-size: 11px; }
+.nd-body pre code { background: transparent; padding: 0; }
+.nd-body blockquote { border-left: 2px solid var(--accent); padding: 2px var(--sp-2); margin: var(--sp-1) 0; color: var(--text-on-dark-2); font-style: italic; }
+.nd-body img.note-embed-img { max-width: 100%; border-radius: var(--r-sm); border: 1px solid var(--border-card); }
+.nd-body hr { border: none; border-top: 1px dashed var(--border-card); margin: var(--sp-3) 0; }
+
+/* Wikilinks inside the drawer — load in the drawer, not via navigation */
+.nd-body .wikilink {
+    color: var(--gilt-200);
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(201,163,78,0.4);
+    padding: 0 1px;
+}
+.nd-body .wikilink:hover { color: var(--gilt-100); border-bottom-color: var(--accent); }
+.nd-body .wikilink-broken { color: var(--text-on-dark-3); font-style: italic; border-bottom: 1px dotted var(--text-on-dark-3); cursor: not-allowed; }
+
+/* Callouts compact */
+.nd-body .cal {
+    margin: var(--sp-1) 0;
+    padding: var(--sp-1) var(--sp-2);
+    border-left: 2px solid var(--accent);
+    background: rgba(201,163,78,0.05);
+    border-radius: var(--r-sm);
+    font-size: 12px;
+}
+.nd-body .cal.cal-warning { border-left-color: var(--ruby-200); background: rgba(168,58,58,0.05); }
+.nd-body .cal.cal-danger { border-left-color: var(--ruby-300); background: rgba(168,58,58,0.10); }
+.nd-body .cal-h {
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gilt-200);
+    margin-bottom: 2px;
+}
+.nd-body .cal.cal-warning .cal-h { color: var(--ruby-100); }
+
+.nd-body .note-tag {
+    display: inline-block;
+    background: var(--bg-card-2); color: var(--text-on-dark-2);
+    border: 1px solid var(--border-card);
+    padding: 0 5px; border-radius: 999px;
+    font-size: 10px; font-family: var(--font-mono);
+    margin: 0 1px;
+}
+
 /* End of system.css */

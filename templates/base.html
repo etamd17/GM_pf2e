@@ -117,6 +117,41 @@
         </div>
     </div>
 
+    {# ── Persistent Notes drawer (every GM page) ────────────────────────
+       A right-edge slide-out for quick vault reference. State (open,
+       current note, scroll, tree expansion, recent list) persists in
+       localStorage so navigating away and coming back is seamless.
+       Pages that ARE the notes page set hide_notes_drawer to skip this. #}
+    {% block notes_drawer %}
+    <div id="notes-drawer" class="notes-drawer" aria-label="Vault notes drawer">
+        <button type="button" class="notes-drawer-tab" id="notes-drawer-tab" aria-expanded="false" title="Open vault notes (N)">
+            <span class="ndt-glyph">📝</span>
+            <span class="ndt-label">Notes</span>
+        </button>
+        <div class="notes-drawer-panel" role="dialog" aria-label="Vault notes">
+            <div class="ndp-resize-handle" id="ndp-resize"></div>
+            <div class="ndp-head">
+                <input type="text" id="nd-search" placeholder="Search vault…" autocomplete="off" spellcheck="false">
+                <button type="button" id="nd-back-btn" class="nd-btn" title="Back to tree" style="display:none;">←</button>
+                <button type="button" id="nd-popout-btn" class="nd-btn" title="Open in full Notes page" style="display:none;">⤢</button>
+                <button type="button" id="nd-close-btn" class="nd-btn" title="Close (Esc)">×</button>
+            </div>
+            <div class="ndp-recent" id="nd-recent" style="display:none;"></div>
+            <div class="ndp-body">
+                <div id="nd-tree" class="nd-tree"></div>
+                <div id="nd-search-results" class="nd-search-results" style="display:none;"></div>
+                <div id="nd-note-view" class="nd-note-view" style="display:none;">
+                    <div class="nd-note-head">
+                        <div class="nd-breadcrumb" id="nd-breadcrumb"></div>
+                        <div class="nd-title" id="nd-title"></div>
+                    </div>
+                    <div class="nd-body" id="nd-body"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+
     <div id="gm-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none w-72"></div>
 
     <!-- Dice Roller -->
@@ -347,6 +382,342 @@
                 // (they have a different shape — msg/type instead of name/action/detail).
             } catch(_) {}
         }
+    </script>
+
+    {# ── Notes drawer behavior ──────────────────────────────────────────
+       Persistent right-edge drawer that survives navigation via
+       localStorage. Loaded on every base-extending GM page; suppressed on
+       /gm/notes (the full page itself) via .notes-drawer-disabled. #}
+    <script>
+    (function() {
+        const path = window.location.pathname;
+        // Disabled on the full notes page (would duplicate) and player views.
+        if (path.startsWith('/gm/notes') || path.startsWith('/player')) {
+            const d = document.getElementById('notes-drawer');
+            if (d) d.style.display = 'none';
+            return;
+        }
+        const drawer = document.getElementById('notes-drawer');
+        if (!drawer) return;
+
+        const STATE_KEY = 'pf2e_notes_drawer_v1';
+        const RECENT_KEY = 'pf2e_notes_drawer_recent_v1';
+        const SCROLL_KEY = 'pf2e_notes_drawer_scrolls_v1';
+
+        function loadState() {
+            try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (_) { return {}; }
+        }
+        function saveState(s) { try { localStorage.setItem(STATE_KEY, JSON.stringify(s)); } catch (_) {} }
+        function loadRecent() {
+            try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (_) { return []; }
+        }
+        function saveRecent(list) { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (_) {} }
+        function loadScrolls() {
+            try { return JSON.parse(localStorage.getItem(SCROLL_KEY) || '{}'); } catch (_) { return {}; }
+        }
+        function saveScrolls(m) { try { localStorage.setItem(SCROLL_KEY, JSON.stringify(m)); } catch (_) {} }
+
+        const state = loadState();
+        // Apply persisted width
+        if (state.width) drawer.style.setProperty('--nd-width', state.width + 'px');
+
+        const tab = document.getElementById('notes-drawer-tab');
+        const closeBtn = document.getElementById('nd-close-btn');
+        const backBtn = document.getElementById('nd-back-btn');
+        const popoutBtn = document.getElementById('nd-popout-btn');
+        const searchInput = document.getElementById('nd-search');
+        const treeEl = document.getElementById('nd-tree');
+        const searchResults = document.getElementById('nd-search-results');
+        const noteView = document.getElementById('nd-note-view');
+        const titleEl = document.getElementById('nd-title');
+        const breadcrumbEl = document.getElementById('nd-breadcrumb');
+        const bodyEl = document.getElementById('nd-body');
+        const recentEl = document.getElementById('nd-recent');
+
+        function setOpen(open) {
+            drawer.classList.toggle('open', !!open);
+            tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+            const s = loadState(); s.open = !!open; saveState(s);
+            if (open && searchInput) {
+                // Don't auto-focus search if a note is being viewed; let user keep position
+            }
+        }
+        function showMode(mode) {
+            // mode: 'tree' | 'search' | 'view'
+            treeEl.style.display = mode === 'tree' ? '' : 'none';
+            searchResults.style.display = mode === 'search' ? '' : 'none';
+            noteView.style.display = mode === 'view' ? 'flex' : 'none';
+            backBtn.style.display = (mode === 'view' || mode === 'search') ? '' : 'none';
+            popoutBtn.style.display = mode === 'view' ? '' : 'none';
+            const s = loadState(); s.mode = mode; saveState(s);
+        }
+
+        // ── Tree ───────────────────────────────────────────────────
+        function renderTree(nodes, expandedSet) {
+            if (!nodes.length) return '';
+            let html = '';
+            nodes.forEach(n => {
+                if (n.kind === 'dir') {
+                    const open = expandedSet.has(n.path);
+                    html += `<details ${open ? 'open' : ''} data-dir-path="${escAttr(n.path)}">`;
+                    html += `<summary>${escapeHtml(n.name)}</summary>`;
+                    html += `<div class="nt-children">${renderTree(n.children || [], expandedSet)}</div>`;
+                    html += `</details>`;
+                } else {
+                    const label = n.name.replace(/\.md$/, '');
+                    if (n.kind === 'canvas') {
+                        html += `<a class="nt-leaf" data-canvas="1" href="#" title="Canvas — open in Obsidian">${escapeHtml(label)} 🗒</a>`;
+                    } else {
+                        html += `<a class="nt-leaf" data-note-path="${escAttr(n.path)}" href="#">${escapeHtml(label)}</a>`;
+                    }
+                }
+            });
+            return html;
+        }
+        async function loadTree() {
+            const r = await fetch('/api/notes/tree');
+            const j = await r.json();
+            const expanded = new Set(loadState().expanded || []);
+            treeEl.innerHTML = renderTree(j.tree || [], expanded);
+            // Save expansion state when toggled
+            treeEl.querySelectorAll('details').forEach(det => {
+                det.addEventListener('toggle', () => {
+                    const s = loadState();
+                    const set = new Set(s.expanded || []);
+                    const p = det.dataset.dirPath;
+                    if (det.open) set.add(p); else set.delete(p);
+                    s.expanded = Array.from(set);
+                    saveState(s);
+                });
+            });
+            // Wire leaf clicks
+            treeEl.querySelectorAll('a.nt-leaf').forEach(a => {
+                if (a.dataset.canvas) return;
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openNoteInDrawer(a.dataset.notePath);
+                });
+            });
+            // Highlight last-active leaf
+            const cur = loadState().current;
+            if (cur) {
+                const lf = treeEl.querySelector(`a.nt-leaf[data-note-path="${cssEscape(cur)}"]`);
+                if (lf) lf.classList.add('active');
+            }
+        }
+
+        // ── Note view (in-drawer render) ───────────────────────────
+        async function openNoteInDrawer(relPath) {
+            if (!relPath) return;
+            // Save scroll of currently-viewed note before swapping
+            const cur = loadState().current;
+            if (cur && noteView.style.display !== 'none') {
+                const sc = loadScrolls();
+                sc[cur] = bodyEl.scrollTop;
+                saveScrolls(sc);
+            }
+            const r = await fetch('/api/notes/render?path=' + encodeURIComponent(relPath));
+            if (!r.ok) {
+                bodyEl.innerHTML = '<div style="padding:var(--sp-2);color:var(--ruby-100);font-size:12px;">Note not found.</div>';
+                showMode('view');
+                return;
+            }
+            const j = await r.json();
+            titleEl.textContent = j.title || relPath;
+            breadcrumbEl.textContent = j.path || relPath;
+            bodyEl.innerHTML = j.html || '';
+            // Intercept wikilinks → load in-drawer
+            bodyEl.querySelectorAll('a.wikilink').forEach(a => {
+                const href = a.getAttribute('href') || '';
+                const m = href.match(/\/gm\/notes\/view\/([^#?]+)(#.+)?/);
+                if (!m) return;
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openNoteInDrawer(decodeURIComponent(m[1]));
+                });
+            });
+            // Restore scroll if we have a saved offset for this note
+            const scrolls = loadScrolls();
+            requestAnimationFrame(() => {
+                bodyEl.scrollTop = scrolls[j.path] || 0;
+            });
+            // Persist current
+            const s = loadState();
+            s.current = j.path;
+            saveState(s);
+            // Update recent (move-to-front, dedup, cap 8)
+            let recent = loadRecent().filter(it => it.path !== j.path);
+            recent.unshift({path: j.path, title: j.title});
+            recent = recent.slice(0, 8);
+            saveRecent(recent);
+            renderRecent();
+            // Update active marker in tree
+            treeEl.querySelectorAll('a.nt-leaf.active').forEach(a => a.classList.remove('active'));
+            const lf = treeEl.querySelector(`a.nt-leaf[data-note-path="${cssEscape(j.path)}"]`);
+            if (lf) lf.classList.add('active');
+            showMode('view');
+        }
+
+        function renderRecent() {
+            const recent = loadRecent();
+            if (!recent.length) { recentEl.style.display = 'none'; return; }
+            const cur = loadState().current;
+            recentEl.style.display = '';
+            recentEl.innerHTML = recent.map(it => `
+                <span class="nd-recent-pill ${it.path === cur ? 'active' : ''}" data-path="${escAttr(it.path)}" title="${escAttr(it.path)}">${escapeHtml(it.title || it.path)}</span>
+            `).join('');
+            recentEl.querySelectorAll('.nd-recent-pill').forEach(p => {
+                p.addEventListener('click', () => openNoteInDrawer(p.dataset.path));
+            });
+        }
+
+        // ── Search (debounced) ─────────────────────────────────────
+        let searchTimer = null;
+        function highlight(snippet, q) {
+            if (!q || !snippet) return escapeHtml(snippet || '');
+            const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            return escapeHtml(snippet).replace(re, '<mark>$1</mark>');
+        }
+        async function runSearch() {
+            const q = searchInput.value.trim();
+            if (q.length < 2) {
+                showMode(loadState().current ? 'view' : 'tree');
+                return;
+            }
+            const r = await fetch('/api/notes/search?q=' + encodeURIComponent(q));
+            const j = await r.json();
+            const hits = j.hits || [];
+            if (!hits.length) {
+                searchResults.innerHTML = `<div style="padding:var(--sp-2);font-size:11px;color:var(--text-on-dark-3);font-style:italic;">No matches.</div>`;
+            } else {
+                searchResults.innerHTML = hits.map(h => `
+                    <a class="nsr-hit" href="#" data-note-path="${escAttr(h.path)}">
+                        <div class="nsr-title">${escapeHtml(h.title)}</div>
+                        <div class="nsr-path">${escapeHtml(h.path)} · ${h.kind}</div>
+                        ${h.snippet ? `<div class="nsr-snippet">${highlight(h.snippet, q)}</div>` : ''}
+                    </a>
+                `).join('');
+                searchResults.querySelectorAll('a.nsr-hit').forEach(a => {
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        openNoteInDrawer(a.dataset.notePath);
+                    });
+                });
+            }
+            showMode('search');
+        }
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(runSearch, 200);
+            });
+        }
+
+        // ── Buttons + hotkeys ──────────────────────────────────────
+        tab.addEventListener('click', () => setOpen(!drawer.classList.contains('open')));
+        closeBtn.addEventListener('click', () => setOpen(false));
+        backBtn.addEventListener('click', () => {
+            // If we were searching, return to last note; else return to tree.
+            const cur = loadState().current;
+            const inSearch = searchResults.style.display !== 'none';
+            if (inSearch && cur) {
+                showMode('view');
+            } else {
+                showMode('tree');
+                if (searchInput) { searchInput.value = ''; }
+            }
+        });
+        popoutBtn.addEventListener('click', () => {
+            const cur = loadState().current;
+            if (cur) window.open('/gm/notes/view/' + encodeURIComponent(cur), '_blank');
+        });
+
+        document.addEventListener('keydown', (e) => {
+            // Don't hijack typing in inputs (except: Esc anywhere closes)
+            const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable;
+            if (e.key === 'Escape') {
+                if (drawer.classList.contains('open')) {
+                    setOpen(false);
+                    e.stopPropagation();
+                }
+                return;
+            }
+            if (inField) return;
+            if (e.key === 'n' || e.key === 'N') {
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                e.preventDefault();
+                setOpen(!drawer.classList.contains('open'));
+                if (drawer.classList.contains('open') && searchInput) {
+                    setTimeout(() => searchInput.focus(), 50);
+                }
+            }
+        });
+
+        // ── Resize ─────────────────────────────────────────────────
+        const resize = document.getElementById('ndp-resize');
+        let resizeStart = null;
+        if (resize) {
+            resize.addEventListener('mousedown', (e) => {
+                resizeStart = { x: e.clientX, w: drawer.getBoundingClientRect().width };
+                drawer.classList.add('resizing');
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!resizeStart) return;
+                const dx = resizeStart.x - e.clientX;  // left = bigger
+                const w = Math.max(320, Math.min(900, resizeStart.w + dx));
+                drawer.style.setProperty('--nd-width', w + 'px');
+            });
+            document.addEventListener('mouseup', () => {
+                if (!resizeStart) return;
+                const w = parseInt(drawer.getBoundingClientRect().width, 10);
+                const s = loadState();
+                s.width = w;
+                saveState(s);
+                drawer.classList.remove('resizing');
+                resizeStart = null;
+            });
+        }
+
+        // ── Persist current note's scroll on scroll ────────────────
+        let scrollDebounce = null;
+        bodyEl.addEventListener('scroll', () => {
+            clearTimeout(scrollDebounce);
+            scrollDebounce = setTimeout(() => {
+                const cur = loadState().current;
+                if (!cur) return;
+                const sc = loadScrolls();
+                sc[cur] = bodyEl.scrollTop;
+                saveScrolls(sc);
+            }, 200);
+        });
+
+        // ── Bootstrap on every page load ───────────────────────────
+        (async function bootstrap() {
+            await loadTree();
+            renderRecent();
+            const s = loadState();
+            // If a note was open last, reopen it (keeps your place across nav)
+            if (s.current) {
+                await openNoteInDrawer(s.current);
+            } else {
+                showMode('tree');
+            }
+            if (s.open) setOpen(true);
+        })();
+
+        // Tiny utilities
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function escAttr(s) { return escapeHtml(s); }
+        function cssEscape(s) {
+            // Fallback for older browsers; we just need it for attribute selectors
+            return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/(["\\])/g, '\\$1');
+        }
+    })();
     </script>
 </body>
 </html>
