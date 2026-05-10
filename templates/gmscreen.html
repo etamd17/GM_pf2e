@@ -662,6 +662,7 @@
             <button class="checks-tab" data-tab="saves" onclick="switchChecksTab('saves')">Saves</button>
             <button class="checks-tab" data-tab="dcs" onclick="switchChecksTab('dcs')">DCs &amp; Flat Checks</button>
             <button class="checks-tab" data-tab="knowledge" onclick="switchChecksTab('knowledge')">Recall Knowledge</button>
+            <button class="checks-tab" data-tab="downtime" onclick="switchChecksTab('downtime')">Downtime</button>
         </div>
 
         <div class="checks-body">
@@ -936,6 +937,45 @@
                         <div><strong>Rare</strong> &rarr; +5 to the DC.</div>
                         <div><strong>Unique</strong> &rarr; +10 to the DC.</div>
                         <div style="margin-top:6px;color:var(--t-t3);font-size:11px;"><em>Success = one piece of accurate info. Crit = two. Fail = nothing. Crit Fail = false info.</em></div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── DOWNTIME ── #}
+            <div class="checks-pane" data-pane="downtime">
+                <div style="color:var(--t-t3);font-size:11px;margin-bottom:10px;font-style:italic;">
+                    Between adventures &mdash; PF2e Player Core p.236. Rolls are once per day of downtime unless noted; Earn Income uses a single roll per task.
+                </div>
+                <table class="situation-table">
+                    <thead><tr><th>Activity</th><th>Skill / DC</th><th>Notes</th></tr></thead>
+                    <tbody>
+                        <tr><td class="situation"><strong>Earn Income</strong></td><td class="skill"><span class="check-pill">Crafting / Lore / Performance</span> <span style="color:var(--t-t3);">(varies)</span></td><td class="notes">DC by task level. Pay = task-level table &times; days, by degree. Crit = +1 level.</td></tr>
+                        <tr><td class="situation"><strong>Craft</strong></td><td class="skill"><span class="check-pill knowledge">Crafting</span> <span style="color:var(--t-t3);">(Int)</span></td><td class="notes">Need formula + materials (½ price). 4+ days; success reduces remaining cost by your level.</td></tr>
+                        <tr><td class="situation"><strong>Treat Wounds</strong></td><td class="skill"><span class="check-pill">Medicine</span> <span style="color:var(--t-t3);">(Wis)</span></td><td class="notes">DC 15 / 20 / 30 / 40 (rank gates). 10 min; once/h per PC unless using Continual Recovery.</td></tr>
+                        <tr><td class="situation"><strong>Subsist</strong></td><td class="skill"><span class="check-pill">Survival / Society</span> <span style="color:var(--t-t3);">(Wis / Int)</span></td><td class="notes">DC by region. Fail = no food/lodging that day. Survival in wild, Society in town.</td></tr>
+                        <tr><td class="situation"><strong>Retraining</strong></td><td class="skill"><span style="color:var(--t-t3);">no roll</span></td><td class="notes">Skill feat: 1 week. Class feat: 1 month. Skill increase: ½ that.</td></tr>
+                        <tr><td class="situation"><strong>Identify Magic</strong></td><td class="skill"><span class="check-pill knowledge">Arcana / Nature / Occultism / Religion</span></td><td class="notes">10 min in downtime, or 1 min with Bardic Lore. DC by item level.</td></tr>
+                        <tr><td class="situation"><strong>Repair</strong></td><td class="skill"><span class="check-pill knowledge">Crafting</span> <span style="color:var(--t-t3);">(Int)</span></td><td class="notes">Heal item HP equal to your level (or higher with kit). 10 min outside combat.</td></tr>
+                        <tr><td class="situation"><strong>Long-Term Rest</strong></td><td class="skill"><span style="color:var(--t-t3);">no roll</span></td><td class="notes">Full day rest = HP equal to Con &times; level &times; 2 (8h sleep + 8h rest).</td></tr>
+                        <tr><td class="situation"><strong>Investigate</strong></td><td class="skill"><span class="check-pill">Society / Diplomacy / Stealth</span></td><td class="notes">Per GM. Often a research montage with multiple checks over days.</td></tr>
+                    </tbody>
+                </table>
+                <div class="check-card" style="margin-top:14px;">
+                    <h4>Earn Income / Task Level <span class="ability-tag">PF2e Core p.236</span></h4>
+                    <div style="font-size:12px;line-height:1.6;color:var(--t-t2);">
+                        <div><strong>Trained</strong> = task at your level &minus;2 to your level. <strong>Expert</strong> = +2 levels available.</div>
+                        <div><strong>Master / Legendary</strong> = +4 / +6 levels available; opens up "lucrative" tasks (3&times; pay) and city-level commissions.</div>
+                        <div style="margin-top:6px;color:var(--t-t3);font-size:11px;"><em>Critical success = pay at task level +1. Failure = pay at task level &minus;1. Crit fail = no pay, lose half a day.</em></div>
+                    </div>
+                </div>
+                <div class="check-card" style="margin-top:10px;">
+                    <h4>Treat Wounds DC <span class="ability-tag">by Medicine rank</span></h4>
+                    <div style="font-size:12px;line-height:1.6;color:var(--t-t2);">
+                        <div><strong>Trained</strong> &mdash; DC 15 &rarr; 2d8 HP (crit 4d8).</div>
+                        <div><strong>Expert</strong> &mdash; DC 20 &rarr; 2d8+10 HP.</div>
+                        <div><strong>Master</strong> &mdash; DC 30 &rarr; 2d8+30 HP.</div>
+                        <div><strong>Legendary</strong> &mdash; DC 40 &rarr; 2d8+50 HP.</div>
+                        <div style="margin-top:6px;color:var(--t-t3);font-size:11px;"><em>Risky Surgery: +2 DC, deal 1d8 damage first, heal as crit success on success.</em></div>
                     </div>
                 </div>
             </div>

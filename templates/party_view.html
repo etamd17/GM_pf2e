@@ -371,9 +371,53 @@
         <button type="button" id="party-damage-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="toggleAllPartyDamage()" title="Apply damage or healing to every PC at once (trap, environmental, mass effect)">
             Party-Wide
         </button>
+        <button type="button" id="loot-distribute-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="toggleLootDistribute()" title="Distribute coins (and optional items) to the whole party at once">
+            Distribute Loot
+        </button>
         <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card);">
             Encounter Tracker
         </a>
+        <div id="loot-distribute-flyout" class="hidden" style="position:absolute; top:100%; right:0; margin-top:6px; z-index:100; background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:var(--sp-3); min-width:380px;">
+            <div style="font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Distribute Treasure Hoard</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:var(--sp-1); margin-bottom:var(--sp-2);">
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">PP</div>
+                    <input type="number" id="loot-pp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">GP</div>
+                    <input type="number" id="loot-gp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">SP</div>
+                    <input type="number" id="loot-sp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">CP</div>
+                    <input type="number" id="loot-cp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+            </div>
+            <div style="margin-bottom:var(--sp-2);">
+                <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px;">Items (one per line — "Healing Potion x2" or just a name)</div>
+                <textarea id="loot-items" rows="3" placeholder="Healing Potion (Lesser) x4&#10;Cold Iron Dagger&#10;Scroll of Heal" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:11px; font-family:var(--font-mono); resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-2); font-size:11px; color:var(--text-on-dark-2);">
+                <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="radio" name="loot-mode" value="split" checked> Split coins evenly
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="radio" name="loot-mode" value="party"> All coins to one PC
+                </label>
+            </div>
+            <div id="loot-target-row" class="hidden" style="margin-bottom:var(--sp-2);">
+                <select id="loot-target" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;"></select>
+            </div>
+            <div id="loot-preview" style="font-size:10px; color:var(--text-on-dark-3); margin-bottom:var(--sp-2); font-style:italic; min-height:16px;"></div>
+            <div style="display:flex; gap:var(--sp-1); justify-content:flex-end;">
+                <button type="button" class="text-xs px-3 py-1.5 rounded border border-white/[0.06] text-base-400 hover:text-accent-300 transition-colors" style="background:var(--bg-card-2);" onclick="document.getElementById('loot-distribute-flyout').classList.add('hidden')">Cancel</button>
+                <button type="button" class="action-pill" style="background:rgba(201,163,78,0.18); border-color:var(--gilt-300); color:var(--gilt-100);" onclick="applyLootDistribution()" title="Send coins (and items) to PCs">Distribute</button>
+            </div>
+        </div>
         <div id="party-damage-flyout" class="hidden" style="position:absolute; top:100%; right:0; margin-top:6px; z-index:100; background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:var(--sp-3); min-width:300px;">
             <div style="font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Apply to Whole Party</div>
             <div style="display:flex; gap:var(--sp-1); align-items:center; flex-wrap:wrap;">
@@ -911,6 +955,135 @@
     document.addEventListener('click', (e) => {
         const fly = document.getElementById('party-damage-flyout');
         const btn = document.getElementById('party-damage-toggle');
+        if (!fly || !btn) return;
+        if (fly.classList.contains('hidden')) return;
+        if (fly.contains(e.target) || btn.contains(e.target)) return;
+        fly.classList.add('hidden');
+    });
+
+    /* ──────────────── Loot distribution ────────────────
+       Split a hoard across the party (or hand it all to one PC) by
+       fan-ing out /api/send_loot. The endpoint already deposits coins
+       in the wallet and appends items to inventory, so this is again
+       client-side iteration. */
+    function _partyNames() {
+        return Array.from(document.querySelectorAll('.pc-card[data-pc-name]'))
+            .map(c => c.dataset.pcName).filter(Boolean);
+    }
+    window.toggleLootDistribute = function() {
+        const fly = document.getElementById('loot-distribute-flyout');
+        if (!fly) return;
+        // Make sure target dropdown is populated
+        const sel = document.getElementById('loot-target');
+        if (sel && !sel.options.length) {
+            _partyNames().forEach(n => {
+                const o = document.createElement('option');
+                o.value = n; o.textContent = n;
+                sel.appendChild(o);
+            });
+        }
+        fly.classList.toggle('hidden');
+        if (!fly.classList.contains('hidden')) {
+            _updateLootPreview();
+            // Hide the other flyout if open
+            document.getElementById('party-damage-flyout')?.classList.add('hidden');
+        }
+    };
+    function _parseLootItems(raw) {
+        return (raw || '').split('\n').map(line => {
+            const m = line.trim().match(/^(.+?)(?:\s*[xX×]\s*(\d+))?$/);
+            if (!m) return null;
+            const nm = (m[1] || '').trim();
+            if (!nm) return null;
+            return { name: nm, qty: m[2] ? parseInt(m[2], 10) : 1 };
+        }).filter(Boolean);
+    }
+    function _splitCoin(total, n) {
+        // Even split with remainder going to the FIRST PC.
+        const each = Math.floor(total / n);
+        const rem = total - each * n;
+        const out = Array(n).fill(each);
+        out[0] += rem;
+        return out;
+    }
+    function _readLootInputs() {
+        return {
+            pp: parseInt(document.getElementById('loot-pp').value || '0', 10),
+            gp: parseInt(document.getElementById('loot-gp').value || '0', 10),
+            sp: parseInt(document.getElementById('loot-sp').value || '0', 10),
+            cp: parseInt(document.getElementById('loot-cp').value || '0', 10),
+            mode: document.querySelector('input[name="loot-mode"]:checked')?.value || 'split',
+            items: _parseLootItems(document.getElementById('loot-items').value),
+            target: document.getElementById('loot-target')?.value || '',
+        };
+    }
+    function _updateLootPreview() {
+        const data = _readLootInputs();
+        const names = _partyNames();
+        const preview = document.getElementById('loot-preview');
+        const targetRow = document.getElementById('loot-target-row');
+        if (data.mode === 'party') {
+            targetRow?.classList.remove('hidden');
+            const t = data.target || (names[0] || '?');
+            const coinSummary = ['pp','gp','sp','cp'].filter(c => data[c] > 0).map(c => `${data[c]} ${c}`).join(' · ') || '(no coins)';
+            const itemSummary = data.items.length ? `${data.items.length} item${data.items.length === 1 ? '' : 's'}` : '';
+            preview.textContent = `→ ${t}: ${coinSummary}${itemSummary ? ' · ' + itemSummary : ''}`;
+        } else {
+            targetRow?.classList.add('hidden');
+            const n = names.length || 1;
+            const splits = ['pp','gp','sp','cp'].map(c => ({c, vals: _splitCoin(data[c], n)}));
+            const remNote = splits.some(s => s.vals[0] !== s.vals[s.vals.length - 1])
+                ? ' (remainder → first PC)' : '';
+            const summary = splits.filter(s => s.vals[0] > 0).map(s => `${s.vals[0]}-${s.vals[s.vals.length-1]} ${s.c}`).join(' · ') || '(no coins)';
+            preview.textContent = `Each PC: ${summary}${remNote}` + (data.items.length ? ` · ${data.items.length} item${data.items.length === 1 ? '' : 's'} → first PC` : '');
+        }
+    }
+    document.addEventListener('input', (e) => {
+        if (!e.target || !e.target.id) return;
+        if (['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].includes(e.target.id)) _updateLootPreview();
+    });
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.name === 'loot-mode') _updateLootPreview();
+    });
+    window.applyLootDistribution = async function() {
+        const data = _readLootInputs();
+        const names = _partyNames();
+        if (!names.length) return;
+        if (data.mode === 'party') {
+            const target = data.target || names[0];
+            await fetch('/api/send_loot', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ target, coins: { pp: data.pp, gp: data.gp, sp: data.sp, cp: data.cp }, items: data.items }),
+            });
+        } else {
+            const splits = {
+                pp: _splitCoin(data.pp, names.length),
+                gp: _splitCoin(data.gp, names.length),
+                sp: _splitCoin(data.sp, names.length),
+                cp: _splitCoin(data.cp, names.length),
+            };
+            for (let i = 0; i < names.length; i++) {
+                const items = i === 0 ? data.items : []; // items go to first PC; GM can re-deal manually if needed
+                await fetch('/api/send_loot', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        target: names[i],
+                        coins: { pp: splits.pp[i], gp: splits.gp[i], sp: splits.sp[i], cp: splits.cp[i] },
+                        items,
+                    }),
+                });
+            }
+        }
+        // Reset and close
+        ['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        document.getElementById('loot-distribute-flyout').classList.add('hidden');
+    };
+    document.addEventListener('click', (e) => {
+        const fly = document.getElementById('loot-distribute-flyout');
+        const btn = document.getElementById('loot-distribute-toggle');
         if (!fly || !btn) return;
         if (fly.classList.contains('hidden')) return;
         if (fly.contains(e.target) || btn.contains(e.target)) return;
