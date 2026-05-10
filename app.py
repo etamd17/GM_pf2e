@@ -6656,6 +6656,19 @@ def gm_screen():
 # content already exposed at /gmscreen and would drown the GM's actual
 # campaign notes. Toggleable via ?include_rules=1 on every endpoint.
 from services import notes as notes_service
+from services import vault_sync as vault_sync_service
+
+# Initialize git-backed vault sync if env vars are set. Idempotent + safe
+# to call at import time — when no env, this is a no-op. Otherwise it
+# clones the configured private vault repo into the resolved vault root
+# (vault_data/ or whatever PF2E_VAULT_DATA points at) and spawns a
+# background poller that `git pull`s on PF2E_VAULT_PULL_INTERVAL_SEC.
+try:
+    if vault_sync_service.ENABLED:
+        _vs_root = notes_service.get_vault_data_dir()
+        vault_sync_service.initialize(_vs_root)
+except Exception as _vs_err:
+    print(f"[VAULT_SYNC] init failed: {_vs_err}")
 
 
 @app.route('/gm/notes/')
@@ -6808,7 +6821,12 @@ def api_notes_asset(rel_path):
 @app.route('/api/notes/health')
 @gm_required
 def api_notes_health():
-    return jsonify(notes_service.vault_status())
+    out = notes_service.vault_status()
+    try:
+        out["git_sync"] = vault_sync_service.status()
+    except Exception as e:
+        out["git_sync"] = {"enabled": False, "error": str(e)}
+    return jsonify(out)
 
 
 @app.route('/api/admin/vault/upload', methods=['POST'])
@@ -6882,6 +6900,15 @@ def api_admin_vault_upload():
 
     notes_service.invalidate_tree_cache()
     notes_service.invalidate_index()
+
+    # If vault_sync is wired, snapshot the bulk upload as a single commit
+    # so the GitHub repo stays in sync with the volume.
+    try:
+        from services import vault_sync as _vault_sync
+        if _vault_sync.ENABLED:
+            _vault_sync.commit_and_push(['.'], f"bulk upload via push_vault.py ({mode})")
+    except Exception:
+        pass
 
     file_count = 0
     for _, _, files in os.walk(target):
@@ -6991,7 +7018,7 @@ def api_session_export():
     if write_to_vault and notes_service.get_vault_root() is not None:
         rel_path = f"Sessions/{safe_title}.md"
         try:
-            r = notes_service.save(rel_path, body)
+            r = notes_service.save(rel_path, body, commit_message=f"session export: {title}")
             written = True
             mtime = r.mtime
         except notes_service.NotePathError as e:

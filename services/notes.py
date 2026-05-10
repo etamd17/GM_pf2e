@@ -734,10 +734,17 @@ class NoteConflict(Exception):
     """The note on disk has changed since the editor loaded it."""
 
 
-def save(rel_path: str, body: str, expected_mtime: Optional[float] = None) -> RenderedNote:
+def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
+         *, commit_message: Optional[str] = None) -> RenderedNote:
     """Write a note. If `expected_mtime` is provided and the on-disk file's
     mtime differs (with a 1-second tolerance for filesystem precision), the
-    write is rejected with ``NoteConflict`` so the editor can show a diff."""
+    write is rejected with ``NoteConflict`` so the editor can show a diff.
+
+    When vault_sync is enabled (PF2E_VAULT_GIT_URL is set), the file is
+    immediately committed and pushed to the configured private GitHub repo
+    so the GM's local Obsidian (via the Obsidian Git plugin) sees it on
+    the next pull. Git failures don't fail the local write — the body is
+    persisted regardless; sync errors are surfaced via /api/notes/health."""
     if get_vault_root() is None:
         raise NotePathError("Vault is not available")
     p = _safe_join(rel_path)
@@ -761,6 +768,19 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None) -> Re
     _RENDER_CACHE.pop(rel_path, None)
     invalidate_tree_cache()
     invalidate_index()
+    # Immediately commit + push if vault_sync is enabled. The commit message
+    # defaults to "save: <path>" but callers (e.g. the session export) pass
+    # a more descriptive one. We do this after the local write so a git
+    # outage doesn't drop the user's edit on the floor.
+    try:
+        from . import vault_sync as _vault_sync
+        if _vault_sync.ENABLED:
+            msg = commit_message or f"save: {rel_path}"
+            _vault_sync.commit_and_push([rel_path], msg)
+    except Exception:
+        # Sync failure is intentionally non-fatal — the local file is good,
+        # the health endpoint surfaces the error.
+        pass
     return render(rel_path)
 
 
