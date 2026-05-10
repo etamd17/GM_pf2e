@@ -4,3 +4,10 @@ __pycache__/
 *.db-journal
 venv/
 .env
+
+# Obsidian vault sync state — never committed; lives on the server's
+# persistent volume, populated via tools/push_vault.py.
+vault_data/
+.vault_last_push_ts
+.vault_local_last_push_ts
+obsidian_vault

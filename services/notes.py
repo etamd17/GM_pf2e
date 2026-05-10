@@ -31,24 +31,64 @@ import yaml
 
 # ─── Vault root resolution ────────────────────────────────────────────────────
 
-# The repo ships obsidian_vault/ as a symlink to the user's actual Obsidian
-# vault (typically ~/Documents/<vault name>). We resolve it once at module
-# import; the website renders an empty-state when the symlink is missing
-# rather than crashing the rest of the app.
+# Two source modes, in priority order:
+#
+#   1. vault_data/ — a real directory inside the repo (or attached as a
+#      Railway volume at /app/vault_data). This is what production reads
+#      from. Populated by `tools/push_vault.py` from the GM's local
+#      Obsidian vault. Edits via /api/notes/save land here too.
+#
+#   2. obsidian_vault/ — a symlink to the GM's local Obsidian vault.
+#      Used for local-only development on the GM's machine. Won't work
+#      under Railway (no filesystem access to the user's machine).
+#
+# The path can be overridden by the PF2E_VAULT_DATA env var so deployment
+# environments can point it at a mounted volume without code changes.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+_VAULT_DATA_DIR = Path(os.environ.get("PF2E_VAULT_DATA", str(_REPO_ROOT / "vault_data")))
 _VAULT_SYMLINK = _REPO_ROOT / "obsidian_vault"
 
 
 def _resolve_vault_root() -> Optional[Path]:
+    # Prefer the writable vault_data/ directory (production / synced).
     try:
-        if not _VAULT_SYMLINK.exists():
-            return None
-        resolved = _VAULT_SYMLINK.resolve(strict=True)
-        if not resolved.is_dir():
-            return None
-        return resolved
+        if _VAULT_DATA_DIR.is_dir():
+            # Empty directory still counts; the upload endpoint will fill it.
+            return _VAULT_DATA_DIR.resolve()
     except (OSError, RuntimeError):
-        return None
+        pass
+    # Fall back to the read-only obsidian_vault/ symlink (local dev).
+    try:
+        if _VAULT_SYMLINK.exists():
+            resolved = _VAULT_SYMLINK.resolve(strict=True)
+            if resolved.is_dir():
+                return resolved
+    except (OSError, RuntimeError):
+        pass
+    return None
+
+
+def get_vault_root() -> Optional[Path]:
+    """Always resolve fresh — used by handlers that mutate vault contents
+    (upload / save) so a brand-new vault_data/ directory is picked up
+    without a process restart."""
+    return _resolve_vault_root()
+
+
+def get_vault_data_dir() -> Path:
+    """The canonical writable vault directory, regardless of whether it
+    currently exists (the upload endpoint will create it on first push)."""
+    return _VAULT_DATA_DIR
+
+
+def vault_source() -> str:
+    """Identifier for which source mode is active — surfaced on the health
+    endpoint so the GM can confirm sync is wired correctly."""
+    if _VAULT_DATA_DIR.is_dir():
+        return "vault_data"
+    if _VAULT_SYMLINK.exists():
+        return "obsidian_symlink"
+    return "missing"
 
 
 VAULT_ROOT: Optional[Path] = _resolve_vault_root()
@@ -93,12 +133,13 @@ class NotePathError(ValueError):
 
 def _safe_join(rel: str) -> Path:
     """Resolve `rel` (URL-style) inside VAULT_ROOT, raising on traversal."""
-    if VAULT_ROOT is None:
+    root = get_vault_root()
+    if root is None:
         raise NotePathError("Vault is not available")
     rel = rel.lstrip("/").replace("\\", "/")
-    candidate = (VAULT_ROOT / rel).resolve()
+    candidate = (root / rel).resolve()
     try:
-        candidate.relative_to(VAULT_ROOT.resolve())
+        candidate.relative_to(root.resolve())
     except ValueError:
         raise NotePathError(f"Path escapes vault: {rel}")
     return candidate
@@ -144,13 +185,14 @@ def _walk_tree(root: Path, vault_root: Path, include_rules: bool) -> list[dict]:
 def tree(include_rules: bool = False) -> list[dict]:
     """Cached folder/file tree of the vault. ``include_rules=True`` exposes the
     16k zzrules/ SRD subtree; defaults to off."""
-    if VAULT_ROOT is None:
+    root = get_vault_root()
+    if root is None:
         return []
     now = time.monotonic()
     cached = _TREE_CACHE.get(include_rules)
     if cached and (now - cached[0] < _TREE_TTL_SEC):
         return cached[1]
-    snapshot = _walk_tree(VAULT_ROOT, VAULT_ROOT, include_rules)
+    snapshot = _walk_tree(root, root, include_rules)
     _TREE_CACHE[include_rules] = (now, snapshot)
     return snapshot
 
@@ -194,7 +236,8 @@ def _build_index(include_rules: bool) -> None:
     """Walk the vault and build title/outbound/inbound link maps. Cheap to
     rebuild — ~100ms for the 525 campaign notes; ~3-4s with rules included."""
     global _TITLE_INDEX, _OUTBOUND, _INBOUND, _INDEX_BUILT_FOR_RULES
-    if VAULT_ROOT is None:
+    root = get_vault_root()
+    if root is None:
         with _INDEX_LOCK:
             _TITLE_INDEX, _OUTBOUND, _INBOUND = {}, {}, {}
             _INDEX_BUILT_FOR_RULES = include_rules
@@ -202,14 +245,14 @@ def _build_index(include_rules: bool) -> None:
     title_index: dict[str, list[str]] = {}
     outbound: dict[str, list[str]] = {}
     inbound: dict[str, list[str]] = {}
-    for dirpath, dirnames, filenames in os.walk(VAULT_ROOT):
+    for dirpath, dirnames, filenames in os.walk(root):
         # Prune .obsidian and other dot dirs in-place
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for fname in filenames:
             if not fname.endswith(".md"):
                 continue
             try:
-                rel = str(Path(dirpath, fname).relative_to(VAULT_ROOT)).replace(os.sep, "/")
+                rel = str(Path(dirpath, fname).relative_to(root)).replace(os.sep, "/")
             except ValueError:
                 continue
             if not include_rules and _is_rules(rel):
@@ -261,6 +304,7 @@ def resolve_wikilink(target: str, *, include_rules: bool = False) -> Optional[st
     most recent mtime. Returns the rel path or None for broken links."""
     if not target:
         return None
+    root = get_vault_root()
     target = target.strip()
     _ensure_index(include_rules=include_rules)
     # 1. Exact relative path (with or without .md)
@@ -268,8 +312,8 @@ def resolve_wikilink(target: str, *, include_rules: bool = False) -> Optional[st
     direct_md = target if target.lower().endswith(".md") else f"{target}.md"
     try:
         p = _safe_join(direct_md)
-        if p.is_file():
-            return str(p.relative_to(VAULT_ROOT)).replace(os.sep, "/")
+        if p.is_file() and root:
+            return str(p.relative_to(root)).replace(os.sep, "/")
     except (NotePathError, AttributeError):
         pass
     # 2. Title lookup (case-insensitive); allow the trailing path component
@@ -287,7 +331,7 @@ def resolve_wikilink(target: str, *, include_rules: bool = False) -> Optional[st
     def _score(rel: str) -> tuple:
         in_rules = _is_rules(rel)
         try:
-            mtime = (VAULT_ROOT / rel).stat().st_mtime if VAULT_ROOT else 0
+            mtime = (root / rel).stat().st_mtime if root else 0
         except OSError:
             mtime = 0
         return (in_rules, len(rel), -mtime)
@@ -379,21 +423,22 @@ def _replace_wikilink(match: re.Match, *, include_rules: bool) -> str:
 def _resolve_asset(target: str) -> Optional[str]:
     """Look up an image embed. Obsidian stores attachments anywhere; we
     accept either a direct path or a filename anywhere in the vault."""
-    if VAULT_ROOT is None:
+    root = get_vault_root()
+    if root is None:
         return None
     try:
         p = _safe_join(target)
         if p.is_file():
-            return str(p.relative_to(VAULT_ROOT)).replace(os.sep, "/")
+            return str(p.relative_to(root)).replace(os.sep, "/")
     except NotePathError:
         pass
     # Filename search — attachments live in zz_Attachments/ typically.
     name = target.split("/")[-1]
-    for dirpath, dirnames, filenames in os.walk(VAULT_ROOT):
+    for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         if name in filenames:
             try:
-                return str(Path(dirpath, name).relative_to(VAULT_ROOT)).replace(os.sep, "/")
+                return str(Path(dirpath, name).relative_to(root)).replace(os.sep, "/")
             except ValueError:
                 continue
     return None
@@ -443,12 +488,13 @@ class RenderedNote:
 
 
 def render(rel_path: str, *, include_rules: bool = False) -> RenderedNote:
-    if VAULT_ROOT is None:
+    root = get_vault_root()
+    if root is None:
         raise NotePathError("Vault is not available")
     p = _safe_join(rel_path)
     if not p.is_file():
         raise FileNotFoundError(rel_path)
-    rel = str(p.relative_to(VAULT_ROOT)).replace(os.sep, "/")
+    rel = str(p.relative_to(root)).replace(os.sep, "/")
     mtime = p.stat().st_mtime
     cached = _RENDER_CACHE.get(rel)
     if cached and cached[0] == mtime:
@@ -496,7 +542,7 @@ def render_excerpt(rel_path: str, *, max_chars: int = 1800, include_rules: bool 
     """Render a truncated version of a note for inline embedding (e.g. the
     Now Playing card on the GM hub). Truncates the BODY before render so
     the resulting HTML is always well-formed."""
-    if VAULT_ROOT is None:
+    if get_vault_root() is None:
         raise NotePathError("Vault is not available")
     p = _safe_join(rel_path)
     if not p.is_file():
@@ -551,7 +597,8 @@ def _build_snippet(body: str, query_lc: str, ctx: int = 60) -> str:
 def search(query: str, *, include_rules: bool = False, limit: int = 50) -> list[SearchHit]:
     """Two-phase search: filename match first (fast, lots of signal), then
     body grep across notes. Skip zzrules unless `include_rules=True`."""
-    if VAULT_ROOT is None or not query:
+    root = get_vault_root()
+    if root is None or not query:
         return []
     q = query.strip()
     if len(q) < 2:
@@ -560,13 +607,13 @@ def search(query: str, *, include_rules: bool = False, limit: int = 50) -> list[
     hits: list[SearchHit] = []
     seen: set[str] = set()
     # Phase 1: title hits
-    for dirpath, dirnames, filenames in os.walk(VAULT_ROOT):
+    for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for fname in filenames:
             if not fname.endswith(".md"):
                 continue
             try:
-                rel = str(Path(dirpath, fname).relative_to(VAULT_ROOT)).replace(os.sep, "/")
+                rel = str(Path(dirpath, fname).relative_to(root)).replace(os.sep, "/")
             except ValueError:
                 continue
             if not include_rules and _is_rules(rel):
@@ -578,13 +625,13 @@ def search(query: str, *, include_rules: bool = False, limit: int = 50) -> list[
                 if len(hits) >= limit:
                     return hits
     # Phase 2: body hits
-    for dirpath, dirnames, filenames in os.walk(VAULT_ROOT):
+    for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for fname in filenames:
             if not fname.endswith(".md"):
                 continue
             try:
-                rel = str(Path(dirpath, fname).relative_to(VAULT_ROOT)).replace(os.sep, "/")
+                rel = str(Path(dirpath, fname).relative_to(root)).replace(os.sep, "/")
             except ValueError:
                 continue
             if rel in seen:
@@ -610,7 +657,8 @@ def backlinks(rel_path: str, *, include_rules: bool = False) -> list[dict]:
     """Return [{path, title, snippet}] for every note that links to `rel_path`.
     Resolution treats both the basename (e.g. `[[Romi]]`) and the full path."""
     _ensure_index(include_rules=include_rules)
-    if VAULT_ROOT is None:
+    root = get_vault_root()
+    if root is None:
         return []
     target_basename = rel_path.rsplit("/", 1)[-1]
     target_title = target_basename[:-3] if target_basename.endswith(".md") else target_basename
@@ -630,7 +678,7 @@ def backlinks(rel_path: str, *, include_rules: bool = False) -> list[dict]:
                 title = origin.rsplit("/", 1)[-1].rsplit(".md", 1)[0]
                 snippet = ""
                 try:
-                    with open((VAULT_ROOT / origin), "r", encoding="utf-8", errors="replace") as f:
+                    with open((root / origin), "r", encoding="utf-8", errors="replace") as f:
                         body = f.read()
                     snippet = _build_snippet(body, target_title.lower(), ctx=50)[:160]
                 except OSError:
@@ -650,11 +698,12 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None) -> Re
     """Write a note. If `expected_mtime` is provided and the on-disk file's
     mtime differs (with a 1-second tolerance for filesystem precision), the
     write is rejected with ``NoteConflict`` so the editor can show a diff."""
-    if VAULT_ROOT is None:
+    if get_vault_root() is None:
         raise NotePathError("Vault is not available")
     p = _safe_join(rel_path)
-    if not p.parent.exists():
-        raise NotePathError(f"Parent directory missing: {p.parent}")
+    # Auto-create parent directories. Edits-from-the-website often land in
+    # paths like Sessions/2026-05-10.md that don't exist yet on first push.
+    p.parent.mkdir(parents=True, exist_ok=True)
     if p.exists() and expected_mtime is not None:
         actual = p.stat().st_mtime
         if abs(actual - expected_mtime) > 1.0:
@@ -679,26 +728,37 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None) -> Re
 
 def vault_status() -> dict:
     """Lightweight health check used by the `/gm/notes` empty state and a
-    /api/notes/health endpoint. Verifies the symlink resolves AND that the
+    /api/notes/health endpoint. Verifies the source resolves AND that the
     process has read access — macOS TCC will block Documents/ access for
-    processes that don't have Full Disk Access, and the empty tree that
-    results is a confusing failure mode to debug otherwise."""
-    if VAULT_ROOT is None:
+    processes that don't have Full Disk Access when reading the local
+    symlink, and the empty tree that results is a confusing failure mode
+    to debug otherwise."""
+    src = vault_source()
+    root = get_vault_root()
+    if root is None:
         return {
             "available": False,
+            "source": src,
+            "vault_data_dir": str(_VAULT_DATA_DIR),
             "symlink_path": str(_VAULT_SYMLINK),
             "reason": "missing",
-            "detail": "Symlink missing or broken",
+            "detail": (
+                "No vault available. Run `python tools/push_vault.py` to push "
+                "your local Obsidian vault to this server, or symlink "
+                f"obsidian_vault/ at the project root for local development."
+            ),
         }
     # Probe read access — raises PermissionError under macOS TCC if the
     # current process doesn't have Full Disk Access for ~/Documents.
     try:
-        os.scandir(VAULT_ROOT).close()
+        os.scandir(root).close()
     except PermissionError as e:
         return {
             "available": False,
+            "source": src,
+            "vault_data_dir": str(_VAULT_DATA_DIR),
             "symlink_path": str(_VAULT_SYMLINK),
-            "vault_root": str(VAULT_ROOT),
+            "vault_root": str(root),
             "reason": "permission",
             "detail": (
                 "macOS denied read access. Grant Full Disk Access (or just "
@@ -710,13 +770,35 @@ def vault_status() -> dict:
     except OSError as e:
         return {
             "available": False,
+            "source": src,
+            "vault_data_dir": str(_VAULT_DATA_DIR),
             "symlink_path": str(_VAULT_SYMLINK),
-            "vault_root": str(VAULT_ROOT),
+            "vault_root": str(root),
             "reason": "io",
             "detail": str(e),
         }
+    # Count files for a quick "synced" indicator
+    file_count = 0
+    try:
+        for _, _, files in os.walk(root):
+            file_count += sum(1 for f in files if f.endswith(".md"))
+            if file_count > 9999:
+                break
+    except OSError:
+        pass
+    last_push_at = None
+    try:
+        marker = root / ".vault_last_push"
+        if marker.is_file():
+            last_push_at = marker.stat().st_mtime
+    except OSError:
+        pass
     return {
         "available": True,
+        "source": src,
+        "vault_data_dir": str(_VAULT_DATA_DIR),
         "symlink_path": str(_VAULT_SYMLINK),
-        "vault_root": str(VAULT_ROOT),
+        "vault_root": str(root),
+        "note_count": file_count,
+        "last_push_at": last_push_at,
     }

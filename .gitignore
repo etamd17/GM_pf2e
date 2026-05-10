@@ -13,3 +13,10 @@ party_data/*.json
 
 # GM-authored campaign intro metadata — local content, not repo state.
 campaign.json
+
+# Obsidian vault sync state — populated on the server's persistent
+# volume by tools/push_vault.py; never committed.
+vault_data/
+.vault_last_push_ts
+.vault_local_last_push_ts
+obsidian_vault

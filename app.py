@@ -6799,6 +6799,134 @@ def api_notes_health():
     return jsonify(notes_service.vault_status())
 
 
+@app.route('/api/admin/vault/upload', methods=['POST'])
+@gm_required
+def api_admin_vault_upload():
+    """Receive a gzipped tarball of the GM's local Obsidian vault and
+    atomically swap it into vault_data/. Used by tools/push_vault.py.
+
+    Body: multipart form with `vault` field (the tar.gz file) and an
+    optional `replace` field ('full' to wipe vault_data first, default
+    'merge' which only overwrites files in the tar). Returns the new
+    file count and a server timestamp suitable for the next pull's
+    `since=` argument."""
+    import tarfile, tempfile, shutil, time as _t
+    f = request.files.get('vault')
+    if not f:
+        return jsonify({"success": False, "error": "vault file required"}), 400
+    mode = (request.form.get('replace') or 'merge').lower()
+    target = notes_service.get_vault_data_dir()
+    target.mkdir(parents=True, exist_ok=True)
+
+    # If replace=full, write into a fresh sibling dir then atomically swap.
+    # On merge, extract over the existing tree (the typical incremental push).
+    if mode == 'full':
+        staging = target.parent / (target.name + '.staging')
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir(parents=True)
+        extract_to = staging
+    else:
+        extract_to = target
+
+    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+        f.save(tmp.name)
+        tmp_path = tmp.name
+    try:
+        with tarfile.open(tmp_path, 'r:gz') as tar:
+            for member in tar.getmembers():
+                # Reject path-traversal in archive member names
+                name = member.name
+                if name.startswith('/') or '..' in Path(name).parts:
+                    continue
+                if member.isdev() or member.issym() or member.islnk():
+                    continue
+                tar.extract(member, path=extract_to, set_attrs=False)
+    except tarfile.TarError as e:
+        return jsonify({"success": False, "error": f"bad tarball: {e}"}), 400
+    finally:
+        try: os.remove(tmp_path)
+        except OSError: pass
+
+    if mode == 'full':
+        # Atomic swap: rename existing vault_data → backup, staging → vault_data
+        backup = target.parent / (target.name + '.bak')
+        if backup.exists():
+            shutil.rmtree(backup)
+        if target.exists():
+            os.rename(target, backup)
+        os.rename(extract_to, target)
+        if backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+
+    # Stamp last-push so the pull endpoint knows what's new
+    now = _t.time()
+    try:
+        marker = target / '.vault_last_push'
+        marker.touch(exist_ok=True)
+        os.utime(marker, (now, now))
+    except OSError:
+        pass
+
+    notes_service.invalidate_tree_cache()
+    notes_service.invalidate_index()
+
+    file_count = 0
+    for _, _, files in os.walk(target):
+        file_count += sum(1 for x in files if x.endswith('.md'))
+    return jsonify({
+        "success": True,
+        "mode": mode,
+        "vault_root": str(target),
+        "note_count": file_count,
+        "server_now": now,
+    })
+
+
+@app.route('/api/admin/vault/changes-since')
+@gm_required
+def api_admin_vault_changes_since():
+    """Return a gzipped tarball of every vault file modified after `since`
+    (Unix epoch float). Used by tools/pull_vault.py to bring server-side
+    edits — like session export markdowns — back to the GM's local vault."""
+    import tarfile, io, time as _t
+    try:
+        since = float(request.args.get('since', '0') or '0')
+    except (TypeError, ValueError):
+        since = 0.0
+    root = notes_service.get_vault_root()
+    if root is None:
+        return jsonify({"error": "vault unavailable"}), 503
+    buf = io.BytesIO()
+    file_count = 0
+    with tarfile.open(fileobj=buf, mode='w:gz') as tar:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+            for fname in filenames:
+                if fname.startswith('.'):
+                    continue
+                full = os.path.join(dirpath, fname)
+                try:
+                    mtime = os.path.getmtime(full)
+                except OSError:
+                    continue
+                if mtime <= since:
+                    continue
+                try:
+                    rel = os.path.relpath(full, root)
+                    tar.add(full, arcname=rel)
+                    file_count += 1
+                except (OSError, tarfile.TarError):
+                    continue
+    buf.seek(0)
+    server_now = _t.time()
+    resp = Response(buf.getvalue(), mimetype='application/gzip')
+    resp.headers['Content-Disposition'] = 'attachment; filename=vault-changes.tar.gz'
+    resp.headers['X-Vault-File-Count'] = str(file_count)
+    resp.headers['X-Vault-Server-Now'] = str(server_now)
+    return resp
+
+
 @app.route('/api/notes/exists')
 @gm_required
 def api_notes_exists():

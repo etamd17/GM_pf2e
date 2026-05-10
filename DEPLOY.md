@@ -97,3 +97,57 @@ git push
 ```
 
 Railway auto-deploys. Character data on the volume persists.
+
+## Step 7 (optional): Obsidian vault sync
+
+The Notes feature reads campaign content from `vault_data/` on the server.
+That directory needs a Railway persistent volume so it survives redeploys,
+and a separate `tools/push_vault.py` run from your Mac to populate it.
+
+### Attach a Railway volume
+
+1. Project → service → **Variables** tab → **+ New Variable**:
+   `PF2E_VAULT_DATA = /app/vault_data`
+2. **Settings** tab → scroll to **Volumes** → **+ Add Volume**:
+   - Mount path: `/app/vault_data`
+   - Size: 1 GB is plenty for typical campaign content (no SRD needed)
+3. Redeploy. The volume is now empty; the next push will fill it.
+
+### Push your vault from your Mac
+
+```bash
+cd ~/GM_pf2e
+python3 tools/push_vault.py --url https://yourapp.up.railway.app
+```
+
+You'll be prompted for the GM password (set on Railway as `GM_PASSWORD`).
+The first run uploads everything (minus `zzrules/` SRD content, large
+attachments > 5 MB, and per-machine `.obsidian/` config). Subsequent runs
+ship only files you've modified since the last push.
+
+Common one-liner aliases for `~/.zshrc`:
+
+```bash
+alias pf2e-push='cd ~/GM_pf2e && python3 tools/push_vault.py --url https://yourapp.up.railway.app'
+alias pf2e-pull='cd ~/GM_pf2e && python3 tools/pull_vault.py --url https://yourapp.up.railway.app'
+```
+
+### Pull session-export markdown back to your local vault
+
+When you click **End Session — Export** on the GM hub, the app writes a
+session-recap markdown into `vault_data/Sessions/` on the server. To bring
+that file back to your local Obsidian vault for editing:
+
+```bash
+python3 tools/pull_vault.py --url https://yourapp.up.railway.app
+```
+
+Pulls only files modified after your last successful push. Safe to run
+repeatedly.
+
+### When to push
+
+- Before each session, after prep in Obsidian
+- After Cowork-written summaries land in your local vault
+- Whenever you've added new NPCs / locations you want available in the
+  drawer during the session
