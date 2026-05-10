@@ -268,6 +268,51 @@
 .trk .c-drag:active { cursor: grabbing; transform: scale(0.95); }
 .trk .sortable-ghost { background:rgba(196,60,60,0.08) !important; }
 
+/* Multi-target mode swaps the drag glyph for a checkbox in c-drag.
+   Drag still works on the column itself — sortable handle is the row,
+   not the glyph. */
+.trk .c-drag .multi-check { display: none; cursor: pointer; }
+body.multi-mode .trk .c-drag .drag-glyph { display: none; }
+body.multi-mode .trk .c-drag .multi-check { display: inline-block; transform: scale(1.2); accent-color: var(--gilt-300); }
+body.multi-mode #multi-toggle-btn { background: rgba(200,168,78,0.18); border-color: var(--t-gold); color: var(--t-gold); }
+body.multi-mode .trk .combatant.multi-selected { background: rgba(200,168,78,0.06); box-shadow: inset 0 0 0 1px var(--gilt-300); }
+
+/* Fixed bottom action bar — only shows when multi-mode is on. */
+#multi-action-bar {
+    position: fixed;
+    bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-2);
+    z-index: 200;
+    max-width: 96vw;
+}
+#multi-action-bar.hidden { display: none; }
+#multi-action-bar .ma-section {
+    display: flex; align-items: center; gap: var(--sp-1);
+    border-right: 1px solid var(--border-card);
+    padding-right: var(--sp-3);
+}
+#multi-action-bar .ma-section:last-child { border-right: none; padding-right: 0; }
+#multi-action-bar .ma-count {
+    font-family: var(--font-display);
+    font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--gilt-200);
+    margin-right: var(--sp-2);
+}
+#multi-action-bar input[type="number"], #multi-action-bar select {
+    background: var(--bg-input); border: 1px solid var(--border-strong);
+    color: var(--text-on-dark); padding: 4px 8px;
+    border-radius: var(--r-sm); font-size: 12px;
+    font-family: var(--font-ui);
+}
+#multi-action-bar input[type="number"]:focus, #multi-action-bar select:focus {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
 .trk .c-init { text-align:center; }
 .trk .c-init input {
   width:44px; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
@@ -852,6 +897,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     <div class="hb-right">
         <button class="hb-btn" onclick="apiPost('/api/roll_npc_initiative')" title="Roll d20+Perception for all NPCs">Roll Init</button>
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
+        <button class="hb-btn" id="multi-toggle-btn" onclick="toggleMultiMode()" title="Select multiple combatants for AOE damage / condition application">Multi</button>
         <div class="trk-tools-wrap" style="position:relative; display:inline-block;">
             <button class="hb-btn" onclick="toggleTrkTools(event)" aria-haspopup="menu" aria-expanded="false" id="trk-tools-btn">Tools ▾</button>
             <div id="trk-tools-menu" class="trk-tools-menu" role="menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:var(--t-bg-higher); border:1px solid var(--t-border); border-radius:6px; padding:6px; min-width:180px; z-index:100; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
@@ -1144,6 +1190,51 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             <div style="display:none;"><span id="ap-name"></span><span id="ap-subtitle"></span></div>
             <div id="ap-body"></div>
         </div>
+    </div>
+</div>
+
+{# ═══════════════════ MULTI-TARGET ACTION BAR ═══════════════════
+   Hidden by default. Toggled via the "Multi" header button → adds a
+   `multi-mode` class to <body> which reveals the per-row checkboxes
+   and this fixed bottom bar. Bulk damage / heal / condition iterate
+   over selected combatants client-side using the existing single-target
+   endpoints (no new backend). #}
+<div id="multi-action-bar" class="hidden" role="toolbar" aria-label="Multi-target actions">
+    <div class="ma-section">
+        <span class="ma-count" id="multi-count">0 selected</span>
+        <button class="hb-btn" onclick="multiSelectAll()" type="button" title="Select every combatant">All</button>
+        <button class="hb-btn" onclick="multiSelectNone()" type="button" title="Clear selection">None</button>
+    </div>
+    <div class="ma-section">
+        <input type="number" id="multi-dmg-amount" placeholder="amount" min="1" style="width:80px;">
+        <select id="multi-dmg-type">
+            <option value="untyped">untyped</option>
+            <option value="bludgeoning">bludgeoning</option>
+            <option value="piercing">piercing</option>
+            <option value="slashing">slashing</option>
+            <option value="fire">fire</option>
+            <option value="cold">cold</option>
+            <option value="electricity">electricity</option>
+            <option value="acid">acid</option>
+            <option value="sonic">sonic</option>
+            <option value="vitality">vitality</option>
+            <option value="void">void</option>
+            <option value="force">force</option>
+            <option value="spirit">spirit</option>
+            <option value="mental">mental</option>
+            <option value="poison">poison</option>
+            <option value="bleed">bleed</option>
+        </select>
+        <button class="hb-btn danger" type="button" onclick="multiApplyDamage('damage')" title="Apply damage to all selected (W/R/I auto-applies for monsters)">Damage</button>
+        <button class="hb-btn gold" type="button" onclick="multiApplyDamage('heal')" title="Heal all selected">Heal</button>
+    </div>
+    <div class="ma-section">
+        <select id="multi-cond-sel"></select>
+        <input type="number" id="multi-cond-val" placeholder="val" min="1" max="9" style="width:48px;" title="For valued conditions (frightened, sickened, etc.) — defaults to 1">
+        <button class="hb-btn" type="button" onclick="multiApplyCondition()" title="Add condition to all selected">Add Condition</button>
+    </div>
+    <div class="ma-section">
+        <button class="hb-btn" type="button" onclick="exitMultiMode()" title="Exit multi-target mode">Done</button>
     </div>
 </div>
 
@@ -1474,7 +1565,10 @@ function renderInitList() {
         const portCls = c.is_pc ? 'pc' : 'enemy';
 
         return `<div class="${rowCls}" data-id="${c.instance_id}">
-            <div class="c-drag" title="Drag to reorder">⠇</div>
+            <div class="c-drag" title="Drag to reorder">
+                <span class="drag-glyph">⠇</span>
+                <input type="checkbox" class="multi-check" data-id="${c.instance_id}" onclick="event.stopPropagation();updateMultiCount();" aria-label="Select for multi-target action">
+            </div>
             <div class="c-init">
                 <input type="number" value="${c.initiative}"
                        onkeydown="if(event.key==='Enter'){updateInit('${c.instance_id}',this.value);this.blur()}"
@@ -1530,6 +1624,8 @@ function renderInitList() {
 
     // Re-init sortable
     initSortable();
+    // Multi-mode selection survives re-renders (HP changes, SSE updates, etc.)
+    _restoreMultiSelection();
 }
 
 function renderActivePanel() {
@@ -2032,6 +2128,111 @@ function eliteWeak(id, mode) {
     const fd = new FormData();
     fd.append('mode', mode);
     apiPost('/api/toggle_elite_weak/' + id, fd, null);
+}
+
+/* ──────────────── Multi-target (AOE) mode ────────────────
+   Selects multiple combatants and applies damage / heal / condition
+   to all of them. Iterates the existing single-target endpoints so
+   no new API surface is needed. Selected IDs live in a persistent Set
+   so SSE-driven re-renders don't wipe the selection. */
+const _multiSelected = new Set();
+function _populateMultiCondSel() {
+    const sel = document.getElementById('multi-cond-sel');
+    if (!sel || sel.options.length) return;
+    CONDITIONS_LIST.forEach(co => {
+        const o = document.createElement('option');
+        o.value = co; o.textContent = co.replace(/_/g, '-');
+        sel.appendChild(o);
+    });
+}
+function toggleMultiMode() {
+    const on = !document.body.classList.contains('multi-mode');
+    if (on) {
+        document.body.classList.add('multi-mode');
+        _populateMultiCondSel();
+        document.getElementById('multi-action-bar').classList.remove('hidden');
+        updateMultiCount();
+    } else {
+        exitMultiMode();
+    }
+}
+function exitMultiMode() {
+    document.body.classList.remove('multi-mode');
+    document.getElementById('multi-action-bar').classList.add('hidden');
+    multiSelectNone();
+}
+function _selectedIds() { return Array.from(_multiSelected); }
+function updateMultiCount() {
+    // Sync the persistent set with whatever is checked in the DOM right now.
+    document.querySelectorAll('.multi-check').forEach(cb => {
+        if (cb.checked) _multiSelected.add(cb.dataset.id);
+        else _multiSelected.delete(cb.dataset.id);
+    });
+    const el = document.getElementById('multi-count');
+    if (el) el.textContent = `${_multiSelected.size} selected`;
+    document.querySelectorAll('.trk .combatant').forEach(row => {
+        const cb = row.querySelector('.multi-check');
+        row.classList.toggle('multi-selected', !!(cb && cb.checked));
+    });
+}
+// Re-applied by render() after every re-build of the row list so the
+// selection survives SSE-driven updates (HP changes, conditions, etc.).
+function _restoreMultiSelection() {
+    if (!document.body.classList.contains('multi-mode')) return;
+    document.querySelectorAll('.multi-check').forEach(cb => {
+        cb.checked = _multiSelected.has(cb.dataset.id);
+    });
+    document.querySelectorAll('.trk .combatant').forEach(row => {
+        const cb = row.querySelector('.multi-check');
+        row.classList.toggle('multi-selected', !!(cb && cb.checked));
+    });
+    const el = document.getElementById('multi-count');
+    if (el) el.textContent = `${_multiSelected.size} selected`;
+}
+function multiSelectAll() {
+    document.querySelectorAll('.multi-check').forEach(cb => { cb.checked = true; });
+    updateMultiCount();
+}
+function multiSelectNone() {
+    _multiSelected.clear();
+    document.querySelectorAll('.multi-check').forEach(cb => { cb.checked = false; });
+    updateMultiCount();
+}
+async function multiApplyDamage(action) {
+    const ids = _selectedIds();
+    if (!ids.length) return;
+    const amount = parseInt(document.getElementById('multi-dmg-amount').value || '0', 10);
+    if (!amount || amount < 1) return;
+    const damageType = document.getElementById('multi-dmg-type').value || 'untyped';
+    for (const id of ids) {
+        const fd = new FormData();
+        fd.append('amount', String(amount));
+        fd.append('action', action);
+        fd.append('damage_type', damageType);
+        try {
+            await fetch('/api/adjust_hp/' + id, { method: 'POST', body: fd });
+        } catch(_) {}
+    }
+}
+async function multiApplyCondition() {
+    const ids = _selectedIds();
+    if (!ids.length) return;
+    const cond = document.getElementById('multi-cond-sel').value;
+    if (!cond) return;
+    const valuedSet = new Set(VALUED_CONDITIONS);
+    const repeats = valuedSet.has(cond)
+        ? Math.max(1, parseInt(document.getElementById('multi-cond-val').value || '1', 10))
+        : 1;
+    for (const id of ids) {
+        for (let r = 0; r < repeats; r++) {
+            const fd = new FormData();
+            fd.append('condition', cond);
+            fd.append('action', valuedSet.has(cond) ? 'add' : 'add');
+            try {
+                await fetch('/api/toggle_condition/' + id, { method: 'POST', body: fd });
+            } catch(_) {}
+        }
+    }
 }
 
 function toggleReaction(pcName, used) {

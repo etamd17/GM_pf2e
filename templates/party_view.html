@@ -367,10 +367,42 @@
         <h1 class="font-display text-xl text-accent-300 tracking-wide">Party Overview</h1>
         <p class="text-xs text-base-500 mt-0.5">Real-time character status &mdash; click a spell, feat, attack, or feature for details</p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex gap-2 items-center" style="position:relative;">
+        <button type="button" id="party-damage-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="toggleAllPartyDamage()" title="Apply damage or healing to every PC at once (trap, environmental, mass effect)">
+            Party-Wide
+        </button>
         <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card);">
             Encounter Tracker
         </a>
+        <div id="party-damage-flyout" class="hidden" style="position:absolute; top:100%; right:0; margin-top:6px; z-index:100; background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:var(--sp-3); min-width:300px;">
+            <div style="font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Apply to Whole Party</div>
+            <div style="display:flex; gap:var(--sp-1); align-items:center; flex-wrap:wrap;">
+                <input type="number" id="pwd-amount" placeholder="amount" min="1" style="width:80px; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                <select id="pwd-type" style="background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                    <option value="untyped">untyped</option>
+                    <option value="bludgeoning">bludgeoning</option>
+                    <option value="piercing">piercing</option>
+                    <option value="slashing">slashing</option>
+                    <option value="fire">fire</option>
+                    <option value="cold">cold</option>
+                    <option value="electricity">electricity</option>
+                    <option value="acid">acid</option>
+                    <option value="sonic">sonic</option>
+                    <option value="vitality">vitality</option>
+                    <option value="void">void</option>
+                    <option value="force">force</option>
+                    <option value="spirit">spirit</option>
+                    <option value="mental">mental</option>
+                    <option value="poison">poison</option>
+                    <option value="bleed">bleed</option>
+                </select>
+                <button type="button" class="action-pill dmg" onclick="applyAllPartyDamage('damage')" title="Apply damage to all PCs">Damage</button>
+                <button type="button" class="action-pill heal" onclick="applyAllPartyDamage('heal')" title="Heal all PCs">Heal</button>
+            </div>
+            <div style="font-size:10px; color:var(--text-on-dark-3); margin-top:var(--sp-2); font-style:italic;">
+                Players still take their saves — apply post-save HP. Halve / nullify on the GM's call.
+            </div>
+        </div>
     </div>
 </div>
 
@@ -841,6 +873,49 @@
         if (inc) inc.disabled = heroPoints >= 3;
         if (dec) dec.disabled = heroPoints <= 0;
     }
+
+    /* ──────────────── Party-wide damage / heal ────────────────
+       Iterates /api/adjust_party_hp/<pc_name> for every PC card on the page.
+       The endpoint already handles temp HP, dying logic, and rebroadcast,
+       so this is a pure client-side fan-out. Exposed on window so the
+       onclick attributes in the header HTML can find them. */
+    window.toggleAllPartyDamage = function() {
+        const fly = document.getElementById('party-damage-flyout');
+        if (!fly) return;
+        fly.classList.toggle('hidden');
+        if (!fly.classList.contains('hidden')) {
+            const a = document.getElementById('pwd-amount');
+            if (a) a.focus();
+        }
+    };
+    window.applyAllPartyDamage = async function(action) {
+        const amt = parseInt(document.getElementById('pwd-amount').value || '0', 10);
+        if (!amt || amt < 1) return;
+        const cards = document.querySelectorAll('.pc-card[data-pc-name]');
+        const names = Array.from(cards).map(c => c.dataset.pcName).filter(Boolean);
+        if (!names.length) return;
+        for (const name of names) {
+            const fd = new FormData();
+            fd.append('amount', String(amt));
+            fd.append('action', action);
+            try {
+                await fetch('/api/adjust_party_hp/' + encodeURIComponent(name), {
+                    method: 'POST', body: fd,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+            } catch(_) {}
+        }
+        document.getElementById('pwd-amount').value = '';
+        document.getElementById('party-damage-flyout').classList.add('hidden');
+    };
+    document.addEventListener('click', (e) => {
+        const fly = document.getElementById('party-damage-flyout');
+        const btn = document.getElementById('party-damage-toggle');
+        if (!fly || !btn) return;
+        if (fly.classList.contains('hidden')) return;
+        if (fly.contains(e.target) || btn.contains(e.target)) return;
+        fly.classList.add('hidden');
+    });
 
     document.addEventListener('click', async (e) => {
         const btn = e.target.closest('.hero-adjust-btn');
