@@ -552,6 +552,54 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   font-size:10px; font-weight:700;
 }
 .trk .cp-add button:hover { background:rgba(255,255,255,0.1); }
+.trk .cp-add input[type="number"] {
+  width: 54px; background:var(--t-bg-higher); border:1px dashed var(--t-t4);
+  color:var(--t-t1); padding:3px 6px; border-radius:9px; font-size:10px;
+  text-align:center; outline:none;
+}
+.trk .cp-add input[type="number"]:focus { border-color:var(--t-gold); color:var(--t-gold); }
+
+/* Auto-expiry rounds badge — small ⏱N suffix on a condition pill. */
+.trk .cp-exp, .trk .cond-chip .cp-exp {
+  display: inline-block; margin-left: 4px; padding: 0 4px;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  background: rgba(200,168,78,0.18); color: var(--t-gold);
+  border: 1px solid rgba(200,168,78,0.40); border-radius: 999px;
+  font-family: var(--font-mono);
+}
+
+/* Action economy widget — three pips + reaction toggle on the active
+   panel for non-PC, non-hazard combatants. Filled = spent. */
+.trk .ae-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px 0;
+  margin-bottom: 6px;
+  border-bottom: 1px dotted rgba(255,255,255,0.06);
+}
+.trk .ae-lbl {
+  font-family: 'Cinzel', serif; font-size: 10px;
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--t-gold);
+}
+.trk .ae-pips { display: inline-flex; gap: 4px; }
+.trk .ae-divider { color: var(--t-t3); margin: 0 4px; }
+.trk .ae-pip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  background: transparent; cursor: pointer;
+  font-size: 14px; line-height: 1;
+  color: var(--t-gold);
+  border: 1px solid rgba(200,168,78,0.45);
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast), opacity var(--t-fast);
+}
+.trk .ae-pip:hover { background: rgba(200,168,78,0.10); }
+.trk .ae-pip.spent {
+  color: var(--t-t3); border-color: rgba(255,255,255,0.10);
+  background: transparent; opacity: 0.55;
+}
+.trk .ae-pip.spent:hover { opacity: 0.8; color: var(--t-gold); border-color: rgba(200,168,78,0.30); }
+.trk .ae-pip.ae-rxn { font-size: 12px; }
 
 .trk .pd-row { display:flex; gap:3px; align-items:center; margin-top:3px; width:100%; }
 .trk .pd-row .pd-lbl { font-size:9px; color:var(--t-gold); font-weight:700; letter-spacing:.8px; flex-shrink:0; }
@@ -1231,6 +1279,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     <div class="ma-section">
         <select id="multi-cond-sel"></select>
         <input type="number" id="multi-cond-val" placeholder="val" min="1" max="9" style="width:48px;" title="For valued conditions (frightened, sickened, etc.) — defaults to 1">
+        <input type="number" id="multi-cond-rounds" placeholder="rounds" min="1" max="9" style="width:64px;" title="Optional auto-expiry: clear after N end-of-turns">
         <button class="hb-btn" type="button" onclick="multiApplyCondition()" title="Add condition to all selected">Add Condition</button>
     </div>
     <div class="ma-section">
@@ -1495,13 +1544,19 @@ function renderInitList() {
         const isDying = c.conditions && c.conditions.dying > 0;
         const rowCls = `combatant ${isActive ? 'active' : ''} ${c.delaying ? 'delaying' : ''} ${isDying ? 'down' : ''}`;
 
-        // Conditions HTML (read-only in grid; full controls in hero card)
+        // Conditions HTML (read-only in grid; full controls in hero card).
+        // Append a rounds-remaining badge when the GM set an auto-expiry timer.
         let condsHtml = '';
         if (c.conditions) {
+            const expiry = c.condition_expiry || {};
             for (const [k, v] of Object.entries(c.conditions)) {
                 if (!v || v === 0 || v === false) continue;
                 const isValued = typeof v === 'number' && v > 0;
-                const label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
+                let label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
+                const exp = expiry[k];
+                if (exp && exp > 0) {
+                    label += ` <span class="cp-exp" title="Expires in ${exp} round${exp === 1 ? '' : 's'}">⏱${exp}</span>`;
+                }
                 const cls = condChipClass(k);
                 condsHtml += `<span class="cp ${cls}" title="${condTooltip(k)}">${label}</span>`;
             }
@@ -1734,14 +1789,40 @@ function renderActivePanel() {
                  <span id="rk-info-${c.instance_id}" style="font-size:10px;color:var(--t-t3);margin-left:6px;"></span>`;
     }
 
+    // Action economy — only renders for non-PC, non-hazard combatants.
+    // PCs already track this on their sheet; bosses + mooks lean on the
+    // GM's tracker since their cards are the GM's combat dashboard.
+    if (!c.is_pc && !c.is_hazard) {
+        const used = Math.max(0, Math.min(c.max_actions || 3, c.actions_used || 0));
+        const max = Math.max(1, Math.min(4, c.max_actions || 3));
+        let pips = '';
+        for (let i = 0; i < max; i++) {
+            const filled = i < used;
+            pips += `<button type="button" class="ae-pip ${filled ? 'spent' : ''}" onclick="useAction('${c.instance_id}','action',${filled ? -1 : 1})" title="${filled ? 'Refund this action' : 'Spend an action'}">◆</button>`;
+        }
+        const rxnSpent = !!c.reaction_used;
+        html += `<div class="ae-row">
+            <span class="ae-lbl">Actions</span>
+            <span class="ae-pips">${pips}</span>
+            <span class="ae-divider">·</span>
+            <span class="ae-lbl">Reaction</span>
+            <button type="button" class="ae-pip ae-rxn ${rxnSpent ? 'spent' : ''}" onclick="useAction('${c.instance_id}','reaction',${rxnSpent ? -1 : 1})" title="${rxnSpent ? 'Reaction spent — click to restore' : 'Reaction available — click to mark spent'}">↺</button>
+        </div>`;
+    }
+
     // Conditions
     const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false) : [];
     html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click × to remove</span>' : ''}</div>`;
     if (activeConds.length) {
+        const expiry = c.condition_expiry || {};
         html += `<div class="cond-row">`;
         activeConds.forEach(([k,v]) => {
             const isValued = typeof v === 'number' && v > 0;
-            const label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
+            let label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
+            const exp = expiry[k];
+            if (exp && exp > 0) {
+                label += ` <span class="cp-exp" title="Auto-expires in ${exp} round${exp === 1 ? '' : 's'}">⏱${exp}</span>`;
+            }
             const cls = condChipClass(k);
             html += `<span class="cond-chip ${cls}" title="${condTooltip(k)}">${label}`;
             if (isValued && VALUED_CONDITIONS.includes(k)) {
@@ -1756,9 +1837,12 @@ function renderActivePanel() {
     } else {
         html += `<div style="font-size:11px;color:var(--t-t3);font-style:italic;margin-bottom:4px;">No active conditions.</div>`;
     }
-    // Quick-add condition
+    // Quick-add condition. The optional rounds input sets a GM-defined
+    // auto-expiry timer (decremented at end of this combatant's turn,
+    // condition cleared when it hits 0). Leave blank for indefinite.
     html += `<div class="cp-add" style="margin-top:5px;">
         <select id="cond-sel-ap-${c.instance_id}">${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}</select>
+        <input type="number" id="cond-rounds-ap-${c.instance_id}" placeholder="rounds" min="1" max="9" style="width:54px;" title="Optional: clear automatically after N end-of-turns">
         <button onclick="addConditionAP('${c.instance_id}')">+ Add</button>
     </div>`;
 
@@ -2024,11 +2108,15 @@ function addCondition(id) {
 function addConditionAP(id) {
     const sel = document.getElementById('cond-sel-ap-' + id);
     if (!sel) return;
+    const roundsEl = document.getElementById('cond-rounds-ap-' + id);
+    const rounds = roundsEl ? parseInt(roundsEl.value || '0', 10) : 0;
     const fd = new FormData();
     fd.append('condition', sel.value);
     fd.append('action', 'add');
+    if (rounds > 0) fd.append('rounds', String(rounds));
     apiPost('/api/toggle_condition/' + id, fd, null);
     try { sel.selectedIndex = 0; } catch(_) {}
+    if (roundsEl) roundsEl.value = '';
 }
 
 // Persistent-damage validation. PF2e RAW format is "<dice> <type>"
@@ -2103,6 +2191,14 @@ function removePersistentDamage(pcName, idx) {
 function rollPersistentFlatCheck(pcName, idx) {
     fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/flat_check/' + idx, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    }).catch(() => {});
+}
+
+function useAction(instanceId, slot, delta) {
+    fetch('/api/use_action/' + encodeURIComponent(instanceId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot, delta }),
     }).catch(() => {});
 }
 
@@ -2223,11 +2319,16 @@ async function multiApplyCondition() {
     const repeats = valuedSet.has(cond)
         ? Math.max(1, parseInt(document.getElementById('multi-cond-val').value || '1', 10))
         : 1;
+    const rounds = parseInt(document.getElementById('multi-cond-rounds').value || '0', 10);
     for (const id of ids) {
         for (let r = 0; r < repeats; r++) {
             const fd = new FormData();
             fd.append('condition', cond);
-            fd.append('action', valuedSet.has(cond) ? 'add' : 'add');
+            fd.append('action', 'add');
+            // Only set the timer on the FIRST repeat — repeating it just
+            // resets the same timer to the same value, which is fine but
+            // wasted bytes.
+            if (r === 0 && rounds > 0) fd.append('rounds', String(rounds));
             try {
                 await fetch('/api/toggle_condition/' + id, { method: 'POST', body: fd });
             } catch(_) {}
@@ -2722,6 +2823,9 @@ function connectSSE() {
                 if (typeof src.reaction_used === 'boolean') dst.reaction_used = src.reaction_used;
                 if (typeof src.hero_points === 'number')   dst.hero_points   = src.hero_points;
                 if (Array.isArray(src.persistent_damage_list)) dst.persistent_damage_list = src.persistent_damage_list;
+                if (src.condition_expiry && typeof src.condition_expiry === 'object') dst.condition_expiry = src.condition_expiry;
+                if (typeof src.actions_used === 'number') dst.actions_used = src.actions_used;
+                if (typeof src.max_actions === 'number')  dst.max_actions  = src.max_actions;
             });
             STATE.round = sse.round ?? STATE.round;
             STATE.turn_index = sse.turn_index ?? STATE.turn_index;

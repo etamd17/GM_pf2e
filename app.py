@@ -375,6 +375,7 @@ def _do_persist_encounter_state():
                 'initiative': c.initiative,
                 'current_hp': c.current_hp,
                 'conditions': dict(c.conditions),
+                'condition_expiry': dict(getattr(c, 'condition_expiry', {}) or {}),
                 # Preserve the native shape per combatant type so restore
                 # round-trips cleanly: PCs = list[dict], monsters = str.
                 'persistent_damage': (
@@ -753,6 +754,12 @@ def _do_broadcast_encounter_state():
                 else:
                     entry['hp_status'] = ''
             entry['conditions'] = {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False}
+            entry['condition_expiry'] = dict(getattr(c, 'condition_expiry', {}) or {})
+            entry['actions_used'] = int(getattr(c, 'actions_used', 0) or 0)
+            entry['max_actions'] = int(getattr(c, 'max_actions', 3) or 3)
+            # Monsters reuse the same reaction_used field as PCs.
+            if 'reaction_used' not in entry:
+                entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
             combatants.append(entry)
         payload = {
             'encounter': combatants,
@@ -2301,6 +2308,13 @@ class Character:
             'concealed': saved_conds.get('concealed', False),
             'hidden': saved_conds.get('hidden', False)
         }
+        # Per-condition auto-expiry timer (rounds remaining). See Monster.__init__.
+        self.condition_expiry = dict(build.get('condition_expiry', {}) or {})
+        # Per-turn action economy for the GM-side combat HUD. PCs track their
+        # own actions on the sheet, but a quick view in the tracker is useful
+        # too. Reset to 0 / False at the start of each PC's turn (cycle_turn).
+        self.actions_used = 0
+        self.max_actions = 3
 
         attributes = build.get('attributes') or {}
         # Pathbuilder exports `ancestryhp` / `classhp` directly. When PB
@@ -3354,7 +3368,19 @@ class Monster:
                 self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', ''))})
 
         self.conditions = { 'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0, 'doomed': 0, 'stunned': 0, 'slowed': 0, 'enfeebled': 0, 'clumsy': 0, 'drained': 0, 'stupefied': 0, 'prone': False, 'off_guard': False, 'concealed': False, 'hidden': False, 'undetected': False }
-        
+
+        # Auto-expiry: { condition_name: rounds_remaining }. Decremented at the
+        # end of THIS combatant's turn; condition is cleared when it hits 0.
+        # Lets the GM mark "frightened 1 for 2 rounds" without a manual cleanup
+        # later. Conditions that already auto-tick by rule (frightened -1 each
+        # turn) ignore expiry — whichever clears first wins.
+        self.condition_expiry = {}
+        # Per-turn action economy: tracker pips show how many of the monster's
+        # 3 actions + reaction are still available. Reset on turn-start.
+        self.actions_used = 0
+        self.reaction_used = False
+        self.max_actions = 3
+
         # Elite/Weak adjustment tracking
         self.elite_weak = 0  # 0=normal, 1=elite, -1=weak
         self.delaying = False
@@ -4140,6 +4166,8 @@ def _restore_encounter_autosave():
                 new_c.initiative = item.get('initiative', 0)
                 if 'current_hp' in item: new_c.current_hp = item['current_hp']
                 if 'conditions' in item: new_c.conditions = item['conditions']
+                if 'condition_expiry' in item:
+                    new_c.condition_expiry = dict(item.get('condition_expiry') or {})
                 if 'persistent_damage' in item:
                     _pd_in = item['persistent_damage']
                     # Heal corrupt stale values: historical saves may contain the
@@ -4405,6 +4433,9 @@ def _get_tracker_state():
                 'fort': c.fort, 'ref': c.ref, 'will': c.will,
                 'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
                 'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
+                'condition_expiry': dict(getattr(c, 'condition_expiry', {}) or {}),
+                'actions_used': int(getattr(c, 'actions_used', 0) or 0),
+                'max_actions': int(getattr(c, 'max_actions', 3) or 3),
                 # Render the tracker-display string. PCs store a list[dict];
                 # monsters keep the legacy "1d6 fire" string.
                 'persistent_damage': (
@@ -4486,6 +4517,7 @@ def _get_tracker_state():
                 entry['resistances'] = getattr(c, 'resistances', [])
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
                 entry['traits'] = getattr(c, 'traits', [])
+                entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
             combatants.append(entry)
         party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
         encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
@@ -5656,18 +5688,45 @@ def update_pc_condition(pc_name):
 @app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
 def toggle_condition(instance_id):
     condition = request.form.get('condition')
-    action = request.form.get('action') 
+    action = request.form.get('action')
+    # Optional rounds value sets a GM-defined auto-expiry timer that ticks
+    # at the end of this combatant's turn. Only honored on add/increase;
+    # decrease/toggle leaves any existing timer alone unless the condition
+    # value reaches 0 (in which case the timer is cleared as a side effect).
+    try:
+        rounds = int(request.form.get('rounds', '') or 0)
+    except ValueError:
+        rounds = 0
     for combatant in ACTIVE_ENCOUNTER:
         if combatant.instance_id == instance_id:
             if condition in ['frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned', 'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied']:
                 current = combatant.conditions.get(condition, 0)
-                if action in ['increase', 'add']: combatant.conditions[condition] = current + 1
+                if action in ['increase', 'add']:
+                    combatant.conditions[condition] = current + 1
+                    if rounds > 0:
+                        if not hasattr(combatant, 'condition_expiry') or combatant.condition_expiry is None:
+                            combatant.condition_expiry = {}
+                        combatant.condition_expiry[condition] = rounds
                 elif action == 'decrease' and current > 0:
                     combatant.conditions[condition] = current - 1
                     if condition == 'dying' and combatant.conditions[condition] == 0: combatant.conditions['wounded'] = combatant.conditions.get('wounded', 0) + 1
+                # Clear any expiry if the condition is now 0
+                if combatant.conditions.get(condition, 0) == 0:
+                    _exp = getattr(combatant, 'condition_expiry', None)
+                    if isinstance(_exp, dict) and condition in _exp:
+                        del _exp[condition]
             elif condition in ['prone', 'off_guard', 'concealed', 'hidden', 'undetected']:
                 if action == 'toggle': combatant.conditions[condition] = not combatant.conditions[condition]
-                elif action == 'add': combatant.conditions[condition] = True
+                elif action == 'add':
+                    combatant.conditions[condition] = True
+                    if rounds > 0:
+                        if not hasattr(combatant, 'condition_expiry') or combatant.condition_expiry is None:
+                            combatant.condition_expiry = {}
+                        combatant.condition_expiry[condition] = rounds
+                if combatant.conditions.get(condition, False) is False:
+                    _exp = getattr(combatant, 'condition_expiry', None)
+                    if isinstance(_exp, dict) and condition in _exp:
+                        del _exp[condition]
             if combatant.is_pc and combatant.name in PARTY_LIBRARY: 
                 PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
                 _broadcast_pc_state(combatant.name)
@@ -5682,6 +5741,39 @@ def toggle_condition(instance_id):
             break
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
+
+@app.route('/api/use_action/<instance_id>', methods=['POST'])
+def use_action(instance_id):
+    """Toggle a combatant's action-economy pip. Body: {slot: 'action'|'reaction',
+    delta: +1|-1}. Used by the tracker action-economy widget so the GM can
+    track how many of a monster's 3 actions + reaction it has spent this turn.
+    Auto-reset at the start of that combatant's next turn by cycle_turn."""
+    data = request.get_json(silent=True) or {}
+    slot = data.get('slot', 'action')
+    try:
+        delta = int(data.get('delta', 1))
+    except (TypeError, ValueError):
+        delta = 1
+    target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
+    if not target:
+        return jsonify({"success": False, "error": "Combatant not found"}), 404
+    if slot == 'reaction':
+        cur = bool(getattr(target, 'reaction_used', False))
+        target.reaction_used = not cur if delta == 0 else (delta > 0)
+        if target.is_pc and target.name in PARTY_LIBRARY:
+            PARTY_LIBRARY[target.name].reaction_used = bool(target.reaction_used)
+            _broadcast_pc_state(target.name)
+    else:
+        max_a = int(getattr(target, 'max_actions', 3) or 3)
+        cur = int(getattr(target, 'actions_used', 0) or 0)
+        target.actions_used = max(0, min(max_a, cur + delta))
+    _broadcast_encounter_state()
+    return jsonify({
+        "success": True,
+        "actions_used": int(getattr(target, 'actions_used', 0) or 0),
+        "max_actions": int(getattr(target, 'max_actions', 3) or 3),
+        "reaction_used": bool(getattr(target, 'reaction_used', False)),
+    })
 
 @app.route('/api/recovery_check/<instance_id>', methods=['POST'])
 def recovery_check(instance_id):
@@ -5888,6 +5980,27 @@ def cycle_turn(direction):
         # === END OF CURRENT TURN: auto-tick conditions (PF2E Remaster) ===
         current_c = ACTIVE_ENCOUNTER[TURN_INDEX]
 
+        # GM-defined auto-expiry timers (decremented at end of THIS combatant's
+        # turn). Independent of the per-condition tick rules below; whichever
+        # clears the condition first wins.
+        _expiry = getattr(current_c, 'condition_expiry', None)
+        if isinstance(_expiry, dict) and _expiry:
+            for _cond in list(_expiry.keys()):
+                _expiry[_cond] = int(_expiry[_cond]) - 1
+                if _expiry[_cond] <= 0:
+                    if _cond in current_c.conditions:
+                        if isinstance(current_c.conditions[_cond], bool):
+                            current_c.conditions[_cond] = False
+                        else:
+                            current_c.conditions[_cond] = 0
+                    del _expiry[_cond]
+                    _combat_log(f"{current_c.name}: {_cond.replace('_','-').title()} expired", 'condition')
+                    if current_c.is_pc and current_c.name in PARTY_LIBRARY:
+                        try:
+                            PARTY_LIBRARY[current_c.name].conditions[_cond] = current_c.conditions[_cond]
+                        except Exception:
+                            pass
+
         # Frightened decreases by 1 at end of turn (PF2E Core p.619)
         if current_c.conditions.get('frightened', 0) > 0:
             current_c.conditions['frightened'] -= 1
@@ -5936,6 +6049,11 @@ def cycle_turn(direction):
                 _combat_log(f"{_pc.name}: Raise a Shield expired (start of turn)", 'condition')
             _persist_pc_combat_state(new_c.name)
             _broadcast_pc_state(new_c.name)
+        # Action economy reset: every combatant gets 3 actions + reaction back
+        # at the start of their turn. PC reaction was already cleared above.
+        new_c.actions_used = 0
+        if not new_c.is_pc:
+            new_c.reaction_used = False
 
         # Stunned: lose actions, then reduce stunned by the number lost (PF2E Core p.448)
         stunned_val = new_c.conditions.get('stunned', 0)
@@ -6343,6 +6461,8 @@ def load_encounter():
                 new_c.initiative = item.get('initiative', 0)
                 if 'current_hp' in item: new_c.current_hp = item['current_hp']
                 if 'conditions' in item: new_c.conditions = item['conditions']
+                if 'condition_expiry' in item:
+                    new_c.condition_expiry = dict(item.get('condition_expiry') or {})
                 if 'persistent_damage' in item:
                     _pd_in = item['persistent_damage']
                     # Heal corrupt stale values: historical saves may contain the
