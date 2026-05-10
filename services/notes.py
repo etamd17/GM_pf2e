@@ -345,6 +345,46 @@ def note_exists(name: str, *, include_rules: bool = False) -> Optional[str]:
     return resolve_wikilink(name, include_rules=include_rules)
 
 
+def extract_state_lines(rel_path: str = "Now Playing.md") -> dict:
+    """Extract the campaign-state bullets from `Now Playing.md`.
+
+    Looks for lines like ``- **Active Campaign:** Shades of Blood`` in the
+    body and key/value pairs in the frontmatter. Returns whatever it found,
+    keyed by the label (lowercased, stripped).
+
+    Used by the public homepage to surface a "where the party stands"
+    headline. Failures are quiet — a missing note returns an empty dict.
+    """
+    out: dict[str, str] = {}
+    try:
+        p = _safe_join(rel_path)
+        if not p.is_file():
+            return {}
+        with open(p, "r", encoding="utf-8", errors="replace") as f:
+            raw = f.read()
+    except (NotePathError, OSError):
+        return {}
+    fm, body = _split_frontmatter(raw)
+    # Frontmatter values pass through (lower-cased keys for stable lookup)
+    for k, v in (fm or {}).items():
+        if isinstance(v, (str, int, float)):
+            out[str(k).strip().lower()] = str(v).strip()
+    # Body bullets like `- **Label:** value` (Obsidian-style key:value)
+    bullet_re = re.compile(
+        r"^\s*[-*]\s+\*\*(?P<label>[^:*]+?):\*\*\s*(?P<value>.+?)\s*$",
+        re.MULTILINE,
+    )
+    for m in bullet_re.finditer(body):
+        label = m.group("label").strip().lower()
+        if label in out:
+            continue
+        value = m.group("value").strip()
+        # Strip trailing wikilink display alias remnants for cleanliness:
+        # the homepage pre-renders, so leave [[X]] markers intact.
+        out[label] = value
+    return out
+
+
 # ─── Markdown render pipeline ────────────────────────────────────────────────
 
 # Obsidian callout syntax: `> [!note] Title\n> body`. We match a leading

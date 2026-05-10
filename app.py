@@ -4246,6 +4246,10 @@ CAMPAIGN_DEFAULT = {
     'session_number': 1,
     'next_session_at': '',
     'last_recap': '',
+    # Optional CSS-url for the homepage hero background. Drop a portrait /
+    # poster-shaped image under static/portraits/ or a public CDN URL and
+    # reference it as `/portraits/shades-of-blood.jpg` etc.
+    'hero_image': '',
 }
 
 def _load_campaign_config():
@@ -4290,12 +4294,20 @@ def index():
     """
     _sync_party_from_disk()
     is_gm = _is_gm()
+    # Pull "where the party stands" state from the Obsidian vault if present.
+    # Quiet failure mode: missing vault → empty dict → template hides the row.
+    from services import notes as _notes
+    try:
+        state = _notes.extract_state_lines("Now Playing.md") if _notes.vault_status().get("available") else {}
+    except Exception:
+        state = {}
     return render_template(
         'campaign_intro.html',
         campaign=_load_campaign_config(),
         party=list(PARTY_LIBRARY.values()),
         current_player=session.get('player_name'),
         is_gm=is_gm,
+        vault_state=state,
     )
 
 @app.route('/api/campaign', methods=['GET', 'POST'])
