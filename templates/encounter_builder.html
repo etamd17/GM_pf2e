@@ -4,20 +4,20 @@
 {% block content %}
 <div class="flex justify-between items-end mb-6 border-b border-gray-700 pb-2">
     <div>
-        <h1 class="text-3xl font-header text-amber-500">Encounter Builder</h1>
+        <h1 class="text-3xl font-header text-accent-300">Encounter Builder</h1>
         <p class="text-sm text-gray-400 mt-1">Stage monsters, balance XP, then load directly into the tracker.</p>
     </div>
     <div class="flex items-center gap-3">
         <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-3 py-2 rounded">
             <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Party Level:</label>
             <input type="number" id="builder-party-level" value="{{ party_level }}" min="1" max="20" onchange="recalcXP()"
-                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-amber-500">
+                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-accent-300">
         </div>
         <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-3 py-2 rounded"
              title="PF2e GM Core encounter thresholds are scaled per PC: ±10 / 15 / 20 / 30 / 40 from the 4-player baseline.">
             <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Party Size:</label>
             <input type="number" id="builder-party-size" value="{{ party_size }}" min="1" max="8" onchange="recalcXP()"
-                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-amber-500">
+                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-accent-300">
         </div>
     </div>
 </div>
@@ -27,26 +27,26 @@
     <div class="w-1/3 space-y-4">
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <input type="text" id="monster-search" placeholder="Search monsters by name..." autocomplete="off"
-                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600 mb-2">
+                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent-300/50 placeholder:text-gray-600 mb-2">
             <!-- Level / trait filter strip. Filters alone (with empty name) still
                  return results so you can browse "Lv 3–5 undead" without typing. -->
             <div class="grid grid-cols-[1fr_auto_1fr_2fr] gap-2 items-center mb-3">
                 <input type="number" id="monster-min-lvl" placeholder="Min" min="-1" max="25" oninput="triggerMonsterSearch()"
-                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-amber-500/50" title="Minimum level">
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-accent-300/50" title="Minimum level">
                 <span class="text-gray-500 text-xs">–</span>
                 <input type="number" id="monster-max-lvl" placeholder="Max" min="-1" max="25" oninput="triggerMonsterSearch()"
-                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-amber-500/50" title="Maximum level">
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-accent-300/50" title="Maximum level">
                 <input type="text" id="monster-trait" placeholder="trait e.g. undead" oninput="triggerMonsterSearch()"
-                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500/50 placeholder:text-gray-600" title="Trait filter (substring match)">
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-accent-300/50 placeholder:text-gray-600" title="Trait filter (substring match)">
             </div>
             <!-- Party-level quick-scope buttons: one click auto-fills min/max around
                  the current party level (PL−4 .. PL+2) — the most useful encounter band. -->
             <div class="flex items-center gap-1 mb-3 text-[10px]">
                 <span class="text-gray-500 uppercase tracking-wider mr-1">Scope:</span>
-                <button onclick="applyLevelScope('party')" class="bg-gray-900 hover:bg-amber-900/40 text-gray-400 hover:text-amber-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="Filter to PL−4 .. PL+2 (the useful range)">Party ±</button>
+                <button onclick="applyLevelScope('party')" class="bg-gray-900 hover:bg-accent-600/40 text-gray-400 hover:text-accent-300 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="Filter to PL−4 .. PL+2 (the useful range)">Party ±</button>
                 <button onclick="applyLevelScope('below')" class="bg-gray-900 hover:bg-gray-700 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL−4 .. PL−1 (minions & mooks)">Mooks</button>
                 <button onclick="applyLevelScope('match')" class="bg-gray-900 hover:bg-gray-700 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL−1 .. PL+1 (bread & butter)">Peers</button>
-                <button onclick="applyLevelScope('boss')" class="bg-gray-900 hover:bg-red-900/40 text-gray-400 hover:text-red-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL+1 .. PL+4 (bosses & elites)">Boss</button>
+                <button onclick="applyLevelScope('boss')" class="bg-gray-900 hover:bg-danger-500/30 text-gray-400 hover:text-danger-200 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL+1 .. PL+4 (bosses & elites)">Boss</button>
                 <button onclick="applyLevelScope('clear')" class="bg-gray-900 hover:bg-gray-700 text-gray-500 border border-gray-700 px-2 py-0.5 rounded transition-colors ml-auto" title="Clear filters">×</button>
             </div>
             <div id="monster-results" class="space-y-1 max-h-[40vh] overflow-y-auto custom-scrollbar">
@@ -57,7 +57,7 @@
         <!-- Custom Monster Builder -->
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <details>
-                <summary class="font-header text-sm text-amber-500 cursor-pointer mb-3">+ Create Custom Monster</summary>
+                <summary class="font-header text-sm text-accent-300 cursor-pointer mb-3">+ Create Custom Monster</summary>
                 <div class="space-y-3 mt-3">
                     <div class="grid grid-cols-2 gap-2">
                         <input type="text" id="cm-name" placeholder="Monster Name" class="col-span-2 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
@@ -97,7 +97,7 @@
                         </div>
                     </div>
                     
-                    <button onclick="createCustomMonster()" class="w-full bg-amber-900/30 hover:bg-amber-900/50 text-amber-400 border border-amber-900/50 rounded py-2 text-sm font-bold transition-colors">Create Monster</button>
+                    <button onclick="createCustomMonster()" class="w-full bg-accent-600/30 hover:bg-accent-600/50 text-accent-300 border border-accent-600/50 rounded py-2 text-sm font-bold transition-colors">Create Monster</button>
                 </div>
             </details>
         </div>
@@ -115,7 +115,7 @@
         <!-- Quick Add Hazard -->
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <details>
-                <summary class="font-header text-sm text-orange-400 cursor-pointer mb-3"> Add Hazard / Trap</summary>
+                <summary class="font-header text-sm text-danger-200 cursor-pointer mb-3"> Add Hazard / Trap</summary>
                 <div class="space-y-2 mt-3">
                     <input type="text" id="hz-name" placeholder="Hazard Name" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
                     <div class="grid grid-cols-2 gap-2">
@@ -143,7 +143,7 @@
                     </div>
                     <input type="text" id="hz-trigger" placeholder="Trigger (e.g. weight on pressure plate)" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs">
                     <textarea id="hz-routine" placeholder="Routine — what happens when triggered (e.g. 2d8 piercing damage Reflex DC 18)" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs" rows="2"></textarea>
-                    <button onclick="addHazard()" class="w-full bg-orange-900/30 hover:bg-orange-900/50 text-orange-400 border border-orange-900/50 rounded py-2 text-sm font-bold transition-colors">Add Hazard to Budget</button>
+                    <button onclick="addHazard()" class="w-full bg-danger-500/20 hover:bg-danger-500/30 text-danger-200 border border-danger-400/40 rounded py-2 text-sm font-bold transition-colors">Add Hazard to Budget</button>
                     <p class="text-[10px] text-gray-600 italic">Empty Stealth/Disable DCs auto-fill from the level-DC table. Simple hazards trigger once; complex hazards act in initiative.</p>
                 </div>
             </details>
@@ -155,7 +155,7 @@
         <!-- XP Budget Bar -->
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <div class="flex justify-between items-center mb-3">
-                <h2 class="font-header text-amber-500 text-lg">Encounter Budget</h2>
+                <h2 class="font-header text-accent-300 text-lg">Encounter Budget</h2>
                 <div class="flex items-center gap-3">
                     <span id="xp-total" class="text-2xl font-header text-white">0</span>
                     <span class="text-gray-500 text-sm">XP</span>
@@ -163,12 +163,12 @@
                 </div>
             </div>
             <div class="relative h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
-                <div id="xp-bar" class="absolute top-0 left-0 h-full transition-all duration-300 rounded-full" style="width: 0%; background: #64748B;"></div>
+                <div id="xp-bar" class="absolute top-0 left-0 h-full transition-all duration-300 rounded-full" style="width: 0%; background: var(--ink-500);"></div>
                 <div class="absolute top-0 h-full border-r border-gray-600" style="left: 20%;" title="Low (40 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-yellow-700/50" style="left: 30%;" title="Moderate (60 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-orange-700/50" style="left: 40%;" title="Severe (80 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-red-700/50" style="left: 60%;" title="Extreme (120 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-red-900/50" style="left: 80%;" title="Impossible (160 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-accent-500/50" style="left: 30%;" title="Moderate (60 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-danger-200/50" style="left: 40%;" title="Severe (80 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-danger-300/50" style="left: 60%;" title="Extreme (120 XP)"></div>
+                <div class="absolute top-0 h-full border-r border-danger-500/50" style="left: 80%;" title="Impossible (160 XP)"></div>
             </div>
             <div class="flex justify-between text-[9px] text-gray-600 mt-1 px-1">
                 <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span><span>!!!</span>
@@ -178,7 +178,7 @@
         <!-- Staged Monsters -->
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="font-header text-amber-500 text-lg">Staged Creatures</h2>
+                <h2 class="font-header text-accent-300 text-lg">Staged Creatures</h2>
                 <button onclick="clearStage()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded border border-gray-600 font-bold uppercase transition-colors">Clear All</button>
             </div>
             <div id="staged-list" class="space-y-2">
@@ -189,10 +189,10 @@
         <!-- Actions -->
         <div class="flex gap-3">
             <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-                <input type="checkbox" id="chk-add-party" checked class="accent-amber-500"> Include full party
+                <input type="checkbox" id="chk-add-party" checked class="accent-gold-300"> Include full party
             </label>
             <div class="flex-1"></div>
-            <button onclick="loadToTracker()" id="btn-load" class="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <button onclick="loadToTracker()" id="btn-load" class="bg-accent-400 hover:bg-accent-300 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                 Load to Tracker →
             </button>
         </div>
@@ -257,12 +257,12 @@
             let extras = [];
             if (m.best_attack != null) {
                 const dmgPart = m.best_damage ? ` · ${esc(String(m.best_damage))}` : '';
-                extras.push(`<span class="text-amber-300">Atk ${esc(String(m.best_attack))}${dmgPart}</span>`);
+                extras.push(`<span class="text-accent-200">Atk ${esc(String(m.best_attack))}${dmgPart}</span>`);
             }
             if (m.perception != null) extras.push(`<span class="text-gray-500">Perc +${m.perception}</span>`);
             if (m.immunities && m.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(m.immunities.join(', '))}</span>`);
             if (m.resistances && m.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(m.resistances.join(', '))}</span>`);
-            if (m.weaknesses && m.weaknesses.length) extras.push(`<span class="text-red-400">Weak: ${esc(m.weaknesses.join(', '))}</span>`);
+            if (m.weaknesses && m.weaknesses.length) extras.push(`<span class="text-danger-200">Weak: ${esc(m.weaknesses.join(', '))}</span>`);
             let extraHtml = extras.length ? `<div class="text-[10px] mt-0.5">${extras.join(' · ')}</div>` : '';
             let traitsHtml = (m.traits && m.traits.length)
                 ? `<div class="flex flex-wrap gap-1 mt-1">${m.traits.map(t => `<span class=\"text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700\">${esc(t)}</span>`).join('')}</div>`
@@ -272,7 +272,7 @@
             // (common case: "3 goblins"). event.stopPropagation keeps those from firing
             // the card's click.
             return `
-            <div class="relative bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 rounded p-2.5 transition-colors cursor-pointer"
+            <div class="relative bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-accent-300/50 rounded p-2.5 transition-colors cursor-pointer"
                  onclick='addToStage(${json}, 1)'>
                 <div class="flex justify-between items-center">
                     <span class="font-bold text-gray-200 text-sm">${esc(m.name)}</span>
@@ -281,9 +281,9 @@
                         <span class="text-gray-500">HP ${m.hp}</span>
                         <span class="text-sky-400">AC ${m.ac}</span>
                         <div class="flex items-center gap-0.5 ml-1" onclick="event.stopPropagation()">
-                            <button type="button" onclick='addToStage(${json}, 2)' class="bg-gray-800 hover:bg-amber-800/40 text-gray-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 2">×2</button>
-                            <button type="button" onclick='addToStage(${json}, 3)' class="bg-gray-800 hover:bg-amber-800/40 text-gray-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 3">×3</button>
-                            <button type="button" onclick='addToStage(${json}, 4)' class="bg-gray-800 hover:bg-amber-800/40 text-gray-400 hover:text-amber-300 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 4">×4</button>
+                            <button type="button" onclick='addToStage(${json}, 2)' class="bg-gray-800 hover:bg-accent-500/40 text-gray-400 hover:text-accent-200 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 2">×2</button>
+                            <button type="button" onclick='addToStage(${json}, 3)' class="bg-gray-800 hover:bg-accent-500/40 text-gray-400 hover:text-accent-200 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 3">×3</button>
+                            <button type="button" onclick='addToStage(${json}, 4)' class="bg-gray-800 hover:bg-accent-500/40 text-gray-400 hover:text-accent-200 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 4">×4</button>
                         </div>
                     </div>
                 </div>
@@ -355,13 +355,13 @@
         } else {
             document.getElementById('btn-load').disabled = false;
             container.innerHTML = staged.map((s, i) => {
-                let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-green-600 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-red-600 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
-                let hazardLabel = s.is_hazard ? `<span class="text-[10px] bg-orange-600 text-white px-1 py-0.5 rounded font-bold ml-1">${s.hazard_type === 'complex' ? 'COMPLEX' : 'SIMPLE'} HAZARD</span>` : '';
+                let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-success-500 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-danger-300 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
+                let hazardLabel = s.is_hazard ? `<span class="text-[10px] bg-danger-200 text-white px-1 py-0.5 rounded font-bold ml-1">${s.hazard_type === 'complex' ? 'COMPLEX' : 'SIMPLE'} HAZARD</span>` : '';
                 let effectiveLevel = s.level + s.elite_weak;
                 let extras = [];
                 if (s.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(s.immunities.join(', '))}</span>`);
                 if (s.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(s.resistances.join(', '))}</span>`);
-                if (s.weaknesses.length) extras.push(`<span class="text-red-400">Weak: ${esc(s.weaknesses.join(', '))}</span>`);
+                if (s.weaknesses.length) extras.push(`<span class="text-danger-200">Weak: ${esc(s.weaknesses.join(', '))}</span>`);
                 let extraHtml = extras.length ? `<div class="text-[10px] mt-1">${extras.join(' · ')}</div>` : '';
                 return `
                 <div class="bg-gray-900 border border-gray-700 rounded-lg p-3 flex flex-col">
@@ -373,15 +373,15 @@
                             <span class="text-[10px] text-gray-500">Lv ${effectiveLevel}</span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-green-700 text-white':'bg-gray-800 text-gray-400 hover:text-green-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Elite (+2 to everything)">E</button>
-                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-red-700 text-white':'bg-gray-800 text-gray-400 hover:text-red-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Weak (-2 to everything)">W</button>
+                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-success-500 text-white':'bg-gray-800 text-gray-400 hover:text-success-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Elite (+2 to everything)">E</button>
+                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-danger-400 text-white':'bg-gray-800 text-gray-400 hover:text-danger-200'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Weak (-2 to everything)">W</button>
                             <span class="mx-1 border-r border-gray-700 h-5"></span>
                             <button onclick="adjustCount(${i}, -1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">-</button>
                             <span class="text-white font-bold w-8 text-center">${s.count}</span>
                             <button onclick="adjustCount(${i}, 1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">+</button>
                             <span class="mx-1 border-r border-gray-700 h-5"></span>
-                            <button onclick="duplicateEntry(${i})" class="text-[10px] bg-gray-800 hover:bg-amber-900/50 text-gray-400 hover:text-amber-400 px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Duplicate as separate entry (for mixed Elite/Normal)">⧉</button>
-                            <button onclick="removeFromStage(${i})" class="text-red-400 hover:text-red-300 text-sm font-bold transition-colors" title="Remove">×</button>
+                            <button onclick="duplicateEntry(${i})" class="text-[10px] bg-gray-800 hover:bg-accent-600/50 text-gray-400 hover:text-accent-300 px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Duplicate as separate entry (for mixed Elite/Normal)">⧉</button>
+                            <button onclick="removeFromStage(${i})" class="text-danger-200 hover:text-danger-100 text-sm font-bold transition-colors" title="Remove">×</button>
                         </div>
                     </div>
                     ${extraHtml}
@@ -418,13 +418,16 @@
         const tE = _thresholdFor('Extreme',  partySize);
         const barCap = tE * 1.25;
         let label, color, barColor;
-        if (totalXP === 0)        { label = 'Empty';      color = 'text-gray-400';        barColor = '#64748B'; }
-        else if (totalXP < tT)    { label = 'Trivial';    color = 'text-gray-400';        barColor = '#64748B'; }
-        else if (totalXP < tL)    { label = 'Low';        color = 'text-green-400';       barColor = '#34D399'; }
-        else if (totalXP < tM)    { label = 'Moderate';   color = 'text-yellow-400';      barColor = '#FBBF24'; }
-        else if (totalXP < tS)    { label = 'Severe';     color = 'text-orange-500';      barColor = '#F97316'; }
-        else if (totalXP < tE)    { label = 'Extreme';    color = 'text-red-500 font-bold';  barColor = '#EF4444'; }
-        else                       { label = 'Impossible'; color = 'text-red-600 font-bold';  barColor = '#DC2626'; }
+        // XP-tier colors: muted ink → success → warn → rust → ruby gradient.
+        // Stays within the brand palette while preserving the green-to-red
+        // legibility readers expect from a danger meter.
+        if (totalXP === 0)        { label = 'Empty';      color = 'text-gray-400';                  barColor = '#6f6755'; }
+        else if (totalXP < tT)    { label = 'Trivial';    color = 'text-gray-400';                  barColor = '#6f6755'; }
+        else if (totalXP < tL)    { label = 'Low';        color = 'text-success-400';               barColor = '#6a9c44'; }
+        else if (totalXP < tM)    { label = 'Moderate';   color = 'text-accent-300';                barColor = '#a4842b'; }
+        else if (totalXP < tS)    { label = 'Severe';     color = 'text-danger-200';                barColor = '#c47133'; }
+        else if (totalXP < tE)    { label = 'Extreme';    color = 'text-danger-300 font-bold';      barColor = '#a83a3a'; }
+        else                       { label = 'Impossible'; color = 'text-danger-400 font-bold';     barColor = '#7c2222'; }
         const pct = Math.min((totalXP / barCap) * 100, 100);
 
         const diffEl = document.getElementById('xp-difficulty');
@@ -579,23 +582,23 @@
     async function importMonsterJSON() {
         const raw = document.getElementById('monster-json-paste').value.trim();
         const status = document.getElementById('import-monster-status');
-        if (!raw) { status.textContent = 'Paste JSON first.'; status.className = 'text-xs mt-2 text-red-400'; status.classList.remove('hidden'); return; }
+        if (!raw) { status.textContent = 'Paste JSON first.'; status.className = 'text-xs mt-2 text-danger-200'; status.classList.remove('hidden'); return; }
         let parsed;
-        try { parsed = JSON.parse(raw); } catch(e) { status.textContent = 'Invalid JSON.'; status.className = 'text-xs mt-2 text-red-400'; status.classList.remove('hidden'); return; }
+        try { parsed = JSON.parse(raw); } catch(e) { status.textContent = 'Invalid JSON.'; status.className = 'text-xs mt-2 text-danger-200'; status.classList.remove('hidden'); return; }
         try {
             const res = await fetch('/api/import_monster', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(parsed) });
             const data = await res.json();
             if (data.success) {
                 status.textContent = `Imported ${data.name}!`;
-                status.className = 'text-xs mt-2 text-green-400';
+                status.className = 'text-xs mt-2 text-success-400';
                 status.classList.remove('hidden');
                 setTimeout(() => window.location.reload(), 1500);
             } else {
                 status.textContent = data.error || 'Import failed';
-                status.className = 'text-xs mt-2 text-red-400';
+                status.className = 'text-xs mt-2 text-danger-200';
                 status.classList.remove('hidden');
             }
-        } catch(e) { status.textContent = 'Error.'; status.className = 'text-xs mt-2 text-red-400'; status.classList.remove('hidden'); }
+        } catch(e) { status.textContent = 'Error.'; status.className = 'text-xs mt-2 text-danger-200'; status.classList.remove('hidden'); }
     }
 </script>
 {% endblock %}

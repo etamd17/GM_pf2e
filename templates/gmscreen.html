@@ -18,13 +18,13 @@
        Tailwind defaults that the old version used).
     ──────────────────────────────────────────────────────────────────── */
     .gm-ref-card {
-        background: #191920;
+        background: var(--bg-card);
         border: 1px solid rgba(255,255,255,0.06);
         border-radius: 10px;
         padding: 16px 18px;
         transition: border-color 0.15s;
     }
-    .gm-ref-card:hover { border-color: rgba(142,212,212,0.18); }
+    .gm-ref-card:hover { border-color: rgba(201,163,78,0.18); }
 
     .gm-ref-header {
         font-family: 'Cinzel', serif;
@@ -32,10 +32,10 @@
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #8ED4D4;                 /* accent-300 */
+        color: var(--gilt-200);                 /* accent-300 */
         margin: 0 0 14px;
         padding-bottom: 8px;
-        border-bottom: 1px solid rgba(142,212,212,0.18);
+        border-bottom: 1px solid rgba(201,163,78,0.18);
         display: flex;
         align-items: baseline;
         justify-content: space-between;
@@ -46,7 +46,7 @@
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.06em;
-        color: #6b6b8a;                 /* base-500 */
+        color: var(--text-on-dark-3);                 /* base-500 */
         text-transform: uppercase;
     }
 
@@ -57,24 +57,24 @@
         font-family: 'Cinzel', serif;
         font-size: 10px; font-weight: 700;
         letter-spacing: 0.08em; text-transform: uppercase;
-        color: #8ED4D4;
-        border-bottom: 1px solid rgba(142,212,212,0.18);
+        color: var(--gilt-200);
+        border-bottom: 1px solid rgba(201,163,78,0.18);
         background: rgba(13,13,18,0.6);
     }
     .gm-table td {
         padding: 6px 10px;
         border-bottom: 1px solid rgba(255,255,255,0.04);
-        color: #d8d8e6;                 /* base-200 */
+        color: var(--text-on-dark-2);                 /* base-200 */
         vertical-align: top;
     }
     .gm-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.025); }
-    .gm-table tbody tr:hover td { background: rgba(142,212,212,0.04); }
+    .gm-table tbody tr:hover td { background: rgba(201,163,78,0.04); }
     .gm-table tr:last-child td { border-bottom: none; }
-    .gm-table .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #ededf4; }
-    .gm-table .pos { color: #fca5a5; }   /* danger-300 */
-    .gm-table .neg { color: #86efac; }   /* success-300 */
-    .gm-table .heal { color: #86efac; font-weight: 700; }
-    .gm-table .hurt { color: #fca5a5; font-weight: 700; }
+    .gm-table .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--text-on-dark); }
+    .gm-table .pos { color: var(--ruby-100); }   /* danger-300 */
+    .gm-table .neg { color: var(--success); }   /* success-300 */
+    .gm-table .heal { color: var(--success); font-weight: 700; }
+    .gm-table .hurt { color: var(--ruby-100); font-weight: 700; }
 
     /* Conditions: always-visible compact rows. The previous design used
        <details> collapsibles, which is exactly wrong for at-the-table
@@ -85,7 +85,7 @@
         font-family: 'Cinzel', serif;
         font-weight: 700;
         font-size: 12px;
-        color: #fca5a5;                 /* danger-300 — conditions are bad news */
+        color: var(--ruby-100);                 /* danger-300 — conditions are bad news */
         white-space: nowrap;
         padding: 4px 0;
     }
@@ -94,7 +94,7 @@
         padding: 4px 0;
         font-size: 12px;
         line-height: 1.45;
-        color: #b8b8cc;                 /* base-300 */
+        color: var(--text-on-dark-2);                 /* base-300 */
     }
     .gm-cond dt + dd { border-top: 1px dotted rgba(255,255,255,0.04); }
     .gm-cond dt:first-child + dd { border-top: none; }
@@ -103,44 +103,44 @@
     .gm-callout-row {
         display: flex; gap: 8px; align-items: baseline;
         font-size: 13px; padding: 4px 0;
-        color: #d8d8e6;
+        color: var(--text-on-dark-2);
     }
-    .gm-callout-row .label { color: #8ED4D4; font-weight: 700; min-width: 110px; flex-shrink: 0; }
+    .gm-callout-row .label { color: var(--gilt-200); font-weight: 700; min-width: 110px; flex-shrink: 0; }
 
     /* Compendium search — quieter chrome, brand palette */
-    .gm-search-wrap { background: #191920; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+    .gm-search-wrap { background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
     .gm-search-input {
-        width: 100%; background: #0d0d12; border: 1px solid rgba(255,255,255,0.10);
-        color: #ededf4; border-radius: 6px;
+        width: 100%; background: var(--bg-page); border: 1px solid rgba(255,255,255,0.10);
+        color: var(--text-on-dark); border-radius: 6px;
         padding: 9px 12px; font-size: 13px;
         font-family: 'Inter', sans-serif;
     }
-    .gm-search-input:focus { outline: none; border-color: rgba(142,212,212,0.4); }
+    .gm-search-input:focus { outline: none; border-color: rgba(201,163,78,0.4); }
     .gm-cat-btn {
         padding: 8px 14px; font-size: 11px; font-weight: 700;
         letter-spacing: 0.04em; text-transform: uppercase;
-        background: #24242e; border: 1px solid rgba(255,255,255,0.08);
-        color: #b8b8cc; border-radius: 6px;
+        background: var(--bg-card-2); border: 1px solid rgba(255,255,255,0.08);
+        color: var(--text-on-dark-2); border-radius: 6px;
         cursor: pointer; transition: all 0.15s;
         font-family: 'Inter', sans-serif;
     }
-    .gm-cat-btn:hover { border-color: rgba(142,212,212,0.3); color: #ededf4; }
-    .gm-cat-btn.active { background: rgba(142,212,212,0.12); border-color: rgba(142,212,212,0.4); color: #8ED4D4; }
+    .gm-cat-btn:hover { border-color: rgba(201,163,78,0.3); color: var(--text-on-dark); }
+    .gm-cat-btn.active { background: rgba(201,163,78,0.12); border-color: rgba(201,163,78,0.4); color: var(--gilt-200); }
 
     /* Result cards from compendium search — typed by category */
-    .gm-result-card { background: #24242e; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-    .gm-result-card:hover { border-color: rgba(142,212,212,0.3); background: #2e2e3c; }
-    .gm-result-name { font-size: 13px; font-weight: 700; color: #ededf4; }
-    .gm-result-desc { font-size: 11px; color: #8888a0; line-height: 1.4; margin-top: 4px;
+    .gm-result-card { background: var(--bg-card-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .gm-result-card:hover { border-color: rgba(201,163,78,0.3); background: var(--bg-hover); }
+    .gm-result-name { font-size: 13px; font-weight: 700; color: var(--text-on-dark); }
+    .gm-result-desc { font-size: 11px; color: var(--text-on-dark-3); line-height: 1.4; margin-top: 4px;
         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
     .gm-type-badge {
         font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 9999px;
         letter-spacing: 0.04em; text-transform: uppercase;
     }
-    .gm-type-badge.spell { background: rgba(167,139,250,0.15); color: #c4b5fd; }
-    .gm-type-badge.feat  { background: rgba(224,176,80,0.15);  color: #e0b050; }
-    .gm-type-badge.item  { background: rgba(94,234,212,0.12);  color: #5eead4; }
+    .gm-type-badge.spell { background: rgba(168,118,80,0.15);  color: var(--tint-will); }
+    .gm-type-badge.feat  { background: rgba(201,163,78,0.15);  color: var(--gilt-200); }
+    .gm-type-badge.item  { background: rgba(154,145,122,0.12); color: var(--ink-300); }
 
     /* Hide the default webkit disclosure triangle for details (still used
        by the checks-drawer panes; kept for back-compat). */
@@ -155,14 +155,14 @@
        belongs with the rest of the GM's on-the-fly rules, not the turn
        timer. Local CSS variables isolate it from the tracker's palette. */
     .checks-drawer {
-      --t-bg-surface: #1f2937;
-      --t-bg-raised:  #111827;
-      --t-border:     #374151;
-      --t-gold:       #f59e0b;
-      --t-t1:         #e5e7eb;
-      --t-t2:         #9ca3af;
-      --t-t3:         #6b7280;
-      --t-red-b:      #f87171;
+      --t-bg-surface: var(--bg-card);
+      --t-bg-raised:  var(--bg-page);
+      --t-border:     var(--border-strong);
+      --t-gold:       var(--gilt-300);
+      --t-t1:         var(--text-on-dark);
+      --t-t2:         var(--text-on-dark-2);
+      --t-t3:         var(--text-on-dark-3);
+      --t-red-b:      var(--ruby-200);
 
       position:fixed; top:76px; right:0; bottom:12px;
       width:500px; max-width:96vw;
@@ -190,7 +190,7 @@
     }
     .checks-drawer-handle::before {
       content:""; position:absolute; top:0; bottom:0; left:0; width:2px;
-      background:linear-gradient(180deg, transparent, var(--t-gold) 20%, #60a5fa 50%, var(--t-gold) 80%, transparent);
+      background:linear-gradient(180deg, transparent, var(--t-gold) 20%, var(--ruby-300) 50%, var(--t-gold) 80%, transparent);
       opacity:.9;
     }
     .checks-drawer-handle-label {
@@ -212,7 +212,7 @@
     }
     .checks-drawer-panel::before {
       content:""; position:absolute; top:0; left:0; right:0; height:3px;
-      background:linear-gradient(90deg, transparent, #60a5fa, var(--t-gold), #60a5fa, transparent);
+      background:linear-gradient(90deg, transparent, var(--ruby-300), var(--t-gold), var(--ruby-300), transparent);
       opacity:.85;
     }
     .checks-drawer-head {
@@ -245,22 +245,27 @@
     .check-card h4 .ability-tag { font-size:9px; color:var(--t-t3); font-family:'JetBrains Mono',monospace; font-weight:600; letter-spacing:.5px; }
     .check-card .desc { font-size:11px; color:var(--t-t2); line-height:1.5; margin-bottom:6px; }
     .check-card .actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+    /* Skill check pills + save cards. Per-category tint stays inside the
+       brand palette — gilt for general, ruby for social, warm rust for
+       athletic, ink for stealth, pale-gilt for knowledge. Save cards use
+       the dedicated --tint-fort/ref/will tokens so each save reads
+       distinctly without falling back to cool blues/violets. */
     .check-pill {
       display:inline-block; font-size:10px; padding:2px 7px; border-radius:9999px;
-      background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.3); color:#93c5fd;
+      background:rgba(201,163,78,0.10); border:1px solid rgba(201,163,78,0.30); color:var(--gilt-200);
       font-weight:600; letter-spacing:.3px;
     }
-    .check-pill.social { background:rgba(244,114,182,0.12); border-color:rgba(244,114,182,0.3); color:#f9a8d4; }
-    .check-pill.athletic { background:rgba(251,146,60,0.12); border-color:rgba(251,146,60,0.3); color:#fdba74; }
-    .check-pill.stealth { background:rgba(167,139,250,0.12); border-color:rgba(167,139,250,0.3); color:#c4b5fd; }
-    .check-pill.knowledge { background:rgba(94,234,212,0.12); border-color:rgba(94,234,212,0.3); color:#5eead4; }
+    .check-pill.social    { background:rgba(211,110,110,0.10); border-color:rgba(211,110,110,0.30); color:var(--ruby-100); }
+    .check-pill.athletic  { background:rgba(196,113,51,0.10);  border-color:rgba(196,113,51,0.30);  color:#d09060; }
+    .check-pill.stealth   { background:rgba(154,145,122,0.10); border-color:rgba(154,145,122,0.30); color:var(--ink-300); }
+    .check-pill.knowledge { background:rgba(214,184,120,0.10); border-color:rgba(214,184,120,0.30); color:var(--tint-perc); }
 
-    .check-card.save-fort { border-color:rgba(251,146,60,0.35); }
-    .check-card.save-fort h4 { color:#fdba74; }
-    .check-card.save-ref { border-color:rgba(96,165,250,0.35); }
-    .check-card.save-ref h4 { color:#93c5fd; }
-    .check-card.save-will { border-color:rgba(167,139,250,0.35); }
-    .check-card.save-will h4 { color:#c4b5fd; }
+    .check-card.save-fort { border-color:rgba(201,163,78,0.35); }
+    .check-card.save-fort h4 { color:var(--tint-fort); }
+    .check-card.save-ref  { border-color:rgba(184,138,74,0.35); }
+    .check-card.save-ref h4 { color:var(--tint-ref); }
+    .check-card.save-will { border-color:rgba(168,118,80,0.35); }
+    .check-card.save-will h4 { color:var(--tint-will); }
 
     .situation-table { width:100%; border-collapse:collapse; font-size:12px; }
     .situation-table th {
@@ -293,7 +298,7 @@
     .dc-card .dc-row .k { color:var(--t-t2); }
     .dc-card .dc-row .v { color:var(--t-t1); font-family:'JetBrains Mono',monospace; font-weight:700; }
     .dc-card .dc-row .v.pos { color:var(--t-red-b); }
-    .dc-card .dc-row .v.neg { color:#5eead4; }
+    .dc-card .dc-row .v.neg { color:var(--tint-perc); }
 </style>
 {% endblock %}
 
@@ -303,7 +308,7 @@
 <div class="mb-5 pb-4 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-end justify-between gap-3">
     <div>
         <h1 class="font-display text-accent-300 text-xl tracking-wide mb-1">GM Screen</h1>
-        <p class="text-base-500 text-xs">Rules reference — DCs, conditions, and combat math at a glance. Press <kbd class="px-1 py-0.5 rounded text-[10px]" style="background:#24242e;border:1px solid rgba(255,255,255,0.10);color:#b8b8cc;font-family:'JetBrains Mono',monospace;">C</kbd> for the checks drawer.</p>
+        <p class="text-base-500 text-xs">Rules reference — DCs, conditions, and combat math at a glance. Press <kbd class="kbd">C</kbd> for the checks drawer.</p>
     </div>
 </div>
 
@@ -324,7 +329,7 @@
     <div id="comp-results" class="hidden">
         <div id="comp-results-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></div>
     </div>
-    <div id="comp-detail" class="hidden mt-4 p-5 rounded-lg" style="background:#0d0d12;border:1px solid rgba(255,255,255,0.08);">
+    <div id="comp-detail" class="hidden mt-4 p-5 rounded-lg" style="background:var(--bg-page);border:1px solid rgba(255,255,255,0.08);">
         <div class="flex justify-between items-start mb-3">
             <div>
                 <h3 id="comp-detail-name" class="font-display text-base-100 text-xl"></h3>
@@ -453,7 +458,7 @@
     <div class="masonry-item gm-ref-card">
         <h2 class="gm-ref-header">Dying &amp; Recovery</h2>
         <div class="text-sm text-base-200 mb-3 leading-relaxed">
-            At 0 HP: move initiative to just before the attacker, gain <strong style="color:#fca5a5;">Dying 1</strong> (or 2 on crit hit / crit failure on the save).
+            At 0 HP: move initiative to just before the attacker, gain <strong style="color:var(--ruby-100);">Dying 1</strong> (or 2 on crit hit / crit failure on the save).
         </div>
         <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2">Recovery — DC 10 + Dying</div>
         <table class="gm-table mb-3" style="font-size:12px;">
@@ -465,15 +470,15 @@
             </tbody>
         </table>
         <p class="text-[12px] text-base-300 leading-relaxed">
-            Dying back to 0 &rarr; clear Dying, gain <strong style="color:#e0b050;">Wounded 1</strong> (or +1 if already Wounded).
-            Damage while Dying = Dying +1 (or +2 on crit). <strong style="color:#fca5a5;">Dead</strong> at Dying 4.
+            Dying back to 0 &rarr; clear Dying, gain <strong style="color:var(--gilt-200);">Wounded 1</strong> (or +1 if already Wounded).
+            Damage while Dying = Dying +1 (or +2 on crit). <strong style="color:var(--ruby-100);">Dead</strong> at Dying 4.
         </p>
     </div>
     
     <div class="masonry-item gm-ref-card">
         <h2 class="gm-ref-header">Elite &amp; Weak Adjustments</h2>
         <table class="gm-table" style="font-size:12px;">
-            <thead><tr><th></th><th style="color:#86efac;">Elite (+1 lvl)</th><th style="color:#fca5a5;">Weak (&minus;1 lvl)</th></tr></thead>
+            <thead><tr><th></th><th style="color:var(--success);">Elite (+1 lvl)</th><th style="color:var(--ruby-100);">Weak (&minus;1 lvl)</th></tr></thead>
             <tbody>
                 <tr><td>AC / Saves / Attacks / DCs / Perception / Skills</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
                 <tr><td>Damage rolls</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
@@ -486,7 +491,7 @@
     <div class="masonry-item gm-ref-card">
         <h2 class="gm-ref-header">Undead &amp; Void Healing</h2>
         <div class="gm-callout-row"><span class="label">Immunities</span><span>Death effects, disease, poison, unconscious.</span></div>
-        <div class="gm-callout-row"><span class="label">Void Healing</span><span>Healed by <strong style="color:#86efac;">void</strong> (negative). Damaged by <strong style="color:#fca5a5;">vitality</strong> (positive).</span></div>
+        <div class="gm-callout-row"><span class="label">Void Healing</span><span>Healed by <strong style="color:var(--success);">void</strong> (negative). Damaged by <strong style="color:var(--ruby-100);">vitality</strong> (positive).</span></div>
         <div class="gm-callout-row"><span class="label">Destroyed</span><span>Auto-destroyed at 0 HP — Dying rules don't apply to basic undead.</span></div>
     </div>
 
@@ -578,7 +583,7 @@
             document.getElementById('comp-detail-name').innerText = data.name;
 
             let metaHtml = `<span class="gm-type-badge ${type}">${type}</span>`;
-            const tagPill = (txt) => `<span class="text-[10px] px-2 py-0.5 rounded font-medium" style="background:#24242e;border:1px solid rgba(255,255,255,0.08);color:#b8b8cc;">${esc(txt)}</span>`;
+            const tagPill = (txt) => `<span class="text-[10px] px-2 py-0.5 rounded font-medium" style="background:var(--bg-card-2);border:1px solid rgba(255,255,255,0.08);color:var(--text-on-dark-2);">${esc(txt)}</span>`;
             if (data.level !== null && data.level !== undefined) metaHtml += tagPill(`Level ${data.level}`);
             if (data.traditions) {
                 try {
@@ -816,10 +821,10 @@
                 <div class="check-card" style="margin-top:14px;">
                     <h4>Save Result Tiers <span class="ability-tag">&plusmn;10 rule</span></h4>
                     <div style="font-size:12px;line-height:1.7;color:var(--t-t2);">
-                        <div><strong style="color:#86efac;">Crit Success</strong> (beat DC by 10+ or nat 20) &mdash; no effect, or effect becomes Success.</div>
-                        <div><strong style="color:#a7f3d0;">Success</strong> &mdash; usually half damage; rider effects reduced.</div>
-                        <div><strong style="color:#fcd34d;">Failure</strong> &mdash; full damage; rider effects apply.</div>
-                        <div><strong style="color:#fca5a5;">Crit Failure</strong> (miss by 10+ or nat 1) &mdash; double damage, or worse rider effect.</div>
+                        <div><strong style="color:var(--success);">Crit Success</strong> (beat DC by 10+ or nat 20) &mdash; no effect, or effect becomes Success.</div>
+                        <div><strong style="color:#9bc06f;">Success</strong> &mdash; usually half damage; rider effects reduced.</div>
+                        <div><strong style="color:#e0b65a;">Failure</strong> &mdash; full damage; rider effects apply.</div>
+                        <div><strong style="color:var(--ruby-100);">Crit Failure</strong> (miss by 10+ or nat 1) &mdash; double damage, or worse rider effect.</div>
                     </div>
                 </div>
             </div>
@@ -870,8 +875,8 @@
                         </div>
                         <div class="dc-card">
                             <h4>Flat Checks</h4>
-                            <div class="dc-row"><span class="k">Attack target is <strong style="color:#fcd34d;">concealed</strong></span><span class="v">DC 5</span></div>
-                            <div class="dc-row"><span class="k">Attack target is <strong style="color:#fcd34d;">hidden</strong></span><span class="v">DC 11</span></div>
+                            <div class="dc-row"><span class="k">Attack target is <strong style="color:#e0b65a;">concealed</strong></span><span class="v">DC 5</span></div>
+                            <div class="dc-row"><span class="k">Attack target is <strong style="color:#e0b65a;">hidden</strong></span><span class="v">DC 11</span></div>
                             <div class="dc-row"><span class="k">Persistent damage &mdash; end</span><span class="v">DC 15</span></div>
                             <div class="dc-row"><span class="k">Assisted-recovery flat</span><span class="v">DC 10</span></div>
                             <div class="dc-row"><span class="k">Recover from dying</span><span class="v">DC 10+dying</span></div>
