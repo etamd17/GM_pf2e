@@ -6883,6 +6883,118 @@ def api_admin_vault_upload():
     })
 
 
+@app.route('/api/session/export', methods=['POST'])
+@gm_required
+def api_session_export():
+    """Generate a session-recap markdown from the current combat log + party
+    state, optionally writing it directly to vault_data/Sessions/<name>.md.
+
+    Body (JSON):
+        title          — optional, defaults to "Session - YYYY-MM-DD"
+        write_to_vault — bool, default True. False returns markdown only.
+        include_log    — bool, default True. False omits the combat log.
+        log_since      — float epoch, default 0 (all 200 buffered entries).
+
+    Returns: { success, markdown, path?, written, mtime?, byte_count }.
+    The path is a vault-relative `Sessions/<title>.md` so the user can
+    open it via the Notes drawer or pull it back via tools/pull_vault.py.
+    """
+    from datetime import datetime as _dt
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip() or f"Session - {_dt.now().strftime('%Y-%m-%d')}"
+    safe_title = ''.join(ch for ch in title if ch.isalnum() or ch in ' -_').strip() or "Session"
+    write_to_vault = bool(data.get('write_to_vault', True))
+    include_log = bool(data.get('include_log', True))
+    try:
+        log_since = float(data.get('log_since') or 0)
+    except (TypeError, ValueError):
+        log_since = 0.0
+
+    campaign = _load_campaign_config() or {}
+    md_lines = []
+    md_lines.append("---")
+    md_lines.append("type: session-recap")
+    md_lines.append(f"date: {_dt.now().strftime('%Y-%m-%d')}")
+    md_lines.append(f"title: \"{title}\"")
+    if campaign.get('name'):
+        md_lines.append(f"campaign: \"{campaign['name']}\"")
+    md_lines.append("tags: [session-recap, generated]")
+    md_lines.append("---")
+    md_lines.append("")
+    md_lines.append(f"# {title}")
+    md_lines.append("")
+    if campaign.get('name'):
+        md_lines.append(f"_Campaign: **{campaign['name']}**_")
+    if campaign.get('session_number'):
+        md_lines.append(f"_Session number: {campaign['session_number']}_")
+    md_lines.append("")
+    md_lines.append("## Party State")
+    md_lines.append("")
+    md_lines.append("| PC | Class | HP | Hero | Conditions |")
+    md_lines.append("|----|-------|----|------|------------|")
+    for name, pc in sorted(PARTY_LIBRARY.items()):
+        ac = getattr(pc, 'ac', '?')
+        hp_now = getattr(pc, 'current_hp', 0)
+        hp_max = getattr(pc, 'hp', 0)
+        hero = getattr(pc, 'hero_points', 0)
+        cls = (getattr(pc, 'class_name', '') or '').strip()
+        conds = []
+        try:
+            for k, v in (pc.conditions or {}).items():
+                if v and v != 0 and v is not False:
+                    conds.append(f"{k}{(' '+str(v)) if isinstance(v, int) and v > 0 else ''}")
+        except Exception:
+            pass
+        cond_str = ', '.join(conds) if conds else '—'
+        link = f"[[{name}]]" if hasattr(pc, 'name') else name
+        md_lines.append(f"| {link} | {cls} | {hp_now}/{hp_max} | {hero} | {cond_str} |")
+    md_lines.append("")
+    if ACTIVE_ENCOUNTER:
+        md_lines.append("## Active Encounter at Export")
+        md_lines.append("")
+        for c in ACTIVE_ENCOUNTER:
+            tag = "PC" if c.is_pc else "Enemy"
+            md_lines.append(f"- **{c.name}** ({tag}, init {c.initiative}) — HP {c.current_hp}/{c.hp}")
+        md_lines.append("")
+    if include_log and COMBAT_LOGS:
+        md_lines.append("## Combat Log")
+        md_lines.append("")
+        for entry in COMBAT_LOGS:
+            ts = entry.get('time', '')
+            rd = entry.get('round', '')
+            msg = entry.get('msg', '')
+            tp = entry.get('type', '')
+            md_lines.append(f"- `{ts}` · R{rd} · _{tp}_ — {msg}")
+        md_lines.append("")
+    md_lines.append("## GM Notes")
+    md_lines.append("")
+    md_lines.append("_Drop your prose recap here, or hand off to Cowork to draft from the log above._")
+    md_lines.append("")
+    body = "\n".join(md_lines)
+    body_bytes = body.encode("utf-8")
+
+    written = False
+    rel_path = None
+    mtime = None
+    if write_to_vault and notes_service.get_vault_root() is not None:
+        rel_path = f"Sessions/{safe_title}.md"
+        try:
+            r = notes_service.save(rel_path, body)
+            written = True
+            mtime = r.mtime
+        except notes_service.NotePathError as e:
+            return jsonify({"success": False, "error": str(e), "markdown": body}), 400
+    return jsonify({
+        "success": True,
+        "markdown": body,
+        "path": rel_path,
+        "written": written,
+        "mtime": mtime,
+        "byte_count": len(body_bytes),
+        "title": title,
+    })
+
+
 @app.route('/api/admin/vault/changes-since')
 @gm_required
 def api_admin_vault_changes_since():
