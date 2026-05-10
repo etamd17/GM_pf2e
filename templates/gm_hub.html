@@ -1,244 +1,116 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GM Dashboard - {{ campaign.name }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { theme: { extend: { colors: {
-            base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#2e2e3c', 600:'#42425a', 500:'#6b6b8a', 400:'#9494b0', 300:'#b8b8cc', 200:'#d8d8e6', 100:'#ededf4' },
-            accent:  { 300:'#8ED4D4', 400:'#6BBFBF', 500:'#52A8A8', 600:'#3F8888' },
-            gold:    { 300:'#e0b050', 400:'#c89620' },
-            danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' }
-        }, fontFamily: { display:['Cinzel','serif'], sans:['Inter','system-ui','sans-serif'] } } } }
-    </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        body { font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#ededf4; min-height:100vh; }
-        .font-display { font-family:'Cinzel',serif; }
-        ::-webkit-scrollbar { width:6px; }
-        ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
-
-        .stage {
-            position:relative;
-            min-height:100vh;
+{% extends "base.html" %}
+{% block title %}GM Dashboard - {{ campaign.name }}{% endblock %}
+{% block extra_head %}
+        body.gm-hub-body { background: var(--bg-page) !important; }
+        .gm-hub-stage {
+            position: relative;
+            min-height: 100vh;
             background:
-                radial-gradient(circle at 20% 0%, rgba(94,173,173,0.06), transparent 55%),
-                radial-gradient(circle at 80% 100%, rgba(224,176,80,0.04), transparent 50%),
-                #0d0d12;
-            padding: 32px 24px;
+                radial-gradient(circle at 20% 0%, rgba(201,163,78,0.05), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(168,58,58,0.04), transparent 50%);
+            padding: var(--sp-7) var(--sp-6);
         }
+        .gm-hub-quick-link {
+            font-size: 11px;
+            color: var(--text-on-dark-3);
+            padding: var(--sp-1) var(--sp-3);
+            border-radius: var(--r-sm);
+            text-decoration: none;
+            transition: color var(--t-fast), background var(--t-fast);
+        }
+        .gm-hub-quick-link:hover { color: var(--text-on-dark); background: rgba(201,163,78,0.06); }
+{% endblock %}
+{% block content %}
 
-        .gm-tool-card {
-            background:#191920;
-            border:1px solid rgba(255,255,255,0.06);
-            border-radius:12px;
-            padding:18px 18px 16px;
-            display:block;
-            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
-            position:relative;
-            overflow:hidden;
-        }
-        .gm-tool-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(142,212,212,0.35);
-            box-shadow: 0 10px 28px rgba(0,0,0,0.45);
-        }
-        .gm-tool-card .accent-bar {
-            position:absolute; top:0; left:0; right:0; height:2px;
-            opacity:0.55; transition: opacity 0.15s;
-        }
-        .gm-tool-card:hover .accent-bar { opacity:1; }
+    <div class="gm-hub-stage">
+        <div class="max-w-5xl mx-auto">
 
-        .gm-tool-glyph {
-            display:inline-block;
-            width:36px; height:36px;
-            border-radius:8px;
-            background:#24242e;
-            color:#8ED4D4;
-            font-family:'Cinzel',serif;
-            font-size:18px; font-weight:700;
-            line-height:36px; text-align:center;
-            margin-bottom:10px;
-            border:1px solid rgba(255,255,255,0.06);
-        }
+            {# ── Hero ── #}
+            <header class="text-center" style="margin-bottom: var(--sp-7);">
+                <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Game Master</div>
+                <h1 class="font-display" style="font-size:28px; letter-spacing:0.04em; color:var(--gilt-100); margin:0 0 var(--sp-1);">{{ campaign.name }}</h1>
+                <p class="font-flavor" style="font-size:12px; font-style:italic; color:var(--text-on-dark-3); margin:0 0 var(--sp-3);" id="campaign-tagline">
+                    {% if campaign.tagline %}{{ campaign.tagline }}{% else %}Dashboard &amp; Tools{% endif %}
+                </p>
+                <div class="flex flex-wrap justify-center" style="gap: var(--sp-2);">
+                    <span class="pill accent">Session <span class="v">{{ campaign.session_number }}</span></span>
+                    {% if campaign.next_session_at %}
+                    <span class="pill">Next <span class="v">{{ campaign.next_session_at }}</span></span>
+                    {% endif %}
+                    <span class="pill">Party <span class="v">{{ party_count }}</span></span>
+                    <span class="pill">Bestiary <span class="v">{{ monster_count }}</span></span>
+                    {% if encounter_count > 0 %}
+                    <span class="pill live">Combat <span class="v">{{ encounter_count }} active</span></span>
+                    {% endif %}
+                </div>
+            </header>
 
-        .gm-tool-title {
-            font-family:'Cinzel',serif;
-            font-size:14px; font-weight:700;
-            letter-spacing:0.04em;
-            color:#8ED4D4;
-            margin-bottom:4px;
-        }
-        .gm-tool-desc {
-            font-size:12px;
-            color:#9494b0;
-            line-height:1.5;
-        }
-        .gm-tool-count {
-            display:inline-block;
-            margin-top:10px;
-            font-family:'JetBrains Mono', monospace;
-            font-size:10px;
-            font-weight:700;
-            letter-spacing:0.04em;
-            text-transform:uppercase;
-            color:#6b6b8a;
-            padding:3px 8px;
-            border-radius:4px;
-            background:#24242e;
-            border:1px solid rgba(255,255,255,0.05);
-        }
-        .gm-tool-count.live {
-            color:#86efac;
-            border-color:rgba(134,239,172,0.25);
-            background:rgba(134,239,172,0.06);
-        }
+            {# ── Tool grid ── #}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
 
-        /* Color tints per tool category — applied via data-tone */
-        .gm-tool-card[data-tone="party"]    .gm-tool-glyph { color:#8ED4D4; }
-        .gm-tool-card[data-tone="party"]    .accent-bar    { background:linear-gradient(90deg, transparent, #8ED4D4, transparent); }
-        .gm-tool-card[data-tone="combat"]   .gm-tool-glyph { color:#fca5a5; }
-        .gm-tool-card[data-tone="combat"]   .accent-bar    { background:linear-gradient(90deg, transparent, #fca5a5, transparent); }
-        .gm-tool-card[data-tone="builder"]  .gm-tool-glyph { color:#e0b050; }
-        .gm-tool-card[data-tone="builder"]  .accent-bar    { background:linear-gradient(90deg, transparent, #e0b050, transparent); }
-        .gm-tool-card[data-tone="screen"]   .gm-tool-glyph { color:#c4b5fd; }
-        .gm-tool-card[data-tone="screen"]   .accent-bar    { background:linear-gradient(90deg, transparent, #c4b5fd, transparent); }
-        .gm-tool-card[data-tone="generator"].gm-tool-glyph { color:#86efac; }
-        .gm-tool-card[data-tone="generator"].accent-bar    { background:linear-gradient(90deg, transparent, #86efac, transparent); }
-        .gm-tool-card[data-tone="map"]      .gm-tool-glyph { color:#93c5fd; }
-        .gm-tool-card[data-tone="map"]      .accent-bar    { background:linear-gradient(90deg, transparent, #93c5fd, transparent); }
-        .gm-tool-card[data-tone="player"]   .gm-tool-glyph { color:#9494b0; }
-        .gm-tool-card[data-tone="player"]   .accent-bar    { background:linear-gradient(90deg, transparent, #9494b0, transparent); }
+                <a href="/party" class="tile">
+                    <div class="tile__glyph">P</div>
+                    <h2 class="tile__title">Party View</h2>
+                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
+                    <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
+                </a>
 
-        .gm-meta-strip {
-            display:flex; flex-wrap:wrap; gap:8px;
-            margin-top:14px;
-        }
-        .gm-meta-pill {
-            font-size:10px;
-            font-weight:700;
-            letter-spacing:0.08em;
-            text-transform:uppercase;
-            color:#9494b0;
-            padding:5px 10px;
-            border-radius:9999px;
-            background:#24242e;
-            border:1px solid rgba(255,255,255,0.06);
-        }
-        .gm-meta-pill .v { color:#ededf4; font-family:'JetBrains Mono', monospace; }
-        .gm-meta-pill.session .v { color:#e0b050; }
-        .gm-meta-pill.live .v { color:#86efac; }
+                <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
+                    <div class="tile__glyph">&#9876;</div>
+                    <h2 class="tile__title">Encounter Tracker</h2>
+                    <p class="tile__desc">Initiative order, turns, HP, conditions, persistent damage. The combat surface.</p>
+                    <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
+                        {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
+                    </span>
+                </a>
 
-        .gm-quick-link {
-            font-size:11px;
-            color:#6b6b8a;
-            padding:4px 10px;
-            border-radius:6px;
-            transition: color 0.15s, background 0.15s;
-        }
-        .gm-quick-link:hover { color:#ededf4; background:rgba(255,255,255,0.04); }
-    </style>
-</head>
-<body class="stage">
+                <a href="/encounter_builder" class="tile">
+                    <div class="tile__glyph">&#9881;</div>
+                    <h2 class="tile__title">Encounter Builder</h2>
+                    <p class="tile__desc">Search the bestiary, build to a difficulty budget, drop into the tracker.</p>
+                    <span class="pill" style="margin-top:var(--sp-3);">{{ monster_count }} monster{{ '' if monster_count == 1 else 's' }} loaded</span>
+                </a>
 
-    <div class="max-w-4xl mx-auto">
+                <a href="/gmscreen" class="tile">
+                    <div class="tile__glyph">&#9776;</div>
+                    <h2 class="tile__title">GM Screen</h2>
+                    <p class="tile__desc">DCs, conditions, combat math, compendium search. <kbd class="kbd">C</kbd> opens checks drawer.</p>
+                </a>
 
-        {# ── Hero ── #}
-        <header class="text-center mb-8 md:mb-10">
-            <div class="text-[10px] uppercase tracking-widest font-bold text-base-500 mb-2">Game Master</div>
-            <h1 class="font-display text-2xl md:text-3xl tracking-wide mb-1" style="color:#8ED4D4;">{{ campaign.name }}</h1>
-            <p class="text-xs text-base-500 italic" id="campaign-tagline">{% if campaign.tagline %}{{ campaign.tagline }}{% else %}Dashboard &amp; Tools{% endif %}</p>
-            <div class="gm-meta-strip justify-center">
-                <span class="gm-meta-pill session">Session <span class="v">{{ campaign.session_number }}</span></span>
-                {% if campaign.next_session_at %}
-                <span class="gm-meta-pill">Next <span class="v">{{ campaign.next_session_at }}</span></span>
-                {% endif %}
-                <span class="gm-meta-pill">Party <span class="v">{{ party_count }}</span></span>
-                <span class="gm-meta-pill">Bestiary <span class="v">{{ monster_count }}</span></span>
-                {% if encounter_count > 0 %}
-                <span class="gm-meta-pill live">Combat <span class="v">{{ encounter_count }} active</span></span>
-                {% endif %}
+                <a href="/generator" class="tile">
+                    <div class="tile__glyph">&#9881;</div>
+                    <h2 class="tile__title">Generators</h2>
+                    <p class="tile__desc">NPCs, taverns, loot, hazards, weather &mdash; scaled to party level &amp; biome.</p>
+                </a>
+
+                <a href="/gm/map" class="tile" data-tone="muted">
+                    <div class="tile__glyph">&#9783;</div>
+                    <h2 class="tile__title">Battle Map</h2>
+                    <p class="tile__desc">VTT canvas with fog, walls, lighting, templates, token movement. Currently in maintenance mode.</p>
+                </a>
+
+                <a href="/" class="tile">
+                    <div class="tile__glyph">&#9776;</div>
+                    <h2 class="tile__title">Campaign Lobby</h2>
+                    <p class="tile__desc">The intro page players land on. Edit the recap, intro, next-session date.</p>
+                </a>
+
+                <a href="/player" class="tile">
+                    <div class="tile__glyph">&#9823;</div>
+                    <h2 class="tile__title">Player Hub</h2>
+                    <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
+                </a>
+
             </div>
-        </header>
 
-        {# ── Tool grid ── #}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
-
-            <a href="/party" class="gm-tool-card" data-tone="party">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">P</div>
-                <div class="gm-tool-title">Party View</div>
-                <p class="gm-tool-desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
-                <span class="gm-tool-count {% if party_count > 0 %}live{% endif %}">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
-            </a>
-
-            <a href="/tracker" class="gm-tool-card" data-tone="combat">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9876;</div>
-                <div class="gm-tool-title">Encounter Tracker</div>
-                <p class="gm-tool-desc">Initiative order, turns, HP, conditions, persistent damage. The combat surface.</p>
-                <span class="gm-tool-count {% if encounter_count > 0 %}live{% endif %}">
-                    {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
-                </span>
-            </a>
-
-            <a href="/encounter_builder" class="gm-tool-card" data-tone="builder">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9881;</div>
-                <div class="gm-tool-title">Encounter Builder</div>
-                <p class="gm-tool-desc">Search the bestiary, build to a difficulty budget, drop into the tracker.</p>
-                <span class="gm-tool-count">{{ monster_count }} monster{{ '' if monster_count == 1 else 's' }} loaded</span>
-            </a>
-
-            <a href="/gmscreen" class="gm-tool-card" data-tone="screen">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9776;</div>
-                <div class="gm-tool-title">GM Screen</div>
-                <p class="gm-tool-desc">DCs, conditions, combat math, compendium search. <kbd class="text-[10px] font-mono px-1 py-0.5 rounded" style="background:#24242e;border:1px solid rgba(255,255,255,0.10);color:#b8b8cc;">C</kbd> opens checks drawer.</p>
-            </a>
-
-            <a href="/generator" class="gm-tool-card" data-tone="generator">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9881;</div>
-                <div class="gm-tool-title">Generators</div>
-                <p class="gm-tool-desc">NPCs, taverns, loot, hazards, weather &mdash; scaled to party level &amp; biome.</p>
-            </a>
-
-            <a href="/gm/map" class="gm-tool-card" data-tone="map">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9783;</div>
-                <div class="gm-tool-title">Battle Map</div>
-                <p class="gm-tool-desc">VTT canvas with fog, walls, lighting, templates, token movement. Currently in maintenance mode.</p>
-            </a>
-
-            <a href="/" class="gm-tool-card" data-tone="player">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9776;</div>
-                <div class="gm-tool-title">Campaign Lobby</div>
-                <p class="gm-tool-desc">The intro page players land on. Edit the recap, intro, next-session date.</p>
-            </a>
-
-            <a href="/player" class="gm-tool-card" data-tone="player">
-                <div class="accent-bar"></div>
-                <div class="gm-tool-glyph">&#9823;</div>
-                <div class="gm-tool-title">Player Hub</div>
-                <p class="gm-tool-desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
-            </a>
-
-        </div>
-
-        {# ── Quick links / footer ── #}
-        <div class="flex flex-wrap items-center justify-center gap-1 pt-3 border-t border-white/[0.04]">
-            <a href="/api/perf" class="gm-quick-link" title="SSE subscriber count + broadcast counters">Perf</a>
-            <span class="text-base-700">&middot;</span>
-            <a href="/health" class="gm-quick-link">Health</a>
-            <span class="text-base-700">&middot;</span>
-            <a href="/gm/logout" class="gm-quick-link">Sign out</a>
+            {# ── Quick links / footer ── #}
+            <div class="flex flex-wrap items-center justify-center" style="gap:var(--sp-1); padding-top:var(--sp-3); border-top:1px solid var(--border-card);">
+                <a href="/api/perf" class="gm-hub-quick-link" title="SSE subscriber count + broadcast counters">Perf</a>
+                <span style="color:var(--text-on-dark-3);">&middot;</span>
+                <a href="/health" class="gm-hub-quick-link">Health</a>
+                <span style="color:var(--text-on-dark-3);">&middot;</span>
+                <a href="/gm/logout" class="gm-hub-quick-link">Sign out</a>
+            </div>
         </div>
     </div>
-
-</body>
-</html>
+{% endblock %}

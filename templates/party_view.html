@@ -11,7 +11,7 @@
         overflow: hidden;
         transition: border-color 0.2s;
     }
-    .pc-card:hover { border-color: rgba(125,196,196,0.18); }
+    .pc-card:hover { border-color: rgba(201,163,78,0.18); }
 
     .pc-head {
         padding: 0.9rem 1.1rem;
@@ -21,7 +21,7 @@
     .portrait-ring {
         width: 52px; height: 52px;
         border-radius: 50%;
-        border: 1px solid rgba(125,196,196,0.25);
+        border: 1px solid rgba(201,163,78,0.25);
         overflow: hidden;
         display: flex; align-items: center; justify-content: center;
         background: #282838;
@@ -122,17 +122,17 @@
     }
     .slot-pip.available      { background: #e0b050; border-color: #e0b050; }
     .slot-pip.used           { background: transparent; border-color: rgba(224,176,80,0.3); }
-    .slot-pip.focus-available{ background: #8ED4D4; border-color: #8ED4D4; }
-    .slot-pip.focus-used     { background: transparent; border-color: rgba(142,212,212,0.3); }
+    .slot-pip.focus-available{ background: var(--ruby-200); border-color: var(--ruby-200); }
+    .slot-pip.focus-used     { background: transparent; border-color: rgba(211,110,110,0.3); }
 
     /* -------- Conditions -------- */
     .condition-pill {
         font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
         padding: 2px 8px;
         border-radius: 9999px;
-        background: rgba(248,113,113,0.12);
-        border: 1px solid rgba(248,113,113,0.22);
-        color: #fca5a5;
+        background: rgba(168,58,58,0.12);
+        border: 1px solid rgba(168,58,58,0.32);
+        color: var(--ruby-100);
         text-transform: capitalize;
     }
 
@@ -159,7 +159,7 @@
         color: #e8e8f0;
         outline: none;
     }
-    .hp-input:focus { border-color: rgba(125,196,196,0.4); }
+    .hp-input:focus { border-color: rgba(201,163,78,0.4); }
 
     /* -------- Collapsible sections -------- */
     .pc-tabs {
@@ -185,11 +185,11 @@
         cursor: pointer;
         transition: all 0.15s;
     }
-    .pc-tab:hover { color: #e8e8f0; border-color: rgba(125,196,196,0.2); }
+    .pc-tab:hover { color: #e8e8f0; border-color: rgba(201,163,78,0.2); }
     .pc-tab.active {
-        background: rgba(125,196,196,0.1);
-        border-color: rgba(125,196,196,0.35);
-        color: #8ED4D4;
+        background: rgba(201,163,78,0.1);
+        border-color: rgba(201,163,78,0.35);
+        color: var(--gilt-200);
     }
     .pc-tab .tab-count {
         display: inline-block;
@@ -211,7 +211,7 @@
     }
     .pc-tab-panel.active { display: block; }
     .pc-tab-panel::-webkit-scrollbar { width: 6px; }
-    .pc-tab-panel::-webkit-scrollbar-thumb { background: rgba(125,196,196,0.2); border-radius: 3px; }
+    .pc-tab-panel::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.2); border-radius: 3px; }
     .pc-tab-panel::-webkit-scrollbar-track { background: transparent; }
 
     /* -------- Clickable entries -------- */
@@ -224,8 +224,8 @@
         display: block;
     }
     .detail-link:hover {
-        background: rgba(125,196,196,0.08);
-        color: #8ED4D4;
+        background: rgba(201,163,78,0.08);
+        color: var(--gilt-200);
     }
     .detail-link .meta {
         font-size: 10px; color: #7a7a90;
@@ -251,7 +251,7 @@
         display: flex; align-items: center; justify-content: space-between; gap: 8px;
     }
     .attack-row .attack-bonus {
-        font-weight: 700; color: #8ED4D4; font-size: 11px;
+        font-weight: 700; color: var(--gilt-200); font-size: 11px;
     }
     .attack-row .attack-dmg {
         font-size: 10px; color: #8a8aa0; font-family: 'Inter', sans-serif;
@@ -268,7 +268,7 @@
     }
     .detail-card {
         background: #1e1e27;
-        border: 1px solid rgba(125,196,196,0.25);
+        border: 1px solid rgba(201,163,78,0.25);
         border-radius: 10px;
         max-width: 620px;
         width: 100%;
@@ -301,9 +301,9 @@
         letter-spacing: 0.04em; text-transform: uppercase;
     }
     .detail-meta-tag.type {
-        background: rgba(125,196,196,0.1);
-        border: 1px solid rgba(125,196,196,0.25);
-        color: #8ED4D4;
+        background: rgba(201,163,78,0.1);
+        border: 1px solid rgba(201,163,78,0.25);
+        color: var(--gilt-200);
     }
     .detail-meta-tag.rank {
         background: rgba(224,176,80,0.1);
@@ -331,7 +331,7 @@
     .detail-card-body hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 0; }
     .detail-card-body ul, .detail-card-body ol { margin: 0 0 8px 20px; }
     .detail-card-body::-webkit-scrollbar { width: 8px; }
-    .detail-card-body::-webkit-scrollbar-thumb { background: rgba(125,196,196,0.22); border-radius: 4px; }
+    .detail-card-body::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.22); border-radius: 4px; }
     .detail-card-body::-webkit-scrollbar-track { background: transparent; }
 {% endblock %}
 
@@ -343,7 +343,7 @@
         <p class="text-xs text-base-500 mt-0.5">Real-time character status &mdash; click a spell, feat, attack, or feature for details</p>
     </div>
     <div class="flex gap-2">
-        <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:#191920;">
+        <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card);">
             Encounter Tracker
         </a>
     </div>
@@ -352,7 +352,7 @@
 {% if not party %}
 <div class="pc-card p-10 text-center">
     <h2 class="font-display text-lg text-base-300 mb-2">No Characters Found</h2>
-    <p class="text-sm text-base-500">Export from Pathbuilder 2e and place JSON files in <code class="text-accent-300 px-1.5 py-0.5 rounded text-xs" style="background:#0d0d12;">party_data/</code></p>
+    <p class="text-sm text-base-500">Export from Pathbuilder 2e and place JSON files in <code class="text-accent-300 px-1.5 py-0.5 rounded text-xs" style="background:var(--bg-page);">party_data/</code></p>
 </div>
 {% endif %}
 
@@ -411,13 +411,13 @@
                         </span>
                     </div>
                     <div class="flex items-center gap-1">
-                        <input type="number" class="hp-input hp-amount" value="1" min="1">
-                        <button class="hp-adjust-btn hp-damage-btn" style="background:rgba(248,113,113,0.14); color:#f87171;" title="Damage">&minus;</button>
-                        <button class="hp-adjust-btn hp-heal-btn" style="background:rgba(74,222,128,0.14); color:#4ade80;" title="Heal">+</button>
+                        <input type="number" class="hp-input hp-amount" value="1" min="1" aria-label="Adjust amount">
+                        <button class="hp-adjust-btn hp-damage-btn action-pill dmg" title="Damage" aria-label="Apply damage">&minus;</button>
+                        <button class="hp-adjust-btn hp-heal-btn action-pill heal" title="Heal" aria-label="Apply healing">+</button>
                     </div>
                 </div>
                 <div class="hp-bar-track">
-                    <div class="hp-bar-fill" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}#4ade80{% elif hp_pct > 25 %}#e0b050{% else %}#f87171{% endif %};"></div>
+                    <div class="hp-bar-fill" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}var(--success){% elif hp_pct > 25 %}var(--warn){% else %}var(--ruby-300){% endif %};"></div>
                 </div>
             </div>
 
@@ -443,7 +443,7 @@
             <!-- Exploration activity (GM visibility) -->
             <div class="exploration-row" data-pc="{{ pc.name|e }}" {% if not pc.exploration_activity %}style="display:none;"{% endif %} style="margin-top:4px;">
                 <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Exploration:</span>
-                <span class="exploration-pill" style="display:inline-block;padding:2px 8px;margin-left:6px;border-radius:999px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);color:#c7d2fe;font-size:11px;">{{ pc.exploration_activity or '' }}</span>
+                <span class="exploration-pill pill" style="margin-left:var(--sp-2);">{{ pc.exploration_activity or '' }}</span>
             </div>
 
             <!-- Defenses -->
@@ -551,7 +551,7 @@
                     {% endfor %}
                     {% if pc.focus_max > 0 and loop.first %}
                     <div class="flex items-center gap-2 mt-1.5 pt-1.5" style="border-top:1px solid rgba(255,255,255,0.04);">
-                        <span class="spell-line-tag" style="color:#8ED4D4;">Focus</span>
+                        <span class="spell-line-tag" style="color:var(--gilt-200);">Focus</span>
                         <div class="focus-pips flex gap-1">
                             {% for i in range(pc.focus_max) %}
                             <span class="slot-pip {% if i < pc.focus_points %}focus-available{% else %}focus-used{% endif %}"></span>
@@ -754,9 +754,10 @@
 
     // ---------- Live-update helpers ----------
     function getHPColor(pct) {
-        if (pct > 50) return '#4ade80';
-        if (pct > 25) return '#e0b050';
-        return '#f87171';
+        const cs = getComputedStyle(document.documentElement);
+        if (pct > 50) return cs.getPropertyValue('--success').trim() || '#4a7c2a';
+        if (pct > 25) return cs.getPropertyValue('--warn').trim()    || '#8a6a14';
+        return cs.getPropertyValue('--ruby-300').trim() || '#a83a3a';
     }
     function getHPClass(pct) {
         if (pct > 50) return 'text-base-100';

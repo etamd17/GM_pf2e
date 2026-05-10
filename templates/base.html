@@ -21,13 +21,18 @@
             theme: {
                 extend: {
                     colors: {
-                        base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#2e2e3c', 600:'#42425a', 500:'#6b6b8a', 400:'#9494b0', 300:'#b8b8cc', 200:'#d8d8e6', 100:'#ededf4' },
-                        accent:  { 300:'#8ED4D4', 400:'#6BBFBF', 500:'#52A8A8', 600:'#3F8888' },
-                        gold:    { 300:'#e0b050', 400:'#c89620', 500:'#a87e10' },
-                        danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' },
-                        success: { 300:'#86efac', 400:'#4ade80', 500:'#22c55e' },
-                        info:    { 300:'#93c5fd', 400:'#60a5fa' },
-                        spell:   { 300:'#c4b5fd', 400:'#a78bfa' }
+                        // Aliased to the system.css ramps (--ink-* / --gilt-* / --ruby-*).
+                        // Tailwind utility classes are kept so legacy markup
+                        // doesn't all need rewriting, but every utility now
+                        // resolves to a brand-coherent color, not the old
+                        // teal/violet/mint palette.
+                        base:    { 950:'#0c0a07', 900:'#14110c', 800:'#1d1a14', 700:'#2e2920', 600:'#4a4334', 500:'#6f6755', 400:'#9a917a', 300:'#c9bfa3', 200:'#e3dac0', 100:'#f0ead7' },
+                        accent:  { 200:'#f0d88a', 300:'#e0b65a', 400:'#c9a34e', 500:'#a4842b', 600:'#7d6418' },
+                        gold:    { 200:'#f0d88a', 300:'#c9a34e', 400:'#a4842b', 500:'#7d6418' },
+                        danger:  { 100:'#f5b7b7', 200:'#d36e6e', 300:'#a83a3a', 400:'#7c2222', 500:'#5a1414' },
+                        success: { 300:'#9bc06f', 400:'#6a9c44', 500:'#4a7c2a' },
+                        info:    { 300:'#c9bfa3', 400:'#9a917a' },
+                        spell:   { 300:'#c9a34e', 400:'#a4842b' }
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -40,18 +45,18 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
         :root, [data-theme="dark"] {
-            --bg-body: #0d0d12;
-            --bg-surface: #191920;
-            --bg-raised: #24242e;
-            --bg-hover: #2e2e3c;
-            --text-primary: #ededf4;
-            --text-secondary: #b8b8cc;
-            --text-muted: #6b6b8a;
-            --border-subtle: rgba(255,255,255,0.08);
-            --border-default: rgba(255,255,255,0.12);
-            --accent-primary: #8ED4D4;
-            --accent-secondary: #52A8A8;
-            --nav-bg: #191920;
+            --bg-body: #0c0a07;
+            --bg-surface: #1c1813;
+            --bg-raised: #28221a;
+            --bg-hover: #2e2920;
+            --text-primary: #ede4cf;
+            --text-secondary: #c8bd9e;
+            --text-muted: #8e8369;
+            --border-subtle: rgba(201,163,78,0.14);
+            --border-default: rgba(201,163,78,0.28);
+            --accent-primary: #c9a34e;
+            --accent-secondary: #a4842b;
+            --nav-bg: #14110c;
         }
         [data-theme="light"] {
             --bg-body: #f0f0f5;
@@ -136,16 +141,50 @@
                 </div>
                 <form id="custom-roll-form" class="flex gap-1.5" onsubmit="event.preventDefault(); customRoll();">
                     <input type="text" id="custom-roll-input" placeholder="2d6+4" class="flex-1 rounded px-2 py-1.5 text-xs text-center font-mono focus:outline-none" style="background:var(--bg-body); border:1px solid var(--border-default); color:var(--text-primary);">
-                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:#52A8A8;">Roll</button>
+                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:var(--accent-primary); color:var(--ink-950);">Roll</button>
                 </form>
             </div>
         </div>
-        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:#52A8A8;">
+        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:var(--accent-primary); color:var(--ink-950);">
             <span class="font-display text-sm font-bold">d20</span>
         </button>
     </div>
 
     <script>
+        // Global modal helpers — opt-in via .modal-backdrop / .detail-overlay
+        // class on the overlay element. ESC closes the topmost visible
+        // overlay; a click directly on the overlay (not its children) does
+        // the same. Pages that want custom behavior add
+        // data-no-global-dismiss="true" on the overlay.
+        (function() {
+            function _visible(el) {
+                if (!el) return false;
+                if (el.classList.contains('hidden')) return false;
+                const cs = getComputedStyle(el);
+                return cs.display !== 'none' && cs.visibility !== 'hidden';
+            }
+            function _hide(el) {
+                if (el.dataset.noGlobalDismiss === 'true') return false;
+                if (el.style.display && el.style.display !== 'none') el.style.display = 'none';
+                else el.classList.add('hidden');
+                return true;
+            }
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Escape') return;
+                const overlays = document.querySelectorAll('.modal-backdrop, .detail-overlay');
+                const visible = Array.from(overlays).filter(_visible);
+                if (!visible.length) return;
+                if (_hide(visible[visible.length - 1])) e.stopPropagation();
+            });
+            document.addEventListener('click', function(e) {
+                const t = e.target;
+                if (!t || !t.classList) return;
+                if (!t.classList.contains('modal-backdrop') && !t.classList.contains('detail-overlay')) return;
+                if (!_visible(t)) return;
+                _hide(t);
+            });
+        })();
+
         // Theme toggle
         function toggleTheme() {
             const html = document.documentElement;
