@@ -173,6 +173,23 @@
             <div class="flex justify-between text-[9px] text-gray-600 mt-1 px-1">
                 <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span><span>!!!</span>
             </div>
+            <!-- Difficulty-spike warnings strip — populated by recalcXP() -->
+            <div id="diff-warnings" class="hidden mt-3"></div>
+        </div>
+
+        <!-- Saved Encounter Library -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="font-header text-accent-300 text-lg">Saved Encounters</h2>
+                <button onclick="refreshSavedEncounters()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded border border-gray-600 font-bold uppercase transition-colors" title="Re-scan saved_encounters/">Refresh</button>
+            </div>
+            <div class="flex gap-2 items-center mb-3">
+                <input type="text" id="encounter-save-name" placeholder="Encounter name (e.g. Crypt Goblins)" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent-300/50">
+                <button onclick="saveCurrentStage()" id="btn-save-stage" class="text-xs bg-accent-600/30 hover:bg-accent-600/50 text-accent-200 border border-accent-600/50 rounded px-3 py-1.5 font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled title="Save the staged creatures as a named encounter for next session">Save Stage</button>
+            </div>
+            <div id="saved-encounters-list" class="space-y-1 max-h-[20vh] overflow-y-auto custom-scrollbar">
+                <div class="text-center text-gray-600 text-xs italic py-3">Loading…</div>
+            </div>
         </div>
 
         <!-- Staged Monsters -->
@@ -349,6 +366,8 @@
 
     function renderStage() {
         const container = document.getElementById('staged-list');
+        const saveBtn = document.getElementById('btn-save-stage');
+        if (saveBtn) saveBtn.disabled = staged.length === 0;
         if (staged.length === 0) {
             container.innerHTML = '<div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here.</div>';
             document.getElementById('btn-load').disabled = true;
@@ -440,6 +459,51 @@
             showTierToast(_lastTier, label, barColor);
         }
         _lastTier = label;
+
+        renderDifficultyWarnings(label, partyLevel, partySize);
+    }
+
+    /* Difficulty-spike warnings strip. Shows under the XP bar whenever the
+       staged encounter has a non-trivial risk multiplier (no-healer at
+       Severe+, very-high-level boss, mook overload). Quietly hides when
+       no warning applies. */
+    const PARTY_HAS_HEALER = {{ 'true' if party_has_healer else 'false' }};
+    function renderDifficultyWarnings(label, partyLevel, partySize) {
+        const wrap = document.getElementById('diff-warnings');
+        const warnings = [];
+        if ((label === 'Severe' || label === 'Extreme' || label === 'Impossible') && !PARTY_HAS_HEALER) {
+            warnings.push({ tone: 'danger', text: `<b>No healer detected</b> in the party — a ${label} encounter without in-combat healing usually ends in dying-recovery rolls. Have a stash of potions or scrolls ready.` });
+        }
+        const bossThreshold = partyLevel + 3;
+        const bossLevels = staged
+            .filter(s => !s.is_hazard)
+            .map(s => (s.level || 0) + (s.elite_weak || 0))
+            .filter(eff => eff >= bossThreshold);
+        if (bossLevels.length) {
+            const top = Math.max(...bossLevels);
+            warnings.push({ tone: 'warn', text: `<b>Boss-tier creature</b> at L${top} (party L${partyLevel}). Crit-fail saves are common at PL+3 and up — telegraph the threat before round 1.` });
+        }
+        const totalCount = staged.filter(s => !s.is_hazard).reduce((acc, s) => acc + (s.count || 0), 0);
+        if (totalCount > partySize * 2 && (label === 'Severe' || label === 'Extreme' || label === 'Impossible')) {
+            warnings.push({ tone: 'warn', text: `<b>Mook overload</b> — ${totalCount} creatures vs ${partySize} PCs at ${label}. Action economy will dominate; consider AOE-friendly terrain or letting the players Stride around mooks.` });
+        }
+        if (!warnings.length) {
+            wrap.classList.add('hidden');
+            wrap.innerHTML = '';
+            return;
+        }
+        wrap.classList.remove('hidden');
+        wrap.innerHTML = warnings.map(w => {
+            const tones = {
+                danger: 'border-danger-300/50 bg-danger-500/10 text-danger-100',
+                warn:   'border-accent-300/50 bg-accent-600/10 text-accent-200',
+            };
+            const cls = tones[w.tone] || tones.warn;
+            return `<div class="flex items-start gap-2 border ${cls} rounded px-3 py-2 mb-2 text-xs leading-relaxed">
+                <span class="text-base font-bold mt-[-2px]">!</span>
+                <div class="flex-1">${w.text}</div>
+            </div>`;
+        }).join('');
     }
 
     // One-shot floating toast bar — no library, no dependency.
@@ -475,6 +539,115 @@
             setTimeout(() => toast.remove(), 250);
         }, 2500);
     }
+
+    /* ──────────────── Saved encounter library ────────────────
+       Save the currently-staged monsters to a JSON file under
+       saved_encounters/ so the GM can prep an encounter, save it, and
+       reload next session. Reuses /api/save_stage + /api/load_stage. */
+    async function refreshSavedEncounters() {
+        const list = document.getElementById('saved-encounters-list');
+        try {
+            const res = await fetch('/api/list_encounters');
+            const j = await res.json();
+            const items = j.encounters || [];
+            if (!items.length) {
+                list.innerHTML = '<div class="text-center text-gray-600 text-xs italic py-3">No saved encounters yet. Stage monsters and click Save Stage.</div>';
+                return;
+            }
+            list.innerHTML = items.map(it => `
+                <div class="flex items-center justify-between gap-2 bg-gray-900 hover:bg-gray-700/60 border border-gray-700 rounded px-2 py-1.5 transition-colors">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-bold text-gray-200 truncate">${esc(it.name)}</div>
+                        <div class="text-[10px] text-gray-500">${it.kind === 'stage' ? 'stage' : 'live'} · ${it.count} entries</div>
+                    </div>
+                    <button onclick="loadSavedStage('${esc(it.name).replace(/'/g, "\\'")}')" class="text-[10px] bg-accent-600/30 hover:bg-accent-600/50 text-accent-200 border border-accent-600/50 px-2 py-1 rounded font-bold transition-colors">Load</button>
+                    <button onclick="deleteSavedEncounter('${esc(it.name).replace(/'/g, "\\'")}')" class="text-[10px] bg-gray-800 hover:bg-danger-500/30 text-gray-400 hover:text-danger-200 border border-gray-700 px-2 py-1 rounded transition-colors" title="Delete">×</button>
+                </div>
+            `).join('');
+        } catch (e) {
+            list.innerHTML = `<div class="text-center text-danger-200 text-xs italic py-3">Failed to load: ${esc(String(e))}</div>`;
+        }
+    }
+    async function saveCurrentStage() {
+        const nameEl = document.getElementById('encounter-save-name');
+        const name = (nameEl.value || '').trim();
+        if (!name) { nameEl.focus(); return; }
+        if (!staged.length) return;
+        const monsters = staged.map(s => ({
+            path: s.path, count: s.count, elite_weak: s.elite_weak,
+            is_hazard: !!s.is_hazard,
+            name: s.name, level: s.level,
+            hazard_type: s.hazard_type,
+            stealth_dc: s.stealth_dc, disable_dc: s.disable_dc,
+            trigger: s.trigger, routine: s.routine,
+        }));
+        try {
+            const res = await fetch('/api/save_stage', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, monsters }),
+            });
+            const j = await res.json();
+            if (j.success) {
+                nameEl.value = '';
+                refreshSavedEncounters();
+            }
+        } catch (_) {}
+    }
+    async function loadSavedStage(name) {
+        try {
+            const res = await fetch('/api/load_stage/' + encodeURIComponent(name));
+            const j = await res.json();
+            if (!j.success) return;
+            // Populate the in-memory stage. We need the same shape renderStage
+            // expects (with name, level, hp, etc.) — fetch the full monster
+            // record from the search index for each path so the row renders
+            // cleanly. Hazards carry their own data.
+            const out = [];
+            for (const m of (j.monsters || [])) {
+                if (m.is_hazard) {
+                    out.push({
+                        path: m.path, count: m.count || 1, elite_weak: m.elite_weak || 0,
+                        is_hazard: true, name: m.name, level: m.level,
+                        hazard_type: m.hazard_type, stealth_dc: m.stealth_dc, disable_dc: m.disable_dc,
+                        trigger: m.trigger, routine: m.routine,
+                        immunities: [], resistances: [], weaknesses: [],
+                    });
+                    continue;
+                }
+                // Look up monster details
+                try {
+                    const r = await fetch('/api/monster_details?path=' + encodeURIComponent(m.path));
+                    const md = await r.json();
+                    out.push({
+                        path: m.path, count: m.count || 1, elite_weak: m.elite_weak || 0,
+                        is_hazard: false,
+                        name: md.name || m.path, level: md.level || 0,
+                        immunities: md.immunities || [], resistances: md.resistances || [], weaknesses: md.weaknesses || [],
+                    });
+                } catch(_) {
+                    out.push({
+                        path: m.path, count: m.count || 1, elite_weak: m.elite_weak || 0,
+                        is_hazard: false, name: m.path.split('/').pop().replace(/\.json$/, ''),
+                        level: 0, immunities: [], resistances: [], weaknesses: [],
+                    });
+                }
+            }
+            staged = out;
+            renderStage();
+            recalcXP();
+        } catch(_) {}
+    }
+    async function deleteSavedEncounter(name) {
+        if (!confirm(`Delete saved encounter "${name}"?`)) return;
+        try {
+            const fd = new FormData();
+            fd.append('encounter_name', name);
+            await fetch('/api/delete_encounter', {method: 'POST', body: fd});
+            refreshSavedEncounters();
+        } catch(_) {}
+    }
+    // Initial load when the page first renders.
+    document.addEventListener('DOMContentLoaded', refreshSavedEncounters);
 
     async function loadToTracker() {
         const btn = document.getElementById('btn-load');

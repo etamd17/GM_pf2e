@@ -6506,6 +6506,100 @@ def load_encounter():
                 pass
     return redirect(url_for('tracker_view'))
 
+@app.route('/api/list_encounters', methods=['GET'])
+def list_encounters():
+    """Enumerate saved encounters in ENCOUNTER_DIR. Used by the builder's
+    Load dropdown and the tracker's Save/Load drawer. Filters out the
+    autosave file so it doesn't clutter the list."""
+    if not os.path.exists(ENCOUNTER_DIR):
+        return jsonify({"encounters": []})
+    items = []
+    for fname in sorted(os.listdir(ENCOUNTER_DIR)):
+        if not fname.endswith('.json'):
+            continue
+        if fname.startswith('_'):
+            continue
+        name = fname[:-5]
+        try:
+            full = os.path.join(ENCOUNTER_DIR, fname)
+            mtime = os.path.getmtime(full)
+            with open(full, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            kind = 'stage' if isinstance(raw, dict) and raw.get('format') == 'stage' else 'encounter'
+            count = (
+                len(raw.get('monsters', [])) if kind == 'stage'
+                else len(raw.get('combatants', []) if isinstance(raw, dict) else raw)
+            )
+        except Exception:
+            mtime, kind, count = 0, 'encounter', 0
+        items.append({"name": name, "kind": kind, "count": count, "mtime": mtime})
+    items.sort(key=lambda it: -it.get('mtime', 0))
+    return jsonify({"encounters": items})
+
+
+@app.route('/api/save_stage', methods=['POST'])
+def save_stage():
+    """Save the encounter builder's staged monster list to ENCOUNTER_DIR.
+    Body: {name: str, monsters: [{path, count, elite_weak, is_hazard, ...}]}.
+    Stored under a dict shape with format='stage' so the loader can tell
+    it apart from full-state save_encounter output (which carries hydrated
+    combatant data and a map snapshot)."""
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    monsters = data.get('monsters') or []
+    if not name:
+        return jsonify({"success": False, "error": "Name required"}), 400
+    # Strip path traversal; only keep filename-safe characters
+    safe = ''.join(ch for ch in name if ch.isalnum() or ch in (' ', '-', '_')).strip()
+    if not safe:
+        return jsonify({"success": False, "error": "Invalid name"}), 400
+    if not os.path.exists(ENCOUNTER_DIR):
+        os.makedirs(ENCOUNTER_DIR)
+    from datetime import datetime as _dt
+    payload = {
+        "format": "stage",
+        "saved_at": _dt.now().isoformat(timespec='seconds'),
+        "monsters": monsters,
+    }
+    with open(os.path.join(ENCOUNTER_DIR, f"{safe}.json"), 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2)
+    return jsonify({"success": True, "name": safe})
+
+
+@app.route('/api/load_stage/<name>', methods=['GET'])
+def load_stage(name):
+    """Return the saved monster list for a stage so the builder can repopulate.
+    Also tolerates the older live-encounter save format (combatants[] with
+    type/path) by projecting it back to a stage list."""
+    safe = ''.join(ch for ch in name if ch.isalnum() or ch in (' ', '-', '_')).strip()
+    fpath = os.path.join(ENCOUNTER_DIR, f"{safe}.json")
+    if not os.path.exists(fpath):
+        return jsonify({"success": False, "error": "Not found"}), 404
+    with open(fpath, 'r', encoding='utf-8') as f:
+        raw = json.load(f)
+    if isinstance(raw, dict) and raw.get('format') == 'stage':
+        return jsonify({"success": True, "monsters": raw.get('monsters', [])})
+    # Legacy: project full save into a stage list. Group by path and count duplicates.
+    src = raw.get('combatants', []) if isinstance(raw, dict) else raw
+    monsters = []
+    seen = {}
+    for c in src:
+        if c.get('type') != 'monster':
+            continue
+        key = (c.get('path'), c.get('elite_weak', 0))
+        if key in seen:
+            monsters[seen[key]]['count'] += 1
+        else:
+            seen[key] = len(monsters)
+            monsters.append({
+                'path': c.get('path'),
+                'count': 1,
+                'elite_weak': c.get('elite_weak', 0),
+                'is_hazard': bool(c.get('is_hazard', False)),
+            })
+    return jsonify({"success": True, "monsters": monsters})
+
+
 @app.route('/api/delete_encounter', methods=['POST'])
 @gm_required
 def delete_encounter():
@@ -6538,6 +6632,30 @@ def encounter_builder():
     # override input so the GM can model "what if a guest joins" or "down to
     # 3 PCs tonight" without changing the canonical roster.
     party_size = max(1, len(PARTY_LIBRARY) or 4)
+    # Compute a coarse "is there a healer in the party?" flag for the
+    # difficulty-spike warning. We trust class identity + a skim of known
+    # spell names. Misses corner cases (e.g. a Wizard with Heal scrolls)
+    # but catches the 90% — Cleric / Druid / Bard / Champion / Witch /
+    # Oracle, or any caster with Heal / Soothe / Lay on Hands prepped.
+    HEALER_CLASSES = {'cleric', 'druid', 'bard', 'champion', 'witch', 'oracle'}
+    HEAL_SPELLS = {'heal', 'soothe', 'lay on hands', 'goodberry', 'breath of life'}
+    party_has_healer = False
+    for p in sorted_party:
+        cls = (getattr(p, 'class_name', '') or '').lower()
+        if any(h in cls for h in HEALER_CLASSES):
+            party_has_healer = True
+            break
+        # Skim spells_known on each spellcaster; structure is a list of dicts
+        # with 'levels' → list of {'spells': [{'name': ...}]}.
+        for sc in getattr(p, 'spell_casters', []) or []:
+            for lvl in (sc.get('levels') or []):
+                for sp in (lvl.get('spells') or []):
+                    if (sp.get('name') or '').strip().lower() in HEAL_SPELLS:
+                        party_has_healer = True
+                        break
+                if party_has_healer: break
+            if party_has_healer: break
+        if party_has_healer: break
     # Single source of truth for encounter math (lives in class_matrix).
     # Pass the constants down so the template's recalcXP() can scale per
     # party size instead of hardcoding the 4-player numbers.
@@ -6546,6 +6664,7 @@ def encounter_builder():
                            party=sorted_party,
                            party_level=party_level,
                            party_size=party_size,
+                           party_has_healer=party_has_healer,
                            xp_by_diff=ENCOUNTER_XP_BY_DIFF,
                            difficulty_tiers=ENCOUNTER_DIFFICULTY)
 
@@ -6685,6 +6804,28 @@ def _make_hazard_combatant(entry):
     h.actions = []
     h.notes = ''
     return h
+
+
+@app.route('/api/monster_details')
+def api_monster_details():
+    """Return enough monster metadata for the encounter-builder Load Stage
+    flow to repopulate a row (name, level, immunities, resistances,
+    weaknesses). Lookup by path against MONSTER_LIBRARY."""
+    path = request.args.get('path', '').strip()
+    if not path or path not in MONSTER_LIBRARY:
+        return jsonify({"error": "Not found"}), 404
+    m = MONSTER_LIBRARY[path]
+    return jsonify({
+        "name": m.name,
+        "level": getattr(m, 'level', 0),
+        "ac": getattr(m, 'ac', 0),
+        "hp": getattr(m, 'hp', 0),
+        "perception": getattr(m, 'perception', 0),
+        "immunities": list(getattr(m, 'immunities', []) or []),
+        "resistances": list(getattr(m, 'resistances', []) or []),
+        "weaknesses": list(getattr(m, 'weaknesses', []) or []),
+        "traits": list(getattr(m, 'traits', []) or []),
+    })
 
 
 @app.route('/api/stage_encounter', methods=['POST'])
