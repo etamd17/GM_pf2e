@@ -121,15 +121,38 @@ def _git(*args: str, cwd: Path, check: bool = True, timeout: int = 60) -> tuple[
 
 # ─── Lifecycle ───────────────────────────────────────────────────────────────
 
-def initialize(target: Path) -> bool:
-    """Clone (or attach to) the configured vault repo at `target`. Idempotent.
-    Returns True if the vault is now under git control. No-op when ENABLED is
-    False. Always returns without raising — failures are logged and surfaced
-    via `status()` for the health endpoint to display."""
+def initialize(target: Path, *, background: bool = True) -> bool:
+    """Set up the configured vault repo at `target`. Idempotent. No-op when
+    ENABLED is False. Always returns without raising — failures are logged
+    and surfaced via `status()` for the health endpoint to display.
+
+    By default the heavy work (clone / fetch / reset) runs on a background
+    thread so a slow GitHub or a misconfigured URL can NEVER block Flask
+    boot — gunicorn workers come up immediately, and the vault becomes
+    available in the notes service as soon as the clone finishes. Pass
+    background=False for tests where you want to assert post-clone state.
+    """
     global _target_dir, _poller_started
     if not ENABLED:
         return False
     _target_dir = target
+    if background:
+        t = threading.Thread(
+            target=lambda: _initialize_sync(target),
+            daemon=True,
+            name="vault-sync-init",
+        )
+        t.start()
+        # Don't claim success yet — the background thread will set the flag.
+        # The poller is also started inside _initialize_sync once the first
+        # clone/fetch succeeds.
+        return True
+    return _initialize_sync(target)
+
+
+def _initialize_sync(target: Path) -> bool:
+    """Body of initialize — runs on the calling thread (or background)."""
+    global _poller_started
     try:
         with _lock:
             target.mkdir(parents=True, exist_ok=True)

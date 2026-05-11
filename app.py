@@ -6658,15 +6658,17 @@ def gm_screen():
 from services import notes as notes_service
 from services import vault_sync as vault_sync_service
 
-# Initialize git-backed vault sync if env vars are set. Idempotent + safe
-# to call at import time — when no env, this is a no-op. Otherwise it
-# clones the configured private vault repo into the resolved vault root
-# (vault_data/ or whatever PF2E_VAULT_DATA points at) and spawns a
-# background poller that `git pull`s on PF2E_VAULT_PULL_INTERVAL_SEC.
+# Kick off git-backed vault sync if env vars are set. This dispatches the
+# clone/fetch to a background thread so a misconfigured GitHub URL, a slow
+# clone, or a missing `git` binary CAN'T block gunicorn boot. Empty env =
+# pure no-op. Wrapped in try/except as a final safety net even though the
+# function itself is already exception-proof.
 try:
+    print(f"[VAULT_SYNC] enabled={vault_sync_service.ENABLED}")
     if vault_sync_service.ENABLED:
         _vs_root = notes_service.get_vault_data_dir()
-        vault_sync_service.initialize(_vs_root)
+        vault_sync_service.initialize(_vs_root, background=True)
+        print(f"[VAULT_SYNC] init dispatched to background thread; target={_vs_root}")
 except Exception as _vs_err:
     print(f"[VAULT_SYNC] init failed: {_vs_err}")
 
