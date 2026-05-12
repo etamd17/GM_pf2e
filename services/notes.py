@@ -744,7 +744,14 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
     immediately committed and pushed to the configured private GitHub repo
     so the GM's local Obsidian (via the Obsidian Git plugin) sees it on
     the next pull. Git failures don't fail the local write — the body is
-    persisted regardless; sync errors are surfaced via /api/notes/health."""
+    persisted regardless; sync errors are surfaced via /api/notes/health.
+
+    Holds vault_sync's lock across the write→commit→push window so the
+    background poller cannot fetch+merge between the os.replace and the
+    commit. Without that hold, a poll firing between the file landing on
+    disk and the commit happening could pick up only the previous remote
+    state, mis-merge, and the next push would either rebase awkwardly or
+    silently leave the user's write uncommitted on disk."""
     if get_vault_root() is None:
         raise NotePathError("Vault is not available")
     p = _safe_join(rel_path)
@@ -757,30 +764,50 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
             raise NoteConflict(
                 f"Disk mtime {actual} differs from expected {expected_mtime}"
             )
-    # Atomic write — write to a sibling temp file, fsync, rename.
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(body)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, p)
-    # Bust caches and rebuild the index lazily.
-    _RENDER_CACHE.pop(rel_path, None)
-    invalidate_tree_cache()
-    invalidate_index()
-    # Immediately commit + push if vault_sync is enabled. The commit message
-    # defaults to "save: <path>" but callers (e.g. the session export) pass
-    # a more descriptive one. We do this after the local write so a git
-    # outage doesn't drop the user's edit on the floor.
+    # Try to acquire vault_sync's lock so the poller can't race. When sync
+    # isn't enabled the function returns a no-op context manager.
     try:
         from . import vault_sync as _vault_sync
-        if _vault_sync.ENABLED:
-            msg = commit_message or f"save: {rel_path}"
-            _vault_sync.commit_and_push([rel_path], msg)
+        _sync_lock = _vault_sync.acquire_lock() if _vault_sync.ENABLED else None
     except Exception:
-        # Sync failure is intentionally non-fatal — the local file is good,
-        # the health endpoint surfaces the error.
-        pass
+        _vault_sync = None
+        _sync_lock = None
+    # Use the lock if available; fall back to plain write otherwise.
+    import contextlib
+    lock_ctx = _sync_lock if _sync_lock is not None else contextlib.nullcontext()
+    with lock_ctx:
+        # Atomic write — write to a sibling temp file, fsync, rename.
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(body)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, p)
+        except Exception:
+            # Clean up the temp file on any failure so /tmp doesn't accrue
+            # half-written files between disk-full / permission errors.
+            try: tmp.unlink(missing_ok=True)
+            except Exception: pass
+            raise
+        # Bust caches and rebuild the index lazily.
+        _RENDER_CACHE.pop(rel_path, None)
+        invalidate_tree_cache()
+        invalidate_index()
+        # Immediately commit + push if vault_sync is enabled. The commit
+        # message defaults to "save: <path>" but callers (e.g. the session
+        # export) pass a more descriptive one. We do this still inside the
+        # vault_sync lock so the poller can't race the staging/commit.
+        if _vault_sync is not None and _vault_sync.ENABLED:
+            try:
+                msg = commit_message or f"save: {rel_path}"
+                _vault_sync.commit_and_push([rel_path], msg)
+            except Exception:
+                # Sync failure is intentionally non-fatal — the local file
+                # is good, the health endpoint surfaces the error, and the
+                # next pull() will pick up the local commit when network
+                # is healthy again (since we no longer hard-reset).
+                pass
     return render(rel_path)
 
 

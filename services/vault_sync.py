@@ -58,8 +58,16 @@ logger = logging.getLogger(__name__)
 
 # Single global lock — all git operations are serialized so pull/save can't
 # leave a half-applied state. Cheap because git operations are seconds, not
-# minutes, and the GM is one user.
+# minutes, and the GM is one user. Re-entrant so commit_and_push can be
+# called by save() while save already holds the lock.
 _lock = threading.RLock()
+
+
+def acquire_lock():
+    """Public accessor so notes.save can hold the lock across its
+    write-then-commit window — keeps the poller from fetch+merging
+    between the on-disk write and the commit_and_push that follows."""
+    return _lock
 
 # Mutable status surface for the /api/notes/health endpoint.
 _state = {
@@ -200,34 +208,75 @@ def _initialize_sync(target: Path) -> bool:
 
 
 def pull() -> bool:
-    """Fetch + hard-reset to origin/<branch>. Skips silently when not enabled
-    or not initialized. The hard reset is the right call here because we
-    treat the remote as source of truth — server-side edits go through
-    commit_and_push first, so by the time pull runs there should be no
-    uncommitted work in the working tree."""
+    """Fetch + fast-forward to origin/<branch>. Skips silently when not
+    enabled or not initialized.
+
+    IMPORTANT — never `git reset --hard` unconditionally. A previous version
+    did, which discarded any local commit whose `git push` had failed (e.g.
+    transient network blip during a session-export). The next poller tick
+    would silently wipe both the commit AND the working-tree file, losing
+    the GM's write entirely. Now we:
+      1. fetch
+      2. if origin is strictly ahead: fast-forward merge (safe, no rewrite)
+      3. if local is ahead OR diverged: try to push local commits first,
+         then re-fetch + fast-forward. If push still fails, leave the
+         working tree alone and surface the divergence in status() so
+         the next commit_and_push's rebase retry can catch up.
+    """
     if not ENABLED or _target_dir is None or not (_target_dir / ".git").is_dir():
         return False
     target = _target_dir
     try:
         with _lock:
             _git("fetch", "origin", GIT_BRANCH, cwd=target, timeout=90)
-            _git("reset", "--hard", f"origin/{GIT_BRANCH}", cwd=target)
+            # Compare local HEAD vs origin/branch. _git returns
+            # (returncode, stdout, stderr); we want stdout.
+            _rc, ahead_behind_out, _err = _git(
+                "rev-list", "--left-right", "--count",
+                f"HEAD...origin/{GIT_BRANCH}", cwd=target, check=False,
+            )
+            try:
+                ahead_str, behind_str = ahead_behind_out.strip().split()
+                ahead = int(ahead_str)
+                behind = int(behind_str)
+            except (ValueError, AttributeError):
+                ahead, behind = 0, 0
+            if ahead == 0 and behind == 0:
+                pass  # already in sync
+            elif ahead == 0 and behind > 0:
+                # Pure remote-side commits — safe fast-forward.
+                _git("merge", "--ff-only", f"origin/{GIT_BRANCH}", cwd=target)
+            elif ahead > 0:
+                # We have local commits that haven't reached the remote.
+                # Try to push them first; on success, rebase/ff if needed.
+                pushed_ok = False
+                try:
+                    _git("push", "origin", GIT_BRANCH, cwd=target, timeout=60)
+                    pushed_ok = True
+                except RuntimeError as push_err:
+                    logger.info("vault_sync: pull deferred push failed (%s); will not rewrite local", _redact(str(push_err)))
+                if pushed_ok and behind > 0:
+                    # Remote also had new commits; refetch then fast-forward.
+                    _git("fetch", "origin", GIT_BRANCH, cwd=target, timeout=90)
+                    _git("merge", "--ff-only", f"origin/{GIT_BRANCH}", cwd=target, check=False)
             _state["head_sha"] = _git("rev-parse", "HEAD", cwd=target, check=False)[1].strip() or None
             _state["last_pull_ok"] = True
             _state["last_pull_error"] = None
             _state["last_pull_at"] = time.time()
+            _state["local_ahead"] = ahead if not (ahead > 0 and pushed_ok if 'pushed_ok' in locals() else False) else 0
         # Bust the notes-service caches so the next render sees the new state.
         # Import inside the function to avoid a circular import at module load.
         try:
             from . import notes as _notes
             _notes.invalidate_tree_cache()
             _notes.invalidate_index()
+            _notes._RENDER_CACHE.clear()  # files that came in from the pull need fresh renders
         except Exception:
             pass
         return True
     except Exception as e:
         _state["last_pull_ok"] = False
-        _state["last_pull_error"] = str(e)
+        _state["last_pull_error"] = _redact(str(e))
         _state["last_pull_at"] = time.time()
         logger.warning("vault_sync: pull failed: %s", _redact(str(e)))
         return False
@@ -268,7 +317,7 @@ def commit_and_push(rel_paths: Iterable[str], message: str) -> bool:
         return True
     except Exception as e:
         _state["last_push_ok"] = False
-        _state["last_push_error"] = str(e)
+        _state["last_push_error"] = _redact(str(e))
         _state["last_push_at"] = time.time()
         logger.warning("vault_sync: commit/push failed: %s", _redact(str(e)))
         return False
