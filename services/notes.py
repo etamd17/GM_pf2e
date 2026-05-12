@@ -364,6 +364,11 @@ def extract_state_lines(rel_path: str = "Now Playing.md") -> dict:
             raw = f.read()
     except (NotePathError, OSError):
         return {}
+    # Obsidian on Windows / iCloud sometimes writes a UTF-8 BOM at the
+    # head of the file. Strip it so the frontmatter regex (`^---`) can
+    # still match line 1.
+    if raw.startswith("﻿"):
+        raw = raw[1:]
     fm, body = _split_frontmatter(raw)
     # Frontmatter values pass through (lower-cased keys for stable lookup)
     for k, v in (fm or {}).items():
@@ -754,6 +759,19 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
     silently leave the user's write uncommitted on disk."""
     if get_vault_root() is None:
         raise NotePathError("Vault is not available")
+    # Cold-boot guard: if vault_sync is wired but its background clone
+    # hasn't completed yet, refuse the write. The clone path ends with
+    # `git reset --hard origin/<branch>`, which would silently discard
+    # any file we wrote between the request and clone-finish. Better
+    # to surface a retryable error than to lose the GM's edit.
+    try:
+        from . import vault_sync as _vs_check
+        if _vs_check.ENABLED and not _vs_check._state.get("initialized"):
+            raise NotePathError("Vault sync is still initializing — try again in a moment")
+    except NotePathError:
+        raise
+    except Exception:
+        pass
     p = _safe_join(rel_path)
     # Auto-create parent directories. Edits-from-the-website often land in
     # paths like Sessions/2026-05-10.md that don't exist yet on first push.

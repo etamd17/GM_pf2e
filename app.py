@@ -27,6 +27,10 @@ from pf2e_generator import RobustPF2eGenerator
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
+# Reject oversized uploads at the WSGI layer so a multi-GB POST can't OOM
+# the dyno before our per-endpoint size checks run. Bumped high enough for
+# a fat tarball push (vault_data) but well under Railway's worker memory.
+app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
 
 # --- GM ACCESS CONTROL ---
 GM_PASSWORD = os.environ.get('GM_PASSWORD', '')  # Set in Railway env vars
@@ -39,6 +43,9 @@ def gm_required(f):
             return f(*args, **kwargs)  # No password set = open access (local dev)
         if session.get('gm_authenticated'):
             return f(*args, **kwargs)
+        # API callers expect JSON; HTML callers expect a redirect to login.
+        if request.path.startswith('/api/'):
+            return jsonify({"error": "GM authentication required"}), 403
         return redirect('/gm/login')
     return decorated
 
@@ -52,6 +59,25 @@ def _is_gm():
     """
     return (not GM_PASSWORD) or session.get('gm_authenticated', False)
 
+def require_pc_self_or_gm(f):
+    """Decorator: allow only the GM or the PC's owner (`session.player_name == pc_name`).
+
+    Player sheet mutators take `<pc_name>` from the URL; without this guard
+    any player could `fetch('/api/long_rest/AnotherPC')` and edit a sibling's
+    character. Local dev (no GM_PASSWORD) is open access, same as gm_required.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not GM_PASSWORD:
+            return f(*args, **kwargs)
+        if session.get('gm_authenticated'):
+            return f(*args, **kwargs)
+        pc_name = kwargs.get('pc_name')
+        if pc_name and session.get('player_name') == pc_name:
+            return f(*args, **kwargs)
+        return jsonify({"error": "forbidden — not your character"}), 403
+    return decorated
+
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
     '/api/add_combatant', '/api/add_party', '/api/remove_combatant', '/api/clear_encounter',
@@ -60,6 +86,7 @@ GM_API_PREFIXES = (
     '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
     '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
     '/api/save_encounter', '/api/load_encounter',
+    '/api/roll_all_initiative', '/api/reorder_initiative',
     '/api/monster_search', '/api/stage_encounter', '/api/party_stats',
     '/api/monster_statblock/', '/api/combatant_stats/',
     '/api/toggle_combatant_visibility/',
@@ -72,8 +99,14 @@ GM_API_PREFIXES = (
     # counterpart for player views.
     '/api/tracker_state',
     # /api/gm_secret_log holds GM-only secret rolls (stealth/perception/etc.)
-    # — never fetched by player templates. Keep it GM-only.
-    '/api/gm_secret_log',
+    # — never fetched by player templates. Keep it GM-only. /api/gm_secret_roll
+    # mints new ones; same constraint.
+    '/api/gm_secret_log', '/api/gm_secret_roll',
+    # /api/combat_log/clear and /api/clear_log are GM-only (wipe the combat log);
+    # GET /api/combat_log itself is player-facing and stays open.
+    '/api/combat_log/clear', '/api/clear_log',
+    # Character library admin (delete a PC, upload a handout to the table).
+    '/api/delete_character/', '/api/handout_upload',
     '/api/generate/', '/api/vault_',
 )
 
@@ -986,7 +1019,7 @@ pf2e_gen = RobustPF2eGenerator()
 VALID_GENERATOR_TYPES = {'npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event'}
 
 # --- SECURITY: Allowed image extensions for vault image serving ---
-ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'}
+ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}  # .svg dropped — SVG can carry inline JS / event handlers; if you need to host one, store it as a static asset.
 
 # --- CHARACTER FILE LOOKUP CACHE ---
 _PC_FILE_CACHE = {}  # Maps character name -> filename (not full path)
@@ -4356,7 +4389,14 @@ def gm_login():
         pw = request.form.get('password', '')
         if pw == GM_PASSWORD:
             session['gm_authenticated'] = True
-            return redirect(request.args.get('next', '/gm'))
+            # Reject open-redirects: `next` must be a relative same-origin
+            # path (starts with `/` and not `//`), otherwise an attacker
+            # could craft /gm/login?next=https://evil.com/phish and land
+            # the freshly-authed GM on a phishing page.
+            nxt = request.args.get('next', '/gm') or '/gm'
+            if not nxt.startswith('/') or nxt.startswith('//'):
+                nxt = '/gm'
+            return redirect(nxt)
         return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
             <title>GM Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
             <style>body{font-family:'Inter',system-ui,sans-serif;background:#0d0d12;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
@@ -4982,6 +5022,7 @@ def get_handouts():
     return jsonify({"handouts": visible})
 
 @app.route('/api/handouts', methods=['POST'])
+@gm_required
 def create_handout():
     """GM creates a handout to push to players."""
     data = request.json or {}
@@ -5011,6 +5052,7 @@ def create_handout():
     return jsonify({"success": True, "handout": handout})
 
 @app.route('/api/handouts/<handout_id>', methods=['DELETE'])
+@gm_required
 def delete_handout(handout_id):
     """GM deletes a handout."""
     global HANDOUTS
@@ -5033,7 +5075,7 @@ def upload_handout_image():
     os.makedirs(upload_dir, exist_ok=True)
 
     ext = os.path.splitext(f.filename)[1].lower()
-    if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'):
+    if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
         return jsonify({"error": "Invalid image format"}), 400
 
     filename = f"{uuid.uuid4().hex[:12]}{ext}"
@@ -5161,6 +5203,7 @@ def adjust_hp(instance_id):
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/adjust_party_hp/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def adjust_party_hp(pc_name):
     try:
         amount = int(request.form.get('amount', 0))
@@ -5223,6 +5266,7 @@ def adjust_party_hp(pc_name):
     return redirect(url_for('party_view'))
 
 @app.route('/api/adjust_temp_hp/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def adjust_temp_hp(pc_name):
     """Set / add to / clear a PC's manual temporary HP pool.
 
@@ -5266,6 +5310,7 @@ def adjust_temp_hp(pc_name):
         return jsonify({"success": False, "error": "Bad amount"}), 400
 
 @app.route('/api/adjust_focus/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def adjust_focus(pc_name):
     try:
         action = request.form.get('action')
@@ -5283,6 +5328,7 @@ def adjust_focus(pc_name):
     return jsonify({"success": False})
 
 @app.route('/api/refocus/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def refocus(pc_name):
     """PF2e Refocus activity: spend 10 minutes performing class-appropriate
     deeds to restore 1 Focus Point (capped at focus_max, max 3 in pool)."""
@@ -5304,6 +5350,7 @@ def refocus(pc_name):
                     "message": f"{pc_name} refocused (10 min). +1 Focus Point."})
 
 @app.route('/api/adjust_hero/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def adjust_hero(pc_name):
     try:
         action = request.form.get('action')
@@ -5324,6 +5371,7 @@ def adjust_hero(pc_name):
 # DAILY PREPARATIONS
 # =============================================================================
 @app.route('/api/daily_prep/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def daily_preparations(pc_name):
     """Daily preparations: reset spell slots, focus points, conditions, optionally heal to full."""
     pc, file_path, err = require_pc(pc_name)
@@ -5421,6 +5469,7 @@ def daily_preparations_all():
 # SHIELD BLOCK SYSTEM
 # =============================================================================
 @app.route('/api/shield_block/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def shield_block(pc_name):
     """Use Shield Block reaction: reduce damage by hardness, shield takes remaining."""
     pc, _, err = require_pc(pc_name)
@@ -5536,6 +5585,7 @@ def shield_block(pc_name):
     })
 
 @app.route('/api/repair_shield/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def repair_shield(pc_name):
     """Repair a shield (Crafting check during daily prep or Repair action)."""
     pc_json, file_path, err = require_pc_json(pc_name)
@@ -5565,6 +5615,7 @@ def repair_shield(pc_name):
     return jsonify({"success": True, "shield_hp": build['shield_hp'], "shield_max_hp": shield_max_hp})
 
 @app.route('/api/set_shield_stats/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def set_shield_stats(pc_name):
     """Set shield stats (hardness, HP, BT) when equipping a new shield."""
     pc_json, file_path, err = require_pc_json(pc_name)
@@ -5651,6 +5702,7 @@ def check_flanking():
 
 # NEW: FRONTEND CONDITION SYNC
 @app.route('/api/update_pc_condition/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def update_pc_condition(pc_name):
     data = request.json
     cond = data.get('condition')
@@ -5781,25 +5833,32 @@ def use_action(instance_id):
         delta = int(data.get('delta', 1))
     except (TypeError, ValueError):
         delta = 1
-    target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
-    if not target:
-        return jsonify({"success": False, "error": "Combatant not found"}), 404
-    if slot == 'reaction':
-        cur = bool(getattr(target, 'reaction_used', False))
-        target.reaction_used = not cur if delta == 0 else (delta > 0)
-        if target.is_pc and target.name in PARTY_LIBRARY:
-            PARTY_LIBRARY[target.name].reaction_used = bool(target.reaction_used)
-            _broadcast_pc_state(target.name)
-    else:
-        max_a = int(getattr(target, 'max_actions', 3) or 3)
-        cur = int(getattr(target, 'actions_used', 0) or 0)
-        target.actions_used = max(0, min(max_a, cur + delta))
+    with ENCOUNTER_LOCK:
+        target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
+        if not target:
+            return jsonify({"success": False, "error": "Combatant not found"}), 404
+        if slot == 'reaction':
+            cur = bool(getattr(target, 'reaction_used', False))
+            target.reaction_used = not cur if delta == 0 else (delta > 0)
+            if target.is_pc and target.name in PARTY_LIBRARY:
+                PARTY_LIBRARY[target.name].reaction_used = bool(target.reaction_used)
+        else:
+            max_a = int(getattr(target, 'max_actions', 3) or 3)
+            cur = int(getattr(target, 'actions_used', 0) or 0)
+            target.actions_used = max(0, min(max_a, cur + delta))
+        actions_used = int(getattr(target, 'actions_used', 0) or 0)
+        max_actions = int(getattr(target, 'max_actions', 3) or 3)
+        reaction_used = bool(getattr(target, 'reaction_used', False))
+        is_pc = target.is_pc
+        target_name = target.name
+    if is_pc and target_name in PARTY_LIBRARY:
+        _broadcast_pc_state(target_name)
     _broadcast_encounter_state()
     return jsonify({
         "success": True,
-        "actions_used": int(getattr(target, 'actions_used', 0) or 0),
-        "max_actions": int(getattr(target, 'max_actions', 3) or 3),
-        "reaction_used": bool(getattr(target, 'reaction_used', False)),
+        "actions_used": actions_used,
+        "max_actions": max_actions,
+        "reaction_used": reaction_used,
     })
 
 @app.route('/api/recovery_check/<instance_id>', methods=['POST'])
@@ -5817,39 +5876,43 @@ def recovery_check(instance_id):
     except (TypeError, ValueError):
         d20 = _r.randint(1, 20)
     d20 = max(1, min(20, d20))
-    target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
-    if not target:
-        return jsonify({"success": False, "error": "Combatant not found"}), 404
-    dying = int(target.conditions.get('dying', 0) or 0)
-    if dying <= 0:
-        return jsonify({"success": False, "error": "Not dying"}), 400
-    dc = 10 + dying
-    # Degree-of-success ladder, with nat 1 / nat 20 stepping by one
-    if d20 >= dc + 10: degree = 'crit_success'
-    elif d20 >= dc:    degree = 'success'
-    elif d20 <= dc - 10: degree = 'crit_failure'
-    else:              degree = 'failure'
-    # Step by 1 for natural 1/20
-    order = ['crit_failure', 'failure', 'success', 'crit_success']
-    if d20 == 20: degree = order[min(len(order) - 1, order.index(degree) + 1)]
-    elif d20 == 1: degree = order[max(0, order.index(degree) - 1)]
-    delta = {'crit_success': -2, 'success': -1, 'failure': 1, 'crit_failure': 2}[degree]
-    new_dying = max(0, dying + delta)
-    doomed = int(target.conditions.get('doomed', 0) or 0)
-    death_threshold = max(1, 4 - doomed)
-    died = new_dying >= death_threshold
-    if died:
-        new_dying = death_threshold
-    target.conditions['dying'] = new_dying
-    if new_dying == 0 and dying > 0:
-        target.conditions['wounded'] = int(target.conditions.get('wounded', 0) or 0) + 1
-    if target.is_pc and target.name in PARTY_LIBRARY:
-        PARTY_LIBRARY[target.name].conditions['dying'] = target.conditions['dying']
-        PARTY_LIBRARY[target.name].conditions['wounded'] = target.conditions['wounded']
-        _broadcast_pc_state(target.name)
-        _persist_pc_combat_state(target.name)
+    with ENCOUNTER_LOCK:
+        target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
+        if not target:
+            return jsonify({"success": False, "error": "Combatant not found"}), 404
+        dying = int(target.conditions.get('dying', 0) or 0)
+        if dying <= 0:
+            return jsonify({"success": False, "error": "Not dying"}), 400
+        dc = 10 + dying
+        # Degree-of-success ladder, with nat 1 / nat 20 stepping by one
+        if d20 >= dc + 10: degree = 'crit_success'
+        elif d20 >= dc:    degree = 'success'
+        elif d20 <= dc - 10: degree = 'crit_failure'
+        else:              degree = 'failure'
+        # Step by 1 for natural 1/20
+        order = ['crit_failure', 'failure', 'success', 'crit_success']
+        if d20 == 20: degree = order[min(len(order) - 1, order.index(degree) + 1)]
+        elif d20 == 1: degree = order[max(0, order.index(degree) - 1)]
+        delta = {'crit_success': -2, 'success': -1, 'failure': 1, 'crit_failure': 2}[degree]
+        new_dying = max(0, dying + delta)
+        doomed = int(target.conditions.get('doomed', 0) or 0)
+        death_threshold = max(1, 4 - doomed)
+        died = new_dying >= death_threshold
+        if died:
+            new_dying = death_threshold
+        target.conditions['dying'] = new_dying
+        if new_dying == 0 and dying > 0:
+            target.conditions['wounded'] = int(target.conditions.get('wounded', 0) or 0) + 1
+        is_pc = target.is_pc
+        target_name = target.name
+        new_wounded = target.conditions['wounded']
+    if is_pc and target_name in PARTY_LIBRARY:
+        PARTY_LIBRARY[target_name].conditions['dying'] = new_dying
+        PARTY_LIBRARY[target_name].conditions['wounded'] = new_wounded
+        _broadcast_pc_state(target_name)
+        _persist_pc_combat_state(target_name)
     label = degree.replace('_', ' ').title()
-    msg = f"{target.name}: Recovery DC {dc} → rolled {d20} → {label} ({'died' if died else f'Dying {new_dying}'})"
+    msg = f"{target_name}: Recovery DC {dc} → rolled {d20} → {label} ({'died' if died else f'Dying {new_dying}'})"
     _combat_log(msg, 'condition', degree=degree)
     _persist_encounter_state()
     _broadcast_encounter_state()
@@ -5861,25 +5924,29 @@ def recovery_check(instance_id):
         "delta": delta,
         "dying": new_dying,
         "died": died,
-        "wounded": target.conditions['wounded'],
+        "wounded": new_wounded,
     })
 
 @app.route('/api/set_persistent_damage/<instance_id>', methods=['POST'])
 def set_persistent_damage(instance_id):
     pd_val = request.form.get('persistent_damage', '') or (request.json or {}).get('persistent_damage', '')
-    for c in ACTIVE_ENCOUNTER:
-        if c.instance_id == instance_id:
-            # Monsters keep the legacy string format ('1d6 fire'); PCs use
-            # the list-of-dicts format. Don't splat a string onto a PC's
-            # persistent_damage — it corrupts the list (list("[]") -> ['[',']']).
-            # GM edits for PCs go through /api/persistent_damage/<name>/... instead.
-            if c.is_pc and c.name in PARTY_LIBRARY:
-                c.persistent_damage = pd_val  # update the tracker row only
-            else:
-                c.persistent_damage = pd_val
-            _persist_encounter_state()
-            _broadcast_encounter_state()
-            break
+    # Hold ENCOUNTER_LOCK across the iterate-and-mutate so the autosave
+    # snapshot (which also takes the lock) can't see a torn write, and
+    # parallel AOE damage POSTs can't race each other on the same combatant.
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id:
+                # Monsters keep the legacy string format ('1d6 fire'); PCs use
+                # the list-of-dicts format. Don't splat a string onto a PC's
+                # persistent_damage — it corrupts the list (list("[]") -> ['[',']']).
+                # GM edits for PCs go through /api/persistent_damage/<name>/... instead.
+                if c.is_pc and c.name in PARTY_LIBRARY:
+                    c.persistent_damage = pd_val  # update the tracker row only
+                else:
+                    c.persistent_damage = pd_val
+                break
+    _persist_encounter_state()
+    _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
@@ -5887,12 +5954,13 @@ def set_persistent_damage(instance_id):
 def toggle_elite_weak(instance_id):
     mode = request.form.get('mode', 'normal') or (request.json or {}).get('mode', 'normal')
     mode_val = {'elite': 1, 'weak': -1, 'normal': 0}.get(mode, 0)
-    for c in ACTIVE_ENCOUNTER:
-        if c.instance_id == instance_id and not c.is_pc and hasattr(c, 'apply_elite_weak'):
-            c.apply_elite_weak(mode_val)
-            _persist_encounter_state()
-            _broadcast_encounter_state()
-            break
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id and not c.is_pc and hasattr(c, 'apply_elite_weak'):
+                c.apply_elite_weak(mode_val)
+                break
+    _persist_encounter_state()
+    _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
@@ -5900,8 +5968,9 @@ def toggle_elite_weak(instance_id):
 def update_initiative(instance_id):
     try: init_val = int(request.form.get('initiative', 0) or (request.json or {}).get('initiative', 0))
     except ValueError: init_val = 0
-    for c in ACTIVE_ENCOUNTER:
-        if c.instance_id == instance_id: c.initiative = init_val; break
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id: c.initiative = init_val; break
     _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
@@ -6077,17 +6146,26 @@ def cycle_turn(direction):
                 _combat_log(f"{_pc.name}: Raise a Shield expired (start of turn)", 'condition')
             _persist_pc_combat_state(new_c.name)
             _broadcast_pc_state(new_c.name)
-        # Action economy reset: every combatant gets 3 actions + reaction back
-        # at the start of their turn. PC reaction was already cleared above.
+        # Action economy reset: Slowed lowers the action ceiling, Stunned
+        # then spends from what's left (PF2E Core p.448). Pip widget reads
+        # max_actions/actions_used directly, so both must reflect the
+        # condition math BEFORE the turn renders.
+        slowed_val = new_c.conditions.get('slowed', 0)
+        new_c.max_actions = max(0, min(4, 3 - int(slowed_val or 0)))
         new_c.actions_used = 0
         if not new_c.is_pc:
             new_c.reaction_used = False
 
-        # Stunned: lose actions, then reduce stunned by the number lost (PF2E Core p.448)
+        # Stunned: lose actions (cap at the remaining max), then decrement
+        # stunned by the number lost. We pre-fill actions_used so the pip
+        # widget shows the stunned cost already spent — otherwise the GM
+        # would see 3/3 actions on a stunned combatant's turn and have to
+        # remember to click them off manually.
         stunned_val = new_c.conditions.get('stunned', 0)
         if stunned_val > 0:
-            actions_lost = min(stunned_val, 3)
+            actions_lost = min(stunned_val, new_c.max_actions)
             new_c.conditions['stunned'] = max(0, stunned_val - actions_lost)
+            new_c.actions_used = actions_lost
             _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
             if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
         
@@ -6854,6 +6932,23 @@ def api_admin_vault_upload():
     target = notes_service.get_vault_data_dir()
     target.mkdir(parents=True, exist_ok=True)
 
+    # When git-backed vault_sync is enabled, the .git directory IS the
+    # source of truth. `replace=full` would swap in a plain extract with
+    # no .git, breaking every subsequent push/pull until the process
+    # restarts (commit_and_push gates on `(_target_dir / '.git').is_dir()`).
+    # Refuse it here rather than silently corrupting sync.
+    try:
+        from services import vault_sync as _vault_sync
+        sync_enabled = bool(_vault_sync.ENABLED)
+    except Exception:
+        _vault_sync = None
+        sync_enabled = False
+    if mode == 'full' and sync_enabled:
+        return jsonify({
+            "success": False,
+            "error": "replace=full is not allowed while vault_sync is enabled — use merge so the .git history isn't lost"
+        }), 409
+
     # If replace=full, write into a fresh sibling dir then atomically swap.
     # On merge, extract over the existing tree (the typical incremental push).
     if mode == 'full':
@@ -6868,53 +6963,72 @@ def api_admin_vault_upload():
     with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
         f.save(tmp.name)
         tmp_path = tmp.name
+
+    # Hold the vault_sync lock across the whole extract → swap → commit
+    # window so the background poller can't fetch+merge into vault_data
+    # mid-extraction (which would push a half-extracted snapshot to
+    # GitHub). When sync is disabled the lock is a no-op contextmanager.
+    if sync_enabled and _vault_sync is not None:
+        _sync_cm = _vault_sync.acquire_lock()
+    else:
+        from contextlib import nullcontext
+        _sync_cm = nullcontext()
+
     try:
-        with tarfile.open(tmp_path, 'r:gz') as tar:
-            for member in tar.getmembers():
-                # Reject path-traversal in archive member names
-                name = member.name
-                if name.startswith('/') or '..' in Path(name).parts:
-                    continue
-                if member.isdev() or member.issym() or member.islnk():
-                    continue
-                tar.extract(member, path=extract_to, set_attrs=False)
-    except tarfile.TarError as e:
-        return jsonify({"success": False, "error": f"bad tarball: {e}"}), 400
+        with _sync_cm:
+            try:
+                with tarfile.open(tmp_path, 'r:gz') as tar:
+                    for member in tar.getmembers():
+                        # Reject path-traversal in archive member names
+                        name = member.name
+                        if name.startswith('/') or '..' in Path(name).parts:
+                            continue
+                        if member.isdev() or member.issym() or member.islnk():
+                            continue
+                        # Skip dotfiles at the root so a stray .env or .ssh
+                        # in the GM's local vault doesn't get committed to
+                        # the GitHub mirror. Dotfiles inside subdirs are
+                        # fine (e.g. .obsidian/workspace.json).
+                        if name.split('/', 1)[0].startswith('.') and name != '.gitignore':
+                            continue
+                        tar.extract(member, path=extract_to, set_attrs=False)
+            except tarfile.TarError as e:
+                return jsonify({"success": False, "error": f"bad tarball: {e}"}), 400
+
+            if mode == 'full':
+                # Atomic swap: rename existing vault_data → backup, staging → vault_data
+                backup = target.parent / (target.name + '.bak')
+                if backup.exists():
+                    shutil.rmtree(backup)
+                if target.exists():
+                    os.rename(target, backup)
+                os.rename(extract_to, target)
+                if backup.exists():
+                    shutil.rmtree(backup, ignore_errors=True)
+
+            # Stamp last-push so the pull endpoint knows what's new
+            now = _t.time()
+            try:
+                marker = target / '.vault_last_push'
+                marker.touch(exist_ok=True)
+                os.utime(marker, (now, now))
+            except OSError:
+                pass
+
+            notes_service.invalidate_tree_cache()
+            notes_service.invalidate_index()
+
+            # If vault_sync is wired, snapshot the bulk upload as a single
+            # commit so the GitHub repo stays in sync with the volume.
+            # commit_and_push re-acquires the same RLock — safe.
+            if sync_enabled and _vault_sync is not None:
+                try:
+                    _vault_sync.commit_and_push(['.'], f"bulk upload via push_vault.py ({mode})")
+                except Exception:
+                    pass
     finally:
         try: os.remove(tmp_path)
         except OSError: pass
-
-    if mode == 'full':
-        # Atomic swap: rename existing vault_data → backup, staging → vault_data
-        backup = target.parent / (target.name + '.bak')
-        if backup.exists():
-            shutil.rmtree(backup)
-        if target.exists():
-            os.rename(target, backup)
-        os.rename(extract_to, target)
-        if backup.exists():
-            shutil.rmtree(backup, ignore_errors=True)
-
-    # Stamp last-push so the pull endpoint knows what's new
-    now = _t.time()
-    try:
-        marker = target / '.vault_last_push'
-        marker.touch(exist_ok=True)
-        os.utime(marker, (now, now))
-    except OSError:
-        pass
-
-    notes_service.invalidate_tree_cache()
-    notes_service.invalidate_index()
-
-    # If vault_sync is wired, snapshot the bulk upload as a single commit
-    # so the GitHub repo stays in sync with the volume.
-    try:
-        from services import vault_sync as _vault_sync
-        if _vault_sync.ENABLED:
-            _vault_sync.commit_and_push(['.'], f"bulk upload via push_vault.py ({mode})")
-    except Exception:
-        pass
 
     file_count = 0
     for _, _, files in os.walk(target):
@@ -8327,6 +8441,7 @@ def compendium_detail():
         c.close()
 
 @app.route('/api/long_rest/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def long_rest(pc_name):
     if pc_name in PARTY_LIBRARY:
         pc = PARTY_LIBRARY[pc_name]
@@ -8536,6 +8651,7 @@ def player_whisper(pc_name):
 
 
 @app.route('/api/treat_wounds/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def treat_wounds_dispatch(pc_name):
     """Player rolled Treat Wounds — broadcast a GM-visible record so the
     GM applies the healing (and we keep a session log of total healing
@@ -8580,6 +8696,7 @@ def healing_log_get():
 
 
 @app.route('/api/session_journal/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def session_journal_add(pc_name):
     """End-of-session prompt — player jots a one-line summary, GM gets
     a private SSE event so they can paste it into their Obsidian vault.
@@ -8633,6 +8750,7 @@ def _pc_spell_lock(pc_name):
         return L
 
 @app.route('/api/cast_spell/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def cast_spell(pc_name):
     """Validate + record a spell cast. Returns success/failure with a
     short reason string. Client uses the response to decide whether to
@@ -8883,6 +9001,7 @@ def send_loot_to_player():
 
 
 @app.route('/api/equip_armor/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def equip_armor(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -8915,6 +9034,7 @@ def equip_armor(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/update_sheet/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def update_sheet(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -8931,6 +9051,7 @@ def update_sheet(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/update_wealth/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def update_wealth(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -8947,6 +9068,7 @@ def update_wealth(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/spell_slots/<pc_name>', methods=['GET', 'POST'])
+@require_pc_self_or_gm
 def spell_slots(pc_name):
     """Server-side spell slot persistence. GET returns current state, POST saves it.
     Stores: expended_slots, prepared_spells, cast_prep (all server-side)."""
@@ -8981,6 +9103,7 @@ def spell_slots(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/add_item/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def add_item(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -9002,6 +9125,7 @@ def add_item(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/remove_item/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def remove_item(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -9021,6 +9145,7 @@ def remove_item(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/add_weapon/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def add_weapon(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -9061,6 +9186,7 @@ def add_weapon(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/toggle_two_hand/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def toggle_two_hand(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -9078,6 +9204,7 @@ def toggle_two_hand(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/delete_weapon/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def delete_weapon(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -9089,6 +9216,7 @@ def delete_weapon(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/save_notes/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def save_notes(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -9115,6 +9243,7 @@ def player_builder():
     )
 
 @app.route('/api/toggle_feature/<pc_name>/<feature_name>', methods=['POST'])
+@require_pc_self_or_gm
 def toggle_feature(pc_name, feature_name):
     """Toggle a class feature on/off (like Rage, Panache, etc.)."""
     if pc_name not in PARTY_LIBRARY:
@@ -9146,6 +9275,7 @@ def toggle_feature(pc_name, feature_name):
     return jsonify({"success": True, "active": active, "feature": feature_name, "effects": effects})
 
 @app.route('/api/set_reaction/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def set_reaction(pc_name):
     """Mark / clear a PC's per-round reaction. Auto-reset at the start of the
     PC's turn by cycle_turn; this endpoint is the manual toggle for players
@@ -9191,6 +9321,7 @@ def api_exploration_activities():
     })
 
 @app.route('/api/set_exploration_activity/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def set_exploration_activity(pc_name):
     """Set a PC's current exploration activity. Broadcasts via pc_update so
     the party view / GM screen can render a per-PC banner without polling."""
@@ -9212,6 +9343,7 @@ def set_exploration_activity(pc_name):
 
 
 @app.route('/api/persistent_damage/<pc_name>/add', methods=['POST'])
+@require_pc_self_or_gm
 def persistent_damage_add(pc_name):
     """Add a persistent-damage entry to a PC. Body: {damage, type, source}.
 
@@ -9246,6 +9378,7 @@ def persistent_damage_add(pc_name):
 
 
 @app.route('/api/persistent_damage/<pc_name>/remove/<int:idx>', methods=['POST'])
+@require_pc_self_or_gm
 def persistent_damage_remove(pc_name, idx):
     """Remove one persistent-damage entry by index (e.g. when the player
     rolls the DC 15 flat check and succeeds, or the GM confirms the source
@@ -9270,6 +9403,7 @@ def persistent_damage_remove(pc_name, idx):
 
 
 @app.route('/api/persistent_damage/<pc_name>/flat_check/<int:idx>', methods=['POST'])
+@require_pc_self_or_gm
 def persistent_damage_flat_check(pc_name, idx):
     """Roll the DC 15 flat check for a specific persistent-damage entry.
     On success, the entry is removed. We roll here so the result shows up
@@ -9313,6 +9447,7 @@ def persistent_damage_flat_check(pc_name, idx):
 
 
 @app.route('/api/toggle_shield/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def toggle_shield(pc_name):
     """Raise / lower a shield. PF2e: Raise a Shield is a 1-action activity
     that gives you the shield's circumstance bonus to AC until the start of
@@ -9342,6 +9477,7 @@ def toggle_shield(pc_name):
     })
 
 @app.route('/api/learn_spell/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def learn_spell(pc_name):
     """Add a spell to a character's spellbook/repertoire."""
     if pc_name not in PARTY_LIBRARY:
@@ -9400,6 +9536,7 @@ def learn_spell(pc_name):
     return jsonify({"success": True, "spell": spell_name, "level": spell_level})
 
 @app.route('/api/forget_spell/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def forget_spell(pc_name):
     """Remove a spell from a character's spellbook/repertoire.
 
@@ -9462,6 +9599,7 @@ def forget_spell(pc_name):
     return jsonify({"success": True, "removed": removed, "spell": spell_name, "level": spell_level})
 
 @app.route('/api/set_signature_spells/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def set_signature_spells(pc_name):
     """Set signature spells for spontaneous casters.
 
@@ -9542,6 +9680,7 @@ def set_signature_spells(pc_name):
     return jsonify({"success": True, "signature_spells": cleaned, "max_rank": max_rank})
 
 @app.route('/api/set_focus_spells/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def set_focus_spells(pc_name):
     """Manually add/set focus spells for a character."""
     if pc_name not in PARTY_LIBRARY:
@@ -9597,6 +9736,7 @@ def delete_character(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/add_pet/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def add_pet(pc_name):
     """Add a pet/companion to a character."""
     if pc_name not in PARTY_LIBRARY:
@@ -9613,6 +9753,7 @@ def add_pet(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/remove_pet/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def remove_pet(pc_name):
     """Remove a pet by name."""
     if pc_name not in PARTY_LIBRARY:
@@ -9629,6 +9770,7 @@ def remove_pet(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/send_initiative/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def send_initiative(pc_name):
     """Player rolls initiative and sends it to the GM encounter tracker."""
     if pc_name not in PARTY_LIBRARY:
@@ -9640,6 +9782,7 @@ def send_initiative(pc_name):
     return jsonify({"success": True, "initiative": roll_total})
 
 @app.route('/api/save_session_note/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def save_session_note(pc_name):
     """Save a dated session note entry."""
     if pc_name not in PARTY_LIBRARY:
@@ -9666,6 +9809,7 @@ def save_session_note(pc_name):
     return jsonify({"success": True, "count": len(session_notes)})
 
 @app.route('/api/delete_session_note/<pc_name>/<int:note_idx>', methods=['POST'])
+@require_pc_self_or_gm
 def delete_session_note(pc_name, note_idx):
     """Delete a session note by index."""
     file_path = get_pc_file_path(pc_name)
@@ -9680,6 +9824,7 @@ def delete_session_note(pc_name, note_idx):
     return jsonify({"success": True})
 
 @app.route('/api/sync_spell_slots/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def sync_spell_slots(pc_name):
     """Sync expended spell slot state to the character JSON for GM visibility."""
     if pc_name not in PARTY_LIBRARY:
@@ -9695,6 +9840,7 @@ def sync_spell_slots(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/upload_portrait/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def upload_portrait(pc_name):
     """Upload a character portrait image.
 
@@ -9752,6 +9898,7 @@ def upload_portrait(pc_name):
 
 
 @app.route('/api/update_portrait_focus/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def update_portrait_focus(pc_name):
     """Update only the focus point for an already-uploaded portrait.
     Cheaper than a re-upload when the player just wants to recentre."""
@@ -9836,23 +9983,29 @@ def api_campaign_hero_image():
 
     os.makedirs(CAMPAIGN_ASSETS_DIR, exist_ok=True)
 
-    # Clean out any prior hero_image_*.<ext> so the directory doesn't grow
-    # forever as the GM iterates on the splash art.
+    # Stamp filename with mtime so the browser cache busts naturally on
+    # re-upload (URL changes → fresh fetch). Save the NEW file first; only
+    # delete prior splashes after the new one is durably on disk and the
+    # config points at it. Reverse order would leave the GM with no splash
+    # if f.save() fails (disk hiccup / killed mid-write).
+    stamp = int(time.time())
+    filename = f"hero_image_{stamp}.{ext}"
+    new_path = os.path.join(CAMPAIGN_ASSETS_DIR, filename)
+    f.save(new_path)
+
+    public_url = f"/campaign_assets/{filename}"
+    _save_campaign_config({'hero_image': public_url})
+
+    # Now that the new splash is the source of truth, garbage-collect any
+    # older hero_image_* files so the volume doesn't grow forever as the
+    # GM iterates on the art.
     for old in os.listdir(CAMPAIGN_ASSETS_DIR):
-        if old.startswith('hero_image_'):
+        if old.startswith('hero_image_') and old != filename:
             try:
                 os.remove(os.path.join(CAMPAIGN_ASSETS_DIR, old))
             except OSError:
                 pass
 
-    # Stamp filename with mtime so the browser cache busts naturally on
-    # re-upload (URL changes → fresh fetch).
-    stamp = int(time.time())
-    filename = f"hero_image_{stamp}.{ext}"
-    f.save(os.path.join(CAMPAIGN_ASSETS_DIR, filename))
-
-    public_url = f"/campaign_assets/{filename}"
-    _save_campaign_config({'hero_image': public_url})
     return jsonify({"success": True, "hero_image": public_url, "byte_count": size})
 
 @app.route('/api/export_character/<pc_name>')
@@ -10371,6 +10524,7 @@ def _missing_progression_for_level(build, new_level):
     return missing
 
 @app.route('/api/submit_levelup/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def submit_levelup(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
@@ -10641,6 +10795,7 @@ def submit_levelup(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/revert_level/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def revert_level(pc_name):
     file_path = get_pc_file_path(pc_name)
     if os.path.exists(file_path):

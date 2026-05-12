@@ -1603,9 +1603,13 @@ function renderInitList() {
                          : '';
             subText = `${roleLabel} · Lvl ${c.level}${dcParts.length ? ' · ' + dcParts.join(' / ') : ''}${status}`;
         } else if (c.is_pc) {
+            // Escape BOTH `\` and `'` — see addPersistentDamage's escape; a name
+            // like `Go'el` or one with a stray backslash would otherwise close
+            // the inline JS string early and turn the onclick into a SyntaxError.
+            const _rxnName = c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             const reactionTag = c.reaction_used
-                ? `<button type="button" class="k rxn-spent" onclick="event.stopPropagation();toggleReaction('${c.name.replace(/'/g,"\\'")}',false)" title="Reaction spent — click to restore">RXN ✗</button>`
-                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();toggleReaction('${c.name.replace(/'/g,"\\'")}',true)" title="Reaction available — click to mark spent (AoO, Shield Block, etc.)">RXN</button>`;
+                ? `<button type="button" class="k rxn-spent" onclick="event.stopPropagation();toggleReaction('${_rxnName}',false)" title="Reaction spent — click to restore">RXN ✗</button>`
+                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();toggleReaction('${_rxnName}',true)" title="Reaction available — click to mark spent (AoO, Shield Block, etc.)">RXN</button>`;
             subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''} · ${reactionTag}`;
         }
         else subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}${hiddenBadge}`;
@@ -2920,8 +2924,15 @@ setInterval(async () => {
 
 /* ──────────────── Keyboard shortcut ──────────────── */
 document.addEventListener('keydown', e => {
+    // Bail on form fields AND contenteditable (notes drawer renders markdown
+    // into an editable region) — typing `n` there should not advance turn.
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.isContentEditable) return;
     if (e.key === 'n' || e.key === 'N') {
+        // Don't swallow Cmd+N / Ctrl+N / Alt+N — those are OS / browser
+        // shortcuts (new window, etc.); preventDefault wouldn't suppress
+        // them anyway, but we shouldn't ALSO fire next-turn on top.
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
         e.preventDefault();
         apiPost('/api/cycle_turn/next');
     }

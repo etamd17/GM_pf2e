@@ -124,7 +124,7 @@
        Pages that ARE the notes page set hide_notes_drawer to skip this. #}
     {% block notes_drawer %}
     <div id="notes-drawer" class="notes-drawer" aria-label="Vault notes drawer">
-        <button type="button" class="notes-drawer-tab" id="notes-drawer-tab" aria-expanded="false" title="Open vault notes (N)">
+        <button type="button" class="notes-drawer-tab" id="notes-drawer-tab" aria-expanded="false" title="Open vault notes (\)">
             <span class="ndt-glyph">📝</span>
             <span class="ndt-label">Notes</span>
         </button>
@@ -643,7 +643,12 @@
                 return;
             }
             if (inField) return;
-            if (e.key === 'n' || e.key === 'N') {
+            // Drawer hotkey is `\` (backslash) — `n` was colliding with
+            // tracker.html's Next-Turn binding, which is muscle memory the
+            // GM uses constantly during combat. Backslash is universally
+            // unbound across our pages and doesn't conflict with the dice
+            // widget either. Esc still closes (handled above).
+            if (e.key === '\\') {
                 if (e.metaKey || e.ctrlKey || e.altKey) return;
                 e.preventDefault();
                 setOpen(!drawer.classList.contains('open'));
