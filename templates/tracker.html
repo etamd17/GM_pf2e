@@ -1872,11 +1872,16 @@ function renderActivePanel() {
             html += `<div class="pd-list">`;
             pdList.forEach((e, i) => {
                 const label = `${e.damage || '?'}${e.type ? ' ' + e.type : ''}`;
+                // Escape for the inline JS string literal (single-quoted in onclick).
+                // `escapeHtml` would HTML-entity the apostrophe in names like "Go'el";
+                // the browser would decode it back to ' inside the attribute and the
+                // onclick string would terminate early. JS-escape backslashes the quote.
+                const nameJs = c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 html += `<div class="pd-entry">
                     <span class="pd-lbl">PD</span>
                     <span class="pd-text">${escapeHtml(label)}${e.source ? ` <span class="pd-src">(${escapeHtml(e.source)})</span>` : ''}</span>
-                    <button class="act-btn" onclick="rollPersistentFlatCheck('${escapeHtml(c.name)}', ${i})" title="Roll DC 15 flat check — on success the persistent damage ends">Roll DC 15</button>
-                    <button class="act-btn" onclick="removePersistentDamage('${escapeHtml(c.name)}', ${i})" title="Remove without rolling (e.g. cleansed by a spell)">×</button>
+                    <button class="act-btn" onclick="rollPersistentFlatCheck('${nameJs}', ${i})" title="Roll DC 15 flat check — on success the persistent damage ends">Roll DC 15</button>
+                    <button class="act-btn" onclick="removePersistentDamage('${nameJs}', ${i})" title="Remove without rolling (e.g. cleansed by a spell)">×</button>
                 </div>`;
             });
             html += `</div>`;
@@ -1902,7 +1907,7 @@ function renderActivePanel() {
                 <option value="slashing">slashing</option>
             </select>
             <input type="text" id="pd-src-${c.instance_id}" placeholder="source (optional)" style="width:140px;">
-            <button onclick="addPersistentDamage('${escapeHtml(c.name)}','${c.instance_id}')">Add</button>
+            <button onclick="addPersistentDamage('${c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}','${c.instance_id}')">Add</button>
         </div>`;
     } else {
         html += `<div class="pd-row">

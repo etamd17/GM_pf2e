@@ -13,6 +13,7 @@ import time
 import queue
 import threading
 from functools import wraps
+from pathlib import Path
 
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
 from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES, get_required_slots_at_level
@@ -5768,6 +5769,7 @@ def toggle_condition(instance_id):
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/use_action/<instance_id>', methods=['POST'])
+@gm_required
 def use_action(instance_id):
     """Toggle a combatant's action-economy pip. Body: {slot: 'action'|'reaction',
     delta: +1|-1}. Used by the tracker action-economy widget so the GM can
@@ -5801,6 +5803,7 @@ def use_action(instance_id):
     })
 
 @app.route('/api/recovery_check/<instance_id>', methods=['POST'])
+@gm_required
 def recovery_check(instance_id):
     """PF2e Remaster recovery check: flat check vs DC 10 + current dying value.
     The site never forces a roll — players can roll physical dice and POST
