@@ -7018,7 +7018,33 @@ def api_session_export():
     rel_path = None
     mtime = None
     if write_to_vault and notes_service.get_vault_root() is not None:
-        rel_path = f"Sessions/{safe_title}.md"
+        # Detect the active chapter's Sessions folder from Now Playing.md's
+        # `Last Session: [[Path/To/Sessions/Session - X|alias]]` wikilink.
+        # If present and the parent path resolves to an existing directory in
+        # the vault, drop new exports there so they sit alongside last
+        # session's recap. Falls back to a top-level Sessions/ folder when
+        # we can't tell — keeps the export flow robust if Now Playing.md
+        # ever has a different shape.
+        sessions_dir = "Sessions"
+        try:
+            state = notes_service.extract_state_lines("Now Playing.md")
+            last = state.get("last session") or state.get("last_session") or ""
+            # Pull the target out of [[Path/To/Note|Display Alias]]
+            m = re.search(r"\[\[([^\]\|]+)", last)
+            if m:
+                target = m.group(1).strip()
+                if target.endswith(".md"):
+                    target = target[:-3]
+                parent = "/".join(target.split("/")[:-1])
+                if parent:
+                    # Only honor it if the directory exists in the vault — we
+                    # don't want to silently mkdir a typo into a fresh tree.
+                    parent_abs = (notes_service.get_vault_root() / parent).resolve()
+                    if parent_abs.is_dir():
+                        sessions_dir = parent
+        except Exception:
+            pass
+        rel_path = f"{sessions_dir}/{safe_title}.md"
         try:
             r = notes_service.save(rel_path, body, commit_message=f"session export: {title}")
             written = True
