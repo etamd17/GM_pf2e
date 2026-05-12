@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -104,21 +105,36 @@ def _auth_url() -> str:
 
 
 def _redact(s: str) -> str:
-    """Strip the PAT from any string before logging it."""
+    """Strip the PAT (and any inline-URL credentials) from a string before
+    logging or surfacing it via status(). Covers the configured token AND
+    the generic `https://user:secret@host/...` form, since some operators
+    embed credentials directly in PF2E_VAULT_GIT_URL rather than the
+    separate token env-var."""
+    if not s:
+        return s
     if GIT_TOKEN and GIT_TOKEN in s:
-        return s.replace(GIT_TOKEN, "***")
-    return s
+        s = s.replace(GIT_TOKEN, "***")
+    # Also redact any embedded `://user:secret@` form so subprocess error
+    # messages carrying the auth_url don't leak via TimeoutExpired etc.
+    return re.sub(r"(://)[^/@\s]+:[^/@\s]+@", r"\1***@", s)
 
 
 def _git(*args: str, cwd: Path, check: bool = True, timeout: int = 60) -> tuple[int, str, str]:
-    """Run git with a fixed timeout. Returns (returncode, stdout, stderr)."""
-    proc = subprocess.run(
-        ["git", *args],
-        cwd=str(cwd),
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-    )
+    """Run git with a fixed timeout. Returns (returncode, stdout, stderr).
+
+    Wraps subprocess.TimeoutExpired so the credentialed argv (which git
+    timeouts include verbatim in their `__str__`) doesn't bubble up to
+    status() / log lines un-redacted."""
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(_redact(f"git {' '.join(args[:1])} timed out after {timeout}s")) from None
     if check and proc.returncode != 0:
         raise RuntimeError(
             f"git {' '.join(args)} failed (code {proc.returncode}): "
@@ -166,13 +182,44 @@ def _initialize_sync(target: Path) -> bool:
             target.mkdir(parents=True, exist_ok=True)
             if (target / ".git").is_dir():
                 # Existing checkout — refresh the remote URL (in case the
-                # token rotated) and the identity, then fast-forward.
+                # token rotated) and the identity, then sync to origin
+                # WITHOUT discarding unpushed local commits. The old
+                # behavior here was `git reset --hard origin/<branch>`
+                # which silently wiped any commit whose push had failed
+                # (e.g. session-export that committed locally but couldn't
+                # reach GitHub). On the next deploy / process restart
+                # those commits would vanish.
                 _git("remote", "set-url", "origin", _auth_url(), cwd=target, check=False)
                 _git("config", "user.name", USER_NAME, cwd=target, check=False)
                 _git("config", "user.email", USER_EMAIL, cwd=target, check=False)
                 _git("fetch", "origin", GIT_BRANCH, cwd=target, timeout=90)
                 _git("checkout", "-B", GIT_BRANCH, f"origin/{GIT_BRANCH}", cwd=target, check=False)
-                _git("reset", "--hard", f"origin/{GIT_BRANCH}", cwd=target)
+                # Compare local HEAD vs origin and act safely.
+                _rc, ahead_behind_out, _err = _git(
+                    "rev-list", "--left-right", "--count",
+                    f"HEAD...origin/{GIT_BRANCH}", cwd=target, check=False,
+                )
+                try:
+                    a_str, b_str = ahead_behind_out.strip().split()
+                    ahead, behind = int(a_str), int(b_str)
+                except (ValueError, AttributeError):
+                    ahead, behind = 0, 0
+                if ahead == 0 and behind > 0:
+                    # Pure remote-side work — safe fast-forward.
+                    _git("merge", "--ff-only", f"origin/{GIT_BRANCH}", cwd=target, check=False)
+                elif ahead > 0:
+                    # Local commits never pushed. Try now; if successful and
+                    # remote also moved, refetch + ff-only.
+                    try:
+                        _git("push", "origin", GIT_BRANCH, cwd=target, timeout=60)
+                        if behind > 0:
+                            _git("fetch", "origin", GIT_BRANCH, cwd=target, timeout=90)
+                            _git("merge", "--ff-only", f"origin/{GIT_BRANCH}", cwd=target, check=False)
+                    except RuntimeError as push_err:
+                        logger.info(
+                            "vault_sync: init found local-ahead commits but push failed (%s); leaving working tree intact",
+                            _redact(str(push_err)),
+                        )
             elif any(target.iterdir()):
                 # Non-empty but not a git checkout. Initialize and overwrite
                 # with the remote so the volume's pre-existing contents

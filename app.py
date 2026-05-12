@@ -35,6 +35,17 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
 # --- GM ACCESS CONTROL ---
 GM_PASSWORD = os.environ.get('GM_PASSWORD', '')  # Set in Railway env vars
 
+# Session-cookie hardening. HttpOnly always; SameSite=Lax so the GM can
+# still follow an emailed link and stay logged in, but cross-site POSTs
+# don't carry the cookie. Secure flag is enabled in production (= when a
+# GM_PASSWORD is configured, which is the Railway deploy signal); in
+# local dev over http://localhost we leave it off so the session cookie
+# can still round-trip.
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+if GM_PASSWORD:
+    app.config['SESSION_COOKIE_SECURE'] = True
+
 def gm_required(f):
     """Decorator: requires GM password to access route."""
     @wraps(f)
@@ -85,8 +96,17 @@ GM_API_PREFIXES = (
     '/api/toggle_condition/', '/api/set_persistent_damage/', '/api/toggle_elite_weak/',
     '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
     '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
-    '/api/save_encounter', '/api/load_encounter',
+    '/api/save_encounter', '/api/load_encounter', '/api/delete_encounter',
+    '/api/save_stage',
     '/api/roll_all_initiative', '/api/reorder_initiative',
+    # GM-only loot/check dispatch + party-wide daily prep. Players see
+    # the resulting banners and loot deliveries but can't fire them.
+    '/api/request_check', '/api/send_loot', '/api/daily_prep_all',
+    # PC + monster authoring is GM-only — keeps a curious player from
+    # importing a sheet that overwrites a sibling's JSON file, or
+    # injecting a custom monster mid-fight.
+    '/api/import_pathbuilder', '/api/save_new_character',
+    '/api/import_monster', '/api/create_monster',
     '/api/monster_search', '/api/stage_encounter', '/api/party_stats',
     '/api/monster_statblock/', '/api/combatant_stats/',
     '/api/toggle_combatant_visibility/',
@@ -4876,6 +4896,14 @@ def recall_knowledge(instance_id):
     pc_name = data.get('pc_name', '')
     skill_override = data.get('skill', '')  # Optional skill override
 
+    # A player can only roll Recall Knowledge as their own PC. Without this
+    # check, Kyle could POST {pc_name: "Amadeus"} and the combat log would
+    # show Amadeus's roll using Amadeus's bonuses — both a spoofing vector
+    # and a fairness issue. GM bypasses (rolls NPCs / others freely).
+    if GM_PASSWORD and not _is_gm():
+        if not pc_name or session.get('player_name') != pc_name:
+            return jsonify({"error": "forbidden — you can only roll for your own character"}), 403
+
     # Find the target creature
     target = None
     for c in ACTIVE_ENCOUNTER:
@@ -5933,18 +5961,23 @@ def set_persistent_damage(instance_id):
     # Hold ENCOUNTER_LOCK across the iterate-and-mutate so the autosave
     # snapshot (which also takes the lock) can't see a torn write, and
     # parallel AOE damage POSTs can't race each other on the same combatant.
+    rejected_pc = False
     with ENCOUNTER_LOCK:
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
-                # Monsters keep the legacy string format ('1d6 fire'); PCs use
-                # the list-of-dicts format. Don't splat a string onto a PC's
-                # persistent_damage — it corrupts the list (list("[]") -> ['[',']']).
-                # GM edits for PCs go through /api/persistent_damage/<name>/... instead.
-                if c.is_pc and c.name in PARTY_LIBRARY:
-                    c.persistent_damage = pd_val  # update the tracker row only
-                else:
-                    c.persistent_damage = pd_val
+                # PCs store persistent_damage as a list-of-dicts; this string-
+                # form endpoint would corrupt that into `list("1d6 fire")` →
+                # ['1','d','6',...]. PC PD goes through /api/persistent_damage/
+                # <name>/{add,remove,flat_check} instead — bail with a 409
+                # so a misrouted client hears about it instead of silently
+                # writing junk.
+                if c.is_pc:
+                    rejected_pc = True
+                    break
+                c.persistent_damage = pd_val
                 break
+    if rejected_pc:
+        return jsonify({"success": False, "error": "PCs use /api/persistent_damage/<name>/... — this endpoint is monster-only"}), 409
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -6501,9 +6534,23 @@ def hazard_reset(instance_id):
     return jsonify({'success': True})
 
 
+def _sanitize_encounter_name(name: str) -> str:
+    """Strip everything but alnum/space/dash/underscore from a user-supplied
+    encounter name so it can be safely used as a filename. Returns '' if
+    nothing usable remains so the caller can 400 instead of writing to
+    a bare `.json` path."""
+    if not name:
+        return ''
+    cleaned = ''.join(ch for ch in name if ch.isalnum() or ch in ' -_').strip()
+    return cleaned[:120]  # cap so a giant name can't blow the filename limit
+
+
 @app.route('/api/save_encounter', methods=['POST'])
 def save_encounter():
-    name = request.form.get('encounter_name')
+    raw_name = request.form.get('encounter_name')
+    name = _sanitize_encounter_name(raw_name or '')
+    if not name:
+        return jsonify({"success": False, "error": "encounter_name required (alphanumerics, space, '-' or '_')"}), 400
     if name and ACTIVE_ENCOUNTER:
         if not os.path.exists(ENCOUNTER_DIR): os.makedirs(ENCOUNTER_DIR)
         encounter_data = {
@@ -6538,22 +6585,36 @@ def save_encounter():
 @app.route('/api/load_encounter', methods=['POST'])
 def load_encounter():
     global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP
-    name = request.form.get('encounter_name')
+    name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
+    if not name:
+        return jsonify({"success": False, "error": "encounter_name required"}), 400
     enc_path = os.path.join(ENCOUNTER_DIR, f"{name}.json")
-    if name and os.path.exists(enc_path):
-        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
+    if not os.path.exists(enc_path):
+        return jsonify({"success": False, "error": f"encounter '{name}' not found"}), 404
+    # Parse JSON BEFORE wiping the active state — a malformed save shouldn't
+    # leave the GM staring at an empty tracker mid-session.
+    try:
         with open(enc_path, 'r', encoding='utf-8') as f:
             raw = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return jsonify({"success": False, "error": f"encounter file is unreadable or corrupt: {e}"}), 500
+    if name and os.path.exists(enc_path):
+        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
 
         # Support both old format (list) and new format (dict with metadata)
         if isinstance(raw, list):
             combatants = raw
             saved_map = None
-        else:
-            combatants = raw.get('combatants', raw)
+        elif isinstance(raw, dict):
+            combatants = raw.get('combatants', [])
+            if not isinstance(combatants, list):
+                combatants = []
             ROUND_NUMBER = raw.get('round', 1)
             TURN_INDEX = raw.get('turn_index', 0)
             saved_map = raw.get('map')
+        else:
+            combatants = []
+            saved_map = None
 
         for item in combatants:
             new_c = None
@@ -8265,9 +8326,16 @@ def log_roll():
     degree = data.get('degree')
     if degree not in ('crit_success', 'success', 'failure', 'crit_failure'):
         degree = None
+    # Pin the actor name to the caller's session for non-GM callers — without
+    # this a player could POST {"name": "GM"} and inject fake rolls into the
+    # combat log. The GM can roll as anyone (NPCs etc.).
+    if _is_gm():
+        actor_name = data.get('name', 'Player')
+    else:
+        actor_name = session.get('player_name') or 'Player'
     log_entry = {
         'id': str(uuid.uuid4()),
-        'name': data.get('name', 'Player'),
+        'name': actor_name,
         'action': data.get('action', 'Action'),
         'result': data.get('result', ''),
         'detail': data.get('detail', ''),
@@ -8630,9 +8698,12 @@ def _load_session_state():
 _load_session_state()
 
 @app.route('/api/whisper/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
 def player_whisper(pc_name):
     """Player-only → GM-only message. Players never see other players'
-    whispers; the GM screen surfaces them in its inbox."""
+    whispers; the GM screen surfaces them in its inbox. The URL pc_name
+    is the *sender*; @require_pc_self_or_gm blocks Kyle from whispering
+    AS Amadeus."""
     if pc_name not in PARTY_LIBRARY:
         return jsonify({"success": False, "error": "unknown player"}), 404
     data = request.get_json(silent=True) or {}
