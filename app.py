@@ -158,16 +158,17 @@ def _gzip_response(response):
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)  # Railway volume mount or local
 MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')
-PARTY_DIR = os.path.join(DATA_DIR, 'party_data') 
-ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters') 
+PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
+ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
 OBSIDIAN_DIR = os.path.join(DATA_DIR, 'obsidian_vault')
 MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
+CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
 CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, CAMPAIGN_ASSETS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -9782,6 +9783,74 @@ def serve_portrait(filename):
     adds on upload (?v=<mtime>), re-uploads show immediately too."""
     portraits_dir = os.path.join(PARTY_DIR, 'portraits')
     return send_from_directory(portraits_dir, filename, max_age=3600)
+
+
+@app.route('/campaign_assets/<filename>')
+def serve_campaign_asset(filename):
+    """Serve campaign-level images (hero/splash backgrounds) from
+    CAMPAIGN_ASSETS_DIR. Public — the campaign intro page is the
+    players' login surface and references this URL."""
+    return send_from_directory(CAMPAIGN_ASSETS_DIR, filename, max_age=3600)
+
+
+@app.route('/api/campaign/hero_image', methods=['POST'])
+@gm_required
+def api_campaign_hero_image():
+    """Upload (or remove) the campaign splash background. Stored under
+    /campaign_assets/ on the Railway volume so it survives redeploys.
+    On successful upload, the campaign config's `hero_image` field is
+    updated to the public URL automatically — no manual URL paste."""
+    # Remove mode: empty file + ?action=remove clears the existing image.
+    if request.form.get('action') == 'remove' or request.args.get('action') == 'remove':
+        cfg = _load_campaign_config()
+        old = (cfg.get('hero_image') or '').strip()
+        # Only delete files we own (under /campaign_assets/) to avoid
+        # nuking a remote URL the GM pointed at manually.
+        if old.startswith('/campaign_assets/'):
+            old_path = os.path.join(CAMPAIGN_ASSETS_DIR, os.path.basename(old))
+            try:
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            except OSError:
+                pass
+        _save_campaign_config({'hero_image': ''})
+        return jsonify({"success": True, "hero_image": ""})
+
+    f = request.files.get('image')
+    if not f or not f.filename:
+        return jsonify({"success": False, "error": "image field required"}), 400
+
+    ext = (os.path.splitext(f.filename)[1] or '').lower().lstrip('.')
+    if ext not in {'png', 'jpg', 'jpeg', 'webp', 'gif'}:
+        return jsonify({"success": False, "error": f"unsupported extension '{ext}' — png / jpg / webp / gif only"}), 400
+
+    # Size guard so an accidental 60-MB drop doesn't fill the volume
+    f.seek(0, os.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 15 * 1024 * 1024:
+        return jsonify({"success": False, "error": f"file too large ({size // (1024*1024)} MB); max 15 MB"}), 413
+
+    os.makedirs(CAMPAIGN_ASSETS_DIR, exist_ok=True)
+
+    # Clean out any prior hero_image_*.<ext> so the directory doesn't grow
+    # forever as the GM iterates on the splash art.
+    for old in os.listdir(CAMPAIGN_ASSETS_DIR):
+        if old.startswith('hero_image_'):
+            try:
+                os.remove(os.path.join(CAMPAIGN_ASSETS_DIR, old))
+            except OSError:
+                pass
+
+    # Stamp filename with mtime so the browser cache busts naturally on
+    # re-upload (URL changes → fresh fetch).
+    stamp = int(time.time())
+    filename = f"hero_image_{stamp}.{ext}"
+    f.save(os.path.join(CAMPAIGN_ASSETS_DIR, filename))
+
+    public_url = f"/campaign_assets/{filename}"
+    _save_campaign_config({'hero_image': public_url})
+    return jsonify({"success": True, "hero_image": public_url, "byte_count": size})
 
 @app.route('/api/export_character/<pc_name>')
 def export_character(pc_name):

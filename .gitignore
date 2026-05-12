@@ -20,3 +20,7 @@ vault_data/
 .vault_last_push_ts
 .vault_local_last_push_ts
 obsidian_vault
+
+# GM-uploaded campaign assets (splash images etc.) — server-local,
+# never committed; lives on the Railway volume.
+campaign_assets/

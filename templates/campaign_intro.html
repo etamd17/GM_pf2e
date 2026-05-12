@@ -353,8 +353,28 @@
                     <input type="text" id="edit-next" class="field-input" value="{{ campaign.next_session_at }}" placeholder="e.g. Sat 5/16, 7pm">
                 </div>
                 <div class="md:col-span-2">
-                    <label class="field-label" for="edit-hero">Hero Image URL <span style="opacity:0.6; font-weight:400;">— optional, full-bleed background</span></label>
-                    <input type="text" id="edit-hero" class="field-input" value="{{ campaign.hero_image }}" placeholder="/portraits/shades-of-blood.jpg or https://...">
+                    <label class="field-label">Splash / Hero Image <span style="opacity:0.6; font-weight:400;">— full-bleed background behind the title</span></label>
+                    {# Live preview of the current hero image. Hidden when not set. #}
+                    <div id="hero-preview-row" style="display:{% if campaign.hero_image %}flex{% else %}none{% endif %}; gap:12px; align-items:center; margin-bottom:8px;">
+                        <img id="hero-preview-img"
+                             src="{{ campaign.hero_image }}"
+                             alt="Splash preview"
+                             style="width:120px; height:80px; object-fit:cover; border-radius:6px; border:1px solid rgba(255,255,255,0.10); background:#0c0a07;">
+                        <div style="font-size:11px; color:#9494b0; flex:1; word-break:break-all;" id="hero-current-url">{{ campaign.hero_image }}</div>
+                        <button type="button" onclick="removeHeroImage()" class="btn-ghost" style="font-size:10px; padding:6px 10px;">Remove</button>
+                    </div>
+                    {# Upload picker — accepts png/jpg/webp/gif, posts to /api/campaign/hero_image. #}
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <input type="file" id="hero-upload-file" accept="image/png,image/jpeg,image/webp,image/gif"
+                               style="font-size:12px; color:#b8b8cc;">
+                        <button type="button" onclick="uploadHeroImage()" id="hero-upload-btn" class="btn-gold" style="font-size:11px; padding:8px 14px;">Upload</button>
+                        <span id="hero-upload-status" style="font-size:11px; color:#9494b0;"></span>
+                    </div>
+                    <div style="font-size:10px; color:#6b6b8a; margin-top:6px;">
+                        Or paste a URL (CDN, public link):
+                    </div>
+                    <input type="text" id="edit-hero" class="field-input" value="{{ campaign.hero_image }}" placeholder="/campaign_assets/... or https://..."
+                           style="font-size:11px;">
                 </div>
                 <div>
                     <label class="field-label" for="edit-recap">Last Session Recap</label>
@@ -426,6 +446,68 @@
         const panel = document.getElementById('edit-panel');
         if (!panel) return;
         panel.classList.toggle('hidden');
+    }
+
+    /* ──────────────── Hero / splash image upload ────────────────
+       Posts the chosen file to /api/campaign/hero_image which writes it
+       to the Railway volume and returns the public URL. On success, the
+       text input is auto-filled, the preview row updates, and the
+       homepage background swaps in immediately on the next refresh. */
+    async function uploadHeroImage() {
+        const fileEl = document.getElementById('hero-upload-file');
+        const statusEl = document.getElementById('hero-upload-status');
+        const btn = document.getElementById('hero-upload-btn');
+        if (!fileEl || !fileEl.files || !fileEl.files[0]) {
+            statusEl.textContent = 'Pick a file first.'; statusEl.style.color = '#fca5a5';
+            return;
+        }
+        const file = fileEl.files[0];
+        const fd = new FormData();
+        fd.append('image', file);
+        btn.disabled = true; const oldLabel = btn.textContent; btn.textContent = 'Uploading…';
+        statusEl.style.color = '#9494b0'; statusEl.textContent = 'Sending ' + Math.round(file.size / 1024) + ' KB…';
+        try {
+            const res = await fetch('/api/campaign/hero_image', { method: 'POST', body: fd });
+            const j = await res.json();
+            if (!res.ok || !j.success) {
+                statusEl.textContent = j.error || ('Upload failed (' + res.status + ')');
+                statusEl.style.color = '#fca5a5';
+                return;
+            }
+            const url = j.hero_image;
+            document.getElementById('edit-hero').value = url;
+            const previewRow = document.getElementById('hero-preview-row');
+            previewRow.style.display = 'flex';
+            document.getElementById('hero-preview-img').src = url;
+            document.getElementById('hero-current-url').textContent = url;
+            fileEl.value = '';
+            statusEl.textContent = 'Uploaded · ' + Math.round((j.byte_count || file.size) / 1024) + ' KB';
+            statusEl.style.color = '#86efac';
+            showToast('Splash image uploaded — save to apply', 'ok');
+        } catch (e) {
+            statusEl.textContent = 'Upload error: ' + e;
+            statusEl.style.color = '#fca5a5';
+        } finally {
+            btn.disabled = false; btn.textContent = oldLabel;
+        }
+    }
+
+    async function removeHeroImage() {
+        if (!confirm('Remove the splash image? The campaign config will be cleared and the file deleted from the volume.')) return;
+        const fd = new FormData(); fd.append('action', 'remove');
+        try {
+            const res = await fetch('/api/campaign/hero_image', { method: 'POST', body: fd });
+            const j = await res.json();
+            if (!res.ok || !j.success) {
+                showToast(j.error || 'Remove failed', 'error');
+                return;
+            }
+            document.getElementById('edit-hero').value = '';
+            document.getElementById('hero-preview-row').style.display = 'none';
+            showToast('Splash image removed', 'ok');
+        } catch (e) {
+            showToast('Remove error: ' + e, 'error');
+        }
     }
 
     async function saveCampaign() {
