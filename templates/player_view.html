@@ -3,65 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Player Hub - PF2E Dashboard</title>
+    <title>{{ campaign.name }} · Roster · PF2E</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        // Brand palette mirrors templates/campaign_intro.html so the
+        // hop from homepage → player hub doesn't feel like leaving the
+        // campaign. Accent ramps to gilt (gold), danger to ruby.
         tailwind.config = { theme: { extend: { colors: {
-            base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#282838', 600:'#363648', 500:'#50506a', 400:'#8080a0', 300:'#a0a0b8', 200:'#c8c8d8', 100:'#e8e8f0' },
-            accent:  { 300:'#7DC4C4', 400:'#5EADAD', 500:'#4A9696', 600:'#3A7878' },
-            gold:    { 300:'#d4a244', 400:'#b8860b' },
+            base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#2e2e3c', 600:'#42425a', 500:'#6b6b8a', 400:'#9494b0', 300:'#b8b8cc', 200:'#d8d8e6', 100:'#ededf4' },
+            accent:  { 300:'#e0b65a', 400:'#c9a34e', 500:'#a4842b', 600:'#7d6418' },
+            gold:    { 300:'#e0b050', 400:'#c89620' },
             danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' },
             success: { 300:'#86efac', 400:'#4ade80', 500:'#22c55e' },
             info:    { 300:'#93c5fd', 400:'#60a5fa' },
             spell:   { 300:'#c4b5fd', 400:'#a78bfa' }
-        }}}}
+        }, fontFamily: { display:['Cinzel','serif'], sans:['Inter','system-ui','sans-serif'] } }}}
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        body { font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#e8e8f0; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,500&display=swap');
+        body { font-family:'Inter',system-ui,sans-serif; background:#0c0a07; color:#ededf4; min-height:100vh; }
         .font-display { font-family:'Cinzel',serif; }
         ::-webkit-scrollbar { width:5px; }
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
-        .card { background:#24242e; border:1px solid rgba(255,255,255,0.06); border-radius:12px; transition:all .25s; position:relative; overflow:hidden; }
-        .card:hover { border-color:rgba(94,173,173,0.2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+
+        /* Same stage treatment as templates/campaign_intro.html — warm-ink
+           page floor with a ruby radial up-top and a gilt radial low-right
+           so the hub reads as the same brand world as the homepage. */
+        .stage {
+            position:relative;
+            min-height:100vh;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(168,58,58,0.10), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(201,163,78,0.06), transparent 55%),
+                #0c0a07;
+        }
+        /* Optional splash backdrop. When campaign.hero_image is set the
+           page wears the same fixed cinematic backdrop the homepage uses
+           — the dark gradient mask keeps typography legible regardless
+           of image brightness. */
+        .stage.has-hero::before {
+            content:""; position:fixed; inset:0; pointer-events:none; z-index:-1;
+            background-image:
+                linear-gradient(to bottom, rgba(12,10,7,0.72) 0%, rgba(12,10,7,0.92) 65%, rgba(12,10,7,0.98) 100%),
+                var(--hero-image);
+            background-size: cover, cover;
+            background-position: center 30%, center 30%;
+            background-repeat: no-repeat;
+        }
+
+        /* Hero header — compact relative to the homepage's 38vh band
+           because the roster + tracker need the screen real estate.
+           The rune-and-title pattern matches gm_hub.html and the
+           campaign_intro homepage. */
+        .roster-hero { text-align:center; padding: 28px 16px 18px; }
+        .campaign-rune {
+            font-family:'Cinzel',serif;
+            font-size:11px; letter-spacing:0.32em; text-transform:uppercase;
+            color:rgba(201,163,78,0.65);
+            margin-bottom:8px;
+        }
+        .campaign-title {
+            font-family:'Cinzel',serif; font-weight:700;
+            color:#f0d88a;
+            letter-spacing:0.06em; line-height:1.1;
+            font-size:clamp(26px, 4.2vw, 40px);
+            margin:0 0 6px;
+            text-shadow:
+                0 0 22px rgba(168,58,58,0.30),
+                0 0 50px rgba(0,0,0,0.6),
+                0 4px 20px rgba(0,0,0,0.7);
+        }
+        .campaign-flavor {
+            font-family:'Cormorant Garamond','Cinzel',serif;
+            font-style:italic; font-weight:500;
+            font-size:clamp(13px, 1.5vw, 16px);
+            color:#e0d6b9;
+            letter-spacing:0.02em;
+            margin: 0 auto 12px;
+            max-width:min(640px, 90vw);
+            text-shadow: 0 0 20px rgba(0,0,0,0.85), 0 2px 6px rgba(0,0,0,0.95);
+        }
+        .session-pills { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 10px; }
+        .session-pill {
+            display:inline-flex; align-items:baseline; gap:6px;
+            font-size:11px;
+            background:rgba(201,163,78,0.06);
+            border:1px solid rgba(201,163,78,0.22);
+            border-radius:6px;
+            padding:4px 10px;
+        }
+        .session-pill .lbl {
+            font-family:'Cinzel',serif;
+            text-transform:uppercase; letter-spacing:0.12em;
+            font-size:9px; color:#c8bd9e;
+        }
+        .session-pill .val { color:#ede4cf; font-weight:500; }
+
+        /* Character cards — gilt-edged panels matching the homepage's
+           pc-tile aesthetic. HP/AC numbers in Cinzel for the same
+           "statblock under glass" feel as the GM screen. */
+        .card {
+            background:#191510;
+            border:1px solid rgba(201,163,78,0.16);
+            border-radius:10px;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+            position:relative; overflow:hidden;
+        }
+        .card:hover {
+            border-color:rgba(224,176,80,0.45);
+            transform:translateY(-2px);
+            box-shadow:0 10px 26px rgba(0,0,0,0.5);
+        }
+        .card.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.20), 0 8px 22px rgba(0,0,0,0.45); }
+
         .hp-ring { width:44px; height:44px; position:relative; display:flex; align-items:center; justify-content:center; }
         .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
         .erow { transition:all .2s; border-left:3px solid transparent; }
-        .erow.on { border-left-color:#5EADAD; background:rgba(94,173,173,0.04); }
+        .erow.on { border-left-color:#c9a34e; background:rgba(201,163,78,0.06); }
         @keyframes glow { 0%,100%{opacity:.5} 50%{opacity:1} }
         .glow { animation:glow 2.5s ease-in-out infinite; }
-        .btn-primary { font-family:'Cinzel',serif; font-weight:600; letter-spacing:.06em; background:#3A7878; border:1px solid rgba(94,173,173,0.3); color:#A8DEDE; padding:8px 20px; border-radius:6px; font-size:12px; transition:all .2s; text-transform:uppercase; }
-        .btn-primary:hover { background:#4A9696; }
-        .btn-ghost { font-size:11px; font-weight:500; background:transparent; border:1px solid rgba(255,255,255,0.08); color:#a0a0b8; padding:8px 16px; border-radius:6px; transition:all .2s; }
-        .btn-ghost:hover { border-color:rgba(255,255,255,0.15); color:#c8c8d8; }
+
+        /* Buttons match the homepage. .btn-primary is the warm-gilt CTA
+           used for "+ New Character"; .btn-ghost is the dim chrome chip
+           used for secondary nav. */
+        .btn-primary {
+            font-family:'Cinzel',serif; font-weight:600; letter-spacing:0.06em;
+            background:#a4842b; color:#0c0a07;
+            padding:8px 20px; border-radius:6px; font-size:12px;
+            text-transform:uppercase; border:1px solid rgba(201,163,78,0.3);
+            transition:background 0.15s, transform 0.1s;
+        }
+        .btn-primary:hover { background:#c9a34e; }
+        .btn-ghost {
+            font-size:11px; font-weight:500;
+            background:transparent; border:1px solid rgba(255,255,255,0.10);
+            color:#b8b8cc; padding:8px 16px; border-radius:6px;
+            transition:border-color 0.15s, color 0.15s;
+        }
+        .btn-ghost:hover { border-color:rgba(201,163,78,0.35); color:#ededf4; }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-8">
-<div class="max-w-5xl mx-auto w-full">
+<body class="stage{% if campaign.hero_image %} has-hero{% endif %}"
+      {% if campaign.hero_image %}style="--hero-image: url('{{ campaign.hero_image }}');"{% endif %}>
+<div class="max-w-5xl mx-auto w-full px-4 md:px-8 pb-10" style="position:relative; z-index:1;">
 
-    <div class="text-center mb-8">
-        <h1 class="font-display text-2xl md:text-3xl text-accent-300 tracking-wide mb-1">Player Hub</h1>
-        <p class="text-base-500 text-xs tracking-widest uppercase">Character Roster</p>
-    </div>
+    {# ── Hero band — matches the homepage / gm_hub brand pattern:
+       small uppercase rune above, big campaign name in Cinzel, an
+       optional italic flavor line, then a pill row with the live
+       session info. Compact so the roster stays the focus. #}
+    <header class="roster-hero">
+        <div class="campaign-rune">A Pathfinder Tale · Roster</div>
+        <h1 class="campaign-title">{{ campaign.name }}</h1>
+        {% if campaign.tagline %}
+        <p class="campaign-flavor">{{ campaign.tagline }}</p>
+        {% endif %}
+        <div class="session-pills">
+            <span class="session-pill"><span class="lbl">Session</span><span class="val">{{ campaign.session_number }}</span></span>
+            {% if campaign.next_session_at %}
+            <span class="session-pill"><span class="lbl">Next</span><span class="val">{{ campaign.next_session_at }}</span></span>
+            {% endif %}
+            <span class="session-pill"><span class="lbl">Party</span><span class="val">{{ party|length }}</span></span>
+        </div>
+    </header>
 
-    <!-- My Character Quick Access -->
-    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:rgba(94,173,173,0.05); border:1px solid rgba(94,173,173,0.15);">
-        <span class="text-accent-300 text-sm">Welcome back, <strong id="my-char-name"></strong></span>
-        <a id="my-char-link" href="#" class="ml-3 text-xs font-medium px-4 py-1.5 rounded transition-colors" style="background:rgba(94,173,173,0.1); border:1px solid rgba(94,173,173,0.2); color:#7DC4C4;">Go to My Sheet</a>
+    <!-- My Character Quick Access — gilt-tinted to match the brand chrome -->
+    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:rgba(201,163,78,0.06); border:1px solid rgba(201,163,78,0.22);">
+        <span class="text-sm" style="color:#e0b65a;">Welcome back, <strong id="my-char-name" style="color:#f0d88a;"></strong></span>
+        <a id="my-char-link" href="#" class="ml-3 text-xs font-medium px-4 py-1.5 rounded transition-colors" style="background:rgba(224,176,80,0.12); border:1px solid rgba(224,176,80,0.35); color:#e0b050; font-family:'Cinzel',serif; letter-spacing:0.06em; text-transform:uppercase;">Open Sheet</a>
         <button onclick="clearMyChar()" class="ml-2 text-base-600 text-xs hover:text-base-400 transition-colors" title="Forget my character">&times;</button>
     </div>
 
     <div class="flex justify-center gap-3 mb-8">
+        <a href="/" class="btn-ghost">&larr; Home</a>
         <a href="/map" class="btn-ghost">Battle Map</a>
         <button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="btn-ghost">Import Pathbuilder</button>
         <a href="/player/builder" class="btn-primary">+ New Character</a>
     </div>
 
-    <!-- CHARACTERS -->
+    <!-- CHARACTERS — `is-current` decoration uses the server-rendered
+         session.player_name so the card a player joined as glows gold
+         even before localStorage kicks in. -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
         {% for pc in party %}
-        <div class="card p-5 block relative" data-char-name="{{ pc.name }}">
+        <div class="card p-5 block relative{% if current_player == pc.name %} is-current{% endif %}" data-char-name="{{ pc.name }}">
             <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0"></a>
             <button onclick="event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})" class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson }}?1:0.3">&#9733;</button>
             <button onclick="event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})" class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.15); opacity:0.3;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3">&times;</button>
@@ -69,7 +194,7 @@
                 <div class="hp-ring shrink-0">
                     <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
                     {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
-                    <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#5EADAD{% else %}#ef4444{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
+                    <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#c9a34e{% else %}#ef4444{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
                     {% if pc.portrait %}
                         <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
                              loading="lazy"
@@ -126,8 +251,8 @@
     </div>
 
     <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center transition-all duration-300"
-         style="background:rgba(94,173,173,0.04); border:1px solid rgba(94,173,173,0.1)">
-        <span class="font-display text-accent-300 text-lg tracking-wide glow" id="turn-banner-name">---</span>
+         style="background:rgba(201,163,78,0.05); border:1px solid rgba(201,163,78,0.18)">
+        <span class="font-display text-lg tracking-wide glow" id="turn-banner-name" style="color:#e0b65a;">---</span>
         <span class="text-base-500 text-xs ml-2" id="turn-banner-suffix">is acting</span>
     </div>
     <style>
@@ -149,13 +274,13 @@
         tr.flash-heal { animation: hpFlashUp   1s ease-out 1; }
     </style>
 
-    <div class="rounded-xl overflow-hidden" style="background:#191920; border:1px solid rgba(255,255,255,0.06)">
+    <div class="rounded-xl overflow-hidden" style="background:#191510; border:1px solid rgba(201,163,78,0.14)">
         <table class="w-full text-left border-collapse">
-            <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-14 text-center">Init</th>
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase">Combatant</th>
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-40">Status</th>
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-1/4">Conditions</th>
+            <thead><tr style="border-bottom:1px solid rgba(201,163,78,0.12)">
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-14 text-center" style="font-family:'Cinzel',serif; color:#c8bd9e;">Init</th>
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase" style="font-family:'Cinzel',serif; color:#c8bd9e;">Combatant</th>
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-40" style="font-family:'Cinzel',serif; color:#c8bd9e;">Status</th>
+                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-1/4" style="font-family:'Cinzel',serif; color:#c8bd9e;">Conditions</th>
             </tr></thead>
             <tbody id="tracker-body">
                 <tr><td colspan="4" class="p-10 text-center text-base-600 italic text-sm">Awaiting the GM...</td></tr>
@@ -179,7 +304,7 @@
 
 <!-- IMPORT MODAL -->
 <div id="import-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="rounded-xl w-full max-w-lg p-6" style="background:#24242e; border:1px solid rgba(255,255,255,0.08)">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:#28221a; border:1px solid rgba(201,163,78,0.22)">
         <div class="flex justify-between items-center mb-5">
             <h3 class="font-display text-accent-300 text-lg">Import from Pathbuilder</h3>
             <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
@@ -191,7 +316,7 @@
                 <div class="text-base-500 text-sm">Click to upload JSON file</div>
             </div>
             <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div><span class="text-[10px] text-base-600 uppercase tracking-widest">or paste</span><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div></div>
-            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0d0d12; border:1px solid rgba(255,255,255,0.08)"></textarea>
+            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0c0a07; border:1px solid rgba(201,163,78,0.18)"></textarea>
             <div id="import-status" class="hidden text-sm font-semibold p-3 rounded-lg"></div>
             <div class="flex gap-2 justify-end">
                 <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="btn-ghost">Cancel</button>
@@ -273,10 +398,14 @@
     // GM-only entries (secret rolls, hidden NPC names) via the
     // _player_filter set on _combat_log() server-side, so we just
     // render whatever comes through.
+    // Combat-log color ramp uses gilt for turn markers (matches the
+    // brand accent), ruby for damage, success-green for heal — same
+    // palette as the GM combat log so a player's view of a round
+    // reads consistently with what the GM sees on the tracker.
     const _PLAYER_LOG_COLORS = {
-        turn: '#5EADAD', damage: '#ef4444', heal: '#22c55e',
-        critical: '#dc2626', condition: '#a78bfa', system: '#fbbf24',
-        action: '#cbd5e1',
+        turn: '#c9a34e', damage: '#ef4444', heal: '#22c55e',
+        critical: '#dc2626', condition: '#a78bfa', system: '#e0b65a',
+        action: '#c8bd9e',
     };
     let _playerLogCache = [];
     function _renderPlayerLog() {
@@ -427,7 +556,7 @@
             if(!c.is_pc && !isHidden) nm+=' <span class="text-[8px] text-danger-400/60 uppercase tracking-widest ml-1">Enemy</span>';
             if(isHidden) nm+=' <span class="text-[8px] text-base-500 uppercase tracking-widest ml-1">Unknown</span>';
             let st='';
-            if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#5EADAD':'#ef4444';st=`<span class="text-sm font-bold" style="color:${bc}">${c.current_hp}<span class="text-base-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(255,255,255,0.04)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
+            if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#c9a34e':'#ef4444';st=`<span class="text-sm font-bold" style="color:${bc}">${c.current_hp}<span class="text-base-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(255,255,255,0.04)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
             else if(c.hp_status) st=`<span class="text-xs uppercase tracking-wider font-medium ${c.hp_color||'text-base-600'}">${esc(c.hp_status)}</span>`;
             let cd='<div class="flex flex-wrap gap-1">';
             if(c.conditions) for(const[k,v] of Object.entries(c.conditions)){if(v===true)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k.replace('_','-'))}</span>`;else if(typeof v==='number'&&v>0)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k)} ${v}</span>`;}
@@ -459,8 +588,8 @@
         popup.id = 'handout-popup';
         popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:16px;';
         popup.onclick = function(e) { if (e.target === this) this.remove(); };
-        let inner = `<div style="background:#24242e;border:1px solid rgba(212,162,68,0.3);border-radius:12px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-            <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);background:#0d0d12;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+        let inner = `<div style="background:#28221a;border:1px solid rgba(224,176,80,0.35);border-radius:12px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div style="padding:16px 20px;border-bottom:1px solid rgba(201,163,78,0.18);background:#0c0a07;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
                 <div><div style="font-family:'Cinzel',serif;color:#d4a244;font-size:18px;font-weight:700;"> ${esc(h.title||'Handout')}</div>
                 <div style="font-size:10px;color:#8080a0;margin-top:2px;">From the GM • ${h.time||''}</div></div>
                 <button onclick="document.getElementById('handout-popup').remove()" style="color:#8080a0;font-size:22px;background:none;border:none;cursor:pointer;line-height:1;">&times;</button>

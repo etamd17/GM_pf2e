@@ -7998,10 +7998,19 @@ def vault_export_encounter():
     return jsonify({"success": True, "path": rel_path})
 
 @app.route('/player')
-def player_view(): 
+def player_view():
     # Sync from disk to catch any characters added outside this process
     _sync_party_from_disk()
-    return render_template('player_view.html', party=list(PARTY_LIBRARY.values()))
+    # Pass the campaign config so the hub can render the same hero band
+    # (splash, gilt title, session pill) the homepage uses — the player
+    # arriving here from the campaign_intro shouldn't visually leave the
+    # brand world. Falls back to defaults if no campaign.json exists.
+    return render_template(
+        'player_view.html',
+        party=list(PARTY_LIBRARY.values()),
+        campaign=_load_campaign_config(),
+        current_player=session.get('player_name'),
+    )
 
 _PARTY_DIR_MTIME_CACHE = {}  # filename -> last-seen mtime
 _PARTY_DIR_LISTING_MTIME = 0  # mtime of PARTY_DIR itself, to skip listdir
