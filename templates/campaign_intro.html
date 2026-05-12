@@ -520,34 +520,76 @@
             intro: document.getElementById('edit-intro').value,
             hero_image: (document.getElementById('edit-hero')?.value || '').trim(),
         };
+        let res, data;
         try {
-            const res = await fetch('/api/campaign', {
+            res = await fetch('/api/campaign', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-            const data = await res.json();
-            if (!res.ok || !data.success) {
+        } catch (e) {
+            showToast('Network error contacting server: ' + e.message, 'error');
+            console.error('[saveCampaign] fetch failed', e);
+            return;
+        }
+        // Surface HTTP-level failures (502, 504, etc.) with status code so the
+        // GM knows whether to retry (mid-deploy on Railway) or fix something.
+        if (!res.ok) {
+            let detail = '';
+            try { detail = (await res.text()).slice(0, 200); } catch(_) {}
+            showToast(`Save failed: HTTP ${res.status} — ${detail || 'no body'}`, 'error');
+            console.error('[saveCampaign] non-ok response', res.status, detail);
+            return;
+        }
+        try { data = await res.json(); }
+        catch (e) {
+            showToast('Save returned non-JSON response (server may be deploying — retry in a minute)', 'error');
+            console.error('[saveCampaign] JSON parse failed', e);
+            return;
+        }
+        try {
+            if (!data.success) {
                 showToast(data.error || 'Save failed', 'error');
                 return;
             }
             showToast('Saved', 'ok');
             // Re-render the visible bits inline so the GM sees their edit
             // without a full reload (which would re-collapse this panel).
+            // Every getElementById is null-guarded — the post-homepage-glowup
+            // redesign dropped some of these IDs in favor of the party-stand
+            // pills which are rendered from server state. Missing elements
+            // are no longer fatal.
             const c = data.campaign;
-            document.getElementById('campaign-name').textContent = c.name;
+            const nameEl = document.getElementById('campaign-name');
+            if (nameEl) nameEl.textContent = c.name;
             const tg = document.getElementById('campaign-tagline');
-            if (c.tagline) { tg.textContent = c.tagline; tg.classList.remove('hidden'); }
-            else { tg.classList.add('hidden'); }
-            document.getElementById('session-pill').textContent = 'Session ' + c.session_number;
+            if (tg) {
+                if (c.tagline) { tg.textContent = c.tagline; tg.classList.remove('hidden'); }
+                else { tg.classList.add('hidden'); }
+            }
+            const sp = document.getElementById('session-pill');
+            if (sp) sp.textContent = 'Session ' + c.session_number;
             const nx = document.getElementById('next-session-text');
             if (nx) nx.textContent = c.next_session_at || '';
             const recapEl = document.getElementById('recap-text');
             if (recapEl) recapEl.textContent = c.last_recap;
             const introEl = document.getElementById('intro-text');
             if (introEl) introEl.textContent = c.intro;
+            // Splash background refresh — swap the CSS variable + has-hero
+            // class on <body> live, so a freshly-uploaded splash appears
+            // immediately without a full reload.
+            if (c.hero_image) {
+                document.body.style.setProperty('--hero-image', "url('" + c.hero_image + "')");
+                document.body.classList.add('has-hero');
+            } else {
+                document.body.style.removeProperty('--hero-image');
+                document.body.classList.remove('has-hero');
+            }
         } catch (e) {
-            showToast('Network error', 'error');
+            // Save succeeded server-side but the inline re-render threw —
+            // surface the real reason so the GM doesn't think the save failed.
+            showToast('Saved, but UI refresh failed: ' + e.message + ' (reload to see changes)', 'error');
+            console.error('[saveCampaign] post-save render failed', e);
         }
     }
 </script>
