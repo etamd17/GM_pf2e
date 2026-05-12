@@ -274,6 +274,14 @@ ACTIVE_MAP = {
     #    direction, angle,           # degrees — direction is aim, angle is spread
     #    color, name, owner, source, temporary}
     'templates': [],
+    # --- Drawings layer (annotations) ----------------------------------------
+    # Freehand strokes, arrows, rectangles, labels — visible to players,
+    # authored by the GM. Distinct from walls (which block sight) and
+    # tokens (which take a turn). Used for things like "the trap is here",
+    # tactical sketches, or labelling rooms. Stored as pixel-coord lists
+    # so they scale with the map image.
+    #   {id, type: 'freehand', points: [[x,y],...], color, width, label?, author}
+    'drawings': [],
 }
 MAP_LOCK = threading.Lock()
 
@@ -779,8 +787,16 @@ def _do_broadcast_encounter_state():
         combatants = []
         for i, c in enumerate(ACTIVE_ENCOUNTER):
             entry = {
+                # instance_id lets the map sidebar's drag-to-map drop the
+                # token already linked to the encounter combatant, so HP
+                # / conditions sync through /api/adjust_hp without a
+                # second lookup. The player filter below treats this as
+                # safe to expose (the same id is already in the player
+                # state payload via the tracker).
+                'instance_id': c.instance_id,
                 'name': c.name,
                 'is_pc': c.is_pc,
+                'ac': getattr(c, 'ac', None),
                 'initiative': c.initiative,
                 'is_active': (i == TURN_INDEX),
                 # Include visibility so GM UI can render a hidden-eye indicator.
@@ -11241,6 +11257,7 @@ def _broadcast_map_state():
             'lights': ACTIVE_MAP.get('lights', []),
             'gm_notes': ACTIVE_MAP.get('gm_notes', []),
             'templates': ACTIVE_MAP.get('templates', []),
+            'drawings': ACTIVE_MAP.get('drawings', []),
         }
     sse_broadcast('map_state', state)
 
@@ -11551,22 +11568,74 @@ def upload_map():
         'name': map_name
     })
 
+@app.route('/api/maps/list')
+@gm_required
+def list_maps():
+    """Catalog every map image on disk + whether it has saved state.
+    Used by the GM's map switcher to render the library. Returns
+    `[{id, filename, name, has_state, modified, is_current}]`."""
+    out = []
+    if os.path.exists(MAP_DIR):
+        with MAP_LOCK:
+            current_id = ACTIVE_MAP.get('id')
+        for f in sorted(os.listdir(MAP_DIR)):
+            if not f.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                continue
+            map_id = f.rsplit('.', 1)[0]
+            state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
+            saved = None
+            if os.path.exists(state_path):
+                try:
+                    with open(state_path, 'r', encoding='utf-8') as fh:
+                        saved = json.load(fh)
+                except (OSError, json.JSONDecodeError):
+                    saved = None
+            try:
+                mtime = os.stat(os.path.join(MAP_DIR, f)).st_mtime
+            except OSError:
+                mtime = 0
+            out.append({
+                'id': map_id,
+                'filename': f,
+                'name': (saved or {}).get('name') or map_id,
+                'has_state': saved is not None,
+                'token_count': len((saved or {}).get('tokens') or []),
+                'modified': mtime,
+                'is_current': map_id == current_id,
+            })
+    return jsonify({'maps': out})
+
+
 @app.route('/api/map/load', methods=['POST'])
 @gm_required
 def load_map():
-    """Load a map as the active map."""
+    """Load a map as the active map. Preserves the outgoing map's state
+    to disk before swap so the next switch back resumes where it left off
+    (tokens, walls, fog, drawings, lights, templates, GM notes — all
+    restored)."""
     global ACTIVE_MAP
     data = request.json or {}
-    map_id = data.get('id')
     filename = data.get('filename')
-    
+
     if not filename:
         return jsonify({'success': False, 'error': 'No map specified'}), 400
-    
+
     filepath = os.path.join(MAP_DIR, filename)
     if not os.path.exists(filepath):
         return jsonify({'success': False, 'error': 'Map file not found'}), 404
-    
+
+    # Derive the canonical map_id from the filename if the caller didn't
+    # send one. Older clients posted `{filename}` only; the per-map state
+    # files are keyed on `{id}_state.json` so we MUST resolve an id here
+    # or the new map will start blank every switch.
+    map_id = data.get('id') or filename.rsplit('.', 1)[0]
+
+    # Snapshot the outgoing map's state under its own id before swapping
+    # — otherwise tokens / walls / fog written since the last mutation
+    # would be lost on switch. _save_map_state is a no-op when the
+    # current map has no id (initial blank state), so this is safe.
+    _save_map_state()
+
     # Try to load existing state, or create new
     if not _load_map_state(map_id):
         with MAP_LOCK:
@@ -12044,9 +12113,78 @@ def clear_all_walls():
     """Clear all walls from the map."""
     with MAP_LOCK:
         ACTIVE_MAP['walls'] = []
-    
+
     _save_map_state()
     _broadcast_map_walls()
+    return jsonify({'success': True})
+
+
+# --- DRAWINGS LAYER (annotations) ----------------------------------------
+# Visible-to-players sketches that the GM uses for "trap here", tactical
+# notes, room labels, etc. Decoupled from walls (which block sight) and
+# templates (which model AoEs). All endpoints are GM-only; players see
+# the result via the existing map state broadcast.
+
+def _broadcast_map_drawings():
+    with MAP_LOCK:
+        drawings = list(ACTIVE_MAP.get('drawings', []))
+    sse_broadcast('map_drawings', {'drawings': drawings})
+
+
+@app.route('/api/map/drawing/add', methods=['POST'])
+@gm_required
+def add_map_drawing():
+    """Persist a new annotation. Body: {type, points, color, width, label?}.
+
+    Only `type: 'freehand'` is supported today; the schema is open so
+    future tools (arrow / rect / text) drop in without a migration."""
+    data = request.json or {}
+    pts = data.get('points') or []
+    if not isinstance(pts, list) or len(pts) < 2:
+        return jsonify({'success': False, 'error': 'points must be a list of [x, y] pairs'}), 400
+    drawing = {
+        'id': str(uuid.uuid4())[:8],
+        'type': data.get('type', 'freehand'),
+        'points': [[float(p[0]), float(p[1])] for p in pts if isinstance(p, (list, tuple)) and len(p) >= 2],
+        'color': data.get('color', '#fbbf24'),
+        'width': max(1, min(20, int(data.get('width', 3)))),
+        'label': (data.get('label') or '').strip()[:80] or None,
+        'author': (data.get('author') or 'GM').strip()[:40],
+    }
+    if len(drawing['points']) < 2:
+        return jsonify({'success': False, 'error': 'need at least 2 valid points'}), 400
+    with MAP_LOCK:
+        ACTIVE_MAP.setdefault('drawings', []).append(drawing)
+    _save_map_state()
+    _broadcast_map_drawings()
+    return jsonify({'success': True, 'drawing': drawing})
+
+
+@app.route('/api/map/drawing/remove', methods=['POST'])
+@gm_required
+def remove_map_drawing():
+    """Delete a single annotation by id."""
+    data = request.json or {}
+    drawing_id = data.get('id')
+    if not drawing_id:
+        return jsonify({'success': False, 'error': 'id required'}), 400
+    with MAP_LOCK:
+        before = len(ACTIVE_MAP.get('drawings', []))
+        ACTIVE_MAP['drawings'] = [d for d in ACTIVE_MAP.get('drawings', []) if d.get('id') != drawing_id]
+        removed = before - len(ACTIVE_MAP['drawings'])
+    _save_map_state()
+    _broadcast_map_drawings()
+    return jsonify({'success': True, 'removed': removed})
+
+
+@app.route('/api/map/drawings/clear', methods=['POST'])
+@gm_required
+def clear_map_drawings():
+    """Wipe every annotation on the active map."""
+    with MAP_LOCK:
+        ACTIVE_MAP['drawings'] = []
+    _save_map_state()
+    _broadcast_map_drawings()
     return jsonify({'success': True})
 
 @app.route('/api/map/border', methods=['POST'])
@@ -12142,9 +12280,45 @@ def map_ping():
     x = data.get('x', 0)
     y = data.get('y', 0)
     player = data.get('player', 'Unknown')
-    
+
     # Broadcast ping event to all clients
     _broadcast_event('ping', {'x': x, 'y': y, 'player': player})
+    return jsonify({'success': True})
+
+
+# Per-player throttle for the live cursor broadcast so a flaky network
+# can't flood the SSE channel. ~10 updates/sec/player is plenty for
+# Foundry-style cursor following.
+_LAST_CURSOR_AT = {}
+_CURSOR_MIN_INTERVAL_SEC = 0.08
+
+@app.route('/api/map/cursor', methods=['POST'])
+def map_cursor():
+    """Broadcast a live cursor position. Unlike `/api/map/ping` this fires
+    continuously while the mouse moves and decays on the client; nothing
+    is persisted server-side. Each viewer renders every OTHER viewer's
+    cursor as a small named dot (Foundry-style cursor following).
+
+    Body: {x, y, player} — x/y in map coords (so zoom-independent).
+    Server-throttled per player to one update every ~80 ms; clients also
+    throttle on their side so a wandering mouse doesn't push 1 kHz."""
+    data = request.json or {}
+    player = (data.get('player') or '').strip()
+    if not player:
+        # GM has no player_name; fall back to 'GM' so player views can
+        # render the GM's cursor with a distinguishable label.
+        player = 'GM' if _is_gm() else 'Player'
+    now = time.time()
+    last = _LAST_CURSOR_AT.get(player, 0)
+    if now - last < _CURSOR_MIN_INTERVAL_SEC:
+        return jsonify({'success': True, 'throttled': True})
+    _LAST_CURSOR_AT[player] = now
+    try:
+        x = float(data.get('x', 0))
+        y = float(data.get('y', 0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
+    _broadcast_event('cursor', {'x': x, 'y': y, 'player': player, 't': now})
     return jsonify({'success': True})
 
 @app.route('/api/map/roll', methods=['POST'])

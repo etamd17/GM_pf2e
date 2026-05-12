@@ -325,6 +325,7 @@
         #map-area.tool-select { cursor: default; }
         #map-area.tool-token { cursor: crosshair; }
         #map-area.tool-wall { cursor: crosshair; }
+        #map-area.tool-draw { cursor: crosshair; }
         #map-area.tool-terrain { cursor: cell; }
         #map-area.tool-spawn { cursor: crosshair; }
         
@@ -1022,8 +1023,14 @@
             transition: all 0.15s;
             text-align: center;
         }
-        .map-card:hover { border-color: #3b82f6; background: #2a2a2a; }
+        .map-card:hover { border-color: #c9a34e; background: #2a2218; }
         .map-card.active { border-color: #22c55e; }
+        .map-card .map-meta {
+            font-size: 10px; color: #c8bd9e;
+            letter-spacing: 0.04em; text-transform: uppercase;
+            margin-top: 2px;
+        }
+        .map-card.active .map-meta { color: #86efac; }
         
         .map-card img {
             width: 100%;
@@ -1314,6 +1321,9 @@
                 <button class="rail-btn" id="tool-template" data-tool="template" data-tip="AOE Template (A)">
                     <svg viewBox="0 0 24 24"><path d="M12 3l9 18H3z"/></svg>
                 </button>
+                <button class="rail-btn" id="tool-draw" data-tool="draw" data-tip="Annotate / Sketch (G)">
+                    <svg viewBox="0 0 24 24"><path d="M3 17l3.5 3.5L20 7 16.5 3.5z"/><path d="M14 6l4 4"/></svg>
+                </button>
             </div>
             <div class="rail-divider"></div>
 
@@ -1497,7 +1507,9 @@
         // ===========================================
         let mapState = {{ current_map | tojson }};
         const partyList = {{ party | tojson }};
-        const encounterList = {{ encounter | tojson }};
+        // Mutable so the SSE encounter_update handler can refresh the
+        // sidebar's "drag to map" creature list without a full page reload.
+        let encounterList = {{ encounter | tojson }};
         const availableMaps = {{ maps | tojson }};
         
         let canvas, ctx;
@@ -1666,6 +1678,17 @@
             // Switching shape mid-draw is jarring; cancel any in-progress.
             if (isDrawingWall) cancelWall();
         }
+
+        // Drawing-tool state. Captures pixel-coord points while the GM
+        // holds the mouse with currentTool === 'draw', then POSTs the
+        // stroke to /api/map/drawing/add on mouseup. Color + width are
+        // tweakable from the flyout (see #flyout-pane[data-pane="draw"]).
+        let _drawingActive = false;
+        let _drawingPoints = [];
+        let _drawingColor = '#fbbf24';   // amber so it pops against most maps
+        let _drawingWidth = 3;
+        function setDrawColor(c) { _drawingColor = c || _drawingColor; }
+        function setDrawWidth(w) { _drawingWidth = Math.max(1, Math.min(20, parseInt(w, 10) || _drawingWidth)); }
 
         // Ruler state — while active: start is the drag-origin in map pixels,
         // end follows the mouse. Nothing persisted; purely visual.
@@ -2175,6 +2198,7 @@
             // to clear the canvas and apply the transform, draw the canvas-
             // owned bits, then ask PIXI to sync sprites from mapState.
             _beginLayer('tokens');
+            drawDrawings();
             drawTemplates();
             if (!_USE_PIXI_TOKENS) {
                 drawTokens();
@@ -2188,13 +2212,113 @@
                 _pixiSyncTokens();
             }
         }
+
+        // Render the persistent annotations layer — freehand strokes
+        // committed via /api/map/drawing/add. We also paint the in-progress
+        // stroke while the GM is drawing so they can see where the brush
+        // has been before the commit lands.
+        function drawDrawings() {
+            const list = mapState.drawings || [];
+            for (const d of list) {
+                if (!d || !d.points || d.points.length < 2) continue;
+                ctx.beginPath();
+                ctx.moveTo(d.points[0][0], d.points[0][1]);
+                for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i][0], d.points[i][1]);
+                ctx.lineWidth = (d.width || 3) / zoom;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = d.color || '#fbbf24';
+                ctx.stroke();
+            }
+            // In-progress stroke during a freehand draw — ephemeral, drawn
+            // until mouseup commits to the server.
+            if (_drawingActive && _drawingPoints.length >= 2) {
+                ctx.beginPath();
+                ctx.moveTo(_drawingPoints[0][0], _drawingPoints[0][1]);
+                for (let i = 1; i < _drawingPoints.length; i++) ctx.lineTo(_drawingPoints[i][0], _drawingPoints[i][1]);
+                ctx.lineWidth = (_drawingWidth || 3) / zoom;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = _drawingColor || '#fbbf24';
+                ctx.stroke();
+            }
+        }
         function _drawOverlayLayer() {
             _beginLayer('overlay');
             drawWallPreview();
             drawCalibrationPoints();
             drawRuler();
             drawSelectionBox();
+            drawOtherCursors();
             _endLayer();
+        }
+
+        // ===========================================
+        // LIVE CURSOR BROADCAST (Foundry-parity)
+        // ===========================================
+        // Every viewer broadcasts their cursor position over SSE; every
+        // other viewer renders a small named arrow at that position.
+        // Server throttles to ~10 Hz per player; we add a client-side
+        // throttle so a steady drag doesn't queue up bursts. Cursors fade
+        // after 5s of no update so abandoned tabs don't leave ghosts.
+        const _CURSOR_COLORS = ['#22c55e','#3b82f6','#a855f7','#ec4899','#f59e0b','#06b6d4','#84cc16','#f97316'];
+        function _cursorColor(name) {
+            let h = 0;
+            for (let i = 0; i < (name||'').length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+            return _CURSOR_COLORS[Math.abs(h) % _CURSOR_COLORS.length];
+        }
+        const _otherCursors = new Map();  // playerName → {x, y, t, color}
+        const _MY_CURSOR_NAME = 'GM';
+        let _cursorThrottle = false;
+        function _broadcastCursor(mapX, mapY) {
+            if (_cursorThrottle) return;
+            _cursorThrottle = true;
+            setTimeout(() => { _cursorThrottle = false; }, 80);
+            fetch('/api/map/cursor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: mapX, y: mapY, player: _MY_CURSOR_NAME }),
+            }).catch(() => {});
+        }
+        function drawOtherCursors() {
+            if (_otherCursors.size === 0) return;
+            const now = performance.now();
+            const stale = [];
+            ctx.save();
+            for (const [name, c] of _otherCursors) {
+                const age = now - c.t;
+                if (age > 5000) { stale.push(name); continue; }
+                const alpha = age < 4000 ? 1 : (1 - (age - 4000) / 1000);
+                ctx.globalAlpha = Math.max(0, alpha);
+                // Arrow + name label, sized in screen space so it stays
+                // legible at every zoom level.
+                const s = 1 / zoom;
+                ctx.fillStyle = c.color;
+                ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+                ctx.lineWidth = 1.5 * s;
+                ctx.beginPath();
+                ctx.moveTo(c.x, c.y);
+                ctx.lineTo(c.x + 14 * s, c.y + 14 * s);
+                ctx.lineTo(c.x + 5 * s,  c.y + 14 * s);
+                ctx.lineTo(c.x + 0 * s,  c.y + 19 * s);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.font = `${12 * s}px system-ui, sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                const lbl = String(name).slice(0, 16);
+                const w = ctx.measureText(lbl).width + 8 * s;
+                ctx.fillRect(c.x + 16 * s, c.y + 18 * s, w, 16 * s);
+                ctx.fillStyle = c.color;
+                ctx.fillText(lbl, c.x + 20 * s, c.y + 26 * s);
+            }
+            ctx.restore();
+            for (const k of stale) _otherCursors.delete(k);
+            // Keep the overlay animating while any cursor is live so it
+            // fades smoothly even when the GM's own mouse is still.
+            if (_otherCursors.size > 0) markDirty('overlay');
         }
 
         // ===========================================
@@ -2733,6 +2857,25 @@
                 // to reset per-turn movement budgets on all tokens.
                 try {
                     const payload = JSON.parse(e.data);
+                    // Replace the sidebar roster wholesale and re-wire
+                    // drag/drop — the drag-to-map panel needs to reflect
+                    // newly-added monsters / removed PCs without a reload.
+                    // Normalize the SSE shape to the Jinja initial-render
+                    // shape that populateCreaturePanel expects (hp = max,
+                    // current_hp = current, etc.).
+                    if (Array.isArray(payload.encounter)) {
+                        encounterList = payload.encounter.map(e => ({
+                            id: e.instance_id || e.id,
+                            name: e.name,
+                            hp: e.max_hp != null ? e.max_hp : (e.hp != null ? e.hp : 0),
+                            current_hp: e.current_hp != null ? e.current_hp : e.hp,
+                            ac: e.ac != null ? e.ac : 10,
+                            is_pc: !!e.is_pc,
+                            initiative: e.initiative != null ? e.initiative : 0,
+                            conditions: e.conditions || {},
+                        }));
+                        refreshCreaturePanel();
+                    }
                     const newTurn = payload.turn_index;
                     const newRound = payload.round;
                     const key = `${newRound}:${newTurn}`;
@@ -2755,6 +2898,36 @@
             evtSource.addEventListener('dice_roll', (e) => {
                 const roll = JSON.parse(e.data);
                 showDiceRollNotification(roll);
+            });
+
+            // Drawings layer — annotations persist server-side and any
+            // GM client (incl. a second browser tab) sees them appear in
+            // real time. Replace wholesale rather than diffing because
+            // the payload is small.
+            evtSource.addEventListener('map_drawings', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (Array.isArray(d.drawings)) {
+                        mapState.drawings = d.drawings;
+                        markDirty('tokens');
+                    }
+                } catch(_) {}
+            });
+
+            // Live cursor positions from other viewers — server filters
+            // out our own name. Update the cache and dirty the overlay
+            // layer; drawOtherCursors handles fade-out.
+            evtSource.addEventListener('cursor', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (!d.player || d.player === _MY_CURSOR_NAME) return;
+                    _otherCursors.set(d.player, {
+                        x: d.x, y: d.y,
+                        t: performance.now(),
+                        color: _cursorColor(d.player),
+                    });
+                    markDirty('overlay');
+                } catch(_) {}
             });
 
             // Combat log — append entries on the fly from SSE. Initial
@@ -3941,6 +4114,14 @@
                 placeLight(mapX, mapY);
                 // Stay in light mode so the GM can drop several torches in a row;
                 // they can click Select to stop placing.
+            } else if (currentTool === 'draw') {
+                // Start a freehand stroke. Points accumulate in onMouseMove
+                // and the whole list ships to /api/map/drawing/add on
+                // mouseup. The preview renders from `_drawingPoints` in
+                // drawDrawings until then.
+                _drawingActive = true;
+                _drawingPoints = [[mapX, mapY]];
+                markDirty('tokens');
             } else if (currentTool === 'ruler') {
                 isRulering = true;
                 rulerStart = { x: mapX, y: mapY };
@@ -4006,6 +4187,15 @@
                     }
                 }
                 markDirty('overlay');
+            } else if (_drawingActive) {
+                // Sample mid-drag points for the annotation. Same ~8 px
+                // sampling threshold as freehand walls so the stroke stays
+                // smooth without flooding the points array.
+                const last = _drawingPoints[_drawingPoints.length - 1];
+                if (!last || Math.hypot(mapX - last[0], mapY - last[1]) > 6) {
+                    _drawingPoints.push([mapX, mapY]);
+                    markDirty('tokens');
+                }
             } else if (draggingToken) {
                 // Calculate new grid position based on drag
                 const dx = e.clientX - dragStart.x;
@@ -4037,6 +4227,13 @@
                     showMovementPreview(e.clientX, e.clientY, token, token.x, token.y, gx, gy);
                 }
             }
+
+            // Broadcast our cursor position so every other viewer can
+            // render it (Foundry-style cursor following). Throttled to
+            // ~10 Hz on both ends. We always fire — even mid-drag — so
+            // players can see what the GM is pointing at while moving
+            // a token.
+            _broadcastCursor(mapX, mapY);
 
             // Token hover tooltip — only when the GM is idly hovering (no
             // active drag/draw/template/ruler). Resolves which token is
@@ -4147,6 +4344,38 @@
                 // Snapshot result visible until next ruler action — keep rulerEnd
                 // so the measurement stays drawn.
                 isRulering = false;
+            }
+            // Drawing-tool commit. Two-point minimum (single click =
+            // dot is dropped silently); sampled points are sent verbatim
+            // so the server stores the same shape we previewed.
+            if (_drawingActive) {
+                const pts = _drawingPoints.slice();
+                _drawingActive = false;
+                _drawingPoints = [];
+                if (pts.length >= 2) {
+                    const dColor = _drawingColor;
+                    const dWidth = _drawingWidth;
+                    fetch('/api/map/drawing/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'freehand', points: pts,
+                            color: dColor, width: dWidth, author: 'GM',
+                        }),
+                    }).then(r => r.json()).then(res => {
+                        if (res && res.success && res.drawing && res.drawing.id) {
+                            const id = res.drawing.id;
+                            pushUndo(() => {
+                                fetch('/api/map/drawing/remove', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id }),
+                                }).catch(() => {});
+                            }, 'Annotation');
+                        }
+                    }).catch(() => {});
+                }
+                markDirty('tokens');
             }
             // Drag-based wall commit (Q7). Polyline still finishes via Enter.
             if (isDrawingWall && wallShape !== 'polyline' && wallDragStart && wallDragEnd) {
@@ -6872,6 +7101,14 @@
                         max_hp: draggingCreature.maxHp,
                         ac: draggingCreature.ac,
                         speed: draggingCreature.speed,
+                        // Link the token to its encounter combatant (NPCs)
+                        // or party member (PCs) so HP / conditions sync
+                        // through the existing /api/adjust_hp + condition
+                        // flows. Without instance_id / pc_name the token
+                        // is an orphan: it shows on the map but never
+                        // updates when the GM applies damage in the tracker.
+                        instance_id: draggingCreature.type !== 'pc' ? draggingCreature.id : null,
+                        pc_name: draggingCreature.type === 'pc' ? draggingCreature.name : null,
                         assigned_player: draggingCreature.type === 'pc' ? draggingCreature.name : null
                     })
                 }).then(r => r.json()).catch(() => null);
@@ -6882,6 +7119,15 @@
 
                 draggingCreature = null;
             });
+        }
+
+        // Refresh the draggable creature roster whenever the encounter
+        // changes (a new monster gets added mid-fight, a PC joins, etc.).
+        // Without this the sidebar's "drag to map" list goes stale and
+        // the GM has to refresh the page to drag new combatants.
+        function refreshCreaturePanel() {
+            populateCreaturePanel();
+            setupCreatureDragDrop();
         }
         
         function updateWallList() {
@@ -6959,21 +7205,43 @@
         // ===========================================
         // MAP MODAL
         // ===========================================
-        function showMapModal() {
+        async function showMapModal() {
             const modal = document.getElementById('map-modal');
             const grid = document.getElementById('map-grid');
-            
+
+            // Refresh the catalog on open — uploads / new state files
+            // since the page first rendered should show up immediately.
+            try {
+                const r = await fetch('/api/maps/list');
+                if (r.ok) {
+                    const j = await r.json();
+                    if (Array.isArray(j.maps)) {
+                        // Replace the snapshot baked in at render-time so
+                        // subsequent opens stay fresh too.
+                        availableMaps.length = 0;
+                        for (const m of j.maps) availableMaps.push(m);
+                    }
+                }
+            } catch (_) {}
+
             if (availableMaps.length === 0) {
                 grid.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No maps available. Upload one first.</div>';
             } else {
-                grid.innerHTML = availableMaps.map(map => `
-                    <div class="map-card ${mapState.image === map.filename ? 'active' : ''}" onclick="selectMap('${map.filename}')">
+                grid.innerHTML = availableMaps.map(map => {
+                    const meta = map.token_count
+                        ? `<div class="map-meta">${map.token_count} token${map.token_count === 1 ? '' : 's'}</div>`
+                        : (map.has_state ? '<div class="map-meta">Saved state</div>' : '');
+                    const active = (mapState.image === map.filename) ? 'active' : '';
+                    return `
+                    <div class="map-card ${active}" onclick="selectMap('${map.filename}', '${map.id}')">
                         <img src="/api/map/image/${map.filename}" alt="${map.id}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No preview</text></svg>'">
-                        <div class="map-name">${map.id}</div>
+                        <div class="map-name">${map.name || map.id}</div>
+                        ${meta}
                     </div>
-                `).join('');
+                    `;
+                }).join('');
             }
-            
+
             modal.classList.add('active');
         }
         
@@ -6981,11 +7249,14 @@
             document.getElementById('map-modal').classList.remove('active');
         }
         
-        async function selectMap(filename) {
+        async function selectMap(filename, mapId) {
+            // Pass the explicit id so the server can load this map's
+            // saved state (tokens / walls / fog / drawings) instead of
+            // starting from a blank slate every switch.
             await fetch('/api/map/load', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename })
+                body: JSON.stringify({ filename, id: mapId || filename.replace(/\.[^.]+$/, '') }),
             });
             closeMapModal();
         }

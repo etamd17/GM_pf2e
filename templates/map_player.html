@@ -422,6 +422,67 @@
         let _hoverScreenX = 0;
         let _hoverScreenY = 0;
 
+        // Live cursor broadcast — every viewer (GM + players) publishes
+        // their cursor over SSE; every other viewer renders a small named
+        // arrow at that position. Foundry-style cursor following so the
+        // table can point at things mid-Zoom-session without screen-
+        // sharing. Server throttles at 10 Hz; we add a client throttle.
+        const _CURSOR_COLORS = ['#22c55e','#3b82f6','#a855f7','#ec4899','#f59e0b','#06b6d4','#84cc16','#f97316'];
+        function _cursorColor(name) {
+            let h = 0;
+            for (let i = 0; i < (name||'').length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+            return _CURSOR_COLORS[Math.abs(h) % _CURSOR_COLORS.length];
+        }
+        const _otherCursors = new Map();
+        let _cursorThrottle = false;
+        function _broadcastCursor(mapX, mapY) {
+            if (_cursorThrottle) return;
+            _cursorThrottle = true;
+            setTimeout(() => { _cursorThrottle = false; }, 80);
+            fetch('/api/map/cursor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: mapX, y: mapY, player: playerName || 'Player' }),
+            }).catch(() => {});
+        }
+        function drawOtherCursors() {
+            if (_otherCursors.size === 0) return;
+            const now = performance.now();
+            const stale = [];
+            ctx.save();
+            for (const [name, c] of _otherCursors) {
+                const age = now - c.t;
+                if (age > 5000) { stale.push(name); continue; }
+                const alpha = age < 4000 ? 1 : (1 - (age - 4000) / 1000);
+                ctx.globalAlpha = Math.max(0, alpha);
+                const s = 1 / zoom;
+                ctx.fillStyle = c.color;
+                ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+                ctx.lineWidth = 1.5 * s;
+                ctx.beginPath();
+                ctx.moveTo(c.x, c.y);
+                ctx.lineTo(c.x + 14 * s, c.y + 14 * s);
+                ctx.lineTo(c.x + 5 * s,  c.y + 14 * s);
+                ctx.lineTo(c.x + 0 * s,  c.y + 19 * s);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.font = `${12 * s}px system-ui, sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                const lbl = String(name).slice(0, 16);
+                const w = ctx.measureText(lbl).width + 8 * s;
+                ctx.fillRect(c.x + 16 * s, c.y + 18 * s, w, 16 * s);
+                ctx.fillStyle = c.color;
+                ctx.fillText(lbl, c.x + 20 * s, c.y + 26 * s);
+            }
+            ctx.restore();
+            for (const k of stale) _otherCursors.delete(k);
+            // Keep painting so the fade-out animates smoothly.
+            if (_otherCursors.size > 0) requestAnimationFrame(render);
+        }
+
         // Visibility cache — computing visibility per frame is the hot path
         // on big maps. Cache keyed by the inputs that actually affect LOS so
         // we only rebuild when walls/tokens/lighting change.
@@ -692,6 +753,36 @@
                 const data = JSON.parse(e.data);
                 showPing(data.x, data.y, data.player);
             });
+
+            // GM annotations (freehand sketches, room labels, "trap is
+            // here" markers). Read-only on the player side; the GM is
+            // the only author. Wholesale replace + redraw.
+            evtSource.addEventListener('map_drawings', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (Array.isArray(d.drawings)) {
+                        mapState.drawings = d.drawings;
+                        render();
+                    }
+                } catch(_) {}
+            });
+
+            // Live cursor positions from every other viewer (GM + party).
+            // We ignore our own broadcast so we don't render a cursor
+            // chasing our actual mouse.
+            evtSource.addEventListener('cursor', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (!d.player) return;
+                    if (d.player === (playerName || 'Player')) return;
+                    _otherCursors.set(d.player, {
+                        x: d.x, y: d.y,
+                        t: performance.now(),
+                        color: _cursorColor(d.player),
+                    });
+                    render();
+                } catch(_) {}
+            });
             
             evtSource.addEventListener('turn_update', (e) => {
                 const data = JSON.parse(e.data);
@@ -767,6 +858,10 @@
             // Draw difficult terrain
             drawDifficultTerrain();
 
+            // GM annotations — drawn UNDER tokens so they read as map
+            // markings (the GM's sketches, not active combatants).
+            drawDrawings();
+
             // Draw AOE templates (spell effects visible to everyone)
             drawTemplates();
 
@@ -776,6 +871,10 @@
             // Player's personal overlays (local, never broadcast)
             drawPlayerRangeRings();
             drawPlayerRuler();
+
+            // Other viewers' cursors — drawn last so they sit on top of
+            // everything (Foundry-style cursor following).
+            drawOtherCursors();
 
             ctx.restore();
 
@@ -1427,6 +1526,24 @@
             return colors[key] || '#6b7280';
         }
 
+        // Render GM annotations (freehand strokes from /api/map/drawing/add).
+        // Players see them but can't author them; the SSE listener swaps
+        // mapState.drawings in place when the GM commits or clears.
+        function drawDrawings() {
+            const list = mapState.drawings || [];
+            for (const d of list) {
+                if (!d || !d.points || d.points.length < 2) continue;
+                ctx.beginPath();
+                ctx.moveTo(d.points[0][0], d.points[0][1]);
+                for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i][0], d.points[i][1]);
+                ctx.lineWidth = (d.width || 3) / zoom;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = d.color || '#fbbf24';
+                ctx.stroke();
+            }
+        }
+
         // Hit-test in map coords. Iterate tokens in reverse so the topmost
         // token (drawn last, painted on top) wins when stacked. Mirrors
         // the visibility rules drawTokens uses so the cursor can't pick
@@ -1590,6 +1707,11 @@
             const mouseY = e.clientY - rect.top;
             const mapX = (mouseX - viewX) / zoom;
             const mapY = (mouseY - viewY) / zoom;
+
+            // Broadcast our cursor position so the GM + other players see
+            // it (Foundry-style cursor following). Throttled on both ends
+            // so it stays inexpensive on a flaky connection.
+            _broadcastCursor(mapX, mapY);
 
             // Hover tooltip — pick the topmost token whose disc the cursor
             // falls inside, then drive the floating panel via
