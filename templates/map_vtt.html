@@ -598,6 +598,77 @@
         .stat-label { font-size: 9px; color: #666; text-transform: uppercase; }
         .stat-value { font-size: 16px; font-weight: bold; }
         
+        /* ===== TOKEN HOVER TOOLTIP =====
+           Floats near the cursor while hovering a token on the map.
+           GM view shows extra context (AC, hidden-from-players flag,
+           assigned player) the player view doesn't get. */
+        #token-tooltip {
+            position: fixed;
+            top: 0; left: 0;
+            display: none;
+            min-width: 170px;
+            max-width: 260px;
+            background: rgba(20, 17, 12, 0.96);
+            border: 1px solid rgba(201, 163, 78, 0.45);
+            border-radius: 6px;
+            padding: 8px 10px;
+            color: #ededf4;
+            font-size: 12px;
+            line-height: 1.4;
+            pointer-events: none;
+            z-index: 2000;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+        }
+        #token-tooltip.show { display: block; }
+        #token-tooltip .tt-name {
+            font-family: 'Cinzel', serif;
+            font-size: 13px;
+            font-weight: 600;
+            color: #f0d88a;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+        #token-tooltip .tt-name .tt-tag {
+            font-family: system-ui;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-left: 6px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            vertical-align: middle;
+        }
+        #token-tooltip .tt-name .tt-tag.hidden { background: rgba(168,85,247,0.25); color:#d8b4fe; border:1px solid rgba(168,85,247,0.45); }
+        #token-tooltip .tt-name .tt-tag.pc     { background: rgba(34,197,94,0.20); color:#86efac; border:1px solid rgba(34,197,94,0.40); }
+        #token-tooltip .tt-name .tt-tag.npc    { background: rgba(239,68,68,0.20); color:#fca5a5; border:1px solid rgba(239,68,68,0.40); }
+        #token-tooltip .tt-row {
+            display: flex; justify-content: space-between;
+            color: #c8bd9e;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        #token-tooltip .tt-row .v { color: #ededf4; font-weight: 600; }
+        #token-tooltip .tt-hpbar {
+            margin-top: 5px;
+            height: 5px; border-radius: 3px;
+            background: rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+        #token-tooltip .tt-hpbar > div { height: 100%; transition: width 0.18s; }
+        #token-tooltip .tt-conds {
+            margin-top: 6px;
+            display: flex; flex-wrap: wrap; gap: 3px;
+        }
+        #token-tooltip .tt-cond {
+            font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;
+            padding: 2px 5px; border-radius: 3px;
+            background: rgba(168, 58, 58, 0.18);
+            color: #fca5a5;
+            border: 1px solid rgba(168, 58, 58, 0.35);
+            font-weight: 600;
+        }
+
         /* ===== CONTEXT MENU ===== */
         #context-menu {
             position: fixed;
@@ -1370,6 +1441,9 @@
          font-weight: bold; font-size: 12px; z-index: 200; display: none;"></div>
     
     <!-- Context Menu -->
+    <!-- Token hover tooltip — populated by _updateHoverTooltip on mousemove. -->
+    <div id="token-tooltip" role="tooltip" aria-hidden="true"></div>
+
     <div id="context-menu">
         <div class="context-item" onclick="contextAction('damage')">Apply Damage</div>
         <div class="context-item" onclick="contextAction('heal')">Heal</div>
@@ -2495,7 +2569,17 @@
             mapArea.addEventListener('mousedown', onMouseDown);
             mapArea.addEventListener('mousemove', onMouseMove);
             mapArea.addEventListener('mouseup', onMouseUp);
-            mapArea.addEventListener('mouseleave', onMouseUp);
+            mapArea.addEventListener('mouseleave', (e) => {
+                onMouseUp(e);
+                // Drop hover state so the tooltip doesn't stick after the
+                // cursor leaves the map area (out to the sidebar, header,
+                // or off the window entirely).
+                if (_hoverTokenId) {
+                    _hoverTokenId = null;
+                    _hideHoverTooltip();
+                    markDirty('tokens');
+                }
+            });
             mapArea.addEventListener('wheel', onWheel);
             mapArea.addEventListener('contextmenu', onContextMenu);
             
@@ -3554,15 +3638,23 @@
         }
         
         function getConditionColor(condition) {
+            // Server stores conditions as lowercase keys (e.g. 'frightened',
+            // 'off_guard', 'flat-footed'). Older display passes used Title
+            // Case — both forms resolve here so condition pips actually
+            // get their distinct colors instead of falling through to a
+            // generic gray.
+            const key = String(condition || '').toLowerCase().replace(/[ _-]/g, '');
             const colors = {
-                'Frightened': '#a855f7', 'Sickened': '#84cc16', 'Stunned': '#fbbf24',
-                'Slowed': '#6366f1', 'Prone': '#78716c', 'Dying': '#dc2626',
-                'Wounded': '#f97316', 'Flat-Footed': '#ec4899', 'Invisible': '#e0e0e0',
-                'Hidden': '#737373', 'Quickened': '#14b8a6', 'Persistent Damage': '#b91c1c',
-                'Clumsy': '#f472b6', 'Drained': '#9ca3af', 'Enfeebled': '#a78bfa',
-                'Doomed': '#1e1b4b', 'Unconscious': '#374151', 'Dead': '#000'
+                frightened: '#a855f7', sickened: '#84cc16', stunned: '#fbbf24',
+                slowed: '#6366f1', prone: '#78716c', dying: '#dc2626',
+                wounded: '#f97316', flatfooted: '#ec4899', offguard: '#ec4899',
+                invisible: '#e0e0e0', hidden: '#737373', quickened: '#14b8a6',
+                persistentdamage: '#b91c1c', clumsy: '#f472b6', drained: '#9ca3af',
+                enfeebled: '#a78bfa', doomed: '#1e1b4b', unconscious: '#374151',
+                dead: '#000000', concealed: '#94a3b8', undetected: '#475569',
+                stupefied: '#7c3aed',
             };
-            return colors[condition] || '#6b7280';
+            return colors[key] || '#6b7280';
         }
         
         function drawMovementRange() {
@@ -3945,8 +4037,28 @@
                     showMovementPreview(e.clientX, e.clientY, token, token.x, token.y, gx, gy);
                 }
             }
+
+            // Token hover tooltip — only when the GM is idly hovering (no
+            // active drag/draw/template/ruler). Resolves which token is
+            // under the cursor and feeds the floating tooltip helper.
+            if (!isRulering && !isPlacingTemplate && !isBoxSelecting
+                && !isDrawingWall && !draggingToken && !isDragging) {
+                _hoverScreenX = e.clientX;
+                _hoverScreenY = e.clientY;
+                const t = getTokenAtPoint(mapX, mapY);
+                const nextId = t ? t.id : null;
+                if (nextId !== _hoverTokenId) {
+                    _hoverTokenId = nextId;
+                    markDirty('tokens');
+                }
+                _updateHoverTooltip();
+            } else if (_hoverTokenId) {
+                _hoverTokenId = null;
+                _hideHoverTooltip();
+                markDirty('tokens');
+            }
         }
-        
+
         function showMovementPreview(screenX, screenY, token, fromX, fromY, toX, toY) {
             const preview = document.getElementById('movement-preview');
 
@@ -4357,7 +4469,7 @@
             const gs = mapState.grid_size || 70;
             const ox = mapState.grid_offset_x || 0;
             const oy = mapState.grid_offset_y || 0;
-            
+
             for (let i = (mapState.tokens || []).length - 1; i >= 0; i--) {
                 const token = mapState.tokens[i];
                 const size = token.size || 1;
@@ -4370,6 +4482,83 @@
                 }
             }
             return null;
+        }
+
+        // ── Token hover tooltip — GM variant. Populates the floating
+        //    `#token-tooltip` div with extra context the player view
+        //    doesn't surface (AC, hidden-from-players flag, assigned
+        //    player). Build is cached per token id so panning while
+        //    hovered doesn't thrash the DOM.
+        let _hoverTokenId = null;
+        let _hoverScreenX = 0;
+        let _hoverScreenY = 0;
+        let _hoverLastBuiltId = null;
+        function _updateHoverTooltip() {
+            const el = document.getElementById('token-tooltip');
+            if (!el) return;
+            if (!_hoverTokenId) { _hideHoverTooltip(); return; }
+            const t = (mapState.tokens || []).find(x => x.id === _hoverTokenId);
+            if (!t) { _hideHoverTooltip(); return; }
+            if (_hoverLastBuiltId !== t.id) {
+                el.innerHTML = _renderTooltipHtml(t);
+                _hoverLastBuiltId = t.id;
+            }
+            el.classList.add('show');
+            el.setAttribute('aria-hidden', 'false');
+            const w = el.offsetWidth || 220;
+            const h = el.offsetHeight || 80;
+            let x = _hoverScreenX + 14;
+            let y = _hoverScreenY + 14;
+            if (x + w + 8 > window.innerWidth)  x = _hoverScreenX - w - 14;
+            if (y + h + 8 > window.innerHeight) y = _hoverScreenY - h - 14;
+            el.style.left = Math.max(8, x) + 'px';
+            el.style.top  = Math.max(8, y) + 'px';
+        }
+        function _hideHoverTooltip() {
+            const el = document.getElementById('token-tooltip');
+            if (!el) return;
+            el.classList.remove('show');
+            el.setAttribute('aria-hidden', 'true');
+            _hoverLastBuiltId = null;
+        }
+        function _renderTooltipHtml(t) {
+            const esc = (s) => String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const tags = [];
+            tags.push(t.is_pc ? '<span class="tt-tag pc">PC</span>' : '<span class="tt-tag npc">NPC</span>');
+            if (t.visible_to_players === false) tags.push('<span class="tt-tag hidden">Hidden</span>');
+            const lines = [`<div class="tt-name">${esc(t.name || 'Unknown')}${tags.join('')}</div>`];
+            // HP — GM sees raw numbers always, including for NPCs.
+            if (t.max_hp > 0) {
+                const pct = Math.max(0, Math.min(1, (t.hp || 0) / t.max_hp));
+                const color = pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444';
+                lines.push(`<div class="tt-row"><span>HP</span><span class="v" style="color:${color}">${t.hp|0} / ${t.max_hp|0}</span></div>`);
+                lines.push(`<div class="tt-hpbar"><div style="width:${(pct*100).toFixed(0)}%;background:${color}"></div></div>`);
+            }
+            // Static defenses, level — pulled from the encounter snapshot
+            // that drives the tracker. Skip rows the token doesn't carry
+            // so a half-populated NPC doesn't look broken.
+            if (t.ac != null)        lines.push(`<div class="tt-row"><span>AC</span><span class="v">${t.ac|0}</span></div>`);
+            if (t.level != null)     lines.push(`<div class="tt-row"><span>Lvl</span><span class="v">${t.level|0}</span></div>`);
+            if (t.initiative != null) lines.push(`<div class="tt-row"><span>Init</span><span class="v">${t.initiative|0}</span></div>`);
+            if (t.assigned_player) lines.push(`<div class="tt-row"><span>Player</span><span class="v">${esc(t.assigned_player)}</span></div>`);
+            const condEntries = [];
+            const c = t.conditions || {};
+            if (Array.isArray(c)) {
+                for (const k of c) condEntries.push([k, 1]);
+            } else if (typeof c === 'object') {
+                for (const [k, v] of Object.entries(c)) if (v) condEntries.push([k, v]);
+            }
+            if (condEntries.length) {
+                const pills = condEntries.slice(0, 8).map(([k, v]) => {
+                    const label = k.replace(/[_-]/g, ' ');
+                    const val = (typeof v === 'number' && v > 1) ? ` ${v}` : '';
+                    return `<span class="tt-cond">${esc(label)}${esc(val)}</span>`;
+                }).join('');
+                lines.push(`<div class="tt-conds">${pills}</div>`);
+            }
+            return lines.join('');
         }
 
         function getDoorIconAtPoint(mapX, mapY) {

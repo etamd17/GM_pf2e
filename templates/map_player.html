@@ -27,6 +27,62 @@
             transform-origin: 0 0;
         }
         
+        /* Token hover tooltip — floats near the cursor while hovering a
+           token. Pure DOM (not canvas) so the text stays crisp at any
+           zoom level. Hidden until _updateHoverTooltip first runs. */
+        #token-tooltip {
+            position: fixed;
+            top: 0; left: 0;
+            display: none;
+            min-width: 160px;
+            max-width: 240px;
+            background: rgba(20, 17, 12, 0.95);
+            border: 1px solid rgba(201, 163, 78, 0.45);
+            border-radius: 6px;
+            padding: 8px 10px;
+            color: #ededf4;
+            font-size: 12px;
+            line-height: 1.4;
+            pointer-events: none;
+            z-index: 200;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+        }
+        #token-tooltip.show { display: block; }
+        #token-tooltip .tt-name {
+            font-family: 'Cinzel', serif;
+            font-size: 13px;
+            font-weight: 600;
+            color: #f0d88a;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+        #token-tooltip .tt-row {
+            display: flex; justify-content: space-between;
+            color: #c8bd9e;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        #token-tooltip .tt-row .v { color: #ededf4; font-weight: 600; }
+        #token-tooltip .tt-hpbar {
+            margin-top: 5px;
+            height: 5px; border-radius: 3px;
+            background: rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+        #token-tooltip .tt-hpbar > div { height: 100%; transition: width 0.18s; }
+        #token-tooltip .tt-conds {
+            margin-top: 6px;
+            display: flex; flex-wrap: wrap; gap: 3px;
+        }
+        #token-tooltip .tt-cond {
+            font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;
+            padding: 2px 5px; border-radius: 3px;
+            background: rgba(168, 58, 58, 0.18);
+            color: #fca5a5;
+            border: 1px solid rgba(168, 58, 58, 0.35);
+            font-weight: 600;
+        }
+
         /* Header */
         #header {
             position: fixed;
@@ -318,6 +374,9 @@
         <div id="dice-result">--</div>
     </div>
     
+    <!-- Token hover tooltip — populated by _updateHoverTooltip on mousemove. -->
+    <div id="token-tooltip" role="tooltip" aria-hidden="true"></div>
+
     <!-- Character Sheet Modal -->
     <div id="sheet-modal">
         <div id="sheet-content">
@@ -347,6 +406,21 @@
         let draggingToken = null;
         let dragTokenOffset = { x: 0, y: 0 };
         let isMyTurn = false;
+
+        // Active-combatant tracking — populated from SSE `encounter_update`
+        // events. Used by drawTokens to render the pulsing blue ring on
+        // whichever token is currently taking its turn, matching the GM
+        // view's behavior. Without this the only place the player saw the
+        // active actor was the floating "It's your turn!" banner.
+        let _activeName = '';
+        let _activeRound = 0;
+
+        // Hover tooltip — populated by onMouseMove with the token under the
+        // cursor (if any). Rendered as an absolutely-positioned DOM div
+        // rather than canvas so the text stays crisp regardless of zoom.
+        let _hoverTokenId = null;
+        let _hoverScreenX = 0;
+        let _hoverScreenY = 0;
 
         // Visibility cache — computing visibility per frame is the hot path
         // on big maps. Cache keyed by the inputs that actually affect LOS so
@@ -502,7 +576,17 @@
             container.addEventListener('mousedown', onMouseDown);
             container.addEventListener('mousemove', onMouseMove);
             container.addEventListener('mouseup', onMouseUp);
-            container.addEventListener('mouseleave', onMouseUp);
+            container.addEventListener('mouseleave', (e) => {
+                onMouseUp(e);
+                // Drop hover state so the tooltip + gold-rim border don't
+                // stick after the cursor leaves the map (e.g. moving up
+                // to the header or out to the OS).
+                if (_hoverTokenId) {
+                    _hoverTokenId = null;
+                    _hideHoverTooltip();
+                    render();
+                }
+            });
             container.addEventListener('wheel', onWheel);
             
             // Load map
@@ -617,6 +701,13 @@
             evtSource.addEventListener('encounter_update', (e) => {
                 try {
                     const data = JSON.parse(e.data);
+                    // Track the active combatant globally so drawTokens can
+                    // pulse the right token even when it's another party
+                    // member or a visible enemy (not just self).
+                    const prevActive = _activeName;
+                    _activeName = data.active_name || '';
+                    _activeRound = data.round || 0;
+                    if (_activeName !== prevActive) render();
                     if (data.active_name && playerName) {
                         // Check if active combatant matches our assigned token
                         const myTok = (mapState.tokens || []).find(t => t.assigned_player === playerName);
@@ -688,8 +779,9 @@
 
             ctx.restore();
 
-            // If any token is tweening, keep repainting until it lands.
-            if (_anyTokenAnimating()) requestAnimationFrame(render);
+            // Continuous redraw cases: tweening tokens, or an active-
+            // combatant pulse (sine-driven, needs ~30 fps to look right).
+            if (_anyTokenAnimating() || _activeName) requestAnimationFrame(render);
 
             document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
         }
@@ -1182,47 +1274,273 @@
                     tokenX = ax;
                     tokenY = ay;
                 }
-                
+
                 const cx = tokenX * gs + ox + (gs * size) / 2;
                 const cy = tokenY * gs + oy + (gs * size) / 2;
                 const r = (gs * size) / 2 - 4;
-                
-                const isOwn = token.assigned_player === playerName;
-                
-                // Token circle
+
+                const isOwn = token.assigned_player === playerName || token.pc_name === playerName;
+                const isActive = !!(_activeName && token.name === _activeName);
+
+                // Active-combatant pulse — same blue ring the GM screen
+                // draws, so players watching the map can tell whose turn
+                // it is without having to glance at the banner.
+                if (isActive) {
+                    const pulse = (Math.sin(Date.now() / 300) + 1) / 2;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r + 8/zoom + pulse * 6/zoom, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(59, 130, 246, ${0.3 + pulse * 0.4})`;
+                    ctx.lineWidth = 3/zoom;
+                    ctx.stroke();
+                }
+
+                // Token circle — colored fill, with portrait clipped on top
+                // when one is configured. Same approach as the GM view so
+                // PCs read the same on both sides of the table.
                 ctx.beginPath();
                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                 ctx.fillStyle = token.color || (token.is_pc ? '#22c55e' : '#ef4444');
                 ctx.fill();
-                
-                // Border
-                ctx.strokeStyle = isOwn ? '#22c55e' : '#fff';
-                ctx.lineWidth = (isOwn ? 4 : 2) / zoom;
+                if (token.portrait) {
+                    const img = _getPortraitImage(`/portraits/${token.portrait}`);
+                    if (img) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+                        ctx.clip();
+                        const dia = (r - 2) * 2;
+                        const iw = img.naturalWidth || dia;
+                        const ih = img.naturalHeight || dia;
+                        const scale = Math.max(dia / iw, dia / ih);
+                        const dw = iw * scale, dh = ih * scale;
+                        ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+                        ctx.restore();
+                    }
+                }
+
+                // Border — gold when it's the hovered token, green when
+                // it's THIS player's own token, white otherwise.
+                const isHovered = _hoverTokenId === token.id;
+                if (isHovered) {
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 4 / zoom;
+                } else if (isOwn) {
+                    ctx.strokeStyle = '#22c55e';
+                    ctx.lineWidth = 4 / zoom;
+                } else {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2 / zoom;
+                }
                 ctx.stroke();
-                
-                // Initials
-                ctx.fillStyle = '#fff';
-                ctx.font = `bold ${Math.max(12, r * 0.5)}px system-ui`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const initials = token.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-                ctx.fillText(initials, cx, cy);
-                
-                // HP bar (for own token)
-                if (isOwn && token.max_hp > 0) {
+
+                // Initials — only when no portrait is loaded.
+                const _hasPortrait = token.portrait
+                    && (_portraitImgCache.get(`/portraits/${token.portrait}`) || {}).state === 'ok';
+                if (!_hasPortrait) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `bold ${Math.max(12, r * 0.5)}px system-ui`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const initials = token.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                    ctx.fillText(initials, cx, cy);
+                }
+
+                // HP bar — show for every PC (the party stays transparent
+                // about HP to each other) AND for visible NPCs the players
+                // are currently engaging. Without this, only your own PC
+                // had a visible bar — fine for solo Foundry play but bad
+                // for in-table teamwork ("how's Go'el doing?").
+                if (token.max_hp > 0) {
                     const hpPct = Math.max(0, (token.hp || 0) / token.max_hp);
                     const barW = gs * size - 8;
                     const barH = 6/zoom;
                     const barX = cx - barW/2;
                     const barY = cy + r + 4/zoom;
-                    
-                    ctx.fillStyle = '#333';
+
+                    ctx.fillStyle = '#222';
                     ctx.fillRect(barX, barY, barW, barH);
-                    
+
                     ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
                     ctx.fillRect(barX, barY, barW * hpPct, barH);
                 }
+
+                // Condition pips around the rim — same six-icon layout the
+                // GM view uses. Players see conditions on PCs (party
+                // tactics) and on visible NPCs (so "the boss is stunned"
+                // is obvious without a tracker glance).
+                drawConditionIcons(token, cx, cy, r);
             }
+        }
+
+        // Condition iconography — ported from map_vtt.html with a case-
+        // insensitive lookup since the server stores conditions as
+        // lowercase keys (Character.conditions = {'frightened': 0, ...}).
+        function drawConditionIcons(token, cx, cy, r) {
+            let conditions = token.conditions || {};
+            let condList = [];
+            if (Array.isArray(conditions)) {
+                condList = conditions.map(c => ({ name: c, value: 1 }));
+            } else if (typeof conditions === 'object') {
+                condList = Object.entries(conditions)
+                    .filter(([k, v]) => v)
+                    .map(([k, v]) => ({ name: k, value: typeof v === 'number' ? v : 1 }));
+            }
+            if (condList.length === 0) return;
+            const iconSize = 11 / zoom;
+            const angleStep = (Math.PI * 2) / Math.max(condList.length, 6);
+            condList.slice(0, 6).forEach((cond, i) => {
+                const angle = -Math.PI/2 + i * angleStep;
+                const ix = cx + (r + iconSize) * Math.cos(angle);
+                const iy = cy + (r + iconSize) * Math.sin(angle);
+                ctx.beginPath();
+                ctx.arc(ix, iy, iconSize, 0, Math.PI * 2);
+                ctx.fillStyle = _conditionColor(cond.name);
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1/zoom;
+                ctx.stroke();
+                if (typeof cond.value === 'number' && cond.value > 1) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `bold ${iconSize * 0.85}px system-ui`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(cond.value.toString(), ix, iy);
+                }
+            });
+        }
+
+        function _conditionColor(name) {
+            // Lower-cased palette so 'frightened' (server canon) and
+            // 'Frightened' (legacy display key) both resolve. The bare
+            // fallback gray was visually invisible against the dark map.
+            const key = String(name || '').toLowerCase().replace(/[ _-]/g, '');
+            const colors = {
+                frightened: '#a855f7', sickened: '#84cc16', stunned: '#fbbf24',
+                slowed: '#6366f1', prone: '#78716c', dying: '#dc2626',
+                wounded: '#f97316', flatfooted: '#ec4899', offguard: '#ec4899',
+                invisible: '#e0e0e0', hidden: '#737373', quickened: '#14b8a6',
+                persistentdamage: '#b91c1c', clumsy: '#f472b6', drained: '#9ca3af',
+                enfeebled: '#a78bfa', doomed: '#1e1b4b', unconscious: '#374151',
+                dead: '#000000', concealed: '#94a3b8', undetected: '#475569',
+                stupefied: '#7c3aed',
+            };
+            return colors[key] || '#6b7280';
+        }
+
+        // Hit-test in map coords. Iterate tokens in reverse so the topmost
+        // token (drawn last, painted on top) wins when stacked. Mirrors
+        // the visibility rules drawTokens uses so the cursor can't pick
+        // up a hidden or fog-shrouded enemy.
+        function _tokenAtMapPoint(mx, my) {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const tokens = mapState.tokens || [];
+            const vis = calculateVisibleCells();
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const t = tokens[i];
+                if (t.visible_to_players === false) continue;
+                if (!t.is_pc && vis && vis.all && !vis.all.has(`${t.x},${t.y}`)) continue;
+                const size = t.size || 1;
+                const [ax, ay] = _getAnimatedPosition(t);
+                const cx = ax * gs + ox + (gs * size) / 2;
+                const cy = ay * gs + oy + (gs * size) / 2;
+                const r = (gs * size) / 2 - 4;
+                if ((mx - cx) * (mx - cx) + (my - cy) * (my - cy) <= r * r) return t;
+            }
+            return null;
+        }
+
+        // Tooltip lifecycle. Build the HTML once per hovered token, then
+        // just reposition on subsequent mousemoves until the cursor
+        // changes targets — keeps the DOM cheap on long hovers.
+        let _hoverLastBuiltId = null;
+        function _updateHoverTooltip() {
+            const el = document.getElementById('token-tooltip');
+            if (!el) return;
+            if (!_hoverTokenId) { _hideHoverTooltip(); return; }
+            const t = (mapState.tokens || []).find(x => x.id === _hoverTokenId);
+            if (!t) { _hideHoverTooltip(); return; }
+            if (_hoverLastBuiltId !== t.id) {
+                el.innerHTML = _renderTooltipHtml(t);
+                _hoverLastBuiltId = t.id;
+            }
+            el.classList.add('show');
+            el.setAttribute('aria-hidden', 'false');
+            // Position to the upper-right of the cursor unless that runs
+            // off the viewport, in which case flip to the left/bottom.
+            const w = el.offsetWidth || 200;
+            const h = el.offsetHeight || 60;
+            let x = _hoverScreenX + 14;
+            let y = _hoverScreenY + 14;
+            if (x + w + 8 > window.innerWidth)  x = _hoverScreenX - w - 14;
+            if (y + h + 8 > window.innerHeight) y = _hoverScreenY - h - 14;
+            el.style.left = Math.max(8, x) + 'px';
+            el.style.top  = Math.max(8, y) + 'px';
+        }
+        function _hideHoverTooltip() {
+            const el = document.getElementById('token-tooltip');
+            if (!el) return;
+            el.classList.remove('show');
+            el.setAttribute('aria-hidden', 'true');
+            _hoverLastBuiltId = null;
+        }
+        function _renderTooltipHtml(t) {
+            const esc = (s) => String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const lines = [`<div class="tt-name">${esc(t.name || 'Unknown')}</div>`];
+            // HP — PCs show numeric, NPCs show a status word so we don't
+            // leak the exact HP of monsters to the players.
+            if (t.max_hp > 0) {
+                const pct = Math.max(0, Math.min(1, (t.hp || 0) / t.max_hp));
+                const color = pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444';
+                if (t.is_pc) {
+                    lines.push(`<div class="tt-row"><span>HP</span><span class="v">${t.hp|0} / ${t.max_hp|0}</span></div>`);
+                } else {
+                    const word = pct > 0.75 ? 'Healthy' : pct > 0.5 ? 'Lightly Wounded'
+                               : pct > 0.25 ? 'Wounded' : pct > 0 ? 'Critically Wounded' : 'Down';
+                    lines.push(`<div class="tt-row"><span>HP</span><span class="v" style="color:${color}">${esc(word)}</span></div>`);
+                }
+                lines.push(`<div class="tt-hpbar"><div style="width:${(pct*100).toFixed(0)}%;background:${color}"></div></div>`);
+            }
+            // Conditions — render as small ruby pills. Caps at 6 to match
+            // the icon rim around the token.
+            const condEntries = [];
+            const c = t.conditions || {};
+            if (Array.isArray(c)) {
+                for (const k of c) condEntries.push([k, 1]);
+            } else if (typeof c === 'object') {
+                for (const [k, v] of Object.entries(c)) if (v) condEntries.push([k, v]);
+            }
+            if (condEntries.length) {
+                const pills = condEntries.slice(0, 6).map(([k, v]) => {
+                    const label = k.replace(/[_-]/g, ' ');
+                    const val = (typeof v === 'number' && v > 1) ? ` ${v}` : '';
+                    return `<span class="tt-cond">${esc(label)}${esc(val)}</span>`;
+                }).join('');
+                lines.push(`<div class="tt-conds">${pills}</div>`);
+            }
+            return lines.join('');
+        }
+
+        // Portrait cache mirroring map_vtt.html's _getPortraitImage — keeps
+        // a single HTMLImageElement per URL so frame-to-frame redraws
+        // don't decode the PNG repeatedly. Triggers a render() once the
+        // image finishes loading so the portrait appears without waiting
+        // for the next mouse move.
+        const _portraitImgCache = new Map();
+        function _getPortraitImage(url) {
+            if (!url) return null;
+            const hit = _portraitImgCache.get(url);
+            if (hit) return hit.state === 'ok' ? hit.img : null;
+            const img = new Image();
+            const entry = { img, state: 'loading' };
+            _portraitImgCache.set(url, entry);
+            img.onload = () => { entry.state = 'ok'; _invalidateVisibilityCache(); render(); };
+            img.onerror = () => { entry.state = 'err'; };
+            img.src = url;
+            return null;
         }
         
         // ===========================================
@@ -1267,11 +1585,30 @@
         }
 
         function onMouseMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = (mouseX - viewX) / zoom;
+            const mapY = (mouseY - viewY) / zoom;
+
+            // Hover tooltip — pick the topmost token whose disc the cursor
+            // falls inside, then drive the floating panel via
+            // _updateHoverTooltip. Only updates when the resolved token
+            // actually changes, so panning doesn't thrash the DOM.
+            if (!_playerRulering && !draggingToken && !isDragging) {
+                _hoverScreenX = e.clientX;
+                _hoverScreenY = e.clientY;
+                const hovered = _tokenAtMapPoint(mapX, mapY);
+                const nextId = hovered ? hovered.id : null;
+                if (nextId !== _hoverTokenId) {
+                    _hoverTokenId = nextId;
+                    render();
+                }
+                _updateHoverTooltip();
+            }
+
             if (_playerRulering) {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-                _playerRulerEnd = { x: (mouseX - viewX) / zoom, y: (mouseY - viewY) / zoom };
+                _playerRulerEnd = { x: mapX, y: mapY };
                 render();
                 return;
             }
