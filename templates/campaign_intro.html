@@ -65,6 +65,27 @@
             color: rgba(201,163,78,0.65);
             margin-bottom: 10px;
         }
+        /* Cinematic tagline anchored at the bottom of the hero band.
+           Tuned to read on any splash — text-shadow gives it weight on
+           a bright image, the warm parchment color keeps it from feeling
+           like ordinary body copy. Italic / Cormorant Garamond stack for
+           a "movie poster pullquote" register. */
+        .campaign-hero-tagline {
+            font-family: 'Cormorant Garamond', 'Cinzel', serif;
+            font-style: italic;
+            font-weight: 500;
+            font-size: clamp(16px, 2.4vw, 26px);
+            line-height: 1.35;
+            color: #f0e6c8;
+            letter-spacing: 0.02em;
+            max-width: min(720px, 90vw);
+            margin: 0 auto;
+            padding: 14px 22px;
+            text-shadow:
+                0 0 28px rgba(0,0,0,0.85),
+                0 0 12px rgba(0,0,0,0.95),
+                0 2px 6px rgba(0,0,0,1);
+        }
         /* "Where the party stands" strip — frontmatter-driven row */
         .party-stands {
             display: flex; flex-wrap: wrap; justify-content: center;
@@ -192,51 +213,35 @@
 <body class="stage{% if campaign.hero_image %} has-hero{% endif %}"
       {% if campaign.hero_image %}style="--hero-image: url('{{ campaign.hero_image }}');"{% endif %}>
 
-    <div class="max-w-5xl mx-auto px-4 py-12 md:py-20">
+    {# The wrapper carries the body content above the fixed splash ::before.
+       Without an explicit stacking context here, certain browser/CSS
+       combinations let the splash's negative z-index sit on the same plane
+       and intercept clicks on the PC tiles — which is why "I can't click the
+       player to join" was happening. position:relative + z-index promotes
+       this wrapper into its own stacking context above the splash. #}
+    <div class="max-w-5xl mx-auto px-4 py-12 md:py-20" style="position:relative; z-index:1;">
 
-        {# ── Hero ── #}
-        <header class="text-center mb-10 md:mb-14">
+        {# ── Hero ─────────────────────────────────────────────────────────
+           Stripped down to the minimum so the splash image carries the
+           visual weight: just the small "session N" rune at the very top,
+           and the tagline floated low into the dark gutter at the bottom
+           of the hero band where the cathedral fades to black. Big title
+           is gone — the splash already has "SHADES OF BLOOD" baked in;
+           layering my Cinzel on top was duplicating it. The vault state
+           pills + "where we left off" line are also gone per request —
+           the GM updates the tagline each session with the flavor / quip
+           they want players to see when they log in. #}
+        <header class="text-center" style="min-height: 38vh; display: flex; flex-direction: column; padding-top: 1vh;">
             <div class="campaign-rune">A Pathfinder Tale · Session {{ campaign.session_number }}</div>
+            <h1 class="hidden" id="campaign-name">{{ campaign.name }}</h1>
 
-            <h1 class="campaign-title text-5xl md:text-7xl mb-4" id="campaign-name">{{ campaign.name }}</h1>
+            <div style="flex: 1;"></div>
 
-            {% if campaign.tagline %}
-            <p class="text-base-300 text-sm md:text-base italic" id="campaign-tagline" style="max-width:640px; margin:0 auto; color:#c8bd9e;">{{ campaign.tagline }}</p>
-            {% else %}
-            <p class="text-base-300 text-sm italic hidden" id="campaign-tagline"></p>
-            {% endif %}
-
-            {# ── "Where the party stands" — pulled from Now Playing.md ── #}
-            {% if vault_state %}
-            <div class="party-stands">
-                {% set _location = vault_state.get('current location') or vault_state.get('active location') or vault_state.get('location') %}
-                {% set _chapter = vault_state.get('active chapter') or vault_state.get('chapter') %}
-                {% set _date = vault_state.get('in-game date') or vault_state.get('date') %}
-                {% set _hook = vault_state.get('open scene status') or vault_state.get('next session target') %}
-                {% if _location %}
-                <span class="party-stand-pill"><span class="lbl">Where</span> <span class="val">{{ _location|replace('[[','')|replace(']]','')|safe }}</span></span>
-                {% endif %}
-                {% if _chapter %}
-                <span class="party-stand-pill"><span class="lbl">Chapter</span> <span class="val">{{ _chapter }}</span></span>
-                {% endif %}
-                {% if _date %}
-                <span class="party-stand-pill"><span class="lbl">In-game</span> <span class="val">{{ _date }}</span></span>
-                {% endif %}
-                {% if campaign.next_session_at %}
-                <span class="party-stand-pill"><span class="lbl">Next session</span> <span class="val">{{ campaign.next_session_at }}</span></span>
-                {% endif %}
-            </div>
-            {% if _hook %}
-            <p style="font-size:11px; color:#c8bd9e; font-style:italic; margin-top:14px; max-width:640px; margin-left:auto; margin-right:auto; line-height:1.6;">
-                <span style="color:#a83a3a; font-family:'Cinzel',serif; font-size:9px; letter-spacing:0.18em; text-transform:uppercase; font-style:normal;">Where we left off · </span>
-                {{ _hook|replace('[[','')|replace(']]','')|safe }}
-            </p>
-            {% endif %}
-            {% elif campaign.next_session_at %}
-            <div class="party-stands">
-                <span class="party-stand-pill"><span class="lbl">Next session</span> <span class="val">{{ campaign.next_session_at }}</span></span>
-            </div>
-            {% endif %}
+            {# Tagline anchored at the bottom of the hero band. Tuned to sit
+               in the darker zone of the splash (cathedral base / shadow
+               line) so it reads regardless of the image's brightness. #}
+            <p class="campaign-hero-tagline" id="campaign-tagline"
+               {% if not campaign.tagline %}style="display:none;"{% endif %}>{{ campaign.tagline }}</p>
         </header>
 
         {# ── Last time / intro ── #}
