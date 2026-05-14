@@ -11845,6 +11845,22 @@ def update_map_token():
                     # truthiness — the file may not exist yet (race) but
                     # the canvas falls back gracefully on image load error.
                     token['portrait'] = (data['portrait'] or '')
+                if 'emit_light' in data:
+                    # Per-token light emitter (a PC carrying a torch, a
+                    # glowing rune monster, etc.). Schema mirrors the
+                    # free-standing lights in ACTIVE_MAP['lights'] but
+                    # follows the token through tweens automatically.
+                    # Null/false clears; otherwise normalize the fields.
+                    el = data['emit_light']
+                    if not el:
+                        token['emit_light'] = None
+                    else:
+                        token['emit_light'] = {
+                            'bright': max(0, int(el.get('bright', 0) or 0)),
+                            'dim': max(0, int(el.get('dim', 0) or 0)),
+                            'color': el.get('color', '#ff9c42'),
+                            'enabled': el.get('enabled') is not False,
+                        }
                 break
         else:
             return jsonify({'success': False, 'error': 'Token not found'}), 404
@@ -12134,25 +12150,70 @@ def _broadcast_map_drawings():
 @app.route('/api/map/drawing/add', methods=['POST'])
 @gm_required
 def add_map_drawing():
-    """Persist a new annotation. Body: {type, points, color, width, label?}.
+    """Persist a new annotation. Supports five primitives:
 
-    Only `type: 'freehand'` is supported today; the schema is open so
-    future tools (arrow / rect / text) drop in without a migration."""
+      freehand: {type, points: [[x,y],...], color, width}
+      arrow:    {type, x, y, dx, dy, color, width}
+      rect:     {type, x, y, dx, dy, color, width, filled?}
+      circle:   {type, x, y, radius, color, width, filled?}
+      text:     {type, x, y, label, color, size}
+
+    Coordinates are map pixels so drawings stay locked to the map image
+    regardless of pan / zoom."""
     data = request.json or {}
-    pts = data.get('points') or []
-    if not isinstance(pts, list) or len(pts) < 2:
-        return jsonify({'success': False, 'error': 'points must be a list of [x, y] pairs'}), 400
+    dtype = (data.get('type') or 'freehand').lower()
+    color = data.get('color', '#fbbf24')
+    width = max(1, min(20, int(data.get('width', 3))))
+    label = (data.get('label') or '').strip()[:120] or None
+    author = (data.get('author') or 'GM').strip()[:40]
+
     drawing = {
         'id': str(uuid.uuid4())[:8],
-        'type': data.get('type', 'freehand'),
-        'points': [[float(p[0]), float(p[1])] for p in pts if isinstance(p, (list, tuple)) and len(p) >= 2],
-        'color': data.get('color', '#fbbf24'),
-        'width': max(1, min(20, int(data.get('width', 3)))),
-        'label': (data.get('label') or '').strip()[:80] or None,
-        'author': (data.get('author') or 'GM').strip()[:40],
+        'type': dtype,
+        'color': color,
+        'width': width,
+        'label': label,
+        'author': author,
     }
-    if len(drawing['points']) < 2:
-        return jsonify({'success': False, 'error': 'need at least 2 valid points'}), 400
+
+    if dtype == 'freehand':
+        pts = data.get('points') or []
+        if not isinstance(pts, list) or len(pts) < 2:
+            return jsonify({'success': False, 'error': 'freehand needs at least 2 points'}), 400
+        drawing['points'] = [[float(p[0]), float(p[1])] for p in pts
+                              if isinstance(p, (list, tuple)) and len(p) >= 2]
+        if len(drawing['points']) < 2:
+            return jsonify({'success': False, 'error': 'need at least 2 valid points'}), 400
+    elif dtype in ('arrow', 'rect'):
+        try:
+            drawing['x']  = float(data.get('x', 0));  drawing['y']  = float(data.get('y', 0))
+            drawing['dx'] = float(data.get('dx', 0)); drawing['dy'] = float(data.get('dy', 0))
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'x/y/dx/dy must be numeric'}), 400
+        if abs(drawing['dx']) < 2 and abs(drawing['dy']) < 2:
+            return jsonify({'success': False, 'error': 'shape too small'}), 400
+        if dtype == 'rect':
+            drawing['filled'] = bool(data.get('filled', False))
+    elif dtype == 'circle':
+        try:
+            drawing['x'] = float(data.get('x', 0))
+            drawing['y'] = float(data.get('y', 0))
+            drawing['radius'] = max(2.0, float(data.get('radius', 20)))
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'x/y/radius must be numeric'}), 400
+        drawing['filled'] = bool(data.get('filled', False))
+    elif dtype == 'text':
+        if not label:
+            return jsonify({'success': False, 'error': 'text needs a label'}), 400
+        try:
+            drawing['x'] = float(data.get('x', 0))
+            drawing['y'] = float(data.get('y', 0))
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
+        drawing['size'] = max(8, min(96, int(data.get('size', 18))))
+    else:
+        return jsonify({'success': False, 'error': f'unknown drawing type {dtype!r}'}), 400
+
     with MAP_LOCK:
         ACTIVE_MAP.setdefault('drawings', []).append(drawing)
     _save_map_state()

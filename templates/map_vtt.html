@@ -9,14 +9,15 @@
          renderer is ready by the time _initPixi() fires from init(). When
          the flag is off, the script still loads but no PIXI app is created. -->
     <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { 
-            height: 100%; 
-            overflow: hidden; 
-            background: #0a0a0a; 
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: #0c0a07;
             font-family: system-ui, -apple-system, sans-serif;
-            color: #e0e0e0;
+            color: #ededf4;
         }
         
         /* ===== LAYOUT =====
@@ -398,16 +399,19 @@
             padding: 10px 16px;
             font-size: 11px;
             font-weight: 600;
-            color: #888;
+            color: #c8bd9e;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            background: #1e1e1e;
+            letter-spacing: 0.08em;
+            font-family: 'Cinzel', system-ui, sans-serif;
+            background: #1c1813;
+            border-top: 1px solid rgba(201, 163, 78, 0.10);
             display: flex;
             align-items: center;
             justify-content: space-between;
             cursor: pointer;
+            transition: background 0.12s, color 0.12s;
         }
-        .section-header:hover { background: #252525; }
+        .section-header:hover { background: #28221a; color: #e0b65a; }
         
         .section-content {
             padding: 8px;
@@ -670,30 +674,36 @@
             font-weight: 600;
         }
 
-        /* ===== CONTEXT MENU ===== */
+        /* ===== CONTEXT MENU ===== Warm-ink panel + gilt border so it
+           reads like part of the rest of the app, not a generic dark
+           dropdown. */
         #context-menu {
             position: fixed;
-            background: #2a2a2a;
-            border: 1px solid #444;
-            border-radius: 8px;
+            background: rgba(20, 17, 12, 0.97);
+            border: 1px solid rgba(201, 163, 78, 0.35);
+            border-radius: 6px;
             padding: 4px 0;
-            min-width: 180px;
+            min-width: 200px;
             z-index: 1000;
             display: none;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+            backdrop-filter: blur(6px);
         }
-        
+
         .context-item {
-            padding: 8px 16px;
+            padding: 8px 14px;
             font-size: 12px;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 8px;
+            color: #ededf4;
+            transition: background 0.1s, color 0.1s;
         }
-        .context-item:hover { background: #3a3a3a; }
-        .context-item.danger { color: #f87171; }
-        .context-divider { height: 1px; background: #444; margin: 4px 0; }
+        .context-item:hover { background: rgba(201, 163, 78, 0.14); color: #f0d88a; }
+        .context-item.danger { color: #fca5a5; }
+        .context-item.danger:hover { background: rgba(168, 58, 58, 0.22); color: #fef2f2; }
+        .context-divider { height: 1px; background: rgba(201, 163, 78, 0.18); margin: 4px 0; }
         
         .context-submenu {
             position: relative;
@@ -1431,6 +1441,29 @@
                 <button class="danger" onclick="clearAllTemplates()">Clear all templates</button>
             </div>
 
+            <div class="flyout-pane" data-pane="draw">
+                <div class="flyout-title">Annotate</div>
+                <div class="flyout-row">
+                    <label for="draw-shape-select">Shape</label>
+                    <select id="draw-shape-select" onchange="setDrawShape(this.value)">
+                        <option value="freehand">Freehand (drag)</option>
+                        <option value="arrow">Arrow (drag)</option>
+                        <option value="rect">Rectangle (drag)</option>
+                        <option value="circle">Circle (drag from center)</option>
+                        <option value="text">Label (click)</option>
+                    </select>
+                </div>
+                <div class="flyout-row">
+                    <label for="draw-color-input">Color</label>
+                    <input type="color" id="draw-color-input" value="#fbbf24" onchange="setDrawColor(this.value)">
+                </div>
+                <div class="flyout-row">
+                    <label for="draw-width-input">Width</label>
+                    <input type="number" id="draw-width-input" min="1" max="20" value="3" onchange="setDrawWidth(this.value)" style="width: 60px;">
+                </div>
+                <button class="danger" onclick="clearAllDrawings()">Clear all annotations</button>
+            </div>
+
             <!-- Hidden ambient select kept so existing setAmbient() callers
                  still find the element. The rail button is the user-facing
                  control now. -->
@@ -1455,19 +1488,22 @@
     <div id="token-tooltip" role="tooltip" aria-hidden="true"></div>
 
     <div id="context-menu">
-        <div class="context-item" onclick="contextAction('damage')">Apply Damage</div>
-        <div class="context-item" onclick="contextAction('heal')">Heal</div>
+        <div class="context-item" onclick="contextAction('damage')">Apply Damage…</div>
+        <div class="context-item" onclick="contextAction('heal')">Heal…</div>
+        <div class="context-item" onclick="contextAction('set_hp')">Set HP…</div>
         <div class="context-divider"></div>
         <div class="context-submenu">
-            <div class="context-item">Conditions</div>
+            <div class="context-item">Conditions ▸</div>
             <div class="submenu-content" id="condition-submenu">
                 <!-- Populated by JS -->
             </div>
         </div>
+        <div class="context-item" onclick="contextAction('vision')">Vision &amp; Light…</div>
         <div class="context-divider"></div>
         <div class="context-item" onclick="contextAction('recall')">Recall Knowledge…</div>
-        <div class="context-item" onclick="contextAction('visible')">Toggle Visibility</div>
-        <div class="context-item" onclick="contextAction('details')">View Details</div>
+        <div class="context-item" onclick="contextAction('visible')">Toggle Hidden</div>
+        <div class="context-item" onclick="contextAction('duplicate')">Duplicate</div>
+        <div class="context-item" onclick="contextAction('details')">Edit Token…</div>
         <div class="context-divider"></div>
         <div class="context-item danger" onclick="contextAction('remove')">Remove</div>
     </div>
@@ -1679,16 +1715,30 @@
             if (isDrawingWall) cancelWall();
         }
 
-        // Drawing-tool state. Captures pixel-coord points while the GM
-        // holds the mouse with currentTool === 'draw', then POSTs the
-        // stroke to /api/map/drawing/add on mouseup. Color + width are
-        // tweakable from the flyout (see #flyout-pane[data-pane="draw"]).
+        // Drawing-tool state. The draw rail button switches the GM
+        // into draw mode; the flyout's shape selector decides which
+        // primitive each mouse-down starts. Color + width are stored
+        // here so they persist across shape switches.
         let _drawingActive = false;
-        let _drawingPoints = [];
-        let _drawingColor = '#fbbf24';   // amber so it pops against most maps
+        let _drawingPoints = [];       // freehand path samples
+        let _drawAnchor = null;        // shape primitives' anchor point (mousedown)
+        let _drawEnd = null;           // current end point during drag
+        let _drawingColor = '#fbbf24'; // amber so it pops against most maps
         let _drawingWidth = 3;
+        let _drawShape = 'freehand';   // freehand | arrow | rect | circle | text
         function setDrawColor(c) { _drawingColor = c || _drawingColor; }
         function setDrawWidth(w) { _drawingWidth = Math.max(1, Math.min(20, parseInt(w, 10) || _drawingWidth)); }
+        function setDrawShape(s) {
+            // Switching mid-stroke would commit garbage, so cancel any
+            // in-progress drawing before switching the shape.
+            if (_drawingActive) {
+                _drawingActive = false;
+                _drawingPoints = [];
+                _drawAnchor = null; _drawEnd = null;
+                markDirty('tokens');
+            }
+            _drawShape = s;
+        }
 
         // Ruler state — while active: start is the drag-origin in map pixels,
         // end follows the mouse. Nothing persisted; purely visual.
@@ -1757,6 +1807,69 @@
                 start: performance.now(),
                 dur: TOKEN_ANIM_MS
             };
+            // Record breadcrumb at the OLD position so the trail
+            // shows where the token came from. Breadcrumbs clear on
+            // turn change (cycle_turn SSE → _lastTurnKey check).
+            const trail = _breadcrumbs[tokenId] || (_breadcrumbs[tokenId] = []);
+            trail.push({ x: fromX, y: fromY, t: performance.now() });
+            // Cap so a hundred-cell-long charge doesn't churn the
+            // render. Visually 12 footprints is plenty.
+            while (trail.length > 12) trail.shift();
+        }
+
+        // Per-turn movement trail. Reset whenever the encounter advances
+        // (handled where _lastTurnKey is bumped). Drawn in the tokens
+        // layer below the token itself so the path reads as breadcrumbs,
+        // not foreground UI.
+        const _breadcrumbs = {};  // tokenId → [{x, y, t}]
+        function _clearBreadcrumbs() {
+            for (const k of Object.keys(_breadcrumbs)) delete _breadcrumbs[k];
+        }
+        function drawBreadcrumbs() {
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const now = performance.now();
+            const tokens = mapState.tokens || [];
+            ctx.save();
+            for (const [tokenId, trail] of Object.entries(_breadcrumbs)) {
+                if (!trail || trail.length === 0) continue;
+                const t = tokens.find(x => x.id === tokenId);
+                if (!t) continue;
+                const size = t.size || 1;
+                const color = t.is_pc ? '#22c55e' : '#ef4444';
+                // Draw a dotted line from each crumb to the next.
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2 / zoom;
+                ctx.setLineDash([4 / zoom, 6 / zoom]);
+                ctx.globalAlpha = 0.5;
+                ctx.beginPath();
+                for (let i = 0; i < trail.length; i++) {
+                    const c = trail[i];
+                    const cx = c.x * gs + ox + (gs * size) / 2;
+                    const cy = c.y * gs + oy + (gs * size) / 2;
+                    if (i === 0) ctx.moveTo(cx, cy);
+                    else ctx.lineTo(cx, cy);
+                }
+                // Continue the line into the token's current position so
+                // the trail visibly ends at the token.
+                const [ax, ay] = _getAnimatedPosition(t);
+                ctx.lineTo(ax * gs + ox + (gs * size) / 2, ay * gs + oy + (gs * size) / 2);
+                ctx.stroke();
+                // Small dot at each crumb, sized in screen px so they
+                // stay legible at any zoom.
+                ctx.setLineDash([]);
+                ctx.globalAlpha = 0.65;
+                for (const c of trail) {
+                    const cx = c.x * gs + ox + (gs * size) / 2;
+                    const cy = c.y * gs + oy + (gs * size) / 2;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 3 / zoom, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
         }
 
         function _getAnimatedPosition(token) {
@@ -2199,6 +2312,7 @@
             // owned bits, then ask PIXI to sync sprites from mapState.
             _beginLayer('tokens');
             drawDrawings();
+            drawBreadcrumbs();
             drawTemplates();
             if (!_USE_PIXI_TOKENS) {
                 drawTokens();
@@ -2213,35 +2327,100 @@
             }
         }
 
-        // Render the persistent annotations layer — freehand strokes
-        // committed via /api/map/drawing/add. We also paint the in-progress
-        // stroke while the GM is drawing so they can see where the brush
-        // has been before the commit lands.
+        // Render the persistent annotations layer. Supports five primitives
+        // (freehand, arrow, rect, circle, text) so the GM can switch
+        // between sketch / pointer / shape / label without leaving the
+        // map. In-progress preview is drawn at the end so the GM can see
+        // the stroke / shape as it grows before mouseup commits.
         function drawDrawings() {
             const list = mapState.drawings || [];
-            for (const d of list) {
-                if (!d || !d.points || d.points.length < 2) continue;
-                ctx.beginPath();
-                ctx.moveTo(d.points[0][0], d.points[0][1]);
-                for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i][0], d.points[i][1]);
-                ctx.lineWidth = (d.width || 3) / zoom;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = d.color || '#fbbf24';
-                ctx.stroke();
+            for (const d of list) _paintDrawing(ctx, d, zoom);
+            if (_drawingActive) {
+                const preview = _buildDrawingPreview();
+                if (preview) _paintDrawing(ctx, preview, zoom);
             }
-            // In-progress stroke during a freehand draw — ephemeral, drawn
-            // until mouseup commits to the server.
-            if (_drawingActive && _drawingPoints.length >= 2) {
-                ctx.beginPath();
-                ctx.moveTo(_drawingPoints[0][0], _drawingPoints[0][1]);
-                for (let i = 1; i < _drawingPoints.length; i++) ctx.lineTo(_drawingPoints[i][0], _drawingPoints[i][1]);
-                ctx.lineWidth = (_drawingWidth || 3) / zoom;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = _drawingColor || '#fbbf24';
-                ctx.stroke();
+        }
+
+        // Shared painter — also used by the player view (copied there).
+        // `d` is one entry from mapState.drawings or the live preview.
+        function _paintDrawing(c, d, z) {
+            const lw = (d.width || 3) / z;
+            const stroke = d.color || '#fbbf24';
+            c.lineWidth = lw;
+            c.lineCap = 'round';
+            c.lineJoin = 'round';
+            c.strokeStyle = stroke;
+            c.fillStyle = stroke;
+            if (d.type === 'freehand') {
+                if (!d.points || d.points.length < 2) return;
+                c.beginPath();
+                c.moveTo(d.points[0][0], d.points[0][1]);
+                for (let i = 1; i < d.points.length; i++) c.lineTo(d.points[i][0], d.points[i][1]);
+                c.stroke();
+            } else if (d.type === 'arrow') {
+                const ax = d.x + d.dx, ay = d.y + d.dy;
+                c.beginPath(); c.moveTo(d.x, d.y); c.lineTo(ax, ay); c.stroke();
+                // Arrowhead — sized in screen px so it stays visible at zoom.
+                const a = Math.atan2(d.dy, d.dx);
+                const head = 12 / z;
+                c.beginPath();
+                c.moveTo(ax, ay);
+                c.lineTo(ax - head * Math.cos(a - Math.PI / 7), ay - head * Math.sin(a - Math.PI / 7));
+                c.lineTo(ax - head * Math.cos(a + Math.PI / 7), ay - head * Math.sin(a + Math.PI / 7));
+                c.closePath();
+                c.fill();
+            } else if (d.type === 'rect') {
+                if (d.filled) {
+                    c.globalAlpha = 0.18;
+                    c.fillRect(d.x, d.y, d.dx, d.dy);
+                    c.globalAlpha = 1;
+                }
+                c.strokeRect(d.x, d.y, d.dx, d.dy);
+            } else if (d.type === 'circle') {
+                c.beginPath();
+                c.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
+                if (d.filled) {
+                    c.globalAlpha = 0.18;
+                    c.fill();
+                    c.globalAlpha = 1;
+                }
+                c.stroke();
+            } else if (d.type === 'text') {
+                const size = (d.size || 18) / z;
+                c.font = `bold ${size}px 'Cinzel', system-ui, sans-serif`;
+                c.textAlign = 'left';
+                c.textBaseline = 'top';
+                // Drop shadow for legibility over any map background.
+                c.fillStyle = 'rgba(0,0,0,0.75)';
+                c.fillText(d.label || '', d.x + 2 / z, d.y + 2 / z);
+                c.fillStyle = stroke;
+                c.fillText(d.label || '', d.x, d.y);
             }
+        }
+
+        // Materialize the in-progress drawing as a synthetic entry so
+        // _paintDrawing can render it the same way it renders committed
+        // drawings. Returns null if the stroke is too small to commit.
+        function _buildDrawingPreview() {
+            const base = { color: _drawingColor, width: _drawingWidth };
+            if (_drawShape === 'freehand') {
+                if (_drawingPoints.length < 2) return null;
+                return { ...base, type: 'freehand', points: _drawingPoints };
+            }
+            if (!_drawAnchor || !_drawEnd) return null;
+            const dx = _drawEnd.x - _drawAnchor.x;
+            const dy = _drawEnd.y - _drawAnchor.y;
+            if (_drawShape === 'arrow') {
+                return { ...base, type: 'arrow', x: _drawAnchor.x, y: _drawAnchor.y, dx, dy };
+            }
+            if (_drawShape === 'rect') {
+                return { ...base, type: 'rect', x: _drawAnchor.x, y: _drawAnchor.y, dx, dy, filled: false };
+            }
+            if (_drawShape === 'circle') {
+                const r = Math.hypot(dx, dy);
+                return { ...base, type: 'circle', x: _drawAnchor.x, y: _drawAnchor.y, radius: r, filled: false };
+            }
+            return null;
         }
         function _drawOverlayLayer() {
             _beginLayer('overlay');
@@ -2890,6 +3069,10 @@
                             if (t.actions_used_this_turn) t.actions_used_this_turn = 0;
                             if (t.strikes_this_turn) t.strikes_this_turn = 0;
                         }
+                        // Wipe the per-turn movement trail too — a fresh
+                        // turn starts with no breadcrumbs from last turn's
+                        // chases / retreats cluttering the map.
+                        _clearBreadcrumbs();
                         render();
                     }
                 } catch(_) {}
@@ -2950,10 +3133,13 @@
         // map's right sidebar so the GM doesn't have to switch tools to
         // see what just happened. Auto-scrolls; capped at 200 entries
         // matching the server.
+        // Combat-log palette aligned with the brand (gilt for turn,
+        // ruby for damage/critical, etc.) — matches templates/
+        // player_view.html so the player and GM logs read the same.
         const _COMBAT_LOG_COLORS = {
-            turn: '#5EADAD', damage: '#ef4444', heal: '#22c55e',
-            critical: '#dc2626', condition: '#a78bfa', system: '#fbbf24',
-            action: '#cbd5e1',
+            turn: '#c9a34e', damage: '#ef4444', heal: '#22c55e',
+            critical: '#dc2626', condition: '#a78bfa', system: '#e0b65a',
+            action: '#c8bd9e',
         };
         let _combatLogCache = [];
         function _renderCombatLog() {
@@ -4115,13 +4301,42 @@
                 // Stay in light mode so the GM can drop several torches in a row;
                 // they can click Select to stop placing.
             } else if (currentTool === 'draw') {
-                // Start a freehand stroke. Points accumulate in onMouseMove
-                // and the whole list ships to /api/map/drawing/add on
-                // mouseup. The preview renders from `_drawingPoints` in
-                // drawDrawings until then.
-                _drawingActive = true;
-                _drawingPoints = [[mapX, mapY]];
-                markDirty('tokens');
+                if (_drawShape === 'text') {
+                    // Text labels commit on click — prompt for the
+                    // string immediately so the GM doesn't have to drag.
+                    (async () => {
+                        const label = await floatPrompt('Label text', '', {
+                            title: 'Place Label', confirmLabel: 'Place',
+                        });
+                        if (!label || !label.trim()) return;
+                        const res = await fetch('/api/map/drawing/add', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                type: 'text', x: mapX, y: mapY,
+                                label: label.trim(),
+                                color: _drawingColor, size: 16 + _drawingWidth * 2,
+                                author: 'GM',
+                            }),
+                        }).then(r => r.json()).catch(() => null);
+                        if (res && res.success && res.drawing && res.drawing.id) {
+                            const id = res.drawing.id;
+                            pushUndo(() => fetch('/api/map/drawing/remove', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id }),
+                            }).catch(() => {}), 'Label');
+                        }
+                    })();
+                } else {
+                    // Shape primitives all use mousedown→drag→mouseup.
+                    // Freehand samples on move; arrow/rect/circle just
+                    // need anchor + current end.
+                    _drawingActive = true;
+                    _drawAnchor = { x: mapX, y: mapY };
+                    _drawEnd = { x: mapX, y: mapY };
+                    _drawingPoints = (_drawShape === 'freehand') ? [[mapX, mapY]] : [];
+                    markDirty('tokens');
+                }
             } else if (currentTool === 'ruler') {
                 isRulering = true;
                 rulerStart = { x: mapX, y: mapY };
@@ -4188,12 +4403,16 @@
                 }
                 markDirty('overlay');
             } else if (_drawingActive) {
-                // Sample mid-drag points for the annotation. Same ~8 px
-                // sampling threshold as freehand walls so the stroke stays
-                // smooth without flooding the points array.
-                const last = _drawingPoints[_drawingPoints.length - 1];
-                if (!last || Math.hypot(mapX - last[0], mapY - last[1]) > 6) {
-                    _drawingPoints.push([mapX, mapY]);
+                if (_drawShape === 'freehand') {
+                    const last = _drawingPoints[_drawingPoints.length - 1];
+                    if (!last || Math.hypot(mapX - last[0], mapY - last[1]) > 6) {
+                        _drawingPoints.push([mapX, mapY]);
+                        markDirty('tokens');
+                    }
+                } else {
+                    // Shape primitives just need the current cursor for
+                    // the preview; no point sampling.
+                    _drawEnd = { x: mapX, y: mapY };
                     markDirty('tokens');
                 }
             } else if (draggingToken) {
@@ -4345,33 +4564,46 @@
                 // so the measurement stays drawn.
                 isRulering = false;
             }
-            // Drawing-tool commit. Two-point minimum (single click =
-            // dot is dropped silently); sampled points are sent verbatim
-            // so the server stores the same shape we previewed.
+            // Drawing-tool commit. Each shape posts a different payload
+            // shape to /api/map/drawing/add; the server validates and
+            // broadcasts a `map_drawings` event to every viewer. Single-
+            // point clicks for shape primitives are dropped silently
+            // (the in-progress preview already vanished on mouseup).
             if (_drawingActive) {
+                const shape = _drawShape;
                 const pts = _drawingPoints.slice();
+                const anchor = _drawAnchor, end = _drawEnd;
                 _drawingActive = false;
                 _drawingPoints = [];
-                if (pts.length >= 2) {
-                    const dColor = _drawingColor;
-                    const dWidth = _drawingWidth;
+                _drawAnchor = null; _drawEnd = null;
+                let payload = null;
+                if (shape === 'freehand' && pts.length >= 2) {
+                    payload = { type: 'freehand', points: pts };
+                } else if (anchor && end) {
+                    const dx = end.x - anchor.x, dy = end.y - anchor.y;
+                    if (shape === 'arrow' && Math.hypot(dx, dy) > 6) {
+                        payload = { type: 'arrow', x: anchor.x, y: anchor.y, dx, dy };
+                    } else if (shape === 'rect' && Math.abs(dx) > 4 && Math.abs(dy) > 4) {
+                        payload = { type: 'rect', x: anchor.x, y: anchor.y, dx, dy, filled: false };
+                    } else if (shape === 'circle' && Math.hypot(dx, dy) > 6) {
+                        payload = { type: 'circle', x: anchor.x, y: anchor.y, radius: Math.hypot(dx, dy), filled: false };
+                    }
+                }
+                if (payload) {
+                    payload.color = _drawingColor;
+                    payload.width = _drawingWidth;
+                    payload.author = 'GM';
                     fetch('/api/map/drawing/add', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'freehand', points: pts,
-                            color: dColor, width: dWidth, author: 'GM',
-                        }),
+                        body: JSON.stringify(payload),
                     }).then(r => r.json()).then(res => {
                         if (res && res.success && res.drawing && res.drawing.id) {
                             const id = res.drawing.id;
-                            pushUndo(() => {
-                                fetch('/api/map/drawing/remove', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ id }),
-                                }).catch(() => {});
-                            }, 'Annotation');
+                            pushUndo(() => fetch('/api/map/drawing/remove', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id }),
+                            }).catch(() => {}), shape.charAt(0).toUpperCase() + shape.slice(1));
                         }
                     }).catch(() => {});
                 }
@@ -5603,8 +5835,38 @@
                 });
                 if (amount == null || !parseInt(amount)) return;
                 applyHeal(tok.id, parseInt(amount));
+            } else if (action === 'set_hp') {
+                // Direct-set: handy after an out-of-app heal / damage call
+                // or when GM imports a token mid-fight at non-full HP.
+                const result = await floatingEditor({
+                    title: `Set HP — ${tok.name}`,
+                    fields: [
+                        { key: 'hp',     label: 'Current', type: 'number', min: 0, value: tok.hp || 0, autofocus: true },
+                        { key: 'max_hp', label: 'Max',     type: 'number', min: 0, value: tok.max_hp || 0 },
+                    ],
+                    confirmLabel: 'Set',
+                });
+                if (!result) return;
+                const before = { hp: tok.hp, max_hp: tok.max_hp };
+                const newHp = Math.max(0, parseInt(result.hp) || 0);
+                const newMax = Math.max(0, parseInt(result.max_hp) || tok.max_hp || 0);
+                fetch('/api/map/token/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: tok.id, hp: newHp, max_hp: newMax }),
+                }).then(r => r.ok && pushUndo(() => {
+                    fetch('/api/map/token/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: tok.id, hp: before.hp, max_hp: before.max_hp }),
+                    });
+                }, `Set HP ${tok.name}`));
             } else if (action === 'visible') {
                 toggleVisibility(tok.id);
+            } else if (action === 'duplicate') {
+                duplicateToken(tok);
+            } else if (action === 'vision') {
+                openVisionLightEditor(tok);
             } else if (action === 'details') {
                 showTokenDetails(tok);
             } else if (action === 'recall') {
@@ -5612,6 +5874,90 @@
             } else if (action === 'remove') {
                 removeToken(tok.id);
             }
+        }
+
+        // Duplicate the right-clicked token into the nearest free cell —
+        // mirrors Foundry's "Hold Alt and drag" workflow, just from the
+        // context menu so the GM can spawn three goblins from one template.
+        async function duplicateToken(src) {
+            const gs = mapState.grid_size || 70;
+            // Find a vacant adjacent cell, scanning outward in a 3-ring
+            // spiral so we don't stack tokens on top of each other.
+            const occupied = new Set((mapState.tokens || []).map(t => `${t.x},${t.y}`));
+            let placeX = src.x, placeY = src.y;
+            outer: for (let r = 1; r <= 3; r++) {
+                for (let ox = -r; ox <= r; ox++) {
+                    for (let oy = -r; oy <= r; oy++) {
+                        if (Math.abs(ox) !== r && Math.abs(oy) !== r) continue;  // ring boundary only
+                        const tx = src.x + ox, ty = src.y + oy;
+                        if (!occupied.has(`${tx},${ty}`)) { placeX = tx; placeY = ty; break outer; }
+                    }
+                }
+            }
+            // Strip identity fields so the duplicate isn't linked to the
+            // same encounter slot / PC — it's a fresh combatant the GM
+            // can wire up via the sidebar.
+            const dupe = {
+                name: src.name + ' (copy)',
+                x: placeX, y: placeY,
+                size: src.size || 1,
+                color: src.color || '#ef4444',
+                is_pc: false,           // a duplicated PC is a phantom, not a real player
+                hp: src.hp, max_hp: src.max_hp,
+                ac: src.ac, speed: src.speed,
+                vision_radius: src.vision_radius,
+                darkvision: src.darkvision, low_light_vision: src.low_light_vision,
+                emit_light: src.emit_light,
+                visible_to_players: src.visible_to_players !== false,
+                portrait: src.portrait,
+            };
+            const res = await fetch('/api/map/token/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dupe),
+            }).then(r => r.json()).catch(() => null);
+            if (res && res.success && res.token && res.token.id) {
+                const id = res.token.id;
+                pushUndo(() => removeToken(id, { undo: false }), `Duplicate ${src.name}`);
+            }
+        }
+
+        // Floating editor for vision + light. The token-details panel
+        // already exposes vision_radius / darkvision / low-light fields;
+        // this is the fast path the context menu lands on — color, dim,
+        // bright squares all on one panel, no scrolling.
+        async function openVisionLightEditor(tok) {
+            const cur = tok.emit_light || { bright: 0, dim: 0, color: '#ff9c42', enabled: true };
+            const result = await floatingEditor({
+                title: `Vision &amp; Light — ${tok.name}`,
+                fields: [
+                    { key: 'vision_radius',   label: 'Vision (sq)', type: 'number', min: 0, value: tok.vision_radius || 0, autofocus: true },
+                    { key: 'darkvision',      label: 'Darkvision', type: 'checkbox', value: !!tok.darkvision },
+                    { key: 'low_light_vision',label: 'Low-light',  type: 'checkbox', value: !!tok.low_light_vision },
+                    { key: 'emit_bright',     label: 'Torch bright (sq)', type: 'number', min: 0, value: cur.bright || 0 },
+                    { key: 'emit_dim',        label: 'Torch dim (sq)',    type: 'number', min: 0, value: cur.dim || 0 },
+                    { key: 'emit_color',      label: 'Torch color', type: 'color', value: cur.color || '#ff9c42' },
+                    { key: 'emit_enabled',    label: 'Torch lit', type: 'checkbox', value: cur.enabled !== false },
+                ],
+                confirmLabel: 'Save',
+            });
+            if (!result) return;
+            const bright = Math.max(0, parseInt(result.emit_bright) || 0);
+            const dim    = Math.max(0, parseInt(result.emit_dim) || 0);
+            const emit   = (bright > 0 || dim > 0)
+                ? { bright, dim, color: result.emit_color || '#ff9c42', enabled: !!result.emit_enabled }
+                : null;
+            fetch('/api/map/token/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: tok.id,
+                    vision_radius: Math.max(0, parseInt(result.vision_radius) || 0),
+                    darkvision: !!result.darkvision,
+                    low_light_vision: !!result.low_light_vision,
+                    emit_light: emit,
+                }),
+            }).catch(() => {});
         }
 
         // Recall Knowledge (Q5 of Week 2). Backend is /api/recall_knowledge/
@@ -7119,6 +7465,14 @@
 
                 draggingCreature = null;
             });
+        }
+
+        async function clearAllDrawings() {
+            const ok = await floatConfirm('Clear every annotation on this map?', {
+                title: 'Clear annotations', danger: true, confirmLabel: 'Clear all',
+            });
+            if (!ok) return;
+            fetch('/api/map/drawings/clear', { method: 'POST' }).catch(() => {});
         }
 
         // Refresh the draggable creature roster whenever the encounter
