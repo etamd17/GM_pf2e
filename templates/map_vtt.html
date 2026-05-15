@@ -603,6 +603,73 @@
         .stat-label { font-size: 9px; color: #666; text-transform: uppercase; }
         .stat-value { font-size: 16px; font-weight: bold; }
         
+        /* ===== VAULT NOTE MODAL =====
+           Used by journal pins (clickable map markers linked to a
+           vault note). Mirrors the notes-drawer styling so the same
+           markdown render shows up identically. */
+        #vault-note-modal {
+            position: fixed; inset: 0;
+            display: none; align-items: center; justify-content: center;
+            z-index: 5000;
+        }
+        #vault-note-modal.open { display: flex; }
+        #vault-note-modal .vnm-backdrop {
+            position: absolute; inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(2px);
+        }
+        #vault-note-modal .vnm-frame {
+            position: relative;
+            background: #1c1813;
+            border: 1px solid rgba(201, 163, 78, 0.45);
+            border-radius: 8px;
+            max-width: 720px;
+            width: 92%;
+            max-height: 86vh;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+        }
+        #vault-note-modal .vnm-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(201, 163, 78, 0.22);
+            background: #14110c;
+        }
+        #vault-note-modal .vnm-title {
+            font-family: 'Cinzel', serif;
+            font-weight: 600;
+            color: #f0d88a;
+            font-size: 14px;
+            letter-spacing: 0.04em;
+        }
+        #vault-note-modal .vnm-close {
+            background: none; border: none; color: #c8bd9e;
+            font-size: 22px; line-height: 1;
+            cursor: pointer; padding: 0 4px;
+        }
+        #vault-note-modal .vnm-close:hover { color: #ededf4; }
+        #vault-note-modal .vnm-body {
+            padding: 18px 22px;
+            color: #ededf4;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+        #vault-note-modal .vnm-body h1,
+        #vault-note-modal .vnm-body h2,
+        #vault-note-modal .vnm-body h3 {
+            font-family: 'Cinzel', serif;
+            color: #f0d88a;
+            margin: 14px 0 8px;
+            letter-spacing: 0.04em;
+        }
+        #vault-note-modal .vnm-body a { color: #e0b65a; }
+        #vault-note-modal .vnm-body code {
+            background: rgba(201,163,78,0.10); color: #f0d88a;
+            padding: 1px 4px; border-radius: 3px; font-size: 12px;
+        }
+
         /* ===== TOKEN HOVER TOOLTIP =====
            Floats near the cursor while hovering a token on the map.
            GM view shows extra context (AC, hidden-from-players flag,
@@ -1726,6 +1793,14 @@
         let _drawingColor = '#fbbf24'; // amber so it pops against most maps
         let _drawingWidth = 3;
         let _drawShape = 'freehand';   // freehand | arrow | rect | circle | text
+
+        // Drawing selection state — populated when the GM clicks an
+        // existing annotation in select mode. Selected drawing gets a
+        // gold outline; Delete removes it; drag moves it.
+        let _selectedDrawingId = null;
+        let _drawingDragging = false;     // mousedown landed on the selected drawing
+        let _drawingDragOrigin = null;    // map-coord origin of the drag
+        let _drawingDragDelta = { x: 0, y: 0 };  // running offset during drag
         function setDrawColor(c) { _drawingColor = c || _drawingColor; }
         function setDrawWidth(w) { _drawingWidth = Math.max(1, Math.min(20, parseInt(w, 10) || _drawingWidth)); }
         function setDrawShape(s) {
@@ -2334,11 +2409,93 @@
         // the stroke / shape as it grows before mouseup commits.
         function drawDrawings() {
             const list = mapState.drawings || [];
-            for (const d of list) _paintDrawing(ctx, d, zoom);
+            for (const d of list) {
+                // Selected drawing renders at the dragged-offset position
+                // so the GM gets WYSIWYG movement preview before mouseup
+                // commits via /api/map/drawing/move.
+                const isSel = d.id === _selectedDrawingId;
+                const dx = (isSel && _drawingDragging) ? _drawingDragDelta.x : 0;
+                const dy = (isSel && _drawingDragging) ? _drawingDragDelta.y : 0;
+                _paintDrawing(ctx, dx || dy ? _shiftDrawing(d, dx, dy) : d, zoom);
+                if (isSel) _paintSelectionHalo(d, dx, dy);
+            }
             if (_drawingActive) {
                 const preview = _buildDrawingPreview();
                 if (preview) _paintDrawing(ctx, preview, zoom);
             }
+        }
+
+        // Translate a drawing without mutating the original. Used for the
+        // drag preview so we can paint at the offset without committing.
+        function _shiftDrawing(d, dx, dy) {
+            if (!dx && !dy) return d;
+            const copy = { ...d };
+            if (d.type === 'freehand') {
+                copy.points = (d.points || []).map(p => [p[0] + dx, p[1] + dy]);
+            } else {
+                copy.x = (d.x || 0) + dx;
+                copy.y = (d.y || 0) + dy;
+            }
+            return copy;
+        }
+
+        // Gold outline around the selected drawing so the GM can tell
+        // which one is about to delete / move. Sized in screen px so it
+        // stays consistent at every zoom.
+        function _paintSelectionHalo(d, dx, dy) {
+            ctx.save();
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2 / zoom;
+            ctx.setLineDash([8 / zoom, 4 / zoom]);
+            const pad = 6 / zoom;
+            const b = _drawingBounds(d);
+            if (!b) { ctx.restore(); return; }
+            ctx.strokeRect(b.x + dx - pad, b.y + dy - pad, b.w + pad * 2, b.h + pad * 2);
+            ctx.restore();
+        }
+
+        // AABB for a drawing. Returns null when we can't compute one
+        // (e.g. text without measureText having been called yet — we
+        // approximate from size + label length).
+        function _drawingBounds(d) {
+            if (d.type === 'freehand') {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (const [x, y] of (d.points || [])) {
+                    if (x < minX) minX = x; if (y < minY) minY = y;
+                    if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+                }
+                if (!isFinite(minX)) return null;
+                return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+            }
+            if (d.type === 'arrow' || d.type === 'rect') {
+                const x = Math.min(d.x, d.x + d.dx), y = Math.min(d.y, d.y + d.dy);
+                return { x, y, w: Math.abs(d.dx || 0), h: Math.abs(d.dy || 0) };
+            }
+            if (d.type === 'circle') {
+                return { x: d.x - d.radius, y: d.y - d.radius, w: d.radius * 2, h: d.radius * 2 };
+            }
+            if (d.type === 'text') {
+                const w = (d.label || '').length * (d.size || 18) * 0.55;
+                const h = (d.size || 18) * 1.1;
+                return { x: d.x, y: d.y, w, h };
+            }
+            return null;
+        }
+
+        // Topmost-first hit-test for selecting an annotation in select
+        // mode. Returns the drawing object whose AABB (with a generous
+        // pad for thin lines) contains the click.
+        function _drawingAtMapPoint(mx, my) {
+            const list = mapState.drawings || [];
+            for (let i = list.length - 1; i >= 0; i--) {
+                const d = list[i];
+                const b = _drawingBounds(d);
+                if (!b) continue;
+                const pad = Math.max(12, (d.width || 3) * 2) / zoom;
+                if (mx >= b.x - pad && mx <= b.x + b.w + pad
+                 && my >= b.y - pad && my <= b.y + b.h + pad) return d;
+            }
+            return null;
         }
 
         // Shared painter — also used by the player view (copied there).
@@ -2427,6 +2584,7 @@
             drawWallPreview();
             drawCalibrationPoints();
             drawRuler();
+            drawOtherRulers();
             drawSelectionBox();
             drawOtherCursors();
             _endLayer();
@@ -2459,6 +2617,86 @@
                 body: JSON.stringify({ x: mapX, y: mapY, player: _MY_CURSOR_NAME }),
             }).catch(() => {});
         }
+        // Shared ruler — when the GM (or any client) drags out a
+        // measurement, the line + footage label are broadcast over SSE
+        // so the rest of the table sees the same thing. Server- and
+        // client-throttled to ~10 Hz. Auto-clears after 4 s of no
+        // update so a tab that crashed mid-drag doesn't leave a phantom
+        // line on the map.
+        const _otherRulers = new Map(); // playerName → {x1, y1, x2, y2, feet, t, color}
+        let _rulerThrottle = false;
+        function _broadcastRuler(a, b) {
+            if (_rulerThrottle) return;
+            _rulerThrottle = true;
+            setTimeout(() => { _rulerThrottle = false; }, 80);
+            // Compute feet here too so the receiver doesn't have to
+            // re-derive cell coords and PF2e diagonals.
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const fx = Math.floor((a.x - ox) / gs);
+            const fy = Math.floor((a.y - oy) / gs);
+            const tx = Math.floor((b.x - ox) / gs);
+            const ty = Math.floor((b.y - oy) / gs);
+            const feet = pf2eDistanceSquares(fx, fy, tx, ty) * 5;
+            fetch('/api/map/ruler', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+                    feet, player: _MY_CURSOR_NAME,
+                }),
+            }).catch(() => {});
+        }
+        function _broadcastRulerClear() {
+            fetch('/api/map/ruler', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clear: true, player: _MY_CURSOR_NAME }),
+            }).catch(() => {});
+        }
+        function drawOtherRulers() {
+            if (_otherRulers.size === 0) return;
+            const now = performance.now();
+            const stale = [];
+            ctx.save();
+            for (const [name, r] of _otherRulers) {
+                const age = now - r.t;
+                if (age > 4000) { stale.push(name); continue; }
+                const alpha = age < 3000 ? 1 : (1 - (age - 3000) / 1000);
+                ctx.globalAlpha = Math.max(0, alpha);
+                ctx.strokeStyle = r.color;
+                ctx.lineWidth = 2.5 / zoom;
+                ctx.setLineDash([10 / zoom, 6 / zoom]);
+                ctx.beginPath();
+                ctx.moveTo(r.x1, r.y1);
+                ctx.lineTo(r.x2, r.y2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                // Endpoints
+                for (const [px, py] of [[r.x1, r.y1], [r.x2, r.y2]]) {
+                    ctx.beginPath();
+                    ctx.arc(px, py, 4 / zoom, 0, Math.PI * 2);
+                    ctx.fillStyle = r.color;
+                    ctx.fill();
+                }
+                // Distance label near the end-point with a backing chip.
+                const labelFont = 12 / zoom;
+                ctx.font = `bold ${labelFont}px 'Cinzel', system-ui, sans-serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                const lbl = `${r.feet} ft  ·  ${String(name).slice(0, 14)}`;
+                const tw = ctx.measureText(lbl).width;
+                ctx.fillStyle = 'rgba(15, 12, 8, 0.85)';
+                ctx.fillRect(r.x2 + 8 / zoom, r.y2 - labelFont / 1.5, tw + 10 / zoom, labelFont + 6 / zoom);
+                ctx.fillStyle = r.color;
+                ctx.fillText(lbl, r.x2 + 13 / zoom, r.y2);
+            }
+            ctx.restore();
+            for (const k of stale) _otherRulers.delete(k);
+            if (_otherRulers.size > 0) markDirty('overlay');
+        }
+
         function drawOtherCursors() {
             if (_otherCursors.size === 0) return;
             const now = performance.now();
@@ -3106,6 +3344,24 @@
                     if (!d.player || d.player === _MY_CURSOR_NAME) return;
                     _otherCursors.set(d.player, {
                         x: d.x, y: d.y,
+                        t: performance.now(),
+                        color: _cursorColor(d.player),
+                    });
+                    markDirty('overlay');
+                } catch(_) {}
+            });
+
+            // Shared ruler — when any other viewer drags out a measurement,
+            // we render the same line on our map. Server filters out our
+            // own broadcast so we don't ghost our own ruler.
+            evtSource.addEventListener('ruler', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (!d.player || d.player === _MY_CURSOR_NAME) return;
+                    if (d.clear) { _otherRulers.delete(d.player); markDirty('overlay'); return; }
+                    _otherRulers.set(d.player, {
+                        x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2,
+                        feet: d.feet || 0,
                         t: performance.now(),
                         color: _cursorColor(d.player),
                     });
@@ -3942,6 +4198,50 @@
 
                 // Condition icons (small circles around edge)
                 drawConditionIcons(token, cx, cy, r);
+
+                // Initiative badge — upper-left corner, only when the
+                // token has an initiative value (i.e. it's actually in
+                // a fight). Sized in screen px so it stays readable at
+                // every zoom level.
+                if (token.initiative != null && token.initiative !== '') {
+                    const badgeR = 9 / zoom;
+                    const bx = cx - r + badgeR * 0.4;
+                    const by = cy - r + badgeR * 0.4;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+                    ctx.fillStyle = isActive ? '#fbbf24' : 'rgba(15, 12, 8, 0.9)';
+                    ctx.fill();
+                    ctx.strokeStyle = isActive ? '#fef3c7' : 'rgba(201, 163, 78, 0.55)';
+                    ctx.lineWidth = 1.5 / zoom;
+                    ctx.stroke();
+                    ctx.fillStyle = isActive ? '#0c0a07' : '#f0d88a';
+                    ctx.font = `bold ${10 / zoom}px 'Cinzel', system-ui, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(String(token.initiative), bx, by);
+                }
+
+                // Nameplate — small Cinzel label below the HP bar (or
+                // below the token if no HP bar). Only drawn at usable
+                // zoom levels so a zoomed-out battlefield doesn't get
+                // alphabet soup; the hover tooltip is the fallback at
+                // tighter zooms.
+                if (zoom >= 0.45) {
+                    const nameFont = 11 / zoom;
+                    ctx.font = `bold ${nameFont}px 'Cinzel', system-ui, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    const labelY = cy + r + (token.max_hp > 0 ? (14/zoom + 4/zoom) : 4/zoom)
+                                 + (token.is_pc ? 14/zoom : 0);
+                    const label = String(token.name || '').slice(0, 24);
+                    const tw = ctx.measureText(label).width;
+                    // Backing chip — keeps the text readable on bright maps
+                    // without darkening the whole token.
+                    ctx.fillStyle = 'rgba(15, 12, 8, 0.78)';
+                    ctx.fillRect(cx - tw / 2 - 5 / zoom, labelY - 2 / zoom, tw + 10 / zoom, nameFont + 5 / zoom);
+                    ctx.fillStyle = isActive ? '#f0d88a' : (token.is_pc ? '#cdf2d4' : '#fecaca');
+                    ctx.fillText(label, cx, labelY);
+                }
             }
             
             // Keep the tokens layer animating while a tween is in flight or
@@ -4227,10 +4527,17 @@
                         handleDoorClick(hitWall, e);
                         return;
                     }
-                    // GM click on a note pin: open edit dialog
+                    // GM click on a note pin. Shift+click always edits;
+                    // plain click on a pin with a vault note opens that
+                    // note in a modal (the journal-pin reading flow);
+                    // plain click on a caption-only pin edits it.
                     const hitNote = getNoteAtPoint(mapX, mapY);
                     if (hitNote) {
-                        editGMNote(hitNote);
+                        if (e.shiftKey || !hitNote.note_path) {
+                            editGMNote(hitNote);
+                        } else {
+                            openVaultNoteModal(hitNote.note_path, hitNote.text || hitNote.note_path);
+                        }
                         return;
                     }
                     // GM click on a light marker: offer to remove it. Quick
@@ -4262,6 +4569,25 @@
                             enterTargeting(hitTmpl);
                         }
                         return;
+                    }
+                    // Click an existing annotation → select + prep drag.
+                    // The selection halo + Delete-key removal make the
+                    // drawings layer feel like a real editable surface
+                    // instead of write-only.
+                    const hitDrawing = _drawingAtMapPoint(mapX, mapY);
+                    if (hitDrawing) {
+                        _selectedDrawingId = hitDrawing.id;
+                        _drawingDragging = true;
+                        _drawingDragOrigin = { x: mapX, y: mapY };
+                        _drawingDragDelta = { x: 0, y: 0 };
+                        markDirty('tokens');
+                        return;
+                    }
+                    // Clicking empty space drops any prior drawing
+                    // selection — same UX as deselecting a token.
+                    if (_selectedDrawingId) {
+                        _selectedDrawingId = null;
+                        markDirty('tokens');
                     }
                     // Click on truly empty space in select mode: begin a
                     // box-drag selection. If the mouse barely moves before
@@ -4379,6 +4705,10 @@
             
             if (isRulering && rulerStart) {
                 rulerEnd = { x: mapX, y: mapY };
+                // Share the live ruler line with the rest of the table.
+                // Throttled server-side; we still call every move so the
+                // retract on mouseup feels snappy.
+                _broadcastRuler(rulerStart, rulerEnd);
                 render();
             } else if (isPlacingTemplate && templateAnchor) {
                 templatePreview.dx = mapX;
@@ -4402,6 +4732,14 @@
                     }
                 }
                 markDirty('overlay');
+            } else if (_drawingDragging && _drawingDragOrigin) {
+                // Moving a selected annotation. Track delta in map coords
+                // and let drawDrawings paint the offset preview.
+                _drawingDragDelta = {
+                    x: mapX - _drawingDragOrigin.x,
+                    y: mapY - _drawingDragOrigin.y,
+                };
+                markDirty('tokens');
             } else if (_drawingActive) {
                 if (_drawShape === 'freehand') {
                     const last = _drawingPoints[_drawingPoints.length - 1];
@@ -4563,6 +4901,35 @@
                 // Snapshot result visible until next ruler action — keep rulerEnd
                 // so the measurement stays drawn.
                 isRulering = false;
+                // Retract the shared line on mouseup — the GM's local
+                // ruler stays drawn on their own view (snapshot mode),
+                // but the players' copy clears so it doesn't linger.
+                _broadcastRulerClear();
+            }
+            // Drawing drag commit. Server applies the delta to every
+            // anchor / point so the move broadcasts as a normal
+            // map_drawings update for every other viewer.
+            if (_drawingDragging) {
+                _drawingDragging = false;
+                const dx = _drawingDragDelta.x, dy = _drawingDragDelta.y;
+                _drawingDragDelta = { x: 0, y: 0 };
+                _drawingDragOrigin = null;
+                if (_selectedDrawingId && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+                    const id = _selectedDrawingId;
+                    fetch('/api/map/drawing/move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, dx, dy }),
+                    }).then(r => r.json()).then(res => {
+                        if (res && res.success) {
+                            pushUndo(() => fetch('/api/map/drawing/move', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id, dx: -dx, dy: -dy }),
+                            }).catch(() => {}), 'Move annotation');
+                        }
+                    }).catch(() => {});
+                }
+                markDirty('tokens');
             }
             // Drawing-tool commit. Each shape posts a different payload
             // shape to /api/map/drawing/add; the server validates and
@@ -4871,6 +5238,30 @@
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 const tag = (e.target && e.target.tagName || '').toLowerCase();
                 if (tag === 'input' || tag === 'textarea') return;
+                // If a drawing is selected (and no tokens), the keystroke
+                // removes IT — same UX as Foundry's "click → Delete" for
+                // walls / drawings. Token selection takes precedence so
+                // the bulk-token path still fires when both are set.
+                if (selectedTokenIds.size === 0 && _selectedDrawingId) {
+                    e.preventDefault();
+                    const id = _selectedDrawingId;
+                    // Snapshot for undo BEFORE the remove broadcast wipes
+                    // it from mapState.drawings.
+                    const snap = (mapState.drawings || []).find(d => d.id === id);
+                    _selectedDrawingId = null;
+                    fetch('/api/map/drawing/remove', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id }),
+                    }).then(r => r.json()).then(res => {
+                        if (res && res.success && snap) {
+                            pushUndo(() => fetch('/api/map/drawing/add', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(snap),
+                            }).catch(() => {}), 'Restore annotation');
+                        }
+                    }).catch(() => {});
+                    return;
+                }
                 if (selectedTokenIds.size === 0) return;
                 e.preventDefault();
                 const ids = [...selectedTokenIds];
@@ -5135,47 +5526,76 @@
         }
 
         async function placeGMNote(mapX, mapY) {
-            const text = await floatPrompt('Note text:', '', {
-                title: 'GM Note', type: 'text', placeholder: 'Visible only to you'
+            const result = await floatingEditor({
+                title: 'GM Note',
+                message: 'Visible only to you, unless you flip the share toggle. Set a vault path to make it a journal pin: clicking opens that note.',
+                fields: [
+                    { key: 'text', label: 'Caption', type: 'text', autofocus: true,
+                      placeholder: 'Short label (GM-only when unshared)' },
+                    { key: 'note_path', label: 'Vault note', type: 'text',
+                      placeholder: 'e.g. Locations/Cathedral.md (optional)' },
+                    { key: 'share', label: 'Share with players', type: 'checkbox' },
+                    { key: 'icon', label: 'Icon', type: 'text', value: '📌', maxLength: 2 },
+                ],
+                confirmLabel: 'Pin',
             });
-            if (text == null) return;
+            if (!result) return;
             await fetch('/api/map/note/add', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     x: Math.round(mapX),
                     y: Math.round(mapY),
-                    text: text,
-                    color: '#fbbf24',
-                    icon: '📌',
-                })
+                    text: (result.text || '').trim(),
+                    color: result.share ? '#e0b65a' : '#fbbf24',
+                    icon: (result.icon || '📌').trim().slice(0, 2),
+                    note_path: (result.note_path || '').trim() || null,
+                    share: !!result.share,
+                }),
             });
         }
 
         async function editGMNote(note) {
-            const text = await floatPrompt('Edit note (blank to delete):', note.text || '', {
-                title: 'Edit Note'
+            const result = await floatingEditor({
+                title: 'Edit Note',
+                message: 'Blank the caption AND clear the vault note to delete this pin.',
+                fields: [
+                    { key: 'text', label: 'Caption', type: 'text', value: note.text || '', autofocus: true },
+                    { key: 'note_path', label: 'Vault note', type: 'text', value: note.note_path || '',
+                      placeholder: 'Path inside the vault — e.g. Locations/Cathedral.md' },
+                    { key: 'share', label: 'Share with players', type: 'checkbox', value: !!note.share },
+                    { key: 'icon', label: 'Icon', type: 'text', value: note.icon || '📌', maxLength: 2 },
+                    { key: 'delete', label: 'Delete this pin', type: 'checkbox' },
+                ],
+                confirmLabel: 'Save',
             });
-            if (text == null) return;
-            if (text.trim() === '') {
+            if (!result) return;
+            if (result.delete) {
                 await fetch('/api/map/note/remove', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: note.id })
+                    body: JSON.stringify({ id: note.id }),
                 });
-            } else {
-                await fetch('/api/map/note/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: note.id, text: text })
-                });
+                return;
             }
+            await fetch('/api/map/note/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: note.id,
+                    text: (result.text || '').trim(),
+                    note_path: (result.note_path || '').trim() || null,
+                    share: !!result.share,
+                    color: result.share ? '#e0b65a' : '#fbbf24',
+                    icon: (result.icon || '📌').trim().slice(0, 2),
+                }),
+            });
         }
 
         // Set of tools that have an options flyout next to the rail. Other
         // tools (select, pan, note, terrain, ruler, spawn) just change the
         // active mode and don't show a flyout.
-        const TOOLS_WITH_FLYOUT = new Set(['token', 'wall', 'light', 'template']);
+        const TOOLS_WITH_FLYOUT = new Set(['token', 'wall', 'light', 'template', 'draw']);
 
         function setTool(tool) {
             currentTool = tool;
@@ -7465,6 +7885,48 @@
 
                 draggingCreature = null;
             });
+        }
+
+        // Open a vault note in a modal. Powers the journal-pin click
+        // flow on both the GM (full notes) and player (shared notes
+        // only) views. The endpoint /api/notes/render returns the same
+        // markdown→HTML the notes-drawer uses, so callouts / wikilinks
+        // render identically inside the map modal.
+        async function openVaultNoteModal(notePath, title) {
+            let body = '<div style="color: #c8bd9e; font-size: 12px; padding: 8px;">Loading…</div>';
+            let modal = document.getElementById('vault-note-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'vault-note-modal';
+                modal.innerHTML = `
+                    <div class="vnm-backdrop"></div>
+                    <div class="vnm-frame">
+                        <div class="vnm-head">
+                            <div class="vnm-title"></div>
+                            <button class="vnm-close" type="button" aria-label="Close">&times;</button>
+                        </div>
+                        <div class="vnm-body"></div>
+                    </div>`;
+                document.body.appendChild(modal);
+                modal.querySelector('.vnm-backdrop').addEventListener('click', () => modal.classList.remove('open'));
+                modal.querySelector('.vnm-close').addEventListener('click', () => modal.classList.remove('open'));
+            }
+            modal.querySelector('.vnm-title').textContent = title || notePath;
+            modal.querySelector('.vnm-body').innerHTML = body;
+            modal.classList.add('open');
+            try {
+                const r = await fetch('/api/notes/render?path=' + encodeURIComponent(notePath));
+                if (r.ok) {
+                    const j = await r.json();
+                    modal.querySelector('.vnm-body').innerHTML = j && j.html
+                        ? j.html
+                        : '<div style="color: #fca5a5; font-size: 12px; padding: 8px;">Note empty.</div>';
+                } else {
+                    modal.querySelector('.vnm-body').innerHTML = `<div style="color: #fca5a5; font-size: 12px; padding: 8px;">Couldn't load note (${r.status}).</div>`;
+                }
+            } catch (e) {
+                modal.querySelector('.vnm-body').innerHTML = `<div style="color: #fca5a5; font-size: 12px; padding: 8px;">Network error: ${e.message}</div>`;
+            }
         }
 
         async function clearAllDrawings() {

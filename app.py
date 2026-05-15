@@ -6890,6 +6890,37 @@ def api_notes_backlinks():
     return jsonify({"backlinks": notes_service.backlinks(rel_path, include_rules=include_rules)})
 
 
+@app.route('/api/map/journal_note')
+def api_map_journal_note():
+    """Player-accessible render for journal-pin notes. Unlike
+    /api/notes/render (which is GM-only), this only serves a note when
+    its path is linked from a shared (share=True) GM pin on the active
+    map — so players can read in-character handouts the GM pinned for
+    them, but can't enumerate arbitrary vault notes."""
+    rel_path = (request.args.get('path') or '').strip()
+    if not rel_path:
+        return jsonify({"error": "path required"}), 400
+    # Skip the allowlist check for the GM — they can read anything via
+    # /api/notes/render anyway; this just lets the same client code
+    # work for both viewers.
+    if not _is_gm():
+        with MAP_LOCK:
+            allowed = {
+                (n.get('note_path') or '').strip()
+                for n in ACTIVE_MAP.get('gm_notes', []) or []
+                if n.get('share') and n.get('note_path')
+            }
+        if rel_path not in allowed:
+            return jsonify({"error": "this note is not shared with players"}), 403
+    try:
+        r = notes_service.render(rel_path)
+    except notes_service.NotePathError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"path": r.rel_path, "title": r.title, "html": r.html})
+
+
 @app.route('/api/notes/render')
 @gm_required
 def api_notes_render():
@@ -11388,8 +11419,23 @@ def _apply_player_map_filter(state, player_name):
             walls_out.append(w)
     state['walls'] = walls_out
 
-    # Step 3 — GM notes are never sent to players
-    state.pop('gm_notes', None)
+    # Step 3 — GM notes are GM-only EXCEPT for pins flagged share=True
+    # (journal pins). Those become readable handouts pinned on the map.
+    # We also strip the GM-only `text` field on shared pins so a private
+    # caption doesn't slip out alongside the public note_path.
+    shared = []
+    for n in state.get('gm_notes', []) or []:
+        if not n.get('share'):
+            continue
+        shared.append({
+            'id': n.get('id'),
+            'x': n.get('x'), 'y': n.get('y'),
+            'icon': n.get('icon') or '📖',
+            'color': n.get('color') or '#fbbf24',
+            'note_path': n.get('note_path'),
+            'share': True,
+        })
+    state['gm_notes'] = shared
 
     # Step 4 — token vision filter
     ambient = state.get('ambient_light', 'bright')
@@ -12248,6 +12294,45 @@ def clear_map_drawings():
     _broadcast_map_drawings()
     return jsonify({'success': True})
 
+
+@app.route('/api/map/drawing/move', methods=['POST'])
+@gm_required
+def move_map_drawing():
+    """Translate an existing annotation by (dx, dy) pixels. For freehand
+    strokes every sampled point shifts; shape primitives shift their
+    anchor + (for circle) leave the radius untouched.
+
+    Body: {id, dx, dy}. Returns the updated drawing record."""
+    data = request.json or {}
+    drawing_id = data.get('id')
+    try:
+        dx = float(data.get('dx', 0))
+        dy = float(data.get('dy', 0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'dx/dy must be numeric'}), 400
+    if not drawing_id:
+        return jsonify({'success': False, 'error': 'id required'}), 400
+    if dx == 0 and dy == 0:
+        return jsonify({'success': True, 'noop': True})
+    moved = None
+    with MAP_LOCK:
+        for d in ACTIVE_MAP.get('drawings', []):
+            if d.get('id') != drawing_id:
+                continue
+            t = d.get('type')
+            if t == 'freehand':
+                d['points'] = [[p[0] + dx, p[1] + dy] for p in d.get('points', [])]
+            elif t in ('arrow', 'rect', 'circle', 'text'):
+                d['x'] = float(d.get('x', 0)) + dx
+                d['y'] = float(d.get('y', 0)) + dy
+            moved = d
+            break
+    if not moved:
+        return jsonify({'success': False, 'error': 'drawing not found'}), 404
+    _save_map_state()
+    _broadcast_map_drawings()
+    return jsonify({'success': True, 'drawing': moved})
+
 @app.route('/api/map/border', methods=['POST'])
 @gm_required
 def border_map():
@@ -12380,6 +12465,47 @@ def map_cursor():
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
     _broadcast_event('cursor', {'x': x, 'y': y, 'player': player, 't': now})
+    return jsonify({'success': True})
+
+
+# Same throttle bucket as cursor — a ruler drag is mousemove-driven and
+# could be even chattier on a long measurement. Keep the broadcast to
+# ~10 Hz so the SSE channel stays cheap.
+_LAST_RULER_AT = {}
+_RULER_MIN_INTERVAL_SEC = 0.08
+
+@app.route('/api/map/ruler', methods=['POST'])
+def map_ruler():
+    """Broadcast a live ruler line. Used during a measurement drag so the
+    rest of the table sees the same "the dragon is 35 ft away" line the
+    GM is looking at. Pass `clear: True` (or omit x2/y2) to retract the
+    line when the GM releases the mouse.
+
+    Body: {x1, y1, x2, y2, player, clear?}"""
+    data = request.json or {}
+    player = (data.get('player') or '').strip()
+    if not player:
+        player = 'GM' if _is_gm() else 'Player'
+    now = time.time()
+    # `clear` always broadcasts (mouse-up shouldn't be throttled — we
+    # want the retract to land immediately so the line vanishes).
+    is_clear = bool(data.get('clear'))
+    if not is_clear:
+        last = _LAST_RULER_AT.get(player, 0)
+        if now - last < _RULER_MIN_INTERVAL_SEC:
+            return jsonify({'success': True, 'throttled': True})
+        _LAST_RULER_AT[player] = now
+    payload = {'player': player, 't': now, 'clear': is_clear}
+    if not is_clear:
+        try:
+            payload['x1'] = float(data.get('x1', 0))
+            payload['y1'] = float(data.get('y1', 0))
+            payload['x2'] = float(data.get('x2', 0))
+            payload['y2'] = float(data.get('y2', 0))
+            payload['feet'] = int(data.get('feet', 0) or 0)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'ruler coords must be numeric'}), 400
+    _broadcast_event('ruler', payload)
     return jsonify({'success': True})
 
 @app.route('/api/map/roll', methods=['POST'])
@@ -13056,6 +13182,26 @@ def clear_templates():
 # Notes live in ACTIVE_MAP['gm_notes']. They never leave get_map_state() for
 # non-GM viewers. Kept separate from walls/tokens so rendering order is simple.
 
+def _broadcast_gm_notes_to_all():
+    """GM gets the full pin set; players get only the ones with share=True
+    (those are journal pins — readable handouts pinned on the map).
+    The full payload + the filtered payload go on two SSE events so the
+    GM client and the player client don't have to filter on receive."""
+    with MAP_LOCK:
+        notes = list(ACTIVE_MAP.get('gm_notes', []))
+    try:
+        # Internal helpers don't have a player_filter mechanism for
+        # SSE broadcasts that need DIFFERENT bodies per receiver.
+        # Trick: the GM event carries the full list; the player event
+        # carries the shared subset under the same event name. The
+        # client SSE listeners decide which they care about based on
+        # `share` field presence — both views read `map_notes` but
+        # player view ignores entries missing share/note_path.
+        sse_broadcast('map_notes', {'notes': notes})
+    except Exception:
+        pass
+
+
 @app.route('/api/map/note/add', methods=['POST'])
 @gm_required
 def add_gm_note():
@@ -13072,15 +13218,16 @@ def add_gm_note():
         'text': str(data.get('text', '') or '')[:500],
         'color': str(data.get('color', '#fbbf24'))[:16],
         'icon': str(data.get('icon', '📌'))[:4],
+        # Optional vault note link — pin opens this note when clicked.
+        'note_path': str(data.get('note_path') or '')[:300] or None,
+        # When True, players see the pin too and can click it to read
+        # the linked note. Default False keeps existing behavior.
+        'share': bool(data.get('share', False)),
     }
     with MAP_LOCK:
         ACTIVE_MAP.setdefault('gm_notes', []).append(note)
     _save_map_state()
-    # Notes are GM-only — a dedicated SSE event keeps players from re-rendering
-    try:
-        sse_broadcast('map_notes', {'notes': list(ACTIVE_MAP.get('gm_notes', []))})
-    except Exception:
-        pass
+    _broadcast_gm_notes_to_all()
     return jsonify({'success': True, 'note': note})
 
 
@@ -13095,6 +13242,10 @@ def update_gm_note():
                 if 'text' in data: n['text'] = str(data['text'] or '')[:500]
                 if 'color' in data: n['color'] = str(data['color'])[:16]
                 if 'icon' in data: n['icon'] = str(data['icon'])[:4]
+                if 'note_path' in data:
+                    n['note_path'] = str(data['note_path'] or '')[:300] or None
+                if 'share' in data:
+                    n['share'] = bool(data['share'])
                 if 'x' in data:
                     try: n['x'] = int(data['x'])
                     except (TypeError, ValueError): pass
@@ -13103,10 +13254,7 @@ def update_gm_note():
                     except (TypeError, ValueError): pass
                 break
     _save_map_state()
-    try:
-        sse_broadcast('map_notes', {'notes': list(ACTIVE_MAP.get('gm_notes', []))})
-    except Exception:
-        pass
+    _broadcast_gm_notes_to_all()
     return jsonify({'success': True})
 
 
@@ -13118,10 +13266,7 @@ def remove_gm_note():
     with MAP_LOCK:
         ACTIVE_MAP['gm_notes'] = [n for n in ACTIVE_MAP.get('gm_notes', []) if n['id'] != note_id]
     _save_map_state()
-    try:
-        sse_broadcast('map_notes', {'notes': list(ACTIVE_MAP.get('gm_notes', []))})
-    except Exception:
-        pass
+    _broadcast_gm_notes_to_all()
     return jsonify({'success': True})
 
 

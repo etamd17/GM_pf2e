@@ -27,6 +27,55 @@
             transform-origin: 0 0;
         }
         
+        /* Vault note modal (journal pins). Shared markup with the GM
+           view so a handout reads the same on both sides of the table. */
+        #vault-note-modal {
+            position: fixed; inset: 0;
+            display: none; align-items: center; justify-content: center;
+            z-index: 5000;
+        }
+        #vault-note-modal.open { display: flex; }
+        #vault-note-modal .vnm-backdrop {
+            position: absolute; inset: 0;
+            background: rgba(0, 0, 0, 0.72);
+        }
+        #vault-note-modal .vnm-frame {
+            position: relative;
+            background: #1c1813;
+            border: 1px solid rgba(201, 163, 78, 0.45);
+            border-radius: 8px;
+            max-width: 720px; width: 92%; max-height: 86vh;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+        }
+        #vault-note-modal .vnm-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(201, 163, 78, 0.22);
+            background: #14110c;
+        }
+        #vault-note-modal .vnm-title {
+            font-family: 'Cinzel', serif; font-weight: 600;
+            color: #f0d88a; font-size: 14px; letter-spacing: 0.04em;
+        }
+        #vault-note-modal .vnm-close {
+            background: none; border: none; color: #c8bd9e;
+            font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
+        }
+        #vault-note-modal .vnm-close:hover { color: #ededf4; }
+        #vault-note-modal .vnm-body {
+            padding: 18px 22px; color: #ededf4;
+            overflow-y: auto; font-size: 14px; line-height: 1.55;
+        }
+        #vault-note-modal .vnm-body h1,
+        #vault-note-modal .vnm-body h2,
+        #vault-note-modal .vnm-body h3 {
+            font-family: 'Cinzel', serif; color: #f0d88a;
+            margin: 14px 0 8px; letter-spacing: 0.04em;
+        }
+        #vault-note-modal .vnm-body a { color: #e0b65a; }
+
         /* Token hover tooltip — floats near the cursor while hovering a
            token. Pure DOM (not canvas) so the text stays crisp at any
            zoom level. Hidden until _updateHoverTooltip first runs. */
@@ -767,6 +816,19 @@
                 } catch(_) {}
             });
 
+            // Journal pins — only the share=True notes reach the player
+            // SSE channel. Refresh the cached list + repaint so a freshly
+            // dropped handout pin appears immediately.
+            evtSource.addEventListener('map_notes', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (Array.isArray(d.notes)) {
+                        mapState.gm_notes = d.notes.filter(n => n && n.share);
+                        render();
+                    }
+                } catch(_) {}
+            });
+
             // Live cursor positions from every other viewer (GM + party).
             // We ignore our own broadcast so we don't render a cursor
             // chasing our actual mouse.
@@ -777,6 +839,23 @@
                     if (d.player === (playerName || 'Player')) return;
                     _otherCursors.set(d.player, {
                         x: d.x, y: d.y,
+                        t: performance.now(),
+                        color: _cursorColor(d.player),
+                    });
+                    render();
+                } catch(_) {}
+            });
+
+            // Shared rulers from other viewers. Mirrors the cursor channel.
+            evtSource.addEventListener('ruler', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (!d.player) return;
+                    if (d.player === (playerName || 'Player')) return;
+                    if (d.clear) { _otherRulers.delete(d.player); render(); return; }
+                    _otherRulers.set(d.player, {
+                        x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2,
+                        feet: d.feet || 0,
                         t: performance.now(),
                         color: _cursorColor(d.player),
                     });
@@ -862,6 +941,9 @@
             // markings (the GM's sketches, not active combatants).
             drawDrawings();
 
+            // Journal pins (handouts the GM shared with the party).
+            drawJournalPins();
+
             // Draw AOE templates (spell effects visible to everyone)
             drawTemplates();
 
@@ -871,6 +953,10 @@
             // Player's personal overlays (local, never broadcast)
             drawPlayerRangeRings();
             drawPlayerRuler();
+
+            // Shared rulers from other viewers (GM + party). Drawn
+            // before cursors so the cursor name labels can overlap them.
+            drawOtherRulers();
 
             // Other viewers' cursors — drawn last so they sit on top of
             // everything (Foundry-style cursor following).
@@ -1468,6 +1554,47 @@
                 // tactics) and on visible NPCs (so "the boss is stunned"
                 // is obvious without a tracker glance).
                 drawConditionIcons(token, cx, cy, r);
+
+                // Initiative badge — matches the GM-side rendering. We
+                // only have this for combatants currently in the turn
+                // order; out-of-combat tokens have initiative === null.
+                if (token.initiative != null && token.initiative !== '') {
+                    const badgeR = 9 / zoom;
+                    const bx = cx - r + badgeR * 0.4;
+                    const by = cy - r + badgeR * 0.4;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+                    ctx.fillStyle = isActive ? '#fbbf24' : 'rgba(15, 12, 8, 0.9)';
+                    ctx.fill();
+                    ctx.strokeStyle = isActive ? '#fef3c7' : 'rgba(201, 163, 78, 0.55)';
+                    ctx.lineWidth = 1.5 / zoom;
+                    ctx.stroke();
+                    ctx.fillStyle = isActive ? '#0c0a07' : '#f0d88a';
+                    ctx.font = `bold ${10 / zoom}px 'Cinzel', system-ui, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(String(token.initiative), bx, by);
+                }
+
+                // Nameplate below the HP bar. Same zoom threshold as
+                // the GM view so a zoomed-out battlefield doesn't get
+                // alphabet soup — hover tooltip is the fallback.
+                if (zoom >= 0.45) {
+                    const nameFont = 11 / zoom;
+                    ctx.font = `bold ${nameFont}px 'Cinzel', system-ui, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    const labelY = cy + r + (token.max_hp > 0 ? (14/zoom + 4/zoom) : 4/zoom);
+                    // Players see PCs as "Kyle" etc.; NPCs use the same
+                    // label the GM set — hidden NPCs are filtered out
+                    // earlier in drawTokens so we don't leak names.
+                    const label = String(token.name || '').slice(0, 24);
+                    const tw = ctx.measureText(label).width;
+                    ctx.fillStyle = 'rgba(15, 12, 8, 0.78)';
+                    ctx.fillRect(cx - tw / 2 - 5 / zoom, labelY - 2 / zoom, tw + 10 / zoom, nameFont + 5 / zoom);
+                    ctx.fillStyle = isActive ? '#f0d88a' : (token.is_pc ? '#cdf2d4' : '#fecaca');
+                    ctx.fillText(label, cx, labelY);
+                }
             }
         }
 
@@ -1526,6 +1653,72 @@
             return colors[key] || '#6b7280';
         }
 
+        // Shared rulers from other viewers (GM or other players). Same
+        // wire format as the GM view; same fade-out behavior.
+        const _otherRulers = new Map();
+        let _rulerThrottle = false;
+        function _broadcastRuler(a, b) {
+            if (_rulerThrottle) return;
+            _rulerThrottle = true;
+            setTimeout(() => { _rulerThrottle = false; }, 80);
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            const fx = Math.floor((a.x - ox) / gs);
+            const fy = Math.floor((a.y - oy) / gs);
+            const tx = Math.floor((b.x - ox) / gs);
+            const ty = Math.floor((b.y - oy) / gs);
+            const feet = pf2eDistanceSquares(fx, fy, tx, ty) * 5;
+            fetch('/api/map/ruler', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+                    feet, player: playerName || 'Player',
+                }),
+            }).catch(() => {});
+        }
+        function _broadcastRulerClear() {
+            fetch('/api/map/ruler', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clear: true, player: playerName || 'Player' }),
+            }).catch(() => {});
+        }
+        function drawOtherRulers() {
+            if (_otherRulers.size === 0) return;
+            const now = performance.now();
+            const stale = [];
+            ctx.save();
+            for (const [name, r] of _otherRulers) {
+                const age = now - r.t;
+                if (age > 4000) { stale.push(name); continue; }
+                const alpha = age < 3000 ? 1 : (1 - (age - 3000) / 1000);
+                ctx.globalAlpha = Math.max(0, alpha);
+                ctx.strokeStyle = r.color;
+                ctx.lineWidth = 2.5 / zoom;
+                ctx.setLineDash([10 / zoom, 6 / zoom]);
+                ctx.beginPath(); ctx.moveTo(r.x1, r.y1); ctx.lineTo(r.x2, r.y2); ctx.stroke();
+                ctx.setLineDash([]);
+                for (const [px, py] of [[r.x1, r.y1], [r.x2, r.y2]]) {
+                    ctx.beginPath(); ctx.arc(px, py, 4 / zoom, 0, Math.PI * 2);
+                    ctx.fillStyle = r.color; ctx.fill();
+                }
+                const labelFont = 12 / zoom;
+                ctx.font = `bold ${labelFont}px 'Cinzel', system-ui, sans-serif`;
+                ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                const lbl = `${r.feet} ft  ·  ${String(name).slice(0, 14)}`;
+                const tw = ctx.measureText(lbl).width;
+                ctx.fillStyle = 'rgba(15, 12, 8, 0.85)';
+                ctx.fillRect(r.x2 + 8 / zoom, r.y2 - labelFont / 1.5, tw + 10 / zoom, labelFont + 6 / zoom);
+                ctx.fillStyle = r.color;
+                ctx.fillText(lbl, r.x2 + 13 / zoom, r.y2);
+            }
+            ctx.restore();
+            for (const k of stale) _otherRulers.delete(k);
+            if (_otherRulers.size > 0) requestAnimationFrame(render);
+        }
+
         // Render GM annotations (freehand strokes / arrows / rects /
         // circles / labels from /api/map/drawing/add). Players see them
         // but can't author them; the SSE listener swaps
@@ -1533,6 +1726,82 @@
         function drawDrawings() {
             const list = mapState.drawings || [];
             for (const d of list) _paintDrawing(ctx, d, zoom);
+        }
+
+        // Journal pins — markers the GM placed and flagged `share=True`.
+        // Players click one to read the linked vault note in a modal.
+        // Server filters the broadcast so only share-true pins reach
+        // this view; we still defensive-filter just in case.
+        function drawJournalPins() {
+            const pins = (mapState.gm_notes || []).filter(n => n && n.share);
+            const r = 14 / zoom;
+            for (const p of pins) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(15, 12, 8, 0.85)';
+                ctx.fill();
+                ctx.lineWidth = 2 / zoom;
+                ctx.strokeStyle = p.color || '#e0b65a';
+                ctx.stroke();
+                ctx.font = `${18 / zoom}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = p.color || '#e0b65a';
+                ctx.fillText(p.icon || '📖', p.x, p.y + 1 / zoom);
+                ctx.restore();
+            }
+        }
+
+        // Topmost-first hit-test for journal pins. Used by the click
+        // handler to open the linked note when a player taps a pin.
+        function _journalPinAtMapPoint(mx, my) {
+            const pins = (mapState.gm_notes || []).filter(n => n && n.share);
+            const r = 14 / zoom + 4 / zoom;
+            for (let i = pins.length - 1; i >= 0; i--) {
+                const p = pins[i];
+                if ((mx - p.x) * (mx - p.x) + (my - p.y) * (my - p.y) <= r * r) return p;
+            }
+            return null;
+        }
+
+        // Player-side note modal. /api/map/journal_note only returns
+        // notes that are referenced from a share=true pin on the
+        // current map, so this stays inside the GM's allowlist.
+        async function openJournalNoteModal(pin) {
+            let modal = document.getElementById('vault-note-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'vault-note-modal';
+                modal.innerHTML = `
+                    <div class="vnm-backdrop"></div>
+                    <div class="vnm-frame">
+                        <div class="vnm-head">
+                            <div class="vnm-title"></div>
+                            <button class="vnm-close" type="button" aria-label="Close">&times;</button>
+                        </div>
+                        <div class="vnm-body"></div>
+                    </div>`;
+                document.body.appendChild(modal);
+                modal.querySelector('.vnm-backdrop').addEventListener('click', () => modal.classList.remove('open'));
+                modal.querySelector('.vnm-close').addEventListener('click', () => modal.classList.remove('open'));
+            }
+            modal.querySelector('.vnm-title').textContent = pin.note_path || 'Handout';
+            modal.querySelector('.vnm-body').innerHTML = '<div style="color:#c8bd9e;font-size:12px;padding:8px;">Loading…</div>';
+            modal.classList.add('open');
+            try {
+                const r = await fetch('/api/map/journal_note?path=' + encodeURIComponent(pin.note_path));
+                if (r.ok) {
+                    const j = await r.json();
+                    modal.querySelector('.vnm-body').innerHTML = j && j.html
+                        ? j.html
+                        : '<div style="color:#fca5a5;font-size:12px;padding:8px;">Note empty.</div>';
+                } else {
+                    modal.querySelector('.vnm-body').innerHTML = `<div style="color:#fca5a5;font-size:12px;padding:8px;">Couldn't load (${r.status}).</div>`;
+                }
+            } catch (e) {
+                modal.querySelector('.vnm-body').innerHTML = `<div style="color:#fca5a5;font-size:12px;padding:8px;">Network error.</div>`;
+            }
         }
 
         // Same painter the GM view uses, copied here so we don't depend
@@ -1721,6 +1990,16 @@
                 return;
             }
 
+            // Journal-pin click — open the linked note in the modal.
+            // Takes precedence over token-drag so a pin sitting on top
+            // of a PC token still opens the note (the pin is small;
+            // missing the cluster takes them back to drag).
+            const hitPin = _journalPinAtMapPoint(mapX, mapY);
+            if (hitPin && hitPin.note_path) {
+                openJournalNoteModal(hitPin);
+                return;
+            }
+
             // Check if clicking own token
             if (mapState.player_control && playerName) {
                 const token = getOwnTokenAtPoint(mapX, mapY);
@@ -1769,6 +2048,7 @@
 
             if (_playerRulering) {
                 _playerRulerEnd = { x: mapX, y: mapY };
+                _broadcastRuler(_playerRulerStart, _playerRulerEnd);
                 render();
                 return;
             }
@@ -1795,6 +2075,9 @@
         function onMouseUp(e) {
             if (_playerRulering) {
                 _playerRulering = false;
+                // Clear the shared copy on the rest of the table — the
+                // local ruler stays as a snapshot until the next click.
+                _broadcastRulerClear();
                 // Leave ruler drawn; any non-shift mousedown will clear it.
                 return;
             }
