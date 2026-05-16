@@ -10,6 +10,13 @@
          the flag is off, the script still loads but no PIXI app is created. -->
     <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&display=swap" rel="stylesheet">
+    {# Module hook registry — loaded eagerly so enabled modules below
+       can register handlers as they execute. See static/js/modules.js
+       and static/js/modules/README.md for the conventions. #}
+    <script src="/static/js/modules.js"></script>
+    {% for mod_id, mod_filename in enabled_modules or [] %}
+    <script src="/static/js/modules/{{ mod_filename }}" defer data-module-id="{{ mod_id }}"></script>
+    {% endfor %}
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -603,6 +610,24 @@
         .stat-label { font-size: 9px; color: #666; text-transform: uppercase; }
         .stat-value { font-size: 16px; font-weight: bold; }
         
+        /* ===== SCENE TRANSITION =====
+           Gilt-tinted overlay that briefly washes the screen when the
+           GM switches maps. Triggered from the map_state SSE handler
+           on both views — the players' fade is in lockstep with the
+           GM's, so the "we're moving" beat reads naturally. */
+        #scene-fade {
+            position: fixed; inset: 0;
+            pointer-events: none;
+            z-index: 4500;
+            opacity: 0;
+            background: radial-gradient(circle at center,
+                rgba(240, 216, 138, 0.20) 0%,
+                rgba(168, 58, 58, 0.15) 45%,
+                rgba(12, 10, 7, 0.95) 100%);
+            transition: opacity 0.32s ease-out;
+        }
+        #scene-fade.fade-in { opacity: 1; }
+
         /* ===== VAULT NOTE MODAL =====
            Used by journal pins (clickable map markers linked to a
            vault note). Mirrors the notes-drawer styling so the same
@@ -1317,6 +1342,23 @@
                     </div>
                 </div>
                 
+                <!-- Soundboard Panel -->
+                <div class="section-header" onclick="toggleSection('audio')">
+                    <span>🎵 Soundboard</span>
+                    <span id="audio-count" style="font-size: 10px;">0</span>
+                </div>
+                <div id="audio-panel" class="section-content" style="display: none;">
+                    <div id="audio-list" style="margin-bottom: 8px;"></div>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="file" id="audio-upload" accept="audio/*" style="display: none;" onchange="uploadAudio(this)">
+                        <button onclick="document.getElementById('audio-upload').click()" style="flex: 1;">Upload clip</button>
+                        <button class="danger" onclick="stopAllAudio()" title="Stop everything playing">Stop all</button>
+                    </div>
+                    <div style="font-size: 10px; color: #888; margin-top: 6px; line-height: 1.4;">
+                        mp3 / wav / ogg / m4a / webm · max 20 MB
+                    </div>
+                </div>
+
                 <!-- Walls Panel -->
                 <div class="section-header" onclick="toggleSection('walls')">
                     <span>🧱 Walls</span>
@@ -1468,6 +1510,15 @@
                         <option value="secret_door">Secret Door</option>
                     </select>
                 </div>
+                <div class="flyout-row">
+                    <label for="wall-snap-select">Snap</label>
+                    <select id="wall-snap-select" onchange="setWallSnap(this.value)" title="Hold Alt while clicking to temporarily disable snap.">
+                        <option value="corner" selected>Grid corner</option>
+                        <option value="half">Grid half-step</option>
+                        <option value="center">Grid center</option>
+                        <option value="off">No snap</option>
+                    </select>
+                </div>
                 <button onclick="borderMap()">Border map (auto-wall)</button>
             </div>
 
@@ -1482,6 +1533,19 @@
                         <option value="bullseye">Bullseye</option>
                         <option value="daylight">Daylight</option>
                     </select>
+                </div>
+                <div class="flyout-row">
+                    <label for="light-anim-select">Motion</label>
+                    <select id="light-anim-select" title="Visual jitter only — doesn't affect what fog cells reveal.">
+                        <option value="">Preset default</option>
+                        <option value="none">Steady</option>
+                        <option value="flicker">Flicker (torch)</option>
+                        <option value="pulse">Pulse (magic)</option>
+                    </select>
+                </div>
+                <div class="flyout-row">
+                    <label for="light-color-input">Color</label>
+                    <input type="color" id="light-color-input" value="#ff9c42" title="Overrides preset color when set.">
                 </div>
                 <button class="danger" onclick="clearAllLights()">Clear all lights</button>
             </div>
@@ -1553,6 +1617,9 @@
     <!-- Context Menu -->
     <!-- Token hover tooltip — populated by _updateHoverTooltip on mousemove. -->
     <div id="token-tooltip" role="tooltip" aria-hidden="true"></div>
+
+    <!-- Scene transition fade — overlay that briefly washes the screen when ACTIVE_MAP changes. -->
+    <div id="scene-fade" aria-hidden="true"></div>
 
     <div id="context-menu">
         <div class="context-item" onclick="contextAction('damage')">Apply Damage…</div>
@@ -1776,6 +1843,28 @@
         let wallDragEnd = null;
         let wallFreehandPoints = [];           // [[x, y], ...] recorded along the drag
 
+        // Snap mode used by the wall tool. Defaults to 'corner' (most
+        // walls run along grid lines); the flyout lets the GM switch.
+        // Alt-held during a click bypasses snap so the rare diagonal /
+        // off-grid wall stays one keystroke away.
+        let _wallSnapMode = 'corner';
+        function setWallSnap(mode) { _wallSnapMode = mode; }
+        function _snapToGrid(x, y, mode, altHeld) {
+            if (altHeld || mode === 'off') return [x, y];
+            const gs = mapState.grid_size || 70;
+            const ox = mapState.grid_offset_x || 0;
+            const oy = mapState.grid_offset_y || 0;
+            // Step size — corner snaps to whole cells, half-step to half
+            // cells, center snaps to cell midpoints (whole step with a
+            // +0.5 offset).
+            const step = (mode === 'half') ? gs / 2 : gs;
+            const offX = (mode === 'center') ? gs / 2 : 0;
+            const offY = (mode === 'center') ? gs / 2 : 0;
+            const sx = Math.round((x - ox - offX) / step) * step + ox + offX;
+            const sy = Math.round((y - oy - offY) / step) * step + oy + offY;
+            return [sx, sy];
+        }
+
         function setWallShape(s) {
             wallShape = s;
             // Switching shape mid-draw is jarring; cancel any in-progress.
@@ -1890,6 +1979,15 @@
             // Cap so a hundred-cell-long charge doesn't churn the
             // render. Visually 12 footprints is plenty.
             while (trail.length > 12) trail.shift();
+            // Modules hook — let plugins observe token movements.
+            // Synchronous + fire-and-forget; throw-safe via the registry.
+            if (window.PF2E_HOOKS) {
+                const tok = (mapState.tokens || []).find(t => t.id === tokenId);
+                PF2E_HOOKS.fire('token_moved', {
+                    id: tokenId, from: [fromX, fromY], to: [toX, toY],
+                    name: tok && tok.name, is_pc: tok && !!tok.is_pc,
+                });
+            }
         }
 
         // Per-turn movement trail. Reset whenever the encounter advances
@@ -3160,6 +3258,10 @@
 
             // Setup creature drag and drop
             setupCreatureDragDrop();
+
+            // Initial soundboard render — clips list comes from the
+            // map_state Jinja-rendered into mapState on first paint.
+            refreshAudioList();
             
             // Sync ambient dropdown to server state. `ambient_light` is
             // the new source of truth; fall back to the legacy `lighting`
@@ -3209,8 +3311,15 @@
             evtSource.addEventListener('map_state', (e) => {
                 // Track old token positions so we can tween into new ones.
                 const prevTokens = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y, mu: t.movement_used_this_turn || 0}]));
+                const prevMapId = mapState.id;
                 mapState = JSON.parse(e.data);
                 _invalidateVisibilityCache();
+                // Scene transition fade — gilt overlay washes the screen
+                // for ~600 ms when the active map switches under us.
+                // Players see the same fade because their SSE handler
+                // runs the same trigger. Same-map state updates (token
+                // moves, walls, etc.) don't fire it.
+                if (prevMapId && mapState.id && prevMapId !== mapState.id) _runSceneFade();
                 for (const t of (mapState.tokens || [])) {
                     const prev = prevTokens.get(t.id);
                     if (prev) {
@@ -3234,6 +3343,8 @@
                 if (as) as.value = ambient;
                 _refreshAmbientButton();
                 updateCombatantList();
+                refreshAudioList();
+                if (window.PF2E_HOOKS) PF2E_HOOKS.fire('map_state', mapState);
                 render();
             });
             
@@ -3319,6 +3430,17 @@
             evtSource.addEventListener('dice_roll', (e) => {
                 const roll = JSON.parse(e.data);
                 showDiceRollNotification(roll);
+            });
+
+            // Soundboard playback — every viewer receives the same
+            // `audio` event and triggers an HTMLAudioElement on its
+            // own browser. Browsers require a user gesture before
+            // audio can autoplay; the GM's click on Play counts as
+            // the gesture for them, but PLAYERS who haven't clicked
+            // anything yet on this tab may get an "autoplay blocked"
+            // — we surface a one-time prompt so they can opt in.
+            evtSource.addEventListener('audio', (e) => {
+                try { _audioOnEvent(JSON.parse(e.data)); } catch(_) {}
             });
 
             // Drawings layer — annotations persist server-side and any
@@ -4244,13 +4366,16 @@
                 }
             }
             
-            // Keep the tokens layer animating while a tween is in flight or
-            // an active-combatant pulse is rendering. We dirty just the tokens
-            // layer — bg/fog/overlay don't change frame-to-frame for these
-            // animations, so we skip their repaint.
-            if (_anyTokenAnimating() || (mapState.tokens || []).some(t => isActiveCombatant(t))) {
+            // Keep the tokens layer animating while a tween is in flight,
+            // an active-combatant pulse is rendering, or a flickering /
+            // pulsing light needs a fresh radius this frame. The fog
+            // layer is dirtied too when lights animate so the radial
+            // glow keeps up with the bright/dim radii.
+            const animatedLight = _anyAnimatedLight();
+            if (_anyTokenAnimating() || (mapState.tokens || []).some(t => isActiveCombatant(t)) || animatedLight) {
                 markDirty('tokens');
             }
+            if (animatedLight) markDirty('fog');
         }
         
         function drawConditionIcons(token, cx, cy, r) {
@@ -4603,13 +4728,19 @@
             } else if (currentTool === 'token') {
                 placeToken(mapX, mapY);
             } else if (currentTool === 'wall') {
+                // Snap the click target so vertical / horizontal walls
+                // align cleanly with the grid. Alt bypasses for the rare
+                // off-grid diagonal. Freehand intentionally keeps the
+                // raw cursor — sampling already smooths the path and
+                // snapping every sample point produces stair-steps.
+                const [sx, sy] = _snapToGrid(mapX, mapY, _wallSnapMode, e.altKey);
                 if (wallShape === 'polyline') {
-                    addWallPoint(mapX, mapY);
+                    addWallPoint(sx, sy);
                 } else {
                     // Drag-based shapes: capture start, mark drawing, let
                     // mousemove update the preview, mouseup commits.
-                    wallDragStart = { x: mapX, y: mapY };
-                    wallDragEnd   = { x: mapX, y: mapY };
+                    wallDragStart = { x: sx, y: sy };
+                    wallDragEnd   = { x: sx, y: sy };
                     wallFreehandPoints = wallShape === 'freehand' ? [[mapX, mapY]] : [];
                     isDrawingWall = true;
                     markDirty('overlay');
@@ -4720,11 +4851,13 @@
                 boxSelectEnd = { x: mapX, y: mapY };
                 markDirty('overlay');
             } else if (isDrawingWall && wallShape !== 'polyline' && wallDragStart) {
-                // Update the drag-based wall preview. Freehand also accumulates
-                // points along the path so the eventual commit follows the
-                // hand-drawn shape; sample only when we move ~8 px to keep
-                // point count reasonable.
-                wallDragEnd = { x: mapX, y: mapY };
+                // Update the drag-based wall preview. Snap the drag end
+                // so line / rect drops still align to the grid. Freehand
+                // sampling stays raw — snapping every sample looks bad.
+                const [sx, sy] = (wallShape === 'freehand')
+                    ? [mapX, mapY]
+                    : _snapToGrid(mapX, mapY, _wallSnapMode, e.altKey);
+                wallDragEnd = { x: sx, y: sy };
                 if (wallShape === 'freehand' && wallFreehandPoints.length > 0) {
                     const last = wallFreehandPoints[wallFreehandPoints.length - 1];
                     if (Math.hypot(mapX - last[0], mapY - last[1]) > 8) {
@@ -7929,6 +8062,156 @@
             }
         }
 
+        // Audio playback engine — shared with map_player.html. The GM's
+        // Play button hits /api/map/audio/play which fans out as the
+        // SSE `audio` event; every viewer triggers _audioOnEvent.
+        const _activeAudio = new Map();  // clip id → HTMLAudioElement
+        function _audioOnEvent(p) {
+            if (!p || !p.action) return;
+            if (p.action === 'play') {
+                // Stop a previous play of the same clip so the new
+                // request starts from zero instead of overlapping.
+                _audioStopId(p.id);
+                const el = new Audio(p.url);
+                el.loop = !!p.loop;
+                el.volume = Math.max(0, Math.min(1, p.volume || 0.7));
+                el.dataset.clipId = p.id;
+                el.addEventListener('ended', () => {
+                    if (!el.loop) _activeAudio.delete(p.id);
+                });
+                _activeAudio.set(p.id, el);
+                const playP = el.play();
+                if (playP && typeof playP.catch === 'function') {
+                    playP.catch((err) => {
+                        // Autoplay policy blocked us — surface a small
+                        // prompt so the user can opt in. Subsequent
+                        // plays will then go through automatically.
+                        _showAudioGesturePrompt();
+                    });
+                }
+            } else if (p.action === 'stop') {
+                if (p.id) _audioStopId(p.id);
+                else _audioStopAll();
+            }
+        }
+        function _audioStopId(id) {
+            const el = _activeAudio.get(id);
+            if (!el) return;
+            try { el.pause(); el.currentTime = 0; } catch (_) {}
+            _activeAudio.delete(id);
+        }
+        function _audioStopAll() {
+            for (const el of _activeAudio.values()) {
+                try { el.pause(); el.currentTime = 0; } catch (_) {}
+            }
+            _activeAudio.clear();
+        }
+        let _audioPromptShown = false;
+        function _showAudioGesturePrompt() {
+            if (_audioPromptShown) return;
+            _audioPromptShown = true;
+            const banner = document.createElement('div');
+            banner.style.cssText = 'position:fixed; bottom: 18px; left:50%; transform:translateX(-50%); background:#28221a; border:1px solid rgba(201,163,78,0.5); color:#f0d88a; padding:10px 16px; border-radius:6px; font-size:12px; font-family:Cinzel, serif; z-index:6000; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.55);';
+            banner.textContent = 'Click here to enable GM audio';
+            banner.addEventListener('click', () => {
+                // A user gesture in this tab — replay any queued clips
+                // by simulating their last play state. Simplest: just
+                // remove the banner; next /audio event will play
+                // successfully.
+                banner.remove();
+                _audioPromptShown = false;
+            });
+            document.body.appendChild(banner);
+        }
+
+        // Fade the page through a gilt wash, then back to clear. Pure
+        // CSS — the SSE map_state listener flips the class on map-id
+        // change so the GM and players see the transition in sync.
+        function _runSceneFade() {
+            const el = document.getElementById('scene-fade');
+            if (!el) return;
+            // Force a reflow if a previous fade is still in flight so
+            // the transition restarts from opacity 0.
+            el.classList.remove('fade-in');
+            void el.offsetWidth;
+            el.classList.add('fade-in');
+            setTimeout(() => el.classList.remove('fade-in'), 360);
+        }
+
+        // Soundboard — render the clip list, send play/stop/remove
+        // calls, fire upload form. The state lives in mapState.audio_clips
+        // so SSE map_state refreshes redraw the list. Playback itself is
+        // driven by the `audio` SSE event (see _audioPlay below) so
+        // every viewer (GM + players) hits play in sync.
+        function refreshAudioList() {
+            const list = document.getElementById('audio-list');
+            const countEl = document.getElementById('audio-count');
+            const clips = mapState.audio_clips || [];
+            if (countEl) countEl.textContent = String(clips.length);
+            if (!list) return;
+            if (clips.length === 0) {
+                list.innerHTML = '<div style="color: #666; font-size: 10px; padding: 4px;">No clips uploaded yet.</div>';
+                return;
+            }
+            list.innerHTML = clips.map(c => `
+                <div class="audio-row" style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid rgba(201,163,78,0.14); border-radius: 4px; margin-bottom: 4px; background: #181410;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="color: #e0b65a; font-size: 12px; font-family: 'Cinzel', serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${_escAttr(c.name)}">${_escapeHtml(c.name)}</div>
+                        <div style="font-size: 9px; color: #8e8369;">${c.ext.toUpperCase()} · ${Math.round(c.size/1024)} KB</div>
+                    </div>
+                    <button title="Play" onclick="playAudio('${c.id}', false)" style="background: rgba(34,197,94,0.18); color: #86efac; border: 1px solid rgba(34,197,94,0.4); padding: 4px 8px; border-radius: 3px;">▶</button>
+                    <button title="Loop" onclick="playAudio('${c.id}', true)" style="background: rgba(94,173,173,0.18); color: #5EADAD; border: 1px solid rgba(94,173,173,0.4); padding: 4px 8px; border-radius: 3px;">∞</button>
+                    <button title="Stop" onclick="stopAudio('${c.id}')" style="background: rgba(168,58,58,0.18); color: #fca5a5; border: 1px solid rgba(168,58,58,0.4); padding: 4px 8px; border-radius: 3px;">■</button>
+                    <button title="Remove" onclick="removeAudio('${c.id}', ${_escAttr(c.name)|0})" style="background: transparent; color: #fca5a5; border: 1px solid rgba(168,58,58,0.25); padding: 4px 6px; border-radius: 3px;">×</button>
+                </div>
+            `).join('');
+        }
+        function _escAttr(s) { return String(s||'').replace(/"/g, '&quot;'); }
+        async function uploadAudio(input) {
+            const f = input.files && input.files[0];
+            if (!f) return;
+            const fd = new FormData();
+            fd.append('audio', f);
+            fd.append('name', f.name.replace(/\.[^.]+$/, ''));
+            try {
+                const r = await fetch('/api/map/audio/upload', { method: 'POST', body: fd });
+                const j = await r.json();
+                if (!j.success) alert('Upload failed: ' + (j.error || r.status));
+            } catch (e) {
+                alert('Upload error: ' + e.message);
+            }
+            input.value = '';  // allow re-uploading the same file
+        }
+        function playAudio(id, loop) {
+            fetch('/api/map/audio/play', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, loop: !!loop, volume: 0.7 }),
+            }).catch(() => {});
+        }
+        function stopAudio(id) {
+            fetch('/api/map/audio/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).catch(() => {});
+        }
+        function stopAllAudio() {
+            fetch('/api/map/audio/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            }).catch(() => {});
+        }
+        async function removeAudio(id) {
+            if (!confirm('Delete this clip from the soundboard?')) return;
+            fetch('/api/map/audio/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            }).catch(() => {});
+        }
+
         async function clearAllDrawings() {
             const ok = await floatConfirm('Clear every annotation on this map?', {
                 title: 'Clear annotations', danger: true, confirmLabel: 'Clear all',
@@ -8335,15 +8618,20 @@
 
         async function placeLight(mapX, mapY) {
             // Place a light of the currently-selected preset at the map pixel
-            // coords the GM clicked. The server echoes the full light back
-            // (including a generated id); we capture it for undo.
-            const presetEl = document.getElementById('light-preset-select');
-            const preset = presetEl ? presetEl.value : 'torch';
+            // coords the GM clicked. Motion + color overrides from the
+            // flyout apply on top of the preset defaults — blank options
+            // fall back to the preset's natural behavior.
+            const preset = document.getElementById('light-preset-select')?.value || 'torch';
+            const anim = document.getElementById('light-anim-select')?.value || '';
+            const color = document.getElementById('light-color-input')?.value || '';
+            const body = { preset, x: mapX, y: mapY };
+            if (anim) body.animation = anim;
+            if (color) body.color = color;
             try {
                 const res = await fetch('/api/map/light/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ preset, x: mapX, y: mapY })
+                    body: JSON.stringify(body)
                 }).then(r => r.json());
                 if (res && res.success && res.light && res.light.id) {
                     const id = res.light.id;
@@ -8411,12 +8699,13 @@
                 } else {
                     lx = L.x; ly = L.y;
                 }
+                const mult = _lightAnimMult(L.animation, L.id || '');
                 out.push({
                     id: L.id, preset: L.preset, name: L.name,
                     attached_to: L.attached_to || null,
                     x: lx, y: ly,
-                    brightPx: (L.bright || 0) * gs,
-                    dimPx: ((L.bright || 0) + (L.dim || 0)) * gs,
+                    brightPx: (L.bright || 0) * gs * mult,
+                    dimPx: ((L.bright || 0) + (L.dim || 0)) * gs * mult,
                     color: L.color || '#ff9c42',
                     enabled: L.enabled !== false,
                 });
@@ -8429,18 +8718,51 @@
                 if (!el.bright && !el.dim) continue;
                 const size = t.size || 1;
                 const [ax, ay] = _getAnimatedPosition(t);
+                const mult = _lightAnimMult(el.animation, t.id);
                 out.push({
                     id: 'emit_' + t.id, preset: null, name: null,
                     attached_to: t.id,
                     x: ax * gs + ox + (gs * size) / 2,
                     y: ay * gs + oy + (gs * size) / 2,
-                    brightPx: (el.bright || 0) * gs,
-                    dimPx: ((el.bright || 0) + (el.dim || 0)) * gs,
+                    brightPx: (el.bright || 0) * gs * mult,
+                    dimPx: ((el.bright || 0) + (el.dim || 0)) * gs * mult,
                     color: el.color || '#ff9c42',
                     enabled: true,
                 });
             }
             return out;
+        }
+
+        // Animation multiplier shared by both views. `seed` is per-light
+        // so two torches don't pulse in lockstep. Range stays within
+        // ±10% so the light's vision footprint doesn't visibly jump.
+        function _lightAnimMult(animation, seedStr) {
+            if (!animation || animation === 'none') return 1;
+            let seed = 0;
+            for (let i = 0; i < (seedStr||'').length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) | 0;
+            const now = performance.now();
+            if (animation === 'flicker') {
+                // Two superposed sine waves for that "torch flame" jitter.
+                return 1
+                    + 0.05 * Math.sin(now * 0.013 + seed)
+                    + 0.04 * Math.sin(now * 0.027 + seed * 1.7);
+            }
+            if (animation === 'pulse') {
+                // Slow, magical swell.
+                return 1 + 0.08 * Math.sin(now * 0.0021 + seed);
+            }
+            return 1;
+        }
+
+        function _anyAnimatedLight() {
+            for (const L of (mapState.lights || [])) {
+                if (L && L.animation && L.animation !== 'none' && L.enabled !== false) return true;
+            }
+            for (const t of (mapState.tokens || [])) {
+                const el = t && t.emit_light;
+                if (el && el.animation && el.animation !== 'none' && el.enabled !== false) return true;
+            }
+            return false;
         }
 
         function drawLights() {

@@ -216,13 +216,14 @@ PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
 ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
 OBSIDIAN_DIR = os.path.join(DATA_DIR, 'obsidian_vault')
 MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
+AUDIO_DIR = os.path.join(MAP_DIR, 'audio')  # GM-uploaded soundboard clips
 CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
 CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, CAMPAIGN_ASSETS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, AUDIO_DIR, CAMPAIGN_ASSETS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -282,6 +283,14 @@ ACTIVE_MAP = {
     # so they scale with the map image.
     #   {id, type: 'freehand', points: [[x,y],...], color, width, label?, author}
     'drawings': [],
+    # --- Soundboard ----------------------------------------------------------
+    # GM-uploaded ambient / SFX clips. Server stores the file in
+    # MAP_DIR/audio/; this list carries the metadata so every viewer
+    # knows what's available + which clip is currently playing. The
+    # GM hits Play in the sidebar → server fires SSE `audio_play` →
+    # every client triggers the same <audio>. Same for `audio_stop`.
+    #   {id, name, filename, ext, mime, size, uploaded_at}
+    'audio_clips': [],
 }
 MAP_LOCK = threading.Lock()
 
@@ -4321,7 +4330,37 @@ CAMPAIGN_DEFAULT = {
     # poster-shaped image under static/portraits/ or a public CDN URL and
     # reference it as `/portraits/shades-of-blood.jpg` etc.
     'hero_image': '',
+    # Per-campaign module enable-list. Each entry is the filename (no
+    # extension) of a file under static/js/modules/. The map / tracker
+    # / sheet pages load enabled modules in order. See
+    # static/js/modules.js for the host-side hook registry, and
+    # static/js/modules/README.md for the drop-in conventions.
+    'modules_enabled': [],
 }
+
+MODULES_DIR = os.path.join(BASE_DIR, 'static', 'js', 'modules')
+
+def _list_module_files():
+    """Catalog `.js` files under static/js/modules/. Returns
+    [{id, filename, mtime, size}]. README + dot-files are skipped."""
+    out = []
+    if not os.path.exists(MODULES_DIR):
+        return out
+    for f in sorted(os.listdir(MODULES_DIR)):
+        if not f.endswith('.js') or f.startswith('.') or f.startswith('_'):
+            continue
+        path = os.path.join(MODULES_DIR, f)
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        out.append({
+            'id': f[:-3],            # filename without `.js`
+            'filename': f,
+            'mtime': st.st_mtime,
+            'size': st.st_size,
+        })
+    return out
 
 def _load_campaign_config():
     """Read campaign.json, falling back to defaults. Always returns the full schema."""
@@ -6713,9 +6752,21 @@ def list_encounters():
                 len(raw.get('monsters', [])) if kind == 'stage'
                 else len(raw.get('combatants', []) if isinstance(raw, dict) else raw)
             )
+            # Snapshot of the map that was active when this encounter was
+            # saved (added in 998bb3a9-era). Surface its name + id so
+            # the GM's "load" UI can show which battlefield each encounter
+            # boots into.
+            bound = None
+            if isinstance(raw, dict) and isinstance(raw.get('map'), dict):
+                m = raw['map']
+                bound = {
+                    'id': m.get('id'),
+                    'name': m.get('name'),
+                    'image': m.get('image'),
+                }
         except Exception:
-            mtime, kind, count = 0, 'encounter', 0
-        items.append({"name": name, "kind": kind, "count": count, "mtime": mtime})
+            mtime, kind, count, bound = 0, 'encounter', 0, None
+        items.append({"name": name, "kind": kind, "count": count, "mtime": mtime, "map": bound})
     items.sort(key=lambda it: -it.get('mtime', 0))
     return jsonify({"encounters": items})
 
@@ -10135,6 +10186,54 @@ def api_campaign_hero_image():
 
     return jsonify({"success": True, "hero_image": public_url, "byte_count": size})
 
+
+@app.route('/api/modules')
+@gm_required
+def api_modules_list():
+    """Catalog every .js file in static/js/modules/ plus the per-campaign
+    enabled set. Front-end uses this to render the enable/disable UI."""
+    files = _list_module_files()
+    cfg = _load_campaign_config()
+    enabled = set(cfg.get('modules_enabled') or [])
+    for f in files:
+        f['enabled'] = f['id'] in enabled
+    return jsonify({'modules': files})
+
+
+@app.route('/api/modules/toggle', methods=['POST'])
+@gm_required
+def api_modules_toggle():
+    """Toggle a module's enabled state in the campaign config. The
+    per-page <script> loader reads this list at next page render."""
+    data = request.json or {}
+    module_id = (data.get('id') or '').strip()
+    if not module_id:
+        return jsonify({'success': False, 'error': 'id required'}), 400
+    # Verify the module file actually exists so the enabled list never
+    # references a missing file (which would 404 the script tag).
+    if not any(m['id'] == module_id for m in _list_module_files()):
+        return jsonify({'success': False, 'error': 'module file not found'}), 404
+    enable = bool(data.get('enabled'))
+    cfg = _load_campaign_config()
+    current = list(cfg.get('modules_enabled') or [])
+    if enable and module_id not in current:
+        current.append(module_id)
+    elif (not enable) and module_id in current:
+        current = [m for m in current if m != module_id]
+    _save_campaign_config({'modules_enabled': current})
+    return jsonify({'success': True, 'modules_enabled': current})
+
+
+def _enabled_module_files():
+    """Return the (id, filename) tuples for modules currently enabled in
+    the campaign config, in order. Filters out any enabled entry whose
+    file has since been deleted from disk."""
+    cfg = _load_campaign_config()
+    enabled = cfg.get('modules_enabled') or []
+    files = {m['id']: m['filename'] for m in _list_module_files()}
+    return [(mid, files[mid]) for mid in enabled if mid in files]
+
+
 @app.route('/api/export_character/<pc_name>')
 def export_character(pc_name):
     """Download a character's JSON file."""
@@ -11289,6 +11388,7 @@ def _broadcast_map_state():
             'gm_notes': ACTIVE_MAP.get('gm_notes', []),
             'templates': ACTIVE_MAP.get('templates', []),
             'drawings': ACTIVE_MAP.get('drawings', []),
+            'audio_clips': ACTIVE_MAP.get('audio_clips', []),
         }
     sse_broadcast('map_state', state)
 
@@ -11370,13 +11470,14 @@ def gm_map_view():
             'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False} if hasattr(c, 'conditions') else {},
         })
     
-    return render_template('map_vtt.html', 
-                           maps=maps, 
+    return render_template('map_vtt.html',
+                           maps=maps,
                            current_map=current_map,
                            party=party,
                            encounter=encounter,
                            turn_index=TURN_INDEX,
-                           round_number=ROUND_NUMBER)
+                           round_number=ROUND_NUMBER,
+                           enabled_modules=_enabled_module_files())
 
 def _apply_player_map_filter(state, player_name):
     """Mutate a copy of ACTIVE_MAP to produce the view a non-GM player
@@ -11437,9 +11538,16 @@ def _apply_player_map_filter(state, player_name):
         })
     state['gm_notes'] = shared
 
-    # Step 4 — token vision filter
+    # Step 4 — token vision filter. The bright-ambient case still
+    # filters when there are any non-ethereal walls on the map (a
+    # stealth roll behind a stone wall in daylight should hide the
+    # creature). With no vision-blocking walls AND bright ambient we
+    # skip the LOS pass — every PC can see every visible token, and
+    # the filter would just be cycles wasted.
     ambient = state.get('ambient_light', 'bright')
-    if ambient != 'bright' and player_name:
+    vision_walls = [w for w in state.get('walls', []) if w.get('type') in ('normal', 'door')]
+    needs_los = (ambient != 'bright') or (vision_walls and player_name)
+    if needs_los and player_name:
         owned = [t for t in state['tokens']
                  if (t.get('assigned_player') == player_name
                      or t.get('pc_name') == player_name)]
@@ -11449,7 +11557,14 @@ def _apply_player_map_filter(state, player_name):
                 state.get('lights', []), ambient,
                 state.get('grid_size', 70),
             )
-            state['tokens'] = [t for t in state['tokens'] if t['id'] in visible_ids]
+            # `is_pc` tokens stay visible to their party regardless of
+            # current LOS — the party-marching-around-corners case
+            # shouldn't ghost teammates from each other's screens.
+            kept = []
+            for t in state['tokens']:
+                if t.get('is_pc') or t['id'] in visible_ids:
+                    kept.append(t)
+            state['tokens'] = kept
 
     return state
 
@@ -12295,6 +12410,130 @@ def clear_map_drawings():
     return jsonify({'success': True})
 
 
+# --- SOUNDBOARD ----------------------------------------------------------
+# GM uploads audio clips; the play / stop endpoints fan out over SSE so
+# every connected client hits play on the same `<audio>`. Files live under
+# MAP_DIR/audio/. Player viewers can't author clips — only listen.
+
+_AUDIO_EXT_MIME = {
+    'mp3':  'audio/mpeg',
+    'wav':  'audio/wav',
+    'ogg':  'audio/ogg',
+    'm4a':  'audio/mp4',
+    'webm': 'audio/webm',
+}
+_AUDIO_MAX_BYTES = 20 * 1024 * 1024  # 20 MB — ambient tracks comfortably fit
+
+
+@app.route('/api/map/audio/upload', methods=['POST'])
+@gm_required
+def upload_map_audio():
+    """Accept a single audio file and register it in ACTIVE_MAP.audio_clips.
+    Stored under MAP_DIR/audio/{id}.{ext}; served via /api/map/audio/<file>."""
+    f = request.files.get('audio')
+    if not f or not f.filename:
+        return jsonify({'success': False, 'error': 'audio field required'}), 400
+    ext = (os.path.splitext(f.filename)[1] or '').lower().lstrip('.')
+    if ext not in _AUDIO_EXT_MIME:
+        return jsonify({'success': False, 'error': f"unsupported audio format '{ext}'"}), 400
+    # Server-side size check (MAX_CONTENT_LENGTH catches the worst case
+    # at the WSGI layer; this is the per-endpoint refinement).
+    f.seek(0, os.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > _AUDIO_MAX_BYTES:
+        return jsonify({'success': False, 'error': f'audio too large ({size // (1024*1024)} MB; max 20)'}), 413
+
+    os.makedirs(AUDIO_DIR, exist_ok=True)
+    audio_id = str(uuid.uuid4())[:8]
+    filename = f"{audio_id}.{ext}"
+    f.save(os.path.join(AUDIO_DIR, filename))
+
+    clip = {
+        'id': audio_id,
+        'name': (request.form.get('name') or os.path.splitext(f.filename)[0]).strip()[:80],
+        'filename': filename,
+        'ext': ext,
+        'mime': _AUDIO_EXT_MIME[ext],
+        'size': size,
+        'uploaded_at': time.time(),
+    }
+    with MAP_LOCK:
+        ACTIVE_MAP.setdefault('audio_clips', []).append(clip)
+    _save_map_state()
+    _broadcast_map_state()
+    return jsonify({'success': True, 'clip': clip})
+
+
+@app.route('/api/map/audio/<filename>')
+def serve_map_audio(filename):
+    """Stream a clip. No auth — players need to play the audio the GM
+    triggered, and the file path is opaque (uuid + ext)."""
+    return send_from_directory(AUDIO_DIR, filename, conditional=True)
+
+
+@app.route('/api/map/audio/play', methods=['POST'])
+@gm_required
+def play_map_audio():
+    """Broadcast a play event. Body: {id, volume?, loop?}. The server
+    looks up the clip by id and includes the resolved URL in the SSE
+    payload so clients don't have to re-query."""
+    data = request.json or {}
+    clip_id = data.get('id')
+    with MAP_LOCK:
+        clip = next((c for c in ACTIVE_MAP.get('audio_clips', []) if c.get('id') == clip_id), None)
+    if not clip:
+        return jsonify({'success': False, 'error': 'unknown clip id'}), 404
+    payload = {
+        'action': 'play',
+        'id': clip['id'],
+        'name': clip['name'],
+        'url': '/api/map/audio/' + clip['filename'],
+        'mime': clip.get('mime', ''),
+        'volume': max(0.0, min(1.0, float(data.get('volume', 0.8) or 0.8))),
+        'loop': bool(data.get('loop', False)),
+    }
+    _broadcast_event('audio', payload)
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/audio/stop', methods=['POST'])
+@gm_required
+def stop_map_audio():
+    """Stop a single clip (id provided) or every clip (id omitted)."""
+    data = request.json or {}
+    clip_id = data.get('id')
+    _broadcast_event('audio', {'action': 'stop', 'id': clip_id or None})
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/audio/remove', methods=['POST'])
+@gm_required
+def remove_map_audio():
+    """Delete a clip from the soundboard + erase the file."""
+    data = request.json or {}
+    clip_id = data.get('id')
+    removed = None
+    with MAP_LOCK:
+        remaining = []
+        for c in ACTIVE_MAP.get('audio_clips', []):
+            if c.get('id') == clip_id and not removed:
+                removed = c
+                continue
+            remaining.append(c)
+        ACTIVE_MAP['audio_clips'] = remaining
+    if removed and removed.get('filename'):
+        try:
+            os.remove(os.path.join(AUDIO_DIR, removed['filename']))
+        except OSError:
+            pass
+    _save_map_state()
+    _broadcast_map_state()
+    # Best-effort stop in case the clip is currently playing
+    _broadcast_event('audio', {'action': 'stop', 'id': clip_id})
+    return jsonify({'success': True})
+
+
 @app.route('/api/map/drawing/move', methods=['POST'])
 @gm_required
 def move_map_drawing():
@@ -12934,17 +13173,25 @@ def seek_wall():
 # the client multiplies by grid_size when raycasting.
 
 LIGHT_PRESETS = {
-    'candle':     {'bright': 1,  'dim': 1,  'color': '#ffd27a'},
-    'torch':      {'bright': 4,  'dim': 4,  'color': '#ff9c42'},
-    'lantern':    {'bright': 6,  'dim': 6,  'color': '#ffb866'},
-    'bullseye':   {'bright': 12, 'dim': 2,  'color': '#fff1c0'},
-    'daylight':   {'bright': 12, 'dim': 12, 'color': '#fff8e0'},
+    # Each preset can opt into an animation — flicker for naked flame,
+    # pulse for steady magical glow, none for the rest. The GM can
+    # override per-light via the flyout / update endpoint.
+    'candle':     {'bright': 1,  'dim': 1,  'color': '#ffd27a', 'animation': 'flicker'},
+    'torch':      {'bright': 4,  'dim': 4,  'color': '#ff9c42', 'animation': 'flicker'},
+    'lantern':    {'bright': 6,  'dim': 6,  'color': '#ffb866', 'animation': 'flicker'},
+    'bullseye':   {'bright': 12, 'dim': 2,  'color': '#fff1c0', 'animation': 'none'},
+    'daylight':   {'bright': 12, 'dim': 12, 'color': '#fff8e0', 'animation': 'pulse'},
 }
+
+_LIGHT_ANIMATIONS = {'none', 'flicker', 'pulse'}
 
 def _build_light(data):
     """Normalize a light payload — preset picks defaults, data overrides."""
     preset_key = (data.get('preset') or '').lower()
     preset = LIGHT_PRESETS.get(preset_key, {})
+    animation = (data.get('animation') or preset.get('animation') or 'none').lower()
+    if animation not in _LIGHT_ANIMATIONS:
+        animation = 'none'
     return {
         'id': str(uuid.uuid4())[:8],
         'x': float(data.get('x', 0)),                  # pixel coords
@@ -12956,6 +13203,11 @@ def _build_light(data):
         'attached_to': data.get('attached_to'),        # token id or None
         'name': data.get('name', preset_key or 'Light'),
         'preset': preset_key or None,
+        # Per-frame visual animation. 'flicker' jitters the radius like
+        # a torch; 'pulse' smoothly waxes/wanes like a magical sphere.
+        # Purely cosmetic — fog reveal still uses the static radius so
+        # cells don't flicker in and out.
+        'animation': animation,
     }
 
 
@@ -12983,12 +13235,16 @@ def update_light():
     if not light_id:
         return jsonify({'success': False, 'error': 'light id required'}), 400
 
-    mutable = {'x', 'y', 'bright', 'dim', 'color', 'enabled', 'attached_to', 'name'}
+    mutable = {'x', 'y', 'bright', 'dim', 'color', 'enabled', 'attached_to', 'name', 'animation'}
     with MAP_LOCK:
         light = next((l for l in ACTIVE_MAP.get('lights', []) if l['id'] == light_id), None)
         if not light:
             return jsonify({'success': False, 'error': 'light not found'}), 404
         for k, v in data.items():
+            if k == 'animation':
+                val = (v or 'none').lower() if isinstance(v, str) else 'none'
+                light['animation'] = val if val in _LIGHT_ANIMATIONS else 'none'
+                continue
             if k in mutable:
                 if k in ('bright', 'dim'):
                     light[k] = int(v)

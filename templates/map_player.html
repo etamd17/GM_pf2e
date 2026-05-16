@@ -27,6 +27,22 @@
             transform-origin: 0 0;
         }
         
+        /* Scene transition fade — overlay that briefly washes the
+           screen when the GM switches maps. Player and GM views share
+           the same CSS so the transition reads in lockstep. */
+        #scene-fade {
+            position: fixed; inset: 0;
+            pointer-events: none;
+            z-index: 4500;
+            opacity: 0;
+            background: radial-gradient(circle at center,
+                rgba(240, 216, 138, 0.20) 0%,
+                rgba(168, 58, 58, 0.15) 45%,
+                rgba(12, 10, 7, 0.95) 100%);
+            transition: opacity 0.32s ease-out;
+        }
+        #scene-fade.fade-in { opacity: 1; }
+
         /* Vault note modal (journal pins). Shared markup with the GM
            view so a handout reads the same on both sides of the table. */
         #vault-note-modal {
@@ -426,6 +442,9 @@
     <!-- Token hover tooltip — populated by _updateHoverTooltip on mousemove. -->
     <div id="token-tooltip" role="tooltip" aria-hidden="true"></div>
 
+    <!-- Scene transition fade — overlay that briefly washes the screen when ACTIVE_MAP changes. -->
+    <div id="scene-fade" aria-hidden="true"></div>
+
     <!-- Character Sheet Modal -->
     <div id="sheet-modal">
         <div id="sheet-content">
@@ -583,10 +602,11 @@
                     // Free-standing lights carry raw pixel coords.
                     lx = L.x; ly = L.y;
                 }
+                const mult = _lightAnimMult(L.animation, L.id || '');
                 out.push({
                     x: lx, y: ly,
-                    brightPx: (L.bright || 0) * gs,
-                    dimPx: ((L.bright || 0) + (L.dim || 0)) * gs,
+                    brightPx: (L.bright || 0) * gs * mult,
+                    dimPx: ((L.bright || 0) + (L.dim || 0)) * gs * mult,
                     color: L.color || '#ff9c42',
                 });
             }
@@ -598,15 +618,44 @@
                 if (!el.bright && !el.dim) continue;
                 const size = t.size || 1;
                 const [ax, ay] = _getAnimatedPosition(t);
+                const mult = _lightAnimMult(el.animation, t.id);
                 out.push({
                     x: ax * gs + ox + (gs * size) / 2,
                     y: ay * gs + oy + (gs * size) / 2,
-                    brightPx: (el.bright || 0) * gs,
-                    dimPx: ((el.bright || 0) + (el.dim || 0)) * gs,
+                    brightPx: (el.bright || 0) * gs * mult,
+                    dimPx: ((el.bright || 0) + (el.dim || 0)) * gs * mult,
                     color: el.color || '#ff9c42',
                 });
             }
             return out;
+        }
+
+        // Shared with the GM view: jitter / pulse a light's radius
+        // ±10% over time. seedStr keeps multiple lights out of phase.
+        function _lightAnimMult(animation, seedStr) {
+            if (!animation || animation === 'none') return 1;
+            let seed = 0;
+            for (let i = 0; i < (seedStr||'').length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) | 0;
+            const now = performance.now();
+            if (animation === 'flicker') {
+                return 1
+                    + 0.05 * Math.sin(now * 0.013 + seed)
+                    + 0.04 * Math.sin(now * 0.027 + seed * 1.7);
+            }
+            if (animation === 'pulse') {
+                return 1 + 0.08 * Math.sin(now * 0.0021 + seed);
+            }
+            return 1;
+        }
+        function _anyAnimatedLight() {
+            for (const L of (mapState.lights || [])) {
+                if (L && L.animation && L.animation !== 'none' && L.enabled !== false) return true;
+            }
+            for (const t of (mapState.tokens || [])) {
+                const el = t && t.emit_light;
+                if (el && el.animation && el.animation !== 'none' && el.enabled !== false) return true;
+            }
+            return false;
         }
 
         function _computeVisibilityKey() {
@@ -738,7 +787,10 @@
                 // GM notes). The raw SSE payload is the GM-view.
                 fetch('/api/map/state').then(r => r.json()).then(newState => {
                     const hadMap = !!mapState.image;
+                    const prevMapId = mapState.id;
                     mapState = newState;
+                    // Scene transition fade when the GM switches maps.
+                    if (prevMapId && mapState.id && prevMapId !== mapState.id) _runSceneFade();
 
                     document.getElementById('map-name').textContent = mapState.name || 'Map';
 
@@ -814,6 +866,13 @@
                         render();
                     }
                 } catch(_) {}
+            });
+
+            // Soundboard — every viewer hears the same clip when the
+            // GM hits Play. Browsers gate autoplay; first time we get
+            // blocked we surface a one-time click-to-enable banner.
+            evtSource.addEventListener('audio', (e) => {
+                try { _audioOnEvent(JSON.parse(e.data)); } catch(_) {}
             });
 
             // Journal pins — only the share=True notes reach the player
@@ -964,9 +1023,9 @@
 
             ctx.restore();
 
-            // Continuous redraw cases: tweening tokens, or an active-
-            // combatant pulse (sine-driven, needs ~30 fps to look right).
-            if (_anyTokenAnimating() || _activeName) requestAnimationFrame(render);
+            // Continuous redraw cases: tweening tokens, an active-
+            // combatant pulse, or any flickering/pulsing light source.
+            if (_anyTokenAnimating() || _activeName || _anyAnimatedLight()) requestAnimationFrame(render);
 
             document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
         }
@@ -1849,6 +1908,68 @@
                 c.fillStyle = stroke;
                 c.fillText(d.label || '', d.x, d.y);
             }
+        }
+
+        // Audio playback engine — mirrors map_vtt.html. Triggered by
+        // SSE `audio` events from /api/map/audio/play (GM-only origin).
+        // Each clip plays on a fresh HTMLAudioElement so re-plays don't
+        // overlap, and a one-time banner unblocks autoplay if the
+        // browser blocked the first attempt.
+        const _activeAudio = new Map();
+        function _audioOnEvent(p) {
+            if (!p || !p.action) return;
+            if (p.action === 'play') {
+                _audioStopId(p.id);
+                const el = new Audio(p.url);
+                el.loop = !!p.loop;
+                el.volume = Math.max(0, Math.min(1, p.volume || 0.7));
+                el.dataset.clipId = p.id;
+                el.addEventListener('ended', () => {
+                    if (!el.loop) _activeAudio.delete(p.id);
+                });
+                _activeAudio.set(p.id, el);
+                const playP = el.play();
+                if (playP && typeof playP.catch === 'function') {
+                    playP.catch(() => _showAudioGesturePrompt());
+                }
+            } else if (p.action === 'stop') {
+                if (p.id) _audioStopId(p.id);
+                else _audioStopAll();
+            }
+        }
+        function _audioStopId(id) {
+            const el = _activeAudio.get(id);
+            if (!el) return;
+            try { el.pause(); el.currentTime = 0; } catch (_) {}
+            _activeAudio.delete(id);
+        }
+        function _audioStopAll() {
+            for (const el of _activeAudio.values()) {
+                try { el.pause(); el.currentTime = 0; } catch (_) {}
+            }
+            _activeAudio.clear();
+        }
+        let _audioPromptShown = false;
+        function _showAudioGesturePrompt() {
+            if (_audioPromptShown) return;
+            _audioPromptShown = true;
+            const banner = document.createElement('div');
+            banner.style.cssText = 'position:fixed; bottom: 18px; left:50%; transform:translateX(-50%); background:#28221a; border:1px solid rgba(201,163,78,0.5); color:#f0d88a; padding:10px 16px; border-radius:6px; font-size:12px; font-family:Cinzel, serif; z-index:6000; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.55);';
+            banner.textContent = 'Tap to enable session audio';
+            banner.addEventListener('click', () => { banner.remove(); _audioPromptShown = false; });
+            document.body.appendChild(banner);
+        }
+
+        // Scene-fade — gilt wash overlay triggered when the map id
+        // changes (the GM switched scenes). Mirrors the GM-view fader
+        // so both sides of the table see the same beat.
+        function _runSceneFade() {
+            const el = document.getElementById('scene-fade');
+            if (!el) return;
+            el.classList.remove('fade-in');
+            void el.offsetWidth;
+            el.classList.add('fade-in');
+            setTimeout(() => el.classList.remove('fade-in'), 360);
         }
 
         // Hit-test in map coords. Iterate tokens in reverse so the topmost
