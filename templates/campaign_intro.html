@@ -581,11 +581,12 @@
             const introEl = document.getElementById('intro-text');
             if (introEl) introEl.textContent = c.intro;
             // First-session edge case: when both panels started empty,
-            // their <section> wrappers don't exist in the DOM (Jinja
-            // skipped them via `{% if %}`). A fresh recap/intro then has
-            // nothing to update inline — the GM would see "Saved" but
-            // their text wouldn't appear until reload. Detect that, and
-            // reload so the panels render correctly.
+            // their <section> wrappers don't exist in the DOM (the
+            // server-side Jinja conditional skipped them at render).
+            // A fresh recap/intro then has nothing to update inline —
+            // the GM would see "Saved" but their text wouldn't appear
+            // until reload. Detect that, and reload so the panels
+            // render correctly.
             const wantsRecap = !!(c.last_recap && !recapEl);
             const wantsIntro = !!(c.intro && !introEl);
             if (wantsRecap || wantsIntro) {
