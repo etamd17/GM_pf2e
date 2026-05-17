@@ -294,6 +294,40 @@ ACTIVE_MAP = {
 }
 MAP_LOCK = threading.Lock()
 
+
+def _fresh_map_state(overrides=None):
+    """Return a brand-new ACTIVE_MAP-shaped dict carrying the FULL
+    schema — every new field that's been added since launch. Use this
+    on every reinit path (clear_map, load_map's new-map branch,
+    load_encounter's saved_map merge) so the codebase has ONE place
+    that knows what an ACTIVE_MAP looks like.
+
+    The bug it prevents: older saved encounters' `map` snapshots
+    pre-date `audio_clips` / `drawings` / `fog` / etc. The previous
+    pattern was `ACTIVE_MAP.clear(); ACTIVE_MAP.update(snapshot)`,
+    which left those fields entirely absent — every subsequent
+    `ACTIVE_MAP['fog'].append(...)` (and equivalents) then raised
+    KeyError mid-session.
+    """
+    state = copy.deepcopy(ACTIVE_MAP_DEFAULTS)
+    if overrides:
+        # Shallow-merge: overrides win on per-key collisions, but
+        # missing keys in `overrides` keep the schema default. We
+        # deep-copy nested mutables out of the override so the caller
+        # can't accidentally alias into ACTIVE_MAP.
+        for k, v in overrides.items():
+            if isinstance(v, (list, dict)):
+                state[k] = copy.deepcopy(v)
+            else:
+                state[k] = v
+    return state
+
+
+# Snapshot the canonical schema at import time. ACTIVE_MAP itself is
+# mutated in place across the app, so we keep the pristine shape here
+# for the helper above to clone from.
+ACTIVE_MAP_DEFAULTS = copy.deepcopy(ACTIVE_MAP)
+
 # Reentrant lock for encounter/PC state mutations. Used by internal helpers
 # (_combat_log, _broadcast_*, _get_tracker_state, _do_persist_*) so that
 # multi-step reads/writes are consistent under threaded=True.
@@ -793,6 +827,11 @@ def _do_broadcast_encounter_state():
     with ENCOUNTER_LOCK:
         active_c = ACTIVE_ENCOUNTER[TURN_INDEX] if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
         active_name = active_c.name if active_c else None
+        # `active_id` lets clients match the active combatant by
+        # instance_id rather than by name. Two combatants sharing a
+        # name (e.g. "Goblin", "Goblin") previously both got the
+        # active-pulse on player view because the match was by name.
+        active_id = active_c.instance_id if active_c else None
         combatants = []
         for i, c in enumerate(ACTIVE_ENCOUNTER):
             entry = {
@@ -845,6 +884,7 @@ def _do_broadcast_encounter_state():
             'encounter': combatants,
             'round': ROUND_NUMBER,
             'active_name': active_name,
+            'active_id': active_id,
             'turn_index': TURN_INDEX,
             # Flag used by the player filter below — avoids re-reading globals
             # inside the filter, which runs after ENCOUNTER_LOCK is released.
@@ -877,6 +917,10 @@ def _do_broadcast_encounter_state():
         p['encounter'] = filtered_enc
         if not active_visible:
             p['active_name'] = '???'
+            # active_id leaks the hidden combatant's instance_id —
+            # strip it so a client can't probe for hidden creatures
+            # by id correlation.
+            p['active_id'] = None
         return p
 
     sse_broadcast('encounter_update', payload, player_filter=_player_filter)
@@ -6714,9 +6758,14 @@ def load_encounter():
 
         # Restore snapshotted map state if present. Older saves skip this.
         if saved_map and isinstance(saved_map, dict):
+            # Merge the saved snapshot into a FULL schema so older saves
+            # (which pre-date drawings / audio_clips / fog / etc.) don't
+            # leave required keys missing — that previously KeyError'd
+            # the next /api/map/fog/reveal or similar mid-session.
+            merged = _fresh_map_state(saved_map)
             with MAP_LOCK:
                 ACTIVE_MAP.clear()
-                ACTIVE_MAP.update(copy.deepcopy(saved_map))
+                ACTIVE_MAP.update(merged)
             try:
                 _save_map_state()
             except Exception:
@@ -11418,14 +11467,19 @@ def _save_map_state():
             json.dump(ACTIVE_MAP, f, indent=2)
 
 def _load_map_state(map_id):
-    """Load map state from disk."""
-    global ACTIVE_MAP
+    """Load map state from disk. Merges the on-disk snapshot into a
+    fresh full-schema copy so older state files (pre-dating drawings /
+    audio_clips / fog / etc.) don't leak stale keys from whatever
+    ACTIVE_MAP currently holds AND don't leave required fields missing
+    on the loaded shape."""
     state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
     if os.path.exists(state_path):
         with open(state_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
+            fresh = _fresh_map_state(data)
             with MAP_LOCK:
-                ACTIVE_MAP.update(data)
+                ACTIVE_MAP.clear()
+                ACTIVE_MAP.update(fresh)
             return True
     return False
 
@@ -11791,30 +11845,63 @@ def load_map():
     # or the new map will start blank every switch.
     map_id = data.get('id') or filename.rsplit('.', 1)[0]
 
-    # Snapshot the outgoing map's state under its own id before swapping
-    # — otherwise tokens / walls / fog written since the last mutation
-    # would be lost on switch. _save_map_state is a no-op when the
-    # current map has no id (initial blank state), so this is safe.
-    _save_map_state()
+    # Sanitize filename + id so a typo / hostile POST can't write a
+    # state file outside MAP_DIR. Filename already passed an existence
+    # check, but id is unsanitized.
+    if '/' in filename or '\\' in filename or filename.startswith('.'):
+        return jsonify({'success': False, 'error': 'invalid filename'}), 400
+    if '/' in map_id or '\\' in map_id or map_id.startswith('.') or '..' in map_id:
+        return jsonify({'success': False, 'error': 'invalid map id'}), 400
 
-    # Try to load existing state, or create new
-    if not _load_map_state(map_id):
-        with MAP_LOCK:
-            ACTIVE_MAP = {
+    # Hold MAP_LOCK across the entire save→load→swap so a concurrent
+    # token-add / wall-draw / fog-reveal can't land on the OUTGOING map
+    # after its snapshot was written (lost) or on the INCOMING map's
+    # fresh dict (orphaned). Was previously open between three lock
+    # releases.
+    with MAP_LOCK:
+        # Snapshot the outgoing map's state under its own id before
+        # swapping — otherwise mutations written since the last save
+        # would be lost on switch.
+        if ACTIVE_MAP.get('id'):
+            try:
+                state_path = os.path.join(MAP_DIR, f"{ACTIVE_MAP['id']}_state.json")
+                with open(state_path, 'w', encoding='utf-8') as f:
+                    json.dump(ACTIVE_MAP, f, indent=2)
+            except OSError:
+                pass
+
+        # Try to load existing state; if there isn't one, start from a
+        # FULL fresh schema (every field the rest of the app expects)
+        # with only the map-identity fields overridden. Previously this
+        # branch built a partial dict missing drawings / audio_clips /
+        # gm_notes / lights / templates / ambient_light / explored /
+        # difficult_terrain / spawn_point — KeyError trap.
+        state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
+        loaded = False
+        if os.path.exists(state_path):
+            try:
+                with open(state_path, 'r', encoding='utf-8') as f:
+                    saved = json.load(f)
+                fresh = _fresh_map_state(saved)
+                ACTIVE_MAP.clear()
+                ACTIVE_MAP.update(fresh)
+                loaded = True
+            except (OSError, json.JSONDecodeError):
+                loaded = False
+        if not loaded:
+            try:
+                grid = int(data.get('grid_size', 70))
+            except (TypeError, ValueError):
+                grid = 70
+            fresh = _fresh_map_state({
                 'id': map_id,
                 'name': data.get('name', map_id),
                 'image': filename,
-                'grid_size': int(data.get('grid_size', 70)),
-                'grid_offset_x': 0,
-                'grid_offset_y': 0,
-                'tokens': [],
-                'fog': [],
-                'walls': [],
-                'fog_enabled': True,
-                'player_control': False,
-                'vision_mode': 'explored',
-            }
-    
+                'grid_size': grid,
+            })
+            ACTIVE_MAP.clear()
+            ACTIVE_MAP.update(fresh)
+
     _save_map_state()
     _broadcast_map_state()
     return jsonify({'success': True, 'map': ACTIVE_MAP})
@@ -11925,11 +12012,22 @@ def add_map_token():
 
 @app.route('/api/map/player/register', methods=['POST'])
 def register_player_name():
-    """Register a player name in the server session for token auth."""
+    """Register a player name in the server session for token auth.
+
+    HARDENED: must match a real PC in PARTY_LIBRARY. Without this
+    check, a player joined as Kyle could POST {name:"Amadeus"} and
+    swap session.player_name to Amadeus — bypassing
+    @require_pc_self_or_gm on every sheet mutator (long_rest,
+    submit_levelup, adjust_party_hp, etc.). Same validation rule
+    as /api/join_campaign."""
     data = request.json or {}
-    name = data.get('name', '').strip()
+    name = (data.get('name') or '').strip()[:80]
     if not name:
         return jsonify({'success': False, 'error': 'No name provided'}), 400
+    # GM can register as anyone (NPC label, debug). Players must pick
+    # a real party member name.
+    if not _is_gm() and name not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'Unknown character'}), 404
     session['player_name'] = name
     return jsonify({'success': True, 'name': name})
 
@@ -12011,16 +12109,27 @@ def update_map_token():
                     # glowing rune monster, etc.). Schema mirrors the
                     # free-standing lights in ACTIVE_MAP['lights'] but
                     # follows the token through tweens automatically.
-                    # Null/false clears; otherwise normalize the fields.
+                    # Null/false clears; otherwise normalize + clamp +
+                    # validate animation (matches _build_light's
+                    # validation so token-attached and free lights
+                    # use the same schema).
                     el = data['emit_light']
                     if not el:
                         token['emit_light'] = None
                     else:
+                        anim = (el.get('animation') or 'none').lower() if isinstance(el.get('animation'), str) else 'none'
+                        if anim not in _LIGHT_ANIMATIONS:
+                            anim = 'none'
+                        try: br = int(el.get('bright', 0) or 0)
+                        except (TypeError, ValueError): br = 0
+                        try: dm = int(el.get('dim', 0) or 0)
+                        except (TypeError, ValueError): dm = 0
                         token['emit_light'] = {
-                            'bright': max(0, int(el.get('bright', 0) or 0)),
-                            'dim': max(0, int(el.get('dim', 0) or 0)),
+                            'bright': max(0, min(_LIGHT_MAX_RADIUS_SQ, br)),
+                            'dim':    max(0, min(_LIGHT_MAX_RADIUS_SQ, dm)),
                             'color': el.get('color', '#ff9c42'),
                             'enabled': el.get('enabled') is not False,
+                            'animation': anim,
                         }
                 break
         else:
@@ -12337,40 +12446,61 @@ def add_map_drawing():
         'author': author,
     }
 
+    # Cap on freehand point count — a runaway draw or a crafted POST
+    # of 50k points becomes a multi-MB JSON that's persisted on every
+    # save. 4096 points is well above what a real stroke produces with
+    # the 6-px sample threshold.
+    _MAX_FREEHAND_POINTS = 4096
+
+    def _finite(v):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if math.isfinite(f) else None
+
     if dtype == 'freehand':
         pts = data.get('points') or []
         if not isinstance(pts, list) or len(pts) < 2:
             return jsonify({'success': False, 'error': 'freehand needs at least 2 points'}), 400
-        drawing['points'] = [[float(p[0]), float(p[1])] for p in pts
-                              if isinstance(p, (list, tuple)) and len(p) >= 2]
-        if len(drawing['points']) < 2:
-            return jsonify({'success': False, 'error': 'need at least 2 valid points'}), 400
+        cleaned = []
+        for p in pts:
+            if not (isinstance(p, (list, tuple)) and len(p) >= 2):
+                continue
+            x, y = _finite(p[0]), _finite(p[1])
+            if x is None or y is None:
+                continue
+            cleaned.append([x, y])
+            if len(cleaned) >= _MAX_FREEHAND_POINTS:
+                break
+        if len(cleaned) < 2:
+            return jsonify({'success': False, 'error': 'need at least 2 finite points'}), 400
+        drawing['points'] = cleaned
     elif dtype in ('arrow', 'rect'):
-        try:
-            drawing['x']  = float(data.get('x', 0));  drawing['y']  = float(data.get('y', 0))
-            drawing['dx'] = float(data.get('dx', 0)); drawing['dy'] = float(data.get('dy', 0))
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'x/y/dx/dy must be numeric'}), 400
-        if abs(drawing['dx']) < 2 and abs(drawing['dy']) < 2:
+        x  = _finite(data.get('x', 0));  y  = _finite(data.get('y', 0))
+        dx = _finite(data.get('dx', 0)); dy = _finite(data.get('dy', 0))
+        if None in (x, y, dx, dy):
+            return jsonify({'success': False, 'error': 'x/y/dx/dy must be finite numbers'}), 400
+        if abs(dx) < 2 and abs(dy) < 2:
             return jsonify({'success': False, 'error': 'shape too small'}), 400
+        drawing['x'] = x; drawing['y'] = y; drawing['dx'] = dx; drawing['dy'] = dy
         if dtype == 'rect':
             drawing['filled'] = bool(data.get('filled', False))
     elif dtype == 'circle':
-        try:
-            drawing['x'] = float(data.get('x', 0))
-            drawing['y'] = float(data.get('y', 0))
-            drawing['radius'] = max(2.0, float(data.get('radius', 20)))
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'x/y/radius must be numeric'}), 400
+        x = _finite(data.get('x', 0))
+        y = _finite(data.get('y', 0))
+        r = _finite(data.get('radius', 20))
+        if None in (x, y, r):
+            return jsonify({'success': False, 'error': 'x/y/radius must be finite numbers'}), 400
+        drawing['x'] = x; drawing['y'] = y; drawing['radius'] = max(2.0, r)
         drawing['filled'] = bool(data.get('filled', False))
     elif dtype == 'text':
         if not label:
             return jsonify({'success': False, 'error': 'text needs a label'}), 400
-        try:
-            drawing['x'] = float(data.get('x', 0))
-            drawing['y'] = float(data.get('y', 0))
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
+        x = _finite(data.get('x', 0)); y = _finite(data.get('y', 0))
+        if None in (x, y):
+            return jsonify({'success': False, 'error': 'x/y must be finite numbers'}), 400
+        drawing['x'] = x; drawing['y'] = y
         drawing['size'] = max(8, min(96, int(data.get('size', 18))))
     else:
         return jsonify({'success': False, 'error': f'unknown drawing type {dtype!r}'}), 400
@@ -12472,14 +12602,24 @@ def serve_map_audio(filename):
     return send_from_directory(AUDIO_DIR, filename, conditional=True)
 
 
+_LAST_AUDIO_PLAY_AT = {}  # clip_id → unix ts of last broadcast
+_AUDIO_PLAY_MIN_INTERVAL_SEC = 0.2
+
 @app.route('/api/map/audio/play', methods=['POST'])
 @gm_required
 def play_map_audio():
     """Broadcast a play event. Body: {id, volume?, loop?}. The server
     looks up the clip by id and includes the resolved URL in the SSE
-    payload so clients don't have to re-query."""
+    payload so clients don't have to re-query. Per-clip rate-limited
+    so a misclicking GM (or a hostile-injected loop) can't fan out
+    100 plays/sec to every connected client."""
     data = request.json or {}
     clip_id = data.get('id')
+    now = time.time()
+    last = _LAST_AUDIO_PLAY_AT.get(clip_id, 0)
+    if now - last < _AUDIO_PLAY_MIN_INTERVAL_SEC:
+        return jsonify({'success': True, 'throttled': True})
+    _LAST_AUDIO_PLAY_AT[clip_id] = now
     with MAP_LOCK:
         clip = next((c for c in ACTIVE_MAP.get('audio_clips', []) if c.get('id') == clip_id), None)
     if not clip:
@@ -12549,6 +12689,12 @@ def move_map_drawing():
         dy = float(data.get('dy', 0))
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'dx/dy must be numeric'}), 400
+    # NaN / Infinity propagates into stored coords and breaks canvas
+    # render for everyone — every subsequent paint short-circuits on
+    # NaN arithmetic. Reject early so a fat-fingered call doesn't
+    # corrupt the persisted state file.
+    if not (math.isfinite(dx) and math.isfinite(dy)):
+        return jsonify({'success': False, 'error': 'dx/dy must be finite'}), 400
     if not drawing_id:
         return jsonify({'success': False, 'error': 'id required'}), 400
     if dx == 0 and dy == 0:
@@ -12660,14 +12806,17 @@ def clear_explored():
 
 @app.route('/api/map/ping', methods=['POST'])
 def map_ping():
-    """Broadcast a ping to all players."""
+    """Broadcast a ping to all players. `player` field derived
+    server-side — body's player is ignored to block identity spoofing."""
     data = request.json or {}
-    x = data.get('x', 0)
-    y = data.get('y', 0)
-    player = data.get('player', 'Unknown')
-
-    # Broadcast ping event to all clients
-    _broadcast_event('ping', {'x': x, 'y': y, 'player': player})
+    try:
+        x = float(data.get('x', 0))
+        y = float(data.get('y', 0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return jsonify({'success': False, 'error': 'x/y must be finite'}), 400
+    _broadcast_event('ping', {'x': x, 'y': y, 'player': _caller_label()})
     return jsonify({'success': True})
 
 
@@ -12677,6 +12826,16 @@ def map_ping():
 _LAST_CURSOR_AT = {}
 _CURSOR_MIN_INTERVAL_SEC = 0.08
 
+def _caller_label():
+    """Server-derived speaker label for broadcast endpoints. Players
+    can't influence this; the body field is ignored. Stops spoofing
+    where a player POSTs {player:'GM'} and their cursor / ruler /
+    ping / roll renders to the table with the GM's identity."""
+    if _is_gm():
+        return 'GM'
+    return (session.get('player_name') or 'Player')[:40]
+
+
 @app.route('/api/map/cursor', methods=['POST'])
 def map_cursor():
     """Broadcast a live cursor position. Unlike `/api/map/ping` this fires
@@ -12684,25 +12843,31 @@ def map_cursor():
     is persisted server-side. Each viewer renders every OTHER viewer's
     cursor as a small named dot (Foundry-style cursor following).
 
-    Body: {x, y, player} — x/y in map coords (so zoom-independent).
+    Body: {x, y} — x/y in map coords (so zoom-independent). The
+    `player` identity is derived server-side from session — body's
+    player field is ignored to block spoofing.
     Server-throttled per player to one update every ~80 ms; clients also
     throttle on their side so a wandering mouse doesn't push 1 kHz."""
     data = request.json or {}
-    player = (data.get('player') or '').strip()
-    if not player:
-        # GM has no player_name; fall back to 'GM' so player views can
-        # render the GM's cursor with a distinguishable label.
-        player = 'GM' if _is_gm() else 'Player'
+    player = _caller_label()
     now = time.time()
     last = _LAST_CURSOR_AT.get(player, 0)
     if now - last < _CURSOR_MIN_INTERVAL_SEC:
         return jsonify({'success': True, 'throttled': True})
     _LAST_CURSOR_AT[player] = now
+    # Drop dict entries we haven't heard from in 5 minutes so the
+    # throttle bookkeeping doesn't grow forever on a long-running app.
+    if len(_LAST_CURSOR_AT) > 64:
+        cutoff = now - 300
+        for k in [k for k, t in _LAST_CURSOR_AT.items() if t < cutoff]:
+            _LAST_CURSOR_AT.pop(k, None)
     try:
         x = float(data.get('x', 0))
         y = float(data.get('y', 0))
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
+    if not (math.isfinite(x) and math.isfinite(y)):
+        return jsonify({'success': False, 'error': 'x/y must be finite'}), 400
     _broadcast_event('cursor', {'x': x, 'y': y, 'player': player, 't': now})
     return jsonify({'success': True})
 
@@ -12720,11 +12885,10 @@ def map_ruler():
     GM is looking at. Pass `clear: True` (or omit x2/y2) to retract the
     line when the GM releases the mouse.
 
-    Body: {x1, y1, x2, y2, player, clear?}"""
+    Body: {x1, y1, x2, y2, clear?}. The `player` field is derived
+    server-side from session — body's player field is ignored."""
     data = request.json or {}
-    player = (data.get('player') or '').strip()
-    if not player:
-        player = 'GM' if _is_gm() else 'Player'
+    player = _caller_label()
     now = time.time()
     # `clear` always broadcasts (mouse-up shouldn't be throttled — we
     # want the retract to land immediately so the line vanishes).
@@ -12734,26 +12898,33 @@ def map_ruler():
         if now - last < _RULER_MIN_INTERVAL_SEC:
             return jsonify({'success': True, 'throttled': True})
         _LAST_RULER_AT[player] = now
+        if len(_LAST_RULER_AT) > 64:
+            cutoff = now - 300
+            for k in [k for k, t in _LAST_RULER_AT.items() if t < cutoff]:
+                _LAST_RULER_AT.pop(k, None)
     payload = {'player': player, 't': now, 'clear': is_clear}
     if not is_clear:
         try:
-            payload['x1'] = float(data.get('x1', 0))
-            payload['y1'] = float(data.get('y1', 0))
-            payload['x2'] = float(data.get('x2', 0))
-            payload['y2'] = float(data.get('y2', 0))
-            payload['feet'] = int(data.get('feet', 0) or 0)
+            x1 = float(data.get('x1', 0)); y1 = float(data.get('y1', 0))
+            x2 = float(data.get('x2', 0)); y2 = float(data.get('y2', 0))
         except (TypeError, ValueError):
             return jsonify({'success': False, 'error': 'ruler coords must be numeric'}), 400
+        if not all(math.isfinite(v) for v in (x1, y1, x2, y2)):
+            return jsonify({'success': False, 'error': 'ruler coords must be finite'}), 400
+        payload.update({'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2})
+        payload['feet'] = max(0, int(data.get('feet', 0) or 0))
     _broadcast_event('ruler', payload)
     return jsonify({'success': True})
 
 @app.route('/api/map/roll', methods=['POST'])
 def broadcast_roll():
-    """Broadcast a dice roll to all clients (especially GM)."""
+    """Broadcast a dice roll to all clients (especially GM). The
+    `player` field is server-derived from session — a player can't
+    POST {player:'GM'} and have a fake roll attributed to the GM."""
     data = request.json or {}
-    
+
     roll_data = {
-        'player': data.get('player', 'Unknown'),
+        'player': _caller_label(),
         'dice': data.get('dice', 'd20'),
         'result': data.get('result') or data.get('roll'),
         'total': data.get('total'),
@@ -12764,7 +12935,7 @@ def broadcast_roll():
         'fumble': data.get('fumble', False),
         'time': time.strftime('%H:%M:%S')
     }
-    
+
     sse_broadcast('dice_roll', roll_data)
     return jsonify({'success': True})
 
@@ -13185,22 +13356,44 @@ LIGHT_PRESETS = {
 
 _LIGHT_ANIMATIONS = {'none', 'flicker', 'pulse'}
 
+# PF2e tops out at 120-ft (24-square) bright vision for typical light
+# spells. 50-square (250-ft) cap leaves room for daylight + a margin
+# while preventing a typo'd 100000-square radius from freezing
+# visibility recomputation.
+_LIGHT_MAX_RADIUS_SQ = 50
+
 def _build_light(data):
-    """Normalize a light payload — preset picks defaults, data overrides."""
+    """Normalize a light payload — preset picks defaults, data overrides.
+    All numeric fields are validated for finite + bounded so a bad
+    POST can't corrupt the persisted state file."""
     preset_key = (data.get('preset') or '').lower()
     preset = LIGHT_PRESETS.get(preset_key, {})
     animation = (data.get('animation') or preset.get('animation') or 'none').lower()
     if animation not in _LIGHT_ANIMATIONS:
         animation = 'none'
+    try:
+        x = float(data.get('x', 0)); y = float(data.get('y', 0))
+    except (TypeError, ValueError):
+        x = y = 0.0
+    if not (math.isfinite(x) and math.isfinite(y)):
+        x = y = 0.0
+    try:
+        bright = int(data.get('bright', preset.get('bright', 4)))
+    except (TypeError, ValueError):
+        bright = preset.get('bright', 4)
+    try:
+        dim = int(data.get('dim', preset.get('dim', 4)))
+    except (TypeError, ValueError):
+        dim = preset.get('dim', 4)
     return {
         'id': str(uuid.uuid4())[:8],
-        'x': float(data.get('x', 0)),                  # pixel coords
-        'y': float(data.get('y', 0)),
-        'bright': int(data.get('bright', preset.get('bright', 4))),
-        'dim': int(data.get('dim', preset.get('dim', 4))),
+        'x': x,                                         # pixel coords
+        'y': y,
+        'bright': max(0, min(_LIGHT_MAX_RADIUS_SQ, bright)),
+        'dim':    max(0, min(_LIGHT_MAX_RADIUS_SQ, dim)),
         'color': data.get('color', preset.get('color', '#ff9c42')),
         'enabled': bool(data.get('enabled', True)),
-        'attached_to': data.get('attached_to'),        # token id or None
+        'attached_to': data.get('attached_to'),         # token id or None
         'name': data.get('name', preset_key or 'Light'),
         'preset': preset_key or None,
         # Per-frame visual animation. 'flicker' jitters the radius like
@@ -13355,15 +13548,18 @@ def _build_template(data):
 
 @app.route('/api/map/template/add', methods=['POST'])
 def add_template():
-    """Create an AOE template. GM or player (players own their templates)."""
+    """Create an AOE template. GM or player (players own their templates).
+
+    HARDENED: `owner` is server-derived; a client-supplied owner in
+    the body is ignored. Without this, a player could POST
+    {owner:'GM'} (or another player's name) and the misattributed
+    template would be editable/removable by the wrong account."""
     data = request.json or {}
-    # Treat no-password local dev as GM (matches gm_required behavior).
     is_gm = _is_gm()
     player_name = session.get('player_name')
     if not is_gm and not player_name:
         return jsonify({'success': False, 'error': 'login required'}), 401
-    if 'owner' not in data:
-        data['owner'] = 'GM' if is_gm else player_name
+    data['owner'] = 'GM' if is_gm else player_name
     tmpl = _build_template(data)
     with MAP_LOCK:
         ACTIVE_MAP.setdefault('templates', []).append(tmpl)
@@ -13550,29 +13746,15 @@ def get_map_state():
 @app.route('/api/map/clear', methods=['POST'])
 @gm_required
 def clear_map():
-    """Clear the current map. Keeps schema in sync with the module-level
-    ACTIVE_MAP declaration so downstream code doesn't hit KeyErrors on the
-    fields (gm_notes, lights, explored) that were added later."""
-    global ACTIVE_MAP
+    """Clear the current map. Uses _fresh_map_state so the schema stays
+    aligned with the module-level default — previously this branch
+    drifted behind as new fields were added (drawings, audio_clips,
+    fog, fog_enabled, vision_mode) and the next /api/map/fog/reveal
+    would KeyError because the field had vanished."""
     with MAP_LOCK:
-        ACTIVE_MAP = {
-            'id': None,
-            'name': None,
-            'image': None,
-            'grid_size': 70,
-            'grid_offset_x': 0,
-            'grid_offset_y': 0,
-            'tokens': [],
-            'walls': [],
-            'explored': [],
-            'difficult_terrain': [],
-            'spawn_point': None,
-            'player_control': True,
-            'gm_notes': [],
-            'ambient_light': 'bright',
-            'lights': [],
-            'templates': [],
-        }
+        fresh = _fresh_map_state()
+        ACTIVE_MAP.clear()
+        ACTIVE_MAP.update(fresh)
     _broadcast_map_state()
     return jsonify({'success': True})
 

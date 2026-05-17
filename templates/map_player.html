@@ -480,7 +480,13 @@
         // whichever token is currently taking its turn, matching the GM
         // view's behavior. Without this the only place the player saw the
         // active actor was the floating "It's your turn!" banner.
+        //
+        // Match by `_activeId` (instance_id) when available; fall back to
+        // `_activeName`. Two combatants sharing a name (e.g. two
+        // "Goblin"s) previously both pulsed on the player view because
+        // the match was string-equal on name.
         let _activeName = '';
+        let _activeId = '';
         let _activeRound = 0;
 
         // Hover tooltip — populated by onMouseMove with the token under the
@@ -809,9 +815,14 @@
                     }
 
                     updateTokenStatus();
+                    // Refresh the hover tooltip if it's open — HP /
+                    // conditions on the hovered token may have changed
+                    // in this push and the cached panel was keyed by
+                    // token id, not the data shape.
+                    if (_hoverTokenId) { _hoverLastBuiltId = null; _updateHoverTooltip(); }
                 });
             });
-            
+
             evtSource.addEventListener('map_tokens', (e) => {
                 // Refresh from the filtered endpoint so visible_to_players /
                 // gm_hidden filtering applies. The raw SSE payload is unfiltered.
@@ -933,10 +944,11 @@
                     // Track the active combatant globally so drawTokens can
                     // pulse the right token even when it's another party
                     // member or a visible enemy (not just self).
-                    const prevActive = _activeName;
+                    const prevActive = _activeId || _activeName;
                     _activeName = data.active_name || '';
+                    _activeId = data.active_id || '';
                     _activeRound = data.round || 0;
-                    if (_activeName !== prevActive) render();
+                    if ((_activeId || _activeName) !== prevActive) render();
                     if (data.active_name && playerName) {
                         // Check if active combatant matches our assigned token
                         const myTok = (mapState.tokens || []).find(t => t.assigned_player === playerName);
@@ -1025,7 +1037,7 @@
 
             // Continuous redraw cases: tweening tokens, an active-
             // combatant pulse, or any flickering/pulsing light source.
-            if (_anyTokenAnimating() || _activeName || _anyAnimatedLight()) requestAnimationFrame(render);
+            if (_anyTokenAnimating() || _activeName || _activeId || _anyAnimatedLight()) requestAnimationFrame(render);
 
             document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
         }
@@ -1524,7 +1536,13 @@
                 const r = (gs * size) / 2 - 4;
 
                 const isOwn = token.assigned_player === playerName || token.pc_name === playerName;
-                const isActive = !!(_activeName && token.name === _activeName);
+                // Prefer instance_id match so two tokens sharing a name
+                // don't both pulse — fall back to name for legacy
+                // encounter broadcasts that don't include active_id.
+                const isActive = !!(
+                    (_activeId && token.instance_id && token.instance_id === _activeId)
+                    || (!_activeId && _activeName && token.name === _activeName)
+                );
 
                 // Active-combatant pulse — same blue ring the GM screen
                 // draws, so players watching the map can tell whose turn
@@ -1927,6 +1945,10 @@
                 el.addEventListener('ended', () => {
                     if (!el.loop) _activeAudio.delete(p.id);
                 });
+                // Quiet failure on the player side — the GM hears about
+                // it from their own toast; players just get the clip
+                // dropped without a noisy banner ruining immersion.
+                el.addEventListener('error', () => { _activeAudio.delete(p.id); });
                 _activeAudio.set(p.id, el);
                 const playP = el.play();
                 if (playP && typeof playP.catch === 'function') {

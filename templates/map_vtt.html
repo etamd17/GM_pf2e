@@ -2005,7 +2005,14 @@
             const now = performance.now();
             const tokens = mapState.tokens || [];
             ctx.save();
-            for (const [tokenId, trail] of Object.entries(_breadcrumbs)) {
+            // Walk a copy of the keys so we can prune orphans (tokens
+            // removed from the encounter) in the same pass. Without
+            // this, breadcrumb arrays for removed tokens lived in the
+            // map forever — minor memory creep over a long session.
+            const liveIds = new Set(tokens.map(t => t.id));
+            for (const tokenId of Object.keys(_breadcrumbs)) {
+                if (!liveIds.has(tokenId)) { delete _breadcrumbs[tokenId]; continue; }
+                const trail = _breadcrumbs[tokenId];
                 if (!trail || trail.length === 0) continue;
                 const t = tokens.find(x => x.id === tokenId);
                 if (!t) continue;
@@ -3344,6 +3351,11 @@
                 _refreshAmbientButton();
                 updateCombatantList();
                 refreshAudioList();
+                // The hovered token's HP / conditions may have changed
+                // via this state push. Invalidating _hoverLastBuiltId
+                // forces _updateHoverTooltip to rebuild the panel on
+                // the next mousemove (or right now if hover is active).
+                if (_hoverTokenId) { _hoverLastBuiltId = null; _updateHoverTooltip(); }
                 if (window.PF2E_HOOKS) PF2E_HOOKS.fire('map_state', mapState);
                 render();
             });
@@ -4353,8 +4365,13 @@
                     ctx.font = `bold ${nameFont}px 'Cinzel', system-ui, sans-serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    const labelY = cy + r + (token.max_hp > 0 ? (14/zoom + 4/zoom) : 4/zoom)
-                                 + (token.is_pc ? 14/zoom : 0);
+                    // Pip strip only rendered when there's an HP bar above
+                    // it to anchor against; if max_hp is 0, no pip strip is
+                    // drawn, so don't reserve space for it (label would
+                    // otherwise crash into the token edge).
+                    const hpSpace = token.max_hp > 0 ? (14/zoom + 4/zoom) : 4/zoom;
+                    const pipSpace = (token.is_pc && token.max_hp > 0) ? 14/zoom : 0;
+                    const labelY = cy + r + hpSpace + pipSpace;
                     const label = String(token.name || '').slice(0, 24);
                     const tw = ctx.measureText(label).width;
                     // Backing chip — keeps the text readable on bright maps
@@ -8078,6 +8095,18 @@
                 el.dataset.clipId = p.id;
                 el.addEventListener('ended', () => {
                     if (!el.loop) _activeAudio.delete(p.id);
+                });
+                // Surface load / decode failures (404 on the served
+                // URL, unsupported codec, etc.) instead of silently
+                // dropping the play. The GM expects to know when a
+                // soundboard click did nothing.
+                el.addEventListener('error', () => {
+                    _activeAudio.delete(p.id);
+                    const t = document.createElement('div');
+                    t.style.cssText = 'position:fixed; bottom:18px; right:18px; background:#28221a; border:1px solid rgba(168,58,58,0.5); color:#fca5a5; padding:8px 12px; border-radius:6px; font-size:11px; z-index:6000; box-shadow:0 8px 24px rgba(0,0,0,0.55); font-family:Cinzel, serif;';
+                    t.textContent = `Audio failed: ${p.name || p.id}`;
+                    document.body.appendChild(t);
+                    setTimeout(() => t.remove(), 3500);
                 });
                 _activeAudio.set(p.id, el);
                 const playP = el.play();
