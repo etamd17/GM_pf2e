@@ -1456,6 +1456,9 @@
                 <button class="rail-btn" id="rail-ambient" data-action="cycleAmbient" data-tip="Ambient: Bright">
                     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M4.5 19.5l2-2M17.5 6.5l2-2"/></svg>
                 </button>
+                <button class="rail-btn" id="rail-preview" data-action="previewAsPlayer" data-tip="Preview as player">
+                    <svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
             </div>
             <div class="rail-divider"></div>
 
@@ -3316,6 +3319,12 @@
             const evtSource = new EventSource('/api/events');
             
             evtSource.addEventListener('map_state', (e) => {
+                // If the GM is in "preview as player" mode, the raw
+                // SSE payload (which is the GM-view state) would un-
+                // do the preview — fetch the filtered version instead
+                // so the preview stays accurate as the GM mutates the
+                // world.
+                if (_previewAsPlayer) { refreshFromServerForPreview(); return; }
                 // Track old token positions so we can tween into new ones.
                 const prevTokens = new Map((mapState.tokens || []).map(t => [t.id, {x: t.x, y: t.y, mu: t.movement_used_this_turn || 0}]));
                 const prevMapId = mapState.id;
@@ -3974,9 +3983,12 @@
                     const mx = (points[0][0] + points[points.length-1][0]) / 2;
                     const my = (points[0][1] + points[points.length-1][1]) / 2;
 
-                    ctx.fillStyle = isSecretDoor
-                        ? (wall.open ? '#22c55e' : '#a855f7')
-                        : (wall.open ? '#22c55e' : '#f59e0b');
+                    // Locked doors get a steel-gray fill; secret stays purple; open green; closed amber.
+                    ctx.fillStyle = wall.locked
+                        ? '#6b7280'
+                        : (isSecretDoor
+                            ? (wall.open ? '#22c55e' : '#a855f7')
+                            : (wall.open ? '#22c55e' : '#f59e0b'));
                     ctx.beginPath();
                     ctx.arc(mx, my, 9/zoom, 0, Math.PI * 2);
                     ctx.fill();
@@ -3985,8 +3997,11 @@
                     ctx.font = `bold ${12/zoom}px system-ui`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    // '?' tells the GM this is a secret door; players see a plain wall
-                    ctx.fillText(isSecretDoor ? '?' : (wall.open ? '○' : '●'), mx, my);
+                    // Glyph priority: locked > secret > open/closed.
+                    const glyph = wall.locked ? '⚷'
+                                : isSecretDoor ? '?'
+                                : (wall.open ? '○' : '●');
+                    ctx.fillText(glyph, mx, my);
 
                     // If any player has discovered the secret, tint a ring
                     // so the GM knows it's "burned"
@@ -4184,6 +4199,15 @@
                         ctx.beginPath();
                         ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
                         ctx.clip();
+                        // Rotate around the token center if the GM has
+                        // set a facing. Pure visual — vision / LOS still
+                        // computes radially, but PF2e flanking + "the
+                        // orc is looking THIS way" cues come for free.
+                        if (token.rotation) {
+                            ctx.translate(cx, cy);
+                            ctx.rotate(token.rotation * Math.PI / 180);
+                            ctx.translate(-cx, -cy);
+                        }
                         // Aspect-fit cover: scale image so the smaller dim
                         // matches the circle diameter; center horizontally
                         // and vertically.
@@ -4197,6 +4221,28 @@
                     }
                 }
                 ctx.restore();
+
+                // Facing indicator — small wedge at the token's forward
+                // edge, drawn only when rotation is set and we're not
+                // already cluttering the rim with a flanking ring.
+                if (token.rotation) {
+                    const ang = (token.rotation - 90) * Math.PI / 180;
+                    const tipX = cx + Math.cos(ang) * (r + 2/zoom);
+                    const tipY = cy + Math.sin(ang) * (r + 2/zoom);
+                    const baseAng1 = ang + Math.PI - 0.35;
+                    const baseAng2 = ang + Math.PI + 0.35;
+                    const baseR = r - 2/zoom;
+                    ctx.beginPath();
+                    ctx.moveTo(tipX, tipY);
+                    ctx.lineTo(cx + Math.cos(baseAng1) * baseR, cy + Math.sin(baseAng1) * baseR);
+                    ctx.lineTo(cx + Math.cos(baseAng2) * baseR, cy + Math.sin(baseAng2) * baseR);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(240, 216, 138, 0.75)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+                    ctx.lineWidth = 1 / zoom;
+                    ctx.stroke();
+                }
 
                 // Flanking indicator (orange dashed ring for flanked enemies)
                 if (!token.is_pc && token._flanked) {
@@ -4265,6 +4311,19 @@
 
                     ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
                     ctx.fillRect(barX, barY, barW * hpPct, barH);
+
+                    // Temp HP overlay — render a thin azure bar above
+                    // the main HP bar showing temp_hp relative to max_hp.
+                    // Caps the visual at max_hp (a PC with temp > max
+                    // is rare in PF2e but the bar shouldn't overflow).
+                    const thp = Math.max(0, token.temp_hp || 0);
+                    if (thp > 0) {
+                        const thpPct = Math.min(1, thp / token.max_hp);
+                        ctx.fillStyle = 'rgba(15,15,15,0.7)';
+                        ctx.fillRect(barX, barY - barH - 1/zoom, barW, barH * 0.6);
+                        ctx.fillStyle = '#60a5fa';
+                        ctx.fillRect(barX, barY - barH - 1/zoom, barW * thpPct, barH * 0.6);
+                    }
                 }
 
                 // Action-economy pips for the active combatant (Week 3).
@@ -4417,7 +4476,7 @@
                 const angle = -Math.PI/2 + i * angleStep;
                 const ix = cx + (r + iconSize) * Math.cos(angle);
                 const iy = cy + (r + iconSize) * Math.sin(angle);
-                
+
                 // Draw circle
                 ctx.beginPath();
                 ctx.arc(ix, iy, iconSize, 0, Math.PI * 2);
@@ -4426,16 +4485,44 @@
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 1/zoom;
                 ctx.stroke();
-                
-                // Draw value if > 1
-                if (typeof cond.value === 'number' && cond.value > 1) {
+
+                // Glyph + value. Glyphs differentiate conditions at a
+                // glance instead of relying on color alone (which only
+                // distinguishes ~14 conditions distinctly; PF2e has 30+).
+                // When the condition has a numeric value (frightened 2,
+                // sickened 3, etc.), the value wins over the glyph.
+                const val = (typeof cond.value === 'number' && cond.value > 1) ? cond.value : null;
+                const glyph = val != null ? String(val) : _conditionGlyph(cond.name);
+                if (glyph) {
                     ctx.fillStyle = '#fff';
-                    ctx.font = `bold ${iconSize * 0.8}px system-ui`;
+                    ctx.font = `bold ${iconSize * 1.05}px system-ui, "Apple Symbols", serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(cond.value.toString(), ix, iy);
+                    ctx.fillText(glyph, ix, iy);
                 }
             });
+        }
+
+        // Per-condition single-character glyphs. Chosen from common
+        // Unicode + Symbol Mathematical blocks that render cross-
+        // browser (no emoji fallback variance). Lowercase + punctuation
+        // stripped so 'flat-footed', 'flat_footed', 'Flat-Footed' all
+        // resolve to the same key, matching getConditionColor.
+        function _conditionGlyph(name) {
+            const key = String(name || '').toLowerCase().replace(/[ _-]/g, '');
+            const g = {
+                frightened: '!', sickened: '◐', stunned: '⚡', slowed: '↓',
+                prone: '_', dying: '✝', wounded: '+', flatfooted: '○', offguard: '○',
+                invisible: '∅', hidden: '◌', quickened: '↑', persistentdamage: '✶',
+                clumsy: '⚠', drained: '–', enfeebled: '~', doomed: '☠',
+                unconscious: 'z', dead: '☠', concealed: '◌', undetected: '?',
+                stupefied: '?', fascinated: '◉', grabbed: '✕', immobilized: '✕',
+                paralyzed: 'X', petrified: '▣', deafened: '⊘', blinded: '⊘',
+                fatigued: '~', encumbered: '≡', restrained: '⊠', fleeing: '→',
+                controlled: '◉', confused: '?', dazzled: '*', broken: '✕',
+                observed: '◉', unnoticed: '?', persistent: '✶',
+            };
+            return g[key] || '·';
         }
         
         function getConditionColor(condition) {
@@ -5338,6 +5425,65 @@
         };
 
         function onKeyDown(e) {
+            // 'H' on hover → quick HP edit for the hovered token. Matches
+            // Foundry's "double-click HP bar" muscle memory without
+            // making the tooltip swallow map clicks (it's pointer-
+            // events:none for a reason — overlapping a wall click is
+            // worse than typing an HP value).
+            if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                const tag = (e.target && e.target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+                if (!_hoverTokenId) return;
+                const tok = (mapState.tokens || []).find(t => t.id === _hoverTokenId);
+                if (!tok) return;
+                e.preventDefault();
+                floatingEditor({
+                    title: `HP — ${tok.name}`,
+                    fields: [
+                        { key: 'hp', label: 'HP', type: 'number', min: 0, value: tok.hp || 0, autofocus: true },
+                        { key: 'temp_hp', label: 'Temp HP', type: 'number', min: 0, value: tok.temp_hp || 0 },
+                    ],
+                    confirmLabel: 'Set',
+                }).then(res => {
+                    if (!res) return;
+                    fetch('/api/map/token/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: tok.id,
+                            hp: Math.max(0, parseInt(res.hp) || 0),
+                            temp_hp: Math.max(0, parseInt(res.temp_hp) || 0),
+                        }),
+                    }).catch(() => {});
+                });
+                return;
+            }
+
+            // Rotate the selected token(s) — [ counterclockwise,
+            // ] clockwise, by 15° (or 5° with Shift for finer aim).
+            // Only fires in select mode + with no input focused so it
+            // can't override typing in a stat field.
+            if ((e.key === '[' || e.key === ']') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                const tag = (e.target && e.target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+                if (selectedTokenIds.size === 0) return;
+                e.preventDefault();
+                const step = e.shiftKey ? 5 : 15;
+                const delta = (e.key === ']') ? step : -step;
+                for (const id of selectedTokenIds) {
+                    const tok = (mapState.tokens || []).find(t => t.id === id);
+                    if (!tok) continue;
+                    const next = ((tok.rotation || 0) + delta + 360) % 360;
+                    tok.rotation = next;  // optimistic local
+                    fetch('/api/map/token/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, rotation: next }),
+                    }).catch(() => {});
+                }
+                markDirty('tokens');
+                return;
+            }
             if (e.key === 'Escape') {
                 if (isDrawingWall) {
                     cancelWall();
@@ -5808,6 +5954,75 @@
             if (action === 'cycleAmbient')  { cycleAmbient(); return; }
             if (action === 'mapMenu')       { showMapMenu(btn); return; }
             if (action === 'clearMenu')     { showClearMenu(btn); return; }
+            if (action === 'previewAsPlayer') { showPreviewAsPlayerMenu(btn); return; }
+        }
+
+        // ── Preview-as-player ────────────────────────────────────────
+        // GM clicks the eye icon, picks a party member, and the GM canvas
+        // switches to rendering the player-filtered state for that PC.
+        // Lets the GM verify "does Kyle actually see the boss yet?" before
+        // a player notices. Toggles off via the same menu or Escape.
+        let _previewAsPlayer = null;
+        async function showPreviewAsPlayerMenu(anchorEl) {
+            const r = anchorEl?.getBoundingClientRect();
+            const anchor = r ? { x: r.right, y: r.top } : undefined;
+            // Pull party list from the existing roster.
+            const party = (partyList || []).map(p => p.name).filter(Boolean);
+            const result = await floatingEditor({
+                title: 'Preview as player',
+                message: _previewAsPlayer
+                    ? `Currently previewing as ${_previewAsPlayer}. Pick another or turn off.`
+                    : 'Switch to the view a specific PC sees. Useful before a session to verify what each player will / won\'t see.',
+                fields: [{
+                    key: 'name', label: 'As', type: 'select',
+                    options: [{ value: '', label: '— Off (GM view) —' },
+                              ...party.map(n => ({ value: n, label: n }))],
+                    autofocus: true,
+                    value: _previewAsPlayer || '',
+                }],
+                confirmLabel: 'Preview',
+                anchor,
+            });
+            if (!result) return;
+            _previewAsPlayer = result.name || null;
+            await refreshFromServerForPreview();
+            _refreshPreviewBanner();
+        }
+        async function refreshFromServerForPreview() {
+            // Always pull through /api/map/state — GM mode returns the
+            // raw state, preview mode returns the filtered one. Either
+            // way the canvas updates without a page reload.
+            const url = _previewAsPlayer
+                ? '/api/map/state?as_player=' + encodeURIComponent(_previewAsPlayer)
+                : '/api/map/state';
+            try {
+                const r = await fetch(url);
+                if (!r.ok) return;
+                const newState = await r.json();
+                mapState = newState;
+                _invalidateVisibilityCache();
+                render();
+            } catch (_) {}
+        }
+        function _refreshPreviewBanner() {
+            let banner = document.getElementById('preview-banner');
+            if (_previewAsPlayer) {
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'preview-banner';
+                    banner.style.cssText = 'position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(20,17,12,0.95); color:#f0d88a; border:1px solid rgba(201,163,78,0.5); padding:6px 14px; border-radius:6px; font-family:Cinzel, serif; font-size:12px; letter-spacing:0.06em; z-index:4600; cursor:pointer;';
+                    banner.title = 'Click to exit preview';
+                    banner.addEventListener('click', () => {
+                        _previewAsPlayer = null;
+                        refreshFromServerForPreview();
+                        _refreshPreviewBanner();
+                    });
+                    document.body.appendChild(banner);
+                }
+                banner.textContent = `👁 Previewing as ${_previewAsPlayer} — click to exit`;
+            } else if (banner) {
+                banner.remove();
+            }
         }
 
         // Ambient cycles bright → dim → dark → bright. The icon stays the

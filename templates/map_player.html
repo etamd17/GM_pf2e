@@ -1570,6 +1570,11 @@
                         ctx.beginPath();
                         ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
                         ctx.clip();
+                        if (token.rotation) {
+                            ctx.translate(cx, cy);
+                            ctx.rotate(token.rotation * Math.PI / 180);
+                            ctx.translate(-cx, -cy);
+                        }
                         const dia = (r - 2) * 2;
                         const iw = img.naturalWidth || dia;
                         const ih = img.naturalHeight || dia;
@@ -1578,6 +1583,23 @@
                         ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
                         ctx.restore();
                     }
+                }
+
+                // Facing wedge — small gold triangle at the token's
+                // forward edge. Mirrors the GM render so the table
+                // sees the same facing the GM positioned.
+                if (token.rotation) {
+                    const ang = (token.rotation - 90) * Math.PI / 180;
+                    const tipX = cx + Math.cos(ang) * (r + 2/zoom);
+                    const tipY = cy + Math.sin(ang) * (r + 2/zoom);
+                    const baseR = r - 2/zoom;
+                    ctx.beginPath();
+                    ctx.moveTo(tipX, tipY);
+                    ctx.lineTo(cx + Math.cos(ang + Math.PI - 0.35) * baseR, cy + Math.sin(ang + Math.PI - 0.35) * baseR);
+                    ctx.lineTo(cx + Math.cos(ang + Math.PI + 0.35) * baseR, cy + Math.sin(ang + Math.PI + 0.35) * baseR);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(240, 216, 138, 0.7)';
+                    ctx.fill();
                 }
 
                 // Border — gold when it's the hovered token, green when
@@ -1624,6 +1646,19 @@
 
                     ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
                     ctx.fillRect(barX, barY, barW * hpPct, barH);
+
+                    // Temp HP overlay — azure bar above the main HP
+                    // bar. Players see it for party members (so they
+                    // know when an ally has cover from Bardic
+                    // Inspiration / Lay on Hands).
+                    const thp = Math.max(0, token.temp_hp || 0);
+                    if (thp > 0) {
+                        const thpPct = Math.min(1, thp / token.max_hp);
+                        ctx.fillStyle = 'rgba(15,15,15,0.7)';
+                        ctx.fillRect(barX, barY - barH - 1/zoom, barW, barH * 0.6);
+                        ctx.fillStyle = '#60a5fa';
+                        ctx.fillRect(barX, barY - barH - 1/zoom, barW * thpPct, barH * 0.6);
+                    }
                 }
 
                 // Condition pips around the rim — same six-icon layout the
@@ -1702,14 +1737,34 @@
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 1/zoom;
                 ctx.stroke();
-                if (typeof cond.value === 'number' && cond.value > 1) {
+                // Glyph or numeric value — same library as the GM view.
+                const val = (typeof cond.value === 'number' && cond.value > 1) ? cond.value : null;
+                const glyph = val != null ? String(val) : _conditionGlyph(cond.name);
+                if (glyph) {
                     ctx.fillStyle = '#fff';
-                    ctx.font = `bold ${iconSize * 0.85}px system-ui`;
+                    ctx.font = `bold ${iconSize * 1.05}px system-ui, "Apple Symbols", serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(cond.value.toString(), ix, iy);
+                    ctx.fillText(glyph, ix, iy);
                 }
             });
+        }
+
+        function _conditionGlyph(name) {
+            const key = String(name || '').toLowerCase().replace(/[ _-]/g, '');
+            const g = {
+                frightened: '!', sickened: '◐', stunned: '⚡', slowed: '↓',
+                prone: '_', dying: '✝', wounded: '+', flatfooted: '○', offguard: '○',
+                invisible: '∅', hidden: '◌', quickened: '↑', persistentdamage: '✶',
+                clumsy: '⚠', drained: '–', enfeebled: '~', doomed: '☠',
+                unconscious: 'z', dead: '☠', concealed: '◌', undetected: '?',
+                stupefied: '?', fascinated: '◉', grabbed: '✕', immobilized: '✕',
+                paralyzed: 'X', petrified: '▣', deafened: '⊘', blinded: '⊘',
+                fatigued: '~', encumbered: '≡', restrained: '⊠', fleeing: '→',
+                controlled: '◉', confused: '?', dazzled: '*', broken: '✕',
+                observed: '◉', unnoticed: '?', persistent: '✶',
+            };
+            return g[key] || '·';
         }
 
         function _conditionColor(name) {

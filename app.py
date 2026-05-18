@@ -11978,6 +11978,10 @@ def add_map_token():
         'name': data.get('name', 'Token'),
         'x': int(data.get('x', 0)),  # Grid coordinates
         'y': int(data.get('y', 0)),
+        # Rotation in degrees (0–359). PF2e doesn't strictly track facing,
+        # but flanking arrows and "the orc is looking that way" cues are
+        # the kind of mid-fight cognitive load this offloads visually.
+        'rotation': max(0, min(359, int(data.get('rotation', 0) or 0))) % 360,
         'size': int(data.get('size', 1)),  # 1 = medium, 2 = large, etc.
         'color': data.get('color', '#3B82F6'),
         'image': data.get('image'),  # Optional custom image
@@ -11986,6 +11990,11 @@ def add_map_token():
         'is_pc': data.get('is_pc', False),
         'hp': int(data.get('hp', 0)),
         'max_hp': int(data.get('max_hp', 0)),
+        # Temp HP renders as a second bar above the main HP bar (the
+        # PF2e Bardic Inspiration / Lay on Hands / shield wave). Tracker
+        # broadcasts the value via /api/map/token/update; auto-imported
+        # from the PC sheet on token-add (handled below).
+        'temp_hp': max(0, int(data.get('temp_hp', 0) or 0)),
         'visible_to_players': data.get('visible_to_players', True),
         'vision_radius': int(data.get('vision_radius', default_vision)),  # Squares of vision (0 = no vision)
         'assigned_player': data.get('assigned_player'),  # Player name who can control this token
@@ -12081,6 +12090,17 @@ def update_map_token():
                 if 'size' in data: token['size'] = int(data['size'])
                 if 'hp' in data: token['hp'] = int(data['hp'])
                 if 'max_hp' in data: token['max_hp'] = int(data['max_hp'])
+                if 'temp_hp' in data:
+                    # Stays as int >= 0; PF2e doesn't have negative temp HP.
+                    token['temp_hp'] = max(0, int(data['temp_hp'] or 0))
+                if 'rotation' in data:
+                    # Normalize to 0–359 so the render path doesn't have
+                    # to handle wrap or negative input.
+                    try:
+                        r = int(data['rotation'] or 0)
+                    except (TypeError, ValueError):
+                        r = 0
+                    token['rotation'] = r % 360
                 if 'visible_to_players' in data: token['visible_to_players'] = bool(data['visible_to_players'])
                 if 'vision_radius' in data: token['vision_radius'] = int(data['vision_radius'])
                 if 'assigned_player' in data: token['assigned_player'] = data['assigned_player']
@@ -12379,16 +12399,44 @@ def set_spawn_point():
 @app.route('/api/map/wall/toggle_door', methods=['POST'])
 @gm_required
 def toggle_door():
-    """Toggle a door open/closed."""
+    """Toggle a door open/closed. Locked doors refuse to open until
+    the GM unlocks them via /api/map/wall/lock_door."""
     data = request.json or {}
     wall_id = data.get('id')
-    
+    locked_reject = False
+
     with MAP_LOCK:
         for wall in ACTIVE_MAP.get('walls', []):
             if wall['id'] == wall_id and wall.get('type') == 'door':
+                if wall.get('locked') and not wall.get('open'):
+                    locked_reject = True
+                    break
                 wall['open'] = not wall.get('open', False)
                 break
-    
+
+    if locked_reject:
+        return jsonify({'success': False, 'error': 'door is locked'}), 423
+    _save_map_state()
+    _broadcast_map_walls()
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/wall/lock_door', methods=['POST'])
+@gm_required
+def lock_door():
+    """Set / clear a door's locked state. Body: {id, locked: bool}.
+    Auto-closes the door when locking — a locked open door wouldn't
+    block anything."""
+    data = request.json or {}
+    wall_id = data.get('id')
+    locked = bool(data.get('locked', True))
+    with MAP_LOCK:
+        for wall in ACTIVE_MAP.get('walls', []):
+            if wall['id'] == wall_id and wall.get('type') == 'door':
+                wall['locked'] = locked
+                if locked and wall.get('open'):
+                    wall['open'] = False
+                break
     _save_map_state()
     _broadcast_map_walls()
     return jsonify({'success': True})
@@ -13156,6 +13204,10 @@ def add_wall():
         'type': data.get('type', 'normal'),  # 'normal', 'terrain', 'invisible', 'ethereal', 'door'
         'open': False,  # For doors
         'closed': data.get('closed', False),  # Whether the wall forms a closed shape
+        # Door locked state. A locked door behaves visually like a
+        # closed door but refuses click-to-open from non-GM. GM-only
+        # toggle. Only meaningful when type == 'door'.
+        'locked': bool(data.get('locked', False)) and data.get('type') == 'door',
         # Secret door fields — if secret=True, the door masquerades as a normal
         # wall to any player not listed in discovered_by. GM always sees it with
         # the secret styling so they can plan around it.
@@ -13729,12 +13781,23 @@ def get_map_state():
     Player clients refetch this on every SSE tick, so it's the scrubber
     between raw ACTIVE_MAP and the wire. Keep all player-side filtering in
     _apply_player_map_filter so /map bootstrap and this refetch can't drift.
+
+    GM-only `?as_player=NAME` runs the same filter the named player
+    would see — powers the GM's "preview as player" toggle so the GM
+    can verify what each PC actually sees before a session.
     """
     is_gm = _is_gm()
     player_name = session.get('player_name')
+    as_player = (request.args.get('as_player') or '').strip()
 
     with MAP_LOCK:
-        if is_gm:
+        if is_gm and as_player and as_player in PARTY_LIBRARY:
+            # Preview mode: return the state a real player named
+            # `as_player` would see. GM-only — a non-GM caller
+            # asking for as_player is ignored.
+            state = copy.deepcopy(ACTIVE_MAP)
+            _apply_player_map_filter(state, as_player)
+        elif is_gm:
             state = dict(ACTIVE_MAP)
         else:
             # deepcopy so the filter can mutate freely without touching the shared ref
