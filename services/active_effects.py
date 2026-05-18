@@ -18,12 +18,6 @@ Capabilities (current pass):
     don't care whether the source list lives on a token or a sheet.
 
 What's NOT here yet:
-  * Reaction-style triggers ("when struck, add Shield Block"). The
-    predicate scope supports response-only events but the trigger
-    side hasn't been wired into the strike-resolution code path.
-  * Source attribution in the PF2e bonus-type sense ("status from
-    Heroism vs status from Aid" — both still type-stack correctly,
-    but the engine doesn't print the actually-suppressed name).
   * Permanent-magical-item bonuses tied to ABP / fundamental runes
     (those live in the Character ABP system, not here).
 """
@@ -184,6 +178,14 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'description': '+1 circumstance to AC; can Shield Block once before breaking.',
         'modifiers': [
             {'stat': 'ac', 'op': 'add', 'value': 1, 'bonus_type': 'circumstance'},
+            # Reaction marker: scope='reaction' means "this doesn't
+            # apply to baseline stats, it FIRES when the event hits."
+            # Damage handlers call find_reaction_triggers to surface it.
+            {'stat': None, 'op': 'add', 'value': 0, 'bonus_type': 'untyped',
+             'source': 'Shield Block',
+             'predicate': {'scope': 'reaction', 'event': 'on_damaged',
+                           'reaction_name': 'Shield Block',
+                           'hint': 'Force-shield absorbs damage equal to its Hardness, then dissipates.'}},
         ],
     },
     'sure_strike': {
@@ -403,6 +405,37 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'description': '+1 item to AC (when raised).',
         'modifiers': [
             {'stat': 'ac', 'op': 'add', 'value': 1, 'bonus_type': 'item', 'tag': 'shield_raised'},
+        ],
+    },
+    # — Reaction markers (no stat delta, just a trigger hint) —
+    'nimble_dodge': {
+        'name': 'Nimble Dodge (ready)',
+        'source': 'feat',
+        'source_id': 'nimble_dodge',
+        'tags': ['rogue'],
+        'duration': {'type': 'until_end_of_turn', 'value': None},
+        'description': 'When an attack targets you, gain +2 circumstance to AC against that attack.',
+        'modifiers': [
+            {'stat': None, 'op': 'add', 'value': 0, 'bonus_type': 'untyped',
+             'source': 'Nimble Dodge',
+             'predicate': {'scope': 'reaction', 'event': 'on_targeted',
+                           'reaction_name': 'Nimble Dodge',
+                           'hint': '+2 circumstance to AC vs this attack.'}},
+        ],
+    },
+    'liberating_step': {
+        'name': 'Liberating Step (ready)',
+        'source': 'feat',
+        'source_id': 'liberating_step',
+        'tags': ['champion'],
+        'duration': {'type': 'until_end_of_turn', 'value': None},
+        'description': 'Trigger when an enemy hits your ally: ally gets resistance, can Step.',
+        'modifiers': [
+            {'stat': None, 'op': 'add', 'value': 0, 'bonus_type': 'untyped',
+             'source': 'Liberating Step',
+             'predicate': {'scope': 'reaction', 'event': 'on_ally_struck',
+                           'reaction_name': 'Liberating Step',
+                           'hint': 'Ally gains resistance equal to 2+lvl + a free Step.'}},
         ],
     },
     # — Generic catch-all —
@@ -686,7 +719,10 @@ def compute_token_stats(
     breakdown: List[Dict] = []
 
     # Track which rows survive stacking so the UI knows what
-    # actually applied.
+    # actually applied. Losers carry a `suppressed_by` label naming
+    # the winning row's source so the player can read "Bless +1
+    # suppressed by Heroism" instead of guessing why their buff
+    # didn't show up.
     for (stat, btype), rows in groups.items():
         values = [r['delta'] for r in rows]
         # Apply the stacked net to the stat.
@@ -695,6 +731,8 @@ def compute_token_stats(
             out[stat] = out[stat] + net
         # Mark which rows are the "winners" — for typed groups the
         # most-positive AND most-negative applied; for untyped, all.
+        winner_pos_source: Optional[str] = None
+        winner_neg_source: Optional[str] = None
         if btype == 'untyped':
             winners = set(id(r) for r in rows)
         else:
@@ -704,15 +742,30 @@ def compute_token_stats(
             for r in rows:
                 if r['delta'] > 0 and r['delta'] == best_pos:
                     winners.add(id(r))
+                    if winner_pos_source is None:
+                        winner_pos_source = r.get('source') or '—'
                 elif r['delta'] < 0 and r['delta'] == worst_neg:
                     winners.add(id(r))
+                    if winner_neg_source is None:
+                        winner_neg_source = r.get('source') or '—'
                 elif r['delta'] == 0:
                     winners.add(id(r))
         for r in rows:
-            breakdown.append({
-                **r,
-                'applied': id(r) in winners,
-            })
+            is_applied = id(r) in winners
+            row_out = {**r, 'applied': is_applied}
+            if not is_applied:
+                # Pick the winner of the same sign — typed groups stack
+                # positives and negatives independently, so a losing
+                # buff is suppressed by the highest buff (not the
+                # highest penalty), and vice versa.
+                rival = None
+                if r['delta'] > 0:
+                    rival = winner_pos_source
+                elif r['delta'] < 0:
+                    rival = winner_neg_source
+                if rival and rival != r.get('source'):
+                    row_out['suppressed_by'] = rival
+            breakdown.append(row_out)
 
     # Handle non-add ops separately (set / mult). These bypass
     # stacking and apply unconditionally — rare in PF2e but worth
@@ -919,6 +972,93 @@ def consume_triggered(active_effects: List[Dict], *, event: str) -> List[Dict]:
             continue
         kept.append(eff)
     return kept
+
+
+# ── Reaction triggers ─────────────────────────────────────────────────
+# Some effects don't apply universally — they FIRE when a specific
+# event happens to the bearer. The classic case: the Shield cantrip
+# gives the caster the ability to Shield Block once during the round.
+# That's a reaction, and it doesn't modify any stat in isolation; it
+# modifies the stat *when the trigger fires*.
+#
+# In our schema this is expressed as a modifier with
+#   predicate.scope = 'reaction'
+#   predicate.event = 'on_damaged' | 'on_struck' | 'on_targeted'
+#                   | 'on_ally_struck' | 'on_critical_failure_save'
+# The compute paths don't apply these modifiers to baseline stats
+# (the no-context call sees `has_filter == True` and drops them).
+# Damage / strike handlers call `find_reaction_triggers` after the
+# event to surface the effect to the player.
+
+REACTION_EVENT_LABELS = {
+    'on_damaged':              'when you take damage',
+    'on_struck':               'when you are hit by a Strike',
+    'on_targeted':             'when an attack targets you',
+    'on_ally_struck':          'when an ally adjacent to you is hit',
+    'on_critical_failure_save':'when you critically fail a save',
+}
+
+
+def find_reaction_triggers(
+    active_effects: Optional[Iterable[Dict]],
+    *,
+    event: str,
+) -> List[Dict]:
+    """Return effect-records whose `modifiers` carry a reaction-scoped
+    predicate matching `event`. Useful payload for the damage / strike
+    handlers to surface "you can use Shield Block now" hints.
+
+    The matcher is permissive on the event side — a modifier with
+    `predicate.scope='reaction'` and no `predicate.event` matches every
+    reaction event (it's an always-available reaction window). A
+    modifier with `predicate.event=X` only matches when `event=X`.
+
+    Returned shape: list of dicts mirroring the source effect plus
+    `trigger`:
+        {
+          'id': str,            # effect id
+          'name': str,
+          'source': str,
+          'caster': str | None,
+          'trigger': {
+            'event': str,
+            'event_label': str,
+            'reaction_name': str | None,
+            'hint': str | None,
+          },
+        }
+    """
+    out: List[Dict] = []
+    if not active_effects:
+        return out
+    for eff in active_effects:
+        # Suppressed effects don't fire reactions either — a saved-
+        # against Hideous Laughter doesn't keep granting you anything.
+        if eff.get('suppressed'):
+            continue
+        for m in eff.get('modifiers') or []:
+            pred = m.get('predicate') or {}
+            if (pred.get('scope') or '').lower() != 'reaction':
+                continue
+            pred_event = (pred.get('event') or '').lower() or None
+            if pred_event is not None and pred_event != event:
+                continue
+            out.append({
+                'id': eff.get('id'),
+                'name': eff.get('name') or '—',
+                'source': eff.get('source') or 'custom',
+                'caster': eff.get('caster'),
+                'trigger': {
+                    'event': event,
+                    'event_label': REACTION_EVENT_LABELS.get(event, event),
+                    'reaction_name': pred.get('reaction_name') or m.get('source'),
+                    'hint': pred.get('hint') or m.get('hint'),
+                },
+            })
+            # One trigger per effect is enough — multiple reaction
+            # modifiers on the same effect would dupe the toast.
+            break
+    return out
 
 
 # ── Catalog application helper ────────────────────────────────────────

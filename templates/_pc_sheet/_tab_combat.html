@@ -93,6 +93,29 @@
                             {% endfor %}
                         </div>
                     </div>
+
+                    {# Active Effects — sheet-level spell/feat/item buffs.
+                       The list is server-rendered on first paint so a
+                       slow SSE reconnect doesn't show an empty card; the
+                       SSE pc_update handler repaints it in place. #}
+                    <div class="panel-card" id="active-effects-card">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="section-header" style="margin:0; padding:0; border:none;">Active Effects</h3>
+                            <button onclick="openActiveEffectPicker()" class="action-btn" style="font-size:10px; padding:4px 8px;" title="Apply a spell / feat / item buff to yourself">+ Add</button>
+                        </div>
+                        <p class="text-[10px] mb-2" style="color:var(--text-muted);">
+                            Spell, feat, and item buffs currently affecting you. Stat penalties from conditions are tracked separately above.
+                        </p>
+                        <div id="active-effects-list" class="flex flex-col gap-1.5">
+                            {# Initial render handled by JS once the page loads —
+                               keeps the server template lean and the JS as the
+                               single source of truth for the row layout. #}
+                        </div>
+                        <div id="active-effects-empty" class="text-[11px] py-3 text-center hidden"
+                             style="color:var(--text-muted); font-style:italic;">
+                            No active effects — drag a spell from Magic, or use + Add.
+                        </div>
+                    </div>
                 </div>
 
                 <div class="lg:col-span-2 space-y-6">

@@ -3112,7 +3112,226 @@
                 lbl.textContent = on ? 'ON' : '—';
             });
         }
-        
+
+        // ══════════════════════════════════════════════════════════════
+        // ACTIVE EFFECTS (sheet-level spell / feat / item buffs)
+        // ══════════════════════════════════════════════════════════════
+        // Single render path: server broadcasts pc_active_effects on
+        // every pc_update; we re-render the panel in place. The picker
+        // calls /api/pc/<name>/effect/add and lets the broadcast paint
+        // the result so we don't fight the server's truth.
+        //
+        // Initial paint happens on DOMContentLoaded via the same Jinja-
+        // backed payload we get from /api/pc/<n>/effects — kept as one
+        // round-trip on load so a slow SSE handshake doesn't show an
+        // empty card.
+
+        let _effectsCatalogCache = null;
+        async function _loadEffectsCatalog() {
+            if (_effectsCatalogCache) return _effectsCatalogCache;
+            try {
+                const res = await fetch('/api/effects/catalog');
+                const data = await res.json();
+                _effectsCatalogCache = (data && data.effects) || [];
+            } catch(e) {
+                console.error('[effects] catalog fetch failed', e);
+                _effectsCatalogCache = [];
+            }
+            return _effectsCatalogCache;
+        }
+
+        function _formatEffectDuration(dur) {
+            if (!dur || !dur.type) return '';
+            const t = dur.type;
+            if (t === 'permanent') return 'permanent';
+            if (t === 'until_end_of_turn') return 'until end of turn';
+            if (t === 'until_start_of_caster_turn') return 'until caster\'s next turn';
+            if (dur.value == null) return t.replace('_', ' ');
+            if (t === 'rounds') return `${dur.value} round${dur.value === 1 ? '' : 's'}`;
+            if (t === 'minutes') return `${dur.value} min`;
+            return `${dur.value} ${t}`;
+        }
+
+        function _escHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({
+                '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+            }[m]));
+        }
+
+        // Render the Active Effects panel from server-canonical lists.
+        // `effects` = the per-instance records; `breakdown` = per-row
+        // stacking results (with `applied: bool` + `suppressed_by: str`
+        // when a row lost the type contest).
+        function renderActiveEffectsPanel(effects, breakdown) {
+            const list = document.getElementById('active-effects-list');
+            const empty = document.getElementById('active-effects-empty');
+            if (!list) return;
+            effects = Array.isArray(effects) ? effects : [];
+            breakdown = Array.isArray(breakdown) ? breakdown : [];
+            if (effects.length === 0) {
+                list.innerHTML = '';
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+            // Index breakdown rows by source name for per-effect summary.
+            const bySource = {};
+            for (const row of breakdown) {
+                const src = row.source || '';
+                if (!bySource[src]) bySource[src] = [];
+                bySource[src].push(row);
+            }
+            list.innerHTML = effects.map(eff => {
+                const id = _escHtml(eff.id || '');
+                const name = _escHtml(eff.name || '—');
+                const source = _escHtml(eff.source || 'custom');
+                const caster = eff.caster ? ` · from ${_escHtml(eff.caster)}` : '';
+                const dur = _formatEffectDuration(eff.duration || {});
+                const isSuppressed = !!eff.suppressed;
+                // Pull the rows that came from this effect's modifiers.
+                // Match on source name (engine tags each row with the
+                // effect's name when no explicit `source` was set).
+                const rows = bySource[eff.name] || [];
+                const rowHtml = rows.map(r => {
+                    const delta = (r.delta > 0 ? '+' : '') + r.delta;
+                    const stat = _escHtml(r.stat || '—');
+                    const btype = _escHtml(r.bonus_type || 'untyped');
+                    const applied = !!r.applied;
+                    const supp = applied ? '' : (r.suppressed_by ? ` <span style="opacity:0.7;">(suppressed by ${_escHtml(r.suppressed_by)})</span>` : ' <span style="opacity:0.6;">(not applied)</span>');
+                    const color = applied ? 'var(--green)' : 'var(--text-muted)';
+                    return `<div style="font-size:10px; color:${color};">
+                        <span style="font-family:var(--font-mono); min-width:30px; display:inline-block;">${delta}</span>
+                        <span>${stat} (${btype})${supp}</span>
+                    </div>`;
+                }).join('');
+                const desc = eff.description ? `<div class="text-[10px] mt-0.5" style="color:var(--text-muted);">${_escHtml(eff.description)}</div>` : '';
+                const suppNote = isSuppressed ? `<span class="text-[9px] uppercase font-bold" style="color:var(--text-muted); letter-spacing:0.1em; margin-left:6px;">saved</span>` : '';
+                return `
+                    <div class="ae-row" data-effect-id="${id}" style="display:flex; align-items:flex-start; gap:8px; padding:6px 8px; border-radius:6px; background:var(--bg-raised); border:1px solid var(--border-subtle); ${isSuppressed ? 'opacity:0.6;' : ''}">
+                        <div style="flex:1; min-width:0;">
+                            <div class="text-[12px] font-bold" style="color:${isSuppressed ? 'var(--text-muted)' : 'var(--gilt)'};">
+                                ${name}${suppNote}
+                                <span class="text-[9px]" style="color:var(--text-muted); margin-left:4px; font-weight:400;">${source}${caster} · ${_escHtml(dur)}</span>
+                            </div>
+                            ${desc}
+                            ${rowHtml ? `<div style="margin-top:3px;">${rowHtml}</div>` : ''}
+                        </div>
+                        <button onclick="dropActiveEffect('${id}')" title="Remove effect" aria-label="Remove ${name}"
+                            style="padding:2px 8px; font-size:10px; border-radius:3px; cursor:pointer; background:transparent; border:1px solid var(--border-strong); color:var(--text-muted);">
+                            ×
+                        </button>
+                    </div>`;
+            }).join('');
+        }
+
+        async function dropActiveEffect(effectId) {
+            if (!effectId) return;
+            try {
+                const res = await fetch(`/api/pc/${pcNameEncoded}/effect/remove`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({effect_id: effectId}),
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    if (typeof showRollToast === 'function') {
+                        showRollToast('Effect remove', '', data.error || 'Could not remove effect.', false, true);
+                    }
+                }
+                // Server broadcasts pc_update with the new list — let
+                // that drive the repaint so we don't double-render.
+            } catch(e) { console.error('[effects] drop failed', e); }
+        }
+
+        async function openActiveEffectPicker() {
+            const catalog = await _loadEffectsCatalog();
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed; inset:0; background:rgba(8,6,3,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px;';
+            const bySource = {};
+            for (const entry of catalog) {
+                if (entry.key === 'custom') continue;     // hide raw custom for now
+                const src = entry.source || 'other';
+                (bySource[src] = bySource[src] || []).push(entry);
+            }
+            const sourceLabels = {
+                spell: 'Spells', feat: 'Feats / Class Features', item: 'Items', condition: 'Conditions', custom: 'Custom',
+            };
+            const cardHtml = Object.entries(bySource).map(([src, entries]) => {
+                const label = sourceLabels[src] || src;
+                const rows = entries.map(entry => {
+                    const key = _escHtml(entry.key);
+                    const name = _escHtml(entry.name || entry.key);
+                    const dur = _formatEffectDuration(entry.duration || {});
+                    const desc = _escHtml(entry.description || '');
+                    return `<button data-effect-apply="${key}" class="ae-pick-row" style="display:block; width:100%; text-align:left; padding:8px 10px; border:none; border-bottom:1px solid var(--border-card); background:transparent; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline;">
+                            <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${name}</span>
+                            <span style="font-size:10px; color:var(--text-muted);">${_escHtml(dur)}</span>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${desc}</div>
+                    </button>`;
+                }).join('');
+                return `<div>
+                    <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted); padding:var(--sp-3) var(--sp-4) var(--sp-1);">${_escHtml(label)}</div>
+                    ${rows}
+                </div>`;
+            }).join('');
+            overlay.innerHTML = `
+                <div style="background:var(--bg-card, var(--bg-raised)); border:1px solid var(--border-card, var(--border-strong)); border-radius:var(--r-md, 8px); width:100%; max-width:560px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 6px 24px rgba(0,0,0,0.45);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border-card, var(--border-strong));">
+                        <h3 style="font-family:var(--font-display); font-size:13px; letter-spacing:0.18em; text-transform:uppercase; color:var(--gilt); margin:0;">Add Effect</h3>
+                        <button data-close style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:0 4px;">×</button>
+                    </div>
+                    <div style="overflow-y:auto; padding:0 0 8px;">${cardHtml || '<div style="padding:20px; text-align:center; color:var(--text-muted);">No effects in catalog.</div>'}</div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.matches('[data-close]')) overlay.remove();
+            });
+            overlay.addEventListener('click', async (e) => {
+                const btn = e.target.closest('[data-effect-apply]');
+                if (!btn) return;
+                const key = btn.getAttribute('data-effect-apply');
+                btn.style.opacity = '0.5';
+                try {
+                    const res = await fetch(`/api/pc/${pcNameEncoded}/effect/add`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({catalog_key: key, caster: pcName}),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        overlay.remove();   // SSE will repaint
+                    } else {
+                        btn.style.opacity = '1';
+                        if (typeof showRollToast === 'function') {
+                            showRollToast('Effect add', '', data.error || 'Could not apply effect.', false, true);
+                        }
+                    }
+                } catch(err) {
+                    btn.style.opacity = '1';
+                    console.error('[effects] add failed', err);
+                }
+            });
+        }
+
+        // Initial paint — Jinja exposes pc.pc_active_effects so we can
+        // render immediately; the SSE broadcast soon refines with the
+        // full breakdown. compute_effective_stats() returns the same
+        // {effective, breakdown} shape the engine emits.
+        {% set _init_effects_payload = pc.compute_effective_stats() %}
+        (function _initActiveEffectsPanel() {
+            try {
+                const initialEffects = {{ pc.pc_active_effects | tojson | safe }};
+                const initialBreakdown = {{ _init_effects_payload.breakdown | tojson | safe }};
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => renderActiveEffectsPanel(initialEffects, initialBreakdown), {once: true});
+                } else {
+                    renderActiveEffectsPanel(initialEffects, initialBreakdown);
+                }
+            } catch(e) { console.error('[effects] init failed', e); }
+        })();
+
         // Pathbuilder-style condition picker — opens a flat modal listing
         // every PF2e condition with a quick-apply button. Numeric conditions
         // (Frightened, Sickened, etc.) prompt for a value; toggle conditions
@@ -4228,7 +4447,37 @@
                             el.innerHTML = html;
                         });
                     }
+                    // Active Effects panel — server now broadcasts the
+                    // full effect list + post-stacking breakdown on every
+                    // pc_update, so we can repaint in place without a
+                    // follow-up /api/pc/<n>/effects round-trip.
+                    if (Array.isArray(data.pc_active_effects)) {
+                        renderActiveEffectsPanel(
+                            data.pc_active_effects,
+                            Array.isArray(data.effects_breakdown) ? data.effects_breakdown : []);
+                    }
                 } catch(err) { console.error('SSE pc_update error:', err); }
+            });
+
+            evtSource.addEventListener('reaction_available', (e) => {
+                _sheetMarkSseAlive();
+                try {
+                    const data = JSON.parse(e.data);
+                    // Only show the toast to the affected player.
+                    if (data.pc_name && data.pc_name !== pcName) return;
+                    const triggers = data.triggers || [];
+                    if (!triggers.length) return;
+                    const labels = triggers.map(t => t.trigger.reaction_name || t.name).join(', ');
+                    const detail = triggers.map(t => {
+                        const hint = t.trigger.hint ? ` — ${t.trigger.hint}` : '';
+                        return `${t.trigger.reaction_name || t.name}: ${t.trigger.event_label}${hint}`;
+                    }).join('\n');
+                    if (typeof showRollToast === 'function') {
+                        showRollToast('Reaction available', labels,
+                            detail + (data.damage ? `\n(${data.damage} damage incoming)` : ''),
+                            false, false);
+                    }
+                } catch(err) { console.error('SSE reaction_available error:', err); }
             });
 
             evtSource.addEventListener('encounter_update', (e) => {

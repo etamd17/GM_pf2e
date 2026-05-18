@@ -784,7 +784,21 @@ def _do_broadcast_pc_state(pc_name):
             # build's expended_slots dict). Routes that mutate slots keep
             # pc.expended_slots in sync so this never has to hit disk.
             'expended_slots': dict(getattr(pc, 'expended_slots', {}) or {}),
+            # Sheet-level active effects + the post-stacking effective
+            # stats / breakdown. Lets the player sheet repaint its
+            # Active Effects panel without a follow-up API call.
+            'pc_active_effects': list(getattr(pc, 'pc_active_effects', []) or []),
         }
+        try:
+            eff = pc.compute_effective_stats()
+            payload['effective'] = eff['effective']
+            payload['effects_breakdown'] = eff['breakdown']
+        except Exception as _e:
+            # Compute is best-effort — never let a bad effect block a
+            # state broadcast (HP / conditions are mission-critical).
+            print(f"[BROADCAST] {pc_name}: effects compute failed: {_e}")
+            payload['effective'] = {}
+            payload['effects_breakdown'] = []
     sse_broadcast('pc_update', payload)
 
 def _flush_enc_broadcast():
@@ -5379,6 +5393,16 @@ def adjust_hp(instance_id):
                     PARTY_LIBRARY[c.name].conditions['wounded'] = c.conditions['wounded']
                     _broadcast_pc_state(c.name)
                     _persist_pc_combat_state(c.name)
+                # Reaction hint: any "when damaged" effects on the
+                # target surface to the player + GM. Only fires on the
+                # damage action (heal is silent).
+                if action == 'damage':
+                    _emit_reaction_triggers(
+                        pc_name=c.name if c.is_pc else None,
+                        instance_id=c.instance_id,
+                        event='on_damaged',
+                        damage_amount=int(effective),
+                    )
                 _persist_encounter_state()
                 _broadcast_encounter_state()
                 break
@@ -5434,6 +5458,17 @@ def adjust_party_hp(pc_name):
             return True
 
         _, pc = apply_pc_delta(pc_name, _mutate)
+        # Reaction hint: damage path only — heal doesn't trigger
+        # "when struck" effects (Heal action arguably could, but PF2e
+        # core rules don't generally chain reactions off positive HP
+        # deltas).
+        if action == 'damage' and amount > 0:
+            _emit_reaction_triggers(
+                pc_name=pc_name,
+                instance_id=getattr(pc, 'instance_id', None) or None,
+                event='on_damaged',
+                damage_amount=int(amount),
+            )
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
             doomed = int(pc.conditions.get('doomed', 0) or 0)
             return jsonify({
@@ -12325,23 +12360,35 @@ def damage_map_token():
     token_id = data.get('id')
     amount = int(data.get('amount', 0))
     
+    target_pc_name = None
+    target_instance_id = None
     with MAP_LOCK:
         for token in ACTIVE_MAP['tokens']:
             if token['id'] == token_id:
                 token['hp'] = max(0, token['hp'] - amount)
-                
+                target_instance_id = token.get('instance_id')
+
                 # Sync with encounter if linked
-                if token.get('instance_id'):
+                if target_instance_id:
                     for c in ACTIVE_ENCOUNTER:
-                        if c.instance_id == token['instance_id']:
+                        if c.instance_id == target_instance_id:
                             c.current_hp = token['hp']
                             # Handle dying/wounded
                             if c.current_hp <= 0 and hasattr(c, 'conditions'):
                                 if c.is_pc:
                                     c.conditions['dying'] = 1 + c.conditions.get('wounded', 0)
+                            if c.is_pc:
+                                target_pc_name = c.name
                             break
                 break
-    
+
+    if amount > 0 and (target_pc_name or target_instance_id):
+        _emit_reaction_triggers(
+            pc_name=target_pc_name,
+            instance_id=target_instance_id,
+            event='on_damaged',
+            damage_amount=amount,
+        )
     _save_map_state()
     _broadcast_map_tokens()
     return jsonify({'success': True})
@@ -12779,6 +12826,57 @@ def remove_map_tile():
     _save_map_state()
     _broadcast_map_tiles()
     return jsonify({'success': True})
+
+
+def _emit_reaction_triggers(*, pc_name=None, instance_id=None, event, damage_amount=None):
+    """Surface available reactions to the affected player + GM. Called
+    from damage paths after the HP delta lands. Pulls active effects
+    from sheet + token (whichever the target uses) and dispatches the
+    engine's reaction matcher.
+
+    A reaction hint is best-effort: if the engine throws, log and move
+    on — damage application must not get blocked by a buggy effect.
+    """
+    try:
+        effects_list = []
+        target_name = None
+        if pc_name and pc_name in PARTY_LIBRARY:
+            pc = PARTY_LIBRARY[pc_name]
+            effects_list = list(getattr(pc, 'pc_active_effects', []) or [])
+            target_name = pc_name
+        # Token-side reactions live on the map record. PCs may have
+        # BOTH sheet + token effects; dedupe by id when both contribute.
+        if instance_id:
+            tok_effects, tok = _token_active_effects(instance_id)
+            if tok_effects:
+                seen = {e.get('id') for e in effects_list}
+                for e in tok_effects:
+                    if e.get('id') not in seen:
+                        effects_list.append(e)
+                if tok and not target_name:
+                    target_name = tok.get('name')
+        if not effects_list:
+            return
+        triggers = effects_service.find_reaction_triggers(effects_list, event=event)
+        if not triggers:
+            return
+        # Combat log + dedicated SSE event for the player sheet to toast.
+        for t in triggers:
+            label = t['trigger'].get('reaction_name') or t.get('name', 'Reaction')
+            _combat_log(
+                f"{target_name or 'Target'}: {label} ready ({t['trigger']['event_label']})",
+                'condition',
+            )
+        sse_broadcast('reaction_available', {
+            'pc_name': pc_name,
+            'instance_id': instance_id,
+            'target': target_name,
+            'event': event,
+            'damage': damage_amount,
+            'triggers': triggers,
+        })
+    except Exception as _e:
+        print(f"[REACTION] emit failed for {pc_name or instance_id}: {_e}")
 
 
 def _token_active_effects(instance_id):
