@@ -2540,7 +2540,7 @@
         <!-- Tab Bar -->
         <div class="flex gap-0 tab-bar-scroll" style="border-bottom:2px solid var(--border-default); margin-bottom:0;">
             <button onclick="switchTab('core')" class="tab-btn active" id="btn-tab-core">Core & Skills</button>
-            <button onclick="switchTab('combat')" class="tab-btn" id="btn-tab-combat">Combat</button>
+            <button onclick="switchTab('combat')" class="tab-btn" id="btn-tab-combat">Combat<span id="combat-tab-effects-badge" class="hidden" style="margin-left:6px; padding:1px 6px; border-radius:8px; font-size:9px; font-weight:700; background:var(--green-glow); color:var(--green); border:1px solid var(--green);" title="Active spell/feat/item buffs"></span></button>
             <button onclick="switchTab('magic')" class="tab-btn" id="btn-tab-magic">Magic</button>
             <button onclick="switchTab('feats')" class="tab-btn" id="btn-tab-feats">Feats</button>
             <button onclick="switchTab('inventory')" class="tab-btn" id="btn-tab-inventory">Inventory</button>
@@ -3165,9 +3165,22 @@
         function renderActiveEffectsPanel(effects, breakdown) {
             const list = document.getElementById('active-effects-list');
             const empty = document.getElementById('active-effects-empty');
+            const tabBadge = document.getElementById('combat-tab-effects-badge');
             if (!list) return;
             effects = Array.isArray(effects) ? effects : [];
             breakdown = Array.isArray(breakdown) ? breakdown : [];
+            // Tab badge: only count effects that actually contribute.
+            // Suppressed (saved) effects still show in the list but
+            // don't count as "you have a buff running" for the badge.
+            const activeCount = effects.filter(e => !e.suppressed).length;
+            if (tabBadge) {
+                if (activeCount > 0) {
+                    tabBadge.textContent = activeCount;
+                    tabBadge.classList.remove('hidden');
+                } else {
+                    tabBadge.classList.add('hidden');
+                }
+            }
             if (effects.length === 0) {
                 list.innerHTML = '';
                 if (empty) empty.classList.remove('hidden');
@@ -3206,6 +3219,28 @@
                 }).join('');
                 const desc = eff.description ? `<div class="text-[10px] mt-0.5" style="color:var(--text-muted);">${_escHtml(eff.description)}</div>` : '';
                 const suppNote = isSuppressed ? `<span class="text-[9px] uppercase font-bold" style="color:var(--text-muted); letter-spacing:0.1em; margin-left:6px;">saved</span>` : '';
+                // Reaction-trigger hint: surface "when damaged: Shield
+                // Block" type lines so beginners know an effect grants
+                // them a usable reaction in addition to its stat bonus.
+                const REACTION_EVENT_LABELS = {
+                    'on_damaged': 'when you take damage',
+                    'on_struck':  'when you are hit',
+                    'on_targeted':'when targeted by an attack',
+                    'on_ally_struck':'when an ally is hit',
+                    'on_critical_failure_save':'when you crit-fail a save',
+                };
+                const reactionMods = (eff.modifiers || []).filter(m => ((m.predicate || {}).scope || '').toLowerCase() === 'reaction');
+                const reactionHtml = reactionMods.map(m => {
+                    const pred = m.predicate || {};
+                    const evt = (pred.event || '').toLowerCase();
+                    const label = REACTION_EVENT_LABELS[evt] || (evt ? evt.replace(/_/g, ' ') : 'reaction');
+                    const rxnName = pred.reaction_name || m.source || 'Reaction';
+                    const hint = pred.hint ? ` — ${_escHtml(pred.hint)}` : '';
+                    return `<div style="font-size:10px; margin-top:2px; color:var(--blue, #5a8ee8);">
+                        <span style="font-family:var(--font-mono); min-width:30px; display:inline-block;">⚡</span>
+                        <span><strong>${_escHtml(rxnName)}</strong> <span style="opacity:0.75;">${_escHtml(label)}${hint}</span></span>
+                    </div>`;
+                }).join('');
                 return `
                     <div class="ae-row" data-effect-id="${id}" style="display:flex; align-items:flex-start; gap:8px; padding:6px 8px; border-radius:6px; background:var(--bg-raised); border:1px solid var(--border-subtle); ${isSuppressed ? 'opacity:0.6;' : ''}">
                         <div style="flex:1; min-width:0;">
@@ -3215,6 +3250,7 @@
                             </div>
                             ${desc}
                             ${rowHtml ? `<div style="margin-top:3px;">${rowHtml}</div>` : ''}
+                            ${reactionHtml}
                         </div>
                         <button onclick="dropActiveEffect('${id}')" title="Remove effect" aria-label="Remove ${name}"
                             style="padding:2px 8px; font-size:10px; border-radius:3px; cursor:pointer; background:transparent; border:1px solid var(--border-strong); color:var(--text-muted);">
