@@ -5357,29 +5357,92 @@ def adjust_hp(instance_id):
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
                 old_hp = c.current_hp
+                effective = amount
+                wri_notes = []
                 if action == 'damage':
                     was_above_zero = c.current_hp > 0
-                    # Apply W/R/I calculation for non-PC targets
-                    effective = amount
-                    wri_notes = []
-                    if not c.is_pc and damage_type and damage_type != 'untyped':
-                        effective, wri_notes = _calculate_damage_with_wri(amount, damage_type, c)
-                    c.current_hp = max(0, c.current_hp - effective)
-                    # Build detailed log message
+                    # PCs route through the same temp-HP-aware damage
+                    # path the player sheet uses. Without this the GM's
+                    # tracker "−damage" button silently bypassed the
+                    # PC's manual temp HP pool + any toggle THP — a +10
+                    # temp HP buff would protect against player-side
+                    # damage but evaporate under GM-side damage. Same
+                    # in-memory PC object, so we keep wri (PCs don't
+                    # carry W/R/I tables today, but a future per-PC
+                    # ABP rune that grants resistance would land here).
+                    if c.is_pc and c.name in PARTY_LIBRARY:
+                        # Drain toggle THP (passive — re-grants), then
+                        # manual THP, then real HP. Same shape as
+                        # adjust_party_hp's mutator so the two paths
+                        # stay in lockstep.
+                        def _mutate(pc):
+                            remaining = amount
+                            toggle_thp = 0
+                            try:
+                                toggle_thp = int(pc.toggle_effects_summary.get('temp_hp', 0) or 0)
+                            except Exception:
+                                toggle_thp = 0
+                            if toggle_thp > 0 and remaining > 0:
+                                remaining = max(0, remaining - toggle_thp)
+                            manual_thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+                            if manual_thp > 0 and remaining > 0:
+                                used = min(manual_thp, remaining)
+                                pc.temp_hp_manual = manual_thp - used
+                                remaining -= used
+                            pc.temp_hp = int(getattr(pc, 'temp_hp_manual', 0) or 0) + toggle_thp
+                            pc.current_hp = max(0, pc.current_hp - remaining)
+                            return remaining   # hp_actually_lost
+                        hp_before = c.current_hp
+                        try:
+                            hp_lost, _pc = apply_pc_delta(c.name, _mutate, persist=False, broadcast=False)
+                        except Exception:
+                            hp_lost = 0
+                            _pc = PARTY_LIBRARY.get(c.name)
+                        if _pc is not None:
+                            c.current_hp = _pc.current_hp
+                            try:
+                                c.temp_hp = int(getattr(_pc, 'temp_hp', 0) or 0)
+                                c.temp_hp_manual = int(getattr(_pc, 'temp_hp_manual', 0) or 0)
+                            except Exception:
+                                pass
+                        effective = hp_before - (c.current_hp if _pc else hp_before)
+                        # Dying / wounded post-conditions still computed
+                        # by apply_pc_delta's mutator since we set
+                        # pc.current_hp inside it. But we also need to
+                        # bump dying here for consistency with old log
+                        # behavior — apply_pc_delta doesn't add dying.
+                        if c.current_hp == 0:
+                            if was_above_zero:
+                                c.conditions['dying'] = 1 + c.conditions.get('wounded', 0)
+                            else:
+                                c.conditions['dying'] = c.conditions.get('dying', 0) + 1
+                            doomed = int(c.conditions.get('doomed', 0) or 0)
+                            max_dying = max(1, 4 - doomed)
+                            if c.conditions['dying'] >= max_dying:
+                                c.conditions['dying'] = max_dying
+                            _combat_log(f"{c.name} is Dying {c.conditions['dying']}{' — DEAD' if c.conditions['dying'] >= max_dying else ''}!", 'critical')
+                            # Mirror back to PARTY_LIBRARY
+                            PARTY_LIBRARY[c.name].conditions['dying'] = c.conditions['dying']
+                    else:
+                        # Non-PC: apply W/R/I resist/weakness, then drain HP.
+                        if damage_type and damage_type != 'untyped':
+                            effective, wri_notes = _calculate_damage_with_wri(amount, damage_type, c)
+                        c.current_hp = max(0, c.current_hp - effective)
+                        if c.current_hp == 0:
+                            c.conditions['dying'] = 1 + c.conditions.get('wounded', 0) if was_above_zero else c.conditions.get('dying', 0) + 1
+                            doomed = int(c.conditions.get('doomed', 0) or 0)
+                            max_dying = max(1, 4 - doomed)
+                            if c.conditions['dying'] >= max_dying:
+                                c.conditions['dying'] = max_dying
+                            _combat_log(f"{c.name} is Dying {c.conditions['dying']}{' — DEAD' if c.conditions['dying'] >= max_dying else ''}!", 'critical')
+
+                    # Combat log with the same shape as before
                     type_label = f" {damage_type}" if damage_type and damage_type != 'untyped' else ''
                     if wri_notes:
                         adj_detail = ' | '.join(wri_notes)
                         _combat_log(f"{c.name} took {effective}{type_label} damage ({old_hp}→{c.current_hp}) [{adj_detail}, raw {amount}]", 'damage')
                     else:
                         _combat_log(f"{c.name} took {effective}{type_label} damage ({old_hp}→{c.current_hp})", 'damage')
-                    if c.current_hp == 0:
-                        c.conditions['dying'] = 1 + c.conditions.get('wounded', 0) if was_above_zero else c.conditions.get('dying', 0) + 1
-                        # Doomed-aware death threshold: 4 - doomed.
-                        doomed = int(c.conditions.get('doomed', 0) or 0)
-                        max_dying = max(1, 4 - doomed)
-                        if c.conditions['dying'] >= max_dying:
-                            c.conditions['dying'] = max_dying
-                        _combat_log(f"{c.name} is Dying {c.conditions['dying']}{' — DEAD' if c.conditions['dying'] >= max_dying else ''}!", 'critical')
                 elif action == 'heal':
                     was_dying = c.conditions.get('dying', 0) > 0
                     c.current_hp = min(c.hp, c.current_hp + amount)
@@ -13184,10 +13247,18 @@ def remove_token_effect():
 
 
 def _expire_token_effects_for_round():
-    """Walk every token's active_effects and drop any whose round-
-    based duration has fully elapsed. Logs expiries to the combat log
-    so the GM sees Bless / Bane / Shield falling off automatically.
-    Called from cycle_turn at end-of-turn (under MAP_LOCK)."""
+    """Walk every token's active_effects AND every PC's sheet-level
+    pc_active_effects and drop any whose round-based duration has fully
+    elapsed. Logs expiries to the combat log so the GM sees Bless /
+    Bane / Shield falling off automatically. Called from cycle_turn at
+    end-of-turn.
+
+    Two storage locations to keep in sync — a sheet-applied Heroism
+    mirrors to the map token via add_pc_effect, but only the token side
+    used to expire. That left the player sheet showing "Heroism" minutes
+    after it should have ended, with no way to clear it but manually
+    clicking ×.
+    """
     expired_log = []
     with MAP_LOCK:
         for tok in ACTIVE_MAP.get('tokens', []):
@@ -13199,8 +13270,25 @@ def _expire_token_effects_for_round():
                 tok['active_effects'] = kept
                 for e in exp:
                     expired_log.append((tok.get('name', 'Token'), e.get('name', '—')))
+    # Sheet-side expiry — track which PCs changed so we broadcast only those.
+    changed_pcs = set()
+    with ENCOUNTER_LOCK:
+        for pc_name, pc in PARTY_LIBRARY.items():
+            effs = list(getattr(pc, 'pc_active_effects', []) or [])
+            if not effs:
+                continue
+            kept, exp = effects_service.expire_round_effects(effs, ROUND_NUMBER)
+            if not exp:
+                continue
+            pc.pc_active_effects = kept
+            changed_pcs.add(pc_name)
+            for e in exp:
+                expired_log.append((pc_name, e.get('name', '—')))
     for tname, ename in expired_log:
         _combat_log(f"{tname}: {ename} expired", 'condition')
+    for pc_name in changed_pcs:
+        _persist_pc_combat_state(pc_name)
+        _broadcast_pc_state(pc_name)
 
 
 # --- SOUNDBOARD ----------------------------------------------------------
