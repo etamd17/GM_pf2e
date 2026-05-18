@@ -866,6 +866,18 @@
                 showPing(data.x, data.y, data.player);
             });
 
+            // Tile layer — decorative GM-placed images. Read-only
+            // on the player side.
+            evtSource.addEventListener('map_tiles', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (Array.isArray(d.tiles)) {
+                        mapState.tiles = d.tiles;
+                        render();
+                    }
+                } catch(_) {}
+            });
+
             // GM annotations (freehand sketches, room labels, "trap is
             // here" markers). Read-only on the player side; the GM is
             // the only author. Wholesale replace + redraw.
@@ -1007,6 +1019,10 @@
 
             // Draw difficult terrain
             drawDifficultTerrain();
+
+            // Tile layer (decorative images) — drawn above the map
+            // image but below tokens, GM annotations, and pins.
+            drawTiles();
 
             // GM annotations — drawn UNDER tokens so they read as map
             // markings (the GM's sketches, not active combatants).
@@ -1849,6 +1865,40 @@
             ctx.restore();
             for (const k of stale) _otherRulers.delete(k);
             if (_otherRulers.size > 0) requestAnimationFrame(render);
+        }
+
+        // Tile layer. Mirrors GM-side rendering. Players see set
+        // dressing the GM placed (banners, debris, lighting fx).
+        const _tileImgCache = new Map();
+        function _getTileImage(filename) {
+            if (!filename) return null;
+            const hit = _tileImgCache.get(filename);
+            if (hit) return hit.state === 'ok' ? hit.img : null;
+            const img = new Image();
+            const entry = { img, state: 'loading' };
+            _tileImgCache.set(filename, entry);
+            img.onload = () => { entry.state = 'ok'; render(); };
+            img.onerror = () => { entry.state = 'err'; };
+            img.src = '/api/map/tiles/' + encodeURIComponent(filename);
+            return null;
+        }
+        function drawTiles() {
+            const tiles = (mapState.tiles || []).slice().sort((a, b) => (a.z||0) - (b.z||0));
+            for (const t of tiles) {
+                const img = _getTileImage(t.filename);
+                if (!img) continue;
+                ctx.save();
+                ctx.globalAlpha = t.opacity != null ? t.opacity : 1;
+                if (t.rotation) {
+                    const cx = t.x + (t.w || img.naturalWidth) / 2;
+                    const cy = t.y + (t.h || img.naturalHeight) / 2;
+                    ctx.translate(cx, cy);
+                    ctx.rotate(t.rotation * Math.PI / 180);
+                    ctx.translate(-cx, -cy);
+                }
+                ctx.drawImage(img, t.x, t.y, t.w || img.naturalWidth, t.h || img.naturalHeight);
+                ctx.restore();
+            }
         }
 
         // Render GM annotations (freehand strokes / arrows / rects /

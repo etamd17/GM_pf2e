@@ -217,13 +217,14 @@ ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
 OBSIDIAN_DIR = os.path.join(DATA_DIR, 'obsidian_vault')
 MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
 AUDIO_DIR = os.path.join(MAP_DIR, 'audio')  # GM-uploaded soundboard clips
+TILES_DIR = os.path.join(MAP_DIR, 'tiles')  # Decorative tile-layer images
 CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
 CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, AUDIO_DIR, CAMPAIGN_ASSETS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, AUDIO_DIR, TILES_DIR, CAMPAIGN_ASSETS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -291,6 +292,14 @@ ACTIVE_MAP = {
     # every client triggers the same <audio>. Same for `audio_stop`.
     #   {id, name, filename, ext, mime, size, uploaded_at}
     'audio_clips': [],
+    # --- Tile layer -------------------------------------------------
+    # Decorative images that sit above the map background but below
+    # tokens. Useful for set dressing: a torchlit chandelier, a
+    # banner, a campfire overlay. Doesn't block sight; doesn't take
+    # a turn. The tile asset lives under MAP_DIR/tiles/; the dict
+    # below carries placement + render metadata.
+    #   {id, filename, x, y, w, h, rotation, opacity, z}
+    'tiles': [],
 }
 MAP_LOCK = threading.Lock()
 
@@ -6916,6 +6925,7 @@ def gm_screen():
 # campaign notes. Toggleable via ?include_rules=1 on every endpoint.
 from services import notes as notes_service
 from services import vault_sync as vault_sync_service
+from services import active_effects as effects_service
 
 # Kick off git-backed vault sync if env vars are set. This dispatches the
 # clone/fetch to a background thread so a misconfigured GitHub URL, a slow
@@ -11438,6 +11448,7 @@ def _broadcast_map_state():
             'templates': ACTIVE_MAP.get('templates', []),
             'drawings': ACTIVE_MAP.get('drawings', []),
             'audio_clips': ACTIVE_MAP.get('audio_clips', []),
+            'tiles': ACTIVE_MAP.get('tiles', []),
         }
     sse_broadcast('map_state', state)
 
@@ -12586,6 +12597,166 @@ def clear_map_drawings():
     _save_map_state()
     _broadcast_map_drawings()
     return jsonify({'success': True})
+
+
+# --- TILE LAYER --------------------------------------------------------
+# Decorative images placed above the map but below tokens. Set-dressing
+# for things that are visible but don't block sight, take a turn, or
+# carry game-state (banners, chandeliers, scattered debris).
+
+_TILE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+_TILE_MAX_BYTES = 8 * 1024 * 1024
+
+def _broadcast_map_tiles():
+    with MAP_LOCK:
+        tiles = list(ACTIVE_MAP.get('tiles', []))
+    sse_broadcast('map_tiles', {'tiles': tiles})
+
+@app.route('/api/map/tile/upload', methods=['POST'])
+@gm_required
+def upload_map_tile():
+    """Upload a tile asset. Returns the filename; the GM then places
+    it via /api/map/tile/add."""
+    f = request.files.get('tile')
+    if not f or not f.filename:
+        return jsonify({'success': False, 'error': 'tile field required'}), 400
+    ext = (os.path.splitext(f.filename)[1] or '').lower().lstrip('.')
+    if ext not in _TILE_EXTENSIONS:
+        return jsonify({'success': False, 'error': f'unsupported format {ext!r}'}), 400
+    f.seek(0, os.SEEK_END); size = f.tell(); f.seek(0)
+    if size > _TILE_MAX_BYTES:
+        return jsonify({'success': False, 'error': f'tile too large ({size // (1024*1024)} MB; max 8)'}), 413
+    os.makedirs(TILES_DIR, exist_ok=True)
+    tile_id = str(uuid.uuid4())[:8]
+    filename = f"{tile_id}.{ext}"
+    f.save(os.path.join(TILES_DIR, filename))
+    return jsonify({'success': True, 'filename': filename})
+
+
+@app.route('/api/map/tiles/<filename>')
+def serve_map_tile(filename):
+    """Stream a tile asset. No auth — tiles are intentionally visible
+    to all viewers (set dressing)."""
+    return send_from_directory(TILES_DIR, filename, conditional=True)
+
+
+@app.route('/api/map/tile/add', methods=['POST'])
+@gm_required
+def add_map_tile():
+    """Place a tile on the map. Body: {filename, x, y, w?, h?,
+    rotation?, opacity?, z?}. The filename must exist in TILES_DIR."""
+    data = request.json or {}
+    filename = (data.get('filename') or '').strip()
+    if not filename or '/' in filename or '\\' in filename or filename.startswith('.'):
+        return jsonify({'success': False, 'error': 'valid filename required'}), 400
+    if not os.path.exists(os.path.join(TILES_DIR, filename)):
+        return jsonify({'success': False, 'error': 'tile asset not found'}), 404
+    try:
+        x = float(data.get('x', 0)); y = float(data.get('y', 0))
+        w = float(data.get('w', 140)); h = float(data.get('h', 140))
+        rot = float(data.get('rotation', 0)) % 360
+        opa = max(0.0, min(1.0, float(data.get('opacity', 1.0))))
+        z = int(data.get('z', 0))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'numeric fields must parse'}), 400
+    if not all(math.isfinite(v) for v in (x, y, w, h, rot, opa)):
+        return jsonify({'success': False, 'error': 'numeric fields must be finite'}), 400
+    tile = {
+        'id': str(uuid.uuid4())[:8],
+        'filename': filename,
+        'x': x, 'y': y, 'w': max(8, w), 'h': max(8, h),
+        'rotation': rot, 'opacity': opa, 'z': z,
+    }
+    with MAP_LOCK:
+        ACTIVE_MAP.setdefault('tiles', []).append(tile)
+    _save_map_state()
+    _broadcast_map_tiles()
+    return jsonify({'success': True, 'tile': tile})
+
+
+@app.route('/api/map/tile/update', methods=['POST'])
+@gm_required
+def update_map_tile():
+    """Patch tile fields. Body: {id, ...overrides}."""
+    data = request.json or {}
+    tile_id = data.get('id')
+    mutable = {'x', 'y', 'w', 'h', 'rotation', 'opacity', 'z'}
+    with MAP_LOCK:
+        tile = next((t for t in ACTIVE_MAP.get('tiles', []) if t.get('id') == tile_id), None)
+        if not tile:
+            return jsonify({'success': False, 'error': 'tile not found'}), 404
+        for k in mutable:
+            if k not in data:
+                continue
+            try:
+                v = float(data[k])
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(v):
+                continue
+            if k == 'rotation': v = v % 360
+            elif k == 'opacity': v = max(0.0, min(1.0, v))
+            elif k in ('w', 'h'): v = max(8, v)
+            tile[k] = v
+    _save_map_state()
+    _broadcast_map_tiles()
+    return jsonify({'success': True})
+
+
+@app.route('/api/map/tile/remove', methods=['POST'])
+@gm_required
+def remove_map_tile():
+    data = request.json or {}
+    tile_id = data.get('id')
+    with MAP_LOCK:
+        ACTIVE_MAP['tiles'] = [t for t in ACTIVE_MAP.get('tiles', []) if t.get('id') != tile_id]
+    _save_map_state()
+    _broadcast_map_tiles()
+    return jsonify({'success': True})
+
+
+@app.route('/api/active_effects/<instance_id>')
+def api_active_effects(instance_id):
+    """Return the active-effect breakdown for a combatant — base stats
+    + each condition's contribution + the resulting effective stats.
+    Powers the GM tooltip "what's modifying this creature" detail panel
+    and the modules system's effect inspection."""
+    target = None
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if getattr(c, 'instance_id', None) == instance_id:
+                target = c
+                break
+    if not target:
+        return jsonify({'success': False, 'error': 'combatant not found'}), 404
+    # Non-GM callers see only their own PC's effects.
+    if not _is_gm():
+        my_name = session.get('player_name')
+        if not target.is_pc or target.name != my_name:
+            return jsonify({'success': False, 'error': 'forbidden'}), 403
+    base = {
+        'ac':         int(getattr(target, 'ac', 10) or 10),
+        'fort':       int(getattr(target, 'fort', 0) or 0),
+        'ref':        int(getattr(target, 'ref', 0) or 0),
+        'will':       int(getattr(target, 'will', 0) or 0),
+        'attack':     0,  # delta only — base attack is per-strike
+        'damage':     0,
+        'perception': int(getattr(target, 'perception', 0) or 0),
+        'skills':     0,
+        'dc':         0,
+        'actions':    int(getattr(target, 'max_actions', 3) or 3),
+    }
+    conds = {k: v for k, v in (getattr(target, 'conditions', {}) or {}).items() if v}
+    effective = effects_service.compute_effects(conds, base)
+    breakdown = effects_service.list_active_effects(conds)
+    return jsonify({
+        'success': True,
+        'instance_id': instance_id,
+        'name': target.name,
+        'base': base,
+        'effective': effective,
+        'effects': breakdown,
+    })
 
 
 # --- SOUNDBOARD ----------------------------------------------------------

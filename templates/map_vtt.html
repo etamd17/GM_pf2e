@@ -2494,6 +2494,7 @@
             // to clear the canvas and apply the transform, draw the canvas-
             // owned bits, then ask PIXI to sync sprites from mapState.
             _beginLayer('tokens');
+            drawTiles();
             drawDrawings();
             drawBreadcrumbs();
             drawTemplates();
@@ -2507,6 +2508,41 @@
             _endLayer();
             if (_USE_PIXI_TOKENS) {
                 _pixiSyncTokens();
+            }
+        }
+
+        // Tile layer — decorative images placed above the map but
+        // below tokens. Cached per filename so multiple tiles using
+        // the same asset don't re-decode.
+        const _tileImgCache = new Map();
+        function _getTileImage(filename) {
+            if (!filename) return null;
+            const hit = _tileImgCache.get(filename);
+            if (hit) return hit.state === 'ok' ? hit.img : null;
+            const img = new Image();
+            const entry = { img, state: 'loading' };
+            _tileImgCache.set(filename, entry);
+            img.onload = () => { entry.state = 'ok'; markDirty('tokens'); };
+            img.onerror = () => { entry.state = 'err'; };
+            img.src = '/api/map/tiles/' + encodeURIComponent(filename);
+            return null;
+        }
+        function drawTiles() {
+            const tiles = (mapState.tiles || []).slice().sort((a, b) => (a.z||0) - (b.z||0));
+            for (const t of tiles) {
+                const img = _getTileImage(t.filename);
+                if (!img) continue;
+                ctx.save();
+                ctx.globalAlpha = t.opacity != null ? t.opacity : 1;
+                if (t.rotation) {
+                    const cx = t.x + (t.w || img.naturalWidth) / 2;
+                    const cy = t.y + (t.h || img.naturalHeight) / 2;
+                    ctx.translate(cx, cy);
+                    ctx.rotate(t.rotation * Math.PI / 180);
+                    ctx.translate(-cx, -cy);
+                }
+                ctx.drawImage(img, t.x, t.y, t.w || img.naturalWidth, t.h || img.naturalHeight);
+                ctx.restore();
             }
         }
 
@@ -3406,6 +3442,10 @@
                 // to reset per-turn movement budgets on all tokens.
                 try {
                     const payload = JSON.parse(e.data);
+                    // Module hook — fire on every encounter push so modules
+                    // can react to HP / condition / turn changes without
+                    // re-parsing the SSE channel themselves.
+                    if (window.PF2E_HOOKS) PF2E_HOOKS.fire('encounter_update', payload);
                     // Replace the sidebar roster wholesale and re-wire
                     // drag/drop — the drag-to-map panel needs to reflect
                     // newly-added monsters / removed PCs without a reload.
@@ -3461,7 +3501,23 @@
             // anything yet on this tab may get an "autoplay blocked"
             // — we surface a one-time prompt so they can opt in.
             evtSource.addEventListener('audio', (e) => {
-                try { _audioOnEvent(JSON.parse(e.data)); } catch(_) {}
+                try {
+                    const p = JSON.parse(e.data);
+                    _audioOnEvent(p);
+                    if (window.PF2E_HOOKS) PF2E_HOOKS.fire('audio_' + (p.action || 'event'), p);
+                } catch(_) {}
+            });
+
+            // Tile layer — same fan-out pattern as drawings. Replace
+            // wholesale and dirty the tokens layer.
+            evtSource.addEventListener('map_tiles', (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (Array.isArray(d.tiles)) {
+                        mapState.tiles = d.tiles;
+                        markDirty('tokens');
+                    }
+                } catch(_) {}
             });
 
             // Drawings layer — annotations persist server-side and any
@@ -3474,6 +3530,7 @@
                     if (Array.isArray(d.drawings)) {
                         mapState.drawings = d.drawings;
                         markDirty('tokens');
+                        if (window.PF2E_HOOKS) PF2E_HOOKS.fire('drawings_changed', { count: d.drawings.length });
                     }
                 } catch(_) {}
             });

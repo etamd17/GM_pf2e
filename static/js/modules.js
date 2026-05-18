@@ -14,11 +14,12 @@
  *      modules.js. Your file gets `PF2E_HOOKS` on window and can
  *      register handlers:
  *
- *      PF2E_HOOKS.on('token_moved',     (t) => console.log(t));
- *      PF2E_HOOKS.on('damage_applied',  (e) => ...);
- *      PF2E_HOOKS.on('turn_change',     (e) => ...);
- *      PF2E_HOOKS.on('encounter_state', (s) => ...);
- *      PF2E_HOOKS.on('drawing_added',   (d) => ...);
+ *      PF2E_HOOKS.on('token_moved',       (t) => console.log(t));
+ *      PF2E_HOOKS.on('map_state',         (s) => ...);  // any state push
+ *      PF2E_HOOKS.on('encounter_update',  (p) => ...);  // turn / HP / cond
+ *      PF2E_HOOKS.on('drawings_changed',  (d) => ...);
+ *      PF2E_HOOKS.on('audio_play',        (p) => ...);  // {id,url,...}
+ *      PF2E_HOOKS.on('audio_stop',        (p) => ...);
  *
  *   4. Optional `module.meta = { id, name, version }` for the
  *      enable/disable UI.
