@@ -3420,6 +3420,11 @@
                 mapState.tokens = incoming;
                 _invalidateVisibilityCache();
                 updateCombatantList();
+                // If the token details panel is showing one of these
+                // tokens, refresh the effects list so a freshly applied
+                // / expired effect updates inline without re-opening
+                // the panel.
+                _refreshEffectsListIfOpen();
                 render();
             });
 
@@ -7259,6 +7264,15 @@
 
                 <div id="detail-conditions" style="margin-top: 12px;">${buildConditionsHtml(t)}</div>
 
+                <div id="detail-effects-panel" data-token-id="${id}" data-instance-id="${e(t.instance_id || '')}" style="margin: 12px 0; padding: 8px; background: #1a160f; border: 1px solid rgba(201,163,78,0.18); border-radius: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <div style="font-size: 10px; color: #c8bd9e; font-family: 'Cinzel', serif; letter-spacing: 0.08em;">ACTIVE EFFECTS</div>
+                        <button onclick="showAddEffectMenu('${e(t.instance_id || '')}', this)"
+                                style="background: rgba(201,163,78,0.14); color: #e0b65a; border: 1px solid rgba(201,163,78,0.35); padding: 3px 8px; border-radius: 3px; font-size: 10px; font-family: 'Cinzel', serif; letter-spacing: 0.04em; cursor: pointer;">+ Add…</button>
+                    </div>
+                    <div id="detail-effects-list">${buildEffectsListHtml(t)}</div>
+                </div>
+
                 <div id="detail-range-panel" style="margin: 8px 0; padding: 8px; background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 6px;">
                     <div style="font-size: 10px; color: #888; margin-bottom: 4px;">RANGE RINGS</div>
                     <div style="display: flex; flex-wrap: wrap; gap: 4px;">
@@ -7276,6 +7290,173 @@
                     <div style="color: #666; font-size: 11px;">Loading stats…</div>
                 </div>
             `;
+        }
+
+        // ── Active Effects management ──────────────────────────────────
+        // Catalog is fetched lazily on first use and cached in memory.
+        // The dropdown lives in the floatingEditor's `select` field so
+        // the GM can pick a pre-built effect, enter a caster name, and
+        // optionally override duration.
+        let _effectCatalog = null;
+        async function _loadEffectCatalog() {
+            if (_effectCatalog) return _effectCatalog;
+            try {
+                const r = await fetch('/api/effects/catalog');
+                if (!r.ok) return [];
+                const j = await r.json();
+                _effectCatalog = j.effects || [];
+                return _effectCatalog;
+            } catch (_) { return []; }
+        }
+
+        function buildEffectsListHtml(token) {
+            const list = (token && token.active_effects) || [];
+            if (list.length === 0) {
+                return '<div style="font-size: 11px; color: #6b6b8a; font-style: italic;">No active effects.</div>';
+            }
+            const esc = (s) => String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const rows = list.map(eff => {
+                const dur = eff.duration || {};
+                let durLabel = '—';
+                if (dur.type === 'rounds') durLabel = `${dur.value || '?'} rd`;
+                else if (dur.type === 'minutes') durLabel = `${dur.value || '?'} min`;
+                else if (dur.type === 'permanent') durLabel = '∞';
+                else if (dur.type === 'until_end_of_turn') durLabel = 'EoT';
+                const exp = dur.expires_at_round != null ? ` · exp R${dur.expires_at_round}` : '';
+                const caster = eff.caster ? ` <span style="color:#8e8369;">(${esc(eff.caster)})</span>` : '';
+                return `
+                <div style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-bottom: 1px dashed rgba(201,163,78,0.10); font-size: 11px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="color: #f0d88a; font-family: 'Cinzel', serif; font-weight: 600;">${esc(eff.name)}${caster}</div>
+                        <div style="color: #8e8369; font-size: 10px; letter-spacing: 0.04em;">${esc(eff.source||'')} · ${durLabel}${exp}</div>
+                    </div>
+                    <button onclick="removeTokenEffect('${esc(token.instance_id || '')}', '${esc(eff.id)}')"
+                            title="Remove"
+                            style="background: rgba(168,58,58,0.18); color: #fca5a5; border: 1px solid rgba(168,58,58,0.4); padding: 2px 6px; border-radius: 3px; font-size: 10px; cursor: pointer;">×</button>
+                </div>`;
+            }).join('');
+            return rows;
+        }
+
+        async function showAddEffectMenu(instanceId, anchorEl) {
+            if (!instanceId) {
+                showToast && showToast('Token has no encounter link', 'error');
+                return;
+            }
+            const catalog = await _loadEffectCatalog();
+            const options = catalog.map(c => ({
+                value: c.key,
+                label: `${c.name} · ${c.source}${c.tags.includes('aoe_emanation') ? ' · AoE' : ''}`,
+            }));
+            const r = anchorEl?.getBoundingClientRect();
+            const anchor = r ? { x: r.right, y: r.top } : undefined;
+            const result = await floatingEditor({
+                title: 'Add Effect',
+                message: 'Pre-built PF2e effects from the catalog. Pick Custom to author one off-table.',
+                fields: [
+                    { key: 'catalog_key', label: 'Effect', type: 'select', options, autofocus: true,
+                      value: options.length > 1 ? options[1].value : 'custom' },
+                    { key: 'caster', label: 'Caster', type: 'text', placeholder: 'e.g. Go\'el' },
+                ],
+                confirmLabel: 'Apply',
+                anchor,
+            });
+            if (!result) return;
+            // Custom branch — second prompt for the manual modifier.
+            let custom_modifiers = null;
+            let custom_name = null;
+            if (result.catalog_key === 'custom') {
+                const c = await floatingEditor({
+                    title: 'Custom Effect',
+                    message: 'A single stat delta. Add more by applying multiple times.',
+                    fields: [
+                        { key: 'name', label: 'Name', type: 'text', autofocus: true, placeholder: 'Inspiring Marshal Stance' },
+                        { key: 'stat', label: 'Stat', type: 'select',
+                          options: ['attack','damage','ac','fort','ref','will','perception','skills','dc','speed','actions'].map(v => ({value: v, label: v})) },
+                        { key: 'value', label: 'Value', type: 'number', value: 1 },
+                        { key: 'bonus_type', label: 'Type', type: 'select',
+                          options: ['status','circumstance','item','untyped'].map(v => ({value: v, label: v})),
+                          value: 'status' },
+                        { key: 'duration_type', label: 'Duration', type: 'select',
+                          options: [
+                            { value: 'rounds', label: 'rounds' },
+                            { value: 'minutes', label: 'minutes' },
+                            { value: 'permanent', label: 'permanent' },
+                            { value: 'until_end_of_turn', label: 'end of turn' },
+                          ], value: 'rounds' },
+                        { key: 'duration_value', label: 'Dur. value', type: 'number', value: 1 },
+                    ],
+                    confirmLabel: 'Create',
+                });
+                if (!c) return;
+                custom_name = (c.name || '').trim() || 'Custom Effect';
+                custom_modifiers = [{
+                    stat: c.stat,
+                    op: 'add',
+                    value: parseFloat(c.value) || 0,
+                    bonus_type: c.bonus_type,
+                    source: custom_name,
+                }];
+                result.duration_override = {
+                    type: c.duration_type,
+                    value: c.duration_type === 'permanent' ? null : parseInt(c.duration_value) || 1,
+                };
+            }
+            // POST to apply
+            const body = {
+                instance_id: instanceId,
+                catalog_key: result.catalog_key,
+                caster: (result.caster || '').trim() || null,
+            };
+            if (result.duration_override) body.duration_override = result.duration_override;
+            if (custom_modifiers) body.custom_modifiers = custom_modifiers;
+            if (custom_name) body.custom_name = custom_name;
+            const res = await fetch('/api/map/token/effect/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }).then(r => r.json()).catch(() => null);
+            if (res && res.success && res.effect) {
+                pushUndo(() => removeTokenEffect(instanceId, res.effect.id, { undo: false }),
+                         `Effect ${res.effect.name}`);
+            }
+        }
+
+        function _refreshEffectsListIfOpen() {
+            const panel = document.getElementById('detail-effects-panel');
+            if (!panel) return;
+            const instId = panel.dataset.instanceId;
+            if (!instId) return;
+            const tok = (mapState.tokens || []).find(t => t.instance_id === instId);
+            const list = document.getElementById('detail-effects-list');
+            if (tok && list) list.innerHTML = buildEffectsListHtml(tok);
+        }
+
+        async function removeTokenEffect(instanceId, effectId, opts = {}) {
+            const res = await fetch('/api/map/token/effect/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instance_id: instanceId, effect_id: effectId }),
+            }).then(r => r.json()).catch(() => null);
+            if (res && res.success && opts.undo !== false && res.removed) {
+                const snap = res.removed;
+                // Restoring a removed effect re-applies it via the
+                // catalog. Simpler than a dedicated "re-add with id"
+                // endpoint; the regenerated id is fine for undo.
+                pushUndo(() => fetch('/api/map/token/effect/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        instance_id: instanceId,
+                        catalog_key: snap.source_id || 'custom',
+                        caster: snap.caster,
+                        duration_override: snap.duration,
+                        custom_modifiers: snap.source === 'custom' ? snap.modifiers : null,
+                        custom_name: snap.source === 'custom' ? snap.name : null,
+                    }),
+                }).catch(() => {}), `Restore ${snap.name}`);
+            }
         }
 
         function _onTokenFieldChange(ev) {

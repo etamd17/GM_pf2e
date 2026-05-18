@@ -6271,7 +6271,19 @@ def cycle_turn(direction):
             if not getattr(ACTIVE_ENCOUNTER[TURN_INDEX], 'delaying', False):
                 break
             old_index = TURN_INDEX
-        
+
+        # Expire any token-active-effects whose round-based duration
+        # elapsed this turn. Shield (1 round), Inspire Courage (1
+        # round), Haste (when single-cast), etc. fall off automatically.
+        # Minute-based effects (Bless, Bane, Heroism, Mage Armor) are
+        # also tracked in rounds since 1 min = 10 rounds, so they expire
+        # the same way. Logs each expiry to the combat log so the GM
+        # sees what fell off.
+        try:
+            _expire_token_effects_for_round()
+        except Exception as _ex:
+            print('[EFFECTS] expire error:', _ex)
+
         # === START OF NEW TURN: auto-apply start-of-turn mechanics ===
         new_c = ACTIVE_ENCOUNTER[TURN_INDEX]
 
@@ -12006,6 +12018,12 @@ def add_map_token():
         # broadcasts the value via /api/map/token/update; auto-imported
         # from the PC sheet on token-add (handled below).
         'temp_hp': max(0, int(data.get('temp_hp', 0) or 0)),
+        # Active effects — spell/feat/item modifiers from
+        # services.active_effects. Each entry is a per-instance
+        # record built by instantiate_effect (catalog-key or custom).
+        # Conditions live on `conditions`; this list is for
+        # everything else (Heroism, Bless, Mage Armor, etc.).
+        'active_effects': list(data.get('active_effects') or []),
         'visible_to_players': data.get('visible_to_players', True),
         'vision_radius': int(data.get('vision_radius', default_vision)),  # Squares of vision (0 = no vision)
         'assigned_player': data.get('assigned_player'),  # Player name who can control this token
@@ -12715,12 +12733,37 @@ def remove_map_tile():
     return jsonify({'success': True})
 
 
+def _token_active_effects(instance_id):
+    """Look up the active_effects list for a token by combatant
+    instance_id. Returns the list (mutable ref) + the token dict, or
+    (None, None) if the token isn't on the map. The encounter-side
+    Character object also stores conditions; map token stores the
+    spell/feat/item effects."""
+    if not instance_id:
+        return None, None
+    with MAP_LOCK:
+        for tok in ACTIVE_MAP.get('tokens', []):
+            if tok.get('instance_id') == instance_id:
+                return tok.setdefault('active_effects', []), tok
+    return None, None
+
+
+@app.route('/api/effects/catalog')
+def api_effects_catalog():
+    """Public catalog of pre-built effects (Heroism, Bless, Mage Armor,
+    etc.). Players see the same list as the GM so they can request
+    'cast Bless on me' with the exact name."""
+    return jsonify({'effects': effects_service.catalog_list()})
+
+
 @app.route('/api/active_effects/<instance_id>')
 def api_active_effects(instance_id):
     """Return the active-effect breakdown for a combatant — base stats
-    + each condition's contribution + the resulting effective stats.
-    Powers the GM tooltip "what's modifying this creature" detail panel
-    and the modules system's effect inspection."""
+    + each condition AND each per-token active effect's contribution
+    + the resulting effective stats. Powers the GM tooltip 'what's
+    modifying this creature' detail panel and the modules system's
+    effect inspection. Now also covers spell / feat / item effects,
+    not just conditions."""
     target = None
     with ENCOUNTER_LOCK:
         for c in ACTIVE_ENCOUNTER:
@@ -12747,16 +12790,108 @@ def api_active_effects(instance_id):
         'actions':    int(getattr(target, 'max_actions', 3) or 3),
     }
     conds = {k: v for k, v in (getattr(target, 'conditions', {}) or {}).items() if v}
-    effective = effects_service.compute_effects(conds, base)
-    breakdown = effects_service.list_active_effects(conds)
+    # Per-token active effects live on the map token, keyed by
+    # instance_id; if the token isn't placed on the map, the only
+    # contributing source is conditions.
+    effects_list, _tok = _token_active_effects(instance_id)
+    result = effects_service.compute_token_stats(conds, effects_list or [], base)
     return jsonify({
         'success': True,
         'instance_id': instance_id,
         'name': target.name,
         'base': base,
-        'effective': effective,
-        'effects': breakdown,
+        'effective': result['effective'],
+        'breakdown': result['breakdown'],
+        'effects': list(effects_list or []),  # full effect records, for the management UI
+        'conditions': conds,
     })
+
+
+@app.route('/api/map/token/effect/add', methods=['POST'])
+@gm_required
+def add_token_effect():
+    """Apply an effect to a token. Body:
+        {instance_id, catalog_key, caster?, duration_override?,
+         custom_name?, custom_modifiers?}
+    Returns the instantiated effect record so the client can render
+    it in the management UI without a roundtrip."""
+    data = request.json or {}
+    instance_id = data.get('instance_id')
+    catalog_key = data.get('catalog_key')
+    if not instance_id or not catalog_key:
+        return jsonify({'success': False, 'error': 'instance_id + catalog_key required'}), 400
+    effects_list, tok = _token_active_effects(instance_id)
+    if effects_list is None:
+        return jsonify({'success': False, 'error': 'token not found on map'}), 404
+    effect_id = str(uuid.uuid4())[:8]
+    eff = effects_service.instantiate_effect(
+        catalog_key,
+        effect_id=effect_id,
+        caster=(data.get('caster') or '').strip()[:40] or None,
+        current_round=int(ROUND_NUMBER or 1),
+        duration_override=data.get('duration_override'),
+        custom_modifiers=data.get('custom_modifiers'),
+        custom_name=data.get('custom_name'),
+    )
+    if not eff:
+        return jsonify({'success': False, 'error': f'unknown catalog key {catalog_key!r}'}), 400
+    with MAP_LOCK:
+        effects_list.append(eff)
+    _save_map_state()
+    _broadcast_map_tokens()
+    _combat_log(f"{tok.get('name', 'Token')}: gained {eff.get('name')}"
+                + (f" from {eff['caster']}" if eff.get('caster') else ''),
+                'condition')
+    return jsonify({'success': True, 'effect': eff})
+
+
+@app.route('/api/map/token/effect/remove', methods=['POST'])
+@gm_required
+def remove_token_effect():
+    """Drop a single effect by id from a token's active_effects list."""
+    data = request.json or {}
+    instance_id = data.get('instance_id')
+    effect_id = data.get('effect_id')
+    if not (instance_id and effect_id):
+        return jsonify({'success': False, 'error': 'instance_id + effect_id required'}), 400
+    removed = None
+    with MAP_LOCK:
+        for tok in ACTIVE_MAP.get('tokens', []):
+            if tok.get('instance_id') != instance_id:
+                continue
+            remaining = []
+            for eff in tok.get('active_effects') or []:
+                if eff.get('id') == effect_id and not removed:
+                    removed = eff
+                    continue
+                remaining.append(eff)
+            tok['active_effects'] = remaining
+            break
+    if not removed:
+        return jsonify({'success': False, 'error': 'effect not found'}), 404
+    _save_map_state()
+    _broadcast_map_tokens()
+    return jsonify({'success': True, 'removed': removed})
+
+
+def _expire_token_effects_for_round():
+    """Walk every token's active_effects and drop any whose round-
+    based duration has fully elapsed. Logs expiries to the combat log
+    so the GM sees Bless / Bane / Shield falling off automatically.
+    Called from cycle_turn at end-of-turn (under MAP_LOCK)."""
+    expired_log = []
+    with MAP_LOCK:
+        for tok in ACTIVE_MAP.get('tokens', []):
+            effs = tok.get('active_effects') or []
+            if not effs:
+                continue
+            kept, exp = effects_service.expire_round_effects(effs, ROUND_NUMBER)
+            if exp:
+                tok['active_effects'] = kept
+                for e in exp:
+                    expired_log.append((tok.get('name', 'Token'), e.get('name', '—')))
+    for tname, ename in expired_log:
+        _combat_log(f"{tname}: {ename} expired", 'condition')
 
 
 # --- SOUNDBOARD ----------------------------------------------------------
