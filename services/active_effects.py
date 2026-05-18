@@ -1,33 +1,31 @@
 """Active Effects engine — PF2e bonus-typed stat modifiers from any
 source (condition / spell / feat / item / ability).
 
-Design goals:
-  * One schema, many sources. A status-bonus from Heroism is the same
-    shape as a status-bonus from Frightened; consumers don't have to
-    handle them differently.
-  * PF2e bonus typing applied correctly. Within (stat, bonus_type)
-    pairs, the highest positive applies and the lowest negative
-    applies (only one bonus / penalty of each type stacks). Untyped
-    bonuses and penalties stack with everything.
-  * Duration auto-expiry. cycle_turn fires `expire_round_effects` so
-    Bless and Bane fall off automatically.
-  * Catalog of ~15 common L1-5 effects so the GM doesn't have to
-    re-author Heroism / Bless / Bane every session.
+Capabilities (current pass):
+  * Unified schema for conditions, spells, feats, items, custom.
+  * PF2e bonus typing: highest positive / lowest negative per
+    (stat, bonus_type) group; untyped stacks freely.
+  * Duration tracking with auto-expiry through the round counter.
+  * Modifier predicates — "+1 attack only on ranged strikes",
+    "+1 AC only vs the marked creature", "fires once then consumes".
+  * Save-vs-DC suppression — effects can declare a save; on success
+    the effect is marked `suppressed: True` and stops contributing.
+  * Effect chains — a catalog entry can declare follow-up effects
+    that fire on apply (e.g. Aid casts an "Aided" marker on its
+    target). The apply path materializes the chain.
+  * Sheet-level integration — Character objects expose the same
+    schema via `pc_active_effects`; the engine's compute helpers
+    don't care whether the source list lives on a token or a sheet.
 
-What's NOT here (deliberate, follow-up scope):
-  * Trigger conditions (e.g. "+1 attack against THIS creature only").
-    Today every modifier applies to its stat unconditionally — good
-    enough for the common cases (Bless, Heroism, Mage Armor, Shield).
-  * Effect-from-effect chains (one effect creating another).
-  * Save vs DC suppression. Today the GM toggles an effect on/off.
-  * Effects that modify the sheet itself (PC sheet calculations) —
-    this engine is map-token-scoped. Sheet-level effects would need
-    to land in Character.compute_*.
-  * Drag-from-spell-card-to-token UX. Catalog adds via dropdown.
-
-PF2E_CONDITION_EFFECTS (from the prior pass) still maps conditions →
-modifiers but is now a SOURCE for the same `Modifier` schema below,
-unified with spell / feat / item modifiers.
+What's NOT here yet:
+  * Reaction-style triggers ("when struck, add Shield Block"). The
+    predicate scope supports response-only events but the trigger
+    side hasn't been wired into the strike-resolution code path.
+  * Source attribution in the PF2e bonus-type sense ("status from
+    Heroism vs status from Aid" — both still type-stack correctly,
+    but the engine doesn't print the actually-suppressed name).
+  * Permanent-magical-item bonuses tied to ABP / fundamental runes
+    (those live in the Character ABP system, not here).
 """
 from __future__ import annotations
 from typing import Dict, Iterable, List, Mapping, Optional, Tuple
@@ -192,13 +190,20 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'name': 'Sure Strike',
         'source': 'spell',
         'source_id': 'sure_strike',
-        'tags': ['fortune', 'self'],
+        'tags': ['fortune', 'self', 'roll_advantage'],
         'duration': {'type': 'until_end_of_turn', 'value': None},
-        'description': 'Roll the next Strike twice, take the better. (Tracked as a turn-tag — apply on the strike roll.)',
-        # No numeric modifier — purely a roll modification. Lives here so
-        # the GM can see the marker on the token; the engine attaches no
-        # stat delta. Tag flagged 'roll_advantage' for future modules.
-        'modifiers': [],
+        # Consumed after the marked-for strike fires. Module hook
+        # `before_strike` should check for this marker; the engine
+        # auto-removes it via consume_triggered('next_strike').
+        'consumes_on': 'next_strike',
+        'description': 'Roll the next Strike twice, take the better. (Auto-clears after the marked strike.)',
+        'modifiers': [
+            # Pure marker: zero stat delta, but the predicate carries
+            # the scope so a strike-aware module can detect it.
+            {'stat': None, 'op': 'add', 'value': 0, 'bonus_type': 'untyped',
+             'predicate': {'scope': 'strike', 'target': 'self', 'until': 'next_strike'},
+             'source': 'Sure Strike'},
+        ],
     },
     'true_strike': {  # alias for older books
         'name': 'True Strike',
@@ -228,10 +233,18 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'duration': {'type': 'minutes', 'value': 1},
         'description': '+1 status to AC and saves vs creatures of the chosen alignment.',
         'modifiers': [
-            {'stat': 'ac',   'op': 'add', 'value': 1, 'bonus_type': 'status', 'tag': 'vs_alignment'},
-            {'stat': 'fort', 'op': 'add', 'value': 1, 'bonus_type': 'status', 'tag': 'vs_alignment'},
-            {'stat': 'ref',  'op': 'add', 'value': 1, 'bonus_type': 'status', 'tag': 'vs_alignment'},
-            {'stat': 'will', 'op': 'add', 'value': 1, 'bonus_type': 'status', 'tag': 'vs_alignment'},
+            # Predicate-gated: the +1 only applies when the context's
+            # tags list includes 'vs_alignment'. The strike / save
+            # resolver passes that tag in when the attacker is the
+            # tagged alignment.
+            {'stat': 'ac',   'op': 'add', 'value': 1, 'bonus_type': 'status',
+             'predicate': {'tag': 'vs_alignment'}},
+            {'stat': 'fort', 'op': 'add', 'value': 1, 'bonus_type': 'status',
+             'predicate': {'tag': 'vs_alignment'}},
+            {'stat': 'ref',  'op': 'add', 'value': 1, 'bonus_type': 'status',
+             'predicate': {'tag': 'vs_alignment'}},
+            {'stat': 'will', 'op': 'add', 'value': 1, 'bonus_type': 'status',
+             'predicate': {'tag': 'vs_alignment'}},
         ],
     },
     # — 2nd-level spells —
@@ -276,12 +289,42 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'name': 'Slow',
         'source': 'spell',
         'source_id': 'slow',
-        'tags': ['arcane', 'occult'],
-        'duration': {'type': 'rounds', 'value': 1},
-        'description': 'Lose 1 action per turn (target chooses which).',
+        'tags': ['arcane', 'occult', 'incapacitation'],
+        'duration': {'type': 'rounds', 'value': 6},
+        'description': 'Will save. Crit fail → slowed 2 / 6 rd; fail → slowed 1 / 6 rd; success → slowed 1 / 1 rd; crit success → unaffected.',
+        # Default modifier reflects fail outcome (slowed 1). The save
+        # resolver will halve duration on success or null on crit_success.
         'modifiers': [
             {'stat': 'actions', 'op': 'add', 'value': -1, 'bonus_type': 'untyped'},
         ],
+        'save': {
+            'type': 'will',
+            'dc': 0,  # GM supplies on apply (spell DC)
+            'on_crit_success': 'negate',
+            'on_success':      'reduce',
+            'on_failure':      'apply',
+            'on_crit_failure': 'stronger',
+        },
+    },
+    'hideous_laughter': {
+        'name': 'Hideous Laughter',
+        'source': 'spell',
+        'source_id': 'hideous_laughter',
+        'tags': ['emotion', 'mental'],
+        'duration': {'type': 'rounds', 'value': 1},
+        'description': 'Will save. Success → no effect; fail → slowed 1 + off-guard 1 rd; crit fail → also incapacitated.',
+        'modifiers': [
+            {'stat': 'actions', 'op': 'add', 'value': -1, 'bonus_type': 'untyped'},
+            {'stat': 'ac',      'op': 'add', 'value': -2, 'bonus_type': 'circumstance'},
+        ],
+        'save': {
+            'type': 'will',
+            'dc': 0,
+            'on_crit_success': 'negate',
+            'on_success':      'negate',
+            'on_failure':      'apply',
+            'on_crit_failure': 'stronger',
+        },
     },
     # — Class features —
     'inspire_courage': {
@@ -340,9 +383,14 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'source_id': 'bestial_mutagen_lesser',
         'tags': ['alchemical', 'elixir', 'polymorph'],
         'duration': {'type': 'minutes', 'value': 10},
-        'description': '+1 item to attack with claws/jaws, −2 status to AC.',
+        'description': '+1 item to attack with natural weapons (melee), −2 status to AC.',
         'modifiers': [
-            {'stat': 'attack', 'op': 'add', 'value': 1, 'bonus_type': 'item', 'tag': 'natural_weapon'},
+            # Predicate-gated: the +1 item only applies when the
+            # context flags the strike as a melee natural weapon.
+            # Old `tag: 'natural_weapon'` was decorative; now it
+            # actually gates application.
+            {'stat': 'attack', 'op': 'add', 'value': 1, 'bonus_type': 'item',
+             'predicate': {'scope': 'melee', 'tag': 'natural_weapon'}},
             {'stat': 'ac',     'op': 'add', 'value': -2, 'bonus_type': 'status'},
         ],
     },
@@ -368,6 +416,94 @@ EFFECT_CATALOG: Dict[str, Dict] = {
         'modifiers': [],
     },
 }
+
+
+# ── Modifier predicate model ─────────────────────────────────────────
+# A modifier can carry an optional `predicate` dict that gates when it
+# applies. The engine's compute helpers accept an optional `context`
+# argument describing the current situation; predicates evaluate against
+# the context.
+#
+#   predicate = {
+#     'scope':  'always'              # default: applies to every compute
+#             | 'strike'              # only when computing a strike roll
+#             | 'attack'              # alias for strike
+#             | 'damage'              # only when computing damage
+#             | 'spell_attack' | 'spell_save'
+#             | 'ranged' | 'melee'
+#             | 'save' | 'skill' | 'perception',
+#     'target': 'any'                 # default: any target
+#             | 'self'                # only when subject == self
+#             | <instance_id str>     # only when target instance_id matches,
+#     'tag':    str | None,           # match if the context carries this tag
+#     'until':  'permanent'           # consumes never
+#             | 'next_strike'         # mark consumed after the next strike
+#             | 'next_action'         # mark consumed after the next action
+#             | 'end_of_turn'         # mark consumed at end of caster's turn
+#   }
+#
+# A modifier with no predicate is treated as `{scope:'always',
+# target:'any', until:'permanent'}` — same behavior as before the
+# trigger pass landed.
+#
+# Compute context (passed into compute_token_stats / compute_for_action):
+#   ctx = {
+#     'scope':  'strike' | 'damage' | 'save' | 'skill' | 'perception' | None
+#     'subject_id': 'instance-of-the-roller',
+#     'target_id': 'instance-of-the-target' (for strikes/spells),
+#     'strike_kind': 'melee' | 'ranged' | None,
+#     'tags': ['vs_alignment', 'natural_weapon', ...],   # context flags
+#   }
+
+
+def _predicate_matches(pred: Optional[Dict], ctx: Optional[Mapping]) -> bool:
+    """True if this modifier should apply in `ctx`. Missing predicate
+    = always-on (back-compat with pre-trigger effects).
+
+    A predicate with ANY filter (scope, target, or tag) that isn't
+    'always'/'any'/None requires a context to check against. The
+    no-context call (compute_token_stats with no context arg) asks
+    'what does this creature carry universally?' — gated modifiers
+    don't qualify, so they're filtered out."""
+    if not pred:
+        return True
+    scope = (pred.get('scope') or 'always').lower()
+    target = pred.get('target') or 'any'
+    tag = pred.get('tag')
+    has_filter = (scope != 'always') or (target not in ('any', None)) or bool(tag)
+    if not ctx:
+        # No context = caller wants the universally-applying baseline.
+        return not has_filter
+
+    ctx_scope = (ctx.get('scope') or 'always').lower()
+    ctx_kind = (ctx.get('strike_kind') or '').lower()
+    if scope != 'always':
+        # Treat scope='melee' / 'ranged' as syntactic sugar for "this
+        # is a strike of the named kind." Accept either:
+        #  - ctx_scope is 'strike'/'attack' AND ctx_kind matches, OR
+        #  - ctx_scope itself is the kind (caller passed 'melee'
+        #    directly without separately setting strike_kind).
+        attack_like = ctx_scope in ('strike', 'attack', 'melee', 'ranged')
+        if scope in ('strike', 'attack'):
+            if not attack_like:
+                return False
+        elif scope == 'ranged':
+            if not (attack_like and (ctx_kind == 'ranged' or ctx_scope == 'ranged')):
+                return False
+        elif scope == 'melee':
+            if not (attack_like and (ctx_kind == 'melee' or ctx_scope == 'melee')):
+                return False
+        elif scope != ctx_scope:
+            return False
+    if target == 'self':
+        if not ctx.get('subject_id') or ctx.get('subject_id') != ctx.get('source_id'):
+            return False
+    elif target not in ('any', None):
+        if ctx.get('target_id') != target:
+            return False
+    if tag and tag not in (ctx.get('tags') or []):
+        return False
+    return True
 
 
 # ── Bonus stacking (PF2e core rule) ─────────────────────────────────
@@ -440,9 +576,13 @@ _COND_LOOKUP: Dict[str, List[Dict]] = {
 def _flatten_sources(
     conditions: Optional[Mapping[str, int]],
     active_effects: Optional[Iterable[Dict]],
+    context: Optional[Mapping] = None,
 ) -> List[Dict]:
     """Return the unified list of expanded modifiers from all sources.
-    Each entry: {stat, delta, op, bonus_type, source, tag}."""
+    Each entry: {stat, delta, op, bonus_type, source, tag, predicate?}.
+    Predicate-gated modifiers that don't match `context` are dropped
+    here (so the bonus-stacking step downstream doesn't see them at
+    all)."""
     out: List[Dict] = []
     # Conditions first
     for cname, cval in (conditions or {}).items():
@@ -450,10 +590,18 @@ def _flatten_sources(
             continue
         v = 1 if cval is True else int(cval)
         for m in _COND_LOOKUP.get(_norm(cname), []):
+            if not _predicate_matches(m.get('predicate'), context):
+                continue
             out.extend(_expand_modifier(m, condition_value=v))
     # Then active effects (spells / feats / items / custom)
     for eff in active_effects or []:
+        # Suppressed effects (failed-save outcome) don't contribute.
+        # Kept on the list so the UI can show "Heroism (suppressed)".
+        if eff.get('suppressed'):
+            continue
         for m in eff.get('modifiers', []) or []:
+            if not _predicate_matches(m.get('predicate'), context):
+                continue
             # Active-effect modifiers already carry their final
             # numeric value (catalog entries don't use the '-V' marker).
             expanded = _expand_modifier(m, condition_value=1)
@@ -474,10 +622,38 @@ def compute_effects(conditions: Mapping[str, int], base_stats: Mapping[str, floa
     return compute_token_stats(conditions, [], base_stats)['effective']
 
 
+def compute_for_action(
+    conditions: Optional[Mapping[str, int]],
+    active_effects: Optional[Iterable[Dict]],
+    base_stats: Mapping[str, float],
+    *,
+    scope: str,                # 'strike' | 'damage' | 'save' | 'skill' | 'perception'
+    subject_id: Optional[str] = None,
+    target_id: Optional[str] = None,
+    strike_kind: Optional[str] = None,    # 'melee' | 'ranged'
+    tags: Optional[List[str]] = None,
+) -> Dict:
+    """Context-aware compute. Returns the same shape as
+    compute_token_stats, but only modifiers whose predicate matches
+    the action context are applied. Used by trigger-aware code paths
+    (a strike-roll handler), the GM tooltip for "what applies to
+    THIS attack against THIS target", and module hooks."""
+    ctx = {
+        'scope': scope,
+        'subject_id': subject_id,
+        'source_id': subject_id,   # `source` is a synonym used by predicate.target='self'
+        'target_id': target_id,
+        'strike_kind': strike_kind,
+        'tags': list(tags or []),
+    }
+    return compute_token_stats(conditions, active_effects, base_stats, context=ctx)
+
+
 def compute_token_stats(
     conditions: Optional[Mapping[str, int]],
     active_effects: Optional[Iterable[Dict]],
     base_stats: Mapping[str, float],
+    context: Optional[Mapping] = None,
 ) -> Dict:
     """Apply ALL sources (conditions + active effects) to a base stat
     dict, returning effective stats + per-stat breakdown. PF2e bonus
@@ -495,7 +671,7 @@ def compute_token_stats(
     "Bless +1 (suppressed by Heroism)" — both visible, only one
     actually contributing.
     """
-    expanded = _flatten_sources(conditions, active_effects)
+    expanded = _flatten_sources(conditions, active_effects, context=context)
     # Group by (stat, bonus_type) for stacking
     groups: Dict[Tuple[str, str], List[Dict]] = {}
     for row in expanded:
@@ -555,6 +731,196 @@ def compute_token_stats(
     return {'effective': out, 'breakdown': breakdown}
 
 
+# ── Save-vs-DC suppression ────────────────────────────────────────────
+# Effects can declare a save block. The GM (or auto-roll path) applies
+# the save outcome via `resolve_save`; the effect gains a
+# `suppressed: True` flag when the target succeeds, which gates it out
+# of subsequent compute calls. We DON'T remove the effect — keeping it
+# in the list lets the UI render "Hideous Laughter (saved)" so the
+# caster knows their slot got resisted.
+#
+#   effect['save'] = {
+#     'type': 'fort' | 'ref' | 'will',
+#     'dc':   24,
+#     'on_crit_success': 'negate',
+#     'on_success':      'negate' | 'reduce',
+#     'on_failure':      'apply'  | 'reduce' | 'stronger',
+#     'on_crit_failure': 'apply'  | 'stronger',
+#   }
+# `reduce` halves the numeric values of the effect's modifiers; the
+# concrete semantics are spell-specific (Slow on success = 1 round
+# instead of 1 min, etc.) — for the engine, `reduce` halves duration.
+
+SAVE_TYPES = ('fort', 'ref', 'will')
+SAVE_OUTCOMES = ('crit_success', 'success', 'failure', 'crit_failure')
+
+
+def resolve_save(effect: Dict, roll_total: int, current_round: int = 1) -> Dict:
+    """Apply a save outcome to an effect in place. Returns the outcome
+    metadata for the combat log.
+
+    Caller computes `roll_total` (d20 + save bonus + modifiers) and
+    passes it in. We derive the degree of success from total vs dc
+    using PF2e's standard four-tier table (crit_success on ≥ dc+10,
+    crit_failure on ≤ dc−10, with nat 1 / nat 20 shift handled by
+    the CALLER — the engine just sees the post-shift total).
+    """
+    save = effect.get('save') or {}
+    dc = int(save.get('dc') or 0)
+    diff = roll_total - dc
+    if diff >= 10:
+        degree = 'crit_success'
+    elif diff >= 0:
+        degree = 'success'
+    elif diff <= -10:
+        degree = 'crit_failure'
+    else:
+        degree = 'failure'
+    outcome = save.get(f'on_{degree}') or 'apply'
+    effect['save_result'] = {
+        'roll': roll_total,
+        'dc': dc,
+        'degree': degree,
+        'outcome': outcome,
+        'rolled_at_round': current_round,
+    }
+    if outcome == 'negate':
+        effect['suppressed'] = True
+    elif outcome == 'reduce':
+        # Halve the duration. Round-based and minute-based both halve
+        # cleanly through the same path; expires_at_round recomputed.
+        dur = effect.get('duration') or {}
+        if dur.get('value'):
+            dur['value'] = max(1, int(dur['value']) // 2)
+            if dur.get('expires_at_round') is not None and current_round:
+                # Recompute from the original applied_at_round if we
+                # have it, otherwise from current.
+                start = effect.get('applied_at_round') or current_round
+                if dur.get('type') == 'minutes':
+                    dur['expires_at_round'] = start + dur['value'] * 10
+                else:
+                    dur['expires_at_round'] = start + dur['value']
+        effect['suppressed'] = False
+    elif outcome == 'stronger':
+        # Spell-specific (Hideous Laughter crit-fail upgrades the
+        # condition — engine can't generalize without per-spell rules).
+        # Caller (catalog handler) can post-process the effect.
+        effect['suppressed'] = False
+    else:
+        # 'apply' — the default outcome on a failure.
+        effect['suppressed'] = False
+    return effect['save_result']
+
+
+# ── Effect chain materialization ──────────────────────────────────────
+# A catalog entry can declare follow-up effects that get instantiated
+# when the parent is applied. The most common case is something like:
+#   Aid (success)  → applies 'aid_success' to its target, who then
+#                    benefits from the +1 circumstance on their next
+#                    skill check. Without chains, the GM applies the
+#                    Aid action AND remembers to drop the Aided marker
+#                    manually. With chains, "Aid (success)" is itself
+#                    the chained marker.
+#
+# Chains in this pass are SHALLOW: when the parent is applied, the
+# chain entries fire once. They don't fire recursively (a chain
+# making another chain is one-step deep). Deep recursion is out of
+# scope — same reason we don't support effect-creates-effect-from-
+# spell-cast-from-effect today.
+#
+#   catalog_entry['chains'] = [
+#     {'when': 'on_apply', 'effect_key': 'flat_footed_marker',
+#      'duration_override': {'type': 'rounds', 'value': 1},
+#      'target': 'self'},                # self | caster | manual
+#   ]
+#
+# `target: 'manual'` means the caller is expected to apply the chain
+# themselves (AoE emanations etc.). The chain is returned to the
+# caller as a metadata list — the engine doesn't pick WHICH ally
+# tokens to apply to, just declares the intent.
+
+
+def materialize_chains(
+    parent_effect: Dict,
+    *,
+    current_round: int,
+    caster: Optional[str] = None,
+) -> List[Dict]:
+    """Return a list of (target_kind, instantiated_effect) tuples-as-
+    dicts for the chains the parent declares. Caller decides which
+    tokens to attach each chain to."""
+    parent_key = parent_effect.get('source_id')
+    template = EFFECT_CATALOG.get(parent_key) if parent_key else None
+    if not template:
+        return []
+    out: List[Dict] = []
+    for chain in template.get('chains') or []:
+        eff_key = chain.get('effect_key')
+        if not eff_key or eff_key not in EFFECT_CATALOG:
+            continue
+        inst = instantiate_effect(
+            eff_key,
+            effect_id=_fresh_id(),
+            caster=caster or parent_effect.get('caster'),
+            current_round=current_round,
+            duration_override=chain.get('duration_override'),
+        )
+        if inst is None:
+            continue
+        out.append({
+            'target_kind': chain.get('target') or 'self',  # self | caster | manual
+            'when': chain.get('when') or 'on_apply',
+            'effect': inst,
+        })
+    return out
+
+
+def _fresh_id() -> str:
+    """uuid4 hex prefix — same convention the app.py paths use."""
+    import uuid as _uuid
+    return _uuid.uuid4().hex[:8]
+
+
+# ── Trigger consumption ───────────────────────────────────────────────
+# Modifiers with predicate.until='next_strike' / 'next_action' / etc.
+# need to disappear after their gated event fires. compute_for_action
+# is purely read; mutation happens through consume_triggered.
+
+def consume_triggered(active_effects: List[Dict], *, event: str) -> List[Dict]:
+    """Walk the effects list, dropping modifiers whose `until` field
+    matches `event`. If an effect has zero modifiers left after the
+    sweep, it's removed entirely. Returns the (potentially shorter)
+    effects list. Caller commits the new list back to the token.
+
+    `event` examples:
+      - 'next_strike'   (consume Sure Strike's roll-twice flag)
+      - 'next_action'   (consume single-action buffs)
+      - 'end_of_turn'   (consume Aid's +1 to next check)
+    """
+    kept: List[Dict] = []
+    for eff in active_effects:
+        remaining_mods = []
+        for m in eff.get('modifiers') or []:
+            pred = m.get('predicate') or {}
+            if (pred.get('until') or 'permanent') == event:
+                continue  # consumed
+            remaining_mods.append(m)
+        # Some effects are pure markers (no modifiers) with their own
+        # consume rule on the effect itself. Honour that too.
+        eff_until = (eff.get('consumes_on') or '').lower()
+        if eff_until == event:
+            continue  # consume the whole effect
+        eff['modifiers'] = remaining_mods
+        # If the effect has no modifiers AND no save block AND no
+        # chain metadata AND no marker tag, drop it — there's nothing
+        # left to display.
+        if (not remaining_mods and not eff.get('save')
+                and not eff.get('chains') and not eff.get('tags')):
+            continue
+        kept.append(eff)
+    return kept
+
+
 # ── Catalog application helper ────────────────────────────────────────
 def instantiate_effect(
     catalog_key: str,
@@ -565,6 +931,7 @@ def instantiate_effect(
     duration_override: Optional[Dict] = None,
     custom_modifiers: Optional[List[Dict]] = None,
     custom_name: Optional[str] = None,
+    save_dc: Optional[int] = None,
 ) -> Optional[Dict]:
     """Build a per-token effect record from a catalog entry. Computes
     `expires_at_round` from `current_round + duration.value` for
@@ -574,6 +941,10 @@ def instantiate_effect(
     (Heroism cast at 5th level lasts longer, etc.).
     `custom_modifiers` lets the 'custom' catalog entry carry the
     GM-authored deltas.
+    `save_dc` plugs the GM's spell DC into a save-bearing effect
+    (Slow / Hideous Laughter). The catalog DC field defaults to 0 —
+    rolling the save against DC 0 trivially succeeds, so a missing
+    save_dc is a no-op rather than a crash.
     """
     template = EFFECT_CATALOG.get(catalog_key)
     if not template:
@@ -588,7 +959,12 @@ def instantiate_effect(
         # 1 minute = 10 rounds in PF2e.
         expires_at_round = current_round + int(dur['value']) * 10
     mods = custom_modifiers if catalog_key == 'custom' and custom_modifiers else list(template.get('modifiers', []))
-    return {
+    save = None
+    if template.get('save'):
+        save = dict(template['save'])
+        if save_dc is not None:
+            save['dc'] = int(save_dc)
+    eff = {
         'id': effect_id,
         'name': custom_name if catalog_key == 'custom' and custom_name else template.get('name', catalog_key),
         'source': template.get('source', 'custom'),
@@ -600,6 +976,12 @@ def instantiate_effect(
         'modifiers': mods,
         'description': template.get('description', ''),
     }
+    if save is not None:
+        eff['save'] = save
+        eff['suppressed'] = False
+    if template.get('consumes_on'):
+        eff['consumes_on'] = template['consumes_on']
+    return eff
 
 
 def expire_round_effects(effects: List[Dict], current_round: int) -> Tuple[List[Dict], List[Dict]]:

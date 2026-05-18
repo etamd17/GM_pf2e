@@ -5755,9 +5755,17 @@
                         if (!isExpended) availableCount++;
                         const escName = spellName.replace(/'/g, "\\'");
                         const heightenTag = (rank > 0) ? `<span class="text-[10px] ml-1 px-1.5 rounded" style="background:rgba(167,139,250,0.15); color:#B8A0FF;">↑${rank}</span>` : '';
-                        castableHtml += `<div class="play-view-spell ${isExpended ? 'expended' : ''}">
+                        // Drag handle: dragging a prepared spell onto
+                        // the map applies its Active Effect to whichever
+                        // token receives the drop. The map drop handler
+                        // pre-fills the catalog dropdown based on the
+                        // dragged spell name; if no catalog match, it
+                        // falls through to the custom-effect form.
+                        castableHtml += `<div class="play-view-spell ${isExpended ? 'expended' : ''}"
+                                              draggable="true"
+                                              ondragstart="_onSpellDragStart(event, '${escName}', ${rank})">
                             <div class="flex items-center gap-2">
-                                <span class="spell-name">${spellName}</span>
+                                <span class="spell-name" title="Drag onto a map token to apply">${spellName}</span>
                                 ${heightenTag}
                                 ${isFont ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px]" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); color:#86EFAC;" title="Cleric Divine Font slot">Font</span>' : ''}
                             </div>
@@ -6126,6 +6134,51 @@
 
         // R3: when casting from a prepared slot, append the slot rank to the
         // spell name so the toast + GM broadcast show the actual heightened tier.
+        // Maps a spell name to its catalog key in services/active_effects.py.
+        // Names match the PF2e books; catalog keys are snake_case
+        // versions. Unknown spells fall through to a 'custom' apply.
+        const _SPELL_TO_CATALOG = {
+            'bless': 'bless',
+            'bane': 'bane',
+            'mage armor': 'mage_armor',
+            'shield': 'shield',
+            'sure strike': 'sure_strike',
+            'true strike': 'sure_strike',
+            'magic weapon': 'magic_weapon',
+            'protection': 'protection',
+            'mirror image': 'mirror_image',
+            'heroism': 'heroism',
+            'haste': 'haste',
+            'slow': 'slow',
+            'hideous laughter': 'hideous_laughter',
+            'inspire courage': 'inspire_courage',
+            'inspire defense': 'inspire_defense',
+        };
+
+        function _spellToCatalogKey(name) {
+            return _SPELL_TO_CATALOG[(name || '').toLowerCase().trim()] || null;
+        }
+
+        function _onSpellDragStart(ev, spellName, rank) {
+            try {
+                const catalog = _spellToCatalogKey(spellName);
+                const payload = {
+                    kind: 'pf2e_spell',
+                    spell_name: spellName,
+                    rank: rank || 0,
+                    catalog_key: catalog,
+                    caster: (typeof pcName !== 'undefined' ? pcName : null),
+                };
+                ev.dataTransfer.setData('application/x-pf2e-spell', JSON.stringify(payload));
+                // Also set text/plain so cross-window drag has a
+                // visible fallback (some browsers ignore custom MIME).
+                ev.dataTransfer.setData('text/plain', `pf2e-spell:${spellName}`);
+                ev.dataTransfer.effectAllowed = 'copy';
+            } catch (e) {
+                console.warn('[spell-drag] setData failed', e);
+            }
+        }
+
         function castPrepSpell(spellName, expendKey, cIdx, slotRank) {
             const labeled = (slotRank && slotRank > 0) ? `${spellName} (rank ${slotRank})` : spellName;
             rollSpell(labeled);

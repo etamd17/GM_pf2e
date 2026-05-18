@@ -8443,6 +8443,21 @@
             
             mapArea.addEventListener('drop', async (e) => {
                 e.preventDefault();
+                // Spell drag from a player's sheet (cross-tab/window).
+                // Payload is JSON with {kind: 'pf2e_spell', spell_name,
+                // catalog_key, caster}. Drop on a token → apply the
+                // mapped Active Effect. Drop on empty space → ignored
+                // (no target).
+                const spellRaw = e.dataTransfer.getData('application/x-pf2e-spell');
+                if (spellRaw) {
+                    try {
+                        const payload = JSON.parse(spellRaw);
+                        if (payload && payload.kind === 'pf2e_spell') {
+                            await _handleSpellDrop(payload, e);
+                            return;
+                        }
+                    } catch (_) {}
+                }
                 if (!draggingCreature) return;
                 
                 const rect = canvas.getBoundingClientRect();
@@ -8700,6 +8715,52 @@
             });
             if (!ok) return;
             fetch('/api/map/drawings/clear', { method: 'POST' }).catch(() => {});
+        }
+
+        // Resolve a spell-drag dropped on the map. If the drop point
+        // is inside a token, apply the mapped Active Effect to that
+        // token. If no catalog match exists for the spell, open the
+        // custom-effect form pre-filled with the spell name.
+        async function _handleSpellDrop(payload, ev) {
+            const rect = canvas.getBoundingClientRect();
+            const mapX = (ev.clientX - rect.left - viewX) / zoom;
+            const mapY = (ev.clientY - rect.top - viewY) / zoom;
+            const target = getTokenAtPoint(mapX, mapY);
+            if (!target) {
+                showToast && showToast('Drop on a token to apply a spell', 'error');
+                return;
+            }
+            const instanceId = target.instance_id;
+            if (!instanceId) {
+                showToast && showToast(`${target.name} isn't linked to an encounter combatant — apply via the token panel`, 'error');
+                return;
+            }
+            // Known catalog effect → apply directly.
+            if (payload.catalog_key) {
+                const res = await fetch('/api/map/token/effect/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        instance_id: instanceId,
+                        catalog_key: payload.catalog_key,
+                        caster: payload.caster || null,
+                    }),
+                }).then(r => r.json()).catch(() => null);
+                if (res && res.success && res.effect) {
+                    pushUndo(() => removeTokenEffect(instanceId, res.effect.id, { undo: false }),
+                             `${payload.spell_name} on ${target.name}`);
+                    showToast && showToast(`${payload.spell_name} → ${target.name}`, 'success');
+                } else {
+                    showToast && showToast(`Apply failed: ${(res && res.error) || 'unknown'}`, 'error');
+                }
+                return;
+            }
+            // Unknown spell — surface the catalog menu so the GM can pick
+            // a near match or use Custom. Pre-loaded but doesn't enforce.
+            showToast && showToast(
+                `No catalog entry for "${payload.spell_name}" — opening Add Effect on ${target.name}`,
+                'info');
+            showAddEffectMenu(instanceId, ev.target);
         }
 
         // Refresh the draggable creature roster whenever the encounter

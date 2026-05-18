@@ -1349,6 +1349,9 @@ def _do_persist_pc_combat_state(pc_name):
         persistent_damage = list(getattr(pc, 'persistent_damage', []) or [])
         # Exploration activity (Phase 10)
         exploration_activity = str(getattr(pc, 'exploration_activity', '') or '')
+        # Sheet-level Active Effects (engine schema). Survives a server
+        # restart mid-buff so Heroism doesn't vanish after a deploy.
+        pc_active_effects = list(getattr(pc, 'pc_active_effects', []) or [])
     file_path = get_pc_file_path(pc_name)
     if not file_path or not os.path.exists(file_path):
         return
@@ -1366,6 +1369,7 @@ def _do_persist_pc_combat_state(pc_name):
         build['reaction_used'] = reaction_used
         build['persistent_damage'] = persistent_damage
         build['exploration_activity'] = exploration_activity
+        build['pc_active_effects'] = pc_active_effects
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(pc_json, f, indent=2)
     except Exception as e:
@@ -2952,6 +2956,11 @@ class Character:
                     self.pets.append(parsed)
         
         self.active_effects = build.get('active_effects') or {}
+        # Sheet-level Active Effects (the engine's instance records,
+        # not the legacy `active_effects` dict above which is the
+        # pre-engine condition-count map kept for back-compat with
+        # the highest_buff calculator).
+        self.pc_active_effects = list(build.get('pc_active_effects') or [])
 
     def get_rule_mod(self, selector):
         if selector not in self.rule_modifiers: return 0
@@ -3408,7 +3417,46 @@ class Character:
         d['attacks'] = self.attacks
         d['total_bulk'] = round(self.total_bulk, 1)
         d['rule_modifiers'] = self.rule_modifiers
+        # Sheet-level active effects (spell/feat/item buffs) carried
+        # via the Active Effects engine. as_dict surfaces both the
+        # raw list AND the effective stats post-application so the
+        # sheet UI can show "AC 19 (effective 20 with Heroism)".
+        d['pc_active_effects'] = list(getattr(self, 'pc_active_effects', []) or [])
+        eff = self.compute_effective_stats()
+        d['effective'] = eff['effective']
+        d['effects_breakdown'] = eff['breakdown']
         return d
+
+    def compute_effective_stats(self):
+        """Apply pc_active_effects (and conditions, since conditions
+        already feed through this engine) on top of the base @property
+        computations. Returns {effective, breakdown}.
+
+        Conditions are already partly handled in the ac / save
+        properties (via get_status_penalty and circumstance pen).
+        Active Effects compute strictly ADDITIVELY on top, so the
+        base passed in here is the post-condition value. Double-
+        counting Frightened would over-penalize; we feed an empty
+        conditions dict to keep the engine focused on the
+        active_effects-only delta."""
+        from services import active_effects as _ae
+        base = {
+            'ac':         int(self.ac or 0),
+            'fort':       int(self.fort or 0),
+            'ref':        int(self.ref or 0),
+            'will':       int(self.will or 0),
+            'perception': int(self.perception or 0),
+            'attack':     0,
+            'damage':     0,
+            'skills':     0,
+            'dc':         0,
+            'actions':    int(getattr(self, 'max_actions', 3) or 3),
+        }
+        return _ae.compute_token_stats(
+            {},  # conditions already baked into base via @property paths
+            list(getattr(self, 'pc_active_effects', []) or []),
+            base,
+        )
 
 class Monster:
     def __init__(self, data, file_path=""):
@@ -12812,9 +12860,11 @@ def api_active_effects(instance_id):
 def add_token_effect():
     """Apply an effect to a token. Body:
         {instance_id, catalog_key, caster?, duration_override?,
-         custom_name?, custom_modifiers?}
-    Returns the instantiated effect record so the client can render
-    it in the management UI without a roundtrip."""
+         custom_name?, custom_modifiers?, save_dc?}
+    Returns the instantiated effect record + any chained effects the
+    catalog declared. For chains targeted at 'self' / 'caster', the
+    chain is auto-attached to this same token (caster chains attach
+    to the caster token if one can be located by name)."""
     data = request.json or {}
     instance_id = data.get('instance_id')
     catalog_key = data.get('catalog_key')
@@ -12832,17 +12882,178 @@ def add_token_effect():
         duration_override=data.get('duration_override'),
         custom_modifiers=data.get('custom_modifiers'),
         custom_name=data.get('custom_name'),
+        save_dc=data.get('save_dc'),
     )
     if not eff:
         return jsonify({'success': False, 'error': f'unknown catalog key {catalog_key!r}'}), 400
+    chains = effects_service.materialize_chains(
+        eff, current_round=int(ROUND_NUMBER or 1), caster=eff.get('caster'))
+    chain_log: List[str] = []
     with MAP_LOCK:
         effects_list.append(eff)
+        # Auto-attach chains tagged 'self' to this token; 'caster'
+        # chains find the caster token by name. 'manual' chains
+        # return to the client; the UI prompts the GM to apply them.
+        for ch in chains:
+            kind = ch.get('target_kind')
+            chained_eff = ch.get('effect')
+            if not chained_eff:
+                continue
+            if kind == 'self':
+                effects_list.append(chained_eff)
+                chain_log.append(chained_eff.get('name', '—'))
+            elif kind == 'caster' and eff.get('caster'):
+                # Locate caster token by name (best-effort).
+                for caster_tok in ACTIVE_MAP.get('tokens', []):
+                    if caster_tok.get('name') == eff['caster']:
+                        caster_tok.setdefault('active_effects', []).append(chained_eff)
+                        chain_log.append(f"{chained_eff.get('name', '—')} on caster")
+                        break
+            # 'manual' chains are returned in the response body
     _save_map_state()
     _broadcast_map_tokens()
     _combat_log(f"{tok.get('name', 'Token')}: gained {eff.get('name')}"
                 + (f" from {eff['caster']}" if eff.get('caster') else ''),
                 'condition')
+    for cl in chain_log:
+        _combat_log(f"  ↳ chained: {cl}", 'condition')
+    return jsonify({
+        'success': True,
+        'effect': eff,
+        'manual_chains': [ch['effect'] for ch in chains if ch.get('target_kind') == 'manual'],
+    })
+
+
+@app.route('/api/pc/<pc_name>/effect/add', methods=['POST'])
+@require_pc_self_or_gm
+def add_pc_effect(pc_name):
+    """Apply a catalog (or custom) Active Effect to a PC's sheet.
+    Body shape mirrors the token effect/add endpoint. Sheet-level
+    effects persist with the PC's combat state, so they survive
+    server restarts and follow the PC into encounter tracker
+    state."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'unknown pc'}), 404
+    pc = PARTY_LIBRARY[pc_name]
+    data = request.json or {}
+    catalog_key = data.get('catalog_key')
+    if not catalog_key:
+        return jsonify({'success': False, 'error': 'catalog_key required'}), 400
+    eff = effects_service.instantiate_effect(
+        catalog_key,
+        effect_id=str(uuid.uuid4())[:8],
+        caster=(data.get('caster') or '').strip()[:40] or None,
+        current_round=int(ROUND_NUMBER or 1),
+        duration_override=data.get('duration_override'),
+        custom_modifiers=data.get('custom_modifiers'),
+        custom_name=data.get('custom_name'),
+        save_dc=data.get('save_dc'),
+    )
+    if not eff:
+        return jsonify({'success': False, 'error': f'unknown catalog key {catalog_key!r}'}), 400
+    pc.pc_active_effects = list(getattr(pc, 'pc_active_effects', []) or []) + [eff]
+    _persist_pc_combat_state(pc_name)
+    _broadcast_pc_state(pc_name)
+    # Mirror to any token linked to this PC on the map so the token
+    # tooltip + breakdown stay in sync. Token-side effects coexist
+    # with sheet-side; doubling up here would over-apply, so we only
+    # mirror if no token effect already references this catalog key.
+    with MAP_LOCK:
+        for tok in ACTIVE_MAP.get('tokens', []):
+            if tok.get('pc_name') == pc_name:
+                existing = tok.setdefault('active_effects', [])
+                if not any(e.get('id') == eff['id'] for e in existing):
+                    existing.append(eff)
+    _broadcast_map_tokens()
+    _combat_log(f"{pc_name}: gained {eff.get('name')}"
+                + (f" from {eff['caster']}" if eff.get('caster') else ''),
+                'condition')
     return jsonify({'success': True, 'effect': eff})
+
+
+@app.route('/api/pc/<pc_name>/effect/remove', methods=['POST'])
+@require_pc_self_or_gm
+def remove_pc_effect(pc_name):
+    """Drop a sheet-level effect by id. Also strips any matching
+    mirror entry on the linked map token."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'unknown pc'}), 404
+    pc = PARTY_LIBRARY[pc_name]
+    data = request.json or {}
+    effect_id = data.get('effect_id')
+    if not effect_id:
+        return jsonify({'success': False, 'error': 'effect_id required'}), 400
+    before = list(getattr(pc, 'pc_active_effects', []) or [])
+    pc.pc_active_effects = [e for e in before if e.get('id') != effect_id]
+    if len(pc.pc_active_effects) == len(before):
+        return jsonify({'success': False, 'error': 'effect not found'}), 404
+    _persist_pc_combat_state(pc_name)
+    _broadcast_pc_state(pc_name)
+    with MAP_LOCK:
+        for tok in ACTIVE_MAP.get('tokens', []):
+            if tok.get('pc_name') == pc_name:
+                tok['active_effects'] = [
+                    e for e in tok.get('active_effects') or []
+                    if e.get('id') != effect_id
+                ]
+    _broadcast_map_tokens()
+    return jsonify({'success': True})
+
+
+@app.route('/api/pc/<pc_name>/effects')
+def list_pc_effects(pc_name):
+    """Read-only view of a PC's sheet-level Active Effects + the
+    computed effective stats. Player view fetches this on the
+    sheet to render the effects panel."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'unknown pc'}), 404
+    # Players can only inspect their own sheet.
+    if not _is_gm() and session.get('player_name') != pc_name:
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+    pc = PARTY_LIBRARY[pc_name]
+    eff = pc.compute_effective_stats()
+    return jsonify({
+        'success': True,
+        'effects': list(getattr(pc, 'pc_active_effects', []) or []),
+        'effective': eff['effective'],
+        'breakdown': eff['breakdown'],
+    })
+
+
+@app.route('/api/map/token/effect/save', methods=['POST'])
+@gm_required
+def resolve_token_effect_save():
+    """Resolve a save against a save-bearing effect. Body:
+        {instance_id, effect_id, roll_total}
+    Server applies the outcome (negate / reduce / apply / stronger)
+    and returns the save_result block for the combat log."""
+    data = request.json or {}
+    instance_id = data.get('instance_id')
+    effect_id = data.get('effect_id')
+    try:
+        roll_total = int(data.get('roll_total'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'roll_total must be an int'}), 400
+    effects_list, tok = _token_active_effects(instance_id)
+    if effects_list is None:
+        return jsonify({'success': False, 'error': 'token not found'}), 404
+    target_eff = None
+    with MAP_LOCK:
+        for e in effects_list:
+            if e.get('id') == effect_id:
+                target_eff = e
+                break
+        if not target_eff or not target_eff.get('save'):
+            return jsonify({'success': False, 'error': 'effect has no save block'}), 404
+        result = effects_service.resolve_save(target_eff, roll_total, current_round=int(ROUND_NUMBER or 1))
+    _save_map_state()
+    _broadcast_map_tokens()
+    _combat_log(
+        f"{tok.get('name', 'Token')}: {target_eff.get('name')} save"
+        f" → {result['degree']} (roll {result['roll']} vs DC {result['dc']})"
+        f" → {result['outcome']}",
+        'condition')
+    return jsonify({'success': True, 'save_result': result, 'effect': target_eff})
 
 
 @app.route('/api/map/token/effect/remove', methods=['POST'])
