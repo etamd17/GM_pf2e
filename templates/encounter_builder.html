@@ -55,8 +55,8 @@
         </div>
         
         <!-- Custom Monster Builder -->
-        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
-            <details>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4" id="custom-monster-card">
+            <details id="custom-monster-details">
                 <summary class="font-header text-sm text-accent-300 cursor-pointer mb-3">+ Create Custom Monster</summary>
                 <div class="space-y-3 mt-3">
                     <div class="grid grid-cols-2 gap-2">
@@ -170,8 +170,13 @@
                 <div class="absolute top-0 h-full border-r border-danger-300/50" style="left: 60%;" title="Extreme (120 XP)"></div>
                 <div class="absolute top-0 h-full border-r border-danger-500/50" style="left: 80%;" title="Impossible (160 XP)"></div>
             </div>
-            <div class="flex justify-between text-[9px] text-gray-600 mt-1 px-1">
-                <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span><span>!!!</span>
+            <div class="flex justify-between text-[11px] text-gray-400 font-bold uppercase tracking-wider mt-1.5 px-1">
+                <span title="0 XP — minimal threat">Trivial</span>
+                <span class="text-success-400" title="Low: small skirmish">Low</span>
+                <span class="text-accent-300" title="Moderate: standard fight">Moderate</span>
+                <span class="text-danger-200" title="Severe: tough — expect resource burn">Severe</span>
+                <span class="text-danger-300" title="Extreme: PCs may go down">Extreme</span>
+                <span class="text-danger-400" title="Beyond Extreme — likely TPK">Impossible</span>
             </div>
             <!-- Difficulty-spike warnings strip — populated by recalcXP() -->
             <div id="diff-warnings" class="hidden mt-3"></div>
@@ -194,12 +199,27 @@
 
         <!-- Staged Monsters -->
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex justify-between items-center mb-2">
                 <h2 class="font-header text-accent-300 text-lg">Staged Creatures</h2>
                 <button onclick="clearStage()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded border border-gray-600 font-bold uppercase transition-colors">Clear All</button>
             </div>
+            <!-- Live summary: count / XP / tier so the GM can scan an encounter
+                 at a glance without counting individual rows. Populated by renderStage(). -->
+            <div id="staged-summary" class="flex flex-wrap items-center gap-2 text-[11px] text-gray-400 mb-3 pb-2 border-b border-gray-700/50 hidden">
+                <span><span id="ss-count" class="text-gray-200 font-bold">0</span> <span id="ss-count-lbl">creatures</span></span>
+                <span class="text-gray-700">·</span>
+                <span><span id="ss-xp" class="text-accent-300 font-bold">0</span> XP</span>
+                <span class="text-gray-700">·</span>
+                <span id="ss-tier" class="font-bold uppercase tracking-wider">Empty</span>
+            </div>
             <div id="staged-list" class="space-y-2">
-                <div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here.</div>
+                <div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here, or use Quick Add below.</div>
+            </div>
+            <!-- Quick add: promoted from the collapsed custom-monster details -->
+            <div class="mt-3 pt-3 border-t border-gray-700/50">
+                <button onclick="toggleCustomMonsterForm()" id="btn-toggle-custom" class="w-full text-xs bg-gray-900 hover:bg-accent-600/20 text-gray-300 hover:text-accent-200 border border-gray-700 hover:border-accent-600/50 rounded px-3 py-2 font-bold uppercase tracking-wider transition-colors" title="Create a one-off monster without searching the compendium">
+                    + Create Custom Monster
+                </button>
             </div>
         </div>
 
@@ -277,10 +297,16 @@
                 extras.push(`<span class="text-accent-200">Atk ${esc(String(m.best_attack))}${dmgPart}</span>`);
             }
             if (m.perception != null) extras.push(`<span class="text-gray-500">Perc +${m.perception}</span>`);
-            if (m.immunities && m.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(m.immunities.join(', '))}</span>`);
-            if (m.resistances && m.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(m.resistances.join(', '))}</span>`);
-            if (m.weaknesses && m.weaknesses.length) extras.push(`<span class="text-danger-200">Weak: ${esc(m.weaknesses.join(', '))}</span>`);
-            let extraHtml = extras.length ? `<div class="text-[10px] mt-0.5">${extras.join(' · ')}</div>` : '';
+            let extraHtml = extras.length ? `<div class="text-[11px] mt-1">${extras.join(' · ')}</div>` : '';
+
+            // Defensive pills: immunities, resistances, weaknesses get their own
+            // colored chips so the GM can pick the right damage type at a glance.
+            let defPills = [];
+            const pillCls = 'inline-block text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border';
+            (m.immunities || []).forEach(v => defPills.push(`<span class="${pillCls} bg-purple-500/15 border-purple-500/40 text-purple-300" title="Immune to ${esc(v)}">Imm ${esc(v)}</span>`));
+            (m.resistances || []).forEach(v => defPills.push(`<span class="${pillCls} bg-sky-500/15 border-sky-500/40 text-sky-300" title="Resists ${esc(v)}">Res ${esc(v)}</span>`));
+            (m.weaknesses || []).forEach(v => defPills.push(`<span class="${pillCls} bg-danger-500/20 border-danger-500/50 text-danger-200" title="Weak to ${esc(v)} — bonus damage">Weak ${esc(v)}</span>`));
+            const defHtml = defPills.length ? `<div class="flex flex-wrap gap-1 mt-1">${defPills.join('')}</div>` : '';
             let traitsHtml = (m.traits && m.traits.length)
                 ? `<div class="flex flex-wrap gap-1 mt-1">${m.traits.map(t => `<span class=\"text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700\">${esc(t)}</span>`).join('')}</div>`
                 : '';
@@ -304,6 +330,7 @@
                         </div>
                     </div>
                 </div>
+                ${defHtml}
                 ${extraHtml}
                 ${traitsHtml}
             </div>`;
@@ -348,6 +375,22 @@
     function adjustCount(idx, delta) { staged[idx].count = Math.max(1, staged[idx].count + delta); renderStage(); }
     function setEliteWeak(idx, val) { staged[idx].elite_weak = staged[idx].elite_weak === val ? 0 : val; renderStage(); }
     function clearStage() { staged = []; renderStage(); }
+
+    // Promoted Quick-Add button: open + scroll to the custom-monster form so
+    // the GM doesn't have to hunt for the collapsed details element.
+    function toggleCustomMonsterForm() {
+        const det = document.getElementById('custom-monster-details');
+        const card = document.getElementById('custom-monster-card');
+        if (!det) return;
+        det.open = !det.open;
+        if (det.open) {
+            requestAnimationFrame(() => {
+                card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById('cm-name')?.focus();
+            });
+        }
+    }
+    window.toggleCustomMonsterForm = toggleCustomMonsterForm;
     function duplicateEntry(idx) {
         // Create a copy of the staged monster as a new entry (resets count to 1, keeps elite/weak)
         const original = staged[idx];
@@ -377,11 +420,12 @@
                 let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-success-500 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-danger-300 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
                 let hazardLabel = s.is_hazard ? `<span class="text-[10px] bg-danger-200 text-white px-1 py-0.5 rounded font-bold ml-1">${s.hazard_type === 'complex' ? 'COMPLEX' : 'SIMPLE'} HAZARD</span>` : '';
                 let effectiveLevel = s.level + s.elite_weak;
-                let extras = [];
-                if (s.immunities.length) extras.push(`<span class="text-purple-400">Imm: ${esc(s.immunities.join(', '))}</span>`);
-                if (s.resistances.length) extras.push(`<span class="text-sky-400">Res: ${esc(s.resistances.join(', '))}</span>`);
-                if (s.weaknesses.length) extras.push(`<span class="text-danger-200">Weak: ${esc(s.weaknesses.join(', '))}</span>`);
-                let extraHtml = extras.length ? `<div class="text-[10px] mt-1">${extras.join(' · ')}</div>` : '';
+                let defPills = [];
+                const pillCls = 'inline-block text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border';
+                (s.immunities || []).forEach(v => defPills.push(`<span class="${pillCls} bg-purple-500/15 border-purple-500/40 text-purple-300">Imm ${esc(v)}</span>`));
+                (s.resistances || []).forEach(v => defPills.push(`<span class="${pillCls} bg-sky-500/15 border-sky-500/40 text-sky-300">Res ${esc(v)}</span>`));
+                (s.weaknesses || []).forEach(v => defPills.push(`<span class="${pillCls} bg-danger-500/20 border-danger-500/50 text-danger-200">Weak ${esc(v)}</span>`));
+                let extraHtml = defPills.length ? `<div class="flex flex-wrap gap-1 mt-2">${defPills.join('')}</div>` : '';
                 return `
                 <div class="bg-gray-900 border border-gray-700 rounded-lg p-3 flex flex-col">
                     <div class="flex justify-between items-center">
@@ -392,8 +436,8 @@
                             <span class="text-[10px] text-gray-500">Lv ${effectiveLevel}</span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-success-500 text-white':'bg-gray-800 text-gray-400 hover:text-success-400'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Elite (+2 to everything)">E</button>
-                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-danger-400 text-white':'bg-gray-800 text-gray-400 hover:text-danger-200'} px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Weak (-2 to everything)">W</button>
+                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-success-500 text-white':'bg-gray-800 text-gray-400 hover:text-success-400'} px-2 py-1 rounded border border-gray-600 font-bold uppercase tracking-wider transition-colors" title="Elite — +2 attack/DC/HP">Elite</button>
+                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-danger-400 text-white':'bg-gray-800 text-gray-400 hover:text-danger-200'} px-2 py-1 rounded border border-gray-600 font-bold uppercase tracking-wider transition-colors" title="Weak — −2 attack/DC/HP">Weak</button>
                             <span class="mx-1 border-r border-gray-700 h-5"></span>
                             <button onclick="adjustCount(${i}, -1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">-</button>
                             <span class="text-white font-bold w-8 text-center">${s.count}</span>
@@ -454,6 +498,24 @@
         diffEl.className = `text-sm font-bold uppercase px-2 py-1 rounded bg-gray-900 border border-gray-700 ${color}`;
         document.getElementById('xp-bar').style.width = pct + '%';
         document.getElementById('xp-bar').style.background = barColor;
+
+        // Staged summary chip — count / XP / tier in a single scan line
+        const summary = document.getElementById('staged-summary');
+        if (summary) {
+            const totalCreatures = staged.reduce((acc, s) => acc + (s.count || 0), 0);
+            summary.classList.toggle('hidden', staged.length === 0);
+            const cEl = document.getElementById('ss-count');
+            const lEl = document.getElementById('ss-count-lbl');
+            const xEl = document.getElementById('ss-xp');
+            const tEl = document.getElementById('ss-tier');
+            if (cEl) cEl.textContent = totalCreatures;
+            if (lEl) lEl.textContent = totalCreatures === 1 ? 'creature' : 'creatures';
+            if (xEl) xEl.textContent = totalXP;
+            if (tEl) {
+                tEl.textContent = label;
+                tEl.className = `font-bold uppercase tracking-wider ${color}`;
+            }
+        }
 
         if (label !== _lastTier && _lastTier !== 'Empty' && label !== 'Empty') {
             showTierToast(_lastTier, label, barColor);

@@ -61,6 +61,46 @@
 .trk .hb-left { display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }
 .trk .hb-left .name { font-family:'Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:.4px; color:var(--t-t1); }
 .trk .hb-left .meta { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:1.1px; }
+
+/* Sync indicator — small green dot + "Synced" label that pulses gold for a
+   beat whenever a GM action broadcasts state to player sheets. Closes the
+   loop on "did the player see this?" without a noisy toast every time. */
+.trk .sync-dot {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:3px 9px; border-radius:999px;
+  background: rgba(62,186,104,0.10);
+  border: 1px solid rgba(62,186,104,0.30);
+  font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color: var(--t-green);
+  transition: background .25s, border-color .25s, color .25s;
+}
+.trk .sync-dot .sync-dot-glyph {
+  width:7px; height:7px; border-radius:50%;
+  background: var(--t-green);
+  box-shadow: 0 0 4px rgba(62,186,104,0.55);
+  transition: background .25s, box-shadow .25s;
+}
+.trk .sync-dot.syncing {
+  background: rgba(200,168,78,0.18);
+  border-color: rgba(200,168,78,0.55);
+  color: var(--t-gold);
+}
+.trk .sync-dot.syncing .sync-dot-glyph {
+  background: var(--t-gold);
+  box-shadow: 0 0 10px rgba(200,168,78,0.85);
+  animation: syncPulse 0.7s ease-out;
+}
+.trk .sync-dot.error {
+  background: rgba(196,60,60,0.18);
+  border-color: rgba(196,60,60,0.55);
+  color: var(--t-red-b);
+}
+.trk .sync-dot.error .sync-dot-glyph { background: var(--t-red-b); }
+@keyframes syncPulse {
+  0%   { transform: scale(0.7); }
+  50%  { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
 .trk .xp-tag {
   background:linear-gradient(135deg, rgba(200,168,78,0.18), rgba(200,168,78,0.06));
   border:1px solid rgba(200,168,78,0.4); color:var(--t-gold);
@@ -88,7 +128,7 @@
 }
 .trk .turn-now { display:flex; flex-direction:column; padding:0 12px; border-right:1px solid var(--t-border); min-width:110px; }
 .trk .turn-now .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; }
-.trk .turn-now .v { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trk .turn-now .v { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1.1; max-width:420px; word-break:break-word; }
 .trk .turn-now .v::before { content:"▸ "; color:var(--t-gold); }
 .trk .turn-ctl { display:flex; gap:6px; }
 .trk .next-btn {
@@ -172,6 +212,41 @@
   border:1px solid var(--t-border);
 }
 .trk .panel.hidden { display:none; }
+/* Anchored / sticky open-state — visually announces "this panel is still
+   open, the GM hasn't lost it" with a gold outline + subtle glow. Used by
+   the Secret Roll panel and other transient drawers. */
+.trk .panel.anchored {
+  border-color: rgba(200,168,78,0.55);
+  box-shadow:
+    0 0 0 1px rgba(200,168,78,0.18),
+    0 0 18px rgba(200,168,78,0.10);
+  position: relative;
+}
+.trk .panel.anchored::before {
+  content: "PINNED";
+  position: absolute; top: -8px; left: 12px;
+  background: var(--t-bg-base);
+  color: var(--t-gold);
+  font-family: 'Cinzel', serif;
+  font-size: 9px; font-weight: 700; letter-spacing: .16em;
+  padding: 1px 6px;
+  border: 1px solid rgba(200,168,78,0.45);
+  border-radius: 3px;
+}
+.trk .panel-pin {
+  background:transparent; border:1px solid rgba(200,168,78,0.30);
+  color:var(--t-t3); font-size:10px; cursor:pointer; line-height:1;
+  padding:3px 7px; border-radius:4px;
+  font-family:'Cinzel',serif; letter-spacing:.12em; font-weight:700;
+  text-transform:uppercase;
+  margin-right:6px;
+  transition: color .12s, background .12s, border-color .12s;
+}
+.trk .panel-pin:hover { color: var(--t-gold); border-color: var(--t-gold); }
+.trk .panel-pin.active {
+  color: var(--t-gold); background: rgba(200,168,78,0.12);
+  border-color: var(--t-gold);
+}
 .trk .panel-head {
   display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
 }
@@ -214,17 +289,22 @@
      primary) | conditions (1fr, flex) | actions (auto). The conditions
      column shrinks first under pressure; HP holds at 200 so the gauge
      stays readable. */
-  grid-template-columns: 28px 56px minmax(140px, 1.4fr) 52px 200px minmax(120px, 1fr) auto;
+  grid-template-columns: 36px 72px minmax(160px, 1.4fr) 52px 200px minmax(120px, 1fr) auto;
   gap:8px; padding:10px 12px;
-  background:rgba(19,22,31,0.6); border-bottom:1px solid var(--t-border);
+  background:rgba(19,22,31,0.95);
+  border-bottom:1px solid var(--t-border);
   font-size:9px; letter-spacing:1.5px; color:var(--t-t3); text-transform:uppercase; font-weight:700;
+  /* Sticky so column labels stay visible no matter how many combatants are
+     in the encounter. Sits below the page header. */
+  position: sticky; top: 0; z-index: 5;
+  backdrop-filter: blur(4px);
 }
 .trk .grid-head > div { display:flex; align-items:center; }
 .trk .grid-head .h-center { justify-content:center; }
 
 .trk .combatant {
   display:grid;
-  grid-template-columns: 28px 56px minmax(140px, 1.4fr) 52px 200px minmax(120px, 1fr) auto;
+  grid-template-columns: 36px 72px minmax(160px, 1.4fr) 52px 200px minmax(120px, 1fr) auto;
   gap:8px; padding:10px 12px;
   /* Fixed minimum row height — prevents content collapse when many rows
      compete for vertical space, and keeps the in-grid HP gauge readable. */
@@ -256,15 +336,20 @@
 .trk .c-drag {
   cursor: grab;
   color: var(--t-t4);
-  font-size: 14px;
+  font-size: 20px;
   user-select: none;
   text-align: center;
   font-family: 'Cinzel', serif;
   line-height: 1;
-  transition: color 0.12s, transform 0.12s;
+  transition: color 0.12s, transform 0.12s, background 0.12s;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
 }
 .trk .c-drag::before { content: ""; }
-.trk .c-drag:hover { color: var(--t-gold); transform: scale(1.15); }
+.trk .c-drag:hover { color: var(--t-gold); transform: scale(1.1); background: rgba(200,168,78,0.08); }
 .trk .c-drag:active { cursor: grabbing; transform: scale(0.95); }
 .trk .sortable-ghost { background:rgba(196,60,60,0.08) !important; }
 
@@ -303,6 +388,13 @@ body.multi-mode .trk .combatant.multi-selected { background: rgba(200,168,78,0.0
     text-transform: uppercase; color: var(--gilt-200);
     margin-right: var(--sp-2);
 }
+#multi-action-bar .ma-summary {
+    font-family: var(--font-ui);
+    font-size: 11px; color: var(--t-t2);
+    max-width: 280px; line-height: 1.2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#multi-action-bar .ma-summary:empty { display: none; }
 #multi-action-bar input[type="number"], #multi-action-bar select {
     background: var(--bg-input); border: 1px solid var(--border-strong);
     color: var(--text-on-dark); padding: 4px 8px;
@@ -315,15 +407,15 @@ body.multi-mode .trk .combatant.multi-selected { background: rgba(200,168,78,0.0
 
 .trk .c-init { text-align:center; }
 .trk .c-init input {
-  width:44px; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
-  padding:5px 0; text-align:center; border-radius:5px;
-  font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; outline:none;
+  width:60px; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
+  padding:6px 0; text-align:center; border-radius:5px;
+  font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; outline:none;
 }
 .trk .c-init input:focus { border-color:var(--t-red); }
 .trk .combatant.active .c-init input {
-  border-color:var(--t-red); color:var(--t-gold); font-weight:700;
-  background:linear-gradient(180deg, rgba(196,60,60,0.15), rgba(196,60,60,0.05));
-  box-shadow:0 0 0 1px rgba(196,60,60,0.3);
+  border-color:var(--t-red); color:var(--t-gold); font-weight:800; font-size:17px;
+  background:linear-gradient(180deg, rgba(196,60,60,0.18), rgba(196,60,60,0.06));
+  box-shadow:0 0 0 1px rgba(196,60,60,0.35);
 }
 
 .trk .c-name { display:flex; align-items:center; gap:9px; min-width:0; }
@@ -348,9 +440,16 @@ body.multi-mode .trk .combatant.multi-selected { background: rgba(200,168,78,0.0
 
 .trk .nm-wrap { min-width:0; }
 .trk .nm {
-  font-weight:600; font-size:13px; line-height:1.15; background:none; border:none; padding:0; color:var(--t-t1);
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; text-align:left; display:block;
+  font-weight:600; font-size:13px; line-height:1.18; background:none; border:none; padding:0; color:var(--t-t1);
+  cursor:pointer; text-align:left; display:block;
   max-width:100%;
+  /* Allow up to two lines of name rather than truncating with ellipsis —
+     a long monster name should never be hidden during combat. */
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .trk .nm:hover { color:var(--t-gold); }
 .trk .nm-sub { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:.4px; margin-top:1px; }
@@ -497,7 +596,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
    gauge itself is the primary signal for triage — the GM scans the bar
    colors from across the table, not the digits. */
 .trk .c-hp-top { display:flex; justify-content:space-between; align-items:baseline; font-size:13px; gap:6px; }
-.trk .c-hp-top .cur { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; color:var(--t-t1); }
+.trk .c-hp-top .cur { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-t1); }
+.trk .combatant.active .c-hp-top .cur { font-size:17px; }
+.trk .combatant.active .c-hp-top .max { font-size:13px; }
 .trk .c-hp-top .cur.lo { color:var(--t-red-b); }
 .trk .c-hp-top .cur.mi { color:var(--t-gold); }
 .trk .c-hp-top .cur.hi { color:var(--t-green); }
@@ -508,22 +609,42 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .c-hp-bar { height:12px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; box-shadow: inset 0 1px 0 rgba(0,0,0,0.4); }
 .trk .c-hp-fill { height:100%; transition:width .3s ease, background .3s ease; background:linear-gradient(90deg, var(--t-green), #5fd884); }
 .trk .c-hp-fill.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
+.trk .c-hp-fill.mid-low { background:linear-gradient(90deg, #c47a3a, #e07a2b); }
 .trk .c-hp-fill.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
-.trk .c-hp-ctrl { display:flex; gap:3px; margin-top:2px; }
+/* Damage entry — segmented control: amount + type + [−][+] visually joined */
+.trk .c-hp-ctrl { display:flex; gap:0; margin-top:6px; align-items:stretch; height:32px; }
+.trk .c-hp-ctrl > * { border-radius:0; height:100%; box-sizing:border-box; }
+.trk .c-hp-ctrl > *:first-child { border-top-left-radius:5px; border-bottom-left-radius:5px; }
+.trk .c-hp-ctrl > *:last-child  { border-top-right-radius:5px; border-bottom-right-radius:5px; }
 .trk .c-hp-ctrl input {
   flex:1; min-width:0; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
-  padding:4px 5px; border-radius:4px; font-size:11px; font-family:'JetBrains Mono',monospace; outline:none;
+  padding:0 8px; font-size:14px; font-family:'JetBrains Mono',monospace; outline:none;
+  border-right-width:0;
 }
-.trk .c-hp-ctrl input:focus { border-color:var(--t-red); }
+.trk .combatant.active .c-hp-ctrl input { font-size:15px; }
+.trk .c-hp-ctrl input:focus { border-color:var(--t-red); z-index:1; position:relative; }
 .trk .c-hp-ctrl select {
   background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
-  padding:4px 3px; border-radius:4px; font-size:10px; max-width:72px; outline:none;
+  padding:0 4px; font-size:11px; max-width:78px; outline:none;
+  border-right-width:0;
 }
-.trk .c-hp-ctrl button { padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; border:none; cursor:pointer; }
-.trk .c-hp-ctrl .minus { background:rgba(196,60,60,0.15); color:var(--t-red-b); border:1px solid rgba(196,60,60,0.4); }
-.trk .c-hp-ctrl .minus:hover { background:rgba(196,60,60,0.25); }
-.trk .c-hp-ctrl .plus { background:rgba(62,186,104,0.15); color:var(--t-green); border:1px solid rgba(62,186,104,0.4); }
-.trk .c-hp-ctrl .plus:hover { background:rgba(62,186,104,0.25); }
+.trk .c-hp-ctrl select:focus { border-color:var(--t-gold); z-index:1; position:relative; }
+.trk .c-hp-ctrl button {
+  padding:0 12px; font-size:16px; font-weight:700; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:38px;
+}
+.trk .c-hp-ctrl .minus {
+  background:rgba(196,60,60,0.18); color:var(--t-red-b);
+  border:1px solid rgba(196,60,60,0.45);
+  border-right-width:0;
+}
+.trk .c-hp-ctrl .minus:hover { background:rgba(196,60,60,0.32); }
+.trk .c-hp-ctrl .plus {
+  background:rgba(62,186,104,0.18); color:var(--t-green);
+  border:1px solid rgba(62,186,104,0.45);
+}
+.trk .c-hp-ctrl .plus:hover { background:rgba(62,186,104,0.32); }
 
 .trk .c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; min-width:0; }
 .trk .cp {
@@ -535,9 +656,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .cp.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
 .trk .cp.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
 .trk .cp button {
-  background:none; border:none; padding:0; cursor:pointer; color:inherit; opacity:.65; font-size:11px; line-height:1;
+  background:none; border:none; padding:2px 4px; cursor:pointer; color:inherit; opacity:.85; font-size:14px; line-height:1;
+  border-radius:3px;
 }
-.trk .cp button:hover { opacity:1; color:var(--t-red-b); }
+.trk .cp button:hover { opacity:1; color:var(--t-red-b); background:rgba(196,60,60,0.12); }
 .trk .cp-add {
   display:flex; gap:3px; align-items:center; width:100%; margin-top:3px;
 }
@@ -744,6 +866,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .hp-bar { height:7px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; margin-top:5px; }
 .trk .hp-bar .f { height:100%; transition:width .3s; background:linear-gradient(90deg, var(--t-green), #5fd884); }
 .trk .hp-bar .f.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
+.trk .hp-bar .f.mid-low { background:linear-gradient(90deg, #c47a3a, #e07a2b); }
 .trk .hp-bar .f.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
 
 .trk .section-h {
@@ -876,6 +999,51 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   transform:translateY(10px); transition: transform .2s;
 }
 .trk-modal.open .trk-modal-panel { transform:translateY(0); }
+
+/* Side-panel variant: stat block lives on the right edge, persistent,
+   non-blocking (no backdrop, no focus steal). Reused for the cycle-through
+   combatant viewer so the GM never loses the grid. */
+.trk-modal.side-panel {
+  background: transparent;
+  backdrop-filter: none;
+  inset: auto;
+  top: 64px; right: 0; bottom: 0;
+  width: auto; padding: 0;
+  pointer-events: none; /* let clicks fall through outside the panel */
+}
+.trk-modal.side-panel .trk-modal-panel {
+  pointer-events: auto;
+  width: 440px; max-width: 95vw; height: 100%;
+  max-height: none;
+  border-radius: 14px 0 0 14px;
+  border-right: none;
+  transform: translateX(20px);
+  box-shadow: -12px 0 36px rgba(0,0,0,0.5);
+}
+.trk-modal.side-panel.open .trk-modal-panel { transform: translateX(0); }
+.trk-modal.side-panel .trk-modal-head {
+  gap: 8px; align-items: center;
+}
+.trk-modal.side-panel .sp-nav {
+  display: inline-flex; gap: 4px; margin-right: 6px;
+}
+.trk-modal.side-panel .sp-nav button {
+  background: var(--t-bg-higher); border: 1px solid var(--t-border);
+  color: var(--t-gold); width: 26px; height: 26px;
+  border-radius: 4px; font-size: 14px; line-height: 1;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Cinzel', serif; font-weight: 700;
+}
+.trk-modal.side-panel .sp-nav button:hover {
+  background: rgba(200,168,78,0.12); border-color: var(--t-gold);
+}
+.trk-modal.side-panel .sp-pos {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--t-t3); letter-spacing: .1em; margin-left: 4px;
+}
+@media (max-width: 1100px) {
+  .trk-modal.side-panel .trk-modal-panel { width: 90vw; }
+}
 .trk-modal-head {
   padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start;
   border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.5);
@@ -932,6 +1100,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     <div class="hb-left">
         <span id="trk-wordmark" class="name">Encounter Tracker</span>
         <span id="trk-wordmark-meta" class="meta">PF2e</span>
+        <span id="sync-indicator" class="sync-dot" title="Player sheets are in sync. Pulses gold when a tracker change broadcasts.">
+            <span class="sync-dot-glyph"></span>
+            <span class="sync-dot-label">Synced</span>
+        </span>
         <div id="xp-badge" class="xp-row {% if encounter_xp <= 0 %}hidden{% endif %}">
             <span style="color:var(--t-t3);text-transform:uppercase;letter-spacing:.8px;font-size:9px;font-weight:700;">Party Lvl <strong id="xp-party-level" style="color:var(--t-t1);">{{ party_level }}</strong></span>
             <span id="xp-diff-label" class="xp-diff {{ diff_color }}">{{ diff_label }}</span>
@@ -1037,10 +1209,17 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 </div>
 
 {# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
-<div id="secret-roll-panel" class="panel hidden">
+<div id="secret-roll-panel" class="panel hidden anchored">
     <div class="panel-head">
         <span class="panel-ttl"> GM Secret Roll</span>
-        <button class="panel-close" onclick="document.getElementById('secret-roll-panel').classList.add('hidden')">&times;</button>
+        <div style="display:flex;align-items:center;">
+            <button id="secret-pin-btn" class="panel-pin active"
+                    onclick="toggleSecretPin()"
+                    title="Pinned panels stay open between rolls. Click to unpin.">
+                Pinned
+            </button>
+            <button class="panel-close" onclick="closeSecretRollPanel()">&times;</button>
+        </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="number" id="secret-dice-count" value="1" min="1" max="20" class="tinput" style="width:55px;text-align:center;">
@@ -1263,7 +1442,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
    endpoints (no new backend). #}
 <div id="multi-action-bar" class="hidden" role="toolbar" aria-label="Multi-target actions">
     <div class="ma-section">
-        <span class="ma-count" id="multi-count">0 selected</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;">
+            <span class="ma-count" id="multi-count">0 selected</span>
+            <span class="ma-summary" id="multi-summary" title="Selected combatants"></span>
+        </div>
         <button class="hb-btn" onclick="multiSelectAll()" type="button" title="Select every combatant">All</button>
         <button class="hb-btn" onclick="multiSelectNone()" type="button" title="Clear selection">None</button>
     </div>
@@ -1301,18 +1483,27 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     </div>
 </div>
 
-{# ═══════════════════ STAT POPUP MODAL ═══════════════════ #}
-<div id="stat-modal" class="trk-modal" onclick="if(event.target===this) closeStatModal()">
+{# ═══════════════════ STAT SIDE-PANEL ═══════════════════
+   Persistent right-side stat block. Prev/Next cycle through initiative
+   order without closing. No backdrop — clicks outside the panel still
+   reach the grid. #}
+<div id="stat-modal" class="trk-modal side-panel">
     <div class="trk-modal-panel">
         <div class="trk-modal-head">
-            <div>
-                <h3 id="sm-name">—</h3>
-                <div id="sm-subtitle" class="sub"></div>
+            <div class="sp-nav">
+                <button type="button" onclick="cycleStatPanel(-1)" title="Previous combatant (↑)">‹</button>
+                <button type="button" onclick="cycleStatPanel(1)" title="Next combatant (↓)">›</button>
             </div>
-            <button class="trk-modal-close" onclick="closeStatModal()">&times;</button>
+            <div style="flex:1;min-width:0;">
+                <h3 id="sm-name" style="white-space:normal;line-height:1.15;">—</h3>
+                <div id="sm-subtitle" class="sub">
+                    <span id="sm-pos" class="sp-pos"></span>
+                </div>
+            </div>
+            <button class="trk-modal-close" onclick="closeStatModal()" title="Close panel (Esc)">&times;</button>
         </div>
         <div id="sm-body" class="trk-modal-body">
-            <div style="text-align:center;padding:32px;color:var(--t-t3);">Loading…</div>
+            <div style="text-align:center;padding:32px;color:var(--t-t3);">Click a combatant name to view their stat block.</div>
         </div>
     </div>
 </div>
@@ -1405,10 +1596,29 @@ async function apiPost(url, body, contentType) {
         if (data.combatants !== undefined) {
             applyState(data);
         }
+        pulseSync(true);
         return data;
     } catch(e) {
         console.error('API error:', url, e);
         toast('Request failed', 'error');
+        pulseSync(false);
+    }
+}
+
+// Pulse the sync indicator. ok=true → gold pulse (broadcast went out).
+// ok=false → red error state until the next successful POST.
+let _syncResetTimer = null;
+function pulseSync(ok) {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return;
+    el.classList.remove('error');
+    if (ok) {
+        el.classList.add('syncing');
+        clearTimeout(_syncResetTimer);
+        _syncResetTimer = setTimeout(() => el.classList.remove('syncing'), 700);
+    } else {
+        el.classList.remove('syncing');
+        el.classList.add('error');
     }
 }
 
@@ -1440,6 +1650,29 @@ function _renderNow() {
     renderActivePanel();
     renderMeta();
     renderWordmark();
+    scrollActiveIntoView();
+    refreshStatPanelIfOpen();
+}
+
+// Keep the active combatant visible no matter how many participants are
+// in the encounter. Only scrolls when the row is clipped, so we don't yank
+// the GM's scroll position during in-row edits.
+let _lastScrolledActive = null;
+function scrollActiveIntoView() {
+    if (!STATE.combatants.length) return;
+    const ac = STATE.combatants[STATE.turn_index];
+    if (!ac) return;
+    if (_lastScrolledActive === ac.instance_id) return;
+    _lastScrolledActive = ac.instance_id;
+    requestAnimationFrame(() => {
+        const row = document.querySelector(`.combatant[data-id="${ac.instance_id}"]`);
+        if (!row) return;
+        const r = row.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        if (r.top < 80 || r.bottom > vh - 40) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
 }
 
 // Hide the "Encounter Tracker" wordmark + PF2e meta tag when there's an
@@ -1490,19 +1723,41 @@ function render() {
     });
 }
 
-function hpBarClass(pct) {
-    if (pct > 50) return '';
-    if (pct > 25) return 'mid';
+/* PCs and monsters get different HP-gauge thresholds. A PC at 50% is still
+   fine — they can take another hit. A monster at 50% is half-defeated. So
+   the monster gauge "yellows" earlier and the PC gauge stays green longer.
+   Pass `isPC` from any caller; default false (safer for unknown creatures). */
+function hpBarClass(pct, isPC) {
+    if (isPC) {
+        if (pct > 50) return '';
+        if (pct > 25) return 'mid';
+        return 'low';
+    }
+    if (pct > 75) return '';
+    if (pct > 50) return 'mid';
+    if (pct > 25) return 'mid-low';
     return 'low';
 }
-function hpTextClass(pct) {
-    if (pct > 50) return 'hi';
+function hpTextClass(pct, isPC) {
+    if (isPC) {
+        if (pct > 50) return 'hi';
+        if (pct > 25) return 'mi';
+        return 'lo';
+    }
+    if (pct > 75) return 'hi';
+    if (pct > 50) return 'mi';
     if (pct > 25) return 'mi';
     return 'lo';
 }
-function hpPctColor(pct) {
-    if (pct > 50) return 'var(--t-green)';
-    if (pct > 25) return 'var(--t-gold)';
+function hpPctColor(pct, isPC) {
+    if (isPC) {
+        if (pct > 50) return 'var(--t-green)';
+        if (pct > 25) return 'var(--t-gold)';
+        return 'var(--t-red-b)';
+    }
+    if (pct > 75) return 'var(--t-green)';
+    if (pct > 50) return 'var(--t-gold)';
+    if (pct > 25) return '#e07a2b';
     return 'var(--t-red-b)';
 }
 
@@ -1657,10 +1912,10 @@ function renderInitList() {
             <div class="c-ac">${c.ac}</div>
             <div class="c-hp">
                 <div class="c-hp-top">
-                    <span class="cur ${hpTextClass(hpPct)}">${c.current_hp}<span class="max">/${c.max_hp}</span></span>
-                    <span class="pct" style="color:${hpPctColor(hpPct)};">${hpPct}%</span>
+                    <span class="cur ${hpTextClass(hpPct, c.is_pc)}">${c.current_hp}<span class="max">/${c.max_hp}</span></span>
+                    <span class="pct" style="color:${hpPctColor(hpPct, c.is_pc)};">${hpPct}%</span>
                 </div>
-                <div class="c-hp-bar"><div class="c-hp-fill ${hpBarClass(hpPct)}" style="width:${hpPct}%"></div></div>
+                <div class="c-hp-bar"><div class="c-hp-fill ${hpBarClass(hpPct, c.is_pc)}" style="width:${hpPct}%"></div></div>
             </div>
             <div class="c-cond">
                 ${condsHtml}
@@ -1769,8 +2024,8 @@ function renderActivePanel() {
     </div>`;
 
     // HP ribbon with inline damage controls
-    const pctColor = hpPctColor(hpPct);
-    const fillCls = hpBarClass(hpPct);
+    const pctColor = hpPctColor(hpPct, c.is_pc);
+    const fillCls = hpBarClass(hpPct, c.is_pc);
     const dmgOpts = DAMAGE_TYPES.map(d => `<option value="${d}">${d === 'untyped' ? '— type —' : d}</option>`).join('');
     html += `<div class="hp-ribbon">
         <div class="hp-r-top">
@@ -1779,11 +2034,13 @@ function renderActivePanel() {
         </div>
         <div class="hp-num">${c.current_hp}<span class="slash">/</span><span class="mx">${c.max_hp}</span></div>
         <div class="hp-bar"><div class="f ${fillCls}" style="width:${hpPct}%"></div></div>
-        <div class="c-hp-ctrl" style="margin-top:8px;">
-            <input type="number" id="hp-amt-ap-${c.instance_id}" value="1" min="1" placeholder="amt">
-            <select id="dmg-type-ap-${c.instance_id}">${dmgOpts}</select>
-            <button class="minus" onclick="adjustHPAP('${c.instance_id}','damage')">−</button>
-            <button class="plus" onclick="adjustHPAP('${c.instance_id}','heal')">+</button>
+        <div class="c-hp-ctrl">
+            <input type="number" id="hp-amt-ap-${c.instance_id}" value="1" min="1" placeholder="amt"
+                   title="Enter applies damage · Shift+Enter heals"
+                   onkeydown="if(event.key==='Enter'){adjustHPAP('${c.instance_id}', event.shiftKey ? 'heal' : 'damage');event.preventDefault();}">
+            <select id="dmg-type-ap-${c.instance_id}" title="Damage type (affects resist/weak)">${dmgOpts}</select>
+            <button class="minus" onclick="adjustHPAP('${c.instance_id}','damage')" title="Apply damage (Enter)">−</button>
+            <button class="plus" onclick="adjustHPAP('${c.instance_id}','heal')" title="Heal (Shift+Enter)">+</button>
         </div>
     </div>`;
 
@@ -2143,6 +2400,15 @@ function adjustHPAP(id, action) {
     apiPost('/api/adjust_hp/' + id, fd, null);
 }
 
+// Direct HP adjust for keyboard shortcuts (no DOM lookup needed)
+function adjustHPDirect(id, action, amount) {
+    const fd = new FormData();
+    fd.append('amount', amount);
+    fd.append('action', action);
+    fd.append('damage_type', 'untyped');
+    apiPost('/api/adjust_hp/' + id, fd, null);
+}
+
 async function updateInit(id, val) {
     const fd = new FormData();
     fd.append('initiative', parseInt(val) || 0);
@@ -2321,6 +2587,28 @@ function exitMultiMode() {
     multiSelectNone();
 }
 function _selectedIds() { return Array.from(_multiSelected); }
+
+// Group selected combatants by base name (strips trailing " 1", " 2" etc.)
+// → "3 Goblins, 1 Ogre". Falls back to comma list if nothing groups.
+function _selectedSummary() {
+    if (!_multiSelected.size) return '';
+    const counts = new Map();
+    for (const id of _multiSelected) {
+        const c = STATE.combatants.find(x => x.instance_id === id);
+        if (!c) continue;
+        const base = String(c.name || '?').replace(/\s+\d+$/, '').trim();
+        counts.set(base, (counts.get(base) || 0) + 1);
+    }
+    const parts = [];
+    for (const [name, n] of counts) {
+        parts.push(n > 1 ? `${n} ${name}s` : `${n} ${name}`);
+    }
+    return parts.join(', ');
+}
+function _writeMultiSummary() {
+    const el = document.getElementById('multi-summary');
+    if (el) el.textContent = _selectedSummary();
+}
 function updateMultiCount() {
     // Sync the persistent set with whatever is checked in the DOM right now.
     document.querySelectorAll('.multi-check').forEach(cb => {
@@ -2329,6 +2617,7 @@ function updateMultiCount() {
     });
     const el = document.getElementById('multi-count');
     if (el) el.textContent = `${_multiSelected.size} selected`;
+    _writeMultiSummary();
     document.querySelectorAll('.trk .combatant').forEach(row => {
         const cb = row.querySelector('.multi-check');
         row.classList.toggle('multi-selected', !!(cb && cb.checked));
@@ -2347,6 +2636,7 @@ function _restoreMultiSelection() {
     });
     const el = document.getElementById('multi-count');
     if (el) el.textContent = `${_multiSelected.size} selected`;
+    _writeMultiSummary();
 }
 function multiSelectAll() {
     document.querySelectorAll('.multi-check').forEach(cb => { cb.checked = true; });
@@ -2557,9 +2847,20 @@ async function submitCustomMonster() {
 }
 
 
-/* ──────────────── Stat Popup Modal ──────────────── */
+/* ──────────────── Stat Side-Panel (persistent, cycleable) ──────────────── */
+let STAT_PANEL_ID = null;  // currently displayed combatant instance_id
+
+function cycleStatPanel(dir) {
+    if (!STATE.combatants.length) return;
+    let idx = STATE.combatants.findIndex(c => c.instance_id === STAT_PANEL_ID);
+    if (idx < 0) idx = STATE.turn_index;
+    idx = (idx + dir + STATE.combatants.length) % STATE.combatants.length;
+    openStatModal(STATE.combatants[idx].instance_id);
+}
+
 async function openStatModal(instanceId) {
     const modal = document.getElementById('stat-modal');
+    STAT_PANEL_ID = instanceId;
     modal.classList.add('open');
     document.getElementById('sm-body').innerHTML = '<div style="text-align:center;padding:32px;color:var(--t-t3);">Loading…</div>';
 
@@ -2569,9 +2870,12 @@ async function openStatModal(instanceId) {
 
         const eliteLabel = d.elite_weak === 1 ? ' (Elite)' : d.elite_weak === -1 ? ' (Weak)' : '';
         document.getElementById('sm-name').textContent = d.name + eliteLabel;
-        document.getElementById('sm-subtitle').textContent = d.is_pc
+        const posIdx = STATE.combatants.findIndex(c => c.instance_id === instanceId);
+        const posStr = posIdx >= 0 ? `  ·  ${posIdx + 1} / ${STATE.combatants.length}` : '';
+        const subText = d.is_pc
             ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '- ' + d.subclass : ''}`
             : `Creature ${d.level}`;
+        document.getElementById('sm-subtitle').innerHTML = `${escapeHtml(subText)}<span class="sp-pos">${posStr}</span>`;
 
         let html = '';
 
@@ -2600,9 +2904,9 @@ async function openStatModal(instanceId) {
         // HP
         const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
         html += `<div class="hp-ribbon">
-            <div class="hp-r-top"><span class="l">Hit Points</span><span class="pct" style="color:${hpPctColor(hpPct)};">${hpPct}%</span></div>
+            <div class="hp-r-top"><span class="l">Hit Points</span><span class="pct" style="color:${hpPctColor(hpPct, d.is_pc)};">${hpPct}%</span></div>
             <div class="hp-num">${d.current_hp}<span class="slash">/</span><span class="mx">${d.max_hp}</span></div>
-            <div class="hp-bar"><div class="f ${hpBarClass(hpPct)}" style="width:${hpPct}%"></div></div>
+            <div class="hp-bar"><div class="f ${hpBarClass(hpPct, d.is_pc)}" style="width:${hpPct}%"></div></div>
         </div>`;
 
         // Defenses
@@ -2699,6 +3003,23 @@ async function openStatModal(instanceId) {
 
 function closeStatModal() {
     document.getElementById('stat-modal').classList.remove('open');
+    STAT_PANEL_ID = null;
+}
+
+/* Refresh the stat panel after combatant state changes (HP, conditions, etc.)
+   so the side panel stays in sync with the grid without the GM re-clicking. */
+function refreshStatPanelIfOpen() {
+    const modal = document.getElementById('stat-modal');
+    if (modal && modal.classList.contains('open') && STAT_PANEL_ID) {
+        // Verify the combatant still exists; otherwise advance to a sibling
+        const idx = STATE.combatants.findIndex(c => c.instance_id === STAT_PANEL_ID);
+        if (idx < 0) {
+            if (STATE.combatants.length) { cycleStatPanel(0); }
+            else { closeStatModal(); }
+            return;
+        }
+        openStatModal(STAT_PANEL_ID);
+    }
 }
 
 
@@ -2922,23 +3243,52 @@ setInterval(async () => {
 }, 8000);
 
 
-/* ──────────────── Keyboard shortcut ──────────────── */
+/* ──────────────── Keyboard shortcuts ────────────────
+   Live combat:
+     Space / N      → next turn
+     ← / →          → cycle the stat side-panel (prev / next combatant)
+     ↑ / ↓          → heal / damage the focused combatant (1 HP; ×5 with Shift)
+                       Focus order: stat-panel combatant > active combatant
+     Esc            → close side-panel / RK modal
+*/
 document.addEventListener('keydown', e => {
-    // Bail on form fields AND contenteditable (notes drawer renders markdown
-    // into an editable region) — typing `n` there should not advance turn.
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
     if (e.target.isContentEditable) return;
-    if (e.key === 'n' || e.key === 'N') {
-        // Don't swallow Cmd+N / Ctrl+N / Alt+N — those are OS / browser
-        // shortcuts (new window, etc.); preventDefault wouldn't suppress
-        // them anyway, but we shouldn't ALSO fire next-turn on top.
-        if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'n' || e.key === 'N' || e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         apiPost('/api/cycle_turn/next');
+        return;
     }
     if (e.key === 'Escape') {
         closeStatModal();
         document.getElementById('rk-modal')?.classList.remove('open');
+        return;
+    }
+    // Side-panel cycling
+    if (e.key === 'ArrowLeft') {
+        const modal = document.getElementById('stat-modal');
+        if (modal && modal.classList.contains('open')) { e.preventDefault(); cycleStatPanel(-1); }
+        return;
+    }
+    if (e.key === 'ArrowRight') {
+        const modal = document.getElementById('stat-modal');
+        if (modal && modal.classList.contains('open')) { e.preventDefault(); cycleStatPanel(1); }
+        return;
+    }
+    // HP adjust on the focused combatant — prefer the one being viewed
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        let targetId = STAT_PANEL_ID;
+        if (!targetId) {
+            const ac = STATE.combatants[STATE.turn_index];
+            if (ac) targetId = ac.instance_id;
+        }
+        if (!targetId) return;
+        e.preventDefault();
+        const amt = e.shiftKey ? 5 : 1;
+        adjustHPDirect(targetId, e.key === 'ArrowUp' ? 'heal' : 'damage', amt);
+        return;
     }
 });
 
@@ -2950,6 +3300,27 @@ function openSecretRollPanel() {
     const panel = document.getElementById('secret-roll-panel');
     panel.classList.toggle('hidden');
     if (!panel.classList.contains('hidden')) loadSecretLog();
+}
+
+function closeSecretRollPanel() {
+    const panel = document.getElementById('secret-roll-panel');
+    const pinBtn = document.getElementById('secret-pin-btn');
+    if (pinBtn && pinBtn.classList.contains('active')) {
+        // Pinned: confirm so the GM doesn't lose a roll session mid-encounter.
+        if (!confirm('This panel is pinned. Close it anyway?')) return;
+    }
+    panel.classList.add('hidden');
+}
+
+function toggleSecretPin() {
+    const btn = document.getElementById('secret-pin-btn');
+    const panel = document.getElementById('secret-roll-panel');
+    const pinned = btn.classList.toggle('active');
+    btn.textContent = pinned ? 'Pinned' : 'Unpinned';
+    panel.classList.toggle('anchored', pinned);
+    btn.title = pinned
+        ? 'Pinned panels stay open between rolls. Click to unpin.'
+        : 'Click to pin this panel open and prevent accidental closures.';
 }
 
 async function doSecretRoll() {

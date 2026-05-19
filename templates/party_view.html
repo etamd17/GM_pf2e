@@ -159,26 +159,49 @@
         border: 1px solid rgba(168,58,58,0.32);
         color: var(--ruby-100);
         text-transform: capitalize;
+        flex-shrink: 0;
+    }
+    /* When a PC has many active conditions, the strip stays on a single row
+       and scrolls horizontally instead of ballooning the whole card vertically. */
+    .conditions-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        max-width: 60%;
+        padding-bottom: 2px;
+    }
+    .conditions-row::-webkit-scrollbar { height: 4px; }
+    .conditions-row::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.25); border-radius: 2px; }
+    .conditions-row::-webkit-scrollbar-track { background: transparent; }
+    .conditions-overflow {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+        padding: 2px 6px;
+        border-radius: 9999px;
+        background: rgba(201,163,78,0.10);
+        border: 1px solid rgba(201,163,78,0.35);
+        color: var(--gilt-200);
+        flex-shrink: 0;
     }
 
     /* -------- HP controls -------- */
     .hp-adjust-btn {
-        width: 26px; height: 26px;
-        border-radius: 5px;
+        width: 34px; height: 34px;
+        border-radius: 6px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 13px; font-weight: 700;
+        font-size: 17px; font-weight: 700;
         cursor: pointer;
-        transition: opacity 0.15s;
+        transition: opacity 0.15s, transform 0.08s;
         border: none;
         line-height: 1;
     }
     .hp-adjust-btn:hover { opacity: 0.85; }
+    .hp-adjust-btn:active { transform: scale(0.95); }
     .hp-input {
-        width: 38px; height: 26px;
+        width: 48px; height: 34px;
         text-align: center;
-        font-size: 12px; font-weight: 600;
+        font-size: 14px; font-weight: 600;
         font-family: 'Inter', sans-serif;
-        border-radius: 5px;
+        border-radius: 6px;
         background: #0d0d12;
         border: 1px solid rgba(255,255,255,0.08);
         color: #e8e8f0;
@@ -196,17 +219,17 @@
     }
     .pc-tab {
         flex: 1;
-        min-width: 60px;
-        padding: 5px 8px;
+        min-width: 80px;
+        padding: 7px 10px;
         border-radius: 5px;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         text-align: center;
         background: #16161d;
         border: 1px solid rgba(255,255,255,0.05);
-        color: #8a8aa0;
+        color: #b0b0c0;
         cursor: pointer;
         transition: all 0.15s;
     }
@@ -282,25 +305,42 @@
         font-size: 10px; color: #8a8aa0; font-family: 'Inter', sans-serif;
     }
 
-    /* -------- Detail modal -------- */
+    /* -------- Detail drawer ----
+       Right-side slide-in drawer (no backdrop, no focus steal) so the GM
+       can keep scanning the party grid while reading a spell or feat. */
     .detail-overlay {
-        position: fixed; inset: 0;
-        background: rgba(0,0,0,0.7);
-        backdrop-filter: blur(4px);
+        position: fixed;
+        top: 64px; right: 0; bottom: 0;
         z-index: 9999;
-        display: flex; align-items: center; justify-content: center;
-        padding: 20px;
+        display: flex; align-items: stretch; justify-content: flex-end;
+        padding: 0;
+        background: transparent;
+        backdrop-filter: none;
+        pointer-events: none;
     }
     .detail-card {
         background: #1e1e27;
         border: 1px solid rgba(201,163,78,0.25);
-        border-radius: 10px;
-        max-width: 620px;
-        width: 100%;
-        max-height: 88vh;
+        border-right: none;
+        border-radius: 12px 0 0 12px;
+        max-width: 480px;
+        width: 480px;
+        max-height: none;
+        height: 100%;
         display: flex; flex-direction: column;
         overflow: hidden;
-        box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+        box-shadow: -12px 0 36px rgba(0,0,0,0.55);
+        pointer-events: auto;
+        transform: translateX(20px);
+        opacity: 0;
+        transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+    .detail-overlay.open .detail-card {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    @media (max-width: 900px) {
+        .detail-card { width: 92vw; max-width: 92vw; }
     }
     .detail-card-head {
         padding: 14px 18px;
@@ -358,6 +398,26 @@
     .detail-card-body::-webkit-scrollbar { width: 8px; }
     .detail-card-body::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.22); border-radius: 4px; }
     .detail-card-body::-webkit-scrollbar-track { background: transparent; }
+
+    /* ── Card-flash animations ──
+       Brief border + glow pulse so the GM can confirm a damage / heal /
+       condition action landed on this specific PC card. Especially useful
+       for party-wide damage where 4 cards update simultaneously. */
+    @keyframes pcFlashDmg {
+        0%   { box-shadow: 0 0 0 0 rgba(196,60,60,0.55); border-color: rgba(196,60,60,0.7); }
+        100% { box-shadow: 0 0 0 14px rgba(196,60,60,0);  border-color: rgba(255,255,255,0.06); }
+    }
+    @keyframes pcFlashHeal {
+        0%   { box-shadow: 0 0 0 0 rgba(62,186,104,0.55); border-color: rgba(62,186,104,0.7); }
+        100% { box-shadow: 0 0 0 14px rgba(62,186,104,0); border-color: rgba(255,255,255,0.06); }
+    }
+    @keyframes pcFlashCond {
+        0%   { box-shadow: 0 0 0 0 rgba(201,163,78,0.55); border-color: rgba(201,163,78,0.7); }
+        100% { box-shadow: 0 0 0 14px rgba(201,163,78,0); border-color: rgba(255,255,255,0.06); }
+    }
+    .pc-card.card-flash-dmg  { animation: pcFlashDmg 0.7s ease-out; }
+    .pc-card.card-flash-heal { animation: pcFlashHeal 0.7s ease-out; }
+    .pc-card.card-flash-cond { animation: pcFlashCond 0.7s ease-out; }
 {% endblock %}
 
 {% block content %}
@@ -733,12 +793,16 @@
     }
 
     function closeModal() {
-        modal.style.display = 'none';
+        modal.classList.remove('open');
+        // Wait for the slide-out transition before fully hiding so it can
+        // animate back in on next open.
+        setTimeout(() => {
+            if (!modal.classList.contains('open')) modal.style.display = 'none';
+        }, 200);
     }
     modalClose.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.style.display !== 'none') closeModal();
+        if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
     });
 
     async function openDetail(el) {
@@ -801,6 +865,8 @@
         }
 
         modal.style.display = 'flex';
+        // Next frame so the transition can pick up the class change.
+        requestAnimationFrame(() => modal.classList.add('open'));
         modalBody.scrollTop = 0;
     }
 
@@ -869,9 +935,27 @@
         return 'text-danger-400';
     }
 
-    function updateCardHP(card, currentHP, maxHP, conditions) {
-        const pct = maxHP > 0 ? (currentHP / maxHP * 100) : 0;
+    // Brief flash so the GM gets visual confirmation that a damage / heal /
+    // condition action landed on this specific card. Variant is 'dmg' | 'heal' | 'cond'.
+    function flashCard(card, variant) {
+        if (!card) return;
+        card.classList.remove('card-flash-dmg', 'card-flash-heal', 'card-flash-cond');
+        // Force reflow so re-adding the class restarts the animation.
+        void card.offsetWidth;
+        card.classList.add('card-flash-' + variant);
+        setTimeout(() => card.classList.remove('card-flash-' + variant), 700);
+    }
+
+    function updateCardHP(card, currentHP, maxHP, conditions, opts) {
+        opts = opts || {};
         const hpDisplay = card.querySelector('.hp-display');
+        let prevHP = null;
+        if (hpDisplay) {
+            // Read the previous displayed HP for flash direction inference
+            const m = (hpDisplay.textContent || '').match(/(-?\d+)/);
+            if (m) prevHP = parseInt(m[1], 10);
+        }
+        const pct = maxHP > 0 ? (currentHP / maxHP * 100) : 0;
         if (hpDisplay) {
             hpDisplay.className = 'hp-display text-sm font-bold ' + getHPClass(pct);
             hpDisplay.innerHTML = currentHP + '<span class="text-base-500 font-normal text-xs"> / ' + maxHP + '</span>';
@@ -881,8 +965,18 @@
             bar.style.width = pct + '%';
             bar.style.background = getHPColor(pct);
         }
+        const prevConds = card._prevConds || null;
         if (conditions !== undefined) {
             updateConditions(card, conditions);
+            card._prevConds = JSON.stringify(conditions);
+        }
+        // Flash unless caller explicitly suppresses (e.g. initial paint)
+        if (!opts.noFlash) {
+            if (prevHP !== null && currentHP < prevHP) flashCard(card, 'dmg');
+            else if (prevHP !== null && currentHP > prevHP) flashCard(card, 'heal');
+            else if (conditions !== undefined && prevConds && prevConds !== JSON.stringify(conditions)) {
+                flashCard(card, 'cond');
+            }
         }
     }
 

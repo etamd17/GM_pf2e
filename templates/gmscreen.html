@@ -128,8 +128,9 @@
     .gm-cat-btn.active { background: rgba(201,163,78,0.12); border-color: rgba(201,163,78,0.4); color: var(--gilt-200); }
 
     /* Result cards from compendium search — typed by category */
-    .gm-result-card { background: var(--bg-card-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-    .gm-result-card:hover { border-color: rgba(201,163,78,0.3); background: var(--bg-hover); }
+    .gm-result-card { background: var(--bg-card-2); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.08s; }
+    .gm-result-card:hover { border-color: rgba(201,163,78,0.4); background: rgba(201,163,78,0.06); }
+    .gm-result-card:active { transform: scale(0.99); }
     .gm-result-name { font-size: 13px; font-weight: 700; color: var(--text-on-dark); }
     .gm-result-desc { font-size: 11px; color: var(--text-on-dark-3); line-height: 1.4; margin-top: 4px;
         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -165,13 +166,19 @@
       --t-red-b:      var(--ruby-200);
 
       position:fixed; top:76px; right:0; bottom:12px;
-      width:500px; max-width:96vw;
+      /* Narrower on smaller screens so the drawer doesn't cover half the page.
+         The 96vw cap keeps it on mobile, but on laptops it now snaps to 420px. */
+      width: min(500px, 38vw);
+      min-width: 360px;
+      max-width: 96vw;
       z-index:120;
       display:flex;
       pointer-events:none;
       transform:translateX(calc(100% - 32px));
       transition: transform .22s cubic-bezier(.4,0,.2,1);
     }
+    @media (max-width: 1280px) { .checks-drawer { width: 420px; } }
+    @media (max-width: 900px)  { .checks-drawer { width: 92vw; } }
     .checks-drawer.open { transform:translateX(0); }
     .checks-drawer-handle {
       width:32px; flex-shrink:0;
@@ -281,13 +288,14 @@
     .situation-table td.notes { color:var(--t-t3); font-size:11px; font-style:italic; }
     .situation-table tr:hover td { background:rgba(255,255,255,0.02); }
 
-    .dc-table { width:100%; border-collapse:collapse; font-size:12px; font-family:'JetBrains Mono',monospace; }
+    .dc-table { width:100%; border-collapse:collapse; font-size:13px; font-family:'JetBrains Mono',monospace; line-height: 1.5; }
     .dc-table th {
-      text-align:center; padding:6px 8px; color:var(--t-gold); font-family:'Cinzel',serif;
-      font-size:10px; letter-spacing:1px; text-transform:uppercase;
+      text-align:center; padding:8px 8px; color:var(--t-gold); font-family:'Cinzel',serif;
+      font-size:11px; letter-spacing:1px; text-transform:uppercase;
       border-bottom:2px solid var(--t-border); background:rgba(19,22,31,0.5);
     }
-    .dc-table td { padding:5px 8px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--t-t2); }
+    .dc-table td { padding:8px 10px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--t-t2); }
+    .dc-table tr:hover td { background:rgba(201,163,78,0.04); }
     .dc-table td.lvl { color:var(--t-t3); }
     .dc-table td strong { color:var(--t-t1); }
 
@@ -579,6 +587,13 @@
             const res = await fetch(`/api/compendium_detail?name=${encodeURIComponent(name)}&type=${type}`);
             const data = await res.json();
             if (data.error) return;
+
+            // Keep focus on the search input so the GM can refine the query
+            // (e.g., "Fireball" → "Fireball, Greater") without re-clicking.
+            const searchInput = document.getElementById('comp-search');
+            if (searchInput && document.activeElement !== searchInput) {
+                requestAnimationFrame(() => searchInput.focus({ preventScroll: true }));
+            }
 
             document.getElementById('comp-detail-name').innerText = data.name;
 
