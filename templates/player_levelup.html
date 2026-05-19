@@ -128,7 +128,7 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="font-body" style="overflow-x:hidden;">
+<body class="font-body levelup-page" style="overflow-x:hidden;">
 
     {# ── Sticky top bar ─────────────────────────────────────────────
        Replaces the cramped sidebar nav. All seven sections are now
@@ -571,9 +571,15 @@
             buildRetrainUI();
 
             // Build per-step Back/Continue navigation footers, then land
-            // on class features so the player sees what's automatic.
+            // on class features so the player sees what's automatic. If
+            // classfeatures isn't relevant at this level (it's lvl-hidden),
+            // fall back to the first visible step — otherwise navTo() bails
+            // on the hidden target and the page renders empty.
             buildStepNav();
-            navTo('classfeatures');
+            const _firstStep = (typeof _visibleStepIds === 'function' && _visibleStepIds()[0]) || 'classfeatures';
+            const _landing = document.getElementById('step-classfeatures') && !document.getElementById('step-classfeatures').classList.contains('lvl-hidden')
+                ? 'classfeatures' : _firstStep;
+            navTo(_landing);
         }
         
         function updateHpPreview() {

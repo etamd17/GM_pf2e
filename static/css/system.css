@@ -1692,9 +1692,9 @@ body.levelup, .levelup-page {
    carry the .lvl-hidden class (applied by init) which beats this rule.
    Using a class-based hide instead of inline style:display:none so we
    don't fight !important specificity. */
-.step-panel { display: block; }
-.step-panel.lvl-hidden { display: none !important; }
-.step-panel + .step-panel:not(.lvl-hidden) {
+.levelup-page .step-panel { display: block; }
+.levelup-page .step-panel.lvl-hidden { display: none !important; }
+.levelup-page .step-panel + .step-panel:not(.lvl-hidden) {
     border-top: 1px solid var(--border-card) !important;
     margin-top: var(--sp-3) !important;
     padding-top: var(--sp-3) !important;
@@ -1801,16 +1801,16 @@ body.levelup, .levelup-page {
 /* Pathbuilder-style level-up: every step is a small section under one
    "Level N" header, each choice rendered as a compact card. No verbose
    per-step intros, no panel-in-panel padding, no chunky H2s. */
-.step-panel {
+.levelup-page .step-panel {
     padding: 0 !important;
     margin-top: var(--sp-5) !important;
     max-width: none !important;
 }
-.step-panel + .step-panel { padding-top: var(--sp-4) !important; margin-top: var(--sp-4) !important; }
+.levelup-page .step-panel + .step-panel { padding-top: var(--sp-4) !important; margin-top: var(--sp-4) !important; }
 
 /* Step heading collapses to a small gilt small-caps label like
    Pathbuilder's "Level 4" markers. */
-.step-panel h2 {
+.levelup-page .step-panel h2 {
     font-family: var(--font-display) !important;
     font-size: 11px !important;
     line-height: 1.1 !important;
@@ -1823,7 +1823,7 @@ body.levelup, .levelup-page {
 }
 /* The descriptive paragraph under each H2 is muted and small.  Used to
    take 5 lines of vertical real estate; now ~1 line of helper text. */
-.step-panel > p {
+.levelup-page .step-panel > p {
     font-size: 11px !important;
     color: var(--text-on-dark-3) !important;
     margin: 0 0 var(--sp-3) 0 !important;
@@ -1833,17 +1833,17 @@ body.levelup, .levelup-page {
 /* Hide the rules-explanation paragraphs entirely — Pathbuilder just
    shows the choice cards. The user already knows the rules; the page
    shouldn't repeat the rulebook. */
-.step-panel > p:first-of-type { display: none !important; }
-.step-panel > p:nth-of-type(2)  { display: none !important; }
+.levelup-page .step-panel > p:first-of-type { display: none !important; }
+.levelup-page .step-panel > p:nth-of-type(2)  { display: none !important; }
 
 /* Flatten the bg-gray-800 / bg-gray-900 inner boxes the step panels
    nest. These were the "card in card in card" vibe-coded culprit.
    Replace with transparent backgrounds — no border, no padding, no
    shadow. The choice cards inside provide the structure. */
-.step-panel .bg-gray-800,
-.step-panel .bg-gray-900,
-.step-panel [class*="bg-gray-800"],
-.step-panel [class*="bg-gray-900"] {
+.levelup-page .step-panel .bg-gray-800,
+.levelup-page .step-panel .bg-gray-900,
+.levelup-page .step-panel [class*="bg-gray-800"],
+.levelup-page .step-panel [class*="bg-gray-900"] {
     background: transparent !important;
     background-image: none !important;
     border: none !important;
@@ -1856,7 +1856,7 @@ body.levelup, .levelup-page {
 /* H3 / H4 inside step panels — small inline labels, no rule lines or
    card chrome. Pathbuilder-style: "SKILL UPGRADES" reads as a row
    header, not a section divider. */
-.step-panel h3 {
+.levelup-page .step-panel h3 {
     font-family: var(--font-display) !important;
     font-size: 10px !important;
     letter-spacing: 0.16em !important;
@@ -1867,7 +1867,7 @@ body.levelup, .levelup-page {
     border: none !important;
     font-weight: 600 !important;
 }
-.step-panel h4 {
+.levelup-page .step-panel h4 {
     font-family: var(--font-display) !important;
     font-size: 10px !important;
     letter-spacing: 0.14em !important;
@@ -1881,8 +1881,8 @@ body.levelup, .levelup-page {
 /* Hide the verbose per-section flex headers ("Skill Upgrades — 1 left",
    "The 4 Free Boosts — 4/4 Allocated", etc.) — replace with tight
    labels. The choice cards already convey state visually. */
-.step-panel .border-b.border-gray-700,
-.step-panel [class*="border-gray-700"] {
+.levelup-page .step-panel .border-b.border-gray-700,
+.levelup-page .step-panel [class*="border-gray-700"] {
     border-color: transparent !important;
     padding-bottom: 0 !important;
     margin-bottom: var(--sp-2) !important;
@@ -1890,25 +1890,25 @@ body.levelup, .levelup-page {
 
 /* Choice cards (the .choice-card class my system.css already styles)
    — even tighter padding so they read like Pathbuilder's icon rows. */
-.choice-card {
+.levelup-page .choice-card {
     padding: var(--sp-2) var(--sp-3) !important;
     margin-bottom: var(--sp-1) !important;
     min-height: auto !important;
 }
-.choice-card .title { font-size: 13px !important; line-height: 1.2 !important; }
-.choice-card .subtitle { font-size: 9px !important; letter-spacing: 0.14em !important; opacity: 0.8 !important; }
+.levelup-page .choice-card .title { font-size: 13px !important; line-height: 1.2 !important; }
+.levelup-page .choice-card .subtitle { font-size: 9px !important; letter-spacing: 0.14em !important; opacity: 0.8 !important; }
 
 /* Skill / ability cards in the grids — same compact treatment. */
-#ui-abilities, #ui-skills, #ui-feats, #ui-magic-containers,
-#ui-classfeatures, #ui-abilities-math, #ui-retrain-list {
+.levelup-page #ui-abilities, .levelup-page #ui-skills, .levelup-page #ui-feats, .levelup-page #ui-magic-containers,
+.levelup-page #ui-classfeatures, .levelup-page #ui-abilities-math, .levelup-page #ui-retrain-list {
     gap: var(--sp-1) !important;
 }
-#ui-abilities { display: flex !important; flex-wrap: wrap !important; }
+.levelup-page #ui-abilities { display: flex !important; flex-wrap: wrap !important; }
 
 /* "1 left" / "4/4 Allocated" counter chips — small inline pill instead
    of giant 24px headlines. */
-.step-panel #lbl-skill-remaining,
-.step-panel #msg-abilities-done {
+.levelup-page .step-panel #lbl-skill-remaining,
+.levelup-page .step-panel #msg-abilities-done {
     font-size: 11px !important;
     font-family: var(--font-display) !important;
     letter-spacing: 0.14em !important;
@@ -1920,7 +1920,7 @@ body.levelup, .levelup-page {
     border: none !important;
     padding: 0 !important;
 }
-.step-panel #lbl-skill-math {
+.levelup-page .step-panel #lbl-skill-math {
     font-size: 10px !important;
     color: var(--text-on-dark-3) !important;
     font-style: italic !important;
@@ -2714,6 +2714,51 @@ button[onclick^="rollDamage"]:hover {
 /* HP+Shield is the most-touched block during play — pin it first under
    the character name. Saves / abilities follow in their natural order. */
 .stats-strip .hp-area { order: -1 !important; }
+
+/* ── MOBILE: stats-strip reflow ──
+   On phones the desktop "everything on one row" layout crushes the 8
+   defense blocks + HP block into ~40px columns that overlap. Switch to a
+   grid: HP+Shield spans the full width as its own row (order -1 keeps it
+   on top), and the defense stats tile into a clean 3-wide grid below. */
+@media (max-width: 600px) {
+    .stats-strip {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 1px !important;
+        background: var(--border, rgba(255,255,255,0.08)) !important;
+    }
+    .stats-strip > .ss-block {
+        border-right: none !important;
+        background: var(--bg-surface) !important;
+        padding: 6px 4px !important;
+        min-height: 52px !important;
+    }
+    .stats-strip .ss-block.hp-area {
+        grid-column: 1 / -1 !important;
+        min-height: 0 !important;
+        padding: 8px !important;
+        /* Stretch child rows to full width — otherwise align-items:center
+           lets the shield-action row shrink-wrap and crush its buttons to
+           ~24px, overlapping their own text. */
+        align-items: stretch !important;
+    }
+    /* The HP block's inner rows are utility-class flex rows (no stable class
+       hook), so target direct children. Force full width + recenter content. */
+    .stats-strip .ss-block.hp-area > div {
+        width: 100% !important;
+    }
+    /* Shield action buttons (Raise / Block / Reaction) + gauge chips must not
+       shrink below their text — keep them on their own line, wrapping. */
+    .stats-strip .ss-block.hp-area button,
+    .stats-strip .ss-block.hp-area #shield-gauge > * {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+    }
+    /* Defense values were 22px which is fine, but tighten the label so it
+       fits a 1/3-width tile without truncating awkwardly. */
+    .stats-strip .ss-lbl { font-size: 8px !important; letter-spacing: 0.1em !important; }
+    .stats-strip .ss-val { font-size: 19px !important; }
+}
 /* Raise Shield AC visualization — gives the AC stat block a visible
    "shield is up" treatment instead of just a number bump. */
 .stats-strip .ss-block.shield-raised .ss-val,

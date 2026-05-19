@@ -142,6 +142,17 @@
             transition:border-color 0.15s, color 0.15s;
         }
         .btn-ghost:hover { border-color:rgba(201,163,78,0.35); color:#ededf4; }
+
+        /* ── MOBILE ──
+           The roster/tracker table has px-4 cells × 4 columns that overflow
+           a phone. Let the table scroll horizontally inside its rounded
+           frame and tighten cell padding so it mostly fits anyway. */
+        @media (max-width: 600px) {
+            .rounded-xl.overflow-hidden { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+            table.border-collapse th, table.border-collapse td { padding-left: 8px !important; padding-right: 8px !important; }
+            .btn-primary { padding: 8px 14px !important; }
+            .roster-hero { padding: 18px 10px 12px !important; }
+        }
     </style>
 </head>
 <body class="stage{% if campaign.hero_image %} has-hero{% endif %}"

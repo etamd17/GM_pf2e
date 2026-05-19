@@ -1,8 +1,8 @@
         <div id="tab-magic" data-print-title="Magic &amp; Spells" class="tab-content sheet-page space-y-6">
             {% if pc.spell_casters %}
                 <!-- Spell Search -->
-                <div class="no-print flex items-center gap-2 mb-2">
-                    <input type="text" id="spell-search" placeholder="Search spells..." oninput="_onSpellSearchInput('spell-search')" class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
+                <div class="spell-filter-row no-print flex items-center gap-2 mb-2">
+                    <input type="text" id="spell-search" placeholder="Search spells..." oninput="_onSpellSearchInput('spell-search')" class="flex-1 rounded px-3 py-2 text-sm focus:outline-none" style="min-width:0; background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
                     <select id="spell-rank-filter" onchange="filterSpells(document.getElementById('spell-search').value)" class="rounded px-2 py-2 text-sm focus:outline-none" style="background:var(--surface-sunken); border:1px solid var(--border-subtle); color:var(--text-primary);">
                         <option value="">All Ranks</option>
                         <option value="0">Cantrips</option>

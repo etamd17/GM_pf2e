@@ -1970,7 +1970,11 @@
             .char-name { font-size: 20px; }
             .mobile-actions { display:flex; gap:4px; flex-wrap:wrap; }
             .mobile-actions > * { font-size:11px !important; padding:4px 8px !important; }
-            .hp-area button { width:24px !important; height:28px !important; font-size:10px !important; padding:2px !important; }
+            /* Scope the 24px squeeze to the HP +/- adjust buttons only —
+               targeting all .hp-area button also crushed the Shield / Block /
+               Reaction action buttons and the Repair button into 24px squares
+               whose text overflowed and overlapped on phones. */
+            .hp-area .hp-btn { width:24px !important; height:28px !important; font-size:10px !important; padding:2px !important; }
             .hp-area .text-2xl { font-size:20px !important; }
             .sheet-page .grid.grid-cols-1.xl\\:grid-cols-3 { grid-template-columns:1fr !important; }
             .sheet-page .grid.grid-cols-1.md\\:grid-cols-2 { grid-template-columns:1fr !important; }
@@ -1982,6 +1986,15 @@
             h1.font-header { font-size:20px !important; }
             .tab-bar-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
             .tab-bar-scroll::-webkit-scrollbar { display:none; }
+            /* Equipment / weapon / armor browser: its body is two hardcoded
+               w-1/2 columns (list | detail) that crush to ~170px each on a
+               phone. Stack them vertically — list on top with a capped
+               height, detail below. */
+            #equip-modal .flex-1.flex { flex-direction: column !important; }
+            #equip-modal #equip-list { width: 100% !important; max-height: 38vh; border-right: none !important; border-bottom: 1px solid var(--border-card, rgba(255,255,255,0.08)) !important; }
+            #equip-modal #equip-detail { width: 100% !important; }
+            /* Toast container shouldn't claim a fixed 320px on a 375px phone. */
+            #roll-toast-container { width: calc(100vw - 24px) !important; right: 12px !important; top: 12px !important; }
         }
         @media (max-width: 480px) {
             .max-w-6xl { padding-left:8px !important; padding-right:8px !important; }

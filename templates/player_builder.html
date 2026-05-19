@@ -41,17 +41,61 @@
         
         h2, h3, h4, label { font-family: 'Cinzel', serif; }
         input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
+
+        /* ── MOBILE: stack the wizard ──
+           The desktop layout is a fixed 256px sidebar + flex content row. On
+           a phone that leaves ~120px for the form. Stack vertically: the
+           sidebar becomes a top bar whose step nav scrolls horizontally, and
+           the step content takes the full width below. */
+        @media (max-width: 768px) {
+            body.flex.h-screen { flex-direction: column; height: auto; min-height: 100vh; }
+            .builder-sidebar {
+                width: 100% !important;
+                border-right: none !important;
+                border-bottom: 1px solid var(--border, #2a2a33);
+                flex-shrink: 0;
+                position: sticky; top: 0;
+            }
+            .builder-sidebar-head { padding: 10px 14px !important; }
+            .builder-sidebar-head h1 { font-size: 18px !important; }
+            /* Step nav → horizontal scroll strip */
+            .builder-nav-list {
+                display: flex !important;
+                flex-direction: row !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding: 6px 8px !important;
+                gap: 4px;
+                flex: 0 0 auto !important;
+            }
+            .builder-nav-list::-webkit-scrollbar { display: none; }
+            .builder-nav-list .nav-item {
+                width: auto !important;
+                white-space: nowrap;
+                padding: 8px 12px !important;
+                border-radius: 6px;
+                flex: 0 0 auto;
+            }
+            .builder-nav-list .nav-item.active { border-left: none !important; border-bottom: 2px solid #5EADAD; }
+            /* The Finish button block sits below the nav, still full width. */
+            .builder-sidebar > .p-6.border-t { padding: 10px 14px !important; }
+            /* Step panels: tighten the generous desktop padding. */
+            .step-panel { padding: 18px 14px !important; }
+            .step-panel h2 { font-size: 1.6rem !important; }
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
 <body class="font-body flex h-screen">
 
-    <div class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
-        <div class="p-6 border-b border-gray-800">
+    <div class="builder-sidebar w-64 bg-gray-950 border-r border-gray-800 flex flex-col z-10 shadow-2xl shrink-0">
+        <div class="p-6 border-b border-gray-800 builder-sidebar-head">
             <a href="/player" class="text-xs text-gray-500 hover:text-white transition-colors mb-2 block uppercase tracking-wider font-bold">← Back to Roster</a>
             <h1 class="text-2xl font-header text-amber-500 leading-none">Character Forge</h1>
         </div>
-        <div class="flex-1 overflow-y-auto py-4 space-y-1">
+        <div class="flex-1 overflow-y-auto py-4 space-y-1 builder-nav-list">
             <button onclick="navTo('start')" id="nav-start" class="nav-item active w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
                 <span>1. Identity</span> <span id="chk-start" class="text-xs"></span>
             </button>
