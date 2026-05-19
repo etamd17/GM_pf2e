@@ -75,6 +75,11 @@
                             <span>Enc {{ pc.encumbered_limit }}B</span>
                             <span>Max {{ pc.max_bulk_limit }}B</span>
                         </div>
+                        {# Container Net Bulk note — populated by computeNetBulk()
+                           when the inventory contains a Backpack / Belt Pouch /
+                           Sack. Containers reduce the bulk of their contents
+                           by 2B / 0+2L / 0+1L respectively (first carried items). #}
+                        <div id="net-bulk-note" class="mt-2 text-[10px]" style="color:var(--text-secondary); display:none;"></div>
                         {% if pc.is_encumbered %}
                         <div class="mt-2 text-[10px]" style="color:#F59E0B; font-family:var(--font-display); letter-spacing:0.08em; text-transform:uppercase;">
                             Encumbered — Clumsy 1 · −10 ft Speed (drop items to recover)

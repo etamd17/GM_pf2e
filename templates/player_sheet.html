@@ -921,6 +921,47 @@
         .action-btn.primary { background: var(--red); border-color: var(--red); color: white; }
         .action-btn.primary:hover { background: var(--red-b); border-color: var(--red-b); }
 
+        /* === Reaction mirror chip (Strikes card) ===
+           Same semantics as the header reaction chip, painted into the
+           Strikes-card header so the state is always in eye-line during
+           combat. State is driven by data-reaction-used and kept in sync
+           by _paintReactionChip(). */
+        .reaction-chip-mirror {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-family: var(--font-display);
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            padding: 5px 11px;
+            border-radius: 999px;
+            background: rgba(90,142,232,0.10);
+            border: 1px solid rgba(90,142,232,0.40);
+            color: #93C5FD;
+            cursor: pointer;
+            transition: background .15s, border-color .15s, color .15s, transform .08s;
+            min-height: 30px;
+        }
+        .reaction-chip-mirror:hover { background: rgba(90,142,232,0.18); border-color: rgba(90,142,232,0.70); }
+        .reaction-chip-mirror:active { transform: scale(0.97); }
+        .reaction-chip-mirror .reaction-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #60A5FA;
+            box-shadow: 0 0 5px rgba(96,165,250,0.55);
+            transition: background .15s, box-shadow .15s;
+        }
+        .reaction-chip-mirror[data-reaction-used="true"] {
+            background: rgba(220,38,38,0.12);
+            border-color: rgba(220,38,38,0.45);
+            color: #fca5a5;
+        }
+        .reaction-chip-mirror[data-reaction-used="true"]:hover {
+            background: rgba(220,38,38,0.22);
+            border-color: rgba(220,38,38,0.70);
+        }
+        .reaction-chip-mirror[data-reaction-used="true"] .reaction-dot {
+            background: #ef4444;
+            box-shadow: 0 0 5px rgba(239,68,68,0.55);
+        }
+
         /* Topbar small-button (Design C) — ghost / secondary tier.
            Primary tier (.tb.primary) gets embossed gilt-edge treatment so
            the eye lands on Level Up / Save / Strike above lower-stakes
@@ -2008,21 +2049,43 @@
         }
         .theme-toggle:hover { background: var(--bg-overlay); color: var(--gilt); }
 
-        /* === Sustained-spell chip (lives near focus in the toolbar).
-           Single DOM element populated on demand; hidden when empty. */
+        /* === Sustained-spell chip ===
+           Visually harmonized with .resource-chip (same padding, border
+           radius, label typography) so the header chips read as one
+           consistent family of resources instead of three idioms. */
         .sustain-chip {
-            display: none; align-items: center; gap: 6px;
-            padding: 3px 8px; border-radius: 99px;
-            background: rgba(167,139,250,0.08);
-            border: 1px solid rgba(167,139,250,0.25);
+            display: none; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 6px;
+            background: var(--bg-raised);
+            border: 1px solid rgba(167,139,250,0.30);
             font-family: var(--font-ui); font-size: 11px;
             color: var(--color-spell, #a78bfa);
+            white-space: nowrap;
         }
         .sustain-chip.active { display: inline-flex; }
-        .sustain-chip-label { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 9px; opacity: 0.75; }
-        .sustain-chip-item { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px; background: rgba(167,139,250,0.12); border-radius: 4px; }
-        .sustain-chip-item button { background: transparent; color: inherit; opacity: 0.7; padding: 0 2px; font-size: 11px; }
+        .sustain-chip-label {
+            font-family: var(--font-display);
+            font-weight: 700; letter-spacing: 0.12em;
+            text-transform: uppercase; font-size: 9px;
+            color: var(--color-spell, #a78bfa);
+            margin-right: 2px;
+        }
+        .sustain-chip-item {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 1px 6px;
+            background: rgba(167,139,250,0.14);
+            border: 1px solid rgba(167,139,250,0.30);
+            border-radius: 4px;
+        }
+        .sustain-chip-item button {
+            background: transparent; color: inherit;
+            opacity: 0.75; padding: 0 3px; font-size: 12px;
+            line-height: 1; min-width: 18px; min-height: 18px;
+        }
         .sustain-chip-item button:hover { opacity: 1; color: #ef4444; }
+        .sustain-chip-item .sustain-jump:hover {
+            color: var(--gilt); text-decoration: underline;
+        }
 
         /* === Roll history pullout — collapsed button expands a small
            card with the last 5 rolls. Zero idle cost; built on click. */
@@ -2456,6 +2519,233 @@
             a { color: var(--ink) !important; text-decoration: none !important; }
             * { text-shadow: none !important; box-shadow: none !important; }
         }
+
+        /* ═══════════════════════════════════════════════════════════
+           TOUCH-TARGET SWEEP (Wave 3)
+           In-person table play. Tablets. Cold hands. Combat adrenaline.
+           Anything the player taps in the heat of a turn should hit a
+           minimum of ~28px on the short axis. Class names are scoped
+           so we don't inflate every button on the page.
+           ═══════════════════════════════════════════════════════════ */
+        .cond-step {
+            min-width: 28px; min-height: 28px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 6px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-s);
+            font-family: var(--font-display);
+            font-size: 14px; font-weight: 800;
+            cursor: pointer;
+            transition: background .12s, border-color .12s, color .12s, transform .08s;
+            line-height: 1;
+        }
+        .cond-step:hover { background: var(--bg-raised); border-color: rgba(255,255,255,0.25); }
+        .cond-step:active { transform: scale(0.93); }
+        .cond-numeric .cond-val {
+            min-width: 22px; text-align: center; font-variant-numeric: tabular-nums;
+        }
+        .cond-numeric.is-on { border-color: rgba(220,38,38,0.40); }
+        .cond-toggle {
+            min-height: 38px; padding: 8px 12px;
+        }
+
+        /* Invested toggle on inventory rows — was ~14px, now full-width tap zone */
+        .invested-toggle, .inv-invested-toggle {
+            min-width: 28px; min-height: 28px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        /* "DROP" buttons that hide behind hover are unfriendly on touch —
+           always show them at a tap-friendly size in touch contexts. */
+        @media (hover: none) and (pointer: coarse) {
+            .group:not(:hover) [class*="opacity-0"] { opacity: 0.7 !important; }
+            .group:not(:hover) [class*="opacity-0"]:active { opacity: 1 !important; }
+        }
+
+        /* Slot checkbox → pill toggle (Magic tab Wave 3 — see _tab_magic
+           rendering; this just sizes the box so any spell-slot checkbox
+           hits a comfortable tap target). */
+        .slot-pill-toggle {
+            min-width: 24px; min-height: 24px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 6px;
+            border: 1px solid var(--border-s);
+            background: var(--bg-base);
+            cursor: pointer;
+            font-family: var(--font-display);
+            font-size: 11px; font-weight: 700;
+            color: var(--text-muted);
+            transition: background .12s, border-color .12s, color .12s, transform .08s;
+            margin: 1px;
+            line-height: 1;
+        }
+        .slot-pill-toggle:hover { border-color: rgba(255,255,255,0.30); color: var(--text-primary); }
+        .slot-pill-toggle:active { transform: scale(0.94); }
+        .slot-pill-toggle.spent {
+            background: rgba(220,38,38,0.10);
+            border-color: rgba(220,38,38,0.40);
+            color: rgba(252,165,165,0.85);
+            text-decoration: line-through;
+        }
+        .slot-pill-toggle.spent:hover { background: rgba(220,38,38,0.18); }
+
+        /* ── SSE flash: GM-driven update notification ──
+           When the GM applies HP/condition changes from the tracker, the
+           relevant panel briefly pulses so the player notices without
+           having to watch the corner connection pip. Variants:
+             dmg  — red ring (HP went down)
+             heal — green ring (HP went up)
+             cond — gold ring (conditions changed)
+        */
+        @keyframes sheetFlashDmg {
+            0%   { box-shadow: 0 0 0 0 rgba(220,38,38,0.55); }
+            100% { box-shadow: 0 0 0 14px rgba(220,38,38,0); }
+        }
+        @keyframes sheetFlashHeal {
+            0%   { box-shadow: 0 0 0 0 rgba(62,186,104,0.55); }
+            100% { box-shadow: 0 0 0 14px rgba(62,186,104,0); }
+        }
+        @keyframes sheetFlashCond {
+            0%   { box-shadow: 0 0 0 0 rgba(201,163,78,0.55); }
+            100% { box-shadow: 0 0 0 14px rgba(201,163,78,0); }
+        }
+        .sheet-flash-dmg  { animation: sheetFlashDmg  0.7s ease-out; }
+        .sheet-flash-heal { animation: sheetFlashHeal 0.7s ease-out; }
+        .sheet-flash-cond { animation: sheetFlashCond 0.7s ease-out; }
+
+        /* Sustain-chip → spell highlight when a player jumps from header
+           to the sustained spell in the Magic tab. Purple ring matches the
+           sustain-chip color. */
+        @keyframes sustainSpellHighlight {
+            0%   { box-shadow: 0 0 0 0 rgba(167,139,250,0.65); background: rgba(167,139,250,0.15); }
+            100% { box-shadow: 0 0 0 12px rgba(167,139,250,0); }
+        }
+        .sustain-spell-highlight { animation: sustainSpellHighlight 1.8s ease-out; }
+
+        /* ═══ KINETICIST STATE BAR ═══
+           Aura / Gates / Overflow live above the impulse list. */
+        .kineticist-divider {
+            width: 1px; height: 18px;
+            background: var(--border-default);
+            opacity: 0.6;
+        }
+        .ki-aura-toggle {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 11px; border-radius: 999px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-default);
+            color: var(--text-muted);
+            font-family: var(--font-display);
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            cursor: pointer;
+            min-height: 28px;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .ki-aura-toggle .ki-aura-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--text-faint);
+            transition: background .15s, box-shadow .15s;
+        }
+        .ki-aura-toggle.on {
+            background: rgba(96,165,250,0.14);
+            border-color: rgba(96,165,250,0.55);
+            color: #93C5FD;
+        }
+        .ki-aura-toggle.on .ki-aura-dot {
+            background: #60A5FA;
+            box-shadow: 0 0 6px rgba(96,165,250,0.7);
+        }
+        .ki-gate-pill {
+            font-family: var(--font-display);
+            font-size: 10px; font-weight: 700;
+            padding: 4px 9px; border-radius: 999px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-default);
+            color: var(--text-muted);
+            letter-spacing: 0.06em; text-transform: uppercase;
+            cursor: pointer;
+            min-height: 26px;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .ki-gate-pill.open {
+            background: color-mix(in srgb, var(--ki-color) 18%, transparent);
+            border-color: var(--ki-color);
+            color: var(--ki-color);
+        }
+        .ki-overflow-step {
+            min-width: 24px; min-height: 24px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 5px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-default);
+            color: var(--text-secondary);
+            font-family: var(--font-display);
+            font-weight: 800; font-size: 13px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .ki-overflow-step:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.25); }
+        .ki-overflow-val {
+            font-family: var(--font-display);
+            font-size: 14px; font-weight: 800;
+            color: var(--color-spell);
+            min-width: 18px; text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+        .ki-warnings { padding: 0 20px; }
+        .ki-warning {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: rgba(234,179,8,0.10);
+            border: 1px solid rgba(234,179,8,0.40);
+            border-left: 3px solid #eab308;
+            color: #fde68a;
+            font-size: 11px; line-height: 1.4;
+        }
+        .ki-warning.subtle {
+            background: rgba(167,139,250,0.08);
+            border-color: rgba(167,139,250,0.30);
+            border-left-color: #a78bfa;
+            color: #DDD6FE;
+        }
+
+        /* Pet HP +/- buttons in the stat grid. Bigger than 22px so taps land. */
+        .pet-hp-step {
+            min-width: 24px; min-height: 24px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 5px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-default);
+            color: var(--text-secondary);
+            font-family: var(--font-display);
+            font-weight: 800; font-size: 13px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .pet-hp-step:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.25); }
+        .pet-hp-step:active { transform: scale(0.93); }
+
+        /* Effects: reaction badge + reaction-row rim */
+        .effect-reaction-badge {
+            display: inline-flex; align-items: center; gap: 3px;
+            margin-left: 6px; padding: 1px 7px;
+            font-family: var(--font-display);
+            font-size: 9px; font-weight: 800;
+            letter-spacing: 0.10em; text-transform: uppercase;
+            background: rgba(90,142,232,0.14);
+            border: 1px solid rgba(90,142,232,0.45);
+            color: #93C5FD;
+            border-radius: 999px;
+            vertical-align: 2px;
+        }
+        .ae-row.has-reaction {
+            border-left: 3px solid rgba(90,142,232,0.55);
+            padding-left: 6px;
+        }
     </style>
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
@@ -2545,6 +2835,11 @@
             <button onclick="switchTab('feats')" class="tab-btn" id="btn-tab-feats">Feats</button>
             <button onclick="switchTab('inventory')" class="tab-btn" id="btn-tab-inventory">Inventory</button>
             <button onclick="switchTab('pets')" class="tab-btn" id="btn-tab-pets">Pets</button>
+        </div>
+        {# Active tab title — when scrolled deep, easy to lose track of
+           which tab is active. Single label, updated by switchTab(). #}
+        <div id="active-tab-title" class="no-print" style="padding:6px 4px 0; font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-muted);">
+            Core &amp; Skills
         </div>
 
 {% include "_pc_sheet/_tab_core.html" %}
@@ -2806,17 +3101,25 @@
         function _paintReactionChip() {
             const chip = document.getElementById('reaction-chip');
             const lbl = document.getElementById('reaction-lbl');
-            if (!chip || !lbl) return;
-            if (reactionUsed) {
-                chip.style.background = 'rgba(220, 38, 38, 0.12)';
-                chip.style.borderColor = 'rgba(220, 38, 38, 0.4)';
-                chip.style.color = '#fca5a5';
-                lbl.textContent = 'Reaction Spent';
-            } else {
-                chip.style.background = 'rgba(90,142,232,0.12)';
-                chip.style.borderColor = 'rgba(90,142,232,0.35)';
-                chip.style.color = '#93C5FD';
-                lbl.textContent = 'Reaction Ready';
+            if (chip && lbl) {
+                if (reactionUsed) {
+                    chip.style.background = 'rgba(220, 38, 38, 0.12)';
+                    chip.style.borderColor = 'rgba(220, 38, 38, 0.4)';
+                    chip.style.color = '#fca5a5';
+                    lbl.textContent = 'Reaction Spent';
+                } else {
+                    chip.style.background = 'rgba(90,142,232,0.12)';
+                    chip.style.borderColor = 'rgba(90,142,232,0.35)';
+                    chip.style.color = '#93C5FD';
+                    lbl.textContent = 'Reaction Ready';
+                }
+            }
+            // Mirror in the Strikes card — same state, different selector.
+            const mirror = document.getElementById('reaction-chip-strikes');
+            if (mirror) {
+                mirror.dataset.reactionUsed = reactionUsed ? 'true' : 'false';
+                const mLbl = mirror.querySelector('.reaction-mirror-lbl');
+                if (mLbl) mLbl.textContent = reactionUsed ? 'Reaction Spent' : 'Reaction Ready';
             }
         }
         async function useReaction() {
@@ -3241,11 +3544,21 @@
                         <span><strong>${_escHtml(rxnName)}</strong> <span style="opacity:0.75;">${_escHtml(label)}${hint}</span></span>
                     </div>`;
                 }).join('');
+                // Reaction badge on the effect-pill name: pops out reaction-
+                // triggering effects from purely-numeric buffs (haste, bless).
+                // Only renders when at least one reaction modifier is present.
+                const hasReaction = reactionMods.length > 0;
+                const reactionBadge = hasReaction
+                    ? `<span class="effect-reaction-badge" title="This effect grants or triggers a reaction">
+                          <span style="font-family:var(--font-mono);">⚡</span> Reaction
+                       </span>`
+                    : '';
+                const rxnRingCls = hasReaction ? 'has-reaction' : '';
                 return `
-                    <div class="ae-row" data-effect-id="${id}" style="display:flex; align-items:flex-start; gap:8px; padding:6px 8px; border-radius:6px; background:var(--bg-raised); border:1px solid var(--border-subtle); ${isSuppressed ? 'opacity:0.6;' : ''}">
+                    <div class="ae-row ${rxnRingCls}" data-effect-id="${id}" style="display:flex; align-items:flex-start; gap:8px; padding:6px 8px; border-radius:6px; background:var(--bg-raised); border:1px solid var(--border-subtle); ${isSuppressed ? 'opacity:0.6;' : ''}">
                         <div style="flex:1; min-width:0;">
                             <div class="text-[12px] font-bold" style="color:${isSuppressed ? 'var(--text-muted)' : 'var(--gilt)'};">
-                                ${name}${suppNote}
+                                ${name}${reactionBadge}${suppNote}
                                 <span class="text-[9px]" style="color:var(--text-muted); margin-left:4px; font-weight:400;">${source}${caster} · ${_escHtml(dur)}</span>
                             </div>
                             ${desc}
@@ -3927,8 +4240,213 @@
             const btn   = document.getElementById(`btn-tab-${tabId}`);
             if (panel) panel.classList.add('active');
             if (btn)   btn.classList.add('active');
+            // Body breadcrumb so the player doesn't lose track of which tab
+            // they're in while scrolling deep. data-print-title is set on
+            // every .tab-content for the print stylesheet and works here too.
+            const titleEl = document.getElementById('active-tab-title');
+            if (titleEl && panel) {
+                titleEl.textContent = panel.getAttribute('data-print-title') || tabId;
+            }
             localStorage.setItem(`pf2e_tab_${pcName}`, tabId);
         }
+
+        /* Druid / animal-companion HP tracker — wires the stat-grid HP cell
+           +/- buttons to the same localStorage key used by the in-card action
+           row, so both controls stay in sync without a round trip. */
+        function adjustPetHP(petName, delta, evt) {
+            const cell = document.querySelector(`.pet-hp-cell[data-pet-name="${(petName || '').replace(/"/g, '\\"')}"]`);
+            if (!cell) return;
+            const valEl = cell.querySelector('.pet-hp-val');
+            const maxHP = parseInt(valEl?.dataset.max || valEl?.textContent || '0', 10);
+            const hpKey = `pf2e_pethp_${pcName}_${petName}`;
+            let cur = parseInt(localStorage.getItem(hpKey), 10);
+            if (isNaN(cur)) cur = maxHP;
+            const big = (evt && evt.shiftKey) ? 5 : 1;
+            cur = Math.max(0, Math.min(maxHP, cur + delta * big));
+            try { localStorage.setItem(hpKey, String(cur)); } catch(_) {}
+            valEl.textContent = cur;
+            valEl.style.color = cur <= 0 ? '#ef4444' : (cur < maxHP/2 ? '#fbbf24' : '#4ade80');
+            // Also update the action-row mirror if rendered.
+            document.querySelectorAll(`span`).forEach(s => {
+                if (s.textContent && /^\d+\s*\/\s*\d+$/.test(s.textContent) && s.title === 'Click to edit HP directly') {
+                    s.textContent = `${cur} / ${maxHP}`;
+                    s.style.color = valEl.style.color;
+                }
+            });
+        }
+        window.adjustPetHP = adjustPetHP;
+        // After initial paint, record the max HP onto the val span so adjustPetHP
+        // can read it without re-parsing. Runs on DOMContentLoaded since the
+        // partial is rendered server-side.
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.pet-hp-cell').forEach(cell => {
+                const v = cell.querySelector('.pet-hp-val');
+                if (!v || v.dataset.max) return;
+                const max = parseInt(v.textContent, 10);
+                if (!isNaN(max)) v.dataset.max = String(max);
+                // Restore from localStorage if a saved cur exists.
+                const petName = cell.getAttribute('data-pet-name');
+                const saved = parseInt(localStorage.getItem(`pf2e_pethp_${pcName}_${petName}`), 10);
+                if (!isNaN(saved) && saved !== max) {
+                    v.textContent = saved;
+                    v.style.color = saved <= 0 ? '#ef4444' : (saved < max/2 ? '#fbbf24' : '#4ade80');
+                }
+            });
+        });
+
+        /* Cleric quick-cast Heal/Harm (Font) — find the lowest-rank font
+           slot that isn't expended, mark it spent, then route through the
+           normal rollSpell pipeline so the player gets the roll toast +
+           GM broadcast just like a regular cast. */
+        async function quickCastFont(kind, casterIdx) {
+            const spellName = (kind === 'harm') ? 'Harm' : 'Heal';
+            const caster = (typeof castersData !== 'undefined' && castersData[casterIdx]) || null;
+            if (!caster) { rollSpell(spellName); return; }
+
+            // Find the lowest-rank level that has font_slots and a free font seat.
+            let chosenRank = -1, chosenSlotIdx = -1;
+            for (const lvl of (caster.levels || [])) {
+                const slots = parseInt(lvl.slots || 0, 10);
+                const fontSlots = parseInt(lvl.font_slots || 0, 10);
+                if (fontSlots <= 0) continue;
+                // Font slots live at indices [slots .. slots+fontSlots) — past
+                // the normal slot range — per the daily-prep rendering convention.
+                const key = `c${casterIdx}_l${lvl.level}`;
+                window._expendedSlots = window._expendedSlots || {};
+                const list = window._expendedSlots[key] || [];
+                for (let i = slots; i < slots + fontSlots; i++) {
+                    if (!list[i]) { chosenRank = lvl.level; chosenSlotIdx = i; break; }
+                }
+                if (chosenRank >= 0) break;
+            }
+            if (chosenRank < 0) {
+                if (!confirm(`No font slots remaining. Cast ${spellName} from a regular slot instead?`)) return;
+                rollSpell(spellName, null, { casterIdx, rank: 1 });
+                return;
+            }
+            // Mark the chosen font slot expended (UI + server).
+            const key = `c${casterIdx}_l${chosenRank}`;
+            const list = window._expendedSlots[key] || [];
+            while (list.length <= chosenSlotIdx) list.push(false);
+            list[chosenSlotIdx] = true;
+            window._expendedSlots[key] = list;
+            const cb = document.querySelector(`.spell-slot-cb[data-caster-idx="${casterIdx}"][data-spell-level="${chosenRank}"][data-slot-idx="${chosenSlotIdx}"]`);
+            if (cb) {
+                cb.checked = true;
+                if (cb.tagName === 'BUTTON') { cb.classList.add('spent'); cb.setAttribute('aria-pressed', 'true'); }
+            }
+            try {
+                await fetch(`/api/spell_slots/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({expended_slots: window._expendedSlots})
+                });
+            } catch(_) {}
+            // Now fire the actual roll/broadcast. Pass the spell name at its
+            // heightened (slot) rank so the toast shows correct damage tier.
+            const displayName = chosenRank > 1 ? `${spellName} (rank ${chosenRank})` : spellName;
+            rollSpell(displayName);
+        }
+        window.quickCastFont = quickCastFont;
+
+        /* ─── Kineticist: Aura on/off · Gate toggles · Overflow pool ───
+           Class-specific state PF2e tracks but the sheet didn't surface.
+           All client-side: localStorage-persisted per PC so a refresh
+           doesn't lose state and the GM doesn't get a stream of pings. */
+        const KI_ELEMENT_COLORS = {
+            'Fire':  '#ef4444', 'Water': '#3b82f6',
+            'Earth': '#a16207', 'Air':   '#a78bfa',
+            'Metal': '#9ca3af', 'Wood':  '#22c55e',
+            'Universal': '#8ED4D4'
+        };
+        function _kiKey(pcName) { return 'pf2e_kineticist_' + pcName; }
+        function _kiLoad(pcName) {
+            try { return JSON.parse(localStorage.getItem(_kiKey(pcName)) || '{}'); }
+            catch (_) { return {}; }
+        }
+        function _kiSave(pcName, state) {
+            try { localStorage.setItem(_kiKey(pcName), JSON.stringify(state)); } catch(_) {}
+        }
+        function toggleKineticAura(pcName, casterIdx, btnEl) {
+            const state = _kiLoad(pcName);
+            state.auraOn = !state.auraOn;
+            _kiSave(pcName, state);
+            _paintKineticAuraBtn(btnEl, state.auraOn);
+        }
+        function _paintKineticAuraBtn(btn, on) {
+            if (!btn) return;
+            btn.classList.toggle('on', !!on);
+            const lbl = btn.querySelector('.ki-aura-lbl');
+            if (lbl) lbl.textContent = on ? 'Active' : 'Off';
+        }
+        function adjustKineticOverflow(pcName, casterIdx, delta) {
+            const state = _kiLoad(pcName);
+            state.overflow = Math.max(0, (state.overflow || 0) + delta);
+            _kiSave(pcName, state);
+            const v = document.getElementById('ki-overflow-val-' + casterIdx);
+            if (v) v.textContent = state.overflow;
+        }
+        function renderKineticGatePills(casterIdx, elements) {
+            const host = document.getElementById('ki-gate-pills-' + casterIdx);
+            if (!host) return;
+            const state = _kiLoad(pcName);
+            state.gates = state.gates || {};
+            if (!elements.length) {
+                host.innerHTML = '<span class="text-[10px] italic" style="color:var(--text-faint);">no elemental impulses detected</span>';
+                return;
+            }
+            host.innerHTML = elements.map(el => {
+                const color = KI_ELEMENT_COLORS[el] || '#8ED4D4';
+                const open = !!state.gates[el];
+                return `<button type="button" class="ki-gate-pill ${open ? 'open' : ''}"
+                          onclick="toggleKineticGate('${pcName.replace(/'/g, "\\'")}', '${el}', ${casterIdx}, this)"
+                          style="--ki-color: ${color};"
+                          title="Toggle ${el} gate open / closed">${el}</button>`;
+            }).join('');
+        }
+        function toggleKineticGate(pcName, element, casterIdx, btnEl) {
+            const state = _kiLoad(pcName);
+            state.gates = state.gates || {};
+            state.gates[element] = !state.gates[element];
+            _kiSave(pcName, state);
+            if (btnEl) btnEl.classList.toggle('open', !!state.gates[element]);
+        }
+        // Restore Aura + Overflow on load.
+        (function _kiInit() {
+            const state = _kiLoad(pcName);
+            document.querySelectorAll('.kineticist-state-bar').forEach(bar => {
+                const cIdx = bar.getAttribute('data-caster-idx');
+                _paintKineticAuraBtn(bar.querySelector('.ki-aura-toggle'), !!state.auraOn);
+                const v = document.getElementById('ki-overflow-val-' + cIdx);
+                if (v) v.textContent = state.overflow || 0;
+            });
+        })();
+        window.toggleKineticAura = toggleKineticAura;
+        window.adjustKineticOverflow = adjustKineticOverflow;
+        window.renderKineticGatePills = renderKineticGatePills;
+        window.toggleKineticGate = toggleKineticGate;
+
+        // Click a sustain-chip item → jump to Magic tab and highlight the spell.
+        // Sustained casts often need a quick "what was that spell again" check;
+        // the chip now closes that loop.
+        function jumpToSustainedSpell(name) {
+            switchTab('magic');
+            requestAnimationFrame(() => {
+                const needle = (name || '').toLowerCase();
+                const rows = document.querySelectorAll('#tab-magic .spell-entry');
+                let match = null;
+                rows.forEach(r => {
+                    if (match) return;
+                    const dn = (r.getAttribute('data-spell-name') || '').toLowerCase();
+                    if (dn === needle) match = r;
+                });
+                if (match) {
+                    match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    match.classList.add('sustain-spell-highlight');
+                    setTimeout(() => match.classList.remove('sustain-spell-highlight'), 1800);
+                }
+            });
+        }
+        window.jumpToSustainedSpell = jumpToSustainedSpell;
 
         // Tab init on page load. Two paths:
         //  1. Saved tab in localStorage AND its button is visible at this
@@ -4033,6 +4551,19 @@
                 }
             } catch(e) {}
 
+            // Spell-slot toggles are buttons now (was <input type=checkbox>).
+            // The "spent" state is reflected by .spent class + aria-pressed,
+            // which keeps the toggle big enough to tap on a tablet and lets
+            // the existing slot-pill-toggle CSS handle the visual state.
+            function _readCb(cb) {
+                return cb.classList.contains('spent') || cb.getAttribute('aria-pressed') === 'true';
+            }
+            function _writeCb(cb, spent) {
+                cb.classList.toggle('spent', !!spent);
+                cb.setAttribute('aria-pressed', spent ? 'true' : 'false');
+                // Back-compat for any legacy code that still reads .checked
+                cb.checked = !!spent;
+            }
             document.querySelectorAll('.spell-slot-cb').forEach((cb) => {
                 const cIdx = cb.getAttribute('data-caster-idx');
                 const lvl = cb.getAttribute('data-spell-level');
@@ -4040,13 +4571,15 @@
                 const key = `c${cIdx}_l${lvl}`;
 
                 // Restore from server
-                if (window._expendedSlots[key] && window._expendedSlots[key][parseInt(idx)]) cb.checked = true;
+                if (window._expendedSlots[key] && window._expendedSlots[key][parseInt(idx)]) _writeCb(cb, true);
 
-                cb.addEventListener('change', async () => {
+                const handler = async () => {
+                    const nowSpent = !_readCb(cb);
+                    _writeCb(cb, nowSpent);
                     // Update local state
                     if (!window._expendedSlots[key]) window._expendedSlots[key] = [];
                     while (window._expendedSlots[key].length <= parseInt(idx)) window._expendedSlots[key].push(false);
-                    window._expendedSlots[key][parseInt(idx)] = cb.checked;
+                    window._expendedSlots[key][parseInt(idx)] = nowSpent;
 
                     // Save to server
                     try {
@@ -4057,7 +4590,10 @@
                         });
                     } catch(e) {}
                     try { renderSpellsTodayStrip(); } catch(_) {}
-                });
+                };
+                // Buttons get click; legacy inputs still get change.
+                if (cb.tagName === 'BUTTON') cb.addEventListener('click', handler);
+                else cb.addEventListener('change', handler);
             });
 
             // Migrate any existing localStorage data to server (one-time)
@@ -4312,7 +4848,71 @@
             return false;
         }
 
-        async function modifyHP(action, amount) {
+        /* ── HP change toast with undo ──
+           Live-table need: a player taps Damage on a tablet, the modal/inline
+           input is below the fold, and the change applies invisibly. This
+           toast surfaces "12 → 8 (−4)" with a 6-second undo so mis-taps are
+           recoverable without bothering the GM. */
+        let _hpUndoTimer = null;
+        function showHPChangeToast(prevHp, newHp, action, amount) {
+            const container = document.getElementById('roll-toast-container');
+            if (!container) return;
+            // Reuse and replace any active HP toast so rapid taps don't pile up.
+            const existing = document.getElementById('hp-change-toast');
+            if (existing) existing.remove();
+            clearTimeout(_hpUndoTimer);
+
+            const isDmg = action === 'damage';
+            const delta = newHp - prevHp;
+            const accent = isDmg ? '#fca5a5' : '#86efac';
+            const border = isDmg ? 'border-red-500/60' : 'border-green-500/60';
+
+            const toast = document.createElement('div');
+            toast.id = 'hp-change-toast';
+            toast.className = `roll-toast bg-gray-800 border ${border} rounded-lg shadow-2xl p-3 pointer-events-auto`;
+            toast.style.minWidth = '260px';
+            toast.innerHTML = `
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-widest" style="color:${accent};">
+                            ${isDmg ? 'Damage Taken' : 'Healed'}
+                        </div>
+                        <div class="font-bold text-xl mt-0.5" style="color:#e8e8f0; font-family:var(--font-display); font-variant-numeric:tabular-nums;">
+                            ${prevHp} <span style="color:#9ca3af; padding:0 4px;">→</span> ${newHp}
+                            <span style="color:${accent}; font-size:13px; margin-left:6px;">(${delta > 0 ? '+' : ''}${delta})</span>
+                        </div>
+                    </div>
+                    <button type="button" id="hp-undo-btn" class="px-3 py-2 rounded font-bold text-[11px] uppercase tracking-wider"
+                            style="background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.45); color:#e0b050; cursor:pointer; min-height:34px;">
+                        Undo
+                    </button>
+                </div>
+                <div class="text-[9px] mt-2" style="color:#6b7280; letter-spacing:0.08em; text-transform:uppercase;">
+                    Auto-dismisses in 6s · undo reverts the change
+                </div>
+            `;
+            container.appendChild(toast);
+
+            const undoBtn = toast.querySelector('#hp-undo-btn');
+            undoBtn.addEventListener('click', () => {
+                clearTimeout(_hpUndoTimer);
+                // Apply inverse action with the same magnitude, silent so we don't
+                // recurse into another toast.
+                modifyHP(isDmg ? 'heal' : 'damage', Math.abs(delta), { silent: true });
+                toast.remove();
+            });
+
+            _hpUndoTimer = setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(20px)';
+                toast.style.transition = 'all 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 6000);
+        }
+
+        async function modifyHP(action, amount, opts) {
+            opts = opts || {};
+            const prevHp = currentHp;
             const formData = new FormData(); formData.append('action', action); formData.append('amount', amount);
             try {
                 const response = await fetch(`/api/adjust_party_hp/${pcNameEncoded}`, {
@@ -4322,7 +4922,11 @@
                 if (data.success) {
                     const hpEl = document.getElementById('current-hp');
                     hpEl.innerText = data.current_hp;
-                    currentHp = data.current_hp;
+                    const newHp = data.current_hp;
+                    if (!opts.silent && newHp !== prevHp) {
+                        showHPChangeToast(prevHp, newHp, action, amount);
+                    }
+                    currentHp = newHp;
                     const chip = document.getElementById('header-hp-chip-cur');
                     if (chip) chip.textContent = currentHp;
                     // Temp-HP sync: damage may have drained it, heal leaves it alone.
@@ -4358,8 +4962,23 @@
         let currentConditions = {{ pc.conditions | tojson }};
         const maxHp = parseInt("{{ pc.hp }}");
         
+        /* ── Sheet-side pulse helper ──
+           Mirrors the GM-side card flash: when the GM applies damage/heal/
+           condition from the tracker, the player should notice without
+           watching the corner pip. Pulses the affected region for ~0.7s. */
+        function sheetPulse(target, variant) {
+            const el = (typeof target === 'string') ? document.getElementById(target) : target;
+            if (!el) return;
+            el.classList.remove('sheet-flash-dmg', 'sheet-flash-heal', 'sheet-flash-cond');
+            // Force reflow so re-adding the class restarts the animation.
+            void el.offsetWidth;
+            el.classList.add('sheet-flash-' + variant);
+            setTimeout(() => el.classList.remove('sheet-flash-' + variant), 700);
+        }
+
         function applyHpUpdate(newHp) {
             if (newHp === currentHp) return;
+            const prevHp = currentHp;
             currentHp = newHp;
             const hpEl = document.getElementById('current-hp');
             if (!hpEl) return;
@@ -4378,8 +4997,11 @@
             // Direct mirror to the header HP chip — no MutationObserver needed.
             const chip = document.getElementById('header-hp-chip-cur');
             if (chip) chip.textContent = currentHp;
+            // Pulse the HP block so the player notices the GM-driven change.
+            const hpBlock = hpEl.closest('.panel-card') || hpEl.parentElement;
+            sheetPulse(hpBlock, newHp < prevHp ? 'dmg' : 'heal');
         }
-        
+
         function applyConditionUpdate(conditions) {
             if (JSON.stringify(conditions) === JSON.stringify(currentConditions)) return;
             currentConditions = conditions;
@@ -4388,6 +5010,16 @@
             if (strip) {
                 const hasAny = Object.values(conditions).some(v => v && v !== 0 && v !== false);
                 strip.classList.toggle('active', hasAny);
+            }
+            // Pulse the Conditions Matrix card so a GM-applied condition is noticed.
+            const matrix = document.querySelector('.panel-card .section-header')?.parentElement;
+            // Better: target by section title text. Fall back to the first matching panel.
+            const panels = document.querySelectorAll('.panel-card');
+            for (const p of panels) {
+                if (p.querySelector('.section-header')?.textContent?.trim() === 'Conditions Matrix') {
+                    sheetPulse(p, 'cond');
+                    break;
+                }
             }
         }
         
@@ -4944,8 +5576,9 @@
             const key = `c${casterIdx}_l${rank}`;
             window._expendedSlots = window._expendedSlots || {};
             const list = window._expendedSlots[key] || [];
-            // Discover the slot count for this caster+rank from the checkbox row
-            const cbs = document.querySelectorAll(`input.spell-slot-cb[data-caster-idx="${casterIdx}"][data-spell-level="${rank}"]`);
+            // Discover the slot count for this caster+rank from the slot row
+            // (works for both legacy <input> and current <button> toggles).
+            const cbs = document.querySelectorAll(`.spell-slot-cb[data-caster-idx="${casterIdx}"][data-spell-level="${rank}"]`);
             const slotCount = cbs.length;
             if (!slotCount) return true; // no slot UI (e.g. focus) — don't block cast
             let freeIdx = -1;
@@ -4956,11 +5589,18 @@
                 const ok = confirm(`No rank-${rank} slots left. Cast anyway (the slot tracker will NOT be changed)?`);
                 return ok;
             }
-            // Mark the slot used locally + server-side. Update the checkbox UI too.
+            // Mark the slot used locally + server-side. Update the slot UI too.
             while (list.length <= freeIdx) list.push(false);
             list[freeIdx] = true;
             window._expendedSlots[key] = list;
-            if (cbs[freeIdx]) cbs[freeIdx].checked = true;
+            const target = cbs[freeIdx];
+            if (target) {
+                if (target.tagName === 'BUTTON') {
+                    target.classList.add('spent');
+                    target.setAttribute('aria-pressed', 'true');
+                }
+                target.checked = true;
+            }
             try {
                 await fetch(`/api/spell_slots/${pcNameEncoded}`, {
                     method: 'POST', headers: {'Content-Type':'application/json'},
@@ -6196,7 +6836,7 @@
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] font-bold" style="color:var(--text-muted);">${filledCount}/${totalSlots}</span>
                             <div class="flex gap-1">
-                                ${Array(totalSlots).fill().map((_, i) => `<input type="checkbox" data-caster-idx="${cIdx}" data-spell-level="${lvl.level}" data-slot-idx="${i}" class="spell-slot-cb w-3 h-3 ${i >= slots ? 'accent-emerald-500' : 'accent-amber-500'}" title="${i >= slots ? 'Font slot — '+(fontKind==='harm'?'harm':'heal')+' only' : 'Expend Slot'}">`).join('')}
+                                ${Array(totalSlots).fill().map((_, i) => `<button type="button" data-caster-idx="${cIdx}" data-spell-level="${lvl.level}" data-slot-idx="${i}" class="spell-slot-cb slot-pill-toggle ${i >= slots ? 'font-slot-pill' : ''}" aria-pressed="false" title="${i >= slots ? 'Font slot — '+(fontKind==='harm'?'harm':'heal')+' only' : 'Expend Rank '+lvl.level+' slot'}">◆</button>`).join('')}
                             </div>
                         </div>
                     </div>
@@ -6253,14 +6893,32 @@
                 const s_lvl = cb.getAttribute('data-spell-level');
                 const s_idx = cb.getAttribute('data-slot-idx');
                 const key = `c${s_cIdx}_l${s_lvl}`;
-                if (window._expendedSlots && window._expendedSlots[key] && window._expendedSlots[key][parseInt(s_idx)]) cb.checked = true;
-                cb.addEventListener('change', async () => {
+                const _initSpent = !!(window._expendedSlots && window._expendedSlots[key] && window._expendedSlots[key][parseInt(s_idx)]);
+                if (_initSpent) {
+                    cb.checked = true;
+                    if (cb.tagName === 'BUTTON') {
+                        cb.classList.add('spent');
+                        cb.setAttribute('aria-pressed', 'true');
+                    }
+                }
+                const _isButton = cb.tagName === 'BUTTON';
+                const handler = async () => {
+                    let nowSpent;
+                    if (_isButton) {
+                        nowSpent = !cb.classList.contains('spent');
+                        cb.classList.toggle('spent', nowSpent);
+                        cb.setAttribute('aria-pressed', nowSpent ? 'true' : 'false');
+                        cb.checked = nowSpent;
+                    } else {
+                        nowSpent = cb.checked;
+                    }
                     if (!window._expendedSlots) window._expendedSlots = {};
                     if (!window._expendedSlots[key]) window._expendedSlots[key] = [];
                     while (window._expendedSlots[key].length <= parseInt(s_idx)) window._expendedSlots[key].push(false);
-                    window._expendedSlots[key][parseInt(s_idx)] = cb.checked;
+                    window._expendedSlots[key][parseInt(s_idx)] = nowSpent;
                     try { await fetch(`/api/spell_slots/${pcNameEncoded}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({expended_slots: window._expendedSlots}) }); } catch(e) {}
-                });
+                };
+                cb.addEventListener(_isButton ? 'click' : 'change', handler);
             });
         }
 
@@ -6723,19 +7381,38 @@
         }
         // Patch spell-slot listeners once the original handlers are wired.
         // We listen on the root in capture phase — cheaper than re-binding
-        // the original change handler and doesn't fight the existing one.
-        document.addEventListener('change', (e) => {
-            const cb = e.target.closest && e.target.closest('input.spell-slot-cb');
-            if (!cb) return;
-            if (!cb.checked) return; // only the EXPEND direction needs undo
+        // the original handler and doesn't fight the existing one. The slots
+        // are buttons now, so we listen for click and check the post-toggle
+        // state on the next frame (the primary click handler sets it).
+        function _onSlotInteract(cb, viaInput) {
+            const spent = cb.tagName === 'BUTTON'
+                ? cb.classList.contains('spent')
+                : cb.checked;
+            if (!spent) return;
             const rank = cb.getAttribute('data-spell-level');
             const lbl = rank === '0' ? 'Cantrip' : `Rank ${rank}`;
             showUndoToast(`${lbl} slot expended`, () => {
-                cb.checked = false;
-                // Fire the same change event so the original handler
-                // writes the un-expended state back to the server.
-                cb.dispatchEvent(new Event('change', { bubbles: true }));
+                if (cb.tagName === 'BUTTON') {
+                    // Toggle back via the same click path so the click handler
+                    // persists the un-expended state.
+                    cb.click();
+                } else {
+                    cb.checked = false;
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
             });
+        }
+        document.addEventListener('click', (e) => {
+            const cb = e.target.closest && e.target.closest('button.spell-slot-cb');
+            if (!cb) return;
+            // The button's own click handler toggles state synchronously,
+            // so by the time the bubble reaches us .spent reflects new state.
+            requestAnimationFrame(() => _onSlotInteract(cb, false));
+        });
+        document.addEventListener('change', (e) => {
+            const cb = e.target.closest && e.target.closest('input.spell-slot-cb');
+            if (!cb) return;
+            _onSlotInteract(cb, true);
         }, true);
 
         // --- YOUR-TURN FLASH --------------------------------------------
@@ -6922,8 +7599,8 @@
                 if (!sustained.length) { chip.classList.remove('active'); items.innerHTML = ''; return; }
                 chip.classList.add('active');
                 items.innerHTML = sustained.map((s, i) => `
-                    <span class="sustain-chip-item" title="Round ${s.round} of sustaining ${s.name}">
-                        ${s.name}<button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">×</button>
+                    <span class="sustain-chip-item" title="Round ${s.round} of sustaining ${s.name} — click name to jump to spell in Magic tab">
+                        <button type="button" class="sustain-jump" onclick="jumpToSustainedSpell('${(s.name || '').replace(/'/g, "\\'")}')" aria-label="Show ${s.name} in Magic tab" style="background:transparent;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;">${s.name}</button><button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">×</button>
                     </span>`).join(' ');
             }
             function save() {
@@ -7889,6 +8566,42 @@
             setTimeout(() => banner.remove(), 18000);
         }
 
+        /* Container Net Bulk — PF2e: a Backpack ignores the first 2 Bulk
+           of items inside it (and lets you treat 1B of overflow as 1L).
+           Belt Pouch: 4L. Sack: 8B capacity / no bulk reduction by default
+           but commonly house-ruled.
+           This is a client-side display hint only — the authoritative bulk
+           number on the gauge is still computed server-side from raw bulk. */
+        (function initNetBulk() {
+            const list = document.getElementById('inv-list');
+            const note = document.getElementById('net-bulk-note');
+            if (!list || !note) return;
+            const containers = {
+                'backpack': { redB: 2, label: 'Backpack' },
+                "adventurer's pack": { redB: 2, label: "Adventurer's Pack (incl. backpack)" },
+                'sack': { redB: 1, label: 'Sack' },
+                'belt pouch': { redL: 4, label: 'Belt Pouch' },
+            };
+            const found = [];
+            list.querySelectorAll('.inv-item').forEach(row => {
+                const n = (row.getAttribute('data-inv-name') || '').toLowerCase();
+                for (const key in containers) {
+                    if (n.includes(key)) found.push(containers[key]);
+                }
+            });
+            if (!found.length) { note.style.display = 'none'; return; }
+            // De-duplicate by label
+            const seen = new Set();
+            const uniq = found.filter(f => { if (seen.has(f.label)) return false; seen.add(f.label); return true; });
+            const parts = uniq.map(f => {
+                if (f.redB) return `${f.label} ignores first ${f.redB}B`;
+                if (f.redL) return `${f.label} holds first ${f.redL}L free`;
+                return f.label;
+            });
+            note.innerHTML = `<span style="color:var(--gold);">Net Bulk:</span> ${parts.join(' · ')}. Subtract these from the raw total above when checking encumbrance.`;
+            note.style.display = '';
+        })();
+
         // ----- Invested-items toggle (Wave 2 #24) -------------------------
         (function initInvested() {
             const storeKey = `pf2e_invested_${pcName}`;
@@ -7911,6 +8624,17 @@
                 t.addEventListener('click', (e) => {
                     e.preventDefault();
                     const k = t.getAttribute('data-item-name');
+                    // Block the 11th invest with a toast — PF2e caps invested
+                    // magic items at 10/day. Allow un-investing always.
+                    if (!invested[k]) {
+                        const currentCount = Object.values(invested).filter(Boolean).length;
+                        if (currentCount >= 10) {
+                            if (typeof showRollToast === 'function') {
+                                showRollToast('Invested Cap', '10', `You already have 10 invested items — PF2e's daily limit. Un-invest something else first.`, false, true);
+                            }
+                            return;
+                        }
+                    }
                     invested[k] = !invested[k];
                     if (!invested[k]) delete invested[k];
                     try { localStorage.setItem(storeKey, JSON.stringify(invested)); } catch(_) {}
@@ -8199,8 +8923,14 @@
                     while (list.length <= d.slot_idx) list.push(false);
                     list[d.slot_idx] = true;
                     window._expendedSlots[key] = list;
-                    const cb = document.querySelector(`input.spell-slot-cb[data-caster-idx="${casterIdx}"][data-spell-level="${slotRank}"][data-slot-idx="${d.slot_idx}"]`);
-                    if (cb) cb.checked = true;
+                    const cb = document.querySelector(`.spell-slot-cb[data-caster-idx="${casterIdx}"][data-spell-level="${slotRank}"][data-slot-idx="${d.slot_idx}"]`);
+                    if (cb) {
+                        cb.checked = true;
+                        if (cb.tagName === 'BUTTON') {
+                            cb.classList.add('spent');
+                            cb.setAttribute('aria-pressed', 'true');
+                        }
+                    }
                 }
                 // Now run the actual roll-toast/broadcast via the original.
                 const labeled = slotRank > baseRank ? `${spellName} (rank ${slotRank})` : spellName;

@@ -82,12 +82,37 @@
                                         {% endfor %}
                                     </span>
                                     <button onclick="modifyFocus('increase')" class="text-gray-500 hover:text-white px-1 text-sm" title="GM adjust +1">▶</button>
+                                    {# Refocus moved INSIDE the focus pip group so the action sits next to
+                                       what it refills — was floating beside the +Add button which read as
+                                       a generic stat-screen control. #}
+                                    <button onclick="doRefocus('{{ pc.class_name|lower }}', '{{ (caster.tradition or 'arcane')|lower }}')"
+                                            class="no-print refocus-btn"
+                                            title="Spend 10 minutes between encounters to restore 1 Focus Point. Out-of-combat only."
+                                            style="margin-left:8px; padding:4px 10px; min-height:28px;">
+                                        Refocus (1 FP)
+                                    </button>
                                 </div>
-                                <button onclick="doRefocus('{{ pc.class_name|lower }}', '{{ (caster.tradition or 'arcane')|lower }}')" class="no-print refocus-btn" title="Spend 10 minutes to restore 1 Focus Point">Refocus (10m)</button>
                                 {# S4: Long Rest lives in the global header now — single source of truth. #}
                                 <button onclick="addFocusSpellManual()" class="no-print font-header text-[9px] tracking-wider uppercase px-3 py-1.5 rounded transition-colors" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);">+ Add Spell</button>
                                 {% endif %}
                                 {% if 'prepared' in c_type_lower and 'focus' not in c_type_lower and 'alchemical' not in c_type_lower %}
+                                {# Cleric Heal/Harm Font quick-cast — only shown when this caster
+                                   actually has a Font slot somewhere (font_kind populated by the
+                                   server). Lets the Warpriest one-tap their core action instead
+                                   of routing through Daily Prep + Cast. #}
+                                {% set _font_kind = namespace(v='') %}
+                                {% for lvl in caster.levels %}{% if (lvl.font_slots|default(0)) > 0 and not _font_kind.v %}{% set _font_kind.v = (lvl.font_kind or 'heal') %}{% endif %}{% endfor %}
+                                {% if _font_kind.v %}
+                                <button onclick="quickCastFont('{{ _font_kind.v }}', {{ caster_idx }})"
+                                        class="no-print font-header text-[10px] tracking-widest uppercase px-3 py-1.5 rounded transition-colors"
+                                        title="One-click cast of your divine font {{ _font_kind.v }} spell (uses a font slot first)"
+                                        style="background:{% if _font_kind.v == 'harm' %}rgba(220,38,38,0.12){% else %}rgba(74,222,128,0.12){% endif %};
+                                               border:1px solid {% if _font_kind.v == 'harm' %}rgba(220,38,38,0.45){% else %}rgba(74,222,128,0.45){% endif %};
+                                               color:{% if _font_kind.v == 'harm' %}#fca5a5{% else %}#86EFAC{% endif %};
+                                               font-weight:700; letter-spacing:0.08em; min-height:30px;">
+                                    Cast {{ _font_kind.v|title }} (Font)
+                                </button>
+                                {% endif %}
                                 <!-- Play / Prep view toggle (S1) — Play is the default; Prep opens
                                      the modal where the spellbook + slot drop-zones live. -->
                                 <div class="caster-view-toggle no-print" id="view-toggle-{{ caster_idx }}">
@@ -105,6 +130,36 @@
 
                     {% if 'impulse' in c_type_lower %}
                     <!-- === KINETICIST IMPULSE CASTER (grouped by element gate) === -->
+                    {# Aura + Gate tracker — Kineticist is unplayable without
+                       these. State is localStorage-persisted per PC so the
+                       player can flip Aura on/off and choose active gates
+                       between encounters without a backend roundtrip. #}
+                    <div class="kineticist-state-bar" data-caster-idx="{{ caster_idx }}">
+                        <div class="flex flex-wrap items-center gap-3 px-5 py-3" style="background:var(--bg-raised); border-bottom:1px solid var(--border-subtle);">
+                            <div class="flex items-center gap-2">
+                                <span class="font-header text-[10px] uppercase tracking-widest" style="color:var(--text-muted);">Kinetic Aura</span>
+                                <button type="button" class="ki-aura-toggle" onclick="toggleKineticAura('{{ pc.name }}', {{ caster_idx }}, this)">
+                                    <span class="ki-aura-dot"></span>
+                                    <span class="ki-aura-lbl">Off</span>
+                                </button>
+                            </div>
+                            <span class="kineticist-divider"></span>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-header text-[10px] uppercase tracking-widest" style="color:var(--text-muted);">Gates</span>
+                                <span id="ki-gate-pills-{{ caster_idx }}" class="flex flex-wrap items-center gap-1"></span>
+                            </div>
+                            <span class="kineticist-divider"></span>
+                            <div class="flex items-center gap-2">
+                                <span class="font-header text-[10px] uppercase tracking-widest" style="color:var(--text-muted);">Overflow</span>
+                                <button type="button" onclick="adjustKineticOverflow('{{ pc.name }}', {{ caster_idx }}, -1)" class="ki-overflow-step" title="Spend 1 overflow">−</button>
+                                <span id="ki-overflow-val-{{ caster_idx }}" class="ki-overflow-val">0</span>
+                                <button type="button" onclick="adjustKineticOverflow('{{ pc.name }}', {{ caster_idx }}, 1)" class="ki-overflow-step" title="Add 1 overflow">+</button>
+                                <span class="text-[10px]" style="color:var(--text-faint);">/ pool</span>
+                            </div>
+                        </div>
+                        {# Per-impulse element-detection warnings populate here. #}
+                        <div id="ki-warnings-{{ caster_idx }}" class="ki-warnings"></div>
+                    </div>
                     <div class="p-5 space-y-2" id="impulse-container-{{ caster_idx }}">
                         <div class="text-center italic py-4" style="color:var(--text-faint);">Grouping impulses by element...</div>
                     </div>
@@ -139,6 +194,11 @@
                             if (/metal|iron|steel|ore|alloy|carapace/.test(n)) return 'Metal';
                             return 'Universal';
                         }
+                        /* Universals are a real element category in PF2e, but if every
+                           single impulse falls through to Universal, the regex above
+                           missed something. Track that signal so we can show a "review
+                           manually" hint instead of silently mis-grouping. */
+                        var fallthroughs = [];
 
                         var elementConfig = {
                             'Fire':      { color: '#ef4444', icon: '\uD83D\uDD25' },
@@ -154,9 +214,41 @@
                         var groups = {};
                         allImpulses.forEach(function(sp) {
                             var el = detectElement(sp.name);
+                            if (el === 'Universal') fallthroughs.push(sp.name);
                             if (!groups[el]) groups[el] = [];
                             groups[el].push(sp);
                         });
+                        /* Element warning: every impulse fell through to Universal,
+                           which almost certainly means the regex missed a new keyword.
+                           Surface the names so the GM can update gates manually. */
+                        var warnHost = document.getElementById('ki-warnings-' + casterIdx);
+                        if (warnHost) {
+                            if (fallthroughs.length && fallthroughs.length === allImpulses.length && allImpulses.length > 0) {
+                                warnHost.innerHTML =
+                                    '<div class="ki-warning">' +
+                                    '<b>Heads up:</b> all ' + allImpulses.length + ' impulses grouped as Universal — ' +
+                                    'the auto-detector probably missed an element keyword. Names: ' +
+                                    fallthroughs.slice(0, 6).map(function(s){return '"' + s + '"';}).join(', ') +
+                                    (fallthroughs.length > 6 ? ', …' : '') +
+                                    '</div>';
+                            } else if (fallthroughs.length > 0) {
+                                warnHost.innerHTML =
+                                    '<div class="ki-warning subtle">' +
+                                    fallthroughs.length + ' impulse' + (fallthroughs.length === 1 ? '' : 's') +
+                                    ' fell through to Universal — verify if any of these are mis-categorized: ' +
+                                    fallthroughs.slice(0, 4).map(function(s){return '"' + s + '"';}).join(', ') +
+                                    (fallthroughs.length > 4 ? ', …' : '') +
+                                    '</div>';
+                            } else {
+                                warnHost.innerHTML = '';
+                            }
+                        }
+                        /* Populate the Gate pills above with the elements this PC
+                           actually has access to (groups not empty). Players toggle
+                           which gates are "open" via the helper in player_sheet.js. */
+                        if (typeof renderKineticGatePills === 'function') {
+                            renderKineticGatePills(casterIdx, Object.keys(groups).filter(function(e){return e !== 'Universal';}));
+                        }
 
                         /* Sort each group by level, then alphabetically */
                         Object.keys(groups).forEach(function(el) {
@@ -223,14 +315,18 @@
                         <div>
                             <div class="spell-rank-header">
                                 <span>
-                                    {{ lvl.label }}
-                                    {% if lvl.level == 0 %}<span class="rank-count">(Rank {{ pc.cantrip_rank }})</span> <span class="at-will-pill ml-1">At Will</span>{% endif %}
+                                    {% if lvl.level == 0 %}Rank {{ pc.cantrip_rank }} <span class="text-[10px] font-normal opacity-70">· Cantrips</span> <span class="at-will-pill ml-1">At Will</span>
+                                    {% else %}Rank {{ lvl.level }}{% if 'focus' in c_type_lower %} <span class="at-will-pill ml-1">Focus</span>{% endif %}
+                                    {% endif %}
                                 </span>
                                 {% if lvl.level > 0 and lvl.slots > 0 and 'focus' not in c_type_lower %}
                                 <div class="flex gap-1 items-center px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle);">
-                                    <span class="font-header text-[11px] tracking-widest uppercase mr-1" style="color:var(--text-muted);">Slots</span>
+                                    <span class="font-header text-[11px] tracking-widest uppercase mr-1" style="color:var(--text-muted);">{{ lvl.slots }} Slot{{ 's' if lvl.slots != 1 else '' }}</span>
                                     {% for i in range(lvl.slots) %}
-                                    <input type="checkbox" data-caster-idx="{{ caster_idx }}" data-spell-level="{{ lvl.level }}" data-slot-idx="{{ i }}" class="spell-slot-cb w-3.5 h-3.5 accent-amber-500 cursor-pointer">
+                                    <button type="button" data-caster-idx="{{ caster_idx }}" data-spell-level="{{ lvl.level }}" data-slot-idx="{{ i }}"
+                                            class="spell-slot-cb slot-pill-toggle"
+                                            aria-pressed="false"
+                                            title="Toggle spent on this Rank {{ lvl.level }} slot">◆</button>
                                     {% endfor %}
                                 </div>
                                 {% endif %}

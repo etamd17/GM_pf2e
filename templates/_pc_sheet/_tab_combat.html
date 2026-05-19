@@ -50,21 +50,22 @@
                             'stupefied': '−X to Int/Wis/Cha-based checks and spell DCs. Flat check X to cast spells.'
                         } %}
                         
-                        <div class="grid grid-cols-2 gap-2 mb-4">
+                        <div class="text-[9px] font-bold uppercase tracking-widest mb-1.5" style="color:var(--text-faint); letter-spacing:0.18em;">Numeric Conditions</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                             {% for cond in ['Frightened', 'Sickened', 'Enfeebled', 'Clumsy', 'Drained', 'Stupefied'] %}
                             {% set c_lower = cond|lower %}
                             {% set c_val = pc.conditions.get(c_lower, 0) %}
-                            <div class="bg-gray-900 p-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
+                            <div class="cond-numeric bg-gray-900 p-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group {{ 'is-on' if c_val > 0 else '' }}" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
+                                    <span class="text-[11px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
                                     <div class="flex items-center gap-1">
-                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val - 1 }})" class="text-gray-500 hover:text-white px-1 font-bold">-</button>
-                                        <span class="text-xs font-bold {{ 'text-red-400' if c_val > 0 else 'text-gray-600' }}">{{ c_val }}</span>
-                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val + 1 }})" class="text-gray-500 hover:text-white px-1 font-bold">+</button>
+                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val - 1 }})" class="cond-step text-gray-300 hover:text-white" aria-label="Decrease {{ cond }}">−</button>
+                                        <span class="cond-val text-sm font-bold {{ 'text-red-400' if c_val > 0 else 'text-gray-500' }}">{{ c_val }}</span>
+                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val + 1 }})" class="cond-step text-gray-300 hover:text-white" aria-label="Increase {{ cond }}">+</button>
                                     </div>
                                 </div>
                                 {% if c_val > 0 %}
-                                <div class="text-[9px] text-red-300/70 mt-1 leading-tight">{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}</div>
+                                <div class="text-[10px] text-red-300/80 mt-1 leading-tight">{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}</div>
                                 {% endif %}
                             </div>
                             {% endfor %}
@@ -77,17 +78,18 @@
                             'hidden': 'Must Seek to find. Attackers need DC 11 flat check even if they guess your space.'
                         } %}
                         
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="text-[9px] font-bold uppercase tracking-widest mb-1.5" style="color:var(--text-faint); letter-spacing:0.18em;">Toggle Conditions</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {% for cond in ['Prone', 'Off_Guard', 'Concealed', 'Hidden'] %}
                             {% set c_lower = cond|lower %}
                             {% set c_val = pc.conditions.get(c_lower, False) %}
                             <div class="flex flex-col">
-                                <button onclick="updateCondition('{{ c_lower }}', {{ 'false' if c_val else 'true' }})" class="p-2 rounded-lg border flex justify-between items-center shadow-inner transition-colors {{ 'border-red-900/50 bg-red-900/20' if c_val else 'bg-gray-900 border-gray-700 hover:border-gray-500' }}" title="{{ toggle_tips.get(c_lower, '') }}">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val else 'text-gray-500' }}">{{ cond|replace('_', ' ') }}</span>
-                                    <span class="text-[10px] font-bold {{ 'text-red-400' if c_val else 'text-gray-700' }}">{% if c_val %}ON{% else %}OFF{% endif %}</span>
+                                <button onclick="updateCondition('{{ c_lower }}', {{ 'false' if c_val else 'true' }})" class="cond-toggle rounded-lg border flex justify-between items-center shadow-inner transition-colors {{ 'border-red-900/50 bg-red-900/20' if c_val else 'bg-gray-900 border-gray-700 hover:border-gray-500' }}" title="{{ toggle_tips.get(c_lower, '') }}">
+                                    <span class="text-[11px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val else 'text-gray-400' }}">{{ cond|replace('_', ' ') }}</span>
+                                    <span class="text-[10px] font-bold {{ 'text-red-400' if c_val else 'text-gray-600' }}">{% if c_val %}ON{% else %}OFF{% endif %}</span>
                                 </button>
                                 {% if c_val %}
-                                <div class="text-[9px] text-red-300/70 mt-1 px-1 leading-tight">{{ toggle_tips.get(c_lower, '') }}</div>
+                                <div class="text-[10px] text-red-300/80 mt-1 px-1 leading-tight">{{ toggle_tips.get(c_lower, '') }}</div>
                                 {% endif %}
                             </div>
                             {% endfor %}
@@ -120,11 +122,23 @@
 
                 <div class="lg:col-span-2 space-y-6">
                     <div class="panel-card">
-                        <div class="flex justify-between items-center mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
+                        <div class="flex justify-between items-center mb-4 pb-2 flex-wrap gap-2" style="border-bottom:2px solid var(--accent-gold);">
                             <h3 class="section-header" style="border:none; margin:0; padding:0;">Strikes & Weapons</h3>
-                            <button onclick="openWeaponBrowser()" class="action-btn primary">
-                                + Equip Weapon
-                            </button>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                {# Mirror of the header reaction chip — kept in sync via JS (see player_sheet.html reaction wiring).
+                                   Lives in the Strikes card so the player never has to scroll up mid-attack to remember
+                                   whether they spent their reaction on Shield Block / AoO / Liberating Step / etc. #}
+                                <button id="reaction-chip-strikes" type="button" onclick="useReaction()"
+                                        class="reaction-chip-mirror"
+                                        title="PF2e: 1 reaction per round. Toggles in sync with the header chip."
+                                        data-reaction-used="{{ 'true' if pc.reaction_used else 'false' }}">
+                                    <span class="reaction-dot" aria-hidden="true"></span>
+                                    <span class="reaction-mirror-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
+                                </button>
+                                <button onclick="openWeaponBrowser()" class="action-btn primary">
+                                    + Equip Weapon
+                                </button>
+                            </div>
                         </div>
 
                         {# PF2e core reminder — new players routinely forget the
@@ -214,15 +228,14 @@
                                                     aria-label="{{ attack.name }} strike {{ loop.index }} at {{ strike.label }}"
                                                     title="{% if loop.index0 == 0 %}1st Strike {{ strike.label }} — {{ attack.breakdown }}{% else %}Strike {{ loop.index }} {{ strike.label }} — {{ attack.breakdown }} · MAP {{ strike.map_label }}{% endif %}">
                                                 <span class="block font-bold uppercase tracking-widest mb-1" style="font-size:var(--text-2xs); color:{% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};">
-                                                    {% if loop.index0 == 0 %}1st Strike{% elif loop.index0 == 1 %}2nd (MAP){% else %}3rd (MAP){% endif %}
+                                                    {% if loop.index0 == 0 %}1st{% elif loop.index0 == 1 %}2nd{% else %}3rd{% endif %}
                                                 </span>
                                                 <span class="block text-lg font-bold leading-none">{{ strike.label }}</span>
-                                                {# MAP delta — the user asked to just see "here is what you add to your second attack". The big label already is that total, but surface the −5/−4 delta explicitly so it's obvious MAP is baked in. #}
-                                                {% if loop.index0 > 0 and strike.map_label %}
-                                                <span class="block text-[9px] mt-0.5 opacity-80" style="color:var(--color-danger); font-weight:700;">MAP {{ strike.map_label }}</span>
-                                                {% else %}
-                                                <span class="block text-[9px] mt-0.5 opacity-60" style="color:var(--text-faint);">crit ≥ AC+10</span>
-                                                {% endif %}
+                                                {# MAP delta — show on all three buttons so 1st reads as parallel to 2nd/3rd.
+                                                   1st: "MAP +0" (no penalty); 2nd/3rd show the actual −5/−10 or agile −4/−8. #}
+                                                <span class="block text-[9px] mt-0.5 opacity-85" style="color:{% if loop.index0 == 0 %}var(--text-muted){% else %}var(--color-danger){% endif %}; font-weight:700;">
+                                                    MAP {% if loop.index0 == 0 %}+0{% else %}{{ strike.map_label }}{% endif %}
+                                                </span>
                                             </button>
                                             {% endfor %}
                                         </div>

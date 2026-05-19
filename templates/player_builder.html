@@ -92,6 +92,25 @@
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Character Name *</label>
                     <input type="text" id="inp-name" placeholder="e.g. Valeros" class="w-full bg-gray-950 border border-gray-700 rounded p-4 text-white focus:border-amber-500 outline-none text-lg" oninput="runValidation()">
                 </div>
+                {# Starting level — defaults to 1 for new characters, but mid-campaign
+                   joiners can bump straight to the party's current level. The builder
+                   still walks the same steps (Pathbuilder doesn't replay level-by-level
+                   choices for catch-up builds either), but `Cast at Level N` notes
+                   downstream that some bumps are retroactive. #}
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Starting Level</label>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <input type="number" id="inp-level" min="1" max="20" value="1"
+                               class="w-24 bg-gray-950 border border-gray-700 rounded p-3 text-white text-center font-mono text-lg focus:border-amber-500 outline-none"
+                               oninput="updateBuilderLevel(this.value)">
+                        <span class="text-xs text-gray-500">Joining mid-campaign? Set this to the party's current level — the builder will retroactively allocate boosts, skills, and class feats.</span>
+                    </div>
+                    <div id="midcamp-banner" class="hidden mt-3 px-3 py-2 rounded text-xs"
+                         style="background:rgba(167,139,250,0.10); border:1px solid rgba(167,139,250,0.30); color:#DDD6FE;">
+                        <b>Mid-campaign join (Level <span id="midcamp-lvl">3</span>):</b>
+                        After finishing the builder, run Level Up <span id="midcamp-times">2</span> more time(s) — or use "Catch-Up Build" on the post-build screen — to claim the remaining ability boosts, class feats, and skill increases for your level.
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Deity (Optional)</label>
@@ -396,6 +415,7 @@
 
         let state = {
             name: "", deity: "", sanctification: "Neutral",
+            level: 1,
             ancestry: null, heritage: null, ancFeat: null, ancBoosts: [],
             background: null, bgBoosts: [], bgSkills: [], bgLores: [], bgNeedsLore: false,
             cls: null, subclass: null, keyStat: null, clsFeats: {},
@@ -405,6 +425,69 @@
             selectedWeapon: '', selectedArmor: '', adventurerPack: true,
             guided: {}
         };
+
+        /* Builder picker cache — feat / spell lists are inlined as JSON but
+           the per-class / per-tradition filter still runs each time the
+           modal opens. Memoize the result so re-opening the same picker is
+           instant. Keyed on (kind, lookup) — no need to invalidate during
+           a session because the underlying dbFeats / dbSpells are static
+           for the page lifetime. */
+        const _builderCache = (function () {
+            const cache = new Map();
+            return {
+                classFeats(cKey) {
+                    const k = 'cls:' + cKey;
+                    if (cache.has(k)) return cache.get(k);
+                    const raw = dbFeats['class'] || [];
+                    const filtered = raw.filter(f =>
+                        f.level <= 1
+                        && f.traits
+                        && f.traits.some(t => typeof t === 'string' && t.toLowerCase().replace(/-/g, ' ') === cKey)
+                        && !f.traits.some(t => typeof t === 'string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication'))
+                    );
+                    cache.set(k, filtered);
+                    return filtered;
+                },
+                spellsByTradition(tKey, level) {
+                    const k = `sp:${tKey}:${level}`;
+                    if (cache.has(k)) return cache.get(k);
+                    const filtered = (dbSpells || []).filter(s =>
+                        s.level === level
+                        && s.traditions
+                        && s.traditions.some(t => t.toLowerCase() === tKey)
+                    );
+                    cache.set(k, filtered);
+                    return filtered;
+                },
+                guidedGeneral() {
+                    const k = 'gen-skill';
+                    if (cache.has(k)) return cache.get(k);
+                    const raw = [...(dbFeats['general'] || []), ...(dbFeats['skill'] || [])];
+                    const filtered = raw.filter(f => f.level <= 1);
+                    cache.set(k, filtered);
+                    return filtered;
+                },
+            };
+        })();
+
+        // Mid-campaign join: clamp 1..20 and toggle the explanatory banner.
+        function updateBuilderLevel(raw) {
+            let n = parseInt(raw, 10);
+            if (isNaN(n)) n = 1;
+            n = Math.max(1, Math.min(20, n));
+            state.level = n;
+            const banner = document.getElementById('midcamp-banner');
+            if (banner) {
+                if (n > 1) {
+                    banner.classList.remove('hidden');
+                    document.getElementById('midcamp-lvl').textContent = n;
+                    document.getElementById('midcamp-times').textContent = (n - 1);
+                } else {
+                    banner.classList.add('hidden');
+                }
+            }
+        }
+        window.updateBuilderLevel = updateBuilderLevel;
 
         const PF2E_LANGUAGES = [
             'Common', 'Draconic', 'Dwarven', 'Elven', 'Gnomish', 'Goblin', 'Halfling', 'Jotun',
@@ -625,30 +708,27 @@
                 }
                 else if (type === 'class_feat') {
                     title = "Class Feat";
-                    let raw = dbFeats['class'] || [];
                     let cKey = (state.cls || "").toLowerCase().replace(/-/g, ' ');
-                    mCtx.data = raw.filter(f => f.level <= 1 && f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase().replace(/-/g, ' ') === cKey) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                    mCtx.data = _builderCache.classFeats(cKey);
                 }
                 else if (type === 'cantrip') {
                     title = "Cantrips (Lvl 0)";
                     let tKey = (state.tradition || "").toLowerCase();
-                    mCtx.data = (dbSpells || []).filter(s => s.level === 0 && s.traditions && s.traditions.some(t => t.toLowerCase() === tKey));
+                    mCtx.data = _builderCache.spellsByTradition(tKey, 0);
                 }
                 else if (type === 'lvl1_spell') {
                     title = "Level 1 Spells";
                     let tKey = (state.tradition || "").toLowerCase();
-                    mCtx.data = (dbSpells || []).filter(s => s.level === 1 && s.traditions && s.traditions.some(t => t.toLowerCase() === tKey));
+                    mCtx.data = _builderCache.spellsByTradition(tKey, 1);
                 }
                 else if (type === 'guided_general') {
                     title = "General / Skill Feat";
-                    let raw = [...(dbFeats['general']||[]), ...(dbFeats['skill']||[])];
-                    mCtx.data = raw.filter(f => f.level <= 1);
+                    mCtx.data = _builderCache.guidedGeneral();
                 }
                 else if (type === 'guided_class') {
                     title = "Class / Impulse Feat";
-                    let raw = dbFeats['class'] || [];
                     let cKey = (state.cls || "").toLowerCase().replace(/-/g, ' ');
-                    mCtx.data = raw.filter(f => f.level <= 1 && f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase().replace(/-/g, ' ') === cKey) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                    mCtx.data = _builderCache.classFeats(cKey);
                 }
 
                 document.getElementById('mod-title').innerText = title;
@@ -1761,7 +1841,12 @@
                 abilities: finalStats, skills: [...new Set(allSkills)], feats: finalFeats, spellCasters: spellData,
                 languages: [...state.languages, ...state.customLanguages],
                 customLores: state.customLores.map(l => [l, 2]),
-                equipment: equipmentList
+                equipment: equipmentList,
+                // Mid-campaign join: pass the player's chosen starting level so
+                // the post-build flow can prompt the player to run Level Up the
+                // remaining number of times. Backend can ignore safely if it
+                // doesn't yet read this field — defaults to 1 for new characters.
+                starting_level: parseInt(state.level || 1, 10)
             };
 
             try {

@@ -272,9 +272,11 @@
                             style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; {% if pc.shield_raised %}background:rgba(90,142,232,0.2); border:1px solid rgba(90,142,232,0.4); color:#93C5FD;{% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);{% endif %}">
                         Shield {% if pc.shield_raised %}· Raised{% else %}· Raise{% endif %}
                     </button>
-                    <button onclick="useShieldBlock()" title="Shield Block (reaction): the shield prevents Hardness damage, then absorbs leftover."
-                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold); letter-spacing:0.06em; text-transform:uppercase; font-weight:700;">
+                    <button onclick="useShieldBlock()" title="Shield Block — consumes your reaction. Hardness absorbs first, then shield + you split leftover."
+                            class="shield-block-btn"
+                            style="padding:3px 9px; font-size:10px; border-radius:4px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--gold); letter-spacing:0.06em; text-transform:uppercase; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
                         Block
+                        <span aria-hidden="true" title="Shield Block consumes 1 reaction" style="font-size:9px; opacity:0.75; color:#93C5FD;">↳ Reaction</span>
                     </button>
                     <button id="reaction-chip" onclick="useReaction()"
                             title="PF2e: 1 reaction per round, refreshed at the start of your turn. Click to toggle if you spend it on AoO, Shield Warden, etc."
@@ -287,19 +289,20 @@
                    the current state (Raised / Lowered / Broken / Destroyed). #}
                 {% if pc.shield_max_hp > 0 %}
                 {% set sh_pct = (pc.shield_hp / pc.shield_max_hp * 100) if pc.shield_max_hp > 0 else 0 %}
-                <div id="shield-gauge" class="no-print flex items-center justify-center gap-1 flex-wrap" style="margin-top:4px; font-size:10px;">
-                    <span style="font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#93C5FD;">Shield</span>
-                    <span id="shield-hp-text" style="font-weight:700; color:#c8c8d4;">{{ pc.shield_hp }}/{{ pc.shield_max_hp }}</span>
+                <div id="shield-gauge" class="no-print flex items-center justify-center gap-2 flex-wrap" style="margin-top:6px; font-size:11px;">
+                    <span style="font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:#93C5FD;">Shield</span>
+                    <span id="shield-hp-text" style="font-weight:700; color:#c8c8d4; font-family:var(--font-display); font-variant-numeric:tabular-nums; font-size:13px;">{{ pc.shield_hp }}/{{ pc.shield_max_hp }}</span>
                     {# SVG quartered-shield meter.
                        - The fill height is driven by --shield-fill so JS only
                          sets one CSS var rather than rebuilding any DOM.
                        - Broken / destroyed states show crack paths.
-                       - The whole thing is 22×26px, scales as SVG, no raster. #}
+                       - Now 40×46px so the cracked/destroyed state is
+                         actually legible across a table from a tablet. #}
                     <span id="shield-svg-wrap"
                           class="shield-svg {% if pc.shield_destroyed %}destroyed{% elif pc.shield_broken %}broken{% endif %}"
                           style="--shield-fill: {{ sh_pct|int }}%;"
                           aria-hidden="true">
-                        <svg viewBox="0 0 22 26" width="22" height="26" xmlns="http://www.w3.org/2000/svg">
+                        <svg viewBox="0 0 22 26" width="40" height="46" xmlns="http://www.w3.org/2000/svg">
                             <defs>
                                 <clipPath id="sh-heater-clip">
                                     <path d="M1,1 L21,1 L21,13 Q21,21 11,25 Q1,21 1,13 Z"/>
@@ -320,7 +323,13 @@
                             </g>
                         </svg>
                     </span>
-                    <span id="shield-state-lbl" style="font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:{% if pc.shield_destroyed %}#ef4444{% elif pc.shield_broken %}#eab308{% elif pc.shield_raised %}#93C5FD{% else %}var(--t3){% endif %};">
+                    <span id="shield-state-lbl"
+                          style="font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:0.10em; text-transform:uppercase;
+                                 padding:3px 8px; border-radius:4px;
+                                 {% if pc.shield_destroyed %}background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.55); color:#fca5a5;
+                                 {% elif pc.shield_broken %}background:rgba(234,179,8,0.18); border:1px solid rgba(234,179,8,0.55); color:#fbbf24;
+                                 {% elif pc.shield_raised %}background:rgba(96,165,250,0.16); border:1px solid rgba(96,165,250,0.45); color:#93C5FD;
+                                 {% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t2);{% endif %}">
                         {% if pc.shield_destroyed %}Destroyed{% elif pc.shield_broken %}Broken{% elif pc.shield_raised %}Raised · H{{ pc.shield_hardness }}{% else %}H{{ pc.shield_hardness }}{% endif %}
                     </span>
                     {# Phase 11: Repair Shield — full repair on one click.

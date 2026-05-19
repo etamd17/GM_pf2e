@@ -227,6 +227,14 @@
                     <span class="text-xs text-amber-500 font-bold hidden" id="msg-abilities-done"> 4/4 Allocated</span>
                 </div>
                 <div id="ui-abilities" class="flex flex-wrap gap-4"></div>
+                <!-- Quick allocation summary so the player can confirm at a glance
+                     before clicking Continue. Populated by buildAbilitiesUI() →
+                     renderBoostSummary(). -->
+                <div id="abilities-summary" class="mt-4 pt-3 border-t border-gray-700/60 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                    <span style="color:#94a3b8;">Boosts allocated: <strong id="abilities-allocated" style="color:#fbbf24;">0</strong>/4</span>
+                    <span style="color:#94a3b8;">Remaining: <strong id="abilities-remaining" style="color:#fbbf24;">4</strong></span>
+                    <span id="abilities-selected-list" style="color:#cbd5e1; flex-basis:100%;"></span>
+                </div>
             </div>
             <div class="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-inner">
                 <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 text-center">New Modifiers</h3>
@@ -845,15 +853,45 @@
                 }
                 const isFirst = idx === 0;
                 const isLast = idx === list.length - 1;
+                const dirtyTag = window._lvlupDirty
+                    ? ' · <span style="color:#fbbf24;" title="You have unsaved choices in this level-up. Closing the tab will lose them.">Unsaved</span>'
+                    : '';
                 nav.innerHTML = `
                     <button class="step-nav-btn" onclick="navPrev()" ${isFirst ? 'disabled' : ''}>← Back</button>
-                    <span style="font-size:10px; letter-spacing:0.1em; color:#5e6378; text-transform:uppercase;">Step ${idx + 1} of ${list.length}</span>
+                    <span style="font-size:10px; letter-spacing:0.1em; color:#5e6378; text-transform:uppercase;">Step ${idx + 1} of ${list.length}${dirtyTag}</span>
                     ${isLast
                         ? `<button class="step-nav-btn primary" onclick="onFinishClick()">Finalize</button>`
                         : `<button class="step-nav-btn primary" onclick="navNext()">Continue →</button>`}
                 `;
             });
         }
+
+        /* ── Unsaved-changes guard ──
+           Any click inside an active step panel marks the levelup dirty.
+           Refreshes the step-nav so the "Unsaved" tag appears once, and
+           installs a beforeunload guard so closing the tab / navigating
+           away prompts a confirmation. submitLevelUp() clears the flag. */
+        window._lvlupDirty = false;
+        function _markLvlupDirty() {
+            if (window._lvlupDirty) return;
+            window._lvlupDirty = true;
+            try { buildStepNav(); } catch(_) {}
+        }
+        document.addEventListener('change', (e) => {
+            if (e.target.closest('.step-panel.active')) _markLvlupDirty();
+        }, true);
+        document.addEventListener('click', (e) => {
+            const t = e.target;
+            // Ignore the nav footer / finalize buttons themselves.
+            if (t.closest('.step-nav-btn')) return;
+            if (t.closest('.step-panel.active')) _markLvlupDirty();
+        }, true);
+        window.addEventListener('beforeunload', (e) => {
+            if (!window._lvlupDirty) return;
+            e.preventDefault();
+            e.returnValue = 'You have unsaved level-up choices. Leave anyway?';
+            return e.returnValue;
+        });
 
         // Build a tiny gilt-or-ruby progress strip in the sticky top bar
         // that maps to each visible step on the page. Click a pip to
@@ -1025,7 +1063,25 @@
                 </div>`;
             }).join('');
             renderAbilityMath();
+            renderBoostSummary();
         }
+
+        // Footer summary on the Abilities step — shows allocated / remaining
+        // plus the selected stats so the player can confirm before Continue.
+        function renderBoostSummary() {
+            const sel = state.free_boosts_selected || [];
+            const allocatedEl = document.getElementById('abilities-allocated');
+            const remainingEl = document.getElementById('abilities-remaining');
+            const listEl = document.getElementById('abilities-selected-list');
+            if (allocatedEl) allocatedEl.textContent = sel.length;
+            if (remainingEl) remainingEl.textContent = Math.max(0, 4 - sel.length);
+            if (listEl) {
+                listEl.innerHTML = sel.length
+                    ? `Selected: ${sel.map(s => `<span style="color:#fbbf24;font-weight:700;">${s.toUpperCase()}</span>`).join(', ')}`
+                    : '<span style="color:#64748b;font-style:italic;">No boosts selected yet — pick four.</span>';
+            }
+        }
+        window.renderBoostSummary = renderBoostSummary;
 
         function toggleAbility(stat) {
             const idx = state.free_boosts_selected.indexOf(stat);
@@ -1046,6 +1102,7 @@
             if(state.free_boosts_selected.length === 4) document.getElementById('msg-abilities-done').classList.remove('hidden');
             else document.getElementById('msg-abilities-done').classList.add('hidden');
             renderAbilityMath();
+            renderBoostSummary();
             buildSkillsUI();
             updateHpPreview();  // CON boost changes HP per level
             runValidation();
@@ -2005,6 +2062,9 @@
         async function submitLevelUp() {
             // Confirmation dialog — prevent accidental one-click submit
             if (!confirm(`Level up ${pc.name} to Level ${targetLevel}? This cannot be easily undone.`)) return;
+            // Submitting clears the dirty flag so the beforeunload guard doesn't
+            // prompt during the redirect.
+            window._lvlupDirty = false;
             const btn = document.getElementById('btn-finish'); btn.innerText = "Processing Matrix..."; btn.disabled = true;
 
             let finalFeats = [...(pc.raw_feats || [])];

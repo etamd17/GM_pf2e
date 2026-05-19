@@ -4,6 +4,11 @@
                     <h3 class="section-header" style="border:none; margin:0; padding:0;">Animal Companions & Familiars</h3>
                     <button onclick="document.getElementById('pet-add-modal').classList.remove('hidden')" class="no-print action-btn primary">+ Add Pet</button>
                 </div>
+                {# Quick PF2e refresher — most players forget that the
+                   companion's action economy is shared with the master. #}
+                <div class="text-[11px] mb-3 px-3 py-2 rounded" style="background:rgba(167,139,250,0.06); border-left:3px solid var(--color-spell); color:var(--text-secondary);">
+                    Your companion acts on <b>your turn</b>. Spend <b>1 action</b> to command it (or 2 actions if you have Mature/Nimble Companion + want it to take two actions). Untaught: it only Strides/Stands — Mature+: it does anything you direct.
+                </div>
                 
                 {% set pets = pc.pets if pc.pets is defined else [] %}
                 {% if pets %}
@@ -22,9 +27,15 @@
                                 <div class="text-[11px] font-header uppercase" style="color:var(--text-faint);">AC</div>
                                 <div class="text-sm font-bold" style="color:#60A5FA;">{{ pet.ac }}</div>
                             </div>
-                            <div class="rounded p-2 text-center" style="background:var(--bg-base); border:1px solid var(--border-subtle);">
+                            <div class="rounded p-2 text-center pet-hp-cell" data-pet-name="{{ pet.name }}" style="background:var(--bg-base); border:1px solid var(--border-subtle);">
                                 <div class="text-[11px] font-header uppercase" style="color:var(--text-faint);">HP</div>
-                                <div class="text-sm font-bold" style="color:#4ADE80;">{{ pet.hp }}</div>
+                                <div class="flex items-center justify-center gap-1 mt-1">
+                                    <button type="button" onclick="adjustPetHP('{{ pet.name|replace("'", "\\'") }}', -1)" title="Damage 1 (Shift+click −5)"
+                                            class="pet-hp-step" aria-label="Damage pet">−</button>
+                                    <span class="text-sm font-bold pet-hp-val" style="color:#4ADE80; font-variant-numeric:tabular-nums; min-width:24px;">{{ pet.hp }}</span>
+                                    <button type="button" onclick="adjustPetHP('{{ pet.name|replace("'", "\\'") }}', 1)" title="Heal 1 (Shift+click +5)"
+                                            class="pet-hp-step" aria-label="Heal pet">+</button>
+                                </div>
                             </div>
                             <div class="rounded p-2 text-center" style="background:var(--bg-base); border:1px solid var(--border-subtle);">
                                 <div class="text-[11px] font-header uppercase" style="color:var(--text-faint);">Fort</div>
@@ -100,6 +111,11 @@
                             <button onclick="fillPetPreset('Snake','Animal Companion','Small',20,17,5,7,3,25,[{name:'Fangs',bonus:7,damage:'1d8+1 P'}],1,3,1,-4,2,0,'Support: +1d4 poison damage on Strikes.')" class="text-[9px] px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary);">Snake</button>
                             <button onclick="fillPetPreset('Bird','Animal Companion','Small',18,18,4,7,3,10,[{name:'Talons',bonus:7,damage:'1d4+1 S'}],0,3,0,-4,2,0,'Fly 60 ft. Support: Target is off-guard vs next attack.')" class="text-[9px] px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary);">Bird</button>
                             <button onclick="fillPetPreset('Badger','Animal Companion','Small',22,16,6,6,4,25,[{name:'Jaws',bonus:7,damage:'1d8+2 P'}],2,1,2,-4,2,0,'Burrow 10 ft. Support: +1d8 damage vs prone.')" class="text-[9px] px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary);">Badger</button>
+                            {# Tiny presets — added for awakened-animal companions and
+                               familiars where the Small default would mis-scale AC/HP. #}
+                            <button onclick="fillPetPreset('Awakened (Tiny)','Animal Companion','Tiny',18,17,4,7,3,20,[{name:'Tiny Strike',bonus:6,damage:'1d4 mod'}],-1,3,1,2,2,1,'Awakened: Int 8+, can speak. Tiny — needs reach 0 ft; provokes if standing in enemy square.')" class="text-[9px] px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid rgba(167,139,250,0.4); color:#C4B5FD;">Awakened (Tiny)</button>
+                            <button onclick="fillPetPreset('Bat','Familiar','Tiny',16,18,4,7,3,5,[],-3,3,0,-4,1,0,'Fly 25 ft. Echolocation 30 ft (imprecise). Familiar — Hardness 0, dies at 0 HP.')" class="text-[9px] px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary);">Bat (Familiar)</button>
+                            <button onclick="fillPetPreset('Hare','Familiar','Tiny',16,18,4,7,3,30,[],-3,3,0,-4,2,0,'Tiny — needs reach 0 ft to attack. Familiar slot.')" class="text-[9px] px-2 py-1 rounded" style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-secondary);">Hare (Familiar)</button>
                         </div>
                     </details>
                     <div class="grid grid-cols-2 gap-3">
