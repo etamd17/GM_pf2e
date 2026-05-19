@@ -2527,22 +2527,53 @@
            minimum of ~28px on the short axis. Class names are scoped
            so we don't inflate every button on the page.
            ═══════════════════════════════════════════════════════════ */
+        /* Condition tile: name on the left, [−][val][+] on the right.
+           Use grid for the inner row so the value column is fixed-width
+           and the +/- pips can't shove against the tile border. */
+        .cond-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .cond-name {
+            letter-spacing: 0.06em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+        .cond-ctrl {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
         .cond-step {
-            min-width: 28px; min-height: 28px;
+            width: 26px; height: 26px;
             display: inline-flex; align-items: center; justify-content: center;
             border-radius: 6px;
             background: var(--bg-base);
             border: 1px solid var(--border-s);
             font-family: var(--font-display);
-            font-size: 14px; font-weight: 800;
+            font-size: 13px; font-weight: 800;
             cursor: pointer;
             transition: background .12s, border-color .12s, color .12s, transform .08s;
             line-height: 1;
+            padding: 0;
+            flex-shrink: 0;
         }
         .cond-step:hover { background: var(--bg-raised); border-color: rgba(255,255,255,0.25); }
         .cond-step:active { transform: scale(0.93); }
         .cond-numeric .cond-val {
-            min-width: 22px; text-align: center; font-variant-numeric: tabular-nums;
+            width: 18px;
+            display: inline-block;
+            text-align: center;
+            font-family: var(--font-display);
+            font-variant-numeric: tabular-nums;
+            font-size: 14px;
+            font-weight: 700;
         }
         .cond-numeric.is-on { border-color: rgba(220,38,38,0.40); }
         .cond-toggle {

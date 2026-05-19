@@ -55,12 +55,12 @@
                             {% for cond in ['Frightened', 'Sickened', 'Enfeebled', 'Clumsy', 'Drained', 'Stupefied'] %}
                             {% set c_lower = cond|lower %}
                             {% set c_val = pc.conditions.get(c_lower, 0) %}
-                            <div class="cond-numeric bg-gray-900 p-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group {{ 'is-on' if c_val > 0 else '' }}" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-[11px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
-                                    <div class="flex items-center gap-1">
+                            <div class="cond-numeric bg-gray-900 px-3 py-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group {{ 'is-on' if c_val > 0 else '' }}" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
+                                <div class="cond-row">
+                                    <span class="cond-name text-[10px] font-bold uppercase {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
+                                    <div class="cond-ctrl">
                                         <button onclick="updateCondition('{{ c_lower }}', {{ c_val - 1 }})" class="cond-step text-gray-300 hover:text-white" aria-label="Decrease {{ cond }}">−</button>
-                                        <span class="cond-val text-sm font-bold {{ 'text-red-400' if c_val > 0 else 'text-gray-500' }}">{{ c_val }}</span>
+                                        <span class="cond-val {{ 'text-red-400' if c_val > 0 else 'text-gray-500' }}">{{ c_val }}</span>
                                         <button onclick="updateCondition('{{ c_lower }}', {{ c_val + 1 }})" class="cond-step text-gray-300 hover:text-white" aria-label="Increase {{ cond }}">+</button>
                                     </div>
                                 </div>
