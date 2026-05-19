@@ -3411,18 +3411,38 @@
         }
 
         async function adjustCondition(cond, delta) {
+            // Mark fired — see updateCondition for the delegated backstop pattern.
+            window._lastCondCall = Date.now();
+            // 'toggle' for boolean conditions goes through the dedicated
+            // endpoint shape ({toggle: true}); numeric deltas use {delta: N}.
+            const body = (delta === 'toggle') ? { condition: cond, toggle: true } : { condition: cond, delta: delta };
             try {
                 const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({condition: cond, delta: delta})
+                    body: JSON.stringify(body)
                 });
+                if (!res.ok) {
+                    if (typeof showRollToast === 'function') {
+                        showRollToast('Condition', '!', `Server returned ${res.status} for ${cond} ${delta}.`, false, true);
+                    }
+                    return;
+                }
                 const data = await res.json();
                 if (data.success) {
                     _refreshConditionStrip();
                     _paintMetaQuickConds(data.conditions || {});
+                } else if (typeof showRollToast === 'function') {
+                    showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond} ${delta})`, false, true);
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error('[adjustCondition] failed:', e, { cond, delta });
+                if (typeof showRollToast === 'function') {
+                    showRollToast('Condition', '!', `Network error adjusting ${cond}. Open DevTools to see details.`, false, true);
+                }
+            }
         }
+        // Expose globally so inline onclick + delegated handlers can both reach it.
+        window.adjustCondition = adjustCondition;
 
         // Paint the meta-rail Quick Conditions block from a fresh conditions
         // dict (server-canonical). Called after adjustCondition + on SSE
@@ -4190,16 +4210,98 @@
 
         // NEW: FRONTEND CONDITION SYNC
         async function updateCondition(cond, val) {
+            // Mark that the inline (or delegated) handler did fire. Used by the
+            // backstop delegation below to avoid re-firing the action when the
+            // inline onclick is working normally.
+            window._lastCondCall = Date.now();
             if (typeof val === 'number' && (val < 0 || val > 4)) return;
             try {
                 const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ condition: cond, value: val })
                 });
                 const data = await res.json();
-                if (data.success) window.location.reload();
-            } catch (e) {}
+                if (data.success) {
+                    window.location.reload();
+                } else if (typeof showRollToast === 'function') {
+                    showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond}=${val})`, false, true);
+                }
+            } catch (e) {
+                console.error('[updateCondition] fetch failed:', e, { cond, val });
+                if (typeof showRollToast === 'function') {
+                    showRollToast('Condition', '!', `Network error setting ${cond}=${val}. Open DevTools to see details.`, false, true);
+                }
+            }
         }
+        // Expose globally so inline onclick + delegated handlers can both reach it.
+        window.updateCondition = updateCondition;
+
+        /* Defensive event delegation: if the inline onclick on a condition
+           control is ever swallowed by an upstream listener / browser
+           extension / cached older JS, this document-level handler still
+           catches the click and dispatches the action. Inline onclick is
+           left in place so behavior is unchanged when it works; this is
+           strictly a backstop. Covers four widgets:
+             • Matrix numeric +/-  → updateCondition(cond, integer)
+             • Matrix toggle       → updateCondition(cond, true|false)
+             • Quick Conditions    → adjustCondition(cond, delta|'toggle')
+             • Strip pills         → adjustCondition / toggleBoolCondition
+        */
+        /* The backstop is only useful when the INLINE onclick fails silently.
+           If the inline ran, updateCondition / adjustCondition will set
+           window._lastCondCall to the current timestamp. We capture the
+           click time, then in a microtask check whether the marker was
+           bumped. If it was, the inline did its job — bail. If not, fire
+           the parsed call as a fallback. */
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            if (!target || !target.closest) return;
+            // Identify which condition-control this click hit
+            let match = null;
+            const numBtn = target.closest('.cond-numeric button.cond-step');
+            if (numBtn) {
+                const oc = numBtn.getAttribute('onclick') || '';
+                const m = oc.match(/updateCondition\(\s*['"]([^'"]+)['"]\s*,\s*(-?\d+)\s*\)/);
+                if (m) match = { fn: 'updateCondition', args: [m[1], parseInt(m[2], 10)] };
+            }
+            if (!match) {
+                const togBtn = target.closest('button.cond-toggle');
+                if (togBtn) {
+                    const oc = togBtn.getAttribute('onclick') || '';
+                    const m = oc.match(/updateCondition\(\s*['"]([^'"]+)['"]\s*,\s*(true|false)\s*\)/);
+                    if (m) match = { fn: 'updateCondition', args: [m[1], m[2] === 'true'] };
+                }
+            }
+            if (!match) {
+                const qcNum = target.closest('.qc-row button[onclick^="adjustCondition"]');
+                if (qcNum) {
+                    const oc = qcNum.getAttribute('onclick') || '';
+                    const m = oc.match(/adjustCondition\(\s*['"]([^'"]+)['"]\s*,\s*(-?\d+)\s*\)/);
+                    if (m) match = { fn: 'adjustCondition', args: [m[1], parseInt(m[2], 10)] };
+                }
+            }
+            if (!match) {
+                const qcTog = target.closest('button.qc-toggle');
+                if (qcTog) {
+                    const oc = qcTog.getAttribute('onclick') || '';
+                    const m = oc.match(/adjustCondition\(\s*['"]([^'"]+)['"]\s*,\s*['"]toggle['"]\s*\)/);
+                    if (m) match = { fn: 'adjustCondition', args: [m[1], 'toggle'] };
+                }
+            }
+            if (!match) return;
+
+            const t0 = Date.now();
+            // Defer past the click event so the inline onclick has had its
+            // synchronous shot at running. If it did, _lastCondCall will be
+            // >= t0 and we skip the fallback.
+            setTimeout(() => {
+                const lastCall = window._lastCondCall || 0;
+                if (lastCall >= t0) return; // inline handled it
+                console.warn('[cond delegation] inline onclick did not fire; using backstop', match);
+                const fn = window[match.fn];
+                if (typeof fn === 'function') fn(...match.args);
+            }, 0);
+        });
 
         function escapeHtml(str) {
             if(!str) return '';
