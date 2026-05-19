@@ -753,7 +753,20 @@
                 }
             });
             container.addEventListener('wheel', onWheel);
-            
+
+            // iPad / touch support — wheel events don't exist on touch
+            // devices, so the observer flow was stuck at whatever zoom
+            // the canvas resized to. Wire pinch-zoom + two-finger pan
+            // via the Touch Events API (Safari, Chrome, Firefox all
+            // honour them on iOS / iPadOS). Single-finger taps still
+            // synthesize mouse events for the existing select/pan/ruler
+            // path, so the regular handlers keep working.
+            container.style.touchAction = 'none';
+            container.addEventListener('touchstart', onTouchStart, {passive: false});
+            container.addEventListener('touchmove', onTouchMove, {passive: false});
+            container.addEventListener('touchend', onTouchEnd, {passive: false});
+            container.addEventListener('touchcancel', onTouchEnd, {passive: false});
+
             // Load map
             if (mapState.image) {
                 loadMapImage(mapState.image);
@@ -2433,15 +2446,117 @@
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-            
+
             const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
             const newZoom = Math.max(0.1, Math.min(5, zoom * zoomFactor));
-            
+
             viewX = mouseX - (mouseX - viewX) * (newZoom / zoom);
             viewY = mouseY - (mouseY - viewY) * (newZoom / zoom);
             zoom = newZoom;
-            
+
             render();
+        }
+
+        // ===========================================
+        // TOUCH / PINCH (iPad observer flow)
+        // ===========================================
+        // Three regimes by finger count:
+        //  - 1 finger : let the browser synthesize a mouse event so
+        //    the existing onMouseDown / Move / Up path runs (drag own
+        //    token, pan, ruler with the Ruler tool).
+        //  - 2 fingers: pinch-zoom around the midpoint + pan via the
+        //    midpoint's translation. Never falls through to mouse so
+        //    the canvas doesn't jitter while the user zooms.
+        //  - 3+ fingers: treated like 2 (use the first two).
+        let _touchPinch = null;   // {dist, midX, midY, viewX, viewY, zoom}
+
+        function _touchPair(touches) {
+            const rect = canvas.getBoundingClientRect();
+            const a = touches[0], b = touches[1];
+            const ax = a.clientX - rect.left, ay = a.clientY - rect.top;
+            const bx = b.clientX - rect.left, by = b.clientY - rect.top;
+            const dist = Math.hypot(bx - ax, by - ay) || 1;
+            const midX = (ax + bx) / 2, midY = (ay + by) / 2;
+            return {dist, midX, midY};
+        }
+
+        function onTouchStart(e) {
+            if (e.touches.length >= 2) {
+                // Stop the pending single-finger pan from the previous
+                // touchstart — we just promoted to a pinch.
+                isDragging = false;
+                draggingToken = null;
+                document.getElementById('map-container').classList.remove('dragging');
+                const p = _touchPair(e.touches);
+                _touchPinch = {
+                    dist: p.dist, midX: p.midX, midY: p.midY,
+                    viewX, viewY, zoom,
+                };
+                e.preventDefault();
+            }
+            // 1-finger: fall through. The browser fires a synthetic
+            // mousedown after touchend (300 ms delay in some Safari
+            // versions); to make pan feel snappy we forward immediately
+            // and let preventDefault on touchend suppress the synth.
+            else if (e.touches.length === 1) {
+                const t = e.touches[0];
+                onMouseDown({
+                    clientX: t.clientX, clientY: t.clientY,
+                    shiftKey: false,
+                    preventDefault: () => {},
+                });
+            }
+        }
+
+        function onTouchMove(e) {
+            if (_touchPinch && e.touches.length >= 2) {
+                const p = _touchPair(e.touches);
+                const newZoom = Math.max(0.1, Math.min(5, _touchPinch.zoom * (p.dist / _touchPinch.dist)));
+                // Anchor the zoom around the original midpoint so the
+                // pinch feels like the map is being stretched under the
+                // user's fingers, not yanked off-screen.
+                const ratio = newZoom / _touchPinch.zoom;
+                viewX = _touchPinch.midX - (_touchPinch.midX - _touchPinch.viewX) * ratio + (p.midX - _touchPinch.midX);
+                viewY = _touchPinch.midY - (_touchPinch.midY - _touchPinch.viewY) * ratio + (p.midY - _touchPinch.midY);
+                zoom = newZoom;
+                _updateZoomDisplay();
+                render();
+                e.preventDefault();
+                return;
+            }
+            if (e.touches.length === 1) {
+                const t = e.touches[0];
+                onMouseMove({
+                    clientX: t.clientX, clientY: t.clientY,
+                    shiftKey: false,
+                });
+            }
+        }
+
+        function onTouchEnd(e) {
+            if (_touchPinch && e.touches.length < 2) {
+                _touchPinch = null;
+                // If a finger is still down, treat it as the start of a
+                // single-finger pan — otherwise the user has to lift +
+                // re-tap to resume panning after a pinch.
+                if (e.touches.length === 1) {
+                    const t = e.touches[0];
+                    onMouseDown({
+                        clientX: t.clientX, clientY: t.clientY,
+                        shiftKey: false, preventDefault: () => {},
+                    });
+                }
+                e.preventDefault();
+                return;
+            }
+            if (e.touches.length === 0) {
+                onMouseUp({clientX: 0, clientY: 0});
+            }
+        }
+
+        function _updateZoomDisplay() {
+            const el = document.getElementById('zoom-display');
+            if (el) el.textContent = Math.round(zoom * 100) + '%';
         }
         
         function getOwnTokenAtPoint(mapX, mapY) {
