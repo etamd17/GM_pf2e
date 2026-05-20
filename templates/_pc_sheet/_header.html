@@ -145,8 +145,13 @@
             {% endfor %}
         </div>
 
-        <!-- ROW 3 — Stats strip (AC / Speed / Perception / Class DC / HP) -->
+        <!-- ROW 3 — Stats strip (HP/Shield panel + defense tile grid) -->
         <div class="stats-strip">
+            <!-- Defense tiles: AC / Speed / Perception / Class DC / Spell DC /
+                 Fort / Reflex / Will. Wrapped in their own grid so they tile
+                 4-wide x 2-rows beside the HP panel instead of stretching to
+                 the HP block's full height. -->
+            <div class="defense-grid">
             <!-- AC (just the number + shield badge — actions live in HP/Shield zone) -->
             <div id="ac-block" class="ss-block {% if pc.shield_raised %}shield-raised{% endif %}" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
                 <div class="ss-lbl">Armor Class</div>
@@ -216,9 +221,10 @@
                 <div class="ss-val">+{{ pc.will }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ will_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ will_rc }};">{{ will_rl }}</span></div>
             </div>
+            </div><!-- /.defense-grid -->
 
             <!-- HP block -->
-            <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}" style="flex:2.2; min-width:240px;">
+            <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}">
                 <div class="ss-lbl">Hit Points</div>
                 {# Dying widget (Wave 2 #4) — only renders when current_hp == 0,
                    driven by the dying/wounded values that already exist in the

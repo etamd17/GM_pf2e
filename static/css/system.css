@@ -2706,53 +2706,83 @@ button[onclick^="rollDamage"]:hover {
     padding: 4px 6px !important;
 }
 .stats-strip {
-    padding: 0 !important;
+    padding: 8px 12px !important;
     margin: 0 !important;
+    /* New layout: HP/Shield panel on the left, defense tiles in a grid on
+       the right. Vertically centered so the defenses sit beside the HP
+       panel instead of stretching to its full height. */
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
 }
-.stats-strip > .ss-block { flex: 1 1 0 !important; min-width: 0 !important; }
-.stats-strip .hp-area { flex: 1.6 1 0 !important; }
 /* HP+Shield is the most-touched block during play — pin it first under
-   the character name. Saves / abilities follow in their natural order. */
-.stats-strip .hp-area { order: -1 !important; }
+   the character name, as a self-contained panel of fixed-ish width. */
+.stats-strip .hp-area {
+    order: -1 !important;
+    flex: 0 0 auto !important;
+    width: clamp(300px, 32%, 380px) !important;
+    align-self: stretch;
+    background: var(--bg-raised) !important;
+    border: 1px solid var(--border-s) !important;
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+}
+/* The 8 defense tiles tile 4-wide x 2-rows beside the HP panel. */
+.stats-strip .defense-grid {
+    flex: 1 1 auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    align-content: center !important;
+}
+.stats-strip .defense-grid .ss-block {
+    border-right: none !important;
+    background: var(--bg-raised) !important;
+    border: 1px solid var(--border-s) !important;
+    border-radius: 8px !important;
+    padding: 8px 6px !important;
+    min-height: 60px !important;
+    transition: border-color .15s, background .15s;
+}
+.stats-strip .defense-grid .ss-block.rollable-element { cursor: pointer; }
+.stats-strip .defense-grid .ss-block.rollable-element:hover {
+    border-color: rgba(196,60,60,0.3) !important;
+    background: var(--bg-overlay) !important;
+}
 
 /* ── MOBILE: stats-strip reflow ──
-   On phones the desktop "everything on one row" layout crushes the 8
-   defense blocks + HP block into ~40px columns that overlap. Switch to a
-   grid: HP+Shield spans the full width as its own row (order -1 keeps it
-   on top), and the defense stats tile into a clean 3-wide grid below. */
+   On phones, stack the HP/Shield panel on top (order -1) and drop the
+   defense tiles into a clean 3-wide grid below it. */
 @media (max-width: 600px) {
     .stats-strip {
-        display: grid !important;
-        grid-template-columns: repeat(3, 1fr) !important;
-        gap: 1px !important;
-        background: var(--border, rgba(255,255,255,0.08)) !important;
-    }
-    .stats-strip > .ss-block {
-        border-right: none !important;
-        background: var(--bg-surface) !important;
-        padding: 6px 4px !important;
-        min-height: 52px !important;
-    }
-    .stats-strip .ss-block.hp-area {
-        grid-column: 1 / -1 !important;
-        min-height: 0 !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
         padding: 8px !important;
+        gap: 8px !important;
+    }
+    .stats-strip .hp-area {
+        width: 100% !important;
+        order: -1 !important;
         /* Stretch child rows to full width — otherwise align-items:center
            lets the shield-action row shrink-wrap and crush its buttons to
            ~24px, overlapping their own text. */
         align-items: stretch !important;
     }
-    /* The HP block's inner rows are utility-class flex rows (no stable class
-       hook), so target direct children. Force full width + recenter content. */
-    .stats-strip .ss-block.hp-area > div {
-        width: 100% !important;
-    }
+    .stats-strip .hp-area > div { width: 100% !important; }
     /* Shield action buttons (Raise / Block / Reaction) + gauge chips must not
        shrink below their text — keep them on their own line, wrapping. */
-    .stats-strip .ss-block.hp-area button,
-    .stats-strip .ss-block.hp-area #shield-gauge > * {
+    .stats-strip .hp-area button,
+    .stats-strip .hp-area #shield-gauge > * {
         flex-shrink: 0 !important;
         white-space: nowrap !important;
+    }
+    .stats-strip .defense-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
+    }
+    .stats-strip .defense-grid .ss-block {
+        min-height: 50px !important;
+        padding: 6px 4px !important;
     }
     /* Defense values were 22px which is fine, but tighten the label so it
        fits a 1/3-width tile without truncating awkwardly. */
