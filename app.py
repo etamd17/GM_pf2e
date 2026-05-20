@@ -4648,14 +4648,24 @@ def _generate_recap_via_claude(note_text):
     note_text = note_text[:12000]
     campaign = _load_campaign_config()
     prompt = (
-        f"You are writing the on-screen \"Previously on...\" recap for a tabletop RPG session "
-        f"of the campaign \"{campaign.get('name', 'the campaign')}\". Below are the GM's notes "
-        f"from the most recent session. Write ONE evocative paragraph (4-6 sentences) that "
-        f"reminds the players where things stand and sets the mood — second person or narrator "
-        f"voice, dramatic but clear, no headings or bullet points, no preamble. Focus on what "
-        f"happened, unresolved threads, and stakes.\n\n"
+        f"You are the narrator of a \"Previously on...\" recap for the tabletop campaign "
+        f"\"{campaign.get('name', 'the campaign')}\", read aloud to the players at the start of a session. "
+        f"Below are the GM's raw notes from the most recent session.\n\n"
+        f"Write a flowing, story-format recap — 2 to 3 short paragraphs of vivid narrative prose, "
+        f"told in a dramatic narrator voice like the cold-open recap of a TV show. Tell it as a "
+        f"STORY: what the party did, the choices they made, who they met, what they discovered or "
+        f"lost, the tension and the stakes, and the unresolved threads they carry into tonight. "
+        f"Use the characters' names. Keep the momentum and mood high.\n\n"
+        f"IMPORTANT — these are game-prep notes, so IGNORE all the mechanical and logistical "
+        f"scaffolding and never mention it: room or area numbers, map/grid coordinates and "
+        f"directions, encounter or stat-block labels, monster stat lines, dice rolls, DCs, "
+        f"initiative, HP/damage numbers, XP, gold and itemized loot, page or section references, "
+        f"and any GM shorthand or planning notes for scenes that did not actually happen. "
+        f"Translate events into the fiction — e.g. not \"cleared room 4, 30 XP,\" but \"fought "
+        f"through the flooded gallery and left its guardians broken behind them.\" "
+        f"No headings, no bullet points, no preamble or sign-off — just the recap prose.\n\n"
         f"--- SESSION NOTES ---\n{note_text}\n--- END NOTES ---\n\n"
-        f"Write only the recap paragraph."
+        f"Write only the recap."
     )
     import urllib.request as _urlreq
     import urllib.error as _urlerr
@@ -4663,7 +4673,7 @@ def _generate_recap_via_claude(note_text):
     def _call(model):
         payload = json.dumps({
             'model': model,
-            'max_tokens': 400,
+            'max_tokens': 800,
             'messages': [{'role': 'user', 'content': prompt}],
         }).encode('utf-8')
         req = _urlreq.Request(
