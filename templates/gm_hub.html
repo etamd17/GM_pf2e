@@ -92,6 +92,14 @@
                         {# Recap #}
                         <div>
                             <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">&ldquo;Previously on&hellip;&rdquo; Recap</div>
+                            {# Which vault folder the note picker reads from (newest-first). #}
+                            <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+                                <span style="font-size:10px; color:var(--text-on-dark-3); white-space:nowrap;">Folder</span>
+                                <input type="text" id="sessions-folder" value="{{ campaign.sessions_folder }}"
+                                       placeholder="e.g. Shades of Blood/Sessions"
+                                       style="flex:1; min-width:120px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
+                                <button type="button" onclick="saveSessionsFolder()" id="folder-save-btn" style="font-size:11px; color:var(--text-on-dark-2); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 10px; border-radius:5px; cursor:pointer; white-space:nowrap;">Set</button>
+                            </div>
                             <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
                                 <select id="recap-note-select" style="flex:1; min-width:140px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
                                     <option value="">Loading session notes…</option>
@@ -337,6 +345,25 @@
                         // The curtain appears on THIS page too (base.html GM variant) via SSE.
                     } catch (e) {
                         alert('Could not begin session: ' + e);
+                    } finally {
+                        btn.disabled = false; btn.textContent = old;
+                    }
+                }
+
+                async function saveSessionsFolder() {
+                    const folder = document.getElementById('sessions-folder').value.trim();
+                    const btn = document.getElementById('folder-save-btn');
+                    btn.disabled = true; const old = btn.textContent; btn.textContent = '…';
+                    try {
+                        await fetch('/api/campaign', {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ sessions_folder: folder })
+                        });
+                        // Re-pull notes from the new folder.
+                        _sessionNotesLoaded = false;
+                        await loadSessionNotes();
+                    } catch (e) {
+                        /* status surfaced via the picker contents */
                     } finally {
                         btn.disabled = false; btn.textContent = old;
                     }

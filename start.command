@@ -14,6 +14,21 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$SCRIPT_DIR"
 
+# --- Load local secrets / config from a gitignored .env (if present) ---
+# A double-clicked .command does NOT read your ~/.zshrc, so put machine
+# secrets in a file named `.env` next to this script, one KEY=VALUE per line:
+#
+#   ANTHROPIC_API_KEY=sk-ant-...
+#
+# `.env` is already in .gitignore, so the key never gets committed.
+# `set -a` auto-exports every variable defined while the file is sourced.
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    . "$SCRIPT_DIR/.env"
+    set +a
+    echo "  Loaded .env"
+fi
+
 # --- Prefer a project venv if one exists, else fall back to system python3 ---
 if [ -d "venv" ] && [ -f "venv/bin/python3" ]; then
     PY="$SCRIPT_DIR/venv/bin/python3"
