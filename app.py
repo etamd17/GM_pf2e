@@ -25,6 +25,33 @@ from class_matrix import SKILL_FEAT_PREREQS, check_feat_prereqs, RANK_VALUES
 from class_matrix import CLASS_LEVEL_FEATURES
 from pf2e_generator import RobustPF2eGenerator
 
+# ── Local .env loader (dependency-free) ──────────────────────────────────
+# Loads KEY=VALUE lines from a .env beside this file into os.environ so the
+# app picks up secrets (e.g. ANTHROPIC_API_KEY) no matter how it's launched
+# — start.command, `python3 app.py`, gunicorn, or a dev preview. Real
+# environment variables (e.g. Railway's dashboard vars) always win, so this
+# never clobbers production config. python-dotenv is NOT required.
+def _load_dotenv_file():
+    try:
+        env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+        if not os.path.isfile(env_path):
+            return
+        with open(env_path, 'r', encoding='utf-8') as fp:
+            for raw in fp:
+                line = raw.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, _, val = line.partition('=')
+                key = key.strip()
+                # Strip surrounding quotes if the user added them.
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except OSError:
+        pass
+
+_load_dotenv_file()
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
 # Reject oversized uploads at the WSGI layer so a multi-GB POST can't OOM
