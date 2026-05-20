@@ -108,10 +108,12 @@
                             </div>
                             <textarea id="recap-text" rows="4" placeholder="Pick a session note and click Generate, or write the recap here…"
                                       style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;">{{ campaign.last_recap }}</textarea>
-                            <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                            <div style="display:flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:wrap;">
                                 <button type="button" onclick="saveRecap()" id="recap-save-btn" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save recap</button>
+                                <button type="button" onclick="testApiKey()" id="apikey-test-btn" style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:6px 12px; border-radius:5px; cursor:pointer;">Test API key</button>
                                 <span id="recap-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
                             </div>
+                            <div id="apikey-models" style="display:none; margin-top:6px; font-size:10px; color:var(--text-on-dark-3); background:var(--bg-base); border:1px solid var(--border-card); border-radius:5px; padding:6px 8px; max-height:120px; overflow:auto;"></div>
                         </div>
                     </div>
                 </div>
@@ -435,6 +437,34 @@
                         if (j.success) { status.style.color = '#86efac'; status.textContent = 'Recap saved.'; }
                         else { status.textContent = j.error || 'Save failed'; }
                     } catch (e) { status.textContent = 'Network error: ' + e; }
+                }
+
+                async function testApiKey() {
+                    const btn = document.getElementById('apikey-test-btn');
+                    const status = document.getElementById('recap-status');
+                    const box = document.getElementById('apikey-models');
+                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Checking…';
+                    box.style.display = 'none';
+                    try {
+                        const j = await fetch('/api/session/models').then(r => r.json());
+                        if (j.success) {
+                            status.style.color = '#86efac';
+                            status.textContent = 'Key works. Pick one of these for ANTHROPIC_RECAP_MODEL:';
+                            const ids = (j.models || []).map(m => m.id);
+                            box.innerHTML = '<div style="color:var(--gilt-200); margin-bottom:4px;">Available models (current: ' +
+                                (j.current_model || '?') + '):</div>' +
+                                ids.map(id => '<div style="font-family:var(--font-mono,monospace);">' + id + '</div>').join('');
+                            box.style.display = 'block';
+                            try { console.log('[recap] available models:', ids); } catch(_){}
+                        } else {
+                            status.style.color = '#fca5a5';
+                            status.textContent = j.error || 'Key check failed';
+                        }
+                    } catch (e) {
+                        status.style.color = '#fca5a5'; status.textContent = 'Network error: ' + e;
+                    } finally {
+                        btn.disabled = false; btn.textContent = old;
+                    }
                 }
 
                 async function uploadCrest() {

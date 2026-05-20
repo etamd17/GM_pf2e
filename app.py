@@ -4711,6 +4711,41 @@ def _generate_recap_via_claude(note_text):
     return text, reason
 
 
+@app.route('/api/session/models')
+@gm_required
+def api_session_models():
+    """Diagnostic: ask the Anthropic API which models THIS key can use, so the
+    GM can set ANTHROPIC_RECAP_MODEL to a value that actually resolves instead
+    of guessing. Also a quick key-validity check (401 = bad key)."""
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    if not api_key:
+        return jsonify({'success': False, 'key_present': False,
+                        'error': 'No ANTHROPIC_API_KEY reached the server.'}), 200
+    import urllib.request as _urlreq
+    import urllib.error as _urlerr
+    req = _urlreq.Request(
+        'https://api.anthropic.com/v1/models?limit=100',
+        headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01'},
+        method='GET',
+    )
+    try:
+        with _urlreq.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        models = [{'id': m.get('id'), 'name': m.get('display_name', '')}
+                  for m in (data.get('data') or []) if m.get('id')]
+        current = (os.environ.get('ANTHROPIC_RECAP_MODEL') or 'claude-3-5-haiku-latest').strip()
+        return jsonify({'success': True, 'key_present': True, 'current_model': current, 'models': models})
+    except _urlerr.HTTPError as e:
+        try:
+            body = e.read().decode('utf-8', 'replace')[:300]
+        except Exception:
+            body = ''
+        msg = 'API rejected the key (401 — wrong/revoked/no credit).' if e.code == 401 else f'Anthropic API HTTP {e.code}: {body[:160]}'
+        return jsonify({'success': False, 'key_present': True, 'http': e.code, 'error': msg}), 200
+    except (_urlerr.URLError, TimeoutError) as e:
+        return jsonify({'success': False, 'key_present': True, 'error': f'Could not reach the API: {getattr(e, "reason", e)}'}), 200
+
+
 @app.route('/api/session/notes')
 @gm_required
 def api_session_notes():
