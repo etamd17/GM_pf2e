@@ -45,6 +45,70 @@
                 </div>
             </header>
 
+            {# ── Session ritual: opening curtain control + prep ── #}
+            <div class="session-ritual-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
+                    <div>
+                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Begin the Session</h2>
+                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Drops the opening curtain on every connected screen — crest, title, and the &ldquo;Previously on&hellip;&rdquo; recap.</p>
+                    </div>
+                    <div style="display:flex; gap:var(--sp-2); align-items:center;">
+                        <button type="button" id="btn-begin-session" onclick="beginSession()"
+                                style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#0c0a07; background:linear-gradient(180deg,#e0b65a,#a4842b); border:1px solid rgba(240,216,138,0.6); padding:11px 22px; border-radius:7px; cursor:pointer; box-shadow:0 4px 16px rgba(168,58,58,0.2);">
+                            Begin Session
+                        </button>
+                        <button type="button" onclick="toggleSessionPrep()" id="btn-session-prep"
+                                style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 14px; border-radius:7px; cursor:pointer;">
+                            Prep the opening
+                        </button>
+                    </div>
+                </div>
+
+                {# Collapsible prep — crest + recap. Hidden by default. #}
+                <div id="session-prep" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
+                    <div class="grid grid-cols-1 md:grid-cols-2" style="gap:var(--sp-4);">
+                        {# Crest #}
+                        <div>
+                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Campaign Crest</div>
+                            <div style="display:flex; gap:var(--sp-3); align-items:center;">
+                                <div id="crest-preview-wrap" style="width:64px; height:64px; border-radius:8px; border:1px solid var(--border-card); background:var(--bg-base); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
+                                    {% if campaign.crest_image %}
+                                    <img id="crest-preview-img" src="{{ campaign.crest_image }}" alt="crest" style="width:100%; height:100%; object-fit:contain;">
+                                    {% else %}
+                                    <span id="crest-preview-glyph" style="font-size:30px; color:var(--gilt-300);">&#10070;</span>
+                                    {% endif %}
+                                </div>
+                                <div style="flex:1; min-width:0;">
+                                    <input type="file" id="crest-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style="font-size:11px; color:var(--text-on-dark-2); max-width:100%;">
+                                    <div style="display:flex; gap:6px; margin-top:6px;">
+                                        <button type="button" onclick="uploadCrest()" id="crest-upload-btn" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer;">Upload</button>
+                                        <button type="button" onclick="removeCrest()" style="font-size:11px; color:var(--text-on-dark-3); background:transparent; border:1px solid var(--border-card); padding:6px 12px; border-radius:5px; cursor:pointer;">Remove</button>
+                                        <span id="crest-status" style="font-size:10px; color:var(--text-on-dark-3); align-self:center;"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# Recap #}
+                        <div>
+                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">&ldquo;Previously on&hellip;&rdquo; Recap</div>
+                            <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+                                <select id="recap-note-select" style="flex:1; min-width:140px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
+                                    <option value="">Loading session notes…</option>
+                                </select>
+                                <button type="button" onclick="generateRecap()" id="recap-gen-btn" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer; white-space:nowrap;">Generate</button>
+                            </div>
+                            <textarea id="recap-text" rows="4" placeholder="Pick a session note and click Generate, or write the recap here…"
+                                      style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;">{{ campaign.last_recap }}</textarea>
+                            <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                                <button type="button" onclick="saveRecap()" id="recap-save-btn" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save recap</button>
+                                <span id="recap-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {% if now_playing %}
             {# ── Now Playing dashboard from Obsidian vault ── #}
             <div class="now-playing-card"
@@ -253,6 +317,129 @@
                     if (!d || d.classList.contains('hidden')) return;
                     if (e.key === 'Escape') { closeSessionExportDialog(); }
                 });
+            </script>
+
+            {# ── Session ritual controls ── #}
+            <script>
+                function toggleSessionPrep() {
+                    const p = document.getElementById('session-prep');
+                    const open = p.style.display !== 'none';
+                    p.style.display = open ? 'none' : 'block';
+                    if (!open) loadSessionNotes();
+                }
+
+                async function beginSession() {
+                    const btn = document.getElementById('btn-begin-session');
+                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Starting…';
+                    try {
+                        const r = await fetch('/api/session/begin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        // The curtain appears on THIS page too (base.html GM variant) via SSE.
+                    } catch (e) {
+                        alert('Could not begin session: ' + e);
+                    } finally {
+                        btn.disabled = false; btn.textContent = old;
+                    }
+                }
+
+                let _sessionNotesLoaded = false;
+                async function loadSessionNotes() {
+                    if (_sessionNotesLoaded) return;
+                    const sel = document.getElementById('recap-note-select');
+                    try {
+                        const r = await fetch('/api/session/notes');
+                        const j = await r.json();
+                        const notes = (j && j.notes) || [];
+                        if (!notes.length) {
+                            sel.innerHTML = '<option value="">No notes in ' + (j.folder || 'Sessions') + '/ folder</option>';
+                            return;
+                        }
+                        sel.innerHTML = '<option value="">Select a session note…</option>' +
+                            notes.map(n => `<option value="${n.path.replace(/"/g,'&quot;')}">${(n.title||n.name).replace(/</g,'&lt;')}</option>`).join('');
+                        // Default to the newest (first) note.
+                        if (notes[0]) sel.value = notes[0].path;
+                        _sessionNotesLoaded = true;
+                    } catch (e) {
+                        sel.innerHTML = '<option value="">Could not load notes</option>';
+                    }
+                }
+
+                async function generateRecap() {
+                    const sel = document.getElementById('recap-note-select');
+                    const ta = document.getElementById('recap-text');
+                    const status = document.getElementById('recap-status');
+                    const btn = document.getElementById('recap-gen-btn');
+                    const note = sel.value;
+                    if (!note) { status.textContent = 'Pick a note first.'; return; }
+                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Writing…';
+                    status.style.color = 'var(--text-on-dark-3)'; status.textContent = 'Reading the note…';
+                    try {
+                        const r = await fetch('/api/session/recap/generate', {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ note })
+                        });
+                        const j = await r.json();
+                        if (!j.success) { status.textContent = j.error || 'Generate failed'; return; }
+                        ta.value = j.recap || '';
+                        if (j.source === 'ai') {
+                            status.style.color = '#86efac'; status.textContent = 'AI recap written — review & save.';
+                        } else {
+                            status.style.color = '#fbbf24';
+                            status.textContent = 'Pulled a section (no API key set). Edit & save.';
+                        }
+                    } catch (e) {
+                        status.textContent = 'Network error: ' + e;
+                    } finally {
+                        btn.disabled = false; btn.textContent = old;
+                    }
+                }
+
+                async function saveRecap() {
+                    const ta = document.getElementById('recap-text');
+                    const status = document.getElementById('recap-status');
+                    try {
+                        const r = await fetch('/api/session/recap', {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ recap: ta.value })
+                        });
+                        const j = await r.json();
+                        if (j.success) { status.style.color = '#86efac'; status.textContent = 'Recap saved.'; }
+                        else { status.textContent = j.error || 'Save failed'; }
+                    } catch (e) { status.textContent = 'Network error: ' + e; }
+                }
+
+                async function uploadCrest() {
+                    const fileEl = document.getElementById('crest-file');
+                    const status = document.getElementById('crest-status');
+                    const btn = document.getElementById('crest-upload-btn');
+                    if (!fileEl.files || !fileEl.files[0]) { status.textContent = 'Pick a file.'; return; }
+                    const fd = new FormData(); fd.append('image', fileEl.files[0]);
+                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Uploading…';
+                    try {
+                        const r = await fetch('/api/campaign/crest', { method: 'POST', body: fd });
+                        const j = await r.json();
+                        if (!j.success) { status.style.color = '#fca5a5'; status.textContent = j.error || 'Upload failed'; return; }
+                        const wrap = document.getElementById('crest-preview-wrap');
+                        wrap.innerHTML = '<img src="' + j.crest_image + '" alt="crest" style="width:100%;height:100%;object-fit:contain;">';
+                        status.style.color = '#86efac'; status.textContent = 'Crest set.';
+                        fileEl.value = '';
+                    } catch (e) {
+                        status.style.color = '#fca5a5'; status.textContent = 'Error: ' + e;
+                    } finally { btn.disabled = false; btn.textContent = old; }
+                }
+
+                async function removeCrest() {
+                    const status = document.getElementById('crest-status');
+                    const fd = new FormData(); fd.append('action', 'remove');
+                    try {
+                        const r = await fetch('/api/campaign/crest', { method: 'POST', body: fd });
+                        const j = await r.json();
+                        if (j.success) {
+                            document.getElementById('crest-preview-wrap').innerHTML = '<span style="font-size:30px; color:var(--gilt-300);">&#10070;</span>';
+                            status.textContent = 'Removed.';
+                        }
+                    } catch (e) { status.textContent = 'Error: ' + e; }
+                }
             </script>
 
             {# ── Quick links / footer ── #}

@@ -724,5 +724,10 @@
         }
     })();
     </script>
+
+    {# Session-start curtain — GM variant (this page is a GM screen, so it
+       gets the "Enter the Session" control that parts the curtain for all). #}
+    {% set curtain_role = 'gm' %}
+    {% include "_session_curtain.html" %}
 </body>
 </html>

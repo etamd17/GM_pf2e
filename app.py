@@ -4445,6 +4445,12 @@ CAMPAIGN_DEFAULT = {
     # poster-shaped image under static/portraits/ or a public CDN URL and
     # reference it as `/portraits/shades-of-blood.jpg` etc.
     'hero_image': '',
+    # Campaign crest — a square emblem (distinct from the wide hero splash)
+    # shown centered on the session-start curtain and, later, in the app
+    # corner. Uploaded via /api/campaign/crest.
+    'crest_image': '',
+    # Vault folder the session-recap note picker reads from (newest-first).
+    'sessions_folder': 'Sessions',
     # Per-campaign module enable-list. Each entry is the filename (no
     # extension) of a file under static/js/modules/. The map / tracker
     # / sheet pages load enabled modules in order. See
@@ -4505,6 +4511,221 @@ def _save_campaign_config(updates):
     except OSError as e:
         print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
     return cfg
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# SESSION-START CURTAIN — "Previously on..." recap from Obsidian + broadcast
+# ══════════════════════════════════════════════════════════════════════════
+
+def _session_notes(folder=None):
+    """List notes under the configured sessions folder, newest-first.
+    Returns [{path, name, title, mtime}]. Empty if vault unavailable."""
+    try:
+        from services import notes as _notes
+        if not _notes.vault_status().get('available'):
+            return []
+        folder = (folder or _load_campaign_config().get('sessions_folder') or 'Sessions').strip().strip('/')
+        root = _notes.get_vault_root()
+        if root is None:
+            return []
+        out = []
+
+        def _walk(nodes):
+            for n in nodes:
+                if n.get('kind') == 'dir':
+                    _walk(n.get('children') or [])
+                elif n.get('kind') == 'note':
+                    rel = n.get('path', '')
+                    # Only notes inside the sessions folder (case-insensitive).
+                    if rel.lower().startswith(folder.lower() + '/') or rel.lower() == folder.lower() + '.md':
+                        try:
+                            mt = (root / rel).stat().st_mtime
+                        except OSError:
+                            mt = 0
+                        out.append({
+                            'path': rel,
+                            'name': n.get('name', rel),
+                            'title': n.get('name', rel).rsplit('.md', 1)[0],
+                            'mtime': mt,
+                        })
+
+        _walk(_notes.tree())
+        out.sort(key=lambda x: x['mtime'], reverse=True)
+        return out
+    except Exception as e:
+        print(f"[SESSION] note list failed: {e}")
+        return []
+
+
+def _read_session_note_raw(rel_path):
+    """Read a vault note's raw markdown (frontmatter stripped). Path-safe:
+    refuses anything resolving outside the vault root."""
+    from services import notes as _notes
+    root = _notes.get_vault_root()
+    if root is None:
+        raise FileNotFoundError("vault unavailable")
+    target = (root / rel_path).resolve()
+    if not str(target).startswith(str(root.resolve())):
+        raise ValueError("path escapes vault root")
+    if not target.is_file():
+        raise FileNotFoundError(rel_path)
+    with open(target, 'r', encoding='utf-8', errors='replace') as f:
+        raw = f.read()
+    try:
+        _fm, body = _notes._split_frontmatter(raw)
+        return body
+    except Exception:
+        return raw
+
+
+def _extract_recap_section(text):
+    """No-AI fallback: pull a recap from a note. Prefers a '## Recap' /
+    '## Summary' heading section; otherwise the first substantial paragraph."""
+    if not text:
+        return ''
+    import re as _re
+    lines = text.splitlines()
+    # Look for a Recap/Summary/Previously heading and grab until the next heading.
+    for i, ln in enumerate(lines):
+        if _re.match(r'^#{1,6}\s*(recap|summary|previously|what happened)', ln.strip(), _re.I):
+            section = []
+            for nxt in lines[i + 1:]:
+                if _re.match(r'^#{1,6}\s', nxt):
+                    break
+                section.append(nxt)
+            blurb = '\n'.join(section).strip()
+            if blurb:
+                return blurb[:1200]
+    # Fallback: first paragraph of >80 chars (skip headings/frontmatter cruft).
+    paras = [p.strip() for p in _re.split(r'\n\s*\n', text) if p.strip()]
+    for p in paras:
+        if p.startswith('#') or p.startswith('---'):
+            continue
+        if len(p) >= 80:
+            return p[:1200]
+    return (paras[0][:1200] if paras else '')
+
+
+def _generate_recap_via_claude(note_text):
+    """Summarize a session note into one evocative 'Previously on...' paragraph
+    via the Anthropic API. Returns the text, or None if no key / any failure
+    (caller falls back to section extraction). Uses urllib — no new dependency."""
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    if not api_key:
+        return None
+    note_text = (note_text or '').strip()
+    if not note_text:
+        return None
+    # Cap the input so we never ship a huge note to the API.
+    note_text = note_text[:12000]
+    campaign = _load_campaign_config()
+    prompt = (
+        f"You are writing the on-screen \"Previously on...\" recap for a tabletop RPG session "
+        f"of the campaign \"{campaign.get('name', 'the campaign')}\". Below are the GM's notes "
+        f"from the most recent session. Write ONE evocative paragraph (4-6 sentences) that "
+        f"reminds the players where things stand and sets the mood — second person or narrator "
+        f"voice, dramatic but clear, no headings or bullet points, no preamble. Focus on what "
+        f"happened, unresolved threads, and stakes.\n\n"
+        f"--- SESSION NOTES ---\n{note_text}\n--- END NOTES ---\n\n"
+        f"Write only the recap paragraph."
+    )
+    payload = json.dumps({
+        'model': os.environ.get('ANTHROPIC_RECAP_MODEL', 'claude-3-5-haiku-latest'),
+        'max_tokens': 400,
+        'messages': [{'role': 'user', 'content': prompt}],
+    }).encode('utf-8')
+    import urllib.request as _urlreq
+    import urllib.error as _urlerr
+    req = _urlreq.Request(
+        'https://api.anthropic.com/v1/messages',
+        data=payload,
+        headers={
+            'content-type': 'application/json',
+            'x-api-key': api_key,
+            'anthropic-version': '2023-06-01',
+        },
+        method='POST',
+    )
+    try:
+        with _urlreq.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        blocks = data.get('content') or []
+        text = ''.join(b.get('text', '') for b in blocks if b.get('type') == 'text').strip()
+        return text or None
+    except (_urlerr.URLError, _urlerr.HTTPError, ValueError, KeyError, TimeoutError) as e:
+        print(f"[SESSION] Claude recap failed: {e}")
+        return None
+
+
+@app.route('/api/session/notes')
+@gm_required
+def api_session_notes():
+    """List the sessions-folder notes (newest-first) for the recap picker."""
+    return jsonify({'success': True, 'notes': _session_notes(), 'folder': _load_campaign_config().get('sessions_folder', 'Sessions')})
+
+
+@app.route('/api/session/recap/generate', methods=['POST'])
+@gm_required
+def api_session_recap_generate():
+    """Generate a 'Previously on...' blurb from a chosen session note.
+    Tries the Claude API (if ANTHROPIC_API_KEY set); falls back to extracting
+    a recap section from the note. Does NOT save — the GM reviews/edits first."""
+    data = request.json or {}
+    rel = (data.get('note') or '').strip()
+    if not rel:
+        return jsonify({'success': False, 'error': 'note path required'}), 400
+    try:
+        body = _read_session_note_raw(rel)
+    except (FileNotFoundError, ValueError) as e:
+        return jsonify({'success': False, 'error': f'could not read note: {e}'}), 404
+    ai_text = _generate_recap_via_claude(body)
+    if ai_text:
+        return jsonify({'success': True, 'recap': ai_text, 'source': 'ai'})
+    extracted = _extract_recap_section(body)
+    return jsonify({
+        'success': True,
+        'recap': extracted,
+        'source': 'extract',
+        'note': 'No ANTHROPIC_API_KEY set (or the call failed) — showing a section pulled straight from the note. Add a key to enable AI-written recaps.',
+    })
+
+
+@app.route('/api/session/recap', methods=['POST'])
+@gm_required
+def api_session_recap_save():
+    """Persist the (possibly GM-edited) recap text to the campaign config."""
+    data = request.json or {}
+    text = (data.get('recap') or '').strip()
+    cfg = _save_campaign_config({'last_recap': text})
+    return jsonify({'success': True, 'last_recap': cfg.get('last_recap', '')})
+
+
+@app.route('/api/session/begin', methods=['POST'])
+@gm_required
+def api_session_begin():
+    """Broadcast the session-start curtain to every connected screen.
+    Optionally bumps the session number. Carries the campaign name, crest,
+    and saved recap so clients can render the curtain without a refetch."""
+    data = request.json or {}
+    cfg = _load_campaign_config()
+    if data.get('bump_session'):
+        cfg = _save_campaign_config({'session_number': int(cfg.get('session_number', 1)) + 1})
+    payload = {
+        'campaign_name': cfg.get('name', 'The Campaign'),
+        'crest_image': cfg.get('crest_image', ''),
+        'recap': cfg.get('last_recap', ''),
+        'session_number': cfg.get('session_number', 1),
+    }
+    sse_broadcast('session_start', payload)
+    return jsonify({'success': True, **payload})
+
+
+@app.route('/api/session/dismiss', methods=['POST'])
+@gm_required
+def api_session_dismiss():
+    """Part the curtain on every screen at once (GM clicks Enter)."""
+    sse_broadcast('session_dismiss', {'t': int(time.time())})
+    return jsonify({'success': True})
 
 @app.route('/')
 def index():
@@ -10409,6 +10630,59 @@ def api_campaign_hero_image():
                 pass
 
     return jsonify({"success": True, "hero_image": public_url, "byte_count": size})
+
+
+@app.route('/api/campaign/crest', methods=['POST'])
+@gm_required
+def api_campaign_crest():
+    """Upload (or remove) the campaign crest — a square emblem shown centered
+    on the session-start curtain and in the app corner. Mirrors the
+    hero_image uploader but writes crest_* files and updates `crest_image`."""
+    if request.form.get('action') == 'remove' or request.args.get('action') == 'remove':
+        cfg = _load_campaign_config()
+        old = (cfg.get('crest_image') or '').strip()
+        if old.startswith('/campaign_assets/'):
+            old_path = os.path.join(CAMPAIGN_ASSETS_DIR, os.path.basename(old))
+            try:
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            except OSError:
+                pass
+        _save_campaign_config({'crest_image': ''})
+        return jsonify({"success": True, "crest_image": ""})
+
+    f = request.files.get('image')
+    if not f or not f.filename:
+        return jsonify({"success": False, "error": "image field required"}), 400
+
+    ext = (os.path.splitext(f.filename)[1] or '').lower().lstrip('.')
+    if ext not in {'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'}:
+        return jsonify({"success": False, "error": f"unsupported extension '{ext}' — png / jpg / webp / gif / svg only"}), 400
+
+    f.seek(0, os.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 8 * 1024 * 1024:
+        return jsonify({"success": False, "error": f"file too large ({size // (1024*1024)} MB); max 8 MB"}), 413
+
+    os.makedirs(CAMPAIGN_ASSETS_DIR, exist_ok=True)
+    stamp = int(time.time())
+    filename = f"crest_{stamp}.{ext}"
+    new_path = os.path.join(CAMPAIGN_ASSETS_DIR, filename)
+    f.save(new_path)
+
+    public_url = f"/campaign_assets/{filename}"
+    _save_campaign_config({'crest_image': public_url})
+
+    # GC older crests so the volume doesn't grow as the GM iterates.
+    for old in os.listdir(CAMPAIGN_ASSETS_DIR):
+        if old.startswith('crest_') and old != filename:
+            try:
+                os.remove(os.path.join(CAMPAIGN_ASSETS_DIR, old))
+            except OSError:
+                pass
+
+    return jsonify({"success": True, "crest_image": public_url, "byte_count": size})
 
 
 @app.route('/api/modules')
