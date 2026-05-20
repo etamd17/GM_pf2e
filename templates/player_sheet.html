@@ -3921,7 +3921,15 @@
             evtSource.addEventListener('player_roll', (e) => {
                 try {
                     const roll = JSON.parse(e.data);
+                    // Skip the echo of our OWN roll — it already showed via
+                    // showRollToast locally. The name guard catches the case
+                    // where the server keeps our PC name; the fingerprint
+                    // guard catches the case where it relabels us "Player".
                     if (roll.name === pcName) return;
+                    const _sig = `${roll.action}|${roll.result}|${roll.detail || ''}`;
+                    const _now = Date.now();
+                    const _idx = _recentLocalRolls.findIndex(r => r.sig === _sig && (_now - r.ts) < 5000);
+                    if (_idx >= 0) { _recentLocalRolls.splice(_idx, 1); return; }
                     const container = document.getElementById('roll-toast-container');
                     const toast = document.createElement('div');
                     const isCrit = roll.result && (roll.detail || '').includes('[CRIT');
@@ -5399,8 +5407,19 @@
             } catch (error) {}
         }
 
+        // Fingerprints of rolls we just broadcast. The player_roll SSE event
+        // echoes our own roll back, but the server relabels the actor to the
+        // session name (often "Player"), so the name-based guard below can't
+        // recognize it as ours. We match on content instead and consume one
+        // fingerprint per echo — so a coincidental identical roll from another
+        // player still shows.
+        let _recentLocalRolls = [];
+        function _rollSig(action, result, detail) { return `${action}|${result}|${detail || ''}`; }
+
         async function broadcastToGM(actionName, rollResult, detailText, degree) {
             try {
+                _recentLocalRolls.push({ sig: _rollSig(actionName, rollResult, detailText), ts: Date.now() });
+                if (_recentLocalRolls.length > 12) _recentLocalRolls.shift();
                 const body = { name: pcName, action: actionName, result: rollResult, detail: detailText };
                 if (degree) body.degree = degree;
                 await fetch('/api/log_roll', {
