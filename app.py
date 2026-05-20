@@ -8422,7 +8422,14 @@ def _sync_party_from_disk():
 
 @app.route('/player/sheet/<pc_name>')
 def player_sheet(pc_name):
-    if pc_name in PARTY_LIBRARY: 
+    if pc_name in PARTY_LIBRARY:
+        # Claim this character for the browser session so rolls broadcast
+        # under the PC's name instead of the generic "Player" fallback in
+        # /api/log_roll. Mirrors /api/register_player's validation (only a
+        # real party member, never "GM"/NPC). GMs keep their own identity —
+        # they roll as whoever they pick in the tracker.
+        if not _is_gm():
+            session['player_name'] = pc_name
         return render_template('player_sheet.html', pc=PARTY_LIBRARY[pc_name], weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR, armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([{'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]))
     return redirect(url_for('player_view'))
 
