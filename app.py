@@ -4647,7 +4647,6 @@ def _generate_recap_via_claude(note_text):
     # Cap the input so we never ship a huge note to the API.
     note_text = note_text[:12000]
     campaign = _load_campaign_config()
-    model = os.environ.get('ANTHROPIC_RECAP_MODEL', 'claude-3-5-haiku-latest').strip()
     prompt = (
         f"You are writing the on-screen \"Previously on...\" recap for a tabletop RPG session "
         f"of the campaign \"{campaign.get('name', 'the campaign')}\". Below are the GM's notes "
@@ -4658,45 +4657,58 @@ def _generate_recap_via_claude(note_text):
         f"--- SESSION NOTES ---\n{note_text}\n--- END NOTES ---\n\n"
         f"Write only the recap paragraph."
     )
-    payload = json.dumps({
-        'model': model,
-        'max_tokens': 400,
-        'messages': [{'role': 'user', 'content': prompt}],
-    }).encode('utf-8')
     import urllib.request as _urlreq
     import urllib.error as _urlerr
-    req = _urlreq.Request(
-        'https://api.anthropic.com/v1/messages',
-        data=payload,
-        headers={
-            'content-type': 'application/json',
-            'x-api-key': api_key,
-            'anthropic-version': '2023-06-01',
-        },
-        method='POST',
-    )
-    try:
-        with _urlreq.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        blocks = data.get('content') or []
-        text = ''.join(b.get('text', '') for b in blocks if b.get('type') == 'text').strip()
+
+    def _call(model):
+        payload = json.dumps({
+            'model': model,
+            'max_tokens': 400,
+            'messages': [{'role': 'user', 'content': prompt}],
+        }).encode('utf-8')
+        req = _urlreq.Request(
+            'https://api.anthropic.com/v1/messages',
+            data=payload,
+            headers={
+                'content-type': 'application/json',
+                'x-api-key': api_key,
+                'anthropic-version': '2023-06-01',
+            },
+            method='POST',
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            blocks = data.get('content') or []
+            text = ''.join(b.get('text', '') for b in blocks if b.get('type') == 'text').strip()
+            return (text, None) if text else (None, 'empty_response')
+        except _urlerr.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8', 'replace')[:300]
+            except Exception:
+                err_body = ''
+            print(f"[SESSION] Claude recap HTTP {e.code} (model={model}): {err_body}")
+            return None, f'api_http_{e.code}: {err_body[:200]}'
+        except (_urlerr.URLError, TimeoutError) as e:
+            print(f"[SESSION] Claude recap network error: {e}")
+            return None, f'network: {getattr(e, "reason", e)}'
+        except (ValueError, KeyError) as e:
+            print(f"[SESSION] Claude recap parse error: {e}")
+            return None, f'parse_error: {e}'
+
+    SAFE_MODEL = 'claude-3-5-haiku-latest'
+    model = (os.environ.get('ANTHROPIC_RECAP_MODEL') or SAFE_MODEL).strip()
+    text, reason = _call(model)
+    # Self-heal: a misconfigured ANTHROPIC_RECAP_MODEL (404 model_not_found)
+    # shouldn't kill AI recaps — retry once with the known-good default so the
+    # GM still gets a written recap instead of silently falling back to extract.
+    if text is None and model != SAFE_MODEL and reason and reason.startswith('api_http_404'):
+        print(f"[SESSION] model '{model}' not found — retrying with {SAFE_MODEL}")
+        text, reason2 = _call(SAFE_MODEL)
         if text:
             return text, None
-        return None, 'empty_response'
-    except _urlerr.HTTPError as e:
-        # Surface the API's own error (bad key = 401, bad model = 404, etc.)
-        try:
-            err_body = e.read().decode('utf-8', 'replace')[:300]
-        except Exception:
-            err_body = ''
-        print(f"[SESSION] Claude recap HTTP {e.code}: {err_body}")
-        return None, f'api_http_{e.code}: {err_body[:200]}'
-    except (_urlerr.URLError, TimeoutError) as e:
-        print(f"[SESSION] Claude recap network error: {e}")
-        return None, f'network: {getattr(e, "reason", e)}'
-    except (ValueError, KeyError) as e:
-        print(f"[SESSION] Claude recap parse error: {e}")
-        return None, f'parse_error: {e}'
+        reason = f'{reason} (fallback model also failed: {reason2})'
+    return text, reason
 
 
 @app.route('/api/session/notes')
