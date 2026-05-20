@@ -412,7 +412,9 @@
                             status.style.color = '#86efac'; status.textContent = 'AI recap written — review & save.';
                         } else {
                             status.style.color = '#fbbf24';
-                            status.textContent = 'Pulled a section (no API key set). Edit & save.';
+                            // Surface the server's specific reason (key missing vs 401 vs model 404 vs network).
+                            status.textContent = j.note || 'Pulled a section. Edit & save.';
+                            if (j.reason) { try { console.warn('[recap] fallback reason:', j.reason, 'key_present:', j.key_present); } catch(_){} }
                         }
                     } catch (e) {
                         status.textContent = 'Network error: ' + e;

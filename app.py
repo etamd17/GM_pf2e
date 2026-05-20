@@ -4635,17 +4635,19 @@ def _extract_recap_section(text):
 
 def _generate_recap_via_claude(note_text):
     """Summarize a session note into one evocative 'Previously on...' paragraph
-    via the Anthropic API. Returns the text, or None if no key / any failure
-    (caller falls back to section extraction). Uses urllib — no new dependency."""
+    via the Anthropic API. Returns (text, reason): text is the recap on success
+    (reason None); on failure text is None and reason is a short human-readable
+    diagnostic the caller can surface. Uses urllib — no new dependency."""
     api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
     if not api_key:
-        return None
+        return None, 'no_key'
     note_text = (note_text or '').strip()
     if not note_text:
-        return None
+        return None, 'empty_note'
     # Cap the input so we never ship a huge note to the API.
     note_text = note_text[:12000]
     campaign = _load_campaign_config()
+    model = os.environ.get('ANTHROPIC_RECAP_MODEL', 'claude-3-5-haiku-latest').strip()
     prompt = (
         f"You are writing the on-screen \"Previously on...\" recap for a tabletop RPG session "
         f"of the campaign \"{campaign.get('name', 'the campaign')}\". Below are the GM's notes "
@@ -4657,7 +4659,7 @@ def _generate_recap_via_claude(note_text):
         f"Write only the recap paragraph."
     )
     payload = json.dumps({
-        'model': os.environ.get('ANTHROPIC_RECAP_MODEL', 'claude-3-5-haiku-latest'),
+        'model': model,
         'max_tokens': 400,
         'messages': [{'role': 'user', 'content': prompt}],
     }).encode('utf-8')
@@ -4678,10 +4680,23 @@ def _generate_recap_via_claude(note_text):
             data = json.loads(resp.read().decode('utf-8'))
         blocks = data.get('content') or []
         text = ''.join(b.get('text', '') for b in blocks if b.get('type') == 'text').strip()
-        return text or None
-    except (_urlerr.URLError, _urlerr.HTTPError, ValueError, KeyError, TimeoutError) as e:
-        print(f"[SESSION] Claude recap failed: {e}")
-        return None
+        if text:
+            return text, None
+        return None, 'empty_response'
+    except _urlerr.HTTPError as e:
+        # Surface the API's own error (bad key = 401, bad model = 404, etc.)
+        try:
+            err_body = e.read().decode('utf-8', 'replace')[:300]
+        except Exception:
+            err_body = ''
+        print(f"[SESSION] Claude recap HTTP {e.code}: {err_body}")
+        return None, f'api_http_{e.code}: {err_body[:200]}'
+    except (_urlerr.URLError, TimeoutError) as e:
+        print(f"[SESSION] Claude recap network error: {e}")
+        return None, f'network: {getattr(e, "reason", e)}'
+    except (ValueError, KeyError) as e:
+        print(f"[SESSION] Claude recap parse error: {e}")
+        return None, f'parse_error: {e}'
 
 
 @app.route('/api/session/notes')
@@ -4705,15 +4720,31 @@ def api_session_recap_generate():
         body = _read_session_note_raw(rel)
     except (FileNotFoundError, ValueError) as e:
         return jsonify({'success': False, 'error': f'could not read note: {e}'}), 404
-    ai_text = _generate_recap_via_claude(body)
+    ai_text, reason = _generate_recap_via_claude(body)
     if ai_text:
         return jsonify({'success': True, 'recap': ai_text, 'source': 'ai'})
     extracted = _extract_recap_section(body)
+    key_present = bool(os.environ.get('ANTHROPIC_API_KEY', '').strip())
+    # Human-readable explanation of why we fell back, so the GM can fix it.
+    if reason == 'no_key':
+        note = 'No ANTHROPIC_API_KEY reached the server. On Railway, add it under Variables and redeploy; locally, put it in .env.'
+    elif reason and reason.startswith('api_http_401'):
+        note = 'API rejected the key (401). The key is wrong, revoked, or has no credit — check console.anthropic.com.'
+    elif reason and reason.startswith('api_http_404'):
+        note = 'API model not found (404). Set ANTHROPIC_RECAP_MODEL to a valid id (e.g. claude-3-5-haiku-latest).'
+    elif reason and reason.startswith('api_http_'):
+        note = 'Anthropic API error: ' + reason.replace('api_http_', 'HTTP ')
+    elif reason and reason.startswith('network'):
+        note = 'Could not reach the Anthropic API (network/egress). Showing a section from the note instead.'
+    else:
+        note = 'Pulled a section from the note (' + (reason or 'fallback') + '). Edit & save.'
     return jsonify({
         'success': True,
         'recap': extracted,
         'source': 'extract',
-        'note': 'No ANTHROPIC_API_KEY set (or the call failed) — showing a section pulled straight from the note. Add a key to enable AI-written recaps.',
+        'reason': reason,
+        'key_present': key_present,
+        'note': note,
     })
 
 
