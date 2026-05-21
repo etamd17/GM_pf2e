@@ -512,6 +512,37 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   background:#6e1f1f;
   border-color:#8e2828;
 }
+/* Boss-reveal title input (Chunk 4d) — subtle inline field under the enemy
+   name. Stays unobtrusive for mooks; the gold focus ring signals it matters. */
+.trk .epithet-in {
+  margin-top:3px; width:100%; max-width:200px;
+  font-family:'Cinzel','Inter',serif; font-style:italic;
+  font-size:10px; letter-spacing:.3px;
+  color:var(--t-gold);
+  background:transparent;
+  border:1px solid transparent; border-radius:3px;
+  padding:1px 4px;
+  transition:border-color .15s, background .15s;
+}
+.trk .epithet-in::placeholder { color:var(--t-t4); font-style:italic; opacity:.7; }
+.trk .epithet-in:hover { border-color:var(--t-border); }
+.trk .epithet-in:focus {
+  outline:none;
+  background:rgba(200,168,78,0.08);
+  border-color:rgba(200,168,78,0.5);
+}
+/* Announce — fires the cinematic name card. Gold so it reads as a dramatic,
+   intentional action distinct from the routine Hide / Reveal toggle. */
+.trk .act-btn.announce {
+  background:rgba(200,168,78,0.16);
+  border-color:rgba(200,168,78,0.5);
+  color:var(--t-gold);
+  font-weight:600;
+}
+.trk .act-btn.announce:hover {
+  background:rgba(200,168,78,0.28);
+  border-color:var(--t-gold);
+}
 
 /* ═══ GM PLAYER INBOX (whispers + journal entries + treat-wounds) ═══
    Floating panel + FAB. Kept the gold/dark-on-dark vibe of the rest of
@@ -1808,6 +1839,15 @@ function renderInitList() {
     }
     empty.classList.add('hidden');
 
+    // Preserve an in-progress epithet edit across this wholesale re-render.
+    // SSE encounter_update events re-render the whole list; without this the
+    // GM loses whatever they were typing into an epithet field mid-fight.
+    let _epFocus = null;
+    const _ae = document.activeElement;
+    if (_ae && _ae.classList && _ae.classList.contains('epithet-in')) {
+        _epFocus = { id: _ae.getAttribute('data-id'), val: _ae.value, s: _ae.selectionStart, e: _ae.selectionEnd };
+    }
+
     list.innerHTML = STATE.combatants.map((c, idx) => {
         const isActive = idx === STATE.turn_index;
         const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
@@ -1908,6 +1948,7 @@ function renderInitList() {
                 <div class="nm-wrap">
                     <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
                     <div class="nm-sub">${subText}</div>
+                    ${(!c.is_pc && !c.is_hazard) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
                 </div>
             </div>
             <div class="c-ac">${c.ac}</div>
@@ -1944,12 +1985,23 @@ function renderInitList() {
                 ` : `
                     ${ewHtml}
                     ${delayHtml}
+                    ${(!c.is_pc && c.epithet && c.epithet.trim()) ? `<button class="act-btn announce" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen (works even if already visible)">Announce</button>` : ''}
                     ${c.is_pc ? '' : `<button class="act-btn vis ${isHidden ? 'on-hidden' : ''}" onclick="toggleVisibility('${c.instance_id}')" title="${isHidden ? 'Reveal to players' : 'Hide from players (name + HP + conditions masked)'}">${isHidden ? 'Reveal' : 'Hide'}</button>`}
                 `}
                 <button class="act-btn del" onclick="removeCombatant('${c.instance_id}')">Remove</button>
             </div>
         </div>`;
     }).join('');
+
+    // Restore the epithet edit-in-progress (value + focus + caret) if any.
+    if (_epFocus) {
+        const _inp = list.querySelector('.epithet-in[data-id="' + _epFocus.id + '"]');
+        if (_inp) {
+            _inp.value = _epFocus.val;
+            _inp.focus();
+            try { _inp.setSelectionRange(_epFocus.s, _epFocus.e); } catch(_) {}
+        }
+    }
 
     // Re-init sortable
     initSortable();
@@ -2771,6 +2823,20 @@ function toggleVisibility(id) {
     }).catch(() => toast('Network error', 'error'));
 }
 
+function setEpithet(id, value) {
+    // Save the boss-reveal title (Chunk 4d). Server persists + re-broadcasts
+    // encounter state, so the next render reflects it. Empty clears it.
+    apiPost('/api/set_combatant_epithet/' + id, { epithet: (value || '').trim() })
+        .then(d => { if (d && d.success === false) toast(d.error || 'Could not save epithet', 'error'); });
+}
+
+function bossReveal(id) {
+    // Manual trigger: reveal this foe + fire the cinematic name card on every
+    // screen (works even if it was already visible). The drum sounds here too.
+    apiPost('/api/session/boss_reveal/' + id);
+    toast('Foe revealed', 'success');
+}
+
 function saveEncounter() {
     const name = document.getElementById('save-name').value.trim();
     if (!name) { toast('Enter a name first', 'error'); return; }
@@ -3211,6 +3277,8 @@ function connectSSE() {
                 if (src.condition_expiry && typeof src.condition_expiry === 'object') dst.condition_expiry = src.condition_expiry;
                 if (typeof src.actions_used === 'number') dst.actions_used = src.actions_used;
                 if (typeof src.max_actions === 'number')  dst.max_actions  = src.max_actions;
+                if (typeof src.epithet === 'string')      dst.epithet      = src.epithet;
+                if (typeof src.visible_to_players === 'boolean') dst.visible_to_players = src.visible_to_players;
             });
             STATE.round = sse.round ?? STATE.round;
             STATE.turn_index = sse.turn_index ?? STATE.turn_index;

@@ -500,6 +500,12 @@
                 _markSseAlive();
                 try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
             });
+            // Boss reveal (Chunk 4d): GM broadcast → cinematic name card.
+            evtSrc.addEventListener('boss_reveal', e => {
+                _markSseAlive();
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
+            });
             // Combat log — server filters out PD-only entries before
             // broadcast to players, so anything received here is
             // already player-safe.
@@ -632,6 +638,8 @@
 </script>
 {# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
 {% include "_initiative_flourish.html" %}
+{# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
+{% include "_boss_reveal.html" %}
 {% set curtain_role = 'player' %}
 {% include "_session_curtain.html" %}
 </body>

@@ -406,6 +406,13 @@
                     try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
                     try { window.pf2eAudio && window.pf2eAudio.drum(); } catch(_) {}
                 });
+                // Boss reveal (Chunk 4d): cinematic name card on every screen
+                // + an ominous drum hit on the GM device.
+                _toastSSE.addEventListener('boss_reveal', function(e) {
+                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                    try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
+                    try { window.pf2eAudio && window.pf2eAudio.drum(); } catch(_) {}
+                });
                 // Combat_log events exist for tracker log sync but aren't shown as toasts
                 // (they have a different shape — msg/type instead of name/action/detail).
             } catch(_) {}
@@ -1028,6 +1035,9 @@
 
     {# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
     {% include "_initiative_flourish.html" %}
+
+    {# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
+    {% include "_boss_reveal.html" %}
 
     {# Session-start curtain — GM variant (this page is a GM screen, so it
        gets the "Enter the Session" control that parts the curtain for all). #}

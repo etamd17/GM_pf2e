@@ -536,6 +536,8 @@ def _do_persist_encounter_state():
                 # Preserve hidden/visible state across autosave — otherwise a
                 # crash or reload mid-session would reveal hidden NPCs to players.
                 'visible_to_players': getattr(c, 'visible_to_players', True),
+                # Boss-reveal title (Chunk 4d) — keep it across reloads.
+                'epithet': getattr(c, 'epithet', ''),
             }
             encounter_data['combatants'].append(entry)
     try:
@@ -928,6 +930,10 @@ def _do_broadcast_encounter_state():
                     entry['hp_status'] = 'Wounded'
                 else:
                     entry['hp_status'] = ''
+                # Boss-reveal title (Chunk 4d). GM-only here; the player
+                # filter masks hidden NPCs entirely, and a revealed NPC's
+                # title is harmless to expose.
+                entry['epithet'] = getattr(c, 'epithet', '')
             entry['conditions'] = {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False}
             entry['condition_expiry'] = dict(getattr(c, 'condition_expiry', {}) or {})
             entry['actions_used'] = int(getattr(c, 'actions_used', 0) or 0)
@@ -3515,6 +3521,9 @@ class Monster:
         # GM-controlled visibility. When False, player SSE feed masks name,
         # HP, conditions, and scrubs the name from combat-log lines.
         self.visible_to_players = True
+        # Dramatic title shown on the boss-reveal card (Chunk 4d), e.g.
+        # "The Caged Wrath". Empty = no reveal card fires for this creature.
+        self.epithet = ''
         self.name = safe_str(data.get('name', 'Unknown Monster'))
         system = data.get('system') or {}
         if not isinstance(system, dict): system = {}
@@ -4420,6 +4429,8 @@ def _restore_encounter_autosave():
                 # NPCs we honor the saved flag (default True for old saves).
                 if 'visible_to_players' in item:
                     new_c.visible_to_players = bool(item['visible_to_players']) if not new_c.is_pc else True
+                if 'epithet' in item and not new_c.is_pc:
+                    new_c.epithet = str(item['epithet'] or '')
                 ACTIVE_ENCOUNTER.append(new_c)
         if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
         if ACTIVE_ENCOUNTER:
@@ -5078,6 +5089,9 @@ def _get_tracker_state():
                 # GM-side flag: when False the player SSE feed masks this
                 # combatant. The tracker UI renders an eye icon off this.
                 'visible_to_players': getattr(c, 'visible_to_players', True),
+                # Boss-reveal title (Chunk 4d) — the tracker renders an
+                # epithet input off this so the GM can edit it inline.
+                'epithet': getattr(c, 'epithet', ''),
                 # Hazard-specific fields the tracker uses to render the
                 # Trigger / Disable buttons + display routine text. Always
                 # emitted so the client can branch on `is_hazard`.
@@ -5218,6 +5232,7 @@ def toggle_combatant_visibility(instance_id):
         if target is None:
             return jsonify({'success': False, 'error': 'Combatant not found'}), 404
         # Accept an explicit 'visible' boolean, or flip the current state.
+        prev_vis = getattr(target, 'visible_to_players', True)
         if 'visible' in data:
             new_vis = bool(data['visible'])
         else:
@@ -5227,6 +5242,13 @@ def toggle_combatant_visibility(instance_id):
         if target.is_pc:
             new_vis = True
         target.visible_to_players = new_vis
+        # Auto boss-reveal (Chunk 4d): a hidden→visible flip on a non-PC that
+        # carries an epithet fires the cinematic name card for everyone.
+        # Snapshot the fields under the lock; broadcast after we release it.
+        reveal_name = target.name
+        reveal_epithet = (getattr(target, 'epithet', '') or '').strip()
+        reveal_level = getattr(target, 'level', None)
+        did_reveal = (not prev_vis) and new_vis and (not target.is_pc) and bool(reveal_epithet)
         # Sync the map token so moving a creature onto the map keeps the
         # same visibility the GM set in the tracker. ACTIVE_MAP is the
         # shared token dict used by the VTT — we mutate it in place under
@@ -5247,9 +5269,82 @@ def toggle_combatant_visibility(instance_id):
         f"{target.name} is now {'visible to' if new_vis else 'hidden from'} players",
         'system'
     )
+    if did_reveal:
+        _broadcast_boss_reveal(reveal_name, reveal_epithet, reveal_level)
     if _is_ajax() or request.is_json:
         return jsonify({'success': True, 'instance_id': instance_id, 'visible_to_players': new_vis})
     return redirect(url_for('tracker_view'))
+
+
+def _broadcast_boss_reveal(name, epithet, level=None):
+    """Fire the cinematic boss-reveal card (Chunk 4d) to every screen.
+
+    Sent unfiltered on purpose: the creature is being revealed at this very
+    moment, so exposing its name + title to players is the whole point."""
+    sse_broadcast('boss_reveal', {
+        'name': name or '???',
+        'epithet': epithet or '',
+        'level': level,
+        't': int(time.time()),
+    })
+
+
+@app.route('/api/set_combatant_epithet/<instance_id>', methods=['POST'])
+@gm_required
+def set_combatant_epithet(instance_id):
+    """GM-only: set/clear the boss-reveal title on a combatant. Persisted so
+    it survives autosave + save/load; re-broadcasts encounter state so any
+    other GM screen picks up the edit."""
+    data = request.get_json(silent=True) or {}
+    epithet = str(data.get('epithet', '') or '').strip()[:80]
+    target = None
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id:
+                target = c
+                break
+        if target is None:
+            return jsonify({'success': False, 'error': 'Combatant not found'}), 404
+        if target.is_pc:
+            return jsonify({'success': False, 'error': 'PCs have no epithet'}), 400
+        target.epithet = epithet
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'success': True, 'instance_id': instance_id, 'epithet': epithet})
+
+
+@app.route('/api/session/boss_reveal/<instance_id>', methods=['POST'])
+@gm_required
+def api_session_boss_reveal(instance_id):
+    """GM-only manual trigger: reveal a combatant and fire its name card on
+    every screen. Marks the creature visible (so its name unmasks in the
+    feeds) and broadcasts the cinematic card even if it was already visible
+    — handy for re-showing the card or revealing a creature with no epithet
+    (the card then shows just the name)."""
+    target = None
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id:
+                target = c
+                break
+        if target is None:
+            return jsonify({'success': False, 'error': 'Combatant not found'}), 404
+        if not target.is_pc:
+            target.visible_to_players = True
+            for token in ACTIVE_MAP.get('tokens', []):
+                if token.get('instance_id') == instance_id:
+                    token['visible_to_players'] = True
+        reveal_name = target.name
+        reveal_epithet = (getattr(target, 'epithet', '') or '').strip()
+        reveal_level = getattr(target, 'level', None)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    try:
+        _broadcast_map_state()
+    except Exception:
+        pass
+    _broadcast_boss_reveal(reveal_name, reveal_epithet, reveal_level)
+    return jsonify({'success': True, 'instance_id': instance_id})
 
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
@@ -7206,6 +7301,8 @@ def save_encounter():
                 # Persist hidden/visible state so saved encounters reload with
                 # the same player visibility as when they were saved.
                 'visible_to_players': getattr(c, 'visible_to_players', True),
+                # Boss-reveal title (Chunk 4d) — saved with the encounter.
+                'epithet': getattr(c, 'epithet', ''),
             }
             encounter_data['combatants'].append(entry)
         # Snapshot the current map alongside the encounter so Load Encounter
@@ -7287,6 +7384,8 @@ def load_encounter():
                 # Restore hidden/visible state from saved encounter files.
                 if 'visible_to_players' in item:
                     new_c.visible_to_players = bool(item['visible_to_players']) if not new_c.is_pc else True
+                if 'epithet' in item and not new_c.is_pc:
+                    new_c.epithet = str(item['epithet'] or '')
                 ACTIVE_ENCOUNTER.append(new_c)
 
         # Validate turn index

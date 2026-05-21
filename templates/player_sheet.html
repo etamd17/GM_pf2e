@@ -3998,6 +3998,12 @@
             evtSource.addEventListener('roll_initiative', () => {
                 try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
             });
+
+            // Boss reveal (Chunk 4d): GM broadcast → cinematic name card.
+            evtSource.addEventListener('boss_reveal', (e) => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
+            });
         }
         
         // ==========================================
@@ -9538,6 +9544,9 @@
 
     {# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
     {% include "_initiative_flourish.html" %}
+
+    {# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
+    {% include "_boss_reveal.html" %}
 
     {# Death's door — ruby edge-bleed + heartbeat when this PC is at 0/dying.
        Activated by body.at-deaths-door (see _paintDeathsDoor). #}
