@@ -3992,6 +3992,12 @@
                     showHandoutPopup(h);
                 } catch(e) {}
             });
+
+            // Roll for Initiative (Chunk 4c): GM broadcast → cinematic banner.
+            // No audio on player devices (drum is GM-only by design).
+            evtSource.addEventListener('roll_initiative', () => {
+                try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
+            });
         }
         
         // ==========================================
@@ -9529,6 +9535,9 @@
 
     {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}
     {% include "_screen_flash.html" %}
+
+    {# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
+    {% include "_initiative_flourish.html" %}
 
     {# Death's door — ruby edge-bleed + heartbeat when this PC is at 0/dying.
        Activated by body.at-deaths-door (see _paintDeathsDoor). #}

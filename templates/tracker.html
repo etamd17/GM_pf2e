@@ -1129,6 +1129,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
        behind the "Tools ▾" overflow so the bar stops looking like a
        settings panel. #}
     <div class="hb-right">
+        <button class="hb-btn gold" onclick="apiPost('/api/session/roll_initiative')" title="Cinematic ROLL FOR INITIATIVE banner on every screen, with a drum hit on this device. Flavor only — use Roll Init for the mechanical NPC roll.">To Arms!</button>
         <button class="hb-btn" onclick="apiPost('/api/roll_npc_initiative')" title="Roll d20+Perception for all NPCs">Roll Init</button>
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
         <button class="hb-btn" id="multi-toggle-btn" onclick="toggleMultiMode()" title="Select multiple combatants for AOE damage / condition application">Multi</button>

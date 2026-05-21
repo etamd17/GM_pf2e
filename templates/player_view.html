@@ -495,6 +495,11 @@
                     showHandoutPopup(h);
                 } catch(err) {}
             });
+            // Roll for Initiative (Chunk 4c): GM broadcast → cinematic banner.
+            evtSrc.addEventListener('roll_initiative', () => {
+                _markSseAlive();
+                try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
+            });
             // Combat log — server filters out PD-only entries before
             // broadcast to players, so anything received here is
             // already player-safe.
@@ -625,6 +630,8 @@
         document.body.appendChild(popup);
     }
 </script>
+{# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
+{% include "_initiative_flourish.html" %}
 {% set curtain_role = 'player' %}
 {% include "_session_curtain.html" %}
 </body>

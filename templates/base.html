@@ -400,6 +400,12 @@
                 _toastSSE.addEventListener('encounter_update', function(e) {
                     try { window.pf2eAudio && window.pf2eAudio.onEncounterUpdate(JSON.parse(e.data)); } catch(_) {}
                 });
+                // Roll for Initiative (Chunk 4c): cinematic banner on every
+                // screen + a drum hit on the GM device (pf2eAudio is GM-only).
+                _toastSSE.addEventListener('roll_initiative', function() {
+                    try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
+                    try { window.pf2eAudio && window.pf2eAudio.drum(); } catch(_) {}
+                });
                 // Combat_log events exist for tracker log sync but aren't shown as toasts
                 // (they have a different shape — msg/type instead of name/action/detail).
             } catch(_) {}
@@ -1019,6 +1025,9 @@
 
     {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}
     {% include "_screen_flash.html" %}
+
+    {# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
+    {% include "_initiative_flourish.html" %}
 
     {# Session-start curtain — GM variant (this page is a GM screen, so it
        gets the "Enter the Session" control that parts the curtain for all). #}

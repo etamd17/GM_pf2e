@@ -4862,6 +4862,19 @@ def api_session_dismiss():
     sse_broadcast('session_dismiss', {'t': int(time.time())})
     return jsonify({'success': True})
 
+
+@app.route('/api/session/roll_initiative', methods=['POST'])
+@gm_required
+def api_session_roll_initiative():
+    """Broadcast a cinematic ROLL FOR INITIATIVE flourish to every screen.
+
+    Pure flavor — the mechanical NPC initiative roll lives at
+    /api/roll_npc_initiative. This just fires the SSE that every page's
+    existing /api/events socket listens for (no new connection), and the
+    GM device answers with the combat drum via window.pf2eAudio.drum()."""
+    sse_broadcast('roll_initiative', {'t': int(time.time())})
+    return jsonify({'success': True})
+
 @app.route('/')
 def index():
     """Campaign intro / 'join session' lobby.
