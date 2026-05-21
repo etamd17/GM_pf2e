@@ -246,6 +246,11 @@ MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
 AUDIO_DIR = os.path.join(MAP_DIR, 'audio')  # GM-uploaded soundboard clips
 TILES_DIR = os.path.join(MAP_DIR, 'tiles')  # Decorative tile-layer images
 CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
+# Campaign soundscape audio — a symlink (campaign_audio) to the GM's local
+# Foundry/audio folder, or PF2E_AUDIO_DIR. Distinct from the map soundboard
+# AUDIO_DIR above. Resolved fresh per request so a newly-created symlink is
+# picked up without a restart.
+CAMPAIGN_AUDIO_DIR = os.environ.get('PF2E_AUDIO_DIR') or os.path.join(BASE_DIR, 'campaign_audio')
 CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
@@ -4478,6 +4483,9 @@ CAMPAIGN_DEFAULT = {
     'crest_image': '',
     # Vault folder the session-recap note picker reads from (newest-first).
     'sessions_folder': 'Sessions',
+    # Soundscape -> audio-file mapping (paths relative to CAMPAIGN_AUDIO_DIR).
+    # The GM assigns these in the hub; the audio engine plays them on demand.
+    'soundscapes': {'tavern': '', 'dungeon': '', 'combat': ''},
     # Per-campaign module enable-list. Each entry is the filename (no
     # extension) of a file under static/js/modules/. The map / tracker
     # / sheet pages load enabled modules in order. See
@@ -10679,6 +10687,72 @@ def serve_campaign_asset(filename):
     CAMPAIGN_ASSETS_DIR. Public — the campaign intro page is the
     players' login surface and references this URL."""
     return send_from_directory(CAMPAIGN_ASSETS_DIR, filename, max_age=3600)
+
+
+_AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}
+
+def _audio_root():
+    """Resolve the campaign audio dir fresh (symlink may appear post-start)."""
+    try:
+        return os.path.realpath(CAMPAIGN_AUDIO_DIR)
+    except OSError:
+        return CAMPAIGN_AUDIO_DIR
+
+
+@app.route('/campaign_audio/<path:filename>')
+def serve_campaign_audio(filename):
+    """Serve soundscape audio from CAMPAIGN_AUDIO_DIR. GM-device-only feature,
+    but the route is open (no secret URLs) — files are non-sensitive ambience.
+    send_from_directory handles HTTP range requests so large .ogg tracks stream."""
+    root = _audio_root()
+    if not os.path.isdir(root):
+        return ('audio directory not available', 404)
+    return send_from_directory(root, filename, max_age=3600, conditional=True)
+
+
+@app.route('/api/audio/list')
+@gm_required
+def api_audio_list():
+    """List playable audio files under CAMPAIGN_AUDIO_DIR (recursive), grouped
+    by their top-level subfolder (Ambience / Loop / SFX / ...)."""
+    root = _audio_root()
+    if not os.path.isdir(root):
+        return jsonify({'success': False, 'available': False, 'error': 'No campaign audio directory found.', 'files': []})
+    files = []
+    for dirpath, _dirs, names in os.walk(root):
+        for n in names:
+            if os.path.splitext(n)[1].lower() not in _AUDIO_EXTS:
+                continue
+            full = os.path.join(dirpath, n)
+            rel = os.path.relpath(full, root).replace(os.sep, '/')
+            top = rel.split('/', 1)[0] if '/' in rel else ''
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                size = 0
+            files.append({'path': rel, 'name': n, 'group': top, 'size': size})
+    files.sort(key=lambda f: (f['group'].lower(), f['name'].lower()))
+    return jsonify({'success': True, 'available': True, 'files': files,
+                    'soundscapes': _load_campaign_config().get('soundscapes', {})})
+
+
+@app.route('/api/audio/soundscapes', methods=['GET', 'POST'])
+def api_audio_soundscapes():
+    """GET the soundscape->file mapping (used by the audio engine on every GM
+    page); POST (GM-only) to save the GM's assignments."""
+    if request.method == 'GET':
+        return jsonify({'success': True, 'soundscapes': _load_campaign_config().get('soundscapes', {})})
+    if not _is_gm():
+        return jsonify({'success': False, 'error': 'GM authentication required'}), 403
+    data = request.json or {}
+    incoming = data.get('soundscapes') or {}
+    # Whitelist the three known scenes; values are relative paths (or '').
+    current = dict(_load_campaign_config().get('soundscapes') or {})
+    for scene in ('tavern', 'dungeon', 'combat'):
+        if scene in incoming:
+            current[scene] = str(incoming[scene] or '')
+    cfg = _save_campaign_config({'soundscapes': current})
+    return jsonify({'success': True, 'soundscapes': cfg.get('soundscapes', {})})
 
 
 @app.route('/api/campaign/hero_image', methods=['POST'])

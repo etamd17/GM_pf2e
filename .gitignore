@@ -24,3 +24,7 @@ obsidian_vault
 # GM-uploaded campaign assets (splash images etc.) — server-local,
 # never committed; lives on the Railway volume.
 campaign_assets/
+
+# Campaign audio — a symlink to the GM's local Foundry/audio folder (or a
+# PF2E_AUDIO_DIR). Machine-specific, never committed.
+campaign_audio

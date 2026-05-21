@@ -376,7 +376,15 @@
             try {
                 const _toastSSE = new EventSource('/api/events');
                 _toastSSE.addEventListener('player_roll', function(e) {
-                    try { showToast(JSON.parse(e.data)); } catch(_) {}
+                    let log = null;
+                    try { log = JSON.parse(e.data); } catch(_) {}
+                    if (log) showToast(log);
+                    // Audio engine (GM device): dice clatter + crit/fumble cue.
+                    try { window.pf2eAudio && window.pf2eAudio.onPlayerRoll(log); } catch(_) {}
+                });
+                // Encounter updates drive the combat-start drum hit.
+                _toastSSE.addEventListener('encounter_update', function(e) {
+                    try { window.pf2eAudio && window.pf2eAudio.onEncounterUpdate(JSON.parse(e.data)); } catch(_) {}
                 });
                 // Combat_log events exist for tracker log sync but aren't shown as toasts
                 // (they have a different shape — msg/type instead of name/action/detail).
@@ -435,9 +443,12 @@
         const recentEl = document.getElementById('nd-recent');
 
         function setOpen(open) {
+            const wasOpen = drawer.classList.contains('open');
             drawer.classList.toggle('open', !!open);
             tab.setAttribute('aria-expanded', open ? 'true' : 'false');
             const s = loadState(); s.open = !!open; saveState(s);
+            // Page-turn flourish when the tome opens.
+            if (open && !wasOpen) { try { window.pf2eAudio && window.pf2eAudio.pageTurn(); } catch(_) {} }
             if (open && searchInput) {
                 // Don't auto-focus search if a note is being viewed; let user keep position
             }
@@ -722,6 +733,273 @@
             // Fallback for older browsers; we just need it for attribute selectors
             return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/(["\\])/g, '\\$1');
         }
+    })();
+    </script>
+
+    {# ════════════════ AUDIO ENGINE (GM device) ════════════════
+       Soundscapes (GM's Foundry tracks) + synthesized SFX. GM-device-only:
+       lives in base.html so it loads on every GM page, never on /player. #}
+    <div id="audio-widget" class="no-print" style="position:fixed; bottom:16px; right:68px; z-index:100;">
+        <div id="audio-panel" class="hidden" style="position:absolute; bottom:48px; right:0; width:230px; background:var(--bg-raised); border:1px solid var(--border-default); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden;">
+            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface); border-bottom:1px solid var(--border-subtle);">
+                <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent-300);">Soundscape</span>
+                <button type="button" id="audio-master" onclick="pf2eAudio.toggleMaster()" style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:3px 9px; border-radius:999px; cursor:pointer; border:1px solid var(--border-default); background:var(--bg-base); color:var(--text-muted);">Off</button>
+            </div>
+            <div style="padding:10px 11px; display:flex; flex-direction:column; gap:7px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                    <button type="button" class="audio-scene" data-scene="tavern"  onclick="pf2eAudio.playScene('tavern')">Tavern</button>
+                    <button type="button" class="audio-scene" data-scene="dungeon" onclick="pf2eAudio.playScene('dungeon')">Dungeon</button>
+                    <button type="button" class="audio-scene" data-scene="combat"  onclick="pf2eAudio.playScene('combat')">Combat</button>
+                    <button type="button" class="audio-scene audio-stop" onclick="pf2eAudio.stopAmbient()">Stop</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:7px;">
+                    <span style="font-size:13px; color:var(--text-muted);">&#9834;</span>
+                    <input type="range" id="audio-volume" min="0" max="100" value="60" oninput="pf2eAudio.setVolume(this.value/100)" style="flex:1; accent-color:var(--accent-primary);">
+                </div>
+                <div id="audio-hint" style="font-size:9px; color:var(--text-muted); line-height:1.4;"></div>
+            </div>
+        </div>
+        <button type="button" id="audio-fab" onclick="pf2eAudio.togglePanel()" title="Soundscape &amp; SFX"
+                style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-raised); border:1px solid var(--border-default); color:var(--text-muted); font-size:18px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
+            &#9835;
+        </button>
+    </div>
+    <style>
+        #audio-widget .audio-scene {
+            font-family:var(--font-display); font-size:10px; font-weight:700;
+            letter-spacing:0.06em; text-transform:uppercase;
+            padding:7px 4px; border-radius:6px; cursor:pointer;
+            background:var(--bg-base); border:1px solid var(--border-subtle); color:var(--text-secondary);
+            transition:background .12s, border-color .12s, color .12s;
+        }
+        #audio-widget .audio-scene:hover { border-color:var(--border-default); color:var(--text-primary); }
+        #audio-widget .audio-scene.active { background:rgba(201,163,78,0.14); border-color:var(--accent-primary); color:var(--accent-300); }
+        #audio-widget .audio-scene.audio-stop { color:var(--text-muted); }
+        #audio-widget.sound-on #audio-fab { color:var(--accent-300); border-color:var(--accent-primary); }
+        #audio-widget #audio-master.on { background:rgba(106,156,68,0.18); border-color:rgba(106,156,68,0.5); color:#9bc06f; }
+    </style>
+    <script>
+    window.pf2eAudio = (function() {
+        var SOUND_KEY = 'pf2e_sound_on', VOL_KEY = 'pf2e_sound_vol';
+        var soundOn = false;
+        try { soundOn = localStorage.getItem(SOUND_KEY) === '1'; } catch(_) {}
+        var volume = 0.6;
+        try { var v = parseFloat(localStorage.getItem(VOL_KEY)); if (!isNaN(v)) volume = v; } catch(_) {}
+        var mapping = {};            // scene -> relative audio path
+        var currentScene = null;
+        var ctx = null;              // Web Audio context (SFX)
+        var audioA = null, audioB = null, activeEl = null;  // ambient crossfade pair
+
+        // ---- Web Audio context (created/resumed on first user gesture) ----
+        function ac() {
+            if (!ctx) {
+                try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_) { return null; }
+            }
+            if (ctx && ctx.state === 'suspended') { ctx.resume().catch(function(){}); }
+            return ctx;
+        }
+        function _noiseBuffer(dur) {
+            var c = ac(); if (!c) return null;
+            var n = Math.floor(c.sampleRate * dur);
+            var buf = c.createBuffer(1, n, c.sampleRate);
+            var d = buf.getChannelData(0);
+            for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+            return buf;
+        }
+        function _env(node, gain, t0, attack, decay) {
+            var c = ac();
+            node.gain.setValueAtTime(0.0001, t0);
+            node.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain * volume), t0 + attack);
+            node.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+        }
+
+        // ---- Synth SFX ----
+        function dice() {
+            var c = ac(); if (!c || !soundOn) return;
+            var t = c.currentTime;
+            // A few short filtered-noise ticks to mimic dice tumbling on wood.
+            for (var k = 0; k < 5; k++) {
+                var when = t + k * (0.02 + Math.random() * 0.03);
+                var src = c.createBufferSource(); src.buffer = _noiseBuffer(0.05);
+                var bp = c.createBiquadFilter(); bp.type = 'bandpass';
+                bp.frequency.value = 1800 + Math.random() * 2200; bp.Q.value = 0.8;
+                var g = c.createGain();
+                src.connect(bp).connect(g).connect(c.destination);
+                _env(g, 0.16, when, 0.002, 0.05);
+                src.start(when); src.stop(when + 0.07);
+            }
+        }
+        function crit() {
+            var c = ac(); if (!c || !soundOn) return;
+            var t = c.currentTime;
+            // Bright ascending triad — a triumphant gilt chime.
+            [784, 1047, 1568].forEach(function(f, i) {
+                var o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+                var g = c.createGain();
+                o.connect(g).connect(c.destination);
+                var when = t + i * 0.06;
+                _env(g, 0.18, when, 0.005, 0.5);
+                o.start(when); o.stop(when + 0.6);
+            });
+        }
+        function fumble() {
+            var c = ac(); if (!c || !soundOn) return;
+            var t = c.currentTime;
+            var o = c.createOscillator(); o.type = 'sawtooth';
+            o.frequency.setValueAtTime(180, t);
+            o.frequency.exponentialRampToValueAtTime(60, t + 0.35);
+            var g = c.createGain(); o.connect(g).connect(c.destination);
+            _env(g, 0.22, t, 0.005, 0.45);
+            o.start(t); o.stop(t + 0.5);
+        }
+        function drum() {
+            var c = ac(); if (!c || !soundOn) return;
+            var t = c.currentTime;
+            // Membrane: pitch-dropping sine + a noise transient.
+            var o = c.createOscillator(); o.type = 'sine';
+            o.frequency.setValueAtTime(160, t);
+            o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+            var g = c.createGain(); o.connect(g).connect(c.destination);
+            _env(g, 0.5, t, 0.004, 0.35);
+            o.start(t); o.stop(t + 0.4);
+            var src = c.createBufferSource(); src.buffer = _noiseBuffer(0.08);
+            var hp = c.createBiquadFilter(); hp.type = 'lowpass'; hp.frequency.value = 1200;
+            var ng = c.createGain(); src.connect(hp).connect(ng).connect(c.destination);
+            _env(ng, 0.3, t, 0.002, 0.08); src.start(t); src.stop(t + 0.1);
+        }
+        function pageTurn() {
+            var c = ac(); if (!c || !soundOn) return;
+            var t = c.currentTime;
+            var src = c.createBufferSource(); src.buffer = _noiseBuffer(0.25);
+            var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.7;
+            bp.frequency.setValueAtTime(900, t);
+            bp.frequency.exponentialRampToValueAtTime(3200, t + 0.18);
+            var g = c.createGain(); src.connect(bp).connect(g).connect(c.destination);
+            _env(g, 0.12, t, 0.01, 0.22); src.start(t); src.stop(t + 0.26);
+        }
+        function waxSeal() {
+            var c = ac(); if (!c || !soundOn) return;
+            var t = c.currentTime;
+            var o = c.createOscillator(); o.type = 'sine';
+            o.frequency.setValueAtTime(120, t);
+            o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+            var g = c.createGain(); o.connect(g).connect(c.destination);
+            _env(g, 0.4, t, 0.006, 0.18); o.start(t); o.stop(t + 0.22);
+            var src = c.createBufferSource(); src.buffer = _noiseBuffer(0.1);
+            var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+            var ng = c.createGain(); src.connect(lp).connect(ng).connect(c.destination);
+            _env(ng, 0.18, t, 0.01, 0.1); src.start(t); src.stop(t + 0.12);
+        }
+
+        // ---- Ambient soundscape (crossfade between two <audio> elements) ----
+        function _ensureAmbient() {
+            if (!audioA) {
+                audioA = new Audio(); audioA.loop = true; audioA.preload = 'none';
+                audioB = new Audio(); audioB.loop = true; audioB.preload = 'none';
+                audioA.volume = 0; audioB.volume = 0; activeEl = audioA;
+            }
+        }
+        function _fade(el, from, to, ms, onDone) {
+            var steps = 24, i = 0;
+            var dv = (to - from) / steps;
+            el.volume = Math.max(0, Math.min(1, from));
+            var iv = setInterval(function() {
+                i++; el.volume = Math.max(0, Math.min(1, from + dv * i));
+                if (i >= steps) { clearInterval(iv); el.volume = Math.max(0, Math.min(1, to)); if (onDone) onDone(); }
+            }, ms / steps);
+        }
+        function playScene(scene) {
+            if (!soundOn) { setMaster(true); }
+            _ensureAmbient();
+            var rel = mapping[scene];
+            if (!rel) { _hint('No track mapped for ' + scene + '. Map it on the GM hub.'); return; }
+            currentScene = scene;
+            _paintScenes();
+            var incoming = (activeEl === audioA) ? audioB : audioA;
+            var outgoing = activeEl;
+            incoming.src = '/campaign_audio/' + rel.split('/').map(encodeURIComponent).join('/');
+            incoming.volume = 0;
+            incoming.play().then(function() {
+                _fade(incoming, 0, volume, 800);
+                _fade(outgoing, outgoing.volume, 0, 800, function() { try { outgoing.pause(); } catch(_){} });
+                activeEl = incoming;
+            }).catch(function(e) { _hint('Could not play track (' + e.name + ').'); });
+        }
+        function stopAmbient() {
+            currentScene = null; _paintScenes();
+            if (activeEl) _fade(activeEl, activeEl.volume, 0, 500, function(){ try { activeEl.pause(); } catch(_){} });
+        }
+        function setVolume(v) {
+            volume = v; try { localStorage.setItem(VOL_KEY, String(v)); } catch(_){}
+            if (activeEl && currentScene) activeEl.volume = v;
+        }
+
+        // ---- Master on/off ----
+        function setMaster(on) {
+            soundOn = !!on;
+            try { localStorage.setItem(SOUND_KEY, soundOn ? '1' : '0'); } catch(_){}
+            ac(); // create/resume context on enable (this is the arming gesture)
+            var w = document.getElementById('audio-widget');
+            var btn = document.getElementById('audio-master');
+            if (w) w.classList.toggle('sound-on', soundOn);
+            if (btn) { btn.textContent = soundOn ? 'On' : 'Off'; btn.classList.toggle('on', soundOn); }
+            if (!soundOn && activeEl) { try { activeEl.pause(); } catch(_){} }
+        }
+        function toggleMaster() { setMaster(!soundOn); }
+        function togglePanel() {
+            var p = document.getElementById('audio-panel');
+            if (p) p.classList.toggle('hidden');
+        }
+        function _paintScenes() {
+            document.querySelectorAll('#audio-widget .audio-scene[data-scene]').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-scene') === currentScene);
+            });
+        }
+        function _hint(msg) { var h = document.getElementById('audio-hint'); if (h) h.textContent = msg || ''; }
+
+        // ---- Event hooks (called from the SSE handlers below) ----
+        var _lastEncounterActive = null;
+        function onPlayerRoll(log) {
+            if (!soundOn) return;
+            dice();
+            var blob = ((log && (log.detail || '')) + ' ' + ((log && log.degree) || '')).toUpperCase();
+            if (blob.indexOf('CRIT_SUCCESS') >= 0 || blob.indexOf('[CRIT SUCCESS') >= 0 || blob.indexOf('NAT 20') >= 0) {
+                setTimeout(crit, 90);
+            } else if (blob.indexOf('CRIT_FAILURE') >= 0 || blob.indexOf('[CRIT FAIL') >= 0 || blob.indexOf('NAT 1') >= 0) {
+                setTimeout(fumble, 90);
+            }
+        }
+        function onEncounterUpdate(data) {
+            if (!soundOn) return;
+            // Drum when combat transitions from inactive -> active.
+            var active = !!(data && (data.encounter_active || (data.combatant_count || 0) > 0 || data.active_name));
+            if (active && _lastEncounterActive === false) drum();
+            _lastEncounterActive = active;
+        }
+
+        // ---- Load the soundscape mapping for this campaign ----
+        fetch('/api/audio/soundscapes').then(function(r){ return r.json(); }).then(function(j) {
+            if (j && j.soundscapes) mapping = j.soundscapes;
+            var anyMapped = Object.keys(mapping).some(function(k){ return mapping[k]; });
+            if (!anyMapped) _hint('Tip: map your tracks to scenes on the GM hub.');
+        }).catch(function(){});
+
+        // Reflect persisted state on load (does NOT auto-play — needs a click).
+        document.addEventListener('DOMContentLoaded', function() {
+            var vol = document.getElementById('audio-volume'); if (vol) vol.value = Math.round(volume * 100);
+            var w = document.getElementById('audio-widget'); if (w) w.classList.toggle('sound-on', soundOn);
+            var btn = document.getElementById('audio-master');
+            if (btn) { btn.textContent = soundOn ? 'On' : 'Off'; btn.classList.toggle('on', soundOn); }
+        });
+
+        return {
+            dice: dice, crit: crit, fumble: fumble, drum: drum, pageTurn: pageTurn, waxSeal: waxSeal,
+            playScene: playScene, stopAmbient: stopAmbient, setVolume: setVolume,
+            toggleMaster: toggleMaster, togglePanel: togglePanel, setMaster: setMaster,
+            onPlayerRoll: onPlayerRoll, onEncounterUpdate: onEncounterUpdate,
+            setMapping: function(m) { mapping = m || {}; },
+            isOn: function(){ return soundOn; }
+        };
     })();
     </script>
 

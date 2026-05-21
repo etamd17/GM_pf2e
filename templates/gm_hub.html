@@ -116,6 +116,26 @@
                             <div id="apikey-models" style="display:none; margin-top:6px; font-size:10px; color:var(--text-on-dark-3); background:var(--bg-base); border:1px solid var(--border-card); border-radius:5px; padding:6px 8px; max-height:120px; overflow:auto;"></div>
                         </div>
                     </div>
+
+                    {# ── Soundscapes: map audio tracks to the 3 scenes ── #}
+                    <div style="margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-2); margin-bottom:var(--sp-2); flex-wrap:wrap;">
+                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200);">Soundscapes</div>
+                            <span style="font-size:10px; color:var(--text-on-dark-3);">Plays on this (GM) device. Switch live from the &#9835; control, bottom-right.</span>
+                        </div>
+                        <div id="soundscape-rows" style="display:grid; grid-template-columns:auto 1fr; gap:7px 10px; align-items:center;">
+                            <span style="font-size:11px; color:var(--text-on-dark-2);">Tavern</span>
+                            <select id="ss-tavern" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
+                            <span style="font-size:11px; color:var(--text-on-dark-2);">Dungeon</span>
+                            <select id="ss-dungeon" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
+                            <span style="font-size:11px; color:var(--text-on-dark-2);">Combat</span>
+                            <select id="ss-combat" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center; margin-top:8px;">
+                            <button type="button" onclick="saveSoundscapes()" id="ss-save-btn" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save soundscapes</button>
+                            <span id="ss-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -335,7 +355,71 @@
                     const p = document.getElementById('session-prep');
                     const open = p.style.display !== 'none';
                     p.style.display = open ? 'none' : 'block';
-                    if (!open) loadSessionNotes();
+                    if (!open) { loadSessionNotes(); loadAudioFiles(); }
+                }
+
+                // ── Soundscapes: populate the scene <select>s from the audio dir ──
+                let _audioFilesLoaded = false;
+                // Keyword hints for auto-suggesting a track when a scene is unmapped.
+                const _sceneHints = {
+                    tavern:  ['harbor','tavern','town','bounty','indoor','market','inn'],
+                    dungeon: ['cavern','cave','dungeon','crypt','occupied','engine','intake'],
+                    combat:  ['swarm','combat','battle','fight','shadow','chase'],
+                };
+                async function loadAudioFiles() {
+                    if (_audioFilesLoaded) return;
+                    const status = document.getElementById('ss-status');
+                    try {
+                        const j = await fetch('/api/audio/list').then(r => r.json());
+                        const selects = { tavern: document.getElementById('ss-tavern'), dungeon: document.getElementById('ss-dungeon'), combat: document.getElementById('ss-combat') };
+                        if (!j.available) {
+                            Object.values(selects).forEach(s => s.innerHTML = '<option value="">No audio folder found</option>');
+                            status.textContent = j.error || 'Campaign audio directory not available on this server.';
+                            return;
+                        }
+                        const files = j.files || [];
+                        const mapping = j.soundscapes || {};
+                        const optsHtml = '<option value="">— none —</option>' +
+                            files.map(f => `<option value="${f.path.replace(/"/g,'&quot;')}">${(f.group?f.group+' / ':'')+f.name.replace(/</g,'&lt;')}</option>`).join('');
+                        for (const scene of ['tavern','dungeon','combat']) {
+                            const sel = selects[scene];
+                            sel.innerHTML = optsHtml;
+                            // Prefer saved mapping; else auto-suggest by keyword.
+                            let val = mapping[scene] || '';
+                            if (!val) {
+                                const hints = _sceneHints[scene];
+                                const guess = files.find(f => hints.some(h => f.path.toLowerCase().includes(h)));
+                                if (guess) val = guess.path;
+                            }
+                            if (val) sel.value = val;
+                        }
+                        _audioFilesLoaded = true;
+                        status.textContent = files.length + ' tracks found. Pick one per scene, then Save.';
+                    } catch (e) {
+                        status.textContent = 'Could not load audio list: ' + e;
+                    }
+                }
+                async function saveSoundscapes() {
+                    const status = document.getElementById('ss-status');
+                    const payload = { soundscapes: {
+                        tavern:  document.getElementById('ss-tavern').value,
+                        dungeon: document.getElementById('ss-dungeon').value,
+                        combat:  document.getElementById('ss-combat').value,
+                    }};
+                    try {
+                        const j = await fetch('/api/audio/soundscapes', {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify(payload)
+                        }).then(r => r.json());
+                        if (j.success) {
+                            status.style.color = '#86efac';
+                            status.textContent = 'Soundscapes saved.';
+                            // Refresh the live audio engine on THIS page so the new
+                            // mapping works without a reload (other open GM screens
+                            // pick it up on their next load).
+                            try { window.pf2eAudio && window.pf2eAudio.setMapping(payload.soundscapes); } catch(_) {}
+                        } else { status.textContent = j.error || 'Save failed'; }
+                    } catch (e) { status.textContent = 'Network error: ' + e; }
                 }
 
                 async function beginSession() {

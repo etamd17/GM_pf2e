@@ -3535,6 +3535,7 @@ async function sendHandout() {
         const data = await res.json();
         if (data.success) {
             toast(`Handout "${title}" sent!`, 'success');
+            try { window.pf2eAudio && window.pf2eAudio.waxSeal(); } catch(_) {}
             document.getElementById('handout-title').value = '';
             document.getElementById('handout-content').value = '';
             document.getElementById('handout-image').value = '';
