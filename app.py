@@ -246,11 +246,12 @@ MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
 AUDIO_DIR = os.path.join(MAP_DIR, 'audio')  # GM-uploaded soundboard clips
 TILES_DIR = os.path.join(MAP_DIR, 'tiles')  # Decorative tile-layer images
 CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
-# Campaign soundscape audio — a symlink (campaign_audio) to the GM's local
-# Foundry/audio folder, or PF2E_AUDIO_DIR. Distinct from the map soundboard
-# AUDIO_DIR above. Resolved fresh per request so a newly-created symlink is
-# picked up without a restart.
-CAMPAIGN_AUDIO_DIR = os.environ.get('PF2E_AUDIO_DIR') or os.path.join(BASE_DIR, 'campaign_audio')
+# Campaign soundscape audio. On Railway this is the persistent volume
+# (DATA_DIR=/data → /data/campaign_audio) where GM-uploaded tracks live and
+# survive redeploys; locally DATA_DIR defaults to the repo, so the
+# campaign_audio symlink to a local Foundry folder still works for dev.
+# PF2E_AUDIO_DIR overrides both. Distinct from the map soundboard AUDIO_DIR.
+CAMPAIGN_AUDIO_DIR = os.environ.get('PF2E_AUDIO_DIR') or os.path.join(DATA_DIR, 'campaign_audio')
 CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
@@ -10753,6 +10754,62 @@ def api_audio_soundscapes():
             current[scene] = str(incoming[scene] or '')
     cfg = _save_campaign_config({'soundscapes': current})
     return jsonify({'success': True, 'soundscapes': cfg.get('soundscapes', {})})
+
+
+@app.route('/api/audio/upload', methods=['POST'])
+@gm_required
+def api_audio_upload():
+    """Upload one soundscape track to CAMPAIGN_AUDIO_DIR (the Railway volume in
+    production). One file per request keeps each POST under MAX_CONTENT_LENGTH.
+    Returns the saved relative path so the GM can map it to a scene."""
+    f = request.files.get('audio')
+    if not f or not f.filename:
+        return jsonify({'success': False, 'error': 'audio field required'}), 400
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in _AUDIO_EXTS:
+        return jsonify({'success': False, 'error': f"unsupported type '{ext}' — ogg / mp3 / wav / m4a / opus / flac only"}), 400
+    f.seek(0, os.SEEK_END); size = f.tell(); f.seek(0)
+    if size > 48 * 1024 * 1024:
+        return jsonify({'success': False, 'error': f'file too large ({size // (1024*1024)} MB); max 48 MB per file'}), 413
+    # Sanitize to a safe flat filename (strip directories + odd chars).
+    base = os.path.basename(f.filename).replace('\\', '/').split('/')[-1]
+    safe = re.sub(r'[^A-Za-z0-9._ -]', '_', base).strip() or ('track' + ext)
+    root = CAMPAIGN_AUDIO_DIR  # write target (not realpath — we own this dir)
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError as e:
+        return jsonify({'success': False, 'error': f'could not create audio dir: {e}'}), 500
+    dest = os.path.join(root, safe)
+    # Avoid clobbering: if a same-named file exists, suffix with a counter.
+    if os.path.exists(dest):
+        stem, x = os.path.splitext(safe)
+        i = 2
+        while os.path.exists(os.path.join(root, f'{stem}-{i}{x}')):
+            i += 1
+        safe = f'{stem}-{i}{x}'
+        dest = os.path.join(root, safe)
+    f.save(dest)
+    return jsonify({'success': True, 'path': safe, 'name': safe, 'byte_count': size})
+
+
+@app.route('/api/audio/delete', methods=['POST'])
+@gm_required
+def api_audio_delete():
+    """Delete an uploaded track (path relative to CAMPAIGN_AUDIO_DIR). Path-safe."""
+    data = request.json or {}
+    rel = (data.get('path') or '').strip().lstrip('/')
+    if not rel:
+        return jsonify({'success': False, 'error': 'path required'}), 400
+    root = os.path.realpath(CAMPAIGN_AUDIO_DIR)
+    target = os.path.realpath(os.path.join(root, rel))
+    if not target.startswith(root + os.sep) and target != root:
+        return jsonify({'success': False, 'error': 'path escapes audio dir'}), 400
+    try:
+        if os.path.isfile(target):
+            os.remove(target)
+        return jsonify({'success': True})
+    except OSError as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/campaign/hero_image', methods=['POST'])

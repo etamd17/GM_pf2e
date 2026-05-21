@@ -123,6 +123,16 @@
                             <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200);">Soundscapes</div>
                             <span style="font-size:10px; color:var(--text-on-dark-3);">Plays on this (GM) device. Switch live from the &#9835; control, bottom-right.</span>
                         </div>
+
+                        {# Upload tracks to the server (Railway volume) #}
+                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+                            <input type="file" id="audio-upload-files" accept="audio/ogg,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.ogg,.mp3,.wav,.m4a,.opus,.flac" multiple style="font-size:11px; color:var(--text-on-dark-2); max-width:100%;">
+                            <button type="button" onclick="uploadAudioFiles()" id="audio-upload-btn" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer;">Upload</button>
+                            <span id="audio-upload-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
+                        </div>
+                        {# List of tracks already on the server (with delete) #}
+                        <div id="audio-file-list" style="display:none; margin-bottom:8px; max-height:130px; overflow:auto; border:1px solid var(--border-card); border-radius:5px; padding:6px 8px; background:var(--bg-base);"></div>
+
                         <div id="soundscape-rows" style="display:grid; grid-template-columns:auto 1fr; gap:7px 10px; align-items:center;">
                             <span style="font-size:11px; color:var(--text-on-dark-2);">Tavern</span>
                             <select id="ss-tavern" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
@@ -366,26 +376,29 @@
                     dungeon: ['cavern','cave','dungeon','crypt','occupied','engine','intake'],
                     combat:  ['swarm','combat','battle','fight','shadow','chase'],
                 };
-                async function loadAudioFiles() {
-                    if (_audioFilesLoaded) return;
+                async function loadAudioFiles(force) {
+                    if (_audioFilesLoaded && !force) return;
                     const status = document.getElementById('ss-status');
                     try {
                         const j = await fetch('/api/audio/list').then(r => r.json());
                         const selects = { tavern: document.getElementById('ss-tavern'), dungeon: document.getElementById('ss-dungeon'), combat: document.getElementById('ss-combat') };
                         if (!j.available) {
-                            Object.values(selects).forEach(s => s.innerHTML = '<option value="">No audio folder found</option>');
-                            status.textContent = j.error || 'Campaign audio directory not available on this server.';
+                            Object.values(selects).forEach(s => s.innerHTML = '<option value="">No tracks yet — upload above</option>');
+                            renderAudioFileList([]);
+                            status.textContent = 'No tracks on the server yet. Upload .ogg/.mp3 files above, then map them.';
                             return;
                         }
                         const files = j.files || [];
                         const mapping = j.soundscapes || {};
+                        renderAudioFileList(files);
                         const optsHtml = '<option value="">— none —</option>' +
                             files.map(f => `<option value="${f.path.replace(/"/g,'&quot;')}">${(f.group?f.group+' / ':'')+f.name.replace(/</g,'&lt;')}</option>`).join('');
                         for (const scene of ['tavern','dungeon','combat']) {
                             const sel = selects[scene];
+                            const prev = sel.value;
                             sel.innerHTML = optsHtml;
-                            // Prefer saved mapping; else auto-suggest by keyword.
-                            let val = mapping[scene] || '';
+                            // Keep current selection if still valid; else saved mapping; else auto-suggest.
+                            let val = (prev && files.some(f => f.path === prev)) ? prev : (mapping[scene] || '');
                             if (!val) {
                                 const hints = _sceneHints[scene];
                                 const guess = files.find(f => hints.some(h => f.path.toLowerCase().includes(h)));
@@ -394,10 +407,54 @@
                             if (val) sel.value = val;
                         }
                         _audioFilesLoaded = true;
-                        status.textContent = files.length + ' tracks found. Pick one per scene, then Save.';
+                        status.textContent = files.length + ' track' + (files.length===1?'':'s') + ' available. Pick one per scene, then Save.';
                     } catch (e) {
                         status.textContent = 'Could not load audio list: ' + e;
                     }
+                }
+                function renderAudioFileList(files) {
+                    const box = document.getElementById('audio-file-list');
+                    if (!box) return;
+                    if (!files.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+                    box.style.display = 'block';
+                    box.innerHTML = files.map(f => {
+                        const kb = f.size ? Math.round(f.size/1024/1024*10)/10 + ' MB' : '';
+                        const p = f.path.replace(/'/g, "\\'");
+                        return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:2px 0; font-size:11px; color:var(--text-on-dark-2);">
+                            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${(f.group?f.group+' / ':'')+f.name.replace(/</g,'&lt;')} <span style="color:var(--text-on-dark-3);">${kb}</span></span>
+                            <button type="button" onclick="deleteAudioFile('${p}')" title="Delete from server" style="flex-shrink:0; font-size:11px; color:var(--ruby-200); background:transparent; border:none; cursor:pointer;">&times;</button>
+                        </div>`;
+                    }).join('');
+                }
+                async function uploadAudioFiles() {
+                    const input = document.getElementById('audio-upload-files');
+                    const status = document.getElementById('audio-upload-status');
+                    const btn = document.getElementById('audio-upload-btn');
+                    const files = input.files ? Array.from(input.files) : [];
+                    if (!files.length) { status.textContent = 'Pick one or more audio files first.'; return; }
+                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Uploading…';
+                    let done = 0, failed = 0;
+                    for (const file of files) {
+                        status.style.color = 'var(--text-on-dark-3)';
+                        status.textContent = `Uploading ${file.name} (${done+1}/${files.length}, ${Math.round(file.size/1024/1024*10)/10} MB)…`;
+                        const fd = new FormData(); fd.append('audio', file);
+                        try {
+                            const j = await fetch('/api/audio/upload', { method: 'POST', body: fd }).then(r => r.json());
+                            if (j.success) done++; else { failed++; status.style.color='#fca5a5'; status.textContent = (j.error||'upload failed') + ' — ' + file.name; }
+                        } catch (e) { failed++; status.style.color='#fca5a5'; status.textContent = 'Error on ' + file.name + ': ' + e; }
+                    }
+                    btn.disabled = false; btn.textContent = old;
+                    input.value = '';
+                    if (!failed) { status.style.color = '#86efac'; status.textContent = `Uploaded ${done} track${done===1?'':'s'}.`; }
+                    await loadAudioFiles(true);
+                }
+                async function deleteAudioFile(path) {
+                    if (!confirm('Delete "' + path + '" from the server?')) return;
+                    try {
+                        const j = await fetch('/api/audio/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path }) }).then(r => r.json());
+                        if (j.success) await loadAudioFiles(true);
+                        else alert(j.error || 'Delete failed');
+                    } catch (e) { alert('Network error: ' + e); }
                 }
                 async function saveSoundscapes() {
                     const status = document.getElementById('ss-status');
