@@ -2411,6 +2411,31 @@
             .roll-toast.crit-flair, .roll-toast.crit-flair::after { animation: none; }
         }
 
+        /* ── Death's door — at 0 HP / dying, the sheet edges bleed ruby and a
+           slow heartbeat pulses. No greyscale (numbers stay vivid). Fixed,
+           click-through overlay so it never blocks the recovery controls. ── */
+        #deaths-door {
+            position: fixed; inset: 0; pointer-events: none; z-index: 9994;
+            opacity: 0; transition: opacity 0.5s ease;
+            box-shadow:
+                inset 0 0 110px 18px rgba(150,18,18,0.55),
+                inset 0 0 40px 0 rgba(120,10,10,0.5);
+        }
+        body.at-deaths-door #deaths-door {
+            opacity: 1;
+            animation: deathHeartbeat 1.5s ease-in-out infinite;
+        }
+        @keyframes deathHeartbeat {
+            0%, 100% { opacity: 0.38; }
+            14% { opacity: 0.9; }   /* lub */
+            28% { opacity: 0.48; }
+            42% { opacity: 0.98; }  /* dub */
+            58% { opacity: 0.42; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            body.at-deaths-door #deaths-door { opacity: 0.7; animation: none; }
+        }
+
         /* Whisper-to-GM input — small panel that slides up from bottom */
         .whisper-fab {
             position: fixed; bottom: 18px; right: 152px; z-index: 800;
@@ -5105,6 +5130,11 @@
                     } else if (data.dying === 0 && data.wounded > 0 && action === 'heal') {
                         showRollToast('Stabilized', 0, `No longer dying. Wounded ${data.wounded}.`, false, false);
                     }
+                    // Death's-door edge-bleed (Chunk 4b): toggle from authoritative
+                    // server data here, since modifyHP bypasses applyHpUpdate.
+                    if (typeof data.dying === 'number' && currentConditions) currentConditions.dying = data.dying;
+                    const _dire = (newHp <= 0) || ((data.dying || 0) > 0);
+                    document.body.classList.toggle('at-deaths-door', !!_dire);
                 }
             } catch (error) {}
         }
@@ -8037,14 +8067,28 @@
             if (cur <= 0 || dying > 0) w.classList.add('active');
             else w.classList.remove('active');
         }
+        // ----- Death's door edge-bleed (Chunk 4b) -------------------------
+        // When THIS player is at 0 HP or Dying > 0, bleed a ruby rim around
+        // the sheet and pulse a slow heartbeat (CSS handles the animation).
+        // No greyscale — the numbers stay vivid so the recovery controls are
+        // still readable. Only ever paints the affected player's own screen.
+        function _paintDeathsDoor() {
+            const hpEl = document.getElementById('current-hp');
+            const cur = hpEl ? parseInt(hpEl.textContent, 10)
+                             : (typeof currentHp === 'number' ? currentHp : 1);
+            const dying = (currentConditions || {}).dying || 0;
+            const dire = (cur <= 0) || (dying > 0);
+            document.body.classList.toggle('at-deaths-door', !!dire);
+        }
         // Hook into the existing applyHpUpdate / applyConditionUpdate so the
-        // widget updates whenever HP or conditions change.
+        // widget + edge-bleed update whenever HP or conditions change.
         (function patchHpAndConditions() {
             const origHp = window.applyHpUpdate;
             if (typeof origHp === 'function') {
                 window.applyHpUpdate = function() {
                     const r = origHp.apply(this, arguments);
                     try { _refreshDyingWidget(); } catch(_) {}
+                    try { _paintDeathsDoor(); } catch(_) {}
                     return r;
                 };
             }
@@ -8053,10 +8097,12 @@
                 window.applyConditionUpdate = function() {
                     const r = origCond.apply(this, arguments);
                     try { _refreshDyingWidget(); } catch(_) {}
+                    try { _paintDeathsDoor(); } catch(_) {}
                     return r;
                 };
             }
             _refreshDyingWidget();
+            _paintDeathsDoor();
         })();
         function rollRecoveryCheck() {
             const dying = (currentConditions || {}).dying || 1;
@@ -9483,6 +9529,10 @@
 
     {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}
     {% include "_screen_flash.html" %}
+
+    {# Death's door — ruby edge-bleed + heartbeat when this PC is at 0/dying.
+       Activated by body.at-deaths-door (see _paintDeathsDoor). #}
+    <div id="deaths-door" class="no-print" aria-hidden="true"></div>
 
     {# Session-start curtain — player variant (no dismiss control; parts when
        the GM broadcasts session_dismiss). #}
