@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 
-from tests._snapshot import assert_matches_snapshot
+from tests._snapshot import assert_matches_snapshot, serialize_character
 from tests.test_pc_snapshots import L10_FIXTURES, _FIXTURES_DIR
 
 
@@ -126,43 +126,18 @@ def _reduce_build_to_level(build: dict, target_level: int) -> dict:
     return new
 
 
-def _serialize_walk_step(pc) -> dict:
-    """Diff-friendly snapshot of a Character at a single walk step."""
-    return {
-        "name": pc.name,
-        "level": pc.level,
-        "hp": pc.hp,
-        "ac": pc.ac,
-        "fort": pc.fort,
-        "ref": pc.ref,
-        "will": pc.will,
-        "perception": pc.perception,
-        "class_dc": pc.class_dc,
-        "spell_attack": pc.spell_attack,
-        "spell_dc": pc.spell_dc,
-        "mods": dict(sorted((pc.mods or {}).items())),
-        # Pull a stable subset of the proficiency table so we capture how
-        # ranks evolve. The full dict has lores etc. that are zeroed.
-        "key_proficiencies": {
-            k: pc.proficiencies.get(k, 0)
-            for k in (
-                "fortitude", "reflex", "will", "perception", "class_dc",
-                "spell_attack", "spell_dc",
-                "unarmored", "light", "medium", "heavy",
-                "unarmed", "simple", "martial", "advanced",
-            )
-        },
-    }
-
-
 @pytest.mark.parametrize(
     "pc_key,filename,level",
     [(k, f, lv) for k, f in sorted(L10_FIXTURES.items()) for lv in WALK_LEVELS],
 )
 def test_level_walk(Character, pc_key, filename, level):
-    """For each (PC, level) pair: reduce the L10 build to that level, run
-    it through Character, and snapshot. The first run creates the
-    snapshot; subsequent runs lock it in."""
+    """For each (PC, level) pair: reduce the L10 build to that level, run it
+    through Character, and snapshot the FULL sheet. We use the same
+    serialize_character() the L3/L10 snapshots use, so every level locks
+    not just HP/AC/saves/DCs but per-skill totals, the feats granted by
+    that level, weapon attacks, and every typed rule modifier — i.e. the
+    whole "do feats / skills / bonuses rank up correctly each level" picture.
+    The first run creates the snapshot; subsequent runs lock it in."""
     raw = json.loads((_FIXTURES_DIR / filename).read_text(encoding="utf-8"))
     build = raw["build"]
     reduced = _reduce_build_to_level(build, level)
@@ -170,8 +145,52 @@ def test_level_walk(Character, pc_key, filename, level):
     # ``Character`` accepts the wrapper dict OR the inner build dict; pass
     # a wrapper so the import path matches what /api routes use.
     pc = Character({"build": reduced}, file_path=str(_FIXTURES_DIR / filename))
-    payload = _serialize_walk_step(pc)
+    payload = serialize_character(pc)
     assert_matches_snapshot(f"{_WALK_PREFIX}{pc_key.replace('_l10','')}_l{level}", payload)
+
+
+_LEGAL_RANKS = {0, 2, 4, 6, 8}  # PF2e: Untrained/Trained/Expert/Master/Legendary
+_MONOTONIC_KEYS = (
+    "fortitude", "reflex", "will", "perception", "class_dc",
+    "spell_attack", "spell_dc",
+    "unarmored", "light", "medium", "heavy",
+    "unarmed", "simple", "martial", "advanced",
+)
+
+
+@pytest.mark.parametrize("pc_key,filename", sorted(L10_FIXTURES.items()))
+def test_progression_invariants(Character, pc_key, filename):
+    """Correctness invariants true for ANY PF2e PC, checked at every level
+    1-10. Unlike the snapshots (which lock whatever the engine produces),
+    these catch real bugs even on a freshly-seeded run:
+      * every proficiency rank is a legal PF2e value (0/2/4/6/8) — never a 3,
+      * core ranks never DROP as level rises (an un-bump regression trips this),
+      * HP strictly increases each level."""
+    raw = json.loads((_FIXTURES_DIR / filename).read_text(encoding="utf-8"))
+    build = raw["build"]
+    prev_profs = None
+    prev_hp = None
+    for level in WALK_LEVELS:
+        reduced = _reduce_build_to_level(build, level)
+        pc = Character({"build": reduced}, file_path=str(_FIXTURES_DIR / filename))
+
+        for k, v in (pc.proficiencies or {}).items():
+            assert v in _LEGAL_RANKS, f"{pc_key} L{level}: illegal proficiency rank {k}={v}"
+
+        if prev_profs is not None:
+            for k in _MONOTONIC_KEYS:
+                assert pc.proficiencies.get(k, 0) >= prev_profs.get(k, 0), (
+                    f"{pc_key}: {k} rank dropped "
+                    f"{prev_profs.get(k, 0)} -> {pc.proficiencies.get(k, 0)} going into L{level}"
+                )
+
+        if prev_hp is not None:
+            assert pc.hp > prev_hp, (
+                f"{pc_key}: HP did not increase at L{level} ({prev_hp} -> {pc.hp})"
+            )
+
+        prev_profs = dict(pc.proficiencies or {})
+        prev_hp = pc.hp
 
 
 def test_l10_walk_endpoint_matches_full_build(Character):

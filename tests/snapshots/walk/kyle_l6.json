@@ -1,25 +1,123 @@
 {
   "ac": 22,
+  "ac_item": 1,
+  "active_armor_penalty": 0,
+  "active_speed_penalty": 0,
+  "ancestry": "Awakened Animal",
+  "armor_name": "Padded Armor",
+  "armor_str_req": 0,
+  "attacks": [
+    {
+      "damage": "1d4B",
+      "first_strike": 12,
+      "name": "Fist",
+      "traits": [
+        "agile",
+        "finesse",
+        "nonlethal",
+        "unarmed"
+      ]
+    },
+    {
+      "damage": "1d4B",
+      "first_strike": 8,
+      "name": "Staff",
+      "traits": [
+        "monk",
+        "two-hand-d8"
+      ]
+    }
+  ],
+  "background": "Stargazer (Nature)",
+  "class": "Druid",
   "class_dc": 22,
+  "current_hp": 80,
+  "deity": "Not set",
+  "feats": [
+    {
+      "level": 1,
+      "name": "Animal Empathy",
+      "type": "Class Feat"
+    },
+    {
+      "level": 1,
+      "name": "Assurance",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 1,
+      "name": "Climbing Animal",
+      "type": "Heritage"
+    },
+    {
+      "level": 1,
+      "name": "Natural Senses",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 1,
+      "name": "Shield Block",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 1,
+      "name": "Storm Born",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 2,
+      "name": "Battle Medicine",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 2,
+      "name": "Beastmaster Dedication",
+      "type": "Class Feat"
+    },
+    {
+      "level": 3,
+      "name": "Toughness",
+      "type": "General Feat"
+    },
+    {
+      "level": 4,
+      "name": "Additional Lore",
+      "type": "Skill Feat"
+    },
+    {
+      "level": 4,
+      "name": "Mature Beastmaster Companion",
+      "type": "Class Feat"
+    },
+    {
+      "level": 5,
+      "name": "Scurry!",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 6,
+      "name": "Advanced Elemental Spell",
+      "type": "Class Feat"
+    },
+    {
+      "level": 6,
+      "name": "Godless Healing",
+      "type": "Skill Feat"
+    }
+  ],
+  "focus_max": 3,
   "fort": 13,
+  "heritage": "Climbing Animal",
+  "hero_points": 1,
   "hp": 80,
-  "key_proficiencies": {
-    "advanced": 0,
-    "class_dc": 2,
-    "fortitude": 4,
-    "heavy": 0,
-    "light": 2,
-    "martial": 0,
-    "medium": 2,
-    "perception": 4,
-    "reflex": 4,
-    "simple": 2,
-    "spell_attack": 2,
-    "spell_dc": 2,
-    "unarmed": 2,
-    "unarmored": 2,
-    "will": 4
-  },
+  "immunities": [],
+  "initiative_mod": 14,
+  "languages": [
+    "Azlanti",
+    "Common",
+    "Fey",
+    "Wildsong"
+  ],
   "level": 6,
   "mods": {
     "cha": 0,
@@ -31,8 +129,163 @@
   },
   "name": "Kyle",
   "perception": 14,
+  "proficiencies": {
+    "ac": 2,
+    "class_dc": 2,
+    "fortitude": 4,
+    "light": 2,
+    "medium": 2,
+    "perception": 4,
+    "reflex": 4,
+    "simple": 2,
+    "spell_attack": 2,
+    "spell_dc": 2,
+    "unarmed": 2,
+    "unarmored": 2,
+    "will": 4
+  },
   "ref": 14,
+  "rule_modifiers": {
+    "healing-received": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        5
+      ]
+    },
+    "hp": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        6
+      ]
+    },
+    "{item|_id}-damage": {
+      "circumstance": [],
+      "item": [],
+      "status": [],
+      "untyped": [
+        1
+      ]
+    }
+  },
+  "senses": [
+    "Darkvision",
+    "Echolocation",
+    "Low-Light Vision",
+    "Low-Light-Vision",
+    "Scent",
+    "Tremorsense"
+  ],
+  "shield_ac_bonus": 2,
+  "shield_bt": 10,
+  "shield_hardness": 5,
+  "shield_max_hp": 20,
+  "size": "Tiny",
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+4"
+    },
+    {
+      "name": "Arcana",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+1"
+    },
+    {
+      "name": "Athletics",
+      "penalty": 0,
+      "stat": "STR",
+      "total": "+0"
+    },
+    {
+      "name": "Crafting",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+1"
+    },
+    {
+      "name": "Deception",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Diplomacy",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Intimidation",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Medicine",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+4"
+    },
+    {
+      "name": "Nature",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+4"
+    },
+    {
+      "name": "Occultism",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+1"
+    },
+    {
+      "name": "Performance",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Religion",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+4"
+    },
+    {
+      "name": "Society",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+1"
+    },
+    {
+      "name": "Stealth",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+4"
+    },
+    {
+      "name": "Survival",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+4"
+    },
+    {
+      "name": "Thievery",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+4"
+    }
+  ],
+  "speed": 20,
   "spell_attack": 12,
   "spell_dc": 22,
+  "stealth_penalty": 0,
+  "subclass": "Storm",
   "will": 14
 }

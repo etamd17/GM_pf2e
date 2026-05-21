@@ -1,0 +1,402 @@
+{
+  "10": {
+    "class_dc": 27,
+    "feat_count": 21,
+    "fort": 18,
+    "hp": 138,
+    "level": 10,
+    "perception": 19,
+    "proficiencies": {
+      "ac": 2,
+      "arcana": 2,
+      "class_dc": 2,
+      "fortitude": 4,
+      "light": 2,
+      "medium": 2,
+      "nature": 2,
+      "perception": 4,
+      "reflex": 4,
+      "simple": 2,
+      "spell_attack": 4,
+      "spell_dc": 4,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 18,
+    "spell_dc": 29,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 19
+  },
+  "2": {
+    "class_dc": 18,
+    "feat_count": 8,
+    "fort": 6,
+    "hp": 30,
+    "level": 2,
+    "perception": 8,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "medium": 2,
+      "perception": 2,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 7,
+    "spell_dc": 18,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 10
+  },
+  "3": {
+    "class_dc": 19,
+    "feat_count": 9,
+    "fort": 7,
+    "hp": 41,
+    "level": 3,
+    "perception": 11,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "medium": 2,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 8,
+    "spell_dc": 19,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 11
+  },
+  "4": {
+    "class_dc": 20,
+    "feat_count": 11,
+    "fort": 8,
+    "hp": 52,
+    "level": 4,
+    "perception": 12,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "medium": 2,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 9,
+    "spell_dc": 20,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 12
+  },
+  "5": {
+    "class_dc": 21,
+    "feat_count": 12,
+    "fort": 12,
+    "hp": 68,
+    "level": 5,
+    "perception": 13,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 4,
+      "light": 2,
+      "medium": 2,
+      "perception": 4,
+      "reflex": 4,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 13,
+    "spell_dc": 21,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 13
+  },
+  "6": {
+    "class_dc": 22,
+    "feat_count": 14,
+    "fort": 13,
+    "hp": 80,
+    "level": 6,
+    "perception": 14,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 4,
+      "light": 2,
+      "medium": 2,
+      "perception": 4,
+      "reflex": 4,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 14,
+    "spell_dc": 22,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 14
+  },
+  "7": {
+    "class_dc": 23,
+    "feat_count": 15,
+    "fort": 14,
+    "hp": 92,
+    "level": 7,
+    "perception": 15,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 4,
+      "light": 2,
+      "medium": 2,
+      "perception": 4,
+      "reflex": 4,
+      "simple": 2,
+      "spell_attack": 4,
+      "spell_dc": 4,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 15,
+    "spell_dc": 25,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 15
+  },
+  "8": {
+    "class_dc": 24,
+    "feat_count": 17,
+    "fort": 15,
+    "hp": 104,
+    "level": 8,
+    "perception": 16,
+    "proficiencies": {
+      "ac": 2,
+      "class_dc": 2,
+      "fortitude": 4,
+      "light": 2,
+      "medium": 2,
+      "perception": 4,
+      "reflex": 4,
+      "simple": 2,
+      "spell_attack": 4,
+      "spell_dc": 4,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 16,
+    "spell_dc": 26,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 16
+  },
+  "9": {
+    "class_dc": 25,
+    "feat_count": 19,
+    "fort": 16,
+    "hp": 116,
+    "level": 9,
+    "perception": 17,
+    "proficiencies": {
+      "ac": 2,
+      "arcana": 2,
+      "class_dc": 2,
+      "fortitude": 4,
+      "light": 2,
+      "medium": 2,
+      "nature": 2,
+      "perception": 4,
+      "reflex": 4,
+      "simple": 2,
+      "spell_attack": 4,
+      "spell_dc": 4,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 17,
+    "spell_dc": 27,
+    "spell_slots": [
+      {
+        "name": "Druid",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 17
+  }
+}
