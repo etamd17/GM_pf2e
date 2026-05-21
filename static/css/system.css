@@ -3728,4 +3728,63 @@ kbd.key, .kbd {
     margin: 0 1px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   AMBIENT TEXTURE (flavor Chunk 3) — "lit manuscript page" feel.
+   Two fixed, click-through overlays applied app-wide via body pseudo-
+   elements: a faint film grain and a soft edge vignette. STATIC (no
+   animation) so the cost is a single composited layer — safe on player
+   devices. Sits above page content but below the session curtain
+   (z 100000) so the cinematic moment stays pristine.
+   ═══════════════════════════════════════════════════════════════════ */
+body::before {
+    /* Film grain — tiled SVG fractal noise, barely-there opacity. */
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9990;
+    pointer-events: none;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+}
+body::after {
+    /* Edge vignette — focuses the eye, evokes lamplight on a page. */
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9989;
+    pointer-events: none;
+    background: radial-gradient(ellipse 120% 120% at 50% 42%,
+        transparent 55%,
+        rgba(12, 10, 7, 0.16) 82%,
+        rgba(12, 10, 7, 0.40) 100%);
+}
+/* Light theme: dial the overlays down so they don't muddy a bright page. */
+[data-theme="light"] body::before { opacity: 0.03; mix-blend-mode: multiply; }
+[data-theme="light"] body::after { background: radial-gradient(ellipse 120% 120% at 50% 42%, transparent 60%, rgba(0,0,0,0.06) 100%); }
+@media print { body::before, body::after { display: none !important; } }
+
+/* Illuminated drop-cap — a large gilt initial on major titles. Apply the
+   .illuminated-cap class to a heading; the player sheet's .char-name already
+   carries an equivalent first-letter treatment. */
+.illuminated-cap::first-letter {
+    font-family: 'Cinzel', serif;
+    font-size: 1.7em;
+    font-weight: 700;
+    color: var(--accent-primary, #c9a34e);
+    line-height: 0.9;
+    padding-right: 0.04em;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.5), 0 0 14px rgba(168,58,58,0.18);
+}
+
+/* Nav-bar campaign crest emblem. */
+.nav-crest {
+    height: 22px; width: auto; max-width: 30px;
+    object-fit: contain;
+    border-radius: 3px;
+    vertical-align: middle;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+
 /* End of system.css */

@@ -4549,6 +4549,17 @@ def _save_campaign_config(updates):
     return cfg
 
 
+@app.context_processor
+def _inject_campaign_chrome():
+    """Expose the campaign crest to every template so the nav-bar emblem
+    (base.html) renders without each route having to pass it. Cheap: a small
+    JSON read per render."""
+    try:
+        return {'nav_crest': _load_campaign_config().get('crest_image', '')}
+    except Exception:
+        return {'nav_crest': ''}
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # SESSION-START CURTAIN — "Previously on..." recap from Obsidian + broadcast
 # ══════════════════════════════════════════════════════════════════════════

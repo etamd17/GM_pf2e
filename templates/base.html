@@ -92,7 +92,10 @@
     <nav class="border-b shrink-0" style="background:var(--nav-bg); border-color:var(--border-subtle);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-12">
-                <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">PF2E</span>
+                <a href="/gm" class="flex items-center gap-2" title="GM Hub" style="text-decoration:none;">
+                    {% if nav_crest %}<img src="{{ nav_crest }}" alt="" class="nav-crest">{% endif %}
+                    <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">PF2E</span>
+                </a>
                 <div class="flex items-center gap-1 text-xs font-medium">
                     <a href="/gm" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors">GM Hub</a>
                     <a href="/party" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Party</a>
