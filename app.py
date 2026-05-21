@@ -285,6 +285,7 @@ SESSION_HIGHLIGHTS = {
     'rp_moments': [],  # {text, scope}  scope = 'party' or a PC name
     'narrative': '',   # Claude-written, generated at wrap-up
     'mvp_votes': {},   # {voter_pc: choice_pc} — MVP poll on the scrapbook
+    'mvp_winner': '',  # the PC the GM crowned MVP (set when a Hero Point is granted)
 }
 SESSION_HIGHLIGHTS_LOCK = threading.Lock()
 
@@ -4923,7 +4924,17 @@ def _reset_session_highlights(session_number):
         SESSION_HIGHLIGHTS['rp_moments'] = []
         SESSION_HIGHLIGHTS['narrative'] = ''
         SESSION_HIGHLIGHTS['mvp_votes'] = {}
+        SESSION_HIGHLIGHTS['mvp_winner'] = ''
     _persist_session_highlights()
+
+
+def _party_level():
+    """Best guess at the party level for the campaign log: the max PC level."""
+    try:
+        levels = [int(getattr(p, 'level', 1) or 1) for p in PARTY_LIBRARY.values()]
+        return max(levels) if levels else 1
+    except Exception:
+        return 1
 
 
 def _record_crit_fumble(name, action, detail, degree):
@@ -5057,6 +5068,8 @@ def _assemble_scrapbook():
         'crest_image': cfg.get('crest_image', ''),
         'narrative': h.get('narrative', ''),
         'started_at': h.get('started_at', ''),
+        'party_level': _party_level(),
+        'mvp_winner': h.get('mvp_winner', ''),
         'party': party,
         'players': players,
         'mvp': {'tally': mvp_counts, 'total': sum(mvp_counts.values()),
@@ -5118,6 +5131,14 @@ def api_scrapbook_grant_hero(pc_name):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
     _combat_log(f"{pc_name} named session MVP — +1 Hero Point (now {pc.hero_points})", 'system')
+    # Crown the MVP in the session record so the campaign timeline shows it.
+    with SESSION_HIGHLIGHTS_LOCK:
+        SESSION_HIGHLIGHTS['mvp_winner'] = pc_name
+    _persist_session_highlights()
+    try:
+        _save_scrapbook_record(_assemble_scrapbook())
+    except Exception:
+        pass
     return jsonify({'success': True, 'pc': pc_name, 'hero_points': pc.hero_points})
 
 
@@ -5185,19 +5206,26 @@ def api_scrapbook_narrative():
                     'key_present': bool(os.environ.get('ANTHROPIC_API_KEY', '').strip())}), 200
 
 
+def _save_scrapbook_record(sb):
+    """Write a session scrapbook to the volume (campaign log). Returns the
+    session number used as the filename stem."""
+    n = sb.get('session_number', 1)
+    try:
+        os.makedirs(SCRAPBOOK_DIR, exist_ok=True)
+        with open(os.path.join(SCRAPBOOK_DIR, f'session_{n}.json'), 'w', encoding='utf-8') as f:
+            json.dump(sb, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"[SCRAPBOOK] save failed: {e}")
+    return n
+
+
 @app.route('/api/session/scrapbook/push', methods=['POST'])
 @gm_required
 def api_scrapbook_push():
     """Finalize: save the scrapbook to the volume, optionally feed the next
     'Previously on...', and broadcast it to every screen."""
     sb = _assemble_scrapbook()
-    try:
-        os.makedirs(SCRAPBOOK_DIR, exist_ok=True)
-        n = sb.get('session_number', 1)
-        with open(os.path.join(SCRAPBOOK_DIR, f'session_{n}.json'), 'w', encoding='utf-8') as f:
-            json.dump(sb, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"[SCRAPBOOK] save failed: {e}")
+    _save_scrapbook_record(sb)
     data = request.get_json(silent=True) or {}
     if data.get('feed_recap') and sb.get('narrative'):
         _save_campaign_config({'last_recap': sb['narrative']})
@@ -5230,6 +5258,40 @@ def api_scrapbook_saved(name):
     if not data:
         return jsonify({'success': False, 'error': err or 'unreadable'}), 404
     return jsonify({'success': True, 'scrapbook': data})
+
+
+@app.route('/api/session/timeline')
+@gm_required
+def api_session_timeline():
+    """Campaign continuity: a rich, newest-first list of saved sessions for
+    the timeline view — number, date, party level, MVP, and a narrative
+    teaser. The full scrapbook for any entry loads via /scrapbook/saved."""
+    out = []
+    try:
+        if os.path.isdir(SCRAPBOOK_DIR):
+            for fn in os.listdir(SCRAPBOOK_DIR):
+                if not fn.endswith('.json'):
+                    continue
+                data, _err = safe_load_json_file(os.path.join(SCRAPBOOK_DIR, fn))
+                if not isinstance(data, dict):
+                    continue
+                narr = (data.get('narrative') or '').strip().replace('\n', ' ')
+                teaser = (narr[:220] + '…') if len(narr) > 220 else narr
+                party = data.get('party') or {}
+                out.append({
+                    'name': fn[:-5],
+                    'session_number': data.get('session_number', 0),
+                    'date': data.get('started_at', ''),
+                    'party_level': data.get('party_level'),
+                    'mvp_winner': data.get('mvp_winner', ''),
+                    'teaser': teaser,
+                    'crit_count': party.get('crit_count', 0),
+                    'fumble_count': party.get('fumble_count', 0),
+                })
+    except Exception as e:
+        print(f"[TIMELINE] {e}")
+    out.sort(key=lambda s: s.get('session_number', 0), reverse=True)
+    return jsonify({'success': True, 'sessions': out})
 
 
 # Restore any in-flight highlights on import (crash/reload recovery).

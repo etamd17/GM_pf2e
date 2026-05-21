@@ -225,6 +225,25 @@
                 </div>
             </div>
 
+            {# ── Campaign timeline: browse the arc of past sessions ── #}
+            <div class="campaign-timeline-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
+                    <div>
+                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Campaign Timeline</h2>
+                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Every pushed session, newest first &mdash; level, MVP, and a recap teaser. Open one to relive the full scrapbook.</p>
+                    </div>
+                    <button type="button" onclick="toggleTimeline()" id="btn-timeline"
+                            style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:7px; cursor:pointer;">
+                        Show timeline
+                    </button>
+                </div>
+                <div id="timeline-panel" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
+                    <div id="timeline-list" style="display:flex; flex-direction:column; gap:8px;">
+                        <span style="color:var(--text-on-dark-3);">Loading&hellip;</span>
+                    </div>
+                </div>
+            </div>
+
             {% if now_playing %}
             {# ── Now Playing dashboard from Obsidian vault ── #}
             <div class="now-playing-card"
@@ -568,6 +587,47 @@
                         }).then(r => r.json());
                         status.textContent = j.success ? 'Pushed to every screen.' : 'Failed.';
                     } catch (e) { status.textContent = 'Network error.'; }
+                }
+
+                // ── Campaign timeline ──
+                function toggleTimeline() {
+                    const p = document.getElementById('timeline-panel');
+                    const open = p.style.display !== 'none';
+                    p.style.display = open ? 'none' : 'block';
+                    if (!open) loadTimeline();
+                }
+                async function loadTimeline() {
+                    const list = document.getElementById('timeline-list');
+                    try {
+                        const j = await fetch('/api/session/timeline', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
+                        const sessions = (j && j.sessions) || [];
+                        if (!sessions.length) {
+                            list.innerHTML = '<span style="color:var(--text-on-dark-3); font-style:italic;">No sessions recorded yet. Push a Session Complete scrapbook to begin the chronicle.</span>';
+                            return;
+                        }
+                        list.innerHTML = sessions.map(function(s) {
+                            const meta = [];
+                            if (s.party_level) meta.push('Lvl ' + s.party_level);
+                            if (s.mvp_winner) meta.push('MVP: ' + _esc(s.mvp_winner));
+                            if (s.date) meta.push(_esc(s.date));
+                            return '<div style="display:flex; gap:12px; align-items:flex-start; padding:10px 12px; background:var(--bg-base); border:1px solid var(--border-card); border-radius:8px;">' +
+                                '<div style="flex:1; min-width:0;">' +
+                                    '<div style="font-family:var(--font-display); font-weight:700; color:var(--gilt-100); font-size:13px;">Session ' + (s.session_number || '?') +
+                                        (meta.length ? ' <span style="color:var(--text-on-dark-3); font-weight:400; font-size:11px;">&middot; ' + meta.join(' &middot; ') + '</span>' : '') + '</div>' +
+                                    (s.teaser ? '<div style="font-family:var(--font-flavor); font-style:italic; color:var(--text-on-dark-2); font-size:13px; margin-top:4px;">' + _esc(s.teaser) + '</div>' : '') +
+                                '</div>' +
+                                '<button type="button" onclick="openTimelineSession(\'' + _esc(s.name) + '\')" style="white-space:nowrap; font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer;">Open</button>' +
+                            '</div>';
+                        }).join('');
+                    } catch (e) {
+                        list.innerHTML = '<span style="color:var(--text-on-dark-3);">Could not load the timeline.</span>';
+                    }
+                }
+                async function openTimelineSession(name) {
+                    try {
+                        const j = await fetch('/api/session/scrapbook/saved/' + encodeURIComponent(name), { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
+                        if (j && j.success && window.pf2eScrapbook) window.pf2eScrapbook(j.scrapbook, null);
+                    } catch (e) { /* ignore */ }
                 }
 
                 async function checkAudioStorage() {
