@@ -28,3 +28,9 @@ campaign_assets/
 # Campaign audio — a symlink to the GM's local Foundry/audio folder (or a
 # PF2E_AUDIO_DIR). Machine-specific, never committed.
 campaign_audio
+
+# Session-complete scrapbook data (Chunk 6) — runtime state on the volume
+# (DATA_DIR): the in-flight highlights accumulator + saved per-session
+# scrapbooks. Never committed.
+session_highlights.json
+scrapbooks/
