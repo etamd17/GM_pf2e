@@ -413,6 +413,11 @@
                     try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
                     try { window.pf2eAudio && window.pf2eAudio.drum(); } catch(_) {}
                 });
+                // Scene mood (Chunk 5): subtle full-screen tint on every screen.
+                _toastSSE.addEventListener('scene_mood', function(e) {
+                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                    try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
+                });
                 // Combat_log events exist for tracker log sync but aren't shown as toasts
                 // (they have a different shape — msg/type instead of name/action/detail).
             } catch(_) {}
@@ -1038,6 +1043,9 @@
 
     {# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
     {% include "_boss_reveal.html" %}
+
+    {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
+    {% include "_scene_mood.html" %}
 
     {# Session-start curtain — GM variant (this page is a GM screen, so it
        gets the "Enter the Session" control that parts the curtain for all). #}

@@ -188,6 +188,37 @@
 }
 .trk .ts-select:focus { border-color:var(--t-red); }
 
+/* Scene-mood control (Chunk 5) — pushed to the right edge of the tool strip.
+   One tap tints every screen; the dashed chip suggests a mood from combat
+   state (you confirm). Active pill fills with that mood's signature color. */
+.trk .mood-ctl { display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap; }
+.trk .mood-ctl-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--t-t3); }
+.trk .mood-pills { display:flex; gap:3px; }
+.trk .mood-pill {
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:10px; font-weight:600; letter-spacing:.3px;
+  padding:5px 9px; border-radius:6px; cursor:pointer;
+  background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t3);
+  transition:background .15s, border-color .15s, color .15s;
+}
+.trk .mood-pill:hover { color:var(--t-t1); border-color:var(--t-t4); }
+.trk .mood-pill.is-active { font-weight:700; }
+.trk .mood-pill.m-calm.is-active    { background:#d8b45e; border-color:#e6c878; color:#0c0a07; }
+.trk .mood-pill.m-mystery.is-active { background:#7a80c0; border-color:#9aa0e0; color:#0c0a14; }
+.trk .mood-pill.m-tension.is-active { background:#d49a3a; border-color:#e6b45a; color:#0c0a07; }
+.trk .mood-pill.m-combat.is-active  { background:#c43c3c; border-color:#e05a5a; color:#fff; }
+.trk .mood-pill.m-dread.is-active   { background:#3f8a5c; border-color:#5faa7c; color:#fff; }
+.trk .mood-suggest {
+  font-size:10px; font-weight:700; letter-spacing:.3px;
+  padding:5px 9px; border-radius:6px; cursor:pointer;
+  background:rgba(200,168,78,0.16); border:1px dashed rgba(200,168,78,0.55); color:var(--t-gold);
+  animation:moodSuggestPulse 2.2s ease-in-out infinite;
+}
+.trk .mood-suggest:hover { background:rgba(200,168,78,0.28); border-style:solid; }
+.trk .mood-suggest.hidden { display:none; }
+@keyframes moodSuggestPulse { 0%,100%{opacity:.65;} 50%{opacity:1;} }
+@media (prefers-reduced-motion: reduce) { .trk .mood-suggest { animation:none; } }
+
 /* monster dropdown */
 .trk .monster-dd {
   position:absolute; top:calc(100% + 4px); left:0; width:290px;
@@ -1211,6 +1242,21 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
     <div class="ts-divider"></div>
     <button class="ts-btn" onclick="toggleSaveLoadPanel()" title="Save & Load Encounters">💾 Encounters</button>
+
+    {# Scene mood (Chunk 5): one tap tints every screen. Pushed to the right
+       edge of the tool strip. The suggest chip appears when combat state
+       implies a different mood (you confirm — it never switches on its own). #}
+    <div class="mood-ctl" id="mood-ctl">
+        <span class="mood-ctl-label">Mood</span>
+        <div class="mood-pills" role="group" aria-label="Scene mood">
+            <button type="button" class="mood-pill m-calm"    data-mood="calm"    onclick="setSceneMood('calm')"    title="Calm — at ease">Calm</button>
+            <button type="button" class="mood-pill m-mystery" data-mood="mystery" onclick="setSceneMood('mystery')" title="Mystery — eerie, uncertain">Mystery</button>
+            <button type="button" class="mood-pill m-tension" data-mood="tension" onclick="setSceneMood('tension')" title="Tension — something is wrong">Tension</button>
+            <button type="button" class="mood-pill m-combat"  data-mood="combat"  onclick="setSceneMood('combat')"  title="Combat — the fight is on">Combat</button>
+            <button type="button" class="mood-pill m-dread"   data-mood="dread"   onclick="setSceneMood('dread')"   title="Dread — horror, despair">Dread</button>
+        </div>
+        <button type="button" id="mood-suggest" class="mood-suggest hidden" onclick="applyMoodSuggestion()" title="Apply the suggested mood"></button>
+    </div>
 </div>
 
 {# ═══════════════════ SAVE/LOAD PANEL ═══════════════════ #}
@@ -1684,6 +1730,7 @@ function _renderNow() {
     renderWordmark();
     scrollActiveIntoView();
     refreshStatPanelIfOpen();
+    paintMoodControl();
 }
 
 // Keep the active combatant visible no matter how many participants are
@@ -2835,6 +2882,50 @@ function bossReveal(id) {
     // screen (works even if it was already visible). The drum sounds here too.
     apiPost('/api/session/boss_reveal/' + id);
     toast('Foe revealed', 'success');
+}
+
+// ── Scene mood (Chunk 5) ────────────────────────────────────────────────
+// One tap tints every screen. We apply locally first (snappy), then POST so
+// the server persists it and broadcasts scene_mood to the players.
+function setSceneMood(mood) {
+    try { window.pf2eSceneMood && window.pf2eSceneMood(mood); } catch(_) {}
+    paintMoodControl();
+    apiPost('/api/session/mood', { mood: mood })
+        .then(d => { if (d && d.success === false) toast(d.error || 'Could not set mood', 'error'); });
+}
+
+// Suggest a mood from combat state: a living, visible-or-not enemy on the
+// board implies Combat; an empty/clear board implies Calm. Only these two are
+// auto-suggested — Mystery / Tension / Dread stay deliberate manual choices.
+function _suggestMood() {
+    const cs = (typeof STATE !== 'undefined' && STATE.combatants) ? STATE.combatants : [];
+    const livingEnemy = cs.some(c => c && !c.is_pc && !c.is_hazard && (c.current_hp == null || c.current_hp > 0));
+    return livingEnemy ? 'combat' : 'calm';
+}
+
+function paintMoodControl() {
+    const cur = window.__pf2eMood || 'calm';
+    document.querySelectorAll('.mood-pill').forEach(p => {
+        p.classList.toggle('is-active', p.getAttribute('data-mood') === cur);
+    });
+    const chip = document.getElementById('mood-suggest');
+    if (!chip) return;
+    const suggested = _suggestMood();
+    if (suggested && suggested !== cur) {
+        const label = suggested.charAt(0).toUpperCase() + suggested.slice(1);
+        chip.textContent = '→ ' + label + '?';
+        chip.setAttribute('data-mood', suggested);
+        chip.title = 'Combat state suggests the ' + label + ' mood — click to apply';
+        chip.classList.remove('hidden');
+    } else {
+        chip.classList.add('hidden');
+    }
+}
+
+function applyMoodSuggestion() {
+    const chip = document.getElementById('mood-suggest');
+    const m = chip && chip.getAttribute('data-mood');
+    if (m) setSceneMood(m);
 }
 
 function saveEncounter() {

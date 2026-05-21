@@ -4498,6 +4498,10 @@ CAMPAIGN_DEFAULT = {
     # Soundscape -> audio-file mapping (paths relative to CAMPAIGN_AUDIO_DIR).
     # The GM assigns these in the hub; the audio engine plays them on demand.
     'soundscapes': {'tavern': '', 'dungeon': '', 'combat': ''},
+    # Current scene mood (Chunk 5). Drives a subtle full-screen tint on every
+    # screen. One of: calm | mystery | tension | combat | dread. Persisted so
+    # a mid-session reload restores the table's mood.
+    'scene_mood': 'calm',
     # Per-campaign module enable-list. Each entry is the filename (no
     # extension) of a file under static/js/modules/. The map / tracker
     # / sheet pages load enabled modules in order. See
@@ -4560,15 +4564,23 @@ def _save_campaign_config(updates):
     return cfg
 
 
+_VALID_MOODS = ('calm', 'mystery', 'tension', 'combat', 'dread')
+
+
 @app.context_processor
 def _inject_campaign_chrome():
-    """Expose the campaign crest to every template so the nav-bar emblem
-    (base.html) renders without each route having to pass it. Cheap: a small
-    JSON read per render."""
+    """Expose campaign chrome to every template so shared overlays render
+    without each route passing them: the nav-bar crest (base.html) and the
+    current scene mood (the _scene_mood overlay applies it on load). Cheap:
+    one small JSON read per render."""
     try:
-        return {'nav_crest': _load_campaign_config().get('crest_image', '')}
+        cfg = _load_campaign_config()
+        mood = cfg.get('scene_mood', 'calm')
+        if mood not in _VALID_MOODS:
+            mood = 'calm'
+        return {'nav_crest': cfg.get('crest_image', ''), 'scene_mood': mood}
     except Exception:
-        return {'nav_crest': ''}
+        return {'nav_crest': '', 'scene_mood': 'calm'}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -4872,6 +4884,23 @@ def api_session_dismiss():
     """Part the curtain on every screen at once (GM clicks Enter)."""
     sse_broadcast('session_dismiss', {'t': int(time.time())})
     return jsonify({'success': True})
+
+
+@app.route('/api/session/mood', methods=['GET', 'POST'])
+@gm_required
+def api_session_mood():
+    """Get or set the scene mood (Chunk 5). POST {mood} persists it and
+    broadcasts scene_mood to every screen, which applies a subtle tint.
+    Visuals only — no audio coupling (soundscapes are controlled separately)."""
+    if request.method == 'GET':
+        return jsonify({'mood': _load_campaign_config().get('scene_mood', 'calm')})
+    data = request.get_json(silent=True) or {}
+    mood = str(data.get('mood', '') or '').strip().lower()
+    if mood not in _VALID_MOODS:
+        return jsonify({'success': False, 'error': f'Unknown mood (use one of: {", ".join(_VALID_MOODS)})'}), 400
+    _save_campaign_config({'scene_mood': mood})
+    sse_broadcast('scene_mood', {'mood': mood, 't': int(time.time())})
+    return jsonify({'success': True, 'mood': mood})
 
 
 @app.route('/api/session/roll_initiative', methods=['POST'])

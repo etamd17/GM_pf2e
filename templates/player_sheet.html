@@ -4004,6 +4004,12 @@
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
             });
+
+            // Scene mood (Chunk 5): GM broadcast → subtle full-screen tint.
+            evtSource.addEventListener('scene_mood', (e) => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
+            });
         }
         
         // ==========================================
@@ -9547,6 +9553,9 @@
 
     {# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
     {% include "_boss_reveal.html" %}
+
+    {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
+    {% include "_scene_mood.html" %}
 
     {# Death's door — ruby edge-bleed + heartbeat when this PC is at 0/dying.
        Activated by body.at-deaths-door (see _paintDeathsDoor). #}

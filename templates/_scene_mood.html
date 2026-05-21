@@ -1,0 +1,53 @@
+{# ════════════════════════════════════════════════════════════════════
+   SCENE MOOD tint  (flavor Chunk 5)
+   Self-contained drop-in: a fixed, click-through vignette whose color is
+   driven by body.mood-* . Call window.pf2eSceneMood('calm'|'mystery'|
+   'tension'|'combat'|'dread') to change it; each page's existing
+   /api/events socket calls it on the scene_mood broadcast (no new SSE
+   connection). The initial mood is injected server-side (scene_mood from
+   the campaign-chrome context processor) so a fresh load matches the
+   table immediately. Visuals only — no audio coupling.
+   ════════════════════════════════════════════════════════════════════ #}
+<div id="scene-mood" class="no-print" aria-hidden="true"></div>
+
+<style>
+    #scene-mood {
+        position: fixed; inset: 0; pointer-events: none; z-index: 9988;
+        opacity: 0;
+        transition: opacity 1.1s ease, background 1.1s ease;
+    }
+    /* Calm reads as "at ease": a barely-there warm rim. The intensity and
+       coverage climb with the stakes — combat / dread bleed further in. */
+    body.mood-calm    #scene-mood,
+    body.mood-mystery #scene-mood,
+    body.mood-tension #scene-mood,
+    body.mood-combat  #scene-mood,
+    body.mood-dread   #scene-mood { opacity: 1; }
+    body.mood-calm    #scene-mood { background: radial-gradient(ellipse 132% 122% at 50% 42%, transparent 60%, rgba(150,108,48,0.16) 100%); }
+    body.mood-mystery #scene-mood { background: radial-gradient(ellipse 132% 122% at 50% 42%, transparent 44%, rgba(76,82,176,0.38) 100%); }
+    body.mood-tension #scene-mood { background: radial-gradient(ellipse 132% 122% at 50% 42%, transparent 40%, rgba(188,118,34,0.42) 100%); }
+    body.mood-combat  #scene-mood { background: radial-gradient(ellipse 132% 122% at 50% 42%, transparent 36%, rgba(162,28,28,0.50) 100%); }
+    body.mood-dread   #scene-mood { background: radial-gradient(ellipse 132% 122% at 50% 42%, transparent 36%, rgba(40,94,64,0.50) 100%); }
+
+    @media (prefers-reduced-motion: reduce) {
+        #scene-mood { transition: opacity 0.4s ease; }
+    }
+</style>
+
+<script>
+window.pf2eSceneMood = function(mood) {
+    var moods = ['calm', 'mystery', 'tension', 'combat', 'dread'];
+    var b = document.body;
+    if (!b) return;
+    for (var i = 0; i < moods.length; i++) b.classList.remove('mood-' + moods[i]);
+    var ok = moods.indexOf(mood) >= 0;
+    b.classList.add('mood-' + (ok ? mood : 'calm'));
+    window.__pf2eMood = ok ? mood : 'calm';
+};
+(function() {
+    var initial = {{ (scene_mood if scene_mood is defined else 'calm') | tojson }};
+    function apply() { try { window.pf2eSceneMood(initial); } catch (_) {} }
+    if (document.body) apply();
+    else document.addEventListener('DOMContentLoaded', apply, { once: true });
+})();
+</script>
