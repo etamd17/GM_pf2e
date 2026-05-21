@@ -769,8 +769,8 @@ CLASS_PROGRESSION = {
         5:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (kinetic blasts count as unarmed)
         7:  {"perception": 4, "class_dc": 4},                                               # Alertness + Kinetic Expertise
         9:  {"fortitude": 6},                                                                # Elemental Resistance / Juggernaut
-        11: {"unarmored": 4, "light": 4, "reflex": 6},                                      # Armor Expertise + Evasion
-        13: {"simple": 6, "unarmed": 6},                                                    # Weapon Mastery / Gate Mastery
+        11: {"reflex": 6},                                                                   # Evasion (Reflex Master). Armor stays Trained — see L13.
+        13: {"simple": 6, "unarmed": 6, "unarmored": 4, "light": 4},                        # Weapon Mastery + Armor Expertise (PB-verified: armor is Trained at L11, Expert at L13)
         15: {"will": 6},                                                                     # Greater Will
         17: {"unarmored": 6, "light": 6, "fortitude": 8},                                   # Armor Mastery + Legendary Fort
         19: {"reflex": 8},                                                                   # Improved Evasion (Legendary Ref)

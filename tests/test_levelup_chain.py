@@ -27,12 +27,10 @@ import json
 import pytest
 
 from tests._snapshot import assert_matches_snapshot
-from tests.test_pc_snapshots import L10_FIXTURES, _FIXTURES_DIR
+from tests.test_pc_snapshots import L10_FIXTURES, _FIXTURES_DIR, _snap_base
 from tests.test_level_walk import _reduce_build_to_level
 
 _PREFIX = "levelup_chain/"
-# We stage the PC at L1, then submit level-ups for 2..10.
-_CHAIN_LEVELS = list(range(2, 11))
 
 # Proficiency keys the class-progression engine drives automatically (saves,
 # perception, class DC, casting, armor, weapons). Skills are excluded because
@@ -62,6 +60,10 @@ def _chain_levelups(app_module, filename, monkeypatch, tmp_path):
     full = raw["build"]
     Character = app_module.Character
 
+    # Stage at L1, then submit level-ups 2..build-level (10 for Go'el/Kyle,
+    # 11 for Amadeus/Gavin) so the chain exercises each fixture's full curve.
+    chain_levels = list(range(2, int(full.get("level") or 10) + 1))
+
     start = _reduce_build_to_level(full, 1)
     pc_name = f"_CHAIN_{filename}"
     pc_file = tmp_path / f"{pc_name}.json"
@@ -84,7 +86,7 @@ def _chain_levelups(app_module, filename, monkeypatch, tmp_path):
 
     results = {}
     with app_module.app.test_client() as c:
-        for lvl in _CHAIN_LEVELS:
+        for lvl in chain_levels:
             red = _reduce_build_to_level(full, lvl)
             payload = {
                 "new_level": lvl,
@@ -128,7 +130,7 @@ def test_levelup_chain_snapshot(app_module, snap_key, filename, monkeypatch, tmp
                 for sc in (build.get("spellCasters") or [])
             ],
         }
-    assert_matches_snapshot(f"{_PREFIX}{snap_key.replace('_l10', '')}", payload)
+    assert_matches_snapshot(f"{_PREFIX}{_snap_base(snap_key)}", payload)
 
 
 @pytest.mark.parametrize("snap_key,filename", sorted(L10_FIXTURES.items()))

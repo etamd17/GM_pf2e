@@ -33,7 +33,7 @@ from class_matrix import (
     get_required_slots_at_level,
 )
 from tests._snapshot import assert_matches_snapshot
-from tests.test_pc_snapshots import L10_FIXTURES, _FIXTURES_DIR
+from tests.test_pc_snapshots import L10_FIXTURES, _FIXTURES_DIR, _snap_base
 
 
 _PREFIX = "levelup/"
@@ -92,7 +92,7 @@ def _walk_missing_for_fixture(app_module, fixture_path) -> dict:
 @pytest.mark.parametrize("snap_key,filename", sorted(L10_FIXTURES.items()))
 def test_missing_progression_walk(app_module, snap_key, filename):
     payload = _walk_missing_for_fixture(app_module, _FIXTURES_DIR / filename)
-    assert_matches_snapshot(f"{_PREFIX}missing_{snap_key.replace('_l10','')}", payload)
+    assert_matches_snapshot(f"{_PREFIX}missing_{_snap_base(snap_key)}", payload)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -214,4 +214,4 @@ def test_submit_levelup_engine(app_module, snap_key, filename, monkeypatch, tmp_
             for sc in (out.get("spellCasters") or [])
         ],
     }
-    assert_matches_snapshot(f"{_PREFIX}submit_l4_to_l5_{snap_key.replace('_l10','')}", snap)
+    assert_matches_snapshot(f"{_PREFIX}submit_l4_to_l5_{_snap_base(snap_key)}", snap)

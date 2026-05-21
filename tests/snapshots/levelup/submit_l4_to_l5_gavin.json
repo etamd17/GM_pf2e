@@ -1,0 +1,10 @@
+{
+  "feat_count": 1,
+  "level": 5,
+  "proficiencies": {
+    "simple": 4,
+    "unarmed": 4,
+    "will": 4
+  },
+  "spell_casters": []
+}

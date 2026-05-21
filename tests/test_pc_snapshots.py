@@ -18,6 +18,7 @@ pytest. Investigate every diff before accepting.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -33,17 +34,37 @@ PARTY_FIXTURES = {
     "kyle_l3":     "Kyle.json",
 }
 
-# L10 ground-truth fixtures — committed to the repo (NOT party_data, which
-# is gitignored). These come from the players' Pathbuilder builds mapped
-# all the way to L10 so we can lock down the rules engine across the
-# whole progression curve, not just where the live party currently sits.
+# Ground-truth fixtures — committed to the repo (NOT party_data, which is
+# gitignored). These come from the players' Pathbuilder builds mapped to a
+# high level so we can lock down the rules engine across the whole
+# progression curve, not just where the live party currently sits. The map
+# spans levels (L10 Go'el/Kyle, L11 Amadeus/Gavin); every consumer derives
+# the actual level from the build (see ``_fixture_level``) rather than
+# assuming 10, so dropping in an L12+ export extends coverage automatically.
+# Historical name kept (``L10_FIXTURES``) because four test modules import it.
 L10_FIXTURES = {
     "goel_l10": "goel_l10.json",
     "kyle_l10": "kyle_l10.json",
+    "amadeus_l11": "amadeus_l11.json",
+    "gavin_l11": "gavin_l11.json",
 }
 
 _PARTY_DIR = Path(__file__).resolve().parent.parent / "party_data"
 _FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+def _fixture_level(filename: str) -> int:
+    """The build level baked into a ground-truth fixture. Lets the walk /
+    chain suites size their level range per-fixture instead of assuming 10."""
+    raw = json.loads((_FIXTURES_DIR / filename).read_text(encoding="utf-8"))
+    return int((raw.get("build") or {}).get("level") or 10)
+
+
+def _snap_base(snap_key: str) -> str:
+    """Strip a trailing ``_l<N>`` level tag from a fixture key so snapshot
+    filenames stay level-agnostic (``gavin_l11`` -> ``gavin``). Existing L10
+    snapshots keep their names since ``goel_l10`` -> ``goel`` as before."""
+    return re.sub(r"_l\d+$", "", snap_key)
 
 
 @pytest.fixture(scope="module")

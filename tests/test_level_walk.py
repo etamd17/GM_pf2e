@@ -37,12 +37,20 @@ from pathlib import Path
 import pytest
 
 from tests._snapshot import assert_matches_snapshot, serialize_character
-from tests.test_pc_snapshots import L10_FIXTURES, _FIXTURES_DIR
+from tests.test_pc_snapshots import (
+    L10_FIXTURES,
+    _FIXTURES_DIR,
+    _fixture_level,
+    _snap_base,
+)
 
 
-# Levels we walk through. Stops at 10 since that's where ground truth ends;
-# can be extended to 20 once L20 fixtures exist.
-WALK_LEVELS = list(range(1, 11))
+def _walk_levels(filename: str) -> list[int]:
+    """1..fixture-level. Each fixture walks up to its own build level (L10
+    for Go'el/Kyle, L11 for Amadeus/Gavin), so a higher-level export extends
+    the curve without touching this module."""
+    return list(range(1, _fixture_level(filename) + 1))
+
 
 # Snapshot key prefix → put walk snapshots in their own subdir to keep the
 # main snapshots/ readable.
@@ -128,7 +136,7 @@ def _reduce_build_to_level(build: dict, target_level: int) -> dict:
 
 @pytest.mark.parametrize(
     "pc_key,filename,level",
-    [(k, f, lv) for k, f in sorted(L10_FIXTURES.items()) for lv in WALK_LEVELS],
+    [(k, f, lv) for k, f in sorted(L10_FIXTURES.items()) for lv in _walk_levels(f)],
 )
 def test_level_walk(Character, pc_key, filename, level):
     """For each (PC, level) pair: reduce the L10 build to that level, run it
@@ -146,7 +154,7 @@ def test_level_walk(Character, pc_key, filename, level):
     # a wrapper so the import path matches what /api routes use.
     pc = Character({"build": reduced}, file_path=str(_FIXTURES_DIR / filename))
     payload = serialize_character(pc)
-    assert_matches_snapshot(f"{_WALK_PREFIX}{pc_key.replace('_l10','')}_l{level}", payload)
+    assert_matches_snapshot(f"{_WALK_PREFIX}{_snap_base(pc_key)}_l{level}", payload)
 
 
 _LEGAL_RANKS = {0, 2, 4, 6, 8}  # PF2e: Untrained/Trained/Expert/Master/Legendary
@@ -161,8 +169,9 @@ _MONOTONIC_KEYS = (
 @pytest.mark.parametrize("pc_key,filename", sorted(L10_FIXTURES.items()))
 def test_progression_invariants(Character, pc_key, filename):
     """Correctness invariants true for ANY PF2e PC, checked at every level
-    1-10. Unlike the snapshots (which lock whatever the engine produces),
-    these catch real bugs even on a freshly-seeded run:
+    from 1 to the fixture's build level. Unlike the snapshots (which lock
+    whatever the engine produces), these catch real bugs even on a
+    freshly-seeded run:
       * every proficiency rank is a legal PF2e value (0/2/4/6/8) — never a 3,
       * core ranks never DROP as level rises (an un-bump regression trips this),
       * HP strictly increases each level."""
@@ -170,7 +179,7 @@ def test_progression_invariants(Character, pc_key, filename):
     build = raw["build"]
     prev_profs = None
     prev_hp = None
-    for level in WALK_LEVELS:
+    for level in _walk_levels(filename):
         reduced = _reduce_build_to_level(build, level)
         pc = Character({"build": reduced}, file_path=str(_FIXTURES_DIR / filename))
 
@@ -193,11 +202,11 @@ def test_progression_invariants(Character, pc_key, filename):
         prev_hp = pc.hp
 
 
-def test_l10_walk_endpoint_matches_full_build(Character):
-    """Sanity check on the reducer: walking up to L10 should produce
-    numbers that line up with the full PB build's L10 stats. If this drifts,
-    the level walk is testing a different reality than the ground-truth
-    test, which is misleading."""
+def test_walk_top_matches_full_build(Character):
+    """Sanity check on the reducer: walking up to the fixture's own build
+    level should produce numbers that line up with the full PB build's
+    stats. If this drifts, the level walk is testing a different reality
+    than the ground-truth test, which is misleading."""
     for pc_key, filename in L10_FIXTURES.items():
         raw = json.loads((_FIXTURES_DIR / filename).read_text(encoding="utf-8"))
         build = raw["build"]
@@ -205,11 +214,11 @@ def test_l10_walk_endpoint_matches_full_build(Character):
         # Full build, untouched
         full_pc = Character(raw, file_path=str(_FIXTURES_DIR / filename))
 
-        # Reduced-then-rebuilt at L10 — should match the full build's HP
-        # and ability scores. AC and prof ranks may diverge because our
-        # reducer wipes the PB proficiencies block, so we don't compare
-        # those here — the test_pb_ground_truth suite covers them.
-        reduced = _reduce_build_to_level(build, 10)
+        # Reduced-then-rebuilt at the fixture's top level — should match the
+        # full build's HP and ability scores. AC and prof ranks may diverge
+        # because our reducer wipes the PB proficiencies block, so we don't
+        # compare those here — the test_pb_ground_truth suite covers them.
+        reduced = _reduce_build_to_level(build, _fixture_level(filename))
         walked_pc = Character({"build": reduced}, file_path=str(_FIXTURES_DIR / filename))
 
         assert walked_pc.hp == full_pc.hp, (
