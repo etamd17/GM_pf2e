@@ -304,6 +304,9 @@
         <label class="notes-rules-toggle">
             <input type="checkbox" id="notes-include-rules"> Include zzrules/ (16k SRD notes)
         </label>
+        <a id="vault-backup-btn" href="/api/admin/vault/export" download
+           title="Download a .zip backup of the entire vault"
+           style="display:block; margin-top:var(--sp-2); padding:6px 10px; font-size:12px; text-align:center; border:1px solid var(--border-card); border-radius:6px; color:var(--gilt-200); text-decoration:none;">Download backup (.zip)</a>
         <div id="notes-search-results" class="notes-search-results" style="display:none;"></div>
         <div id="notes-tree" class="notes-tree" data-current="{{ current_path or '' }}"></div>
     </aside>

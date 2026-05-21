@@ -745,33 +745,11 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
     mtime differs (with a 1-second tolerance for filesystem precision), the
     write is rejected with ``NoteConflict`` so the editor can show a diff.
 
-    When vault_sync is enabled (PF2E_VAULT_GIT_URL is set), the file is
-    immediately committed and pushed to the configured private GitHub repo
-    so the GM's local Obsidian (via the Obsidian Git plugin) sees it on
-    the next pull. Git failures don't fail the local write — the body is
-    persisted regardless; sync errors are surfaced via /api/notes/health.
-
-    Holds vault_sync's lock across the write→commit→push window so the
-    background poller cannot fetch+merge between the os.replace and the
-    commit. Without that hold, a poll firing between the file landing on
-    disk and the commit happening could pick up only the previous remote
-    state, mis-merge, and the next push would either rebase awkwardly or
-    silently leave the user's write uncommitted on disk."""
+    The vault on the Railway volume is the source of truth; writes land
+    directly in vault_data/. (`commit_message` is accepted for backward
+    compatibility with existing callers but is no longer used.)"""
     if get_vault_root() is None:
         raise NotePathError("Vault is not available")
-    # Cold-boot guard: if vault_sync is wired but its background clone
-    # hasn't completed yet, refuse the write. The clone path ends with
-    # `git reset --hard origin/<branch>`, which would silently discard
-    # any file we wrote between the request and clone-finish. Better
-    # to surface a retryable error than to lose the GM's edit.
-    try:
-        from . import vault_sync as _vs_check
-        if _vs_check.ENABLED and not _vs_check._state.get("initialized"):
-            raise NotePathError("Vault sync is still initializing — try again in a moment")
-    except NotePathError:
-        raise
-    except Exception:
-        pass
     p = _safe_join(rel_path)
     # Auto-create parent directories. Edits-from-the-website often land in
     # paths like Sessions/2026-05-10.md that don't exist yet on first push.
@@ -782,50 +760,24 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
             raise NoteConflict(
                 f"Disk mtime {actual} differs from expected {expected_mtime}"
             )
-    # Try to acquire vault_sync's lock so the poller can't race. When sync
-    # isn't enabled the function returns a no-op context manager.
+    # Atomic write — write to a sibling temp file, fsync, rename.
+    tmp = p.with_suffix(p.suffix + ".tmp")
     try:
-        from . import vault_sync as _vault_sync
-        _sync_lock = _vault_sync.acquire_lock() if _vault_sync.ENABLED else None
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(body)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
     except Exception:
-        _vault_sync = None
-        _sync_lock = None
-    # Use the lock if available; fall back to plain write otherwise.
-    import contextlib
-    lock_ctx = _sync_lock if _sync_lock is not None else contextlib.nullcontext()
-    with lock_ctx:
-        # Atomic write — write to a sibling temp file, fsync, rename.
-        tmp = p.with_suffix(p.suffix + ".tmp")
-        try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                f.write(body)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, p)
-        except Exception:
-            # Clean up the temp file on any failure so /tmp doesn't accrue
-            # half-written files between disk-full / permission errors.
-            try: tmp.unlink(missing_ok=True)
-            except Exception: pass
-            raise
-        # Bust caches and rebuild the index lazily.
-        _RENDER_CACHE.pop(rel_path, None)
-        invalidate_tree_cache()
-        invalidate_index()
-        # Immediately commit + push if vault_sync is enabled. The commit
-        # message defaults to "save: <path>" but callers (e.g. the session
-        # export) pass a more descriptive one. We do this still inside the
-        # vault_sync lock so the poller can't race the staging/commit.
-        if _vault_sync is not None and _vault_sync.ENABLED:
-            try:
-                msg = commit_message or f"save: {rel_path}"
-                _vault_sync.commit_and_push([rel_path], msg)
-            except Exception:
-                # Sync failure is intentionally non-fatal — the local file
-                # is good, the health endpoint surfaces the error, and the
-                # next pull() will pick up the local commit when network
-                # is healthy again (since we no longer hard-reset).
-                pass
+        # Clean up the temp file on any failure so /tmp doesn't accrue
+        # half-written files between disk-full / permission errors.
+        try: tmp.unlink(missing_ok=True)
+        except Exception: pass
+        raise
+    # Bust caches and rebuild the index lazily.
+    _RENDER_CACHE.pop(rel_path, None)
+    invalidate_tree_cache()
+    invalidate_index()
     return render(rel_path)
 
 

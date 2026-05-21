@@ -8087,22 +8087,7 @@ def gm_screen():
 # content already exposed at /gmscreen and would drown the GM's actual
 # campaign notes. Toggleable via ?include_rules=1 on every endpoint.
 from services import notes as notes_service
-from services import vault_sync as vault_sync_service
 from services import active_effects as effects_service
-
-# Kick off git-backed vault sync if env vars are set. This dispatches the
-# clone/fetch to a background thread so a misconfigured GitHub URL, a slow
-# clone, or a missing `git` binary CAN'T block gunicorn boot. Empty env =
-# pure no-op. Wrapped in try/except as a final safety net even though the
-# function itself is already exception-proof.
-try:
-    print(f"[VAULT_SYNC] enabled={vault_sync_service.ENABLED}")
-    if vault_sync_service.ENABLED:
-        _vs_root = notes_service.get_vault_data_dir()
-        vault_sync_service.initialize(_vs_root, background=True)
-        print(f"[VAULT_SYNC] init dispatched to background thread; target={_vs_root}")
-except Exception as _vs_err:
-    print(f"[VAULT_SYNC] init failed: {_vs_err}")
 
 
 @app.route('/gm/notes/')
@@ -8287,11 +8272,48 @@ def api_notes_asset(rel_path):
 @gm_required
 def api_notes_health():
     out = notes_service.vault_status()
-    try:
-        out["git_sync"] = vault_sync_service.status()
-    except Exception as e:
-        out["git_sync"] = {"enabled": False, "error": str(e)}
     return jsonify(out)
+
+
+@app.route('/api/admin/vault/export', methods=['GET'])
+@gm_required
+def api_admin_vault_export():
+    """Stream a .zip of the entire vault as an off-site backup. GM-gated.
+
+    With no git mirror, this is the GM's manual backup: download a full copy
+    of vault_data/ on demand. Excludes dot dirs/files (.git, .obsidian, the
+    .vault_last_push marker) so the archive is clean campaign content. To
+    restore, unzip and re-push with `tools/push_vault.py --replace full`."""
+    import io, zipfile, time as _t
+    root = notes_service.get_vault_root()
+    if root is None:
+        return jsonify({"success": False, "error": "vault is not available"}), 404
+    buf = io.BytesIO()
+    file_count = 0
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for dirpath, dirnames, filenames in os.walk(str(root)):
+            # Prune dot dirs in place (.git, .obsidian, .trash, …).
+            dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+            for fname in filenames:
+                if fname.startswith('.'):
+                    continue
+                abs_path = os.path.join(dirpath, fname)
+                try:
+                    arc = os.path.relpath(abs_path, str(root))
+                    zf.write(abs_path, arcname=arc)
+                    file_count += 1
+                except OSError:
+                    continue
+    if file_count == 0:
+        return jsonify({"success": False, "error": "vault is empty"}), 404
+    buf.seek(0)
+    stamp = _t.strftime('%Y%m%d-%H%M%S')
+    return send_file(
+        buf,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'vault-backup-{stamp}.zip',
+    )
 
 
 @app.route('/api/admin/vault/upload', methods=['POST'])
@@ -8313,23 +8335,6 @@ def api_admin_vault_upload():
     target = notes_service.get_vault_data_dir()
     target.mkdir(parents=True, exist_ok=True)
 
-    # When git-backed vault_sync is enabled, the .git directory IS the
-    # source of truth. `replace=full` would swap in a plain extract with
-    # no .git, breaking every subsequent push/pull until the process
-    # restarts (commit_and_push gates on `(_target_dir / '.git').is_dir()`).
-    # Refuse it here rather than silently corrupting sync.
-    try:
-        from services import vault_sync as _vault_sync
-        sync_enabled = bool(_vault_sync.ENABLED)
-    except Exception:
-        _vault_sync = None
-        sync_enabled = False
-    if mode == 'full' and sync_enabled:
-        return jsonify({
-            "success": False,
-            "error": "replace=full is not allowed while vault_sync is enabled — use merge so the .git history isn't lost"
-        }), 409
-
     # If replace=full, write into a fresh sibling dir then atomically swap.
     # On merge, extract over the existing tree (the typical incremental push).
     if mode == 'full':
@@ -8345,68 +8350,47 @@ def api_admin_vault_upload():
         f.save(tmp.name)
         tmp_path = tmp.name
 
-    # Hold the vault_sync lock across the whole extract → swap → commit
-    # window so the background poller can't fetch+merge into vault_data
-    # mid-extraction (which would push a half-extracted snapshot to
-    # GitHub). When sync is disabled the lock is a no-op contextmanager.
-    if sync_enabled and _vault_sync is not None:
-        _sync_cm = _vault_sync.acquire_lock()
-    else:
-        from contextlib import nullcontext
-        _sync_cm = nullcontext()
-
     try:
-        with _sync_cm:
-            try:
-                with tarfile.open(tmp_path, 'r:gz') as tar:
-                    for member in tar.getmembers():
-                        # Reject path-traversal in archive member names
-                        name = member.name
-                        if name.startswith('/') or '..' in Path(name).parts:
-                            continue
-                        if member.isdev() or member.issym() or member.islnk():
-                            continue
-                        # Skip dotfiles at the root so a stray .env or .ssh
-                        # in the GM's local vault doesn't get committed to
-                        # the GitHub mirror. Dotfiles inside subdirs are
-                        # fine (e.g. .obsidian/workspace.json).
-                        if name.split('/', 1)[0].startswith('.') and name != '.gitignore':
-                            continue
-                        tar.extract(member, path=extract_to, set_attrs=False)
-            except tarfile.TarError as e:
-                return jsonify({"success": False, "error": f"bad tarball: {e}"}), 400
+        try:
+            with tarfile.open(tmp_path, 'r:gz') as tar:
+                for member in tar.getmembers():
+                    # Reject path-traversal in archive member names
+                    name = member.name
+                    if name.startswith('/') or '..' in Path(name).parts:
+                        continue
+                    if member.isdev() or member.issym() or member.islnk():
+                        continue
+                    # Skip dotfiles at the root so a stray .env or .ssh in
+                    # the GM's local vault doesn't land in the vault. Dotfiles
+                    # inside subdirs are fine (e.g. .obsidian/workspace.json).
+                    if name.split('/', 1)[0].startswith('.') and name != '.gitignore':
+                        continue
+                    tar.extract(member, path=extract_to, set_attrs=False)
+        except tarfile.TarError as e:
+            return jsonify({"success": False, "error": f"bad tarball: {e}"}), 400
 
-            if mode == 'full':
-                # Atomic swap: rename existing vault_data → backup, staging → vault_data
-                backup = target.parent / (target.name + '.bak')
-                if backup.exists():
-                    shutil.rmtree(backup)
-                if target.exists():
-                    os.rename(target, backup)
-                os.rename(extract_to, target)
-                if backup.exists():
-                    shutil.rmtree(backup, ignore_errors=True)
+        if mode == 'full':
+            # Atomic swap: rename existing vault_data → backup, staging → vault_data
+            backup = target.parent / (target.name + '.bak')
+            if backup.exists():
+                shutil.rmtree(backup)
+            if target.exists():
+                os.rename(target, backup)
+            os.rename(extract_to, target)
+            if backup.exists():
+                shutil.rmtree(backup, ignore_errors=True)
 
-            # Stamp last-push so the pull endpoint knows what's new
-            now = _t.time()
-            try:
-                marker = target / '.vault_last_push'
-                marker.touch(exist_ok=True)
-                os.utime(marker, (now, now))
-            except OSError:
-                pass
+        # Stamp last-push so the pull endpoint knows what's new
+        now = _t.time()
+        try:
+            marker = target / '.vault_last_push'
+            marker.touch(exist_ok=True)
+            os.utime(marker, (now, now))
+        except OSError:
+            pass
 
-            notes_service.invalidate_tree_cache()
-            notes_service.invalidate_index()
-
-            # If vault_sync is wired, snapshot the bulk upload as a single
-            # commit so the GitHub repo stays in sync with the volume.
-            # commit_and_push re-acquires the same RLock — safe.
-            if sync_enabled and _vault_sync is not None:
-                try:
-                    _vault_sync.commit_and_push(['.'], f"bulk upload via push_vault.py ({mode})")
-                except Exception:
-                    pass
+        notes_service.invalidate_tree_cache()
+        notes_service.invalidate_index()
     finally:
         try: os.remove(tmp_path)
         except OSError: pass
