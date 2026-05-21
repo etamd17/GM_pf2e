@@ -5631,6 +5631,14 @@
                 <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM </div>
             `;
             container.prepend(toast);
+            // Crit / nat-1 flourish + screen-edge flash (Chunk 4).
+            if (isCrit) {
+                toast.classList.add('crit-flourish');
+                try { window.pf2eFlash && window.pf2eFlash('crit'); } catch(_) {}
+            } else if (isFumble) {
+                toast.classList.add('fumble-flourish');
+                try { window.pf2eFlash && window.pf2eFlash('fumble'); } catch(_) {}
+            }
 
             setTimeout(() => {
                 toast.style.opacity = '0';
@@ -9472,6 +9480,9 @@
         row.innerHTML = html.join('');
     })();
     </script>
+
+    {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}
+    {% include "_screen_flash.html" %}
 
     {# Session-start curtain — player variant (no dismiss control; parts when
        the GM broadcasts session_dismiss). #}

@@ -370,8 +370,19 @@
                     </div>`;
                 }
 
+                t.classList.add('roll-toast');
                 t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action || ''}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail || ''}</div>${applyHTML}`;
                 c.prepend(t);
+                // Crit / nat-1 flourish + screen-edge flash (degree first, then
+                // fall back to sniffing the detail string for NAT 20 / NAT 1).
+                const _blob = ((log.detail || '') + ' ' + (log.degree || '')).toUpperCase();
+                if (log.degree === 'crit_success' || _blob.indexOf('[CRIT SUCCESS') >= 0 || _blob.indexOf('NAT 20') >= 0) {
+                    t.classList.add('crit-flourish');
+                    try { window.pf2eFlash && window.pf2eFlash('crit'); } catch(_) {}
+                } else if (log.degree === 'crit_failure' || _blob.indexOf('[CRIT FAIL') >= 0 || _blob.indexOf('NAT 1]') >= 0 || /\bNAT 1\b/.test(_blob)) {
+                    t.classList.add('fumble-flourish');
+                    try { window.pf2eFlash && window.pf2eFlash('fumble'); } catch(_) {}
+                }
                 // Damage-apply toasts stick longer so the GM has time to pick a target.
                 const ttl = isDamageRoll ? 15000 : 6000;
                 setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, ttl);
@@ -1005,6 +1016,9 @@
         };
     })();
     </script>
+
+    {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}
+    {% include "_screen_flash.html" %}
 
     {# Session-start curtain — GM variant (this page is a GM screen, so it
        gets the "Enter the Session" control that parts the curtain for all). #}

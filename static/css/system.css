@@ -3787,4 +3787,63 @@ body::after {
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   DRAMATIC REACTIONS (flavor Chunk 4)
+   Crit / nat-1 flourishes on roll toasts + a brief full-screen edge flash.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Full-screen edge flash — fixed, click-through, fires once via .flash-crit
+   / .flash-fumble (toggled by window.pf2eFlash). Inset box-shadow paints a
+   colored rim that blooms then fades. */
+#screen-flash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 9995;
+    opacity: 0; box-shadow: inset 0 0 0 0 transparent;
+}
+#screen-flash.flash-crit   { animation: scrFlashCrit 0.6s ease-out; }
+#screen-flash.flash-fumble { animation: scrFlashFumble 0.55s ease-out; }
+@keyframes scrFlashCrit {
+    0%   { opacity: 0; box-shadow: inset 0 0 60px 6px rgba(224,182,90,0.0); }
+    25%  { opacity: 1; box-shadow: inset 0 0 120px 18px rgba(224,182,90,0.55); }
+    100% { opacity: 0; box-shadow: inset 0 0 180px 30px rgba(224,182,90,0.0); }
+}
+@keyframes scrFlashFumble {
+    0%   { opacity: 0; box-shadow: inset 0 0 60px 6px rgba(168,58,58,0.0); }
+    22%  { opacity: 1; box-shadow: inset 0 0 120px 18px rgba(168,58,58,0.6); }
+    100% { opacity: 0; box-shadow: inset 0 0 180px 30px rgba(168,58,58,0.0); }
+}
+
+/* Toast flourishes — applied to a .roll-toast on crit/fumble. */
+.roll-toast.crit-flourish {
+    position: relative; overflow: hidden;
+    animation: toastPop 0.45s cubic-bezier(0.16,1,0.3,1);
+    border-color: #e0b65a !important;
+    box-shadow: 0 0 24px rgba(224,182,90,0.35), 0 8px 28px rgba(0,0,0,0.5) !important;
+}
+.roll-toast.crit-flourish::after {
+    /* Gilt shimmer sweep across the card. */
+    content: ""; position: absolute; top: 0; left: -60%; width: 60%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255,236,179,0.55), transparent);
+    transform: skewX(-18deg); pointer-events: none;
+    animation: toastShimmer 0.7s ease-out 1;
+}
+@keyframes toastShimmer { 0% { left: -60%; } 100% { left: 130%; } }
+@keyframes toastPop { 0% { transform: scale(0.96); } 45% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.roll-toast.fumble-flourish {
+    animation: toastShake 0.45s ease-in-out;
+    filter: grayscale(0.7) contrast(1.05);
+    border-color: #7c2222 !important;
+}
+@keyframes toastShake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); } 40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #screen-flash.flash-crit, #screen-flash.flash-fumble { animation: none; opacity: 0; }
+    .roll-toast.crit-flourish { animation: none; }
+    .roll-toast.crit-flourish::after { animation: none; display: none; }
+    .roll-toast.fumble-flourish { animation: none; }
+}
+
 /* End of system.css */
