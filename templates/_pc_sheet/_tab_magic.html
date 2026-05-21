@@ -21,25 +21,25 @@
                     {% set _ct = c_type_lower %}
                     {% if 'spontaneous' in _ct and 'bounded' in _ct %}
                         {% set _chip_class = 'bounded' %}{% set _chip_label = 'Bounded Spontaneous' %}
-                        {% set _model = 'Limited repertoire — cast any known spell from a slot of its rank or higher.' %}
+                        {% set _model = '<b>Fixed repertoire, few slots.</b> The spells you know change only when you level up or retrain. Cast any of them from an open slot of its rank or higher — your slot pool is small (bounded). No daily prep.' %}
                     {% elif 'spontaneous' in _ct %}
-                        {% set _chip_class = 'spontaneous' %}{% set _chip_label = 'Spontaneous' %}
-                        {% set _model = 'Cast any spell from your repertoire on the fly. Each cast spends a slot of that rank or higher; signature spells auto-heighten.' %}
+                        {% set _chip_class = 'spontaneous' %}{% set _chip_label = 'Spontaneous · Known' %}
+                        {% set _model = '<b>Fixed repertoire — you cast from spells you KNOW.</b> Your known list changes only when you level up or retrain; you do not re-pick it each day. Cast any known spell using any open slot of its rank or higher (signature spells auto-heighten). No daily prep.' %}
                     {% elif 'focus' in _ct %}
                         {% set _chip_class = 'focus' %}{% set _chip_label = 'Focus' %}
-                        {% set _model = 'Spend 1 Focus Point per cast. Refocus (10 min) restores 1 point; max 3 in pool. Auto-heightened to half level.' %}
+                        {% set _model = '<b>Focus pool.</b> Spend 1 Focus Point per cast; Refocus (10 min) restores 1, up to a max of 3. Always heightened to half your level.' %}
                     {% elif 'impulse' in _ct %}
                         {% set _chip_class = 'impulse' %}{% set _chip_label = 'Impulse' %}
-                        {% set _model = 'Impulses are magical but not spells. Use them while your kinetic aura is active — no slots, no daily prep.' %}
+                        {% set _model = '<b>Not spells.</b> Impulses work while your kinetic aura is up — no slots, no daily prep, use them at will.' %}
                     {% elif 'alchemical' in _ct %}
                         {% set _chip_class = 'alchemical' %}{% set _chip_label = 'Alchemical' %}
-                        {% set _model = 'Craft items with infused reagents during daily prep. Items work like spells but use the Formula Book.' %}
+                        {% set _model = '<b>Daily crafting.</b> During daily prep you make items with infused reagents — rebuilt each day. They work like spells but come from your Formula Book.' %}
                     {% elif 'innate' in _ct %}
                         {% set _chip_class = 'innate' %}{% set _chip_label = 'Innate' %}
-                        {% set _model = 'Granted by ancestry or items. Each entry tells you how often it can be cast — usually once per day.' %}
+                        {% set _model = '<b>Granted magic.</b> From your ancestry or an item — each entry shows how often you can cast it (usually once per day).' %}
                     {% else %}
                         {% set _chip_class = 'prepared' %}{% set _chip_label = 'Prepared' %}
-                        {% set _model = 'Choose your spells at dawn — drag each into a specific rank slot. Each cast expends that prepared copy until you long rest.' %}
+                        {% set _model = '<b>Rebuild your whole loadout every day.</b> After each long rest you choose, from scratch, which spells fill your slots — swap any or all of them. A cast spends that prepared copy until your next daily prep.' %}
                     {% endif %}
                     <div class="bg-gray-900 p-4 border-b border-gray-700">
                         <!-- Row 1: chip is promoted ABOVE the caster name so the casting model
@@ -60,7 +60,7 @@
                                     <h3 class="text-xl font-header" style="color:var(--color-spell);">{{ caster.name }}</h3>
                                     <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);" title="Spell Tradition">{{ caster.tradition }}</span>
                                 </div>
-                                <div class="caster-mental-model">{{ _model }}</div>
+                                <div class="caster-mental-model">{{ _model | safe }}</div>
                                 <div class="flex gap-3 items-center text-xs flex-wrap mt-2">
                                     {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
                                     <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>

@@ -8277,7 +8277,18 @@
             if (typeof origRollSpell !== 'function') return;
             window.rollSpell = function(spellName, e, slotInfo) {
                 const lower = (spellName || '').toLowerCase();
-                if (!HEIGHTEN_SET.has(lower) || !e || !e.target) {
+                // Prepared casts have a fixed rank (the slot you prepared into),
+                // so there's no rank to choose — skip the picker for a true
+                // one-tap cast. Spontaneous casters DO pick the slot rank, so
+                // they still get the picker.
+                let _prepFixed = false;
+                try {
+                    if (slotInfo && slotInfo.casterIdx !== undefined && typeof castersData !== 'undefined') {
+                        const _ct = ((castersData[slotInfo.casterIdx] || {}).type || '').toLowerCase();
+                        _prepFixed = _ct.indexOf('prepared') >= 0 && _ct.indexOf('spontaneous') < 0;
+                    }
+                } catch(_) {}
+                if (_prepFixed || !HEIGHTEN_SET.has(lower) || !e || !e.target) {
                     return origRollSpell.apply(this, arguments);
                 }
                 e.preventDefault(); e.stopPropagation();
