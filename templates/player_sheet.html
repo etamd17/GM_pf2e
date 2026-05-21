@@ -4010,6 +4010,12 @@
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
             });
+
+            // Session Complete scrapbook (Chunk 6): party moments + this PC's card.
+            evtSource.addEventListener('session_scrapbook', (e) => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, pcName); } catch(_) {}
+            });
         }
         
         // ==========================================
@@ -9556,6 +9562,9 @@
 
     {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
     {% include "_scene_mood.html" %}
+
+    {# Session Complete scrapbook (shared overlay + window.pf2eScrapbook). #}
+    {% include "_session_scrapbook.html" %}
 
     {# Death's door — ruby edge-bleed + heartbeat when this PC is at 0/dying.
        Activated by body.at-deaths-door (see _paintDeathsDoor). #}

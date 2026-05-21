@@ -1,0 +1,256 @@
+{# ════════════════════════════════════════════════════════════════════
+   SESSION COMPLETE scrapbook  (flavor Chunk 6)
+   Self-contained drop-in: include on any page, then call
+   window.pf2eScrapbook(data, viewerPc) to unfurl the wrap-up. Holds NO
+   EventSource of its own — each page's existing /api/events socket calls
+   the trigger on the session_scrapbook broadcast (same thread-budget
+   reasoning as the other flavor overlays). viewerPc scopes "Your Chapter":
+   a PC name shows just that card; null (GM) shows the whole party.
+   ════════════════════════════════════════════════════════════════════ #}
+<div id="scrapbook" class="scrapbook no-print" aria-hidden="true">
+    <div class="sb-scroll">
+        <div class="sb-inner">
+            <div class="sb-head">
+                <div class="sb-kicker">Session <span id="sb-num"></span> &middot; Complete</div>
+                <h1 id="sb-campaign" class="sb-campaign"></h1>
+                <div class="sb-rule"><span></span></div>
+            </div>
+            <div id="sb-narrative" class="sb-narrative"></div>
+            <div class="sb-section">
+                <div class="sb-section-title">Party Moments</div>
+                <div id="sb-party" class="sb-party"></div>
+            </div>
+            <div id="sb-chapters-wrap" class="sb-section">
+                <div id="sb-chapters-title" class="sb-section-title">Your Chapter</div>
+                <div id="sb-chapters" class="sb-chapters"></div>
+            </div>
+            <button id="sb-close" class="sb-close" type="button">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .scrapbook {
+        position: fixed; inset: 0; z-index: 99996;
+        display: none; overflow-y: auto;
+        background:
+            radial-gradient(ellipse 90% 60% at 50% 0%, rgba(120,30,30,0.25), transparent 70%),
+            linear-gradient(180deg, #0d0a07 0%, #15110b 60%, #0a0806 100%);
+        font-family: 'Cormorant Garamond', 'Cinzel', serif;
+    }
+    .scrapbook.show { display: block; animation: sbFade 0.5s ease both; }
+    @keyframes sbFade { from { opacity: 0; } to { opacity: 1; } }
+    .scrapbook .sb-scroll { min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 40px 18px 60px; }
+    .scrapbook .sb-inner { width: 100%; max-width: 760px; }
+
+    .scrapbook .sb-head { text-align: center; margin-bottom: 22px; }
+    .scrapbook .sb-kicker {
+        font-family: 'Cinzel', serif; font-size: 12px; font-weight: 700;
+        letter-spacing: 0.34em; text-transform: uppercase; color: rgba(214,180,94,0.8);
+    }
+    .scrapbook .sb-campaign {
+        font-family: 'Cinzel', serif; font-weight: 700;
+        font-size: clamp(30px, 6vw, 56px); letter-spacing: 0.05em; text-transform: uppercase;
+        color: #f3dd92; margin: 8px 0 0;
+        text-shadow: 0 0 30px rgba(190,44,44,0.35), 0 4px 22px rgba(0,0,0,0.7);
+    }
+    .scrapbook .sb-rule { width: min(420px, 70vw); height: 1px; margin: 16px auto 0;
+        background: linear-gradient(90deg, transparent, rgba(201,163,78,0.6), transparent); position: relative; }
+    .scrapbook .sb-rule span { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) rotate(45deg);
+        width: 6px; height: 6px; background: #d8b45e; box-shadow: 0 0 8px rgba(216,180,94,0.7); }
+
+    .scrapbook .sb-narrative {
+        font-style: italic; font-size: clamp(16px, 2.3vw, 21px); line-height: 1.6;
+        color: #ede4cf; text-align: center; margin: 0 auto 30px; max-width: 640px;
+    }
+    .scrapbook .sb-narrative p { margin: 0 0 14px; }
+
+    .scrapbook .sb-section { margin: 0 auto 26px; }
+    .scrapbook .sb-section-title {
+        font-family: 'Cinzel', serif; font-size: 13px; font-weight: 700;
+        letter-spacing: 0.26em; text-transform: uppercase; color: #d8b45e;
+        text-align: center; margin-bottom: 14px;
+        border-bottom: 1px solid rgba(201,163,78,0.2); padding-bottom: 8px;
+    }
+
+    .scrapbook .sb-tiles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
+    .scrapbook .sb-tile {
+        flex: 1 1 130px; max-width: 200px; min-width: 120px;
+        background: rgba(255,255,255,0.03); border: 1px solid rgba(201,163,78,0.18);
+        border-radius: 10px; padding: 12px 14px; text-align: center;
+    }
+    .scrapbook .sb-tile-v { font-family: 'Cinzel', serif; font-size: 26px; font-weight: 700; color: #f3dd92; line-height: 1; }
+    .scrapbook .sb-tile-l { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #b9b1a0; margin-top: 6px; font-family: 'Cinzel', serif; }
+    .scrapbook .sb-tile.crit .sb-tile-v { color: #6ee7a8; }
+    .scrapbook .sb-tile.fumble .sb-tile-v { color: #e88; }
+
+    .scrapbook .sb-moments { list-style: none; margin: 6px auto 0; padding: 0; max-width: 600px; }
+    .scrapbook .sb-moments li {
+        font-style: italic; font-size: clamp(14px, 2vw, 18px); color: #e7ddc6;
+        text-align: center; padding: 7px 0; border-bottom: 1px dashed rgba(201,163,78,0.14);
+    }
+    .scrapbook .sb-moments li:last-child { border-bottom: none; }
+    .scrapbook .sb-moments li::before { content: '\201C'; color: rgba(214,180,94,0.6); }
+    .scrapbook .sb-moments li::after  { content: '\201D'; color: rgba(214,180,94,0.6); }
+
+    .scrapbook .sb-chapters { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 620px) { .scrapbook .sb-chapters.multi { grid-template-columns: 1fr 1fr; } }
+    .scrapbook .sb-card {
+        background: rgba(255,255,255,0.035); border: 1px solid rgba(201,163,78,0.22);
+        border-radius: 12px; padding: 16px 18px;
+    }
+    .scrapbook .sb-card-name {
+        font-family: 'Cinzel', serif; font-weight: 700; font-size: 19px; color: #f3dd92;
+        letter-spacing: 0.04em; margin-bottom: 10px;
+    }
+    .scrapbook .sb-card-row { font-size: 15px; color: #d9d0bd; margin: 5px 0; }
+    .scrapbook .sb-card-row .lbl { color: #b9b1a0; font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; margin-right: 6px; }
+    .scrapbook .sb-card-row .crit { color: #6ee7a8; font-weight: 700; }
+    .scrapbook .sb-card-row .fumble { color: #e88; font-weight: 700; }
+    .scrapbook .sb-card-row .gold { color: #f3dd92; }
+    .scrapbook .sb-card-moments { margin: 8px 0 0; padding-left: 16px; }
+    .scrapbook .sb-card-moments li { font-style: italic; color: #e7ddc6; font-size: 14px; margin: 3px 0; }
+    .scrapbook .sb-card-empty { color: #8a8372; font-style: italic; font-size: 14px; }
+
+    .scrapbook .sb-close {
+        display: block; margin: 14px auto 0;
+        font-family: 'Cinzel', serif; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px;
+        color: #0c0a07; background: linear-gradient(180deg, #e0b65a, #a4842b);
+        border: 1px solid rgba(240,216,138,0.6); padding: 11px 30px; border-radius: 7px; cursor: pointer;
+        box-shadow: 0 6px 22px rgba(168,58,58,0.22), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    .scrapbook .sb-close:hover { filter: brightness(1.08); }
+
+    @media (prefers-reduced-motion: reduce) { .scrapbook.show { animation: none; } }
+</style>
+
+<script>
+(function() {
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function coins(c) {
+        c = c || {};
+        var parts = [];
+        ['pp', 'gp', 'sp', 'cp'].forEach(function(k) { if (c[k]) parts.push(c[k] + ' ' + k); });
+        return parts.join(', ');
+    }
+    function lootLine(lootArr) {
+        // Flatten a PC's loot records into "Item ×2, 50 gp" style text.
+        var items = [], coinTotals = { pp: 0, gp: 0, sp: 0, cp: 0 };
+        (lootArr || []).forEach(function(l) {
+            (l.items || []).forEach(function(it) { items.push(esc(it.name) + (it.qty > 1 ? ' ×' + it.qty : '')); });
+            ['pp', 'gp', 'sp', 'cp'].forEach(function(k) { coinTotals[k] += (l.coins && l.coins[k]) || 0; });
+        });
+        var cstr = coins(coinTotals);
+        if (cstr) items.push(cstr);
+        return items.join(', ');
+    }
+    function tile(value, label, cls) {
+        return '<div class="sb-tile ' + (cls || '') + '"><div class="sb-tile-v">' + value + '</div><div class="sb-tile-l">' + label + '</div></div>';
+    }
+    function partyHtml(p) {
+        p = p || {};
+        var bh = p.biggest_hit ? (p.biggest_hit.amount + ' <span style="font-size:13px;color:#b9b1a0;">→ ' + esc(p.biggest_hit.target) + '</span>') : '—';
+        var lootBits = [];
+        if (p.loot_count) lootBits.push(p.loot_count + (p.loot_count === 1 ? ' item' : ' items'));
+        var cstr = coins(p.total_coins);
+        if (cstr) lootBits.push(cstr);
+        var html = '<div class="sb-tiles">';
+        html += tile(p.crit_count || 0, 'Crits', 'crit');
+        html += tile(p.fumble_count || 0, 'Nat 1s', 'fumble');
+        html += tile(bh, 'Biggest Hit', '');
+        html += tile(lootBits.length ? lootBits.join('<br>') : '—', 'Loot', '');
+        html += '</div>';
+        if (p.rp_moments && p.rp_moments.length) {
+            html += '<ul class="sb-moments">';
+            p.rp_moments.forEach(function(m) { html += '<li>' + esc(m) + '</li>'; });
+            html += '</ul>';
+        }
+        return html;
+    }
+    function playerCard(pc, c) {
+        c = c || {};
+        var html = '<div class="sb-card"><div class="sb-card-name">' + esc(pc) + '</div>';
+        var any = false;
+        if (c.crits && c.crits.length) { any = true; html += '<div class="sb-card-row"><span class="lbl">Crits</span><span class="crit">' + c.crits.length + '</span> &mdash; ' + esc(c.crits.map(function(x){return x.action;}).filter(Boolean).join(', ')) + '</div>'; }
+        if (c.fumbles && c.fumbles.length) { any = true; html += '<div class="sb-card-row"><span class="lbl">Nat 1s</span><span class="fumble">' + c.fumbles.length + '</span></div>'; }
+        var loot = lootLine(c.loot);
+        if (loot) { any = true; html += '<div class="sb-card-row"><span class="lbl">Loot</span><span class="gold">' + loot + '</span></div>'; }
+        if (c.rp_moments && c.rp_moments.length) {
+            any = true;
+            html += '<ul class="sb-card-moments">';
+            c.rp_moments.forEach(function(m) { html += '<li>“' + esc(m) + '”</li>'; });
+            html += '</ul>';
+        }
+        if (!any) html += '<div class="sb-card-empty">A quiet night for this one.</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function close() {
+        var el = document.getElementById('scrapbook');
+        if (!el) return;
+        el.classList.remove('show');
+        el.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    window.pf2eScrapbook = function(data, viewerPc) {
+        data = data || {};
+        var el = document.getElementById('scrapbook');
+        if (!el) return;
+        var byId = function(id) { return document.getElementById(id); };
+        byId('sb-num').textContent = data.session_number || '';
+        byId('sb-campaign').textContent = data.campaign_name || 'The Campaign';
+        // Narrative → paragraphs
+        var nar = byId('sb-narrative');
+        nar.innerHTML = '';
+        var narText = (data.narrative || '').trim();
+        if (narText) {
+            narText.split(/\n\n+/).forEach(function(para) {
+                para = para.trim();
+                if (para) { var pEl = document.createElement('p'); pEl.textContent = para; nar.appendChild(pEl); }
+            });
+            nar.style.display = '';
+        } else { nar.style.display = 'none'; }
+        // Party
+        byId('sb-party').innerHTML = partyHtml(data.party);
+        // Chapters
+        var players = data.players || {};
+        var title = byId('sb-chapters-title');
+        var ce = byId('sb-chapters');
+        var wrap = byId('sb-chapters-wrap');
+        ce.classList.remove('multi');
+        if (viewerPc && players[viewerPc]) {
+            title.textContent = 'Your Chapter — ' + viewerPc;
+            ce.innerHTML = playerCard(viewerPc, players[viewerPc]);
+            wrap.style.display = '';
+        } else if (!viewerPc) {
+            var keys = Object.keys(players);
+            title.textContent = 'The Party';
+            ce.innerHTML = keys.map(function(pc) { return playerCard(pc, players[pc]); }).join('');
+            if (keys.length > 1) ce.classList.add('multi');
+            wrap.style.display = keys.length ? '' : 'none';
+        } else {
+            wrap.style.display = 'none';
+        }
+        el.classList.add('show');
+        el.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.getElementById('sb-close');
+        if (btn) btn.addEventListener('click', close);
+    }, { once: true });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var el = document.getElementById('scrapbook');
+            if (el && el.classList.contains('show')) close();
+        }
+    });
+})();
+</script>

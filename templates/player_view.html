@@ -512,6 +512,14 @@
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
             });
+            // Session Complete scrapbook (Chunk 6): party moments + own card.
+            evtSrc.addEventListener('session_scrapbook', e => {
+                _markSseAlive();
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                let mine = '';
+                try { mine = localStorage.getItem('pf2e_my_char') || ''; } catch(_) {}
+                try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, mine || null); } catch(_) {}
+            });
             // Combat log — server filters out PD-only entries before
             // broadcast to players, so anything received here is
             // already player-safe.
@@ -648,6 +656,8 @@
 {% include "_boss_reveal.html" %}
 {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
 {% include "_scene_mood.html" %}
+{# Session Complete scrapbook (shared overlay + window.pf2eScrapbook). #}
+{% include "_session_scrapbook.html" %}
 {% set curtain_role = 'player' %}
 {% include "_session_curtain.html" %}
 </body>

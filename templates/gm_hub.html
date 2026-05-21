@@ -156,6 +156,75 @@
                 </div>
             </div>
 
+            {# ── Session ritual: closing scrapbook (Chunk 6) ── #}
+            <div class="session-complete-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
+                    <div>
+                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Session Complete</h2>
+                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Tonight&rsquo;s highlights, a Claude recap, and your role-play moments &mdash; review, then unfurl the scrapbook on every screen.</p>
+                    </div>
+                    <button type="button" onclick="toggleSessionComplete()" id="btn-session-complete"
+                            style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:7px; cursor:pointer;">
+                        Wrap up &amp; review
+                    </button>
+                </div>
+
+                {# Collapsible review — auto-stats + RP moments + narrative + push. #}
+                <div id="session-complete-panel" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
+                    {# Auto-mined stat tiles #}
+                    <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">This Session, So Far</div>
+                    <div id="sc-stats" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:var(--sp-4); font-size:12px; color:var(--text-on-dark-2);">
+                        <span style="color:var(--text-on-dark-3);">Loading…</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2" style="gap:var(--sp-4);">
+                        {# RP moments editor #}
+                        <div>
+                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Role-play Moments</div>
+                            <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+                                <select id="sc-rp-scope" style="min-width:120px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
+                                    <option value="party">Whole party</option>
+                                </select>
+                            </div>
+                            <textarea id="sc-rp-text" rows="2" placeholder="A standout role-play beat — an oath, a betrayal, a perfect line…"
+                                      style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;"></textarea>
+                            <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                                <button type="button" onclick="addRpMoment()" id="sc-rp-add" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 14px; border-radius:5px; cursor:pointer;">Add moment</button>
+                                <span id="sc-rp-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
+                            </div>
+                            <ul id="sc-rp-list" style="list-style:none; margin:10px 0 0; padding:0; font-size:12px;"></ul>
+                        </div>
+
+                        {# Narrative #}
+                        <div>
+                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Closing Narrative</div>
+                            <div style="display:flex; gap:6px; margin-bottom:6px;">
+                                <button type="button" onclick="genScrapbookNarrative()" id="sc-nar-gen" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer; white-space:nowrap;">Generate from session</button>
+                                <span id="sc-nar-status" style="font-size:10px; color:var(--text-on-dark-3); align-self:center;"></span>
+                            </div>
+                            <textarea id="sc-nar-text" rows="6" placeholder="Click Generate to summarize the session log, or write the closing recap here…"
+                                      style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;"></textarea>
+                            <div style="margin-top:6px;">
+                                <button type="button" onclick="saveScrapbookNarrative()" id="sc-nar-save" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save narrative</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Push controls #}
+                    <div style="display:flex; gap:10px; align-items:center; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card); flex-wrap:wrap;">
+                        <button type="button" onclick="previewScrapbook()" id="sc-preview" style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:9px 16px; border-radius:7px; cursor:pointer;">Preview on this screen</button>
+                        <button type="button" onclick="pushScrapbook()" id="sc-push"
+                                style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#0c0a07; background:linear-gradient(180deg,#e0b65a,#a4842b); border:1px solid rgba(240,216,138,0.6); padding:10px 22px; border-radius:7px; cursor:pointer; box-shadow:0 4px 16px rgba(168,58,58,0.2);">
+                            Push to Players
+                        </button>
+                        <label style="font-size:11px; color:var(--text-on-dark-3); display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="checkbox" id="sc-feed-recap" checked> Feed the next &ldquo;Previously on&hellip;&rdquo;
+                        </label>
+                        <span id="sc-push-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
+                    </div>
+                </div>
+            </div>
+
             {% if now_playing %}
             {# ── Now Playing dashboard from Obsidian vault ── #}
             <div class="now-playing-card"
@@ -373,6 +442,132 @@
                     const open = p.style.display !== 'none';
                     p.style.display = open ? 'none' : 'block';
                     if (!open) { loadSessionNotes(); loadAudioFiles(); checkAudioStorage(); }
+                }
+
+                // ── Session Complete scrapbook (Chunk 6) ──
+                let _scDraft = null;
+                function toggleSessionComplete() {
+                    const p = document.getElementById('session-complete-panel');
+                    const open = p.style.display !== 'none';
+                    p.style.display = open ? 'none' : 'block';
+                    if (!open) loadScrapbookDraft();
+                }
+                function _coinStr(c) {
+                    c = c || {}; const parts = [];
+                    ['pp', 'gp', 'sp', 'cp'].forEach(k => { if (c[k]) parts.push(c[k] + ' ' + k); });
+                    return parts.join(', ');
+                }
+                async function loadScrapbookDraft() {
+                    try {
+                        const j = await fetch('/api/session/scrapbook/draft', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
+                        if (!j.success) return;
+                        _scDraft = j.scrapbook;
+                        // Stat chips
+                        const p = j.scrapbook.party || {};
+                        const chips = [];
+                        chips.push('<b style="color:#6ee7a8;">' + (p.crit_count || 0) + '</b> crits');
+                        chips.push('<b style="color:#e88;">' + (p.fumble_count || 0) + '</b> nat 1s');
+                        if (p.biggest_hit) chips.push('biggest hit <b style="color:var(--gilt-100);">' + p.biggest_hit.amount + '</b> → ' + _esc(p.biggest_hit.target));
+                        const loot = [];
+                        if (p.loot_count) loot.push(p.loot_count + ' item' + (p.loot_count === 1 ? '' : 's'));
+                        const cs = _coinStr(p.total_coins); if (cs) loot.push(cs);
+                        if (loot.length) chips.push('loot: <b style="color:var(--gilt-100);">' + loot.join(', ') + '</b>');
+                        document.getElementById('sc-stats').innerHTML = chips.map(c => '<span style="background:var(--bg-base); border:1px solid var(--border-card); border-radius:999px; padding:4px 10px;">' + c + '</span>').join('');
+                        // Scope select (party + PCs)
+                        const sel = document.getElementById('sc-rp-scope');
+                        const cur = sel.value;
+                        sel.innerHTML = '<option value="party">Whole party</option>' +
+                            (j.party_members || []).map(m => '<option value="' + _esc(m) + '">' + _esc(m) + '</option>').join('');
+                        if (cur) sel.value = cur;
+                        // Narrative
+                        const nt = document.getElementById('sc-nar-text');
+                        if (!nt.value.trim() && j.scrapbook.narrative) nt.value = j.scrapbook.narrative;
+                        // RP moments list
+                        renderRpList(j.rp_moments || []);
+                    } catch (e) { /* keep panel usable */ }
+                }
+                function _esc(s) { const d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+                function renderRpList(moments) {
+                    const ul = document.getElementById('sc-rp-list');
+                    if (!moments.length) { ul.innerHTML = '<li style="color:var(--text-on-dark-3); font-style:italic;">No moments yet.</li>'; return; }
+                    ul.innerHTML = moments.map((m, i) => {
+                        const tag = m.scope === 'party' ? 'Party' : _esc(m.scope);
+                        return '<li style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px dashed var(--border-card);">' +
+                            '<span style="font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--gilt-200); background:rgba(201,163,78,0.1); border:1px solid rgba(201,163,78,0.25); border-radius:4px; padding:2px 6px; white-space:nowrap;">' + tag + '</span>' +
+                            '<span style="flex:1; color:var(--text-on-dark-2); font-style:italic;">' + _esc(m.text) + '</span>' +
+                            '<button type="button" onclick="removeRpMoment(' + i + ')" title="Remove" style="color:var(--text-on-dark-3); background:transparent; border:none; cursor:pointer; font-size:14px; line-height:1;">&times;</button>' +
+                            '</li>';
+                    }).join('');
+                }
+                async function addRpMoment() {
+                    const ta = document.getElementById('sc-rp-text');
+                    const scope = document.getElementById('sc-rp-scope').value || 'party';
+                    const text = (ta.value || '').trim();
+                    const status = document.getElementById('sc-rp-status');
+                    if (!text) { status.textContent = 'Type a moment first.'; return; }
+                    try {
+                        const j = await fetch('/api/session/scrapbook/rp_moment', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            body: JSON.stringify({ text, scope })
+                        }).then(r => r.json());
+                        if (j.success) { ta.value = ''; status.textContent = 'Added.'; renderRpList(j.rp_moments || []); }
+                        else status.textContent = j.error || 'Failed.';
+                    } catch (e) { status.textContent = 'Network error.'; }
+                }
+                async function removeRpMoment(index) {
+                    try {
+                        const j = await fetch('/api/session/scrapbook/rp_moment/remove', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            body: JSON.stringify({ index })
+                        }).then(r => r.json());
+                        if (j.success) renderRpList(j.rp_moments || []);
+                    } catch (e) { /* ignore */ }
+                }
+                async function genScrapbookNarrative() {
+                    const status = document.getElementById('sc-nar-status');
+                    const btn = document.getElementById('sc-nar-gen');
+                    status.textContent = 'Summarizing the session…'; btn.disabled = true;
+                    try {
+                        const j = await fetch('/api/session/scrapbook/narrative', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            body: JSON.stringify({})
+                        }).then(r => r.json());
+                        if (j.success) { document.getElementById('sc-nar-text').value = j.narrative; status.textContent = 'Generated.'; }
+                        else status.textContent = j.note || 'Could not generate.';
+                    } catch (e) { status.textContent = 'Network error.'; }
+                    finally { btn.disabled = false; }
+                }
+                async function saveScrapbookNarrative() {
+                    const status = document.getElementById('sc-nar-status');
+                    const text = document.getElementById('sc-nar-text').value || '';
+                    try {
+                        const j = await fetch('/api/session/scrapbook/narrative', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            body: JSON.stringify({ text })
+                        }).then(r => r.json());
+                        status.textContent = j.success ? 'Saved.' : 'Failed.';
+                    } catch (e) { status.textContent = 'Network error.'; }
+                }
+                async function previewScrapbook() {
+                    // Save the narrative draft first so the preview matches, then show locally.
+                    await saveScrapbookNarrative();
+                    try {
+                        const j = await fetch('/api/session/scrapbook/draft', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
+                        if (j.success && window.pf2eScrapbook) window.pf2eScrapbook(j.scrapbook, null);
+                    } catch (e) { /* ignore */ }
+                }
+                async function pushScrapbook() {
+                    const status = document.getElementById('sc-push-status');
+                    const feed = document.getElementById('sc-feed-recap').checked;
+                    await saveScrapbookNarrative();
+                    status.textContent = 'Pushing…';
+                    try {
+                        const j = await fetch('/api/session/scrapbook/push', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            body: JSON.stringify({ feed_recap: feed })
+                        }).then(r => r.json());
+                        status.textContent = j.success ? 'Pushed to every screen.' : 'Failed.';
+                    } catch (e) { status.textContent = 'Network error.'; }
                 }
 
                 async function checkAudioStorage() {
