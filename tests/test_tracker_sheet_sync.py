@@ -58,6 +58,17 @@ def client(app_module):
     a.ROUND_NUMBER = 1
 
 
+@pytest.fixture(autouse=True)
+def _require_party_fixtures(app_module):
+    """These tests drive real PCs through the tracker endpoints and read
+    them back out of PARTY_LIBRARY, so they need the live party builds.
+    party_data/*.json is gitignored (local-only player data), so on a clean
+    checkout (CI) PARTY_LIBRARY is empty — skip there. They still run on the
+    GM's machine, and the committed rules-engine snapshots cover the math in CI."""
+    if "Kyle" not in app_module.PARTY_LIBRARY:
+        pytest.skip("party_data fixtures not present (local-only / CI)")
+
+
 def _add_pc_to_encounter(client, app_module, pc_name="Kyle"):
     """Add a PC from PARTY_LIBRARY into ACTIVE_ENCOUNTER and return its
     instance_id. Mirrors what the tracker UI does when the GM clicks
