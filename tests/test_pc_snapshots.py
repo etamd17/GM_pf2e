@@ -59,7 +59,11 @@ def test_pc_snapshot(Character, snap_key, filename):
     """For each PC at the live-session level (~L3): import the PB JSON,
     build a Character, snapshot."""
     path = _PARTY_DIR / filename
-    assert path.exists(), f"missing party_data fixture: {path}"
+    if not path.exists():
+        # party_data is gitignored (local-only player builds), so these
+        # live-level snapshots run on the GM's machine but skip in CI. The
+        # committed L10 ground-truth fixtures keep the engine covered there.
+        pytest.skip(f"party_data fixture not present (local-only): {filename}")
     data = json.loads(path.read_text(encoding="utf-8"))
     pc = Character(data, file_path=str(path))
     payload = serialize_character(pc)
