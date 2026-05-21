@@ -423,6 +423,11 @@
                     var d = null; try { d = JSON.parse(e.data); } catch(_) {}
                     try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, null); } catch(_) {}
                 });
+                // MVP poll live tally (Chunk 6 / hero-point vote).
+                _toastSSE.addEventListener('mvp_vote', function(e) {
+                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                    try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
+                });
                 // Combat_log events exist for tracker log sync but aren't shown as toasts
                 // (they have a different shape — msg/type instead of name/action/detail).
             } catch(_) {}

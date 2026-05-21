@@ -20,6 +20,11 @@
                 <div class="sb-section-title">Party Moments</div>
                 <div id="sb-party" class="sb-party"></div>
             </div>
+            <div id="sb-mvp-wrap" class="sb-section" style="display:none;">
+                <div class="sb-section-title">Most Valuable Player</div>
+                <div id="sb-mvp-sub" class="sb-mvp-sub"></div>
+                <div id="sb-mvp" class="sb-mvp"></div>
+            </div>
             <div id="sb-chapters-wrap" class="sb-section">
                 <div id="sb-chapters-title" class="sb-section-title">Your Chapter</div>
                 <div id="sb-chapters" class="sb-chapters"></div>
@@ -121,6 +126,35 @@
     }
     .scrapbook .sb-close:hover { filter: brightness(1.08); }
 
+    /* MVP poll */
+    .scrapbook .sb-mvp-sub { text-align: center; font-style: italic; color: #b9b1a0; font-size: 14px; margin-bottom: 12px; }
+    .scrapbook .sb-mvp { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .scrapbook .sb-vote {
+        position: relative; min-width: 130px;
+        font-family: 'Cinzel', serif; font-weight: 700; font-size: 14px;
+        color: #ede4cf; background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(201,163,78,0.3); border-radius: 10px;
+        padding: 12px 16px; cursor: pointer; transition: all 0.15s; text-align: center;
+    }
+    .scrapbook .sb-vote:hover { border-color: rgba(201,163,78,0.7); background: rgba(201,163,78,0.08); }
+    .scrapbook .sb-vote.mine { border-color: #d8b45e; background: rgba(216,180,94,0.16); color: #f4e6b0; box-shadow: 0 0 16px rgba(190,44,44,0.2); }
+    .scrapbook .sb-vote .sb-vote-count {
+        display: inline-block; min-width: 18px; margin-left: 8px;
+        font-size: 12px; color: #d8b45e; font-weight: 700;
+    }
+    .scrapbook .sb-vote.leader::after {
+        content: '\2605'; position: absolute; top: -8px; right: -6px;
+        color: #f3dd92; font-size: 16px; text-shadow: 0 0 8px rgba(190,44,44,0.6);
+    }
+    .scrapbook .sb-grant {
+        display: block; margin: 4px auto 0; font-family: 'Cinzel', serif; font-weight: 700;
+        font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: #0c0a07; background: linear-gradient(180deg, #e0b65a, #a4842b);
+        border: 1px solid rgba(240,216,138,0.6); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+    }
+    .scrapbook .sb-grant:hover { filter: brightness(1.08); }
+    .scrapbook .sb-grant[disabled] { opacity: 0.5; cursor: default; filter: none; }
+
     @media (prefers-reduced-motion: reduce) { .scrapbook.show { animation: none; } }
 </style>
 
@@ -198,6 +232,68 @@
         document.body.style.overflow = '';
     }
 
+    // ── MVP poll ──────────────────────────────────────────────────────
+    var _mvpCandidates = [];
+    var _mvpTally = {};
+    var _mvpViewer = null;   // viewerPc; null = GM (grants instead of votes)
+    var _myVote = null;      // this client's current vote (local to the showing)
+
+    function renderMvp() {
+        var wrap = document.getElementById('sb-mvp-wrap');
+        var sub = document.getElementById('sb-mvp-sub');
+        var box = document.getElementById('sb-mvp');
+        if (!wrap) return;
+        if (!_mvpCandidates.length) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        var max = 0;
+        _mvpCandidates.forEach(function(pc) { var v = _mvpTally[pc] || 0; if (v > max) max = v; });
+        var isGM = !_mvpViewer;
+        if (isGM) {
+            sub.textContent = (max > 0) ? 'Live tally — grant the winner a Hero Point.' : 'Waiting for the party to vote…';
+        } else {
+            sub.textContent = _myVote ? ('You voted for ' + _myVote + ' — tap to change.') : 'Vote for tonight’s MVP.';
+        }
+        var html = '';
+        _mvpCandidates.forEach(function(pc) {
+            var count = _mvpTally[pc] || 0;
+            var leaderCls = (max > 0 && count === max) ? ' leader' : '';
+            html += '<div style="display:flex; flex-direction:column; gap:6px; align-items:center;">';
+            if (isGM) {
+                html += '<div class="sb-vote' + leaderCls + '" style="cursor:default;">' + esc(pc) + '<span class="sb-vote-count">' + count + '</span></div>';
+                html += '<button class="sb-grant" data-grant="' + esc(pc) + '">+ Hero Point</button>';
+            } else {
+                var mineCls = (_myVote === pc) ? ' mine' : '';
+                html += '<button class="sb-vote' + mineCls + leaderCls + '" data-vote="' + esc(pc) + '">' + esc(pc) + '<span class="sb-vote-count">' + (count || '') + '</span></button>';
+            }
+            html += '</div>';
+        });
+        box.innerHTML = html;
+    }
+
+    function sbCastVote(choice) {
+        fetch('/api/session/scrapbook/vote', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ choice: choice })
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j && j.success) { _myVote = j.your_vote; if (j.tally) _mvpTally = j.tally; renderMvp(); }
+        }).catch(function() {});
+    }
+
+    function sbGrantHero(pc) {
+        fetch('/api/session/scrapbook/grant_hero/' + encodeURIComponent(pc), {
+            method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            var sub = document.getElementById('sb-mvp-sub');
+            if (j && j.success && sub) sub.textContent = pc + ' awarded a Hero Point (now ' + j.hero_points + ').';
+            else if (sub) sub.textContent = (j && j.error) ? j.error : 'Could not grant.';
+        }).catch(function() {});
+    }
+
+    // Called by each page's mvp_vote SSE handler so the open poll updates live.
+    window.pf2eScrapbookVote = function(payload) {
+        if (payload && payload.tally) { _mvpTally = payload.tally; renderMvp(); }
+    };
+
     window.pf2eScrapbook = function(data, viewerPc) {
         data = data || {};
         var el = document.getElementById('scrapbook');
@@ -237,6 +333,13 @@
         } else {
             wrap.style.display = 'none';
         }
+        // MVP poll: players vote, the GM grants. _myVote is per-showing local.
+        var mvp = data.mvp || {};
+        _mvpCandidates = mvp.candidates || [];
+        _mvpTally = mvp.tally || {};
+        _mvpViewer = viewerPc || null;
+        _myVote = null;
+        renderMvp();
         el.classList.add('show');
         el.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
@@ -245,6 +348,14 @@
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('sb-close');
         if (btn) btn.addEventListener('click', close);
+        // Delegated handler for vote / grant buttons (rebuilt on every render).
+        var mvpBox = document.getElementById('sb-mvp');
+        if (mvpBox) mvpBox.addEventListener('click', function(e) {
+            var v = e.target.closest('[data-vote]');
+            var g = e.target.closest('[data-grant]');
+            if (v) sbCastVote(v.getAttribute('data-vote'));
+            else if (g) sbGrantHero(g.getAttribute('data-grant'));
+        });
     }, { once: true });
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {

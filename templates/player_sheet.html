@@ -4016,6 +4016,11 @@
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, pcName); } catch(_) {}
             });
+            // MVP poll live tally.
+            evtSource.addEventListener('mvp_vote', (e) => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
+            });
         }
         
         // ==========================================

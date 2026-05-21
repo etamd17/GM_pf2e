@@ -284,8 +284,19 @@ SESSION_HIGHLIGHTS = {
     'loot': [],        # {pc, items:[{name,qty}], coins:{pp,gp,sp,cp}}
     'rp_moments': [],  # {text, scope}  scope = 'party' or a PC name
     'narrative': '',   # Claude-written, generated at wrap-up
+    'mvp_votes': {},   # {voter_pc: choice_pc} — MVP poll on the scrapbook
 }
 SESSION_HIGHLIGHTS_LOCK = threading.Lock()
+
+
+def _mvp_tally():
+    """Anonymous vote counts for the MVP poll: {choice_pc: count}. We only
+    ever broadcast counts, never who-voted-for-whom, so the poll stays private."""
+    counts = {}
+    with SESSION_HIGHLIGHTS_LOCK:
+        for choice in SESSION_HIGHLIGHTS['mvp_votes'].values():
+            counts[choice] = counts.get(choice, 0) + 1
+    return counts
 
 # --- VTT MAP STATE ---
 ACTIVE_MAP = {
@@ -4911,6 +4922,7 @@ def _reset_session_highlights(session_number):
         SESSION_HIGHLIGHTS['loot'] = []
         SESSION_HIGHLIGHTS['rp_moments'] = []
         SESSION_HIGHLIGHTS['narrative'] = ''
+        SESSION_HIGHLIGHTS['mvp_votes'] = {}
     _persist_session_highlights()
 
 
@@ -5034,6 +5046,11 @@ def _assemble_scrapbook():
             'loot':    [l for l in h['loot'] if l['pc'] == pc],
             'rp_moments': [m['text'] for m in h['rp_moments'] if m.get('scope') == pc],
         }
+    # MVP poll: anonymous counts only (party member -> votes), plus the roster
+    # of who can win, so the overlay can render the vote buttons + tally.
+    mvp_counts = {}
+    for choice in h.get('mvp_votes', {}).values():
+        mvp_counts[choice] = mvp_counts.get(choice, 0) + 1
     return {
         'session_number': h.get('session_number', cfg.get('session_number', 1)),
         'campaign_name': cfg.get('name', 'The Campaign'),
@@ -5042,6 +5059,8 @@ def _assemble_scrapbook():
         'started_at': h.get('started_at', ''),
         'party': party,
         'players': players,
+        'mvp': {'tally': mvp_counts, 'total': sum(mvp_counts.values()),
+                'candidates': list(PARTY_LIBRARY.keys())},
     }
 
 
@@ -5054,6 +5073,52 @@ def api_scrapbook_draft():
         rps = list(SESSION_HIGHLIGHTS['rp_moments'])
     return jsonify({'success': True, 'scrapbook': _assemble_scrapbook(),
                     'rp_moments': rps, 'party_members': list(PARTY_LIBRARY.keys())})
+
+
+@app.route('/api/session/scrapbook/vote', methods=['POST'])
+def api_scrapbook_vote():
+    """Cast / change an MVP vote. Players vote as their own character (pinned
+    to the session); the GM may pass an explicit voter. Broadcasts only the
+    anonymous tally so the open scrapbook updates live without revealing who
+    voted for whom. One vote per voter (re-voting overwrites)."""
+    data = request.get_json(silent=True) or {}
+    choice = str(data.get('choice', '') or '').strip()
+    if choice not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'unknown choice'}), 400
+    if _is_gm():
+        voter = (str(data.get('voter') or '').strip() or 'GM')
+    else:
+        voter = session.get('player_name') or ''
+        if not voter:
+            return jsonify({'success': False, 'error': 'join as a character to vote'}), 403
+    with SESSION_HIGHLIGHTS_LOCK:
+        SESSION_HIGHLIGHTS['mvp_votes'][voter] = choice
+    _persist_session_highlights()
+    tally = _mvp_tally()
+    sse_broadcast('mvp_vote', {'tally': tally, 'total': sum(tally.values())})
+    return jsonify({'success': True, 'your_vote': choice, 'tally': tally})
+
+
+@app.route('/api/session/scrapbook/grant_hero/<pc_name>', methods=['POST'])
+@gm_required
+def api_scrapbook_grant_hero(pc_name):
+    """GM grants the session MVP (or anyone) a Hero Point. Caps at 3 (PF2e).
+    apply_pc_delta persists + broadcasts pc_update, so the winner's sheet
+    lights up immediately."""
+    if pc_name not in PARTY_LIBRARY:
+        return jsonify({'success': False, 'error': 'unknown PC'}), 404
+
+    def _mut(pc):
+        before = int(getattr(pc, 'hero_points', 0) or 0)
+        if before < 3:
+            pc.hero_points = before + 1
+        return True
+    try:
+        _, pc = apply_pc_delta(pc_name, _mut)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    _combat_log(f"{pc_name} named session MVP — +1 Hero Point (now {pc.hero_points})", 'system')
+    return jsonify({'success': True, 'pc': pc_name, 'hero_points': pc.hero_points})
 
 
 @app.route('/api/session/scrapbook/rp_moment', methods=['POST'])

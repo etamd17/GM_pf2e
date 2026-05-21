@@ -520,6 +520,12 @@
                 try { mine = localStorage.getItem('pf2e_my_char') || ''; } catch(_) {}
                 try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, mine || null); } catch(_) {}
             });
+            // MVP poll live tally.
+            evtSrc.addEventListener('mvp_vote', e => {
+                _markSseAlive();
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
+            });
             // Combat log — server filters out PD-only entries before
             // broadcast to players, so anything received here is
             // already player-safe.
