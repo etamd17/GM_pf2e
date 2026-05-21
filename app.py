@@ -10756,6 +10756,45 @@ def api_audio_soundscapes():
     return jsonify({'success': True, 'soundscapes': cfg.get('soundscapes', {})})
 
 
+@app.route('/api/audio/storage')
+@gm_required
+def api_audio_storage():
+    """Report where soundscape audio is stored and whether it's durable — so
+    the GM can confirm, before a session, that uploads land on the Railway
+    persistent volume (and survive redeploys) rather than ephemeral disk."""
+    root = CAMPAIGN_AUDIO_DIR
+    # "Persistent" = a volume was explicitly configured via env (DATA_DIR on
+    # Railway, or PF2E_AUDIO_DIR), not the local default that DATA_DIR falls
+    # back to. On Railway without DATA_DIR set, uploads would vanish on deploy.
+    persistent = bool(os.environ.get('DATA_DIR') or os.environ.get('PF2E_AUDIO_DIR'))
+    writable = False
+    try:
+        os.makedirs(root, exist_ok=True)
+        probe = os.path.join(root, '.write_probe')
+        with open(probe, 'w') as fp:
+            fp.write('ok')
+        os.remove(probe)
+        writable = True
+    except OSError:
+        writable = False
+    count = 0
+    try:
+        rr = os.path.realpath(root)
+        if os.path.isdir(rr):
+            for _d, _s, names in os.walk(rr):
+                count += sum(1 for n in names if os.path.splitext(n)[1].lower() in _AUDIO_EXTS)
+    except OSError:
+        pass
+    return jsonify({
+        'success': True,
+        'dir': root,
+        'persistent': persistent,
+        'writable': writable,
+        'data_dir': DATA_DIR,
+        'file_count': count,
+    })
+
+
 @app.route('/api/audio/upload', methods=['POST'])
 @gm_required
 def api_audio_upload():

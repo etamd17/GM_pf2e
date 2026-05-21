@@ -120,7 +120,14 @@
                     {# ── Soundscapes: map audio tracks to the 3 scenes ── #}
                     <div style="margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-2); margin-bottom:var(--sp-2); flex-wrap:wrap;">
-                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200);">Soundscapes</div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200);">Soundscapes</span>
+                                <span id="audio-storage-chip" title="Where uploaded tracks are stored"
+                                      style="display:inline-flex; align-items:center; gap:5px; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; border:1px solid var(--border-card); color:var(--text-on-dark-3);">
+                                    <span class="storage-dot" style="width:6px; height:6px; border-radius:50%; background:var(--text-on-dark-3);"></span>
+                                    <span class="storage-label">Checking…</span>
+                                </span>
+                            </div>
                             <span style="font-size:10px; color:var(--text-on-dark-3);">Plays on this (GM) device. Switch live from the &#9835; control, bottom-right.</span>
                         </div>
 
@@ -365,7 +372,37 @@
                     const p = document.getElementById('session-prep');
                     const open = p.style.display !== 'none';
                     p.style.display = open ? 'none' : 'block';
-                    if (!open) { loadSessionNotes(); loadAudioFiles(); }
+                    if (!open) { loadSessionNotes(); loadAudioFiles(); checkAudioStorage(); }
+                }
+
+                async function checkAudioStorage() {
+                    const chip = document.getElementById('audio-storage-chip');
+                    if (!chip) return;
+                    const dot = chip.querySelector('.storage-dot');
+                    const label = chip.querySelector('.storage-label');
+                    try {
+                        const j = await fetch('/api/audio/storage').then(r => r.json());
+                        let color, text, title;
+                        if (!j.writable) {
+                            color = '#ef4444'; text = 'Storage not writable';
+                            title = 'Cannot write to ' + (j.dir || 'the audio dir') + ' — uploads will fail.';
+                        } else if (j.persistent) {
+                            color = '#6a9c44'; text = 'Volume connected';
+                            title = 'Durable storage: ' + j.dir + ' (survives redeploys). ' + j.file_count + ' track(s).';
+                        } else {
+                            color = '#e0b65a'; text = 'Ephemeral storage';
+                            title = 'No DATA_DIR volume configured — uploads to ' + j.dir + ' are LOST on the next Railway redeploy. Set DATA_DIR=/data with a mounted volume.';
+                        }
+                        dot.style.background = color;
+                        chip.style.borderColor = color + '66';
+                        chip.style.color = color;
+                        label.textContent = text;
+                        chip.title = title;
+                    } catch (e) {
+                        dot.style.background = '#ef4444';
+                        label.textContent = 'Storage check failed';
+                        chip.title = String(e);
+                    }
                 }
 
                 // ── Soundscapes: populate the scene <select>s from the audio dir ──
