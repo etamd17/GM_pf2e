@@ -8355,6 +8355,37 @@ def api_notes_folder():
         return jsonify({"success": False, "error": str(e)}), 400
 
 
+@app.route('/api/notes/preview', methods=['POST'])
+@gm_required
+def api_notes_preview():
+    """Render an unsaved editor buffer to HTML for the split-pane live preview."""
+    data = request.json or {}
+    html = notes_service.render_preview(data.get('body') or '', include_rules=bool(data.get('include_rules')))
+    return jsonify({"success": True, "html": html})
+
+
+@app.route('/api/notes/titles')
+@gm_required
+def api_notes_titles():
+    """All note titles + paths, for `[[` wikilink autocomplete."""
+    return jsonify({"titles": notes_service.list_titles()})
+
+
+@app.route('/api/notes/attachment', methods=['POST'])
+@gm_required
+def api_notes_attachment():
+    """Upload an image/file into zz_Attachments/. Returns the vault path so the
+    editor can insert an ![[..]] embed."""
+    f = request.files.get('file')
+    if not f:
+        return jsonify({"success": False, "error": "file required"}), 400
+    try:
+        rel = notes_service.save_attachment(f.filename or 'attachment', f.read())
+    except notes_service.NotePathError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify({"success": True, "path": rel})
+
+
 @app.route('/api/notes/asset/<path:rel_path>')
 @gm_required
 def api_notes_asset(rel_path):

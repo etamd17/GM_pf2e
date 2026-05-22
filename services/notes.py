@@ -1134,6 +1134,61 @@ def rename_folder(from_dir: str, to_dir: str) -> dict:
     return {"to": to_n, "moved": len(moved), "rewritten": rewritten, "snapshot": snap}
 
 
+# ─── Editor support (Phase 2: live preview / autocomplete / attachments) ────────
+
+def render_preview(raw: str, *, include_rules: bool = False) -> str:
+    """Render an unsaved markdown buffer to HTML using the SAME callout/wikilink/
+    tag passes as render(), so the split-pane live preview matches the saved
+    view exactly. Frontmatter is stripped (not rendered), same as render()."""
+    _fm, body = _split_frontmatter(raw or "")
+    body = _preprocess_callouts(body)
+    body = _preprocess_wikilinks(body, include_rules=include_rules)
+    body = _preprocess_tags(body)
+    return _md_renderer().convert(body)
+
+
+def list_titles(*, include_rules: bool = False) -> list[dict]:
+    """[{title, path}] for every note, for `[[` wikilink autocomplete. Title is
+    the basename (case preserved); sorted case-insensitively by title."""
+    _ensure_index(include_rules=include_rules)
+    out: list[dict] = []
+    with _INDEX_LOCK:
+        for rels in (_TITLE_INDEX or {}).values():
+            for rel in rels:
+                name = rel.rsplit("/", 1)[-1]
+                if name.endswith(".md"):
+                    name = name[:-3]
+                out.append({"title": name, "path": rel})
+    out.sort(key=lambda x: x["title"].lower())
+    return out
+
+
+_ATTACHMENT_DIRNAME = "zz_Attachments"
+
+
+def save_attachment(filename: str, data: bytes) -> str:
+    """Save an uploaded attachment into zz_Attachments/, de-duping the filename.
+    Returns the vault-relative path (for inserting an ![[..]] embed)."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    # Use only the basename of the upload (drop any path components), then strip
+    # characters illegal in filenames — prevents traversal regardless of input.
+    base = (filename or '').replace('\\', '/').split('/')[-1]
+    safe = re.sub(r'[:*?"<>|]+', '_', base).strip().lstrip('.') or "attachment"
+    dest_dir = _safe_join(_ATTACHMENT_DIRNAME)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    stem, dot, ext = safe.rpartition(".")
+    target = dest_dir / safe
+    i = 1
+    while target.exists():
+        target = dest_dir / (f"{stem}-{i}.{ext}" if dot else f"{safe}-{i}")
+        i += 1
+    target.write_bytes(data)
+    invalidate_tree_cache()
+    root = get_vault_root()
+    return str(target.relative_to(root)).replace(os.sep, "/")
+
+
 # ─── Diagnostics ─────────────────────────────────────────────────────────────
 
 def vault_status() -> dict:

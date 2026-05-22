@@ -227,8 +227,10 @@
 .notes-backlink .nbl-title { font-weight: 600; color: var(--text-on-dark); }
 .notes-backlink .nbl-path { font-size: 9px; color: var(--text-on-dark-3); font-family: var(--font-mono); }
 
-/* ── Editor (Phase 4) ─────────────────────────────────────────────────── */
+/* ── Editor (Phase 1: edit/save · Phase 2: split live preview + CodeMirror) ── */
 .notes-editor { display: none; flex-direction: column; gap: var(--sp-2); height: 100%; }
+.notes-editor-split { display: flex; gap: var(--sp-2); flex: 1; min-height: 50vh; }
+.notes-editor-pane { flex: 1 1 50%; display: flex; min-width: 0; }
 .notes-editor textarea {
     flex: 1; min-height: 50vh;
     width: 100%;
@@ -240,10 +242,24 @@
     font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.55;
-    resize: vertical;
+    resize: none;
     tab-size: 4;
 }
 .notes-editor textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* CodeMirror mount (Phase 2) — hidden until the CM module mounts (cm-on). */
+.notes-cm { flex: 1; min-width: 0; display: none; border: 1px solid var(--border-strong); border-radius: var(--r-sm); overflow: hidden; }
+.notes-editor.cm-on .notes-editor-pane > textarea { display: none; }
+.notes-editor.cm-on .notes-cm { display: flex; }
+.notes-cm .cm-editor { height: 100%; width: 100%; }
+.notes-cm .cm-scroller { font-family: var(--font-mono); font-size: 13px; }
+/* Live preview pane */
+.notes-editor-preview {
+    flex: 1 1 50%; min-width: 0; overflow-y: auto; max-height: 72vh;
+    padding: var(--sp-3);
+    background: var(--bg-page);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-sm);
+}
 .notes-editor-foot { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--text-on-dark-3); }
 .notes-editor-status { font-family: var(--font-mono); }
 .notes-editor-status.ok { color: var(--success); }
@@ -349,10 +365,16 @@
 
             {# Edit-mode editor (Phase 4) #}
             <div id="note-editor" class="notes-editor" data-mtime="{{ current.mtime }}" data-path="{{ current.rel_path }}">
-                <textarea id="note-editor-textarea" spellcheck="false">{{ current.raw }}</textarea>
+                <div class="notes-editor-split">
+                    <div class="notes-editor-pane">
+                        <textarea id="note-editor-textarea" spellcheck="false">{{ current.raw }}</textarea>
+                        <div id="note-cm" class="notes-cm"></div>
+                    </div>
+                    <div id="note-preview" class="notes-editor-preview note-body"></div>
+                </div>
                 <div class="notes-editor-foot">
                     <span class="notes-editor-status" id="note-editor-status">Loaded.</span>
-                    <span style="opacity:0.6;">⌘S to save · ESC to cancel</span>
+                    <span style="opacity:0.6;">⌘S to save · ESC to cancel · live preview →</span>
                 </div>
             </div>
         {% else %}
@@ -546,6 +568,26 @@
     let originalRaw = textarea ? textarea.value : '';
     let dirty = false;
 
+    // Split-pane live preview (Phase 2): debounced render of the editor buffer.
+    const previewEl = document.getElementById('note-preview');
+    let _previewTimer = null;
+    async function renderNotePreview() {
+        if (!previewEl || !textarea) return;
+        try {
+            const r = await fetch('/api/notes/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body: textarea.value }),
+            });
+            const j = await r.json();
+            if (j && j.success) previewEl.innerHTML = j.html;
+        } catch (e) { /* keep the last good preview on a transient error */ }
+    }
+    function schedulePreview() {
+        clearTimeout(_previewTimer);
+        _previewTimer = setTimeout(renderNotePreview, 250);
+    }
+
     window.enterEditMode = function() {
         if (!editor) return;
         editor.classList.add('active');
@@ -556,7 +598,8 @@
         statusEl.textContent = 'Editing.'; statusEl.className = 'notes-editor-status';
         dirty = false;
         originalRaw = textarea.value;
-        if (textarea) textarea.focus();
+        if (window.__notesCM) window.__notesCM.focus(); else if (textarea) textarea.focus();
+        renderNotePreview();
     };
     window.exitEditMode = function(saved) {
         if (!editor) return;
@@ -566,7 +609,10 @@
         if (editBtn) editBtn.style.display = '';
         if (saveBtn) saveBtn.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
-        if (!saved) textarea.value = originalRaw;
+        if (!saved) {
+            textarea.value = originalRaw;
+            if (window.__notesCM) window.__notesCM.setValue(originalRaw);
+        }
         dirty = false;
     };
     window.saveNote = async function() {
@@ -608,6 +654,7 @@
         textarea.addEventListener('input', () => {
             dirty = true;
             statusEl.textContent = 'Unsaved.'; statusEl.className = 'notes-editor-status dirty';
+            schedulePreview();
         });
         document.addEventListener('keydown', (e) => {
             if (!editor.classList.contains('active')) return;
@@ -777,6 +824,115 @@
             .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
     function escapeAttr(s) { return escapeHtml(s); }
+})();
+</script>
+
+<script type="module">
+// Phase 2: progressively enhance the textarea with CodeMirror 6 (ESM via CDN,
+// no build step). If anything fails to load, we leave the plain textarea — it
+// stays the save-source, so the editor always works offline / on CDN failure.
+(async () => {
+    const mount = document.getElementById('note-cm');
+    const ta = document.getElementById('note-editor-textarea');
+    const editorEl = document.getElementById('note-editor');
+    if (!mount || !ta || !editorEl) return;   // empty state / no note open
+    try {
+        const [cm, view, lang, theme, ac] = await Promise.all([
+            import('https://esm.sh/codemirror@6.0.1'),
+            import('https://esm.sh/@codemirror/view@6.26.3?deps=codemirror@6.0.1'),
+            import('https://esm.sh/@codemirror/lang-markdown@6.2.5?deps=codemirror@6.0.1'),
+            import('https://esm.sh/@codemirror/theme-one-dark@6.1.2?deps=codemirror@6.0.1'),
+            import('https://esm.sh/@codemirror/autocomplete@6.16.0?deps=codemirror@6.0.1'),
+        ]);
+        const { EditorView, basicSetup } = cm;
+        const { keymap } = view;
+        const { autocompletion } = ac;
+
+        // [[ wikilink autocomplete — completions from /api/notes/titles (cached).
+        let _titles = null;
+        async function fetchTitles() {
+            if (_titles) return _titles;
+            try { const r = await fetch('/api/notes/titles'); const j = await r.json(); _titles = j.titles || []; }
+            catch (e) { _titles = []; }
+            return _titles;
+        }
+        function wikiSource(context) {
+            const before = context.matchBefore(/\[\[([^\]\n]*)$/);
+            if (!before) return null;
+            const typed = before.text.slice(2).toLowerCase();
+            return (async () => {
+                const ts = await fetchTitles();
+                const options = ts
+                    .filter(t => t.title.toLowerCase().includes(typed))
+                    .slice(0, 50)
+                    .map(t => ({ label: t.title, detail: t.path, apply: t.title + ']]' }));
+                return { from: before.from + 2, options, validFor: /^[^\]\n]*$/ };
+            })();
+        }
+
+        // Image paste / drop -> upload to zz_Attachments/, insert ![[path]].
+        async function uploadInsert(file, edView) {
+            const fd = new FormData();
+            fd.append('file', file, file.name || 'pasted.png');
+            try {
+                const r = await fetch('/api/notes/attachment', { method: 'POST', body: fd });
+                const j = await r.json();
+                if (j && j.success) {
+                    const ins = '![[' + j.path + ']]';
+                    const pos = edView.state.selection.main.head;
+                    edView.dispatch({ changes: { from: pos, insert: ins }, selection: { anchor: pos + ins.length } });
+                }
+            } catch (e) { console.warn('attachment upload failed', e); }
+        }
+        const imgHandlers = EditorView.domEventHandlers({
+            paste: (event, edView) => {
+                const items = (event.clipboardData || {}).items || [];
+                for (const it of items) {
+                    if (it.type && it.type.indexOf('image') === 0) {
+                        const f = it.getAsFile();
+                        if (f) { event.preventDefault(); uploadInsert(f, edView); return true; }
+                    }
+                }
+                return false;
+            },
+            drop: (event, edView) => {
+                const files = (event.dataTransfer || {}).files || [];
+                if (files.length && files[0].type.indexOf('image') === 0) {
+                    event.preventDefault(); uploadInsert(files[0], edView); return true;
+                }
+                return false;
+            },
+        });
+
+        // CM -> textarea write-through, so saveNote() + the live preview (both
+        // keyed off the textarea + its 'input' event) keep working unchanged.
+        const writeThrough = EditorView.updateListener.of((u) => {
+            if (u.docChanged) {
+                ta.value = u.state.doc.toString();
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        const saveKeys = keymap.of([
+            { key: 'Mod-s', preventDefault: true, run: () => { if (window.saveNote) window.saveNote(); return true; } },
+            { key: 'Escape', run: () => { if (window.exitEditMode) window.exitEditMode(false); return true; } },
+        ]);
+
+        const v = new EditorView({
+            doc: ta.value,
+            parent: mount,
+            extensions: [basicSetup, lang.markdown(), theme.oneDark,
+                autocompletion({ override: [wikiSource] }), imgHandlers, writeThrough, saveKeys],
+        });
+        editorEl.classList.add('cm-on');
+        window.__notesCM = {
+            view: v,
+            focus: () => v.focus(),
+            setValue: (val) => v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: val } }),
+            startComplete: () => ac.startCompletion(v),
+        };
+    } catch (e) {
+        console.warn('CodeMirror failed to load; using the plain textarea editor.', e);
+    }
 })();
 </script>
 {% endif %}
