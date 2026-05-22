@@ -22,6 +22,7 @@ import re
 import shutil
 import time
 from dataclasses import dataclass
+from html import escape as _html_escape
 from pathlib import Path
 from threading import RLock
 from typing import Optional
@@ -522,6 +523,149 @@ def _md_renderer() -> markdown.Markdown:
     )
 
 
+# ─── Transclusion + query blocks (Phase 3) ─────────────────────────────────────
+
+_EMBED_IMG_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+_TRANSCLUDE_MAX_DEPTH = 4
+_QUERY_FENCE_RE = re.compile(r"```query[ \t]*\n(.*?)\n```", re.DOTALL)
+
+
+def query_notes(filters: dict, *, include_rules: bool = False, limit: int = 200) -> list[dict]:
+    """Notes matching ALL filters, as [{title, path}] sorted by title. Keys:
+    `folder` (path prefix), `tag` (a #tag in the body or a `tags:` frontmatter
+    entry), and any other key = an exact case-insensitive frontmatter match
+    (e.g. `type: npc`, `status: open`). Powers the ```query block + future
+    'loose ends' / roster views."""
+    root = get_vault_root()
+    if root is None:
+        return []
+    folder = (filters.get("folder") or "").strip().strip("/").lower()
+    tag = (filters.get("tag") or "").lstrip("#").strip().lower()
+    fm_filters = {k.lower(): str(v).lower() for k, v in filters.items()
+                  if k.lower() not in ("folder", "tag") and v}
+    out: list[dict] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for fn in filenames:
+            if not fn.endswith(".md"):
+                continue
+            try:
+                rel = str(Path(dirpath, fn).relative_to(root)).replace(os.sep, "/")
+            except ValueError:
+                continue
+            if not include_rules and _is_rules(rel):
+                continue
+            if folder and not rel.lower().startswith(folder + "/"):
+                continue
+            try:
+                fm, fbody = _split_frontmatter(Path(dirpath, fn).read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+            ok = True
+            for k, v in fm_filters.items():
+                fv = fm.get(k)
+                if isinstance(fv, list):
+                    if v not in [str(x).lower() for x in fv]:
+                        ok = False
+                        break
+                elif str(fv).lower() != v:
+                    ok = False
+                    break
+            if ok and tag:
+                tags_fm = fm.get("tags") or []
+                if not isinstance(tags_fm, list):
+                    tags_fm = [tags_fm]
+                tags_fm = [str(x).lower().lstrip("#") for x in tags_fm]
+                in_body = re.search(r"(?<![\w/])#" + re.escape(tag) + r"\b", fbody.lower())
+                if tag not in tags_fm and not in_body:
+                    ok = False
+            if ok:
+                out.append({"title": fn[:-3], "path": rel})
+    out.sort(key=lambda x: x["title"].lower())
+    return out[:limit]
+
+
+def _expand_queries(body: str, *, include_rules: bool, sink: list) -> str:
+    """Replace each ```query block with a placeholder, rendering the matching
+    notes into `sink` as an HTML list."""
+    from urllib.parse import quote
+
+    def repl(m):
+        filters = {}
+        for line in m.group(1).splitlines():
+            if ":" in line:
+                k, _, v = line.partition(":")
+                filters[k.strip()] = v.strip()
+        results = query_notes(filters, include_rules=include_rules)
+        if results:
+            items = "".join(
+                f'<li><a class="wikilink" href="/gm/notes/view/{quote(r["path"])}">{_html_escape(r["title"])}</a></li>'
+                for r in results
+            )
+            block = (f'<div class="note-query"><ul>{items}</ul>'
+                     f'<div class="note-query-foot">{len(results)} note(s)</div></div>')
+        else:
+            block = '<div class="note-query note-query-empty">No matching notes.</div>'
+        sink.append(block)
+        return f"\x00NTX{len(sink) - 1}\x00"
+
+    return _QUERY_FENCE_RE.sub(repl, body)
+
+
+def _expand_transclusions(body: str, *, include_rules: bool, seen: set, depth: int, sink: list) -> str:
+    """Replace non-image ![[note]] embeds with a placeholder, rendering the
+    target note recursively into `sink`. Cycle- and depth-guarded."""
+    from urllib.parse import quote
+
+    def repl(m):
+        if not m.group("embed"):
+            return m.group(0)                    # plain [[link]] — handled later
+        target = m.group("target").strip()
+        if any(target.lower().endswith(ext) for ext in _EMBED_IMG_EXTS):
+            return m.group(0)                    # image embed — handled later
+        rel = resolve_wikilink(target, include_rules=include_rules)
+        alias = (m.group("alias") or "").strip()
+        display = alias or (rel.rsplit("/", 1)[-1][:-3] if rel else target.split("/")[-1])
+        if not rel:
+            return f'<span class="wikilink wikilink-broken">{_html_escape(display)}</span>'
+        link = f'<a class="wikilink wikilink-embed" href="/gm/notes/view/{quote(rel)}">{_html_escape(display)}</a>'
+        if depth >= _TRANSCLUDE_MAX_DEPTH or rel in seen:
+            sink.append(f'<div class="note-transclude note-transclude-skip"><div class="note-transclude-h">{link}'
+                        f' <span class="note-transclude-note">(embed not expanded)</span></div></div>')
+            return f"\x00NTX{len(sink) - 1}\x00"
+        try:
+            _fm, tbody = _split_frontmatter(_safe_join(rel).read_text(encoding="utf-8", errors="replace"))
+        except (NotePathError, OSError):
+            return f'<span class="wikilink wikilink-broken">{_html_escape(display)}</span>'
+        inner = _render_body_to_html(tbody, include_rules=include_rules, seen=seen | {rel}, depth=depth + 1)
+        sink.append(f'<div class="note-transclude"><div class="note-transclude-h">{link}</div>{inner}</div>')
+        return f"\x00NTX{len(sink) - 1}\x00"
+
+    return _WIKILINK_RE.sub(repl, body)
+
+
+def _render_body_to_html(body: str, *, include_rules: bool = False, seen: set = None, depth: int = 0) -> str:
+    """Shared body→HTML pipeline: transclusions + ```query blocks → callouts →
+    wikilinks → tags → markdown. The transcluded/query HTML is held aside behind
+    NUL-delimited placeholders so the markdown pass can't mangle it, then
+    re-injected (unwrapping the <p> the markdown lib puts around a placeholder)."""
+    seen = seen if seen is not None else set()
+    sink: list = []
+    body = _expand_transclusions(body, include_rules=include_rules, seen=seen, depth=depth, sink=sink)
+    body = _expand_queries(body, include_rules=include_rules, sink=sink)
+    body = _preprocess_callouts(body)
+    body = _preprocess_wikilinks(body, include_rules=include_rules)
+    body = _preprocess_tags(body)
+    html = _md_renderer().convert(body)
+
+    def _inject(m):
+        i = int(m.group(1))
+        return sink[i] if 0 <= i < len(sink) else ""
+    html = re.sub(r"<p>\s*\x00NTX(\d+)\x00\s*</p>", _inject, html)
+    html = re.sub(r"\x00NTX(\d+)\x00", _inject, html)
+    return html
+
+
 @dataclass
 class RenderedNote:
     rel_path: str
@@ -561,10 +705,7 @@ def render(rel_path: str, *, include_rules: bool = False) -> RenderedNote:
         fm.get("title")
         or rel.rsplit("/", 1)[-1].rsplit(".md", 1)[0]
     )
-    body = _preprocess_callouts(body)
-    body = _preprocess_wikilinks(body, include_rules=include_rules)
-    body = _preprocess_tags(body)
-    html = _md_renderer().convert(body)
+    html = _render_body_to_html(body, include_rules=include_rules)
     # Bound the LRU
     if len(_RENDER_CACHE) >= _RENDER_CACHE_MAX:
         # Drop the oldest entry by mtime
@@ -776,7 +917,7 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
         except Exception: pass
         raise
     # Bust caches and rebuild the index lazily.
-    _RENDER_CACHE.pop(rel_path, None)
+    _RENDER_CACHE.clear()  # links/transclusions/queries in OTHER notes may now be stale
     invalidate_tree_cache()
     invalidate_index()
     return render(rel_path)
@@ -894,7 +1035,7 @@ def delete_note(rel_path: str, *, take_snapshot: bool = True) -> Optional[str]:
         raise FileNotFoundError(rel_path)
     snap = snapshot([rel_path], label=f"delete-{Path(rel_path).name}") if take_snapshot else None
     p.unlink()
-    _RENDER_CACHE.pop(rel_path, None)
+    _RENDER_CACHE.clear()
     invalidate_tree_cache()
     invalidate_index()
     return snap
@@ -992,7 +1133,7 @@ def rename_note(from_rel: str, to_rel: str) -> dict:
             except OSError:
                 continue
 
-    _RENDER_CACHE.pop(from_rel, None)
+    _RENDER_CACHE.clear()
     invalidate_tree_cache()
     invalidate_index()
     return {"to": to_rel, "snapshot": snap, "referrers": len(referrer_rels), "rewritten": rewritten}
@@ -1080,8 +1221,7 @@ def delete_folder(rel_dir: str, *, take_snapshot: bool = True) -> dict:
     contained = _notes_under(rel_dir)
     snap = snapshot(contained, label=f"delete-folder-{Path(rel_dir).name}") if (take_snapshot and contained) else None
     shutil.rmtree(d)
-    for rel in contained:
-        _RENDER_CACHE.pop(rel, None)
+    _RENDER_CACHE.clear()
     invalidate_tree_cache()
     invalidate_index()
     return {"deleted": len(contained), "snapshot": snap}
@@ -1129,6 +1269,7 @@ def rename_folder(from_dir: str, to_dir: str) -> dict:
             rewritten += n
             _RENDER_CACHE.pop(actual, None)
 
+    _RENDER_CACHE.clear()
     invalidate_tree_cache()
     invalidate_index()
     return {"to": to_n, "moved": len(moved), "rewritten": rewritten, "snapshot": snap}
@@ -1141,10 +1282,7 @@ def render_preview(raw: str, *, include_rules: bool = False) -> str:
     tag passes as render(), so the split-pane live preview matches the saved
     view exactly. Frontmatter is stripped (not rendered), same as render()."""
     _fm, body = _split_frontmatter(raw or "")
-    body = _preprocess_callouts(body)
-    body = _preprocess_wikilinks(body, include_rules=include_rules)
-    body = _preprocess_tags(body)
-    return _md_renderer().convert(body)
+    return _render_body_to_html(body, include_rules=include_rules)
 
 
 def list_titles(*, include_rules: bool = False) -> list[dict]:
@@ -1187,6 +1325,101 @@ def save_attachment(filename: str, data: bytes) -> str:
     invalidate_tree_cache()
     root = get_vault_root()
     return str(target.relative_to(root)).replace(os.sep, "/")
+
+
+# ─── Connection graph (Phase 4) ────────────────────────────────────────────────
+
+def _note_type(rel: str) -> str:
+    """Frontmatter `type` of a note (for graph node coloring), or ''."""
+    try:
+        fm, _ = _split_frontmatter(_safe_join(rel).read_text(encoding="utf-8", errors="replace"))
+        t = fm.get("type")
+        return str(t).lower() if t else ""
+    except (NotePathError, OSError):
+        return ""
+
+
+def _graph_node(rel: str, *, with_type: bool) -> dict:
+    name = rel.rsplit("/", 1)[-1]
+    if name.endswith(".md"):
+        name = name[:-3]
+    node = {"id": rel, "title": name}
+    if with_type:
+        node["type"] = _note_type(rel)
+    return node
+
+
+def neighbors(rel_path: str, *, depth: int = 1, include_rules: bool = False) -> dict:
+    """Local link graph around a note: the note plus everything within `depth`
+    link-hops (outbound + inbound). Nodes carry frontmatter `type` for coloring.
+    This is the default 'webs' view — a global graph hairballs on a big vault."""
+    _ensure_index(include_rules=include_rules)
+    if get_vault_root() is None:
+        return {"nodes": [], "edges": [], "center": rel_path}
+    if not rel_path.endswith(".md"):
+        rel_path += ".md"
+    with _INDEX_LOCK:
+        outbound = dict(_OUTBOUND or {})
+
+    def out_links(r):
+        res = set()
+        for tgt in outbound.get(r, []):
+            d = resolve_wikilink(tgt, include_rules=include_rules)
+            if d:
+                res.add(d)
+        return res
+
+    def in_links(r):
+        return {b["path"] for b in backlinks(r, include_rules=include_rules)}
+
+    nodes = {rel_path}
+    edges = set()
+    frontier = {rel_path}
+    for _ in range(max(1, depth)):
+        nxt = set()
+        for r in frontier:
+            for d in out_links(r):
+                edges.add((r, d))
+                nxt.add(d)
+            for s in in_links(r):
+                edges.add((s, r))
+                nxt.add(s)
+        nxt -= nodes
+        nodes |= nxt
+        frontier = nxt
+        if not frontier:
+            break
+    nodes = {n for n in nodes if include_rules or not _is_rules(n)}
+    node_list = [_graph_node(n, with_type=True) for n in sorted(nodes)]
+    edge_list = [{"source": s, "target": t} for (s, t) in edges
+                 if s in nodes and t in nodes and s != t]
+    return {"nodes": node_list, "edges": edge_list, "center": rel_path}
+
+
+def graph(*, include_rules: bool = False) -> dict:
+    """Whole-vault link graph {nodes, edges}. Omits per-node frontmatter type to
+    stay cheap on large vaults; use neighbors() for the typed local view."""
+    _ensure_index(include_rules=include_rules)
+    if get_vault_root() is None:
+        return {"nodes": [], "edges": []}
+    with _INDEX_LOCK:
+        outbound = dict(_OUTBOUND or {})
+        title_index = dict(_TITLE_INDEX or {})
+    rels = set()
+    for rs in title_index.values():
+        rels.update(rs)
+    rels = {r for r in rels if include_rules or not _is_rules(r)}
+    edges = []
+    seen = set()
+    for r in list(outbound.keys()):
+        if r not in rels:
+            continue
+        for tgt in outbound[r]:
+            d = resolve_wikilink(tgt, include_rules=include_rules)
+            if d and d in rels and d != r and (r, d) not in seen:
+                seen.add((r, d))
+                edges.append({"source": r, "target": d})
+    return {"nodes": [_graph_node(r, with_type=False) for r in sorted(rels)], "edges": edges}
 
 
 # ─── Diagnostics ─────────────────────────────────────────────────────────────

@@ -8386,6 +8386,28 @@ def api_notes_attachment():
     return jsonify({"success": True, "path": rel})
 
 
+@app.route('/api/notes/neighbors')
+@gm_required
+def api_notes_neighbors():
+    """Local connection graph around a note (the sidebar 'webs' panel)."""
+    rel = (request.args.get('path') or '').strip()
+    if not rel:
+        return jsonify({"success": False, "error": "path required"}), 400
+    try:
+        depth = max(1, min(3, int(request.args.get('depth', 1))))
+    except (TypeError, ValueError):
+        depth = 1
+    return jsonify({"success": True, **notes_service.neighbors(rel, depth=depth)})
+
+
+@app.route('/api/notes/graph')
+@gm_required
+def api_notes_graph():
+    """Whole-vault connection graph."""
+    inc = request.args.get('include_rules') in ('1', 'true', 'True')
+    return jsonify({"success": True, **notes_service.graph(include_rules=inc)})
+
+
 @app.route('/api/notes/asset/<path:rel_path>')
 @gm_required
 def api_notes_asset(rel_path):

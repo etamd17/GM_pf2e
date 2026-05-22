@@ -413,6 +413,12 @@
                 <div style="font-size:11px; color:var(--text-on-dark-3); font-style:italic;">Loading…</div>
             </div>
         </div>
+        {% if current %}
+        <div class="notes-meta-section">
+            <div class="notes-meta-h">Connections</div>
+            <div id="note-graph" class="note-graph"></div>
+        </div>
+        {% endif %}
     </aside>
 </div>
 
@@ -436,6 +442,20 @@
 .nt-ctx-item { display:block; width:100%; text-align:left; padding:6px 10px; font-size:13px; background:none; border:none; color:var(--text-on-dark,#eee); cursor:pointer; border-radius:5px; }
 .nt-ctx-item:hover { background:rgba(201,163,78,0.14); }
 .nt-ctx-item.danger { color:var(--ruby-100,#e88); }
+/* Transclusion (![[note]]) */
+.note-transclude { border-left:3px solid var(--ink-400,#9a917a); background:rgba(154,145,122,0.06); padding:var(--sp-2) var(--sp-3); margin:var(--sp-3) 0; border-radius:var(--r-sm); }
+.note-transclude-h { font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--gilt-200); margin-bottom:var(--sp-1); }
+.note-transclude-h a { color:var(--gilt-200); }
+.note-transclude-note { color:var(--text-on-dark-3); font-style:italic; text-transform:none; }
+/* Query block (```query) */
+.note-query { border:1px dashed var(--border-card); border-radius:var(--r-sm); padding:var(--sp-2) var(--sp-3); margin:var(--sp-2) 0; }
+.note-query ul { margin:0; padding-left:var(--sp-4); }
+.note-query-foot { font-size:10px; color:var(--text-on-dark-3); margin-top:4px; }
+.note-query-empty { color:var(--text-on-dark-3); font-style:italic; }
+/* Connection graph */
+.note-graph { height:280px; border:1px solid var(--border-card); border-radius:var(--r-sm); background:var(--bg-page); }
+.note-graph-empty { padding:var(--sp-3); font-size:11px; color:var(--text-on-dark-3); font-style:italic; }
+.mermaid { margin:var(--sp-3) 0; text-align:center; }
 </style>
 
 <div id="nt-new-dialog" class="nt-dialog" style="display:none;">
@@ -580,7 +600,10 @@
                 body: JSON.stringify({ body: textarea.value }),
             });
             const j = await r.json();
-            if (j && j.success) previewEl.innerHTML = j.html;
+            if (j && j.success) {
+                previewEl.innerHTML = j.html;
+                if (window.__renderMermaid) window.__renderMermaid(previewEl);
+            }
         } catch (e) { /* keep the last good preview on a transient error */ }
     }
     function schedulePreview() {
@@ -638,7 +661,10 @@
                 return;
             }
             // Live update the rendered body and stamp the new mtime
-            if (noteBody) noteBody.innerHTML = j.html;
+            if (noteBody) {
+                noteBody.innerHTML = j.html;
+                if (window.__renderMermaid) window.__renderMermaid(noteBody);
+            }
             editor.dataset.mtime = j.mtime;
             originalRaw = textarea.value;
             dirty = false;
@@ -932,6 +958,71 @@
         };
     } catch (e) {
         console.warn('CodeMirror failed to load; using the plain textarea editor.', e);
+    }
+})();
+</script>
+
+<script type="module">
+// Phase 3: render ```mermaid fenced blocks as diagrams (client-side, CDN).
+(async () => {
+    let mermaid;
+    try {
+        mermaid = (await import('https://esm.sh/mermaid@11')).default;
+        mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
+    } catch (e) { console.warn('mermaid failed to load', e); return; }
+    window.__renderMermaid = async (container) => {
+        if (!container) return;
+        const blocks = container.querySelectorAll('pre > code.language-mermaid');
+        if (!blocks.length) return;
+        const nodes = [];
+        blocks.forEach((code) => {
+            const div = document.createElement('div');
+            div.className = 'mermaid';
+            div.textContent = code.textContent;
+            const pre = code.closest('pre');
+            if (pre) { pre.replaceWith(div); nodes.push(div); }
+        });
+        try { await mermaid.run({ nodes }); } catch (e) { console.warn('mermaid render failed', e); }
+    };
+    window.__renderMermaid(document.getElementById('note-body'));   // initial saved body
+})();
+</script>
+
+<script type="module">
+// Phase 4: local connection graph of the open note (vis-network, CDN).
+(async () => {
+    const el = document.getElementById('note-graph');
+    const ed = document.getElementById('note-editor');
+    const center = ed && ed.dataset.path;
+    if (!el || !center) return;
+    try {
+        const vis = await import('https://esm.sh/vis-network@9.1.9/standalone');
+        const r = await fetch('/api/notes/neighbors?path=' + encodeURIComponent(center) + '&depth=1');
+        const g = await r.json();
+        if (!g.success || !(g.nodes || []).length) {
+            el.innerHTML = '<div class="note-graph-empty">No connections yet. Link notes with [[wikilinks]].</div>';
+            return;
+        }
+        const typeColor = (t) => ({ npc: '#c9a34e', pc: '#7fae7f', location: '#6f9ad0', faction: '#c98a6a', beat: '#b07fc9', session: '#9a917a' }[t] || '#8a8a8a');
+        const nodes = g.nodes.map((n) => ({
+            id: n.id, label: n.title, shape: 'dot', size: n.id === g.center ? 15 : 9,
+            color: n.id === g.center ? { background: '#e0b84e', border: '#ffffff' } : { background: typeColor(n.type), border: '#222222' },
+            font: { color: '#cfc7b5', size: 11 },
+        }));
+        const edges = g.edges.map((e) => ({ from: e.source, to: e.target, arrows: 'to', color: { color: '#5a5446' } }));
+        const net = new vis.Network(el, { nodes, edges }, {
+            physics: { stabilization: true, barnesHut: { springLength: 90, gravitationalConstant: -3000 } },
+            interaction: { hover: true, tooltipDelay: 150 },
+            nodes: { borderWidth: 1 }, edges: { smooth: { type: 'continuous' }, width: 1 },
+        });
+        net.on('doubleClick', (p) => {
+            if (p.nodes && p.nodes[0] && p.nodes[0] !== center) {
+                window.location.href = '/gm/notes/view/' + encodeURIComponent(p.nodes[0]);
+            }
+        });
+    } catch (e) {
+        console.warn('graph failed to load', e);
+        el.innerHTML = '<div class="note-graph-empty">Graph unavailable.</div>';
     }
 })();
 </script>
