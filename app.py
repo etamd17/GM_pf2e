@@ -8251,6 +8251,110 @@ def api_notes_save():
     })
 
 
+@app.route('/api/notes/templates')
+@gm_required
+def api_notes_templates():
+    """List the built-in note templates for the New-note picker."""
+    return jsonify({"templates": notes_service.list_templates()})
+
+
+@app.route('/api/notes/create', methods=['POST'])
+@gm_required
+def api_notes_create():
+    """Create a new note in `folder` (vault-relative; empty = root) titled
+    `title`, seeded from `template`. 409 if a note with that name already
+    exists there."""
+    data = request.json or {}
+    folder = (data.get('folder') or '').strip().strip('/')
+    title = (data.get('title') or '').strip()
+    template = (data.get('template') or 'blank').strip()
+    if not title:
+        return jsonify({"success": False, "error": "title required"}), 400
+    # Strip characters illegal in filenames (keep spaces); no leading dots.
+    safe_title = re.sub(r'[\\/:*?"<>|]+', '-', title).strip().strip('.')
+    if not safe_title:
+        return jsonify({"success": False, "error": "invalid title"}), 400
+    rel = f"{folder}/{safe_title}.md" if folder else f"{safe_title}.md"
+    body = notes_service.template_body(template, title)
+    try:
+        r = notes_service.create_note(rel, body=body)
+    except FileExistsError:
+        return jsonify({"success": False, "error": "A note with that name already exists here."}), 409
+    except notes_service.NotePathError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify({"success": True, "path": r.rel_path, "title": r.title})
+
+
+@app.route('/api/notes/delete', methods=['POST'])
+@gm_required
+def api_notes_delete():
+    """Delete a note. Snapshots it first (restore point under .snapshots/)."""
+    data = request.json or {}
+    rel = (data.get('path') or '').strip()
+    if not rel:
+        return jsonify({"success": False, "error": "path required"}), 400
+    try:
+        snap = notes_service.delete_note(rel)
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": "note not found"}), 404
+    except notes_service.NotePathError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify({"success": True, "snapshot": snap})
+
+
+@app.route('/api/notes/rename', methods=['POST'])
+@gm_required
+def api_notes_rename():
+    """Rename/move a note and rewrite [[wikilinks]] across the vault to follow
+    it. Snapshots the note + referrers first. Returns the new path + how many
+    links were rewritten."""
+    data = request.json or {}
+    frm = (data.get('from') or '').strip()
+    to = (data.get('to') or '').strip()
+    if not frm or not to:
+        return jsonify({"success": False, "error": "from and to required"}), 400
+    try:
+        result = notes_service.rename_note(frm, to)
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": "source note not found"}), 404
+    except FileExistsError:
+        return jsonify({"success": False, "error": "a note already exists at the destination"}), 409
+    except notes_service.NotePathError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify({"success": True, **result})
+
+
+@app.route('/api/notes/folder', methods=['POST'])
+@gm_required
+def api_notes_folder():
+    """Folder operations: create / rename / delete. Destructive ops (rename,
+    delete) snapshot the affected notes first."""
+    data = request.json or {}
+    action = (data.get('action') or '').strip().lower()
+    path = (data.get('path') or '').strip().strip('/')
+    try:
+        if action == 'create':
+            if not path:
+                return jsonify({"success": False, "error": "path required"}), 400
+            return jsonify({"success": True, "path": notes_service.create_folder(path)})
+        if action == 'delete':
+            if not path:
+                return jsonify({"success": False, "error": "path required"}), 400
+            return jsonify({"success": True, **notes_service.delete_folder(path)})
+        if action == 'rename':
+            to = (data.get('to') or '').strip().strip('/')
+            if not path or not to:
+                return jsonify({"success": False, "error": "path and to required"}), 400
+            return jsonify({"success": True, **notes_service.rename_folder(path, to)})
+        return jsonify({"success": False, "error": "unknown action"}), 400
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": "folder not found"}), 404
+    except FileExistsError:
+        return jsonify({"success": False, "error": "a folder already exists there"}), 409
+    except notes_service.NotePathError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
 @app.route('/api/notes/asset/<path:rel_path>')
 @gm_required
 def api_notes_asset(rel_path):

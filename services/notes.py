@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -779,6 +780,358 @@ def save(rel_path: str, body: str, expected_mtime: Optional[float] = None,
     invalidate_tree_cache()
     invalidate_index()
     return render(rel_path)
+
+
+# ─── Templates (for create-on-new) ────────────────────────────────────────────
+
+# Built-in note templates surfaced by the "New note" picker. Kept in code (not
+# in the vault) so create works on a brand-new vault and doesn't depend on the
+# GM's own zz_templates/. `{title}` / `{date}` are filled at create time.
+NOTE_TEMPLATES: dict[str, dict] = {
+    "blank": {"label": "Blank", "body": ""},
+    "session": {
+        "label": "Session outline",
+        "body": (
+            "---\ntype: session\ndate: {date}\nstatus: planned\n---\n"
+            "# {title}\n\n## Recap\n\n## Beats\n\n## NPCs present\n\n## Loose ends\n"
+        ),
+    },
+    "npc": {
+        "label": "NPC",
+        "body": (
+            "---\ntype: npc\nstatus: active\nlocation: \nfaction: \n---\n"
+            "# {title}\n\n## Description\n\n## Hooks\n\n## Connections\n"
+        ),
+    },
+    "beat": {
+        "label": "Story beat",
+        "body": (
+            "---\ntype: beat\nstatus: open\n---\n"
+            "# {title}\n\n## What happens\n\n## Stakes\n\n## Next step\n"
+        ),
+    },
+}
+
+
+def list_templates() -> list[dict]:
+    """[{key, label}] for the New-note picker, in a stable order."""
+    return [{"key": k, "label": v["label"]} for k, v in NOTE_TEMPLATES.items()]
+
+
+def template_body(key: str, title: str) -> str:
+    """Fill a template's `{title}`/`{date}` placeholders. Unknown key -> blank.
+    Uses str.replace (not .format) so stray braces in a body never raise."""
+    tpl = NOTE_TEMPLATES.get(key or "blank") or NOTE_TEMPLATES["blank"]
+    return (
+        tpl["body"]
+        .replace("{title}", title)
+        .replace("{date}", time.strftime("%Y-%m-%d"))
+    )
+
+
+# ─── Snapshots (restore points before destructive ops) ─────────────────────────
+
+# Hidden dir inside the vault. Every walker here (tree / search / index build /
+# .zip export) skips dot-dirs, so snapshots never clutter the vault or bloat a
+# backup, but they persist on the Railway volume for manual recovery.
+_SNAPSHOT_DIRNAME = ".snapshots"
+
+
+def snapshot(rel_paths, *, label: str = "") -> Optional[str]:
+    """Copy the given vault-relative notes into a timestamped folder under
+    .snapshots/ before a destructive op (delete / rename-rewrite). Best-effort:
+    returns the snapshot's rel dir on success, or None if nothing was copied.
+    Never raises — a failed snapshot must not block the caller, which has
+    already decided to act."""
+    root = get_vault_root()
+    if root is None:
+        return None
+    safe_label = re.sub(r"[^A-Za-z0-9_-]+", "-", (label or "snap")).strip("-")[:40] or "snap"
+    snap_rel_dir = f"{_SNAPSHOT_DIRNAME}/{time.strftime('%Y%m%d-%H%M%S')}-{safe_label}"
+    snap_root = root / snap_rel_dir
+    copied = 0
+    for rel in rel_paths or []:
+        try:
+            src = _safe_join(rel)
+        except NotePathError:
+            continue
+        if not src.is_file():
+            continue
+        dest = snap_root / rel
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+            copied += 1
+        except OSError:
+            continue
+    return snap_rel_dir if copied else None
+
+
+# ─── Note CRUD ─────────────────────────────────────────────────────────────────
+
+def create_note(rel_path: str, *, body: str = "") -> RenderedNote:
+    """Create a new note (appends .md if missing). Raises FileExistsError if a
+    note already exists at the path, NotePathError on traversal."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    if not rel_path.endswith(".md"):
+        rel_path = rel_path + ".md"
+    p = _safe_join(rel_path)
+    if p.exists():
+        raise FileExistsError(rel_path)
+    # save() does the atomic write + parent mkdir + cache/index invalidation.
+    return save(rel_path, body)
+
+
+def delete_note(rel_path: str, *, take_snapshot: bool = True) -> Optional[str]:
+    """Hard-delete a note. Snapshots it first by default so the GM can recover.
+    Returns the snapshot dir (or None). Raises FileNotFoundError if the note
+    doesn't exist, NotePathError on traversal."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    p = _safe_join(rel_path)
+    if not p.is_file():
+        raise FileNotFoundError(rel_path)
+    snap = snapshot([rel_path], label=f"delete-{Path(rel_path).name}") if take_snapshot else None
+    p.unlink()
+    _RENDER_CACHE.pop(rel_path, None)
+    invalidate_tree_cache()
+    invalidate_index()
+    return snap
+
+
+def _rewrite_links(text, old_title, new_title, old_path_noext, new_path_noext, ambiguous):
+    """Rewrite wikilink targets that point at the renamed note. Preserves the
+    author's style (bare-title vs full-path) plus embed/heading/alias. Bare
+    `[[Title]]` links are left untouched when the title is ambiguous (more than
+    one note shares it) so we never hijack links meant for a same-named note.
+    Returns (new_text, n_rewritten)."""
+    count = 0
+
+    def repl(m):
+        nonlocal count
+        target = m.group("target").strip()
+        t_noext = target[:-3] if target.lower().endswith(".md") else target
+        new_target = None
+        if "/" in t_noext:
+            # Path-style reference (unambiguous) → follow it to the new path.
+            if t_noext.lower() == old_path_noext.lower():
+                new_target = new_path_noext
+        else:
+            # Bare-title reference → new title, but skip when the title is
+            # ambiguous so we never hijack a same-named note's links.
+            if t_noext.lower() == old_title.lower() and not ambiguous:
+                new_target = new_title
+        if new_target is None or new_target == t_noext:
+            return m.group(0)                      # no match, or a no-op rewrite
+        count += 1
+        out = f"{m.group('embed') or ''}[[{new_target}"
+        if m.group("heading"):
+            out += f"#{m.group('heading')}"
+        if m.group("alias"):
+            out += f"|{m.group('alias')}"
+        return out + "]]"
+
+    return _WIKILINK_RE.sub(repl, text), count
+
+
+def rename_note(from_rel: str, to_rel: str) -> dict:
+    """Rename/move a note and rewrite [[wikilinks]] across the vault to follow
+    it (Obsidian-style). Snapshots the moved note + every referrer first, so a
+    bad rewrite is recoverable. Returns {to, snapshot, referrers, rewritten}.
+    Raises FileNotFoundError (source missing), FileExistsError (dest exists),
+    NotePathError (traversal)."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    if not from_rel.endswith(".md"):
+        from_rel += ".md"
+    if not to_rel.endswith(".md"):
+        to_rel += ".md"
+    src = _safe_join(from_rel)
+    dst = _safe_join(to_rel)
+    if not src.is_file():
+        raise FileNotFoundError(from_rel)
+    if dst.exists():
+        raise FileExistsError(to_rel)
+
+    # Resolve referrers + ambiguity from the index BEFORE moving (keyed off the
+    # old title/path).
+    _ensure_index(include_rules=False)
+    referrer_rels = [b["path"] for b in backlinks(from_rel)]
+    old_title = Path(from_rel).name[:-3]
+    with _INDEX_LOCK:
+        ambiguous = len((_TITLE_INDEX or {}).get(old_title.lower(), [])) > 1
+
+    # Snapshot the note + every referrer so the multi-file rewrite is undoable.
+    snap = snapshot([from_rel] + referrer_rels, label=f"rename-{Path(from_rel).name}")
+
+    # Move the file.
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    os.rename(src, dst)
+
+    new_title = Path(to_rel).name[:-3]
+    old_path_noext, new_path_noext = from_rel[:-3], to_rel[:-3]
+    rewritten = 0
+    for rel in referrer_rels:
+        try:
+            rp = _safe_join(rel)
+            text = rp.read_text(encoding="utf-8", errors="replace")
+        except (NotePathError, OSError):
+            continue
+        new_text, n = _rewrite_links(text, old_title, new_title, old_path_noext, new_path_noext, ambiguous)
+        if n and new_text != text:
+            try:
+                tmp = rp.with_suffix(rp.suffix + ".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(new_text)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp, rp)
+                rewritten += n
+                _RENDER_CACHE.pop(rel, None)
+            except OSError:
+                continue
+
+    _RENDER_CACHE.pop(from_rel, None)
+    invalidate_tree_cache()
+    invalidate_index()
+    return {"to": to_rel, "snapshot": snap, "referrers": len(referrer_rels), "rewritten": rewritten}
+
+
+# ─── Folder operations ─────────────────────────────────────────────────────────
+
+def _notes_under(rel_dir: str) -> list[str]:
+    """All `.md` rel paths under a folder (recursive), excluding dot-dirs."""
+    root = get_vault_root()
+    base = _safe_join(rel_dir)
+    out: list[str] = []
+    if root is None or not base.is_dir():
+        return out
+    for dp, dns, fns in os.walk(base):
+        dns[:] = [d for d in dns if not d.startswith(".")]
+        for fn in fns:
+            if fn.endswith(".md"):
+                out.append(str(Path(dp, fn).relative_to(root)).replace(os.sep, "/"))
+    return out
+
+
+def _atomic_write(rp: Path, text: str) -> bool:
+    """Write text to rp atomically (temp + fsync + replace). Returns success."""
+    try:
+        tmp = rp.with_suffix(rp.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, rp)
+        return True
+    except OSError:
+        return False
+
+
+def _rewrite_path_links(text, pathmap):
+    """Rewrite path-style wikilinks (target contains '/') whose target maps in
+    `pathmap` (old_path_noext.lower() -> new_path_noext). Preserves embed/
+    heading/alias. Returns (new_text, n_rewritten)."""
+    count = 0
+
+    def repl(m):
+        nonlocal count
+        target = m.group("target").strip()
+        t_noext = target[:-3] if target.lower().endswith(".md") else target
+        if "/" not in t_noext:
+            return m.group(0)
+        new_target = pathmap.get(t_noext.lower())
+        if not new_target or new_target == t_noext:
+            return m.group(0)
+        count += 1
+        out = f"{m.group('embed') or ''}[[{new_target}"
+        if m.group("heading"):
+            out += f"#{m.group('heading')}"
+        if m.group("alias"):
+            out += f"|{m.group('alias')}"
+        return out + "]]"
+
+    return _WIKILINK_RE.sub(repl, text), count
+
+
+def create_folder(rel_dir: str) -> str:
+    """Create an (empty) folder. Raises FileExistsError if it exists,
+    NotePathError on traversal. Note: the browse tree hides empty folders, so
+    a folder shows up once it has a note in it."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    d = _safe_join(rel_dir)
+    if d.exists():
+        raise FileExistsError(rel_dir)
+    d.mkdir(parents=True)
+    invalidate_tree_cache()
+    return rel_dir.strip("/")
+
+
+def delete_folder(rel_dir: str, *, take_snapshot: bool = True) -> dict:
+    """Delete a folder and everything under it. Snapshots all contained notes
+    first. Returns {deleted, snapshot}. Raises FileNotFoundError, NotePathError."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    d = _safe_join(rel_dir)
+    if not d.is_dir():
+        raise FileNotFoundError(rel_dir)
+    contained = _notes_under(rel_dir)
+    snap = snapshot(contained, label=f"delete-folder-{Path(rel_dir).name}") if (take_snapshot and contained) else None
+    shutil.rmtree(d)
+    for rel in contained:
+        _RENDER_CACHE.pop(rel, None)
+    invalidate_tree_cache()
+    invalidate_index()
+    return {"deleted": len(contained), "snapshot": snap}
+
+
+def rename_folder(from_dir: str, to_dir: str) -> dict:
+    """Rename/move a folder and rewrite path-style [[links]] across the vault to
+    follow the notes inside it (titles are unchanged by a folder move, so only
+    path-style links need rewriting). Snapshots moved notes + referrers first.
+    Returns {to, moved, rewritten, snapshot}."""
+    if get_vault_root() is None:
+        raise NotePathError("Vault is not available")
+    src = _safe_join(from_dir)
+    dst = _safe_join(to_dir)
+    if not src.is_dir():
+        raise FileNotFoundError(from_dir)
+    if dst.exists():
+        raise FileExistsError(to_dir)
+    from_n, to_n = from_dir.strip("/"), to_dir.strip("/")
+
+    moved = _notes_under(from_dir)                    # old rel paths
+    remap = {rel: to_n + rel[len(from_n):] for rel in moved}   # old rel -> new rel
+
+    _ensure_index(include_rules=False)
+    referrers = set()
+    for rel in moved:
+        referrers.update(b["path"] for b in backlinks(rel))
+    snap = snapshot(list(set(moved) | referrers), label=f"rename-folder-{Path(from_dir).name}")
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    os.rename(src, dst)
+
+    # old_path_noext.lower() -> new_path_noext for every moved note.
+    pathmap = {old[:-3].lower(): remap[old][:-3] for old in moved}
+    rewritten = 0
+    for rel in referrers:
+        actual = remap.get(rel, rel)                  # referrer may itself have moved
+        try:
+            rp = _safe_join(actual)
+            text = rp.read_text(encoding="utf-8", errors="replace")
+        except (NotePathError, OSError):
+            continue
+        new_text, n = _rewrite_path_links(text, pathmap)
+        if n and new_text != text and _atomic_write(rp, new_text):
+            rewritten += n
+            _RENDER_CACHE.pop(actual, None)
+
+    invalidate_tree_cache()
+    invalidate_index()
+    return {"to": to_n, "moved": len(moved), "rewritten": rewritten, "snapshot": snap}
 
 
 # ─── Diagnostics ─────────────────────────────────────────────────────────────

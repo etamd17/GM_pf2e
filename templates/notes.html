@@ -307,6 +307,10 @@
         <a id="vault-backup-btn" href="/api/admin/vault/export" download
            title="Download a .zip backup of the entire vault"
            style="display:block; margin-top:var(--sp-2); padding:6px 10px; font-size:12px; text-align:center; border:1px solid var(--border-card); border-radius:6px; color:var(--gilt-200); text-decoration:none;">Download backup (.zip)</a>
+        <div class="notes-tools">
+            <button type="button" id="nt-new-note">New note</button>
+            <button type="button" id="nt-new-folder">New folder</button>
+        </div>
         <div id="notes-search-results" class="notes-search-results" style="display:none;"></div>
         <div id="notes-tree" class="notes-tree" data-current="{{ current_path or '' }}"></div>
     </aside>
@@ -329,6 +333,8 @@
                     <button type="button" id="note-edit-btn" onclick="enterEditMode()" title="Edit this note">Edit</button>
                     <button type="button" id="note-save-btn" onclick="saveNote()" style="display:none;" title="Save (⌘S)">Save</button>
                     <button type="button" id="note-cancel-btn" onclick="exitEditMode(false)" style="display:none;" title="Discard changes">Cancel</button>
+                    <button type="button" id="note-rename-btn" title="Rename or move this note">Rename</button>
+                    <button type="button" id="note-delete-btn" class="danger" title="Delete this note">Delete</button>
                 </div>
             </div>
 
@@ -388,6 +394,43 @@
     </aside>
 </div>
 
+<style>
+.notes-tools { display:flex; gap:6px; margin-top:var(--sp-2); }
+.notes-tools button {
+    flex:1; padding:6px 8px; font-size:12px; cursor:pointer;
+    border:1px solid var(--border-card); border-radius:6px;
+    background:rgba(201,163,78,0.06); color:var(--gilt-200); font-family:inherit;
+}
+.notes-tools button:hover { background:rgba(201,163,78,0.14); }
+.nt-dialog { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.nt-dialog-card { background:var(--bg-card,#1b1b1b); border:1px solid var(--border-card); border-radius:10px; padding:var(--sp-4); width:min(420px,90vw); display:flex; flex-direction:column; gap:var(--sp-2); }
+.nt-dialog-card h3 { margin:0 0 var(--sp-1); }
+.nt-dialog-card label { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--text-on-dark-2,#ccc); }
+.nt-dialog-card input, .nt-dialog-card select { padding:6px 8px; background:var(--bg-card-2,#111); border:1px solid var(--border-card); border-radius:6px; color:var(--text-on-dark,#eee); font-family:inherit; }
+.nt-dialog-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); margin-top:var(--sp-2); }
+.nt-dialog-actions button { padding:6px 14px; border-radius:6px; border:1px solid var(--border-card); background:rgba(201,163,78,0.10); color:var(--gilt-200); cursor:pointer; font-family:inherit; }
+.nt-dialog-err { color:var(--ruby-100,#e88); font-size:12px; min-height:1em; }
+.nt-ctx { position:fixed; z-index:1001; min-width:170px; background:var(--bg-card,#1b1b1b); border:1px solid var(--border-card); border-radius:8px; padding:4px; box-shadow:0 6px 24px rgba(0,0,0,0.45); }
+.nt-ctx-item { display:block; width:100%; text-align:left; padding:6px 10px; font-size:13px; background:none; border:none; color:var(--text-on-dark,#eee); cursor:pointer; border-radius:5px; }
+.nt-ctx-item:hover { background:rgba(201,163,78,0.14); }
+.nt-ctx-item.danger { color:var(--ruby-100,#e88); }
+</style>
+
+<div id="nt-new-dialog" class="nt-dialog" style="display:none;">
+    <div class="nt-dialog-card">
+        <h3>New note</h3>
+        <label>Title <input type="text" id="nt-nd-title" autocomplete="off"></label>
+        <label>Folder <input type="text" id="nt-nd-folder" placeholder="(vault root)" autocomplete="off"></label>
+        <label>Template <select id="nt-nd-template"></select></label>
+        <div class="nt-dialog-err" id="nt-nd-err"></div>
+        <div class="nt-dialog-actions">
+            <button type="button" id="nt-nd-cancel">Cancel</button>
+            <button type="button" id="nt-nd-create">Create</button>
+        </div>
+    </div>
+</div>
+<div id="nt-ctx" class="nt-ctx" style="display:none;"></div>
+
 <script>
 (function() {
     const includeRulesCheckbox = document.getElementById('notes-include-rules');
@@ -403,7 +446,7 @@
         nodes.forEach(n => {
             if (n.kind === 'dir') {
                 const open = currentPath && currentPath.startsWith(n.path + '/');
-                html += `<details ${open ? 'open' : ''}>`;
+                html += `<details data-path="${escapeAttr(n.path)}" ${open ? 'open' : ''}>`;
                 html += `<summary>${escapeHtml(n.name)}</summary>`;
                 html += `<div class="nt-children">${renderTree(n.children || [], depth + 1)}</div>`;
                 html += `</details>`;
@@ -415,7 +458,7 @@
                     ? `#`
                     : `/gm/notes/view/${encodeURIComponent(n.path)}`;
                 const title = n.kind === 'canvas' ? 'Canvas — open in Obsidian' : '';
-                html += `<a class="nt-leaf ${cls}" href="${href}" title="${escapeAttr(title)}">${escapeHtml(label)}${n.kind === 'canvas' ? ' 🗒' : ''}</a>`;
+                html += `<a class="nt-leaf ${cls}" data-path="${escapeAttr(n.path)}" href="${href}" title="${escapeAttr(title)}">${escapeHtml(label)}${n.kind === 'canvas' ? ' 🗒' : ''}</a>`;
             }
         });
         return html;
@@ -577,6 +620,156 @@
             }
         });
     }
+
+    // ── Authoring: create / rename / delete (notes + folders) ──────────
+    async function apiPost(url, body) {
+        const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        let j = {}; try { j = await r.json(); } catch (e) {}
+        return { ok: r.ok, status: r.status, j };
+    }
+    function currentFolder() {
+        if (!currentPath) return '';
+        const i = currentPath.lastIndexOf('/');
+        return i > 0 ? currentPath.slice(0, i) : '';
+    }
+    function gotoNote(path) { window.location.href = '/gm/notes/view/' + encodeURIComponent(path); }
+
+    // New-note dialog
+    const ndDialog = document.getElementById('nt-new-dialog');
+    const ndTitle = document.getElementById('nt-nd-title');
+    const ndFolder = document.getElementById('nt-nd-folder');
+    const ndTemplate = document.getElementById('nt-nd-template');
+    const ndErr = document.getElementById('nt-nd-err');
+    async function openNewNote(folder) {
+        if (!ndDialog) return;
+        ndErr.textContent = '';
+        ndTitle.value = '';
+        ndFolder.value = (folder != null) ? folder : currentFolder();
+        if (!ndTemplate.dataset.loaded) {
+            try {
+                const r = await fetch('/api/notes/templates');
+                const j = await r.json();
+                ndTemplate.innerHTML = (j.templates || [])
+                    .map(t => `<option value="${escapeAttr(t.key)}">${escapeHtml(t.label)}</option>`).join('');
+                ndTemplate.dataset.loaded = '1';
+            } catch (e) {}
+        }
+        ndDialog.style.display = 'flex';
+        ndTitle.focus();
+    }
+    function closeNewNote() { if (ndDialog) ndDialog.style.display = 'none'; }
+    async function submitNewNote() {
+        const title = ndTitle.value.trim();
+        if (!title) { ndErr.textContent = 'Title required.'; return; }
+        const { ok, status, j } = await apiPost('/api/notes/create', {
+            title, folder: ndFolder.value.trim(), template: ndTemplate.value,
+        });
+        if (!ok || !j.success) { ndErr.textContent = j.error || ('Error ' + status); return; }
+        closeNewNote();
+        gotoNote(j.path);
+    }
+    async function newFolder(parent) {
+        const base = (parent != null) ? parent : currentFolder();
+        const name = window.prompt('New folder path:', base ? base + '/' : '');
+        if (!name || !name.trim()) return;
+        const { ok, status, j } = await apiPost('/api/notes/folder', { action: 'create', path: name.trim() });
+        if (!ok || !j.success) { alert('Could not create folder: ' + (j.error || status)); return; }
+        await loadTree();
+    }
+    async function renameItem(path, isDir) {
+        const cur = path.replace(/\.md$/, '');
+        const to = window.prompt('Rename / move ' + (isDir ? 'folder' : 'note') + ' — new path:', cur);
+        if (!to || !to.trim() || to.trim() === cur) return;
+        const url = '/api/notes/' + (isDir ? 'folder' : 'rename');
+        const body = isDir ? { action: 'rename', path, to: to.trim() } : { from: path, to: to.trim() };
+        const { ok, status, j } = await apiPost(url, body);
+        if (!ok || !j.success) { alert('Rename failed: ' + (j.error || status)); return; }
+        if (isDir) { await loadTree(); }
+        else { gotoNote(j.to); }
+    }
+    async function deleteItem(path, isDir) {
+        const msg = isDir
+            ? 'Delete folder "' + path + '" and ALL notes inside it? A snapshot is saved first.'
+            : 'Delete note "' + path + '"? A snapshot is saved first.';
+        if (!window.confirm(msg)) return;
+        const url = '/api/notes/' + (isDir ? 'folder' : 'delete');
+        const body = isDir ? { action: 'delete', path } : { path };
+        const { ok, status, j } = await apiPost(url, body);
+        if (!ok || !j.success) { alert('Delete failed: ' + (j.error || status)); return; }
+        if (isDir || path === currentPath) { window.location.href = '/gm/notes'; }
+        else { await loadTree(); }
+    }
+
+    // Toolbar + dialog wiring
+    const newNoteBtn = document.getElementById('nt-new-note');
+    if (newNoteBtn) newNoteBtn.addEventListener('click', () => openNewNote());
+    const newFolderBtn = document.getElementById('nt-new-folder');
+    if (newFolderBtn) newFolderBtn.addEventListener('click', () => newFolder());
+    const ndCancel = document.getElementById('nt-nd-cancel');
+    if (ndCancel) ndCancel.addEventListener('click', closeNewNote);
+    const ndCreate = document.getElementById('nt-nd-create');
+    if (ndCreate) ndCreate.addEventListener('click', submitNewNote);
+    if (ndTitle) ndTitle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitNewNote();
+        else if (e.key === 'Escape') closeNewNote();
+    });
+    // Note action-bar buttons (only present when a note is open)
+    const renameBtn = document.getElementById('note-rename-btn');
+    if (renameBtn && editor) renameBtn.addEventListener('click', () => renameItem(editor.dataset.path, false));
+    const deleteBtn = document.getElementById('note-delete-btn');
+    if (deleteBtn && editor) deleteBtn.addEventListener('click', () => deleteItem(editor.dataset.path, false));
+
+    // Right-click context menu on the tree (desktop)
+    const ctx = document.getElementById('nt-ctx');
+    function hideCtx() { if (ctx) ctx.style.display = 'none'; }
+    function showCtx(x, y, items) {
+        if (!ctx) return;
+        ctx.innerHTML = '';
+        items.forEach(it => {
+            const b = document.createElement('button');
+            b.textContent = it.label;
+            b.className = 'nt-ctx-item' + (it.danger ? ' danger' : '');
+            b.addEventListener('click', () => { hideCtx(); it.fn(); });
+            ctx.appendChild(b);
+        });
+        ctx.style.left = Math.min(x, window.innerWidth - 190) + 'px';
+        ctx.style.top = y + 'px';
+        ctx.style.display = 'block';
+    }
+    document.addEventListener('click', hideCtx);
+    document.addEventListener('scroll', hideCtx, true);
+    if (treeEl) treeEl.addEventListener('contextmenu', (e) => {
+        const leaf = e.target.closest('a.nt-leaf');
+        const summary = e.target.closest('summary');
+        let items = null;
+        if (leaf && leaf.dataset.path) {
+            const path = leaf.dataset.path;
+            if (path.endsWith('.md')) {
+                items = [
+                    { label: 'Rename / move', fn: () => renameItem(path, false) },
+                    { label: 'Delete', danger: true, fn: () => deleteItem(path, false) },
+                ];
+            }
+        } else if (summary) {
+            const details = summary.closest('details');
+            const folderPath = details && details.dataset.path;
+            if (folderPath) {
+                items = [
+                    { label: 'New note here', fn: () => openNewNote(folderPath) },
+                    { label: 'New subfolder', fn: () => newFolder(folderPath) },
+                    { label: 'Rename / move', fn: () => renameItem(folderPath, true) },
+                    { label: 'Delete folder', danger: true, fn: () => deleteItem(folderPath, true) },
+                ];
+            }
+        }
+        if (!items) return;
+        e.preventDefault();
+        showCtx(e.clientX, e.clientY, items);
+    });
 
     function escapeHtml(s) {
         return String(s == null ? '' : s)
