@@ -2430,17 +2430,7 @@ async function _resolveNotePath(name) {
     _noteResolveInflight.set(name, p);
     return p;
 }
-function _decorateActiveNoteLink() {
-    document.querySelectorAll('.active-note-link').forEach(async a => {
-        const name = a.dataset.noteFor;
-        if (!name) return;
-        const path = await _resolveNotePath(name);
-        if (path) {
-            a.href = '/gm/notes/view/' + encodeURIComponent(path);
-            a.classList.remove('hidden');
-        }
-    });
-}
+function _decorateActiveNoteLink() { /* vault removed; no per-combatant note links */ }
 
 function renderMeta() {
     // Round (hero bar)
