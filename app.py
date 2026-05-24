@@ -5509,6 +5509,148 @@ def gm_threads():
     return render_template('threads.html', beats=_load_story_threads())
 
 
+def _save_story_threads(beats):
+    path = os.path.join(BASE_DIR, 'story_threads.json')
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump({'beats': beats}, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
+def _extract_beats_via_claude(session_notes, existing_beats):
+    """Send session-note markdown + existing beats to Claude and get back a
+    merged beats array. Returns (beats_list, error_reason)."""
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    if not api_key:
+        return None, 'no_key'
+    if not session_notes.strip():
+        return None, 'empty_notes'
+
+    existing_json = json.dumps(existing_beats, indent=2) if existing_beats else '[]'
+    campaign = _load_campaign_config()
+
+    prompt = (
+        f"You are a story-thread analyst for the tabletop RPG campaign "
+        f"\"{campaign.get('name', 'the campaign')}\".\n\n"
+        f"Below are the GM's Obsidian session notes (one or more sessions), "
+        f"followed by the EXISTING story-thread beats (JSON). Your job:\n\n"
+        f"1. Read the session notes and identify every distinct plot thread / "
+        f"story beat: a quest given, a mystery discovered, a confrontation, "
+        f"a relationship formed, an NPC encounter, a location explored, etc.\n"
+        f"2. For each beat produce a JSON object with these fields:\n"
+        f"   - id: short kebab-case slug (e.g. \"kobold-warrens\")\n"
+        f"   - title: short human-readable title\n"
+        f"   - status: \"open\" if unresolved/ongoing, \"resolved\" if wrapped up\n"
+        f"   - session: integer session number (derive from headings or context)\n"
+        f"   - branches_to: list of beat IDs this thread leads into\n"
+        f"   - npcs: list of NPC names involved\n"
+        f"   - locations: list of location names\n"
+        f"   - summary: one-sentence summary of what happened\n"
+        f"3. MERGE with the existing beats:\n"
+        f"   - If a beat from the existing list is clearly continued or concluded "
+        f"in the new notes, UPDATE its status (open -> resolved if wrapped up) "
+        f"and add branches_to links to new beats.\n"
+        f"   - Keep existing beats that aren't mentioned (they may still be open).\n"
+        f"   - Do NOT duplicate beats that already exist.\n"
+        f"   - Connect related beats with branches_to links to show the story flow.\n"
+        f"4. Return ONLY a JSON array of ALL beats (existing updated + new), "
+        f"no commentary, no markdown fences, just the raw JSON array.\n\n"
+        f"IMPORTANT: Ignore mechanical/logistical content (stat blocks, DCs, "
+        f"dice rolls, XP, loot lists, grid coordinates). Focus on the NARRATIVE: "
+        f"what happened in the story, who the party met, what choices they made, "
+        f"what mysteries remain.\n\n"
+        f"--- EXISTING BEATS ---\n{existing_json}\n--- END EXISTING ---\n\n"
+        f"--- SESSION NOTES ---\n{session_notes[:30000]}\n--- END NOTES ---\n\n"
+        f"Return the merged JSON array of beats."
+    )
+
+    import urllib.request as _urlreq
+    import urllib.error as _urlerr
+
+    SAFE_MODEL = 'claude-3-5-haiku-latest'
+    model = (os.environ.get('ANTHROPIC_RECAP_MODEL') or SAFE_MODEL).strip()
+
+    payload = json.dumps({
+        'model': model,
+        'max_tokens': 4096,
+        'messages': [{'role': 'user', 'content': prompt}],
+    }).encode('utf-8')
+    req = _urlreq.Request(
+        'https://api.anthropic.com/v1/messages',
+        data=payload,
+        headers={
+            'content-type': 'application/json',
+            'x-api-key': api_key,
+            'anthropic-version': '2023-06-01',
+        },
+        method='POST',
+    )
+    try:
+        with _urlreq.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        blocks = data.get('content') or []
+        text = ''.join(b.get('text', '') for b in blocks if b.get('type') == 'text').strip()
+        if not text:
+            return None, 'empty_response'
+        # Strip markdown fences if the model wraps it
+        if text.startswith('```'):
+            text = text.split('\n', 1)[-1]
+            if text.endswith('```'):
+                text = text[:-3]
+            text = text.strip()
+        beats = json.loads(text)
+        if not isinstance(beats, list):
+            return None, 'bad_format'
+        return beats, None
+    except _urlerr.HTTPError as e:
+        err = ''
+        try:
+            err = e.read().decode('utf-8', 'replace')[:300]
+        except Exception:
+            pass
+        print(f"[THREADS] Claude extract HTTP {e.code}: {err}")
+        return None, f'api_http_{e.code}'
+    except (_urlerr.URLError, TimeoutError) as e:
+        print(f"[THREADS] Claude extract network error: {e}")
+        return None, 'network_error'
+    except (ValueError, KeyError) as e:
+        print(f"[THREADS] Claude extract parse error: {e}")
+        return None, f'parse_error: {e}'
+
+
+@app.route('/api/threads/upload', methods=['POST'])
+@gm_required
+def api_threads_upload():
+    """Accept one or more Obsidian .md files, extract story beats via Claude,
+    merge with existing threads, and save."""
+    files = request.files.getlist('files')
+    if not files or not any(f.filename for f in files):
+        return jsonify(success=False, error='No files uploaded.'), 400
+
+    combined = []
+    for f in files:
+        if not f.filename or not f.filename.lower().endswith('.md'):
+            continue
+        try:
+            text = f.read().decode('utf-8', errors='replace')
+        except Exception:
+            continue
+        if text.strip():
+            combined.append(f"## File: {f.filename}\n\n{text}")
+
+    if not combined:
+        return jsonify(success=False, error='No valid .md files found.'), 400
+
+    session_notes = '\n\n---\n\n'.join(combined)
+    existing = _load_story_threads()
+
+    beats, err = _extract_beats_via_claude(session_notes, existing)
+    if beats is None:
+        return jsonify(success=False, error=f'AI extraction failed: {err}'), 502
+
+    _save_story_threads(beats)
+    return jsonify(success=True, beats=beats, count=len(beats))
+
+
 @app.route('/api/session/export', methods=['POST'])
 @gm_required
 def api_session_export():

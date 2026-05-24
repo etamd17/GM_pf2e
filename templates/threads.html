@@ -10,20 +10,32 @@
             <span class="threads-hint">Click a beat for details &middot; drag to pan &middot; scroll to zoom</span>
         </div>
     </div>
-    {% if beats %}
+
+    <div class="threads-upload" id="threads-upload">
+        <div class="upload-zone" id="upload-zone">
+            <div class="upload-icon">&#9883;</div>
+            <div class="upload-text">Drop Obsidian .md session notes here</div>
+            <div class="upload-sub">or click to browse</div>
+            <input type="file" id="upload-input" accept=".md" multiple hidden>
+        </div>
+        <div class="upload-status" id="upload-status" hidden>
+            <div class="upload-spinner"></div>
+            <span id="upload-msg">Parsing session notes...</span>
+        </div>
+        <div class="upload-files" id="upload-files" hidden></div>
+        <button class="upload-btn" id="upload-btn" hidden>Parse &amp; Update Threads</button>
+    </div>
+
     <div class="threads-body">
-        <div id="threads-graph" class="threads-graph"></div>
+        <div id="threads-graph" class="threads-graph">
+            {% if not beats %}
+            <div class="threads-empty-inner">Upload session notes above to build your story thread map.</div>
+            {% endif %}
+        </div>
         <aside id="thread-detail" class="thread-detail">
             <div class="thread-detail-empty">Select a beat to see its details.</div>
         </aside>
     </div>
-    {% else %}
-    <div class="threads-empty">
-        <h2>No story threads yet</h2>
-        <p>Hand over an updated branching list (from your Cowork) and it gets dropped into
-           <code>story_threads.json</code>.</p>
-    </div>
-    {% endif %}
 </div>
 
 <script type="application/json" id="threads-data">{{ beats|tojson }}</script>
@@ -36,8 +48,60 @@
 .lg { padding: 2px 8px; border-radius: 999px; font-size: 11px; }
 .lg-open { background: rgba(201,163,78,0.18); color: var(--gilt-100); border: 1px solid var(--accent); }
 .lg-resolved { background: rgba(154,145,122,0.12); color: var(--text-on-dark-3); border: 1px solid var(--border-card); }
+
+.threads-upload { margin-bottom: var(--sp-3); }
+.upload-zone {
+    border: 2px dashed var(--border-card);
+    border-radius: var(--r-md);
+    padding: var(--sp-4) var(--sp-5);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(201,163,78,0.06);
+}
+.upload-icon { font-size: 28px; color: var(--gilt-200); margin-bottom: 4px; }
+.upload-text { font-family: var(--font-display); font-size: 14px; color: var(--gilt-100); }
+.upload-sub { font-size: 11px; color: var(--text-on-dark-3); margin-top: 2px; }
+.upload-files {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-2);
+}
+.upload-file-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(201,163,78,0.12); border: 1px solid var(--accent);
+    border-radius: 999px; padding: 2px 10px; font-size: 11px; color: var(--gilt-100);
+}
+.upload-file-tag .remove { cursor: pointer; opacity: 0.6; font-size: 13px; }
+.upload-file-tag .remove:hover { opacity: 1; }
+.upload-btn {
+    margin-top: var(--sp-2);
+    background: var(--accent); color: var(--bg-page);
+    border: none; border-radius: var(--r-sm); padding: 8px 20px;
+    font-family: var(--font-display); font-size: 13px; cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: opacity 0.2s;
+}
+.upload-btn:hover { opacity: 0.85; }
+.upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.upload-status {
+    display: flex; align-items: center; gap: var(--sp-2);
+    margin-top: var(--sp-2); font-size: 12px; color: var(--gilt-100);
+}
+.upload-status[hidden] { display: none; }
+.upload-files[hidden] { display: none; }
+.upload-btn[hidden] { display: none; }
+.upload-spinner {
+    width: 16px; height: 16px; border: 2px solid var(--border-card);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .threads-body { display: flex; gap: var(--sp-3); flex: 1; min-height: 60vh; }
 .threads-graph { flex: 1; min-width: 0; border: 1px solid var(--border-card); border-radius: var(--r-md); background: var(--bg-page); }
+.threads-empty-inner { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: var(--text-on-dark-3); font-style: italic; }
 .thread-detail { width: 300px; flex-shrink: 0; overflow-y: auto; border: 1px solid var(--border-card); border-radius: var(--r-md); background: var(--bg-card); padding: var(--sp-4); }
 .thread-detail h2 { font-family: var(--font-display); font-size: 16px; color: var(--gilt-100); margin: 0 0 var(--sp-2); }
 .thread-detail .td-meta { font-size: 11px; color: var(--text-on-dark-3); margin-bottom: var(--sp-2); display: flex; gap: var(--sp-2); flex-wrap: wrap; }
@@ -47,12 +111,79 @@
 .thread-detail .td-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gilt-200); margin: var(--sp-2) 0 4px; }
 .thread-detail .td-list { font-size: 12px; color: var(--text-on-dark-2); }
 .thread-detail-empty { font-size: 12px; color: var(--text-on-dark-3); font-style: italic; }
-.threads-empty { text-align: center; color: var(--text-on-dark-3); margin-top: 10vh; }
-.threads-empty h2 { font-family: var(--font-display); color: var(--gilt-100); }
 </style>
 
 <script type="module">
 (async () => {
+    /* ── Upload handling ── */
+    const zone = document.getElementById('upload-zone');
+    const input = document.getElementById('upload-input');
+    const filesEl = document.getElementById('upload-files');
+    const btn = document.getElementById('upload-btn');
+    const statusEl = document.getElementById('upload-status');
+    const msgEl = document.getElementById('upload-msg');
+    let staged = [];
+
+    function renderStaged() {
+        filesEl.hidden = staged.length === 0;
+        btn.hidden = staged.length === 0;
+        filesEl.innerHTML = staged.map((f, i) =>
+            `<span class="upload-file-tag">${f.name}<span class="remove" data-i="${i}">&times;</span></span>`
+        ).join('');
+    }
+
+    function addFiles(fileList) {
+        for (const f of fileList) {
+            if (f.name.toLowerCase().endsWith('.md') && !staged.some(s => s.name === f.name)) {
+                staged.push(f);
+            }
+        }
+        renderStaged();
+    }
+
+    zone.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault(); zone.classList.remove('drag-over');
+        addFiles(e.dataTransfer.files);
+    });
+
+    filesEl.addEventListener('click', (e) => {
+        const rm = e.target.closest('.remove');
+        if (rm) { staged.splice(+rm.dataset.i, 1); renderStaged(); }
+    });
+
+    btn.addEventListener('click', async () => {
+        if (!staged.length) return;
+        btn.disabled = true;
+        statusEl.hidden = false;
+        msgEl.textContent = `Parsing ${staged.length} file${staged.length > 1 ? 's' : ''}... this may take a moment.`;
+
+        const fd = new FormData();
+        staged.forEach(f => fd.append('files', f));
+
+        try {
+            const resp = await fetch('/api/threads/upload', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (data.success) {
+                msgEl.textContent = `Done -- ${data.count} beat${data.count !== 1 ? 's' : ''} mapped.`;
+                staged = [];
+                renderStaged();
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                msgEl.textContent = `Error: ${data.error || 'unknown'}`;
+                btn.disabled = false;
+            }
+        } catch (e) {
+            msgEl.textContent = `Network error: ${e.message}`;
+            btn.disabled = false;
+        }
+    });
+
+    /* ── Graph rendering ── */
     const el = document.getElementById('threads-graph');
     if (!el) return;
     let beats = [];
@@ -92,8 +223,8 @@
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function showBeat(id) {
         const b = byId[id]; if (!b || !panel) return;
-        const npcs = (b.npcs || []).map(esc).join(', ') || '—';
-        const locs = (b.locations || []).map(esc).join(', ') || '—';
+        const npcs = (b.npcs || []).map(esc).join(', ') || '--';
+        const locs = (b.locations || []).map(esc).join(', ') || '--';
         panel.innerHTML =
             '<h2>' + esc(b.title) + '</h2>' +
             '<div class="td-meta">' +
