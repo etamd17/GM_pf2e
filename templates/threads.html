@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Story Threads{% endblock %}
+{% block content %}
+<div class="threads-wrap">
+    <div class="threads-head">
+        <h1 class="threads-title">Story Threads</h1>
+        <div class="threads-legend">
+            <span class="lg lg-open">Open</span>
+            <span class="lg lg-resolved">Resolved</span>
+            <span class="threads-hint">Click a beat for details &middot; drag to pan &middot; scroll to zoom</span>
+        </div>
+    </div>
+    {% if beats %}
+    <div class="threads-body">
+        <div id="threads-graph" class="threads-graph"></div>
+        <aside id="thread-detail" class="thread-detail">
+            <div class="thread-detail-empty">Select a beat to see its details.</div>
+        </aside>
+    </div>
+    {% else %}
+    <div class="threads-empty">
+        <h2>No story threads yet</h2>
+        <p>Hand over an updated branching list (from your Cowork) and it gets dropped into
+           <code>story_threads.json</code>.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script type="application/json" id="threads-data">{{ beats|tojson }}</script>
+
+<style>
+.threads-wrap { padding: var(--sp-4); display: flex; flex-direction: column; height: 100%; }
+.threads-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.threads-title { font-family: var(--font-display); font-size: 22px; color: var(--gilt-100); margin: 0; letter-spacing: 0.04em; }
+.threads-legend { display: flex; align-items: center; gap: var(--sp-3); font-size: 11px; color: var(--text-on-dark-3); }
+.lg { padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+.lg-open { background: rgba(201,163,78,0.18); color: var(--gilt-100); border: 1px solid var(--accent); }
+.lg-resolved { background: rgba(154,145,122,0.12); color: var(--text-on-dark-3); border: 1px solid var(--border-card); }
+.threads-body { display: flex; gap: var(--sp-3); flex: 1; min-height: 60vh; }
+.threads-graph { flex: 1; min-width: 0; border: 1px solid var(--border-card); border-radius: var(--r-md); background: var(--bg-page); }
+.thread-detail { width: 300px; flex-shrink: 0; overflow-y: auto; border: 1px solid var(--border-card); border-radius: var(--r-md); background: var(--bg-card); padding: var(--sp-4); }
+.thread-detail h2 { font-family: var(--font-display); font-size: 16px; color: var(--gilt-100); margin: 0 0 var(--sp-2); }
+.thread-detail .td-meta { font-size: 11px; color: var(--text-on-dark-3); margin-bottom: var(--sp-2); display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.thread-detail .td-badge { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border-card); }
+.thread-detail .td-badge.open { color: var(--gilt-100); border-color: var(--accent); }
+.thread-detail .td-summary { font-family: var(--font-flavor); font-size: 14px; line-height: 1.6; color: var(--text-on-dark); margin-bottom: var(--sp-3); }
+.thread-detail .td-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gilt-200); margin: var(--sp-2) 0 4px; }
+.thread-detail .td-list { font-size: 12px; color: var(--text-on-dark-2); }
+.thread-detail-empty { font-size: 12px; color: var(--text-on-dark-3); font-style: italic; }
+.threads-empty { text-align: center; color: var(--text-on-dark-3); margin-top: 10vh; }
+.threads-empty h2 { font-family: var(--font-display); color: var(--gilt-100); }
+</style>
+
+<script type="module">
+(async () => {
+    const el = document.getElementById('threads-graph');
+    if (!el) return;
+    let beats = [];
+    try { beats = JSON.parse(document.getElementById('threads-data').textContent) || []; } catch (e) {}
+    if (!beats.length) return;
+    const byId = {}; beats.forEach(b => { byId[b.id] = b; });
+
+    let vis;
+    try { vis = await import('https://esm.sh/vis-network@9.1.9/standalone'); }
+    catch (e) { el.innerHTML = '<div style="padding:1rem;color:var(--text-on-dark-3);">Graph library unavailable.</div>'; return; }
+
+    const nodes = beats.map(b => ({
+        id: b.id,
+        label: b.title,
+        level: Number.isInteger(b.session) ? b.session : undefined,
+        shape: 'box',
+        color: b.status === 'resolved'
+            ? { background: '#2a2a28', border: '#5a5446' }
+            : { background: '#3a2f17', border: '#c9a34e' },
+        font: { color: b.status === 'resolved' ? '#9a917a' : '#e8d9b0', size: 13 },
+        margin: 8,
+    }));
+    const edges = [];
+    beats.forEach(b => (b.branches_to || []).forEach(t => {
+        if (byId[t]) edges.push({ from: b.id, to: t, arrows: 'to', color: { color: '#5a5446' } });
+    }));
+
+    const net = new vis.Network(el, { nodes, edges }, {
+        layout: { hierarchical: { enabled: true, direction: 'LR', sortMethod: 'directed', levelSeparation: 200, nodeSpacing: 110, treeSpacing: 160 } },
+        physics: false,
+        interaction: { hover: true, dragNodes: true, tooltipDelay: 150 },
+        edges: { smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.5 }, width: 1.5 },
+        nodes: { borderWidth: 2 },
+    });
+
+    const panel = document.getElementById('thread-detail');
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function showBeat(id) {
+        const b = byId[id]; if (!b || !panel) return;
+        const npcs = (b.npcs || []).map(esc).join(', ') || '—';
+        const locs = (b.locations || []).map(esc).join(', ') || '—';
+        panel.innerHTML =
+            '<h2>' + esc(b.title) + '</h2>' +
+            '<div class="td-meta">' +
+                '<span class="td-badge ' + (b.status === 'open' ? 'open' : '') + '">' + esc(b.status || '?') + '</span>' +
+                (Number.isInteger(b.session) ? '<span class="td-badge">Session ' + b.session + '</span>' : '') +
+            '</div>' +
+            '<div class="td-summary">' + esc(b.summary || '') + '</div>' +
+            '<div class="td-section">NPCs</div><div class="td-list">' + npcs + '</div>' +
+            '<div class="td-section">Locations</div><div class="td-list">' + locs + '</div>';
+    }
+    net.on('click', (p) => { if (p.nodes && p.nodes[0]) showBeat(p.nodes[0]); });
+    net.once('afterDrawing', () => { try { net.fit({ animation: false }); } catch (e) {} });
+})();
+</script>
+{% endblock %}

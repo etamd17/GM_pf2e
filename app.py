@@ -5487,6 +5487,27 @@ def gm_hub():
         now_playing=now_playing,
     )
 
+
+def _load_story_threads():
+    """Load story-thread beats for the /gm/threads diagram from
+    story_threads.json (repo root). The GM's Cowork regenerates this file from
+    the Obsidian vault and hands it over; it's dropped in here. Returns a list
+    of beat dicts (empty on any error)."""
+    try:
+        with open(os.path.join(BASE_DIR, 'story_threads.json'), encoding='utf-8') as f:
+            return json.load(f).get('beats') or []
+    except (OSError, ValueError):
+        return []
+
+
+@app.route('/gm/threads')
+@gm_required
+def gm_threads():
+    """Branching story-thread diagram — a read-only view of how plot beats
+    connect (open/resolved, NPCs, locations, session order). Data-driven; the
+    site no longer reads the Obsidian vault directly."""
+    return render_template('threads.html', beats=_load_story_threads())
+
 @app.route('/tracker')
 @gm_required
 def tracker_view():
