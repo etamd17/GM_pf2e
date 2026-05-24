@@ -5508,6 +5508,51 @@ def gm_threads():
     site no longer reads the Obsidian vault directly."""
     return render_template('threads.html', beats=_load_story_threads())
 
+
+@app.route('/api/session/export', methods=['POST'])
+@gm_required
+def api_session_export():
+    """Build a session recap (party state + active encounter + combat log) and
+    return it as text. The GM downloads it as a .txt and pastes it into Claude /
+    Obsidian. No vault write — the site no longer hosts an Obsidian vault."""
+    from datetime import datetime as _dt
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip() or f"Session - {_dt.now().strftime('%Y-%m-%d')}"
+    include_log = bool(data.get('include_log', True))
+    campaign = _load_campaign_config() or {}
+    md = [f"# {title}", ""]
+    if campaign.get('name'):
+        md.append(f"_Campaign: {campaign['name']}_")
+    if campaign.get('session_number'):
+        md.append(f"_Session number: {campaign['session_number']}_")
+    md += ["", "## Party State", "", "| PC | Class | HP | Hero | Conditions |",
+           "|----|-------|----|------|------------|"]
+    for name, pc in sorted(PARTY_LIBRARY.items()):
+        cls = (getattr(pc, 'class_name', '') or '').strip()
+        conds = []
+        try:
+            for k, v in (pc.conditions or {}).items():
+                if v and v != 0 and v is not False:
+                    conds.append(f"{k}{(' ' + str(v)) if isinstance(v, int) and v > 0 else ''}")
+        except Exception:
+            pass
+        md.append(f"| {name} | {cls} | {getattr(pc, 'current_hp', 0)}/{getattr(pc, 'hp', 0)} | "
+                  f"{getattr(pc, 'hero_points', 0)} | {', '.join(conds) if conds else '—'} |")
+    md.append("")
+    if ACTIVE_ENCOUNTER:
+        md += ["## Active Encounter at Export", ""]
+        for c in ACTIVE_ENCOUNTER:
+            md.append(f"- **{c.name}** ({'PC' if c.is_pc else 'Enemy'}, init {c.initiative}) — HP {c.current_hp}/{c.hp}")
+        md.append("")
+    if include_log and COMBAT_LOGS:
+        md += ["## Combat Log", ""]
+        for e in COMBAT_LOGS:
+            md.append(f"- `{e.get('time', '')}` R{e.get('round', '')} {e.get('type', '')} — {e.get('msg', '')}")
+        md.append("")
+    md += ["## GM Notes", "", "_Paste this into Claude / Obsidian and flesh out the prose recap._", ""]
+    body = "\n".join(md)
+    return jsonify({"success": True, "markdown": body, "byte_count": len(body.encode("utf-8")), "title": title})
+
 @app.route('/tracker')
 @gm_required
 def tracker_view():

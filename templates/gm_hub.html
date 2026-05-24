@@ -244,46 +244,33 @@
                 </div>
             </div>
 
-            {% if now_playing %}
-            {# ── Now Playing dashboard from Obsidian vault ── #}
-            <div class="now-playing-card"
-                 style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); margin-bottom: var(--sp-5); padding: var(--sp-4) var(--sp-5); position: relative;">
+            {# Previously, on... -- manual session summary shown on the players' splash #}
+            <div class="session-summary-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); margin-bottom: var(--sp-5); padding: var(--sp-4) var(--sp-5);">
                 <div style="display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); margin-bottom:var(--sp-2);">
-                    <h2 style="font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: var(--gilt-100); margin: 0;">{{ now_playing.title }}</h2>
-                    <a href="/gm/notes/view/{{ now_playing.rel_path|urlencode }}"
-                       style="font-size: 10px; letter-spacing:.12em; text-transform:uppercase; color: var(--text-on-dark-3); font-family: var(--font-display); text-decoration: none; padding: 4px 8px; border: 1px solid var(--border-card); border-radius: var(--r-sm);"
-                       title="Open the full note in the Notes browser">
-                        Open in Notes →
-                    </a>
+                    <h2 style="font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: var(--gilt-100); margin: 0;">Previously, on&hellip;</h2>
+                    <span style="font-size:10px; letter-spacing:.12em; text-transform:uppercase; color: var(--text-on-dark-3);">shows on the players' splash</span>
                 </div>
-                <div class="np-body">{{ now_playing.html|safe }}</div>
+                <textarea id="session-summary-input" placeholder="Paste last session's summary here (from Obsidian) -- it appears on the campaign splash players see."
+                          style="width:100%; min-height:90px; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:8px 10px; border-radius:var(--r-sm); font-size:13px; line-height:1.5; resize:vertical; font-family:var(--font-flavor);">{{ campaign.last_recap or '' }}</textarea>
+                <div style="display:flex; align-items:center; gap:var(--sp-2); margin-top:var(--sp-2);">
+                    <button type="button" id="session-summary-save" onclick="saveSessionSummary()"
+                            style="background:var(--accent); border:1px solid var(--accent); color:var(--ink-950); padding:5px 14px; border-radius:var(--r-sm); font-size:12px; font-weight:700; cursor:pointer; letter-spacing:0.04em; text-transform:uppercase;">Save</button>
+                    <span id="session-summary-status" style="font-size:11px; color:var(--text-on-dark-3);"></span>
+                </div>
             </div>
-            <style>
-                .now-playing-card .np-body {
-                    font-family: var(--font-flavor);
-                    font-size: 13.5px;
-                    line-height: 1.6;
-                    color: var(--text-on-dark-2);
+            <script>
+                function saveSessionSummary() {
+                    const ta = document.getElementById('session-summary-input');
+                    const st = document.getElementById('session-summary-status');
+                    const btn = document.getElementById('session-summary-save');
+                    btn.disabled = true; st.textContent = 'Saving\u2026';
+                    fetch('/api/session/recap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recap: ta.value }) })
+                        .then(r => r.json())
+                        .then(j => { st.textContent = j.success ? 'Saved \u00b7 shows on the splash' : 'Save failed'; })
+                        .catch(e => { st.textContent = 'Error: ' + e; })
+                        .finally(() => { btn.disabled = false; setTimeout(() => { st.textContent = ''; }, 3000); });
                 }
-                .now-playing-card .np-body h1, .now-playing-card .np-body h2, .now-playing-card .np-body h3 { font-family: var(--font-display); color: var(--gilt-200); margin: var(--sp-3) 0 var(--sp-1); font-size: 13px; letter-spacing: 0.04em; }
-                .now-playing-card .np-body p { margin: 0 0 var(--sp-2); }
-                .now-playing-card .np-body ul { padding-left: var(--sp-4); margin: 0 0 var(--sp-2); }
-                .now-playing-card .np-body table { font-size: 12px; width: 100%; border-collapse: collapse; }
-                .now-playing-card .np-body th, .now-playing-card .np-body td { padding: 3px 8px; text-align: left; }
-                .now-playing-card .np-body th { color: var(--gilt-200); border-bottom: 1px solid var(--border-card); font-family: var(--font-display); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
-                .now-playing-card .np-body td { color: var(--text-on-dark); border-bottom: 1px dashed var(--border-card); }
-                .now-playing-card .np-body hr { border: none; border-top: 1px dashed var(--border-card); margin: var(--sp-2) 0; }
-                .now-playing-card .np-body .wikilink { color: var(--gilt-200); text-decoration: none; border-bottom: 1px dashed rgba(201,163,78,0.4); }
-                .now-playing-card .np-body .wikilink:hover { color: var(--gilt-100); }
-                .now-playing-card .np-body .wikilink-broken { color: var(--text-on-dark-3); font-style: italic; border-bottom: 1px dotted var(--text-on-dark-3); }
-                .now-playing-card .np-body .cal { margin: var(--sp-2) 0; padding: var(--sp-1) var(--sp-3); border-left: 3px solid var(--accent); background: rgba(201,163,78,0.06); border-radius: var(--r-sm); font-size: 12px; }
-                .now-playing-card .np-body .cal.cal-warning { border-left-color: var(--ruby-200); background: rgba(168,58,58,0.06); }
-                .now-playing-card .np-body .cal-h { font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gilt-200); margin-bottom: 2px; }
-                .now-playing-card .np-body .cal.cal-warning .cal-h { color: var(--ruby-100); }
-                .now-playing-card .np-body strong { color: var(--text-on-dark); }
-                .now-playing-card:hover .np-body .wikilink { color: var(--gilt-100); }
-            </style>
-            {% endif %}
+            </script>
 
             {# ── Tool grid ── #}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
@@ -356,7 +343,7 @@
                         class="text-xs font-medium text-base-300 hover:text-accent-300 px-4 py-2 rounded border border-accent-300/30 hover:border-accent-300 transition-colors"
                         style="background:var(--bg-card); cursor:pointer; font-family:var(--font-display); letter-spacing:0.08em; text-transform:uppercase;"
                         onclick="openSessionExportDialog()"
-                        title="Generate a session-recap markdown bundling combat log + party state, written to vault_data/Sessions/">
+                        title="Generate a session recap and download it as a .txt to paste into Claude / Obsidian">
                     End Session — Export Recap
                 </button>
             </div>
@@ -366,8 +353,8 @@
                 <div style="background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); padding:var(--sp-5); max-width:520px; width:100%; box-shadow:var(--shadow-2);">
                     <h2 style="font-family:var(--font-display); font-size:18px; color:var(--gilt-100); margin-bottom:var(--sp-3); letter-spacing:0.04em;">Export Session Recap</h2>
                     <p style="font-size:12px; color:var(--text-on-dark-2); margin-bottom:var(--sp-3); line-height:1.5;">
-                        Bundles the current combat log, party state, and active encounter into a markdown file under <code style="background:var(--bg-card-2);padding:1px 5px;border-radius:var(--r-sm);font-family:var(--font-mono);font-size:11px;">vault_data/Sessions/</code>.
-                        Pull it back to your local Obsidian with <code style="background:var(--bg-card-2);padding:1px 5px;border-radius:var(--r-sm);font-family:var(--font-mono);font-size:11px;">tools/pull_vault.py</code>.
+                        Bundles the current combat log, party state, and active encounter into a
+                        <strong>.txt</strong> you download and paste into Claude / Obsidian.
                     </p>
                     <label style="display:block; font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; font-family:var(--font-display);">Title</label>
                     <input type="text" id="ses-title"
@@ -375,9 +362,6 @@
                            placeholder="Session - 2026-05-10">
                     <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-on-dark-2); margin-bottom:var(--sp-2); cursor:pointer;">
                         <input type="checkbox" id="ses-include-log" checked> Include combat log
-                    </label>
-                    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-on-dark-2); margin-bottom:var(--sp-3); cursor:pointer;">
-                        <input type="checkbox" id="ses-write-vault" checked> Write to <code style="font-size:11px;">vault_data/Sessions/</code>
                     </label>
                     <div id="ses-result" style="display:none; font-size:11px; padding:var(--sp-2); border-radius:var(--r-sm); margin-bottom:var(--sp-3);"></div>
                     <div style="display:flex; gap:var(--sp-2); justify-content:flex-end;">
@@ -411,7 +395,6 @@
                 async function runSessionExport() {
                     const title = (document.getElementById('ses-title').value || '').trim();
                     const includeLog = document.getElementById('ses-include-log').checked;
-                    const writeVault = document.getElementById('ses-write-vault').checked;
                     const resEl = document.getElementById('ses-result');
                     const btn = document.getElementById('ses-export-btn');
                     btn.disabled = true; btn.textContent = 'Exporting…';
@@ -419,7 +402,7 @@
                         const r = await fetch('/api/session/export', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({title, include_log: includeLog, write_to_vault: writeVault}),
+                            body: JSON.stringify({title, include_log: includeLog}),
                         });
                         const j = await r.json();
                         if (!j.success) {
@@ -430,21 +413,18 @@
                             resEl.textContent = 'Export failed: ' + (j.error || 'unknown');
                             return;
                         }
+                        const blob = new Blob([j.markdown], {type: 'text/plain'});
+                        const url = URL.createObjectURL(blob);
+                        const safe = (title || 'session').replace(/[^a-z0-9_ -]/gi, '') || 'session';
+                        const a = document.createElement('a');
+                        a.href = url; a.download = safe + '.txt';
+                        document.body.appendChild(a); a.click(); a.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
                         resEl.style.display = 'block';
                         resEl.style.background = 'rgba(74,124,42,0.10)';
                         resEl.style.color = '#b8d68f';
                         resEl.style.border = '1px solid rgba(74,124,42,0.40)';
-                        let html = `<div style="margin-bottom:4px;"><b>${j.byte_count} bytes</b> generated.</div>`;
-                        if (j.written && j.path) {
-                            html += `<div>Wrote <code>${j.path}</code> on the server. Run <code>tools/pull_vault.py</code> to bring it back to your local vault.</div>`;
-                            html += `<div style="margin-top:4px;"><a href="/gm/notes/view/${encodeURIComponent(j.path)}" style="color:var(--gilt-200);">View in Notes →</a></div>`;
-                        } else if (!writeVault) {
-                            const blob = new Blob([j.markdown], {type: 'text/markdown'});
-                            const url = URL.createObjectURL(blob);
-                            const safe = (title || 'session').replace(/[^a-z0-9_ -]/gi, '');
-                            html += `<div><a href="${url}" download="${safe}.md" style="color:var(--gilt-200);">Download ${safe}.md →</a></div>`;
-                        }
-                        resEl.innerHTML = html;
+                        resEl.innerHTML = `<div><b>${j.byte_count} bytes</b> downloaded as ${safe}.txt — paste into Claude / Obsidian.</div>`;
                     } catch (e) {
                         resEl.style.display = 'block';
                         resEl.style.background = 'rgba(168,58,58,0.10)';
