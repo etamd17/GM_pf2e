@@ -78,6 +78,8 @@
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:var(--border-default); border-radius:10px; }
         ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+        .nav-links { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+        .nav-links::-webkit-scrollbar { display:none; }
         @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
         .toast-animate { animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
         {% block extra_head %}{% endblock %}
@@ -96,19 +98,21 @@
                     {% if nav_crest %}<img src="{{ nav_crest }}" alt="" class="nav-crest">{% endif %}
                     <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">PF2E</span>
                 </a>
-                <div class="flex items-center gap-1 text-xs font-medium">
-                    <a href="/gm" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors">GM Hub</a>
-                    <a href="/party" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Party</a>
-                    <a href="/tracker" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Tracker</a>
-                    <a href="/gm/threads" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Threads</a>
-                    <a href="/gm/map" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Map</a>
-                    <a href="/gmscreen" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">GM Screen</a>
-                    <a href="/encounter_builder" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Builder</a>
-                    <a href="/generator" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors">Generators</a>
-                    <span class="mx-1 text-base-600">|</span>
-                    <button onclick="toggleTheme()" class="text-base-400 hover:text-base-100 transition-colors px-2 py-1.5" title="Toggle Theme">
-                        <span id="theme-icon">&#9788;</span>
-                    </button>
+                <div class="nav-links flex items-center gap-1 text-xs font-medium flex-nowrap">
+                    {% if is_gm %}
+                    <a href="/gm" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Hub</a>
+                    {% endif %}
+                    <a href="/party" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Party</a>
+                    {% if is_gm %}
+                    <a href="/tracker" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Tracker</a>
+                    <a href="/gm/threads" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Threads</a>
+                    <a href="/gm/map" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Map</a>
+                    <a href="/gmscreen" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Screen</a>
+                    <a href="/encounter_builder" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Builder</a>
+                    <a href="/generator" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Generators</a>
+                    {% else %}
+                    <a href="/player" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Player Hub</a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -188,23 +192,6 @@
                 if (!_visible(t)) return;
                 _hide(t);
             });
-        })();
-
-        // Theme toggle
-        function toggleTheme() {
-            const html = document.documentElement;
-            const current = html.getAttribute('data-theme') || 'dark';
-            const next = current === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', next);
-            localStorage.setItem('pf2e_theme', next);
-            document.getElementById('theme-icon').textContent = next === 'dark' ? '\u263C' : '\u263E';
-        }
-        // Apply saved theme on load
-        (function() {
-            const saved = localStorage.getItem('pf2e_theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', saved);
-            const icon = document.getElementById('theme-icon');
-            if (icon) icon.textContent = saved === 'dark' ? '\u263C' : '\u263E';
         })();
 
         const dicePanel = document.getElementById('dice-panel');

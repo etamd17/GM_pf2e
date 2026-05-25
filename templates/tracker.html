@@ -45,12 +45,12 @@
   display:grid;
   grid-template-columns: 1fr auto 1fr;
   gap:14px;
-  padding:11px 18px;
+  padding:6px 14px;
   background:linear-gradient(180deg, rgba(23,27,38,0.85) 0%, rgba(19,22,31,0.9) 100%);
   border:1px solid var(--t-border);
   border-radius:12px;
   align-items:center;
-  position:relative; margin-bottom:12px;
+  position:relative; margin-bottom:8px;
   overflow:hidden;
 }
 .trk .hero-bar::before {
@@ -59,7 +59,7 @@
   opacity:.7;
 }
 .trk .hb-left { display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }
-.trk .hb-left .name { font-family:'Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:.4px; color:var(--t-t1); }
+.trk .hb-left .name { font-family:'Cinzel',serif; font-size:14px; font-weight:700; letter-spacing:.4px; color:var(--t-t1); }
 .trk .hb-left .meta { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:1.1px; }
 
 /* Sync indicator — small green dot + "Synced" label that pulses gold for a
@@ -111,7 +111,7 @@
   display:flex; align-items:center; gap:14px;
   background:linear-gradient(180deg, rgba(38,43,58,0.9), rgba(26,30,41,0.95));
   border:1px solid var(--t-border); border-radius:14px;
-  padding:8px 16px;
+  padding:5px 12px;
   box-shadow:0 3px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .trk .round-block {
@@ -121,20 +121,20 @@
 }
 .trk .round-block .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; margin-bottom:4px; }
 .trk .round-block .v {
-  font-size:20px; font-weight:900;
+  font-size:17px; font-weight:900;
   background:linear-gradient(180deg, #f4e8b8 0%, var(--t-gold-b) 50%, var(--t-gold) 100%);
   -webkit-background-clip:text; background-clip:text; color:transparent;
   filter:drop-shadow(0 1px 2px rgba(200,168,78,0.2));
 }
 .trk .turn-now { display:flex; flex-direction:column; padding:0 12px; border-right:1px solid var(--t-border); min-width:110px; }
 .trk .turn-now .l { font-size:9px; color:var(--t-t3); letter-spacing:1.6px; font-weight:700; }
-.trk .turn-now .v { font-family:'Cinzel',serif; font-size:19px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1.1; max-width:420px; word-break:break-word; }
+.trk .turn-now .v { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--t-red-b); margin-top:2px; line-height:1.1; max-width:420px; word-break:break-word; }
 .trk .turn-now .v::before { content:"▸ "; color:var(--t-gold); }
 .trk .turn-ctl { display:flex; gap:6px; }
 .trk .next-btn {
   background:linear-gradient(180deg, var(--t-red) 0%, var(--t-red-d) 100%);
   color:#fff; font-weight:700; border:none;
-  padding:8px 17px; border-radius:8px; cursor:pointer;
+  padding:5px 14px; border-radius:8px; cursor:pointer;
   font-size:12px; letter-spacing:.6px; text-transform:uppercase;
   box-shadow:0 3px 12px rgba(196,60,60,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
 }

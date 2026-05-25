@@ -354,30 +354,26 @@
         .ability-block {
             display: flex; flex-direction: column; align-items: center;
             width: 78px; min-width: 66px;
-            padding: 2px 6px 3px;
-            background: var(--bg-raised);
+            padding: 4px 6px;
+            background: none;
             border: 1px solid var(--border-s);
             border-radius: 8px;
             position: relative;
             cursor: pointer;
             transition: border-color 0.15s, background 0.15s;
             user-select: none;
-        }
-        .ability-block::before {
-            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            width: 24px; height: 2px; border-radius: 0 0 2px 2px;
-            background: var(--t4);
+            box-shadow: none;
         }
         .ability-block:hover { border-color: rgba(196,60,60,0.25); background: var(--bg-overlay); }
         .ability-block .mod {
             font-family: var(--font-display);
-            font-size: 22px; font-weight: 700;
+            font-size: 20px; font-weight: 700;
             color: #fff; line-height: 1;
             font-variant-numeric: lining-nums tabular-nums;
         }
         .ability-block .label {
             font-family: var(--font-display);
-            font-size: 9px; font-weight: 700;
+            font-size: 8px; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.18em;
             color: var(--t3);
             margin-top: 1px;
@@ -539,7 +535,9 @@
         /* HP block is the one ss-block that needs extra vertical room to
            house the gauge + TMP input + shield gauge. Keep it snug but don't
            clip. The `hp-area` modifier exists specifically for this. */
-        .ss-block.hp-area { padding: 3px 8px 4px; }
+        .ss-block.hp-area { padding: 3px 8px 4px; border-left: 2px solid var(--gilt-dim, rgba(201,163,78,0.55)); }
+        #ac-block { border-left: 2px solid var(--gilt-dim, rgba(201,163,78,0.55)); }
+        #ac-block .ss-val { font-size: 28px; }
 
         /* === CONDITION BAR === */
         .condition-bar {
@@ -720,19 +718,6 @@
         .tab-btn.active { color: var(--gilt); border-bottom-color: var(--gilt); }
         .tab-btn:not(.active):hover { color: var(--t2); }
 
-        /* Chapter numbers: roman-numeral prefix on each tab.
-           Uses CSS counters so the numbering auto-updates if tabs
-           are added/removed/reordered. Dot-middle between numeral
-           and title reads as a rulebook's chapter marker. */
-        .tab-bar-scroll { counter-reset: chapter; }
-        .tab-btn { counter-increment: chapter; }
-        .tab-btn::before {
-            content: counter(chapter, upper-roman) " \00b7 ";
-            color: var(--gilt-dim, rgba(201,163,78,0.55));
-            margin-right: 2px;
-            font-weight: 700;
-        }
-        .tab-btn.active::before { color: var(--gilt); }
         .tab-content { display: none; animation: fadeIn 0.2s ease-out; }
         .tab-content.active { display: block; }
 
@@ -1995,6 +1980,8 @@
             #equip-modal #equip-detail { width: 100% !important; }
             /* Toast container shouldn't claim a fixed 320px on a 375px phone. */
             #roll-toast-container { width: calc(100vw - 24px) !important; right: 12px !important; top: 12px !important; }
+            /* d20 FAB: push above the tab bar so they don't overlap on mobile */
+            #dice-widget { bottom: 60px !important; }
         }
         @media (max-width: 480px) {
             .max-w-6xl { padding-left:8px !important; padding-right:8px !important; }

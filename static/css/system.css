@@ -2735,6 +2735,10 @@ button[onclick^="rollDamage"]:hover {
     gap: 8px !important;
     align-content: center !important;
 }
+.stats-strip .defense-grid > .rubric {
+    grid-column: 1 / -1 !important;
+    margin-bottom: 0 !important;
+}
 .stats-strip .defense-grid .ss-block {
     border-right: none !important;
     background: var(--bg-raised) !important;

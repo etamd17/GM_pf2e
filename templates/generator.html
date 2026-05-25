@@ -89,7 +89,7 @@
     }
     .gen-card-body { padding: 11px 12px 12px; }
 
-    .reroll-btn {
+    .reroll-btn, .pin-btn {
         background: transparent;
         border: 1px solid transparent;
         border-radius: 4px;
@@ -101,11 +101,99 @@
         line-height: 1;
         color: #b8b8cc;
     }
-    .reroll-btn:hover {
+    .reroll-btn:hover, .pin-btn:hover {
         opacity: 1;
         border-color: rgba(142,212,212,0.25);
         color: #8ED4D4;
     }
+    .pin-btn.pinned {
+        opacity: 0.4;
+        color: #8ED4D4;
+        cursor: default;
+        pointer-events: none;
+    }
+
+    /* Pinned section */
+    .pinned-section {
+        background: #191920;
+        border: 1px solid rgba(142,212,212,0.12);
+        border-radius: 10px;
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .pinned-header {
+        padding: 10px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #24242e;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        cursor: pointer;
+        user-select: none;
+    }
+    .pinned-header:hover { background: #2a2a36; }
+    .pinned-title {
+        font-family: 'Cinzel', serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8ED4D4;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .pinned-toggle-icon {
+        font-size: 11px;
+        color: #6b6b8a;
+        transition: transform 0.2s;
+    }
+    .pinned-section.expanded .pinned-toggle-icon { transform: rotate(90deg); }
+    .pinned-body {
+        display: none;
+        padding: 12px 14px;
+    }
+    .pinned-section.expanded .pinned-body { display: block; }
+    .pinned-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.04);
+        margin-bottom: 8px;
+        background: rgba(255,255,255,0.015);
+    }
+    .pinned-item:last-child { margin-bottom: 0; }
+    .pinned-item-type {
+        font-family: 'Cinzel', serif;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #6b6b8a;
+        min-width: 80px;
+        flex-shrink: 0;
+        padding-top: 2px;
+    }
+    .pinned-item-content {
+        flex: 1;
+        min-width: 0;
+    }
+    .pinned-item-content .gen-content { font-size: 12px; }
+    .pinned-remove-btn {
+        background: transparent;
+        border: none;
+        color: #6b6b8a;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        padding: 2px 4px;
+        opacity: 0.6;
+        transition: opacity 0.15s, color 0.15s;
+        flex-shrink: 0;
+    }
+    .pinned-remove-btn:hover { opacity: 1; color: #e06060; }
 
     /* Toolbar contextual chips (Level / Biome / Reroll All) */
     .gen-toolbar-chip {
@@ -165,6 +253,18 @@
         </div>
     </div>
 
+    {# ── Pinned Section (collapsed by default) ── #}
+    <div id="pinned-section" class="pinned-section" style="display:none;">
+        <div class="pinned-header" onclick="togglePinned()">
+            <span class="pinned-title">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10v5l-2 2v4l-3-2-3 2V9L3 7V2z"/></svg>
+                Pinned <span id="pinned-count" style="font-family:'Inter',sans-serif;font-size:10px;color:#6b6b8a;font-weight:600;">(0)</span>
+            </span>
+            <span class="pinned-toggle-icon">&#9656;</span>
+        </div>
+        <div class="pinned-body" id="pinned-body"></div>
+    </div>
+
     {# ── Generator Cards ──────────────────────────────────────────────
        Ordered top-to-bottom by frequency-of-use at the table:
          1. Combat & moment-to-moment (encounter / event / weather / hazard / puzzle)
@@ -182,7 +282,10 @@
                 <span class="gen-card-title">
                     <span class="glyph">{{ glyph | safe }}</span>{{ title }}
                 </span>
-                <button onclick="rerollSingle('{{ id }}', this)" class="reroll-btn" title="Reroll">&#x2684;</button>
+                <span style="display:flex;gap:4px;align-items:center;">
+                    <button onclick="pinCard('{{ id }}', this)" class="pin-btn" title="Pin this result"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10v5l-2 2v4l-3-2-3 2V9L3 7V2z"/></svg></button>
+                    <button onclick="rerollSingle('{{ id }}', this)" class="reroll-btn" title="Reroll">&#x2684;</button>
+                </span>
             </div>
             <div id="content-{{ id }}" class="gen-card-body gen-content">{{ data[id] | safe }}</div>
         </div>
@@ -231,6 +334,12 @@ async function rerollSingle(type, btn) {
             el.innerHTML = data.html;
             el.classList.remove('rerolling');
         }
+        // Reset the pin button for this card (new content = unpinned)
+        const card = el?.closest('.gen-card');
+        if (card) {
+            const pinBtn = card.querySelector('.pin-btn');
+            if (pinBtn) { pinBtn.classList.remove('pinned'); pinBtn.disabled = false; }
+        }
     } catch (e) {
         console.error('Gen error:', e);
         if (el) el.classList.remove('rerolling');
@@ -259,5 +368,65 @@ function _genUpdateUrl() {
     history.replaceState(null, '', u.toString());
     rerollAll();
 }
+
+/* ── Pin functionality ── */
+async function pinCard(type, btn) {
+    if (btn.classList.contains('pinned')) return;
+    const el = document.getElementById(`content-${type}`);
+    if (!el) return;
+    const content = el.innerHTML.trim();
+    try {
+        const res = await fetch('/api/generator/pin', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({type, content})
+        });
+        if (res.ok) {
+            btn.classList.add('pinned');
+            btn.disabled = true;
+            loadPinnedSection();
+        }
+    } catch (e) { console.error('Pin error:', e); }
+}
+
+async function unpinCard(pinId) {
+    try {
+        const res = await fetch(`/api/generator/pin/${pinId}`, {method: 'DELETE'});
+        if (res.ok) loadPinnedSection();
+    } catch (e) { console.error('Unpin error:', e); }
+}
+
+function togglePinned() {
+    document.getElementById('pinned-section').classList.toggle('expanded');
+}
+
+async function loadPinnedSection() {
+    try {
+        const res = await fetch('/api/generator/pins');
+        const data = await res.json();
+        const pins = data.pins || [];
+        const section = document.getElementById('pinned-section');
+        const body = document.getElementById('pinned-body');
+        const count = document.getElementById('pinned-count');
+        if (pins.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = '';
+        count.textContent = `(${pins.length})`;
+        body.innerHTML = pins.map(p => `
+            <div class="pinned-item">
+                <span class="pinned-item-type">${_esc(p.type.replace('_', ' '))}</span>
+                <div class="pinned-item-content"><div class="gen-content">${p.content}</div></div>
+                <button class="pinned-remove-btn" onclick="unpinCard('${p.id}')" title="Remove pin">&times;</button>
+            </div>
+        `).join('');
+    } catch (e) { console.error('Load pins error:', e); }
+}
+
+function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Load pinned section on page load
+loadPinnedSection();
 </script>
 {% endblock %}

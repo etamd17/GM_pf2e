@@ -4481,6 +4481,10 @@ def health_check():
         'sse_connections': sse_subscriber_count(),
     })
 
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
 @app.route('/api/perf')
 def perf_metrics():
     """Lightweight perf snapshot for at-the-table debugging. Returns SSE
@@ -4595,9 +4599,9 @@ def _inject_campaign_chrome():
         mood = cfg.get('scene_mood', 'calm')
         if mood not in _VALID_MOODS:
             mood = 'calm'
-        return {'nav_crest': cfg.get('crest_image', ''), 'scene_mood': mood}
+        return {'nav_crest': cfg.get('crest_image', ''), 'scene_mood': mood, 'is_gm': _is_gm()}
     except Exception:
-        return {'nav_crest': '', 'scene_mood': 'calm'}
+        return {'nav_crest': '', 'scene_mood': 'calm', 'is_gm': _is_gm()}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -8528,6 +8532,57 @@ def api_generate(element_type):
         return jsonify({'error': 'Invalid generator type'}), 400
     data = request.get_json()
     return jsonify({'html': getattr(pf2e_gen, f'get_{element_type}')(int(data.get('level', 1)), data.get('biome', 'City'))})
+
+# --- Pinned generators ---
+PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
+
+def _load_pinned_generators():
+    if os.path.exists(PINNED_GENERATORS_FILE):
+        try:
+            with open(PINNED_GENERATORS_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+    return []
+
+def _save_pinned_generators(pins):
+    os.makedirs(os.path.dirname(PINNED_GENERATORS_FILE) or '.', exist_ok=True)
+    with open(PINNED_GENERATORS_FILE, 'w') as f:
+        json.dump(pins, f, indent=2)
+
+@app.route('/api/generator/pins', methods=['GET'])
+@gm_required
+def api_list_pinned_generators():
+    return jsonify({'pins': _load_pinned_generators()})
+
+@app.route('/api/generator/pin', methods=['POST'])
+@gm_required
+def api_pin_generator():
+    from datetime import datetime as _dt
+    data = request.get_json()
+    if not data or 'type' not in data or 'content' not in data:
+        return jsonify({'error': 'Missing type or content'}), 400
+    pin_type = data['type']
+    if pin_type not in VALID_GENERATOR_TYPES:
+        return jsonify({'error': 'Invalid generator type'}), 400
+    pins = _load_pinned_generators()
+    new_pin = {
+        'id': str(uuid.uuid4()),
+        'type': pin_type,
+        'content': data['content'],
+        'pinned_at': _dt.utcnow().isoformat() + 'Z',
+    }
+    pins.insert(0, new_pin)
+    _save_pinned_generators(pins)
+    return jsonify({'pin': new_pin})
+
+@app.route('/api/generator/pin/<pin_id>', methods=['DELETE'])
+@gm_required
+def api_unpin_generator(pin_id):
+    pins = _load_pinned_generators()
+    pins = [p for p in pins if p.get('id') != pin_id]
+    _save_pinned_generators(pins)
+    return jsonify({'ok': True})
 
 @app.route('/player')
 def player_view():

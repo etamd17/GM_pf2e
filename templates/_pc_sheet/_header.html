@@ -152,6 +152,7 @@
                  4-wide x 2-rows beside the HP panel instead of stretching to
                  the HP block's full height. -->
             <div class="defense-grid">
+            <div class="rubric" data-tint="gilt" style="margin-bottom:6px;">Defenses & Rolls</div>
             <!-- AC (just the number + shield badge — actions live in HP/Shield zone) -->
             <div id="ac-block" class="ss-block {% if pc.shield_raised %}shield-raised{% endif %}" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
                 <div class="ss-lbl">Armor Class</div>
@@ -225,6 +226,7 @@
 
             <!-- HP block -->
             <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}">
+                <div class="rubric" data-tint="verdigris" style="margin-bottom:6px;">Resources</div>
                 <div class="ss-lbl">Hit Points</div>
                 {# Dying widget (Wave 2 #4) — only renders when current_hp == 0,
                    driven by the dying/wounded values that already exist in the
@@ -247,7 +249,7 @@
                     <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:32px; height:32px; padding:0; font-size:16px;">−</button>
                     <div style="text-align:center; min-width:96px;">
                         <div>
-                            <span id="current-hp" class="hp-current" style="font-size:26px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
+                            <span id="current-hp" class="hp-current" style="font-size:36px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
                             <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
                             <span id="temp-hp-chip" class="no-print" style="color:var(--blue); font-size:11px; font-weight:700; margin-left:6px; {% if pc.temp_hp <= 0 %}display:none;{% endif %}"
                                   title="Temporary HP (drains first on damage)">+<span id="temp-hp-val">{{ pc.temp_hp }}</span> tmp</span>

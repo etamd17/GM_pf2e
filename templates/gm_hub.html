@@ -4,7 +4,6 @@
         body.gm-hub-body { background: var(--bg-page) !important; }
         .gm-hub-stage {
             position: relative;
-            min-height: 100vh;
             background:
                 radial-gradient(circle at 20% 0%, rgba(201,163,78,0.05), transparent 55%),
                 radial-gradient(circle at 80% 100%, rgba(168,58,58,0.04), transparent 50%);
@@ -44,6 +43,71 @@
                     {% endif %}
                 </div>
             </header>
+
+            {# ── Tool grid ── #}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
+
+                <a href="/party" class="tile">
+                    <div class="tile__glyph">P</div>
+                    <h2 class="tile__title">Party View</h2>
+                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
+                    <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
+                </a>
+
+                <a href="/gm/threads" class="tile">
+                    <div class="tile__glyph">&#10070;</div>
+                    <h2 class="tile__title">Story Threads</h2>
+                    <p class="tile__desc">Branching map of plot beats &mdash; open vs. resolved, who and where, at a glance.</p>
+                    <span class="pill" style="margin-top:var(--sp-3);">read-only</span>
+                </a>
+
+                <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
+                    <div class="tile__glyph">&#9876;</div>
+                    <h2 class="tile__title">Encounter Tracker</h2>
+                    <p class="tile__desc">Initiative order, turns, HP, conditions, persistent damage. The combat surface.</p>
+                    <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
+                        {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
+                    </span>
+                </a>
+
+                <a href="/encounter_builder" class="tile">
+                    <div class="tile__glyph">&#9881;</div>
+                    <h2 class="tile__title">Encounter Builder</h2>
+                    <p class="tile__desc">Search the bestiary, build to a difficulty budget, drop into the tracker.</p>
+                    <span class="pill" style="margin-top:var(--sp-3);">{{ monster_count }} monster{{ '' if monster_count == 1 else 's' }} loaded</span>
+                </a>
+
+                <a href="/gmscreen" class="tile">
+                    <div class="tile__glyph">&#9776;</div>
+                    <h2 class="tile__title">GM Screen</h2>
+                    <p class="tile__desc">DCs, conditions, combat math, compendium search. <kbd class="kbd">C</kbd> opens checks drawer.</p>
+                </a>
+
+                <a href="/generator" class="tile">
+                    <div class="tile__glyph">&#9881;</div>
+                    <h2 class="tile__title">Generators</h2>
+                    <p class="tile__desc">NPCs, taverns, loot, hazards, weather &mdash; scaled to party level &amp; biome.</p>
+                </a>
+
+                <a href="/gm/map" class="tile" data-tone="muted">
+                    <div class="tile__glyph">&#9783;</div>
+                    <h2 class="tile__title">Battle Map</h2>
+                    <p class="tile__desc">VTT canvas with fog, walls, lighting, templates, token movement. Currently in maintenance mode.</p>
+                </a>
+
+                <a href="/" class="tile">
+                    <div class="tile__glyph">&#9776;</div>
+                    <h2 class="tile__title">Campaign Lobby</h2>
+                    <p class="tile__desc">The intro page players land on. Edit the recap, intro, next-session date.</p>
+                </a>
+
+                <a href="/player" class="tile">
+                    <div class="tile__glyph">&#9823;</div>
+                    <h2 class="tile__title">Player Hub</h2>
+                    <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
+                </a>
+
+            </div>
 
             {# ── Session ritual: opening curtain control + prep ── #}
             <div class="session-ritual-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
@@ -242,99 +306,6 @@
                         <span style="color:var(--text-on-dark-3);">Loading&hellip;</span>
                     </div>
                 </div>
-            </div>
-
-            {# Previously, on... -- manual session summary shown on the players' splash #}
-            <div class="session-summary-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); margin-bottom: var(--sp-5); padding: var(--sp-4) var(--sp-5);">
-                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); margin-bottom:var(--sp-2);">
-                    <h2 style="font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: var(--gilt-100); margin: 0;">Previously, on&hellip;</h2>
-                    <span style="font-size:10px; letter-spacing:.12em; text-transform:uppercase; color: var(--text-on-dark-3);">shows on the players' splash</span>
-                </div>
-                <textarea id="session-summary-input" placeholder="Paste last session's summary here (from Obsidian) -- it appears on the campaign splash players see."
-                          style="width:100%; min-height:90px; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:8px 10px; border-radius:var(--r-sm); font-size:13px; line-height:1.5; resize:vertical; font-family:var(--font-flavor);">{{ campaign.last_recap or '' }}</textarea>
-                <div style="display:flex; align-items:center; gap:var(--sp-2); margin-top:var(--sp-2);">
-                    <button type="button" id="session-summary-save" onclick="saveSessionSummary()"
-                            style="background:var(--accent); border:1px solid var(--accent); color:var(--ink-950); padding:5px 14px; border-radius:var(--r-sm); font-size:12px; font-weight:700; cursor:pointer; letter-spacing:0.04em; text-transform:uppercase;">Save</button>
-                    <span id="session-summary-status" style="font-size:11px; color:var(--text-on-dark-3);"></span>
-                </div>
-            </div>
-            <script>
-                function saveSessionSummary() {
-                    const ta = document.getElementById('session-summary-input');
-                    const st = document.getElementById('session-summary-status');
-                    const btn = document.getElementById('session-summary-save');
-                    btn.disabled = true; st.textContent = 'Saving\u2026';
-                    fetch('/api/session/recap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recap: ta.value }) })
-                        .then(r => r.json())
-                        .then(j => { st.textContent = j.success ? 'Saved \u00b7 shows on the splash' : 'Save failed'; })
-                        .catch(e => { st.textContent = 'Error: ' + e; })
-                        .finally(() => { btn.disabled = false; setTimeout(() => { st.textContent = ''; }, 3000); });
-                }
-            </script>
-
-            {# ── Tool grid ── #}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
-
-                <a href="/party" class="tile">
-                    <div class="tile__glyph">P</div>
-                    <h2 class="tile__title">Party View</h2>
-                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
-                    <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
-                </a>
-
-                <a href="/gm/threads" class="tile">
-                    <div class="tile__glyph">&#10070;</div>
-                    <h2 class="tile__title">Story Threads</h2>
-                    <p class="tile__desc">Branching map of plot beats &mdash; open vs. resolved, who and where, at a glance.</p>
-                    <span class="pill" style="margin-top:var(--sp-3);">read-only</span>
-                </a>
-
-                <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
-                    <div class="tile__glyph">&#9876;</div>
-                    <h2 class="tile__title">Encounter Tracker</h2>
-                    <p class="tile__desc">Initiative order, turns, HP, conditions, persistent damage. The combat surface.</p>
-                    <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
-                        {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
-                    </span>
-                </a>
-
-                <a href="/encounter_builder" class="tile">
-                    <div class="tile__glyph">&#9881;</div>
-                    <h2 class="tile__title">Encounter Builder</h2>
-                    <p class="tile__desc">Search the bestiary, build to a difficulty budget, drop into the tracker.</p>
-                    <span class="pill" style="margin-top:var(--sp-3);">{{ monster_count }} monster{{ '' if monster_count == 1 else 's' }} loaded</span>
-                </a>
-
-                <a href="/gmscreen" class="tile">
-                    <div class="tile__glyph">&#9776;</div>
-                    <h2 class="tile__title">GM Screen</h2>
-                    <p class="tile__desc">DCs, conditions, combat math, compendium search. <kbd class="kbd">C</kbd> opens checks drawer.</p>
-                </a>
-
-                <a href="/generator" class="tile">
-                    <div class="tile__glyph">&#9881;</div>
-                    <h2 class="tile__title">Generators</h2>
-                    <p class="tile__desc">NPCs, taverns, loot, hazards, weather &mdash; scaled to party level &amp; biome.</p>
-                </a>
-
-                <a href="/gm/map" class="tile" data-tone="muted">
-                    <div class="tile__glyph">&#9783;</div>
-                    <h2 class="tile__title">Battle Map</h2>
-                    <p class="tile__desc">VTT canvas with fog, walls, lighting, templates, token movement. Currently in maintenance mode.</p>
-                </a>
-
-                <a href="/" class="tile">
-                    <div class="tile__glyph">&#9776;</div>
-                    <h2 class="tile__title">Campaign Lobby</h2>
-                    <p class="tile__desc">The intro page players land on. Edit the recap, intro, next-session date.</p>
-                </a>
-
-                <a href="/player" class="tile">
-                    <div class="tile__glyph">&#9823;</div>
-                    <h2 class="tile__title">Player Hub</h2>
-                    <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
-                </a>
-
             </div>
 
             {# ── End-of-session export ── #}

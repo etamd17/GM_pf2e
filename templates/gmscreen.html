@@ -155,6 +155,10 @@
        Moved here from the encounter tracker — it's a pure reference and
        belongs with the rest of the GM's on-the-fly rules, not the turn
        timer. Local CSS variables isolate it from the tracker's palette. */
+    @keyframes checks-handle-glow {
+      0%, 100% { box-shadow: -4px 0 14px rgba(0,0,0,0.35), 0 0 8px rgba(201,163,78,0.3); }
+      50%      { box-shadow: -4px 0 14px rgba(0,0,0,0.35), 0 0 18px rgba(201,163,78,0.55), 0 0 30px rgba(201,163,78,0.2); }
+    }
     .checks-drawer {
       --t-bg-surface: var(--bg-card);
       --t-bg-raised:  var(--bg-page);
@@ -174,37 +178,48 @@
       z-index:120;
       display:flex;
       pointer-events:none;
-      transform:translateX(calc(100% - 32px));
+      transform:translateX(calc(100% - 44px));
       transition: transform .22s cubic-bezier(.4,0,.2,1);
     }
     @media (max-width: 1280px) { .checks-drawer { width: 420px; } }
     @media (max-width: 900px)  { .checks-drawer { width: 92vw; } }
     .checks-drawer.open { transform:translateX(0); }
     .checks-drawer-handle {
-      width:32px; flex-shrink:0;
+      width:44px; flex-shrink:0;
       background:linear-gradient(180deg, rgba(23,27,38,0.96), rgba(19,22,31,0.96));
       border:1px solid var(--t-border); border-right:none;
+      border-left: 2px solid var(--gilt-300);
       border-radius:8px 0 0 8px;
       cursor:pointer;
       pointer-events:auto;
-      display:flex; align-items:center; justify-content:center;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
       position:relative;
-      transition: background .15s;
+      transition: background .15s, box-shadow .15s;
       box-shadow:-4px 0 14px rgba(0,0,0,0.35);
+    }
+    .checks-drawer-handle.glow-pulse {
+      animation: checks-handle-glow 1.2s ease-in-out 3;
     }
     .checks-drawer-handle:hover {
       background:linear-gradient(180deg, rgba(40,45,60,0.96), rgba(30,34,46,0.96));
+      box-shadow: -4px 0 14px rgba(0,0,0,0.35), 0 0 12px rgba(201,163,78,0.3);
     }
     .checks-drawer-handle::before {
       content:""; position:absolute; top:0; bottom:0; left:0; width:2px;
       background:linear-gradient(180deg, transparent, var(--t-gold) 20%, var(--ruby-300) 50%, var(--t-gold) 80%, transparent);
       opacity:.9;
     }
+    .checks-drawer-handle-arrow {
+      font-size: 10px;
+      color: var(--t-gold);
+      opacity: 0.7;
+      line-height: 1;
+    }
     .checks-drawer-handle-label {
       writing-mode: vertical-rl; text-orientation: mixed;
       transform: rotate(180deg);
       font-family:'Cinzel',serif;
-      font-size:12px; font-weight:700; letter-spacing:3px;
+      font-size:13px; font-weight:700; letter-spacing:3px;
       color:var(--t-gold); text-transform:uppercase;
       user-select:none; white-space:nowrap;
     }
@@ -652,6 +667,18 @@
             if (d) { e.preventDefault(); toggleChecksDrawer(); }
         }
     });
+    // Remove the intro glow-pulse after it completes so it does not re-trigger
+    (function() {
+        const handle = document.querySelector('.checks-drawer-handle.glow-pulse');
+        if (handle) {
+            handle.addEventListener('animationend', function onEnd(e) {
+                if (e.animationName === 'checks-handle-glow') {
+                    handle.classList.remove('glow-pulse');
+                    handle.removeEventListener('animationend', onEnd);
+                }
+            });
+        }
+    })();
 </script>
 
 {# ═══════════════════ GM CHECKS CHEAT-SHEET DRAWER ═══════════════════ #}
@@ -659,13 +686,15 @@
    slide the full panel out. Non-modal, so you can still see the GM
    screen reference cards behind it. #}
 <div id="checks-drawer" class="checks-drawer">
-    <div class="checks-drawer-handle" onclick="toggleChecksDrawer()" title="Open/close checks reference (C)">
-        <span class="checks-drawer-handle-label">&#128203; Checks</span>
+    <div class="checks-drawer-handle glow-pulse" onclick="toggleChecksDrawer()" title="Open/close checks reference (C)">
+        <span class="checks-drawer-handle-arrow">&#9664;</span>
+        <span class="checks-drawer-handle-label">Checks</span>
+        <span class="checks-drawer-handle-arrow">&#9664;</span>
     </div>
     <div class="checks-drawer-panel">
         <div class="checks-drawer-head">
             <div>
-                <h3>&#128203; Checks &amp; Saves Reference</h3>
+                <h3>Checks &amp; Saves Reference</h3>
                 <div class="sub">What to ask your players to roll &middot; PF2e Remastered</div>
             </div>
             <button class="checks-drawer-close" onclick="closeChecksDrawer()" title="Close (Esc)">&times;</button>
@@ -896,11 +925,11 @@
                             <div class="dc-row"><span class="k">Persistent damage &mdash; end</span><span class="v">DC 15</span></div>
                             <div class="dc-row"><span class="k">Assisted-recovery flat</span><span class="v">DC 10</span></div>
                             <div class="dc-row"><span class="k">Recover from dying</span><span class="v">DC 10+dying</span></div>
-                            <div class="dc-row"><span class="k">Stabilize (new PF2e variant)</span><span class="v">DC 15</span></div>
+                            <div class="dc-row"><span class="k">Administer First Aid (stabilize)</span><span class="v">DC 15</span></div>
                         </div>
                         <div class="dc-card">
                             <h4>Common Combat DCs</h4>
-                            <div class="dc-row"><span class="k">Sustain a spell (avoid wobble)</span><span class="v">&mdash;</span></div>
+                            <div class="dc-row"><span class="k">Sustain a Spell</span><span class="v">no check (1 action)</span></div>
                             <div class="dc-row"><span class="k">Escape a grapple</span><span class="v">vs Fort/Ref</span></div>
                             <div class="dc-row"><span class="k">Trip vs huge creature</span><span class="v">+2 size</span></div>
                             <div class="dc-row"><span class="k">MAP on 2nd strike</span><span class="v pos">&minus;5 / &minus;4 agile</span></div>

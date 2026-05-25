@@ -170,6 +170,15 @@
 </head>
 <body class="stage{% if campaign.hero_image %} has-hero{% endif %}"
       {% if campaign.hero_image %}style="--hero-image: url('{{ campaign.hero_image }}');"{% endif %}>
+
+    <!-- Player Nav -->
+    <nav style="position:relative; z-index:10; height:48px; display:flex; align-items:center; padding:0 24px; background:rgba(12,10,7,0.92); border-bottom:1px solid rgba(201,163,78,0.14);">
+        <span style="font-family:'Cinzel',serif; font-weight:700; font-size:14px; color:#c9a34e; letter-spacing:0.08em; margin-right:28px;">PF2E</span>
+        <a href="/" style="font-family:'Inter',sans-serif; font-size:12px; color:#b8b8cc; text-decoration:none; margin-right:20px; transition:color 0.15s;" onmouseover="this.style.color='#ededf4'" onmouseout="this.style.color='#b8b8cc'">Home</a>
+        <a href="/player" style="font-family:'Inter',sans-serif; font-size:12px; color:#e0b65a; text-decoration:none; margin-right:20px; border-bottom:2px solid #c9a34e; padding-bottom:2px;">Roster</a>
+        <a href="/gm/map" style="font-family:'Inter',sans-serif; font-size:12px; color:#b8b8cc; text-decoration:none; transition:color 0.15s;" onmouseover="this.style.color='#ededf4'" onmouseout="this.style.color='#b8b8cc'">Map</a>
+    </nav>
+
 <div class="max-w-5xl mx-auto w-full px-4 md:px-8 pb-10" style="position:relative; z-index:1;">
 
     {# ── Hero band — matches the homepage / gm_hub brand pattern:
@@ -262,67 +271,45 @@
         {% endfor %}
     </div>
 
-    <!-- ENCOUNTER -->
+    <!-- PARTY STATUS -->
     <div class="flex items-center gap-4 my-8">
         <div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div>
-        <span class="text-base-500 text-xs tracking-widest uppercase font-medium">Active Encounter</span>
+        <span class="text-base-500 text-xs tracking-widest uppercase font-medium">Party Status</span>
         <div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div>
     </div>
 
-    <div class="flex justify-between items-center mb-4">
-        <div class="flex items-center gap-2"><span class="w-2 h-2 bg-success-400 rounded-full animate-pulse"></span><span class="text-base-500 text-xs font-medium uppercase">Live</span></div>
-        <div id="round-badge" class="hidden text-xs text-base-400">Round <span id="round-number" class="text-accent-300 text-lg font-bold ml-1">1</span></div>
-    </div>
+    <div class="rounded-xl overflow-hidden" style="background:#191510; border:1px solid rgba(201,163,78,0.14);">
+        {% for pc in party %}
+        <div class="flex items-center gap-3 px-4 py-3" {% if not loop.last %}style="border-bottom:1px solid rgba(255,255,255,0.04)"{% endif %}>
+            <!-- Name (linked) -->
+            <a href="/player/sheet/{{ pc.name|urlencode }}" class="font-medium text-sm text-base-100 hover:text-accent-300 transition-colors truncate" style="min-width:90px; max-width:140px;">{{ pc.name }}</a>
 
-    <div id="turn-banner" class="hidden mb-4 py-3 px-5 rounded-lg text-center transition-all duration-300"
-         style="background:rgba(201,163,78,0.05); border:1px solid rgba(201,163,78,0.18)">
-        <span class="font-display text-lg tracking-wide glow" id="turn-banner-name" style="color:#e0b65a;">---</span>
-        <span class="text-base-500 text-xs ml-2" id="turn-banner-suffix">is acting</span>
-    </div>
-    <style>
-        /* Own-turn callout: loud banner + pulse. Stops the "wait, it's my turn?"
-           moment — the banner switches to warm gold and doubles in prominence. */
-        #turn-banner.me-turn {
-            background: rgba(212, 162, 68, 0.15) !important;
-            border-color: rgba(212, 162, 68, 0.55) !important;
-            box-shadow: 0 0 24px rgba(212, 162, 68, 0.25);
-            animation: meTurnPulse 1.4s ease-in-out infinite;
-        }
-        #turn-banner.me-turn #turn-banner-name { color: #FCD34D !important; font-size: 1.5rem; letter-spacing:0.05em; }
-        #turn-banner.me-turn #turn-banner-suffix { color: #F59E0B !important; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; }
-        @keyframes meTurnPulse { 0%,100% { transform: scale(1.00);} 50% { transform: scale(1.015);} }
-        /* HP-change flash used on the player's own row when current_hp changes. */
-        @keyframes hpFlashDown { 0% { background:rgba(239,68,68,0.0);} 20% { background:rgba(239,68,68,0.28);} 100% { background:rgba(239,68,68,0.0);} }
-        @keyframes hpFlashUp   { 0% { background:rgba(34,197,94,0.0);}  20% { background:rgba(34,197,94,0.25);} 100% { background:rgba(34,197,94,0.0);} }
-        tr.flash-dmg { animation: hpFlashDown 1s ease-out 1; }
-        tr.flash-heal { animation: hpFlashUp   1s ease-out 1; }
-    </style>
+            <!-- Mini HP bar -->
+            {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+            <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.04); max-width:180px; min-width:60px;">
+                <div class="h-full rounded-full" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}#22c55e{% elif hp_pct > 25 %}#c9a34e{% else %}#ef4444{% endif %};"></div>
+            </div>
+            <span class="text-[10px] text-base-500 tabular-nums shrink-0" style="min-width:42px;">{{ pc.current_hp }}/{{ pc.hp }}</span>
 
-    <div class="rounded-xl overflow-hidden" style="background:#191510; border:1px solid rgba(201,163,78,0.14)">
-        <table class="w-full text-left border-collapse">
-            <thead><tr style="border-bottom:1px solid rgba(201,163,78,0.12)">
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-14 text-center" style="font-family:'Cinzel',serif; color:#c8bd9e;">Init</th>
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase" style="font-family:'Cinzel',serif; color:#c8bd9e;">Combatant</th>
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-40" style="font-family:'Cinzel',serif; color:#c8bd9e;">Status</th>
-                <th class="px-4 py-2.5 text-base-500 text-[10px] font-semibold tracking-widest uppercase w-1/4" style="font-family:'Cinzel',serif; color:#c8bd9e;">Conditions</th>
-            </tr></thead>
-            <tbody id="tracker-body">
-                <tr><td colspan="4" class="p-10 text-center text-base-600 italic text-sm">Awaiting the GM...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+            <!-- Hero Points (filled/empty dots) -->
+            <span class="flex gap-0.5 shrink-0" title="Hero Points">
+                {% for i in range(3) %}
+                <span class="inline-block w-2 h-2 rounded-full" style="background:{% if i < pc.hero_points %}#c9a34e{% else %}rgba(255,255,255,0.08){% endif %};"></span>
+                {% endfor %}
+            </span>
 
-<!-- COMBAT LOG (read-only for players; the GM controls clear/copy elsewhere). -->
-<div class="mt-6">
-    <div class="card">
-        <button onclick="togglePlayerLog()" class="w-full flex justify-between items-center px-4 py-3 text-left text-xs uppercase tracking-wider font-bold text-gray-400 hover:bg-gray-800 transition-colors">
-            <span>Combat Log <span id="player-log-count" class="text-gray-600">0</span></span>
-            <span id="player-log-arrow" class="text-xs">▾</span>
-        </button>
-        <div id="player-log-body" class="hidden px-4 pb-4 max-h-64 overflow-y-auto" style="font-size: 12px; line-height: 1.4; background: #181818;">
-            <div class="text-center py-4 text-gray-600 italic">No combat events yet.</div>
+            <!-- Conditions pills -->
+            <div class="flex flex-wrap gap-1 ml-auto">
+                {% for cname, cval in pc.conditions.items() %}
+                {% if cval %}
+                <span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.15); color:#fca5a5;">{{ cname.replace('_', '-') }}{% if cval is number and cval > 1 %} {{ cval }}{% endif %}</span>
+                {% endif %}
+                {% endfor %}
+            </div>
         </div>
+        {% else %}
+        <div class="p-8 text-center text-base-600 italic text-sm">No party members yet.</div>
+        {% endfor %}
     </div>
 </div>
 
@@ -364,19 +351,12 @@
     function loadMyChar() {
         const name = localStorage.getItem('pf2e_my_char');
         if (!name) return;
-        // Validate against the server-rendered roster: if the GM deleted
-        // this character (or it was renamed), the localStorage entry will
-        // hang around forever and the sheet/map links resolve to 404
-        // pages. Compare against the data-char-name attributes the server
-        // emits on each roster card; if the name isn't there, clear the
-        // bad entry and surface a one-time prompt to pick another.
         const roster = [...document.querySelectorAll('[data-char-name]')]
             .map(el => el.getAttribute('data-char-name'));
         if (roster.length > 0 && !roster.includes(name)) {
             localStorage.removeItem('pf2e_my_char');
             const bar = document.getElementById('my-char-bar');
             if (bar) bar.classList.add('hidden');
-            // Soft notice — toast that fades, doesn't block.
             const toast = document.createElement('div');
             toast.style.cssText =
                 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
@@ -393,101 +373,16 @@
     }
     loadMyChar();
 
-    // ──────────────────────────────────────────────────────────────
-    //  SSE + adaptive polling (perf-optimized for 4+ concurrent players)
-    //
-    //  Previous behavior was (a) 5-second polling ALWAYS on, even while
-    //  SSE was delivering fine — that's 48 req/min per player × 4 = 192
-    //  req/min for nothing — and (b) a full page reload on any SSE
-    //  hiccup, which re-downloads ~250 KB gzipped and forces every other
-    //  connected browser to pay its own cost.
-    //
-    //  New behavior: we treat SSE as the primary transport and only
-    //  poll when it's been silent long enough to suspect the connection
-    //  is stale. On SSE error we reconnect (up to 3 tries with backoff)
-    //  instead of reloading the page.
-    // ──────────────────────────────────────────────────────────────
+    // ── SSE (shared visual flourishes only — encounter tracker removed) ──
     let evtSrc = null;
-    let _sseLastMsgAt = 0;
     let _sseReconnectTries = 0;
-    const _SSE_STALE_MS = 30_000;   // poll only if >30 s since last SSE event
-    const _POLL_INTERVAL = 8_000;   // check staleness every 8 s (was 5 s flat)
-
-    function _markSseAlive() {
-        _sseLastMsgAt = Date.now();
-        _sseReconnectTries = 0;
-    }
-
-    // Combat log (read-only player view). Backend pre-filters out
-    // GM-only entries (secret rolls, hidden NPC names) via the
-    // _player_filter set on _combat_log() server-side, so we just
-    // render whatever comes through.
-    // Combat-log color ramp uses gilt for turn markers (matches the
-    // brand accent), ruby for damage, success-green for heal — same
-    // palette as the GM combat log so a player's view of a round
-    // reads consistently with what the GM sees on the tracker.
-    const _PLAYER_LOG_COLORS = {
-        turn: '#c9a34e', damage: '#ef4444', heal: '#22c55e',
-        critical: '#dc2626', condition: '#a78bfa', system: '#e0b65a',
-        action: '#c8bd9e',
-    };
-    let _playerLogCache = [];
-    function _renderPlayerLog() {
-        const body = document.getElementById('player-log-body');
-        const count = document.getElementById('player-log-count');
-        if (!body) return;
-        if (count) count.textContent = String(_playerLogCache.length);
-        if (_playerLogCache.length === 0) {
-            body.innerHTML = '<div class="text-center py-4 text-gray-600 italic">No combat events yet.</div>';
-            return;
-        }
-        body.innerHTML = _playerLogCache.map(e => {
-            const color = _PLAYER_LOG_COLORS[e.type] || '#cbd5e1';
-            const time = (e.time || '').replace(/[<>"&]/g, '');
-            const msg  = (e.msg  || '').replace(/[<>]/g, '');
-            return `<div style="color:${color}; padding: 2px 0;">
-                <span style="color:#666; font-size: 10px; margin-right: 6px;">${time}</span>${msg}
-            </div>`;
-        }).join('');
-        body.scrollTop = body.scrollHeight;
-    }
-    function _appendPlayerLogEntry(entry) {
-        if (!entry || !entry.msg) return;
-        _playerLogCache.push(entry);
-        if (_playerLogCache.length > 200) _playerLogCache.shift();
-        _renderPlayerLog();
-    }
-    function togglePlayerLog() {
-        const body = document.getElementById('player-log-body');
-        const arrow = document.getElementById('player-log-arrow');
-        if (!body) return;
-        body.classList.toggle('hidden');
-        if (arrow) arrow.textContent = body.classList.contains('hidden') ? '▾' : '▴';
-    }
-    async function refreshPlayerLog() {
-        try {
-            const res = await fetch('/api/combat_log').then(r => r.json());
-            _playerLogCache = (res.log || []).filter(e => e && e.msg);
-            _renderPlayerLog();
-        } catch(_) {}
-    }
-    refreshPlayerLog();
 
     function connectSSE() {
         try {
             if (evtSrc) { try { evtSrc.close(); } catch(_){} }
             evtSrc = new EventSource('/api/events');
-            evtSrc.onopen = _markSseAlive;
-            evtSrc.addEventListener('connected', _markSseAlive);
-            evtSrc.addEventListener('encounter_update', e => {
-                _markSseAlive();
-                try {
-                    const d = JSON.parse(e.data);
-                    renderTracker(d.encounter, d.round, d.active_name);
-                } catch(err) {}
-            });
+            evtSrc.addEventListener('connected', () => { _sseReconnectTries = 0; });
             evtSrc.addEventListener('handout', e => {
-                _markSseAlive();
                 try {
                     const h = JSON.parse(e.data);
                     const myName = localStorage.getItem('pf2e_my_char') || '';
@@ -495,26 +390,22 @@
                     showHandoutPopup(h);
                 } catch(err) {}
             });
-            // Roll for Initiative (Chunk 4c): GM broadcast → cinematic banner.
+            // Roll for Initiative: GM broadcast -> cinematic banner.
             evtSrc.addEventListener('roll_initiative', () => {
-                _markSseAlive();
                 try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
             });
-            // Boss reveal (Chunk 4d): GM broadcast → cinematic name card.
+            // Boss reveal: GM broadcast -> cinematic name card.
             evtSrc.addEventListener('boss_reveal', e => {
-                _markSseAlive();
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
             });
-            // Scene mood (Chunk 5): GM broadcast → subtle full-screen tint.
+            // Scene mood: GM broadcast -> subtle full-screen tint.
             evtSrc.addEventListener('scene_mood', e => {
-                _markSseAlive();
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
             });
-            // Session Complete scrapbook (Chunk 6): party moments + own card.
+            // Session Complete scrapbook: party moments + own card.
             evtSrc.addEventListener('session_scrapbook', e => {
-                _markSseAlive();
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 let mine = '';
                 try { mine = localStorage.getItem('pf2e_my_char') || ''; } catch(_) {}
@@ -522,115 +413,22 @@
             });
             // MVP poll live tally.
             evtSrc.addEventListener('mvp_vote', e => {
-                _markSseAlive();
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
             });
-            // Combat log — server filters out PD-only entries before
-            // broadcast to players, so anything received here is
-            // already player-safe.
-            evtSrc.addEventListener('combat_log', e => {
-                _markSseAlive();
-                try {
-                    const entry = JSON.parse(e.data);
-                    if (entry && entry.msg) _appendPlayerLogEntry(entry);
-                } catch(err) {}
-            });
             evtSrc.onerror = () => {
-                // Try to reconnect a few times with exponential backoff
-                // before falling back to polling. Never force a full reload
-                // unless the user's been on a dead socket for ages.
                 try { evtSrc.close(); } catch(_){}
                 _sseReconnectTries += 1;
                 if (_sseReconnectTries <= 4) {
                     const backoff = Math.min(1000 * Math.pow(2, _sseReconnectTries - 1), 8000);
                     setTimeout(connectSSE, backoff);
                 }
-                // If SSE never comes back, _checkSsePoll() will still
-                // provide state updates via /api/player_state.
             };
-        } catch (e) { /* browser without EventSource — polling will carry us */ }
+        } catch (e) { /* browser without EventSource */ }
     }
     connectSSE();
 
-    // Polling fallback — ONLY fires when SSE has gone silent.
-    async function fetchPlayerState() {
-        try {
-            const r = await fetch('/api/player_state'); const d = await r.json();
-            renderTracker(d.encounter, d.round, d.active_name);
-        } catch(e) {}
-    }
-
-    function _checkSsePoll() {
-        const silent = Date.now() - _sseLastMsgAt;
-        if (!_sseLastMsgAt || silent > _SSE_STALE_MS) fetchPlayerState();
-    }
-    // Track last-seen HP per PC so we can flash the row when damage/heal lands.
-    const _lastHpByName = {};
-    function renderTracker(enc, round, activeName) {
-        const tb = document.getElementById('tracker-body');
-        if (!enc||!enc.length) { tb.innerHTML='<tr><td colspan="4" class="p-10 text-center text-base-600 italic text-sm">Awaiting the GM...</td></tr>'; document.getElementById('round-badge').classList.add('hidden'); document.getElementById('turn-banner').classList.add('hidden'); return; }
-        if (round) { document.getElementById('round-number').innerText=round; document.getElementById('round-badge').classList.remove('hidden'); }
-        const myChar = localStorage.getItem('pf2e_my_char') || '';
-        const banner = document.getElementById('turn-banner');
-        const bannerName = document.getElementById('turn-banner-name');
-        const bannerSuffix = document.getElementById('turn-banner-suffix');
-        if (activeName) {
-            bannerName.innerText = activeName;
-            banner.classList.remove('hidden');
-            // It's MY turn if the active name matches my pinned character.
-            if (myChar && activeName && activeName.toLowerCase() === myChar.toLowerCase()) {
-                banner.classList.add('me-turn');
-                bannerSuffix.innerText = "— It's your turn!";
-            } else {
-                banner.classList.remove('me-turn');
-                bannerSuffix.innerText = 'is acting';
-            }
-        }
-        let h='';
-        // Collect flashes for PCs whose HP changed since the last paint.
-        const flashClasses = {}; // name -> 'dmg' | 'heal'
-        enc.forEach(c => {
-            if (c.is_pc && typeof c.current_hp === 'number') {
-                const prev = _lastHpByName[c.name];
-                if (typeof prev === 'number' && prev !== c.current_hp) {
-                    flashClasses[c.name] = c.current_hp < prev ? 'flash-dmg' : 'flash-heal';
-                }
-                _lastHpByName[c.name] = c.current_hp;
-            }
-        });
-        enc.forEach(c => {
-            // Hidden NPC: the server masks name/initiative/conditions and
-            // tags the entry with `hidden: true`. We render a generic
-            // "???" row so the player sees *something* is in the order
-            // without any identifying detail.
-            const isHidden = c.hidden === true;
-            let rc=c.is_active?'erow on':'erow';
-            let nc=c.is_pc?(c.is_active?'text-base-100':'text-base-300'):(c.is_active?'text-danger-400':'text-danger-400/60');
-            let nm=`<span class="font-medium ${nc}">${esc(c.name)}</span>`;
-            if(!c.is_pc && !isHidden) nm+=' <span class="text-[8px] text-danger-400/60 uppercase tracking-widest ml-1">Enemy</span>';
-            if(isHidden) nm+=' <span class="text-[8px] text-base-500 uppercase tracking-widest ml-1">Unknown</span>';
-            let st='';
-            if(c.is_pc&&c.current_hp!==undefined){let p=c.hp_pct||0;let bc=p>50?'#22C55E':p>25?'#c9a34e':'#ef4444';st=`<span class="text-sm font-bold" style="color:${bc}">${c.current_hp}<span class="text-base-600 text-xs">/${c.max_hp}</span></span><div class="h-1 rounded-full overflow-hidden mt-1 w-20" style="background:rgba(255,255,255,0.04)"><div class="h-full rounded-full" style="width:${p}%;background:${bc}"></div></div>`;}
-            else if(c.hp_status) st=`<span class="text-xs uppercase tracking-wider font-medium ${c.hp_color||'text-base-600'}">${esc(c.hp_status)}</span>`;
-            let cd='<div class="flex flex-wrap gap-1">';
-            if(c.conditions) for(const[k,v] of Object.entries(c.conditions)){if(v===true)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k.replace('_','-'))}</span>`;else if(typeof v==='number'&&v>0)cd+=`<span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.15);color:#fca5a5;">${esc(k)} ${v}</span>`;}
-            cd+='</div>';
-            // Render '?' for initiative when hidden, both because the server
-            // sent null and because showing the actual number would narrow
-            // down what kind of creature it is.
-            const initCell = (isHidden || c.initiative == null) ? '?' : c.initiative;
-            const flashCls = flashClasses[c.name] ? ' ' + flashClasses[c.name] : '';
-            h+=`<tr class="${rc}${flashCls}" style="border-bottom:1px solid rgba(255,255,255,0.04)"><td class="px-4 py-2.5 text-center text-base-500 text-sm font-mono">${initCell}</td><td class="px-4 py-2.5">${nm}</td><td class="px-4 py-2.5">${st}</td><td class="px-4 py-2.5">${cd}</td></tr>`;
-        });
-        tb.innerHTML=h;
-    }
     function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-    // Prime the initial state, then only poll on staleness. When SSE is
-    // healthy _checkSsePoll is a no-op (~8× lower request volume than
-    // the old unconditional 5-second poll for the same latency budget).
-    fetchPlayerState();
-    setInterval(_checkSsePoll, _POLL_INTERVAL);
 
     function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#fca5a5':'#86efac';el.style.border=e?'1px solid rgba(239,68,68,0.15)':'1px solid rgba(34,197,94,0.15)';el.innerText=m;}
     async function handleFileImport(i){if(!i.files||!i.files[0])return;const f=new FormData();f.append('file',i.files[0]);try{const r=await fetch('/api/import_pathbuilder',{method:'POST',body:f});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
