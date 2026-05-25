@@ -1137,10 +1137,16 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 /* handout recipients select */
 .trk .handout-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px; }
 
-/* XP area */
-.trk .xp-row { display:flex; align-items:center; gap:8px; font-size:11px; }
-.trk .xp-row.hidden { display:none; }
-.trk .xp-row .xp-diff { font-weight:700; letter-spacing:.3px; }
+/* XP difficulty bar */
+.trk .xp-bar-wrap { margin:0 0 8px; padding:0 18px; }
+.trk .xp-bar-wrap.hidden { display:none !important; }
+.trk .xp-bar-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+.trk .xp-bar-header .xp-meta { font-size:9px; color:var(--t-t3); text-transform:uppercase; letter-spacing:.8px; font-weight:700; }
+.trk .xp-bar-header .xp-meta strong { color:var(--t-t1); }
+.trk .xp-bar-header .xp-diff-pill { font-size:10px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; padding:1px 8px; border-radius:3px; }
+.trk .xp-bar-track { position:relative; height:6px; background:var(--t-bg-raised); border-radius:3px; overflow:hidden; border:1px solid var(--t-border); }
+.trk .xp-bar-fill { position:absolute; top:0; left:0; height:100%; border-radius:3px; transition:width .3s ease, background .3s ease; }
+.trk .xp-bar-ticks { position:relative; display:flex; justify-content:space-between; font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; padding:0 1px; color:var(--t-t3); }
 
 /* Note: the GM Checks Cheat-Sheet drawer lives on gmscreen.html now —
    the tracker is for active combat flow only. See templates/gmscreen.html. */
@@ -1166,11 +1172,6 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             <span class="sync-dot-glyph"></span>
             <span class="sync-dot-label">Synced</span>
         </span>
-        <div id="xp-badge" class="xp-row {% if encounter_xp <= 0 %}hidden{% endif %}">
-            <span style="color:var(--t-t3);text-transform:uppercase;letter-spacing:.8px;font-size:9px;font-weight:700;">Party Lvl <strong id="xp-party-level" style="color:var(--t-t1);">{{ party_level }}</strong></span>
-            <span id="xp-diff-label" class="xp-diff {{ diff_color }}">{{ diff_label }}</span>
-            <span id="xp-value" class="mono" style="color:var(--t-t3);">({{ encounter_xp }} XP)</span>
-        </div>
     </div>
     <div class="hb-turn">
         <div class="round-block">
@@ -1208,6 +1209,19 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         </div>
         {# hidden legacy round badge, kept for renderMeta backward-compat #}
         <span id="round-badge" class="hidden">Round {{ round_number }}</span>
+    </div>
+</div>
+
+<div id="xp-bar-wrap" class="xp-bar-wrap {% if encounter_xp <= 0 %}hidden{% endif %}">
+    <div class="xp-bar-header">
+        <span class="xp-meta">Party Lvl <strong id="xp-party-level">{{ party_level }}</strong> &middot; <span id="xp-value">{{ encounter_xp }}</span> XP</span>
+        <span id="xp-diff-pill" class="xp-diff-pill">{{ diff_label }}</span>
+    </div>
+    <div class="xp-bar-track">
+        <div id="xp-bar-fill" class="xp-bar-fill" style="width:0%;"></div>
+    </div>
+    <div class="xp-bar-ticks">
+        <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span>
     </div>
 </div>
 
@@ -1612,7 +1626,9 @@ let STATE = {
     encounter_xp: {{ encounter_xp }},
     diff_label: "{{ diff_label }}",
     diff_color: "{{ diff_color }}",
-    party_level: {{ party_level }}
+    party_level: {{ party_level }},
+    party_size: {{ initial_state.party_size | default(4) }},
+    xp_thresholds: {{ initial_state.xp_thresholds | default({}) | tojson }}
 };
 
 /* Bootstrap initial state from Jinja server render */
@@ -1627,6 +1643,8 @@ let STATE = {
         STATE.diff_label = initial.diff_label || '';
         STATE.diff_color = initial.diff_color || '';
         STATE.party_level = initial.party_level || STATE.party_level;
+        STATE.party_size = initial.party_size || STATE.party_size;
+        STATE.xp_thresholds = initial.xp_thresholds || STATE.xp_thresholds;
     }
     // Initial render runs synchronously so background tabs (where rAF is
     // throttled) still paint the tracker on first load.
@@ -1714,6 +1732,8 @@ function applyState(data) {
     STATE.diff_label = data.diff_label ?? '';
     STATE.diff_color = data.diff_color ?? '';
     STATE.party_level = data.party_level ?? STATE.party_level;
+    STATE.party_size = data.party_size ?? STATE.party_size;
+    STATE.xp_thresholds = data.xp_thresholds ?? STATE.xp_thresholds;
     render();
 }
 
@@ -2446,17 +2466,34 @@ function renderMeta() {
         na.textContent = c ? c.name.toUpperCase() : '—';
     }
 
-    // XP badge
-    const xpBadge = document.getElementById('xp-badge');
+    // XP bar
+    const xpWrap = document.getElementById('xp-bar-wrap');
     if (STATE.encounter_xp > 0) {
-        xpBadge.classList.remove('hidden');
+        xpWrap.classList.remove('hidden');
         document.getElementById('xp-party-level').textContent = STATE.party_level;
-        const diff = document.getElementById('xp-diff-label');
-        diff.textContent = STATE.diff_label;
-        diff.className = `xp-diff ${STATE.diff_color}`;
-        document.getElementById('xp-value').textContent = `(${STATE.encounter_xp} XP)`;
+        document.getElementById('xp-value').textContent = STATE.encounter_xp;
+
+        const th = STATE.xp_thresholds || {};
+        const xp = STATE.encounter_xp;
+        const cap = (th.Extreme || 200) * 1.25;
+        const pct = Math.min((xp / cap) * 100, 100);
+
+        const tierColors = {Trivial:'#6f6755', Low:'#6a9c44', Moderate:'#a4842b', Severe:'#c47133', Extreme:'#a83a3a', Impossible:'#7c2222'};
+        let tier = 'Trivial', color = tierColors.Trivial;
+        for (const t of ['Impossible','Extreme','Severe','Moderate','Low','Trivial']) {
+            if (th[t] !== undefined && xp >= th[t]) { tier = t; color = tierColors[t]; break; }
+        }
+
+        const fill = document.getElementById('xp-bar-fill');
+        fill.style.width = pct + '%';
+        fill.style.background = color;
+
+        const pill = document.getElementById('xp-diff-pill');
+        pill.textContent = tier;
+        pill.style.background = color + '33';
+        pill.style.color = color;
     } else {
-        xpBadge.classList.add('hidden');
+        xpWrap.classList.add('hidden');
     }
 }
 

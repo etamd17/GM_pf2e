@@ -5829,10 +5829,14 @@ def _get_tracker_state():
         party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
         encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
         diff_label, diff_color = get_difficulty_label(encounter_xp)
+        from class_matrix import ENCOUNTER_DIFFICULTY
+        party_size = max(1, sum(1 for c in ACTIVE_ENCOUNTER if c.is_pc) or len(PARTY_LIBRARY) or 4)
+        xp_thresholds = {t["name"]: t["base"] + t["per_extra"] * (party_size - 4) for t in ENCOUNTER_DIFFICULTY}
         result = {
             'combatants': combatants, 'round': ROUND_NUMBER, 'turn_index': TURN_INDEX,
             'active_name': active_name, 'encounter_xp': encounter_xp,
             'diff_label': diff_label, 'diff_color': diff_color, 'party_level': party_level,
+            'party_size': party_size, 'xp_thresholds': xp_thresholds,
         }
     _TRACKER_STATE_CACHE = result
     _TRACKER_STATE_CACHE_TIME = now
