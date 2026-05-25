@@ -681,8 +681,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .c-hp-ctrl input {
   flex:1; min-width:0; background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t1);
   padding:0 8px; font-size:14px; font-family:'JetBrains Mono',monospace; outline:none;
-  border-right-width:0;
+  border-right-width:0; -moz-appearance:textfield;
 }
+.trk .c-hp-ctrl input::-webkit-outer-spin-button,
+.trk .c-hp-ctrl input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 .trk .combatant.active .c-hp-ctrl input { font-size:15px; }
 .trk .c-hp-ctrl input:focus { border-color:var(--t-red); z-index:1; position:relative; }
 .trk .c-hp-ctrl select {
