@@ -262,6 +262,99 @@
     .pc-tab-panel::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.2); border-radius: 3px; }
     .pc-tab-panel::-webkit-scrollbar-track { background: transparent; }
 
+    /* -------- Skill rows -------- */
+    .skill-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 12px;
+    }
+    .skill-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 4px;
+        border-radius: 3px;
+        transition: background 0.12s;
+    }
+    .skill-row:hover { background: rgba(201,163,78,0.06); }
+    .skill-name {
+        font-size: 11px;
+        color: #c8c8d8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+    .skill-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .skill-prof {
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        width: 14px;
+        text-align: center;
+        border-radius: 2px;
+        padding: 1px 0;
+        line-height: 1;
+    }
+    .skill-prof.U { color: #666; }
+    .skill-prof.T { color: #e0b050; }
+    .skill-prof.E { color: #7dc4c4; }
+    .skill-prof.M { color: #c47dbc; }
+    .skill-prof.L { color: #ef6b6b; }
+    .skill-total {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e8e8f0;
+        min-width: 24px;
+        text-align: right;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* -------- Inventory rows -------- */
+    .inv-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 4px;
+        border-radius: 3px;
+        transition: background 0.12s;
+    }
+    .inv-row:hover { background: rgba(201,163,78,0.06); }
+    .inv-row:not(:last-child) {
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .inv-name {
+        font-size: 11px;
+        color: #c8c8d8;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .inv-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        font-size: 10px;
+        color: #7a7a90;
+    }
+    .inv-qty { color: #b0b0c0; }
+    .inv-bulk { color: #7a7a90; font-style: italic; }
+    .bulk-summary {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        margin-bottom: 4px;
+        background: rgba(255,255,255,0.02);
+        border-radius: 4px;
+        font-size: 10px;
+        color: #7a7a90;
+    }
+    .bulk-summary .bulk-val { color: #c8c8d8; font-weight: 600; }
+    .bulk-summary .bulk-warn { color: #ef6b6b; }
+
     /* -------- Clickable entries -------- */
     .detail-link {
         cursor: pointer;
@@ -523,7 +616,8 @@
     {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
     {% set attacks_count = pc.attacks|length if pc.attacks else 0 %}
     {% set feats_count = pc.feats|length if pc.feats else 0 %}
-    {% set features_count = pc.class_features|length if pc.class_features else 0 %}
+    {% set skills_count = pc.skills|length if pc.skills else 0 %}
+    {% set inv_count = pc.equipment|length if pc.equipment else 0 %}
     {% set spells_count = namespace(n=0) %}
     {% if pc.spell_casters %}
         {% for caster in pc.spell_casters %}
@@ -629,7 +723,7 @@
             </div>
 
             <!-- Section tabs -->
-            {% if attacks_count or spells_count.n or feats_count or features_count %}
+            {% if attacks_count or spells_count.n or feats_count or skills_count or inv_count %}
             <div class="pc-tabs" role="tablist">
                 {% if attacks_count %}
                 <button type="button" class="pc-tab active" data-tab="attacks">
@@ -641,14 +735,19 @@
                     Spells<span class="tab-count">{{ spells_count.n }}</span>
                 </button>
                 {% endif %}
+                {% if skills_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n %}active{% endif %}" data-tab="skills">
+                    Skills<span class="tab-count">{{ skills_count }}</span>
+                </button>
+                {% endif %}
                 {% if feats_count %}
-                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n %}active{% endif %}" data-tab="feats">
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n and not skills_count %}active{% endif %}" data-tab="feats">
                     Feats<span class="tab-count">{{ feats_count }}</span>
                 </button>
                 {% endif %}
-                {% if features_count %}
-                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n and not feats_count %}active{% endif %}" data-tab="features">
-                    Features<span class="tab-count">{{ features_count }}</span>
+                {% if inv_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n and not skills_count and not feats_count %}active{% endif %}" data-tab="inventory">
+                    Inventory<span class="tab-count">{{ inv_count }}</span>
                 </button>
                 {% endif %}
             </div>
@@ -727,9 +826,26 @@
             </div>
             {% endif %}
 
+            <!-- Skills panel -->
+            {% if skills_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n %}active{% endif %}" data-panel="skills">
+                <div class="skill-grid">
+                    {% for sk in pc.skills %}
+                    <div class="skill-row" {% if sk.breakdown %}title="{{ sk.breakdown }}"{% endif %}>
+                        <span class="skill-name">{{ sk.name }}</span>
+                        <span class="skill-right">
+                            <span class="skill-prof {{ sk.prof_letter }}">{{ sk.prof_letter }}</span>
+                            <span class="skill-total">{{ sk.total }}</span>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Feats panel -->
             {% if feats_count %}
-            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n %}active{% endif %}" data-panel="feats">
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n and not skills_count %}active{% endif %}" data-panel="feats">
                 {% for feat in pc.feats|sort(attribute='level') %}
                 <span class="detail-link"
                       data-detail-type="feat"
@@ -742,17 +858,21 @@
             </div>
             {% endif %}
 
-            <!-- Class Features panel -->
-            {% if features_count %}
-            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n and not feats_count %}active{% endif %}" data-panel="features">
-                {% for feature in pc.class_features %}
-                <span class="detail-link"
-                      data-detail-type="feature"
-                      data-detail-name="{{ feature.name|e }}"
-                      data-detail-desc="{{ feature.desc|e if feature.desc else '' }}"
-                      data-detail-subtitle="{{ feature.type }}">
-                    {{ feature.name }}<span class="meta">L{{ feature.level }}{% if feature.type %} &middot; {{ feature.type }}{% endif %}</span>
-                </span>
+            <!-- Inventory panel -->
+            {% if inv_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n and not skills_count and not feats_count %}active{% endif %}" data-panel="inventory">
+                <div class="bulk-summary">
+                    Bulk: <span class="bulk-val {% if pc.total_bulk >= pc.encumbered_limit %}bulk-warn{% endif %}">{{ pc.total_bulk }}{% if pc.light_bulk_remainder %}.{{ pc.light_bulk_remainder }}{% endif %}</span>
+                    / {{ pc.encumbered_limit }} encumbered / {{ pc.max_bulk_limit }} max
+                </div>
+                {% for item in pc.equipment|sort(attribute='name') %}
+                <div class="inv-row">
+                    <span class="inv-name">{{ item.name }}</span>
+                    <span class="inv-meta">
+                        {% if item.qty > 1 %}<span class="inv-qty">&times;{{ item.qty }}</span>{% endif %}
+                        {% if item.bulk and item.bulk not in ('0', '') and item.bulk|length <= 2 %}<span class="inv-bulk">{{ item.bulk }}B</span>{% endif %}
+                    </span>
+                </div>
                 {% endfor %}
             </div>
             {% endif %}
