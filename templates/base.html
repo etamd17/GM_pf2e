@@ -44,40 +44,12 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        :root, [data-theme="dark"] {
-            --bg-body: #0c0a07;
-            --bg-surface: #1c1813;
-            --bg-raised: #28221a;
-            --bg-hover: #2e2920;
-            --text-primary: #ede4cf;
-            --text-secondary: #c8bd9e;
-            --text-muted: #8e8369;
-            --border-subtle: rgba(201,163,78,0.14);
-            --border-default: rgba(201,163,78,0.28);
-            --accent-primary: #c9a34e;
-            --accent-secondary: #a4842b;
-            --nav-bg: #14110c;
-        }
-        [data-theme="light"] {
-            --bg-body: #f0f0f5;
-            --bg-surface: #ffffff;
-            --bg-raised: #f5f5fa;
-            --bg-hover: #eaeaf0;
-            --text-primary: #1a1a2e;
-            --text-secondary: #4a4a6a;
-            --text-muted: #8888aa;
-            --border-subtle: rgba(0,0,0,0.08);
-            --border-default: rgba(0,0,0,0.12);
-            --accent-primary: #3d8f8f;
-            --accent-secondary: #2a7070;
-            --nav-bg: #ffffff;
-        }
-        body { font-family:'Inter',system-ui,sans-serif; background:var(--bg-body); color:var(--text-primary); }
-        .font-display { font-family:'Cinzel',serif; }
+        body { font-family:var(--font-ui); background:var(--bg-page); color:var(--text-on-dark); }
+        .font-display { font-family:var(--font-display); }
         ::-webkit-scrollbar { width:5px; }
         ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:var(--border-default); border-radius:10px; }
-        ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+        ::-webkit-scrollbar-thumb { background:var(--border-rule); border-radius:10px; }
+        ::-webkit-scrollbar-thumb:hover { background:var(--text-on-dark-3); }
         .nav-links { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
         .nav-links::-webkit-scrollbar { display:none; }
         @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
@@ -91,7 +63,7 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <nav class="border-b shrink-0" style="background:var(--nav-bg); border-color:var(--border-subtle);">
+    <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-12">
                 <a href="/gm" class="flex items-center gap-2" title="GM Hub" style="text-decoration:none;">
@@ -129,32 +101,32 @@
 
     <!-- Dice Roller -->
     <div id="dice-widget" class="fixed bottom-4 right-4 z-[100] flex flex-col items-end">
-        <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-raised); border:1px solid var(--border-default);">
-            <div class="px-3 py-2 flex justify-between items-center" style="background:var(--bg-surface); border-bottom:1px solid var(--border-subtle);">
+        <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-card-2); border:1px solid var(--border-rule);">
+            <div class="px-3 py-2 flex justify-between items-center" style="background:var(--bg-card); border-bottom:1px solid var(--border-card);">
                 <span class="text-xs font-semibold text-accent-300">Dice Roller</span>
                 <button onclick="toggleDicePanel()" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
             </div>
             <div class="p-3">
-                <div class="rounded p-3 mb-3 text-center min-h-[70px] flex flex-col justify-center" style="background:var(--bg-body); border:1px solid var(--border-default);">
+                <div class="rounded p-3 mb-3 text-center min-h-[70px] flex flex-col justify-center" style="background:var(--bg-page); border:1px solid var(--border-rule);">
                     <div id="dice-total" class="text-3xl font-bold text-accent-300 leading-none">--</div>
                     <div id="dice-breakdown" class="text-[10px] text-base-500 mt-1.5 font-mono">Roll the bones...</div>
                 </div>
                 <div class="grid grid-cols-4 gap-1.5 mb-3">
-                    <button onclick="quickRoll(4)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d4</button>
-                    <button onclick="quickRoll(6)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d6</button>
-                    <button onclick="quickRoll(8)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d8</button>
-                    <button onclick="quickRoll(10)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d10</button>
-                    <button onclick="quickRoll(12)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d12</button>
-                    <button onclick="quickRoll(20)" class="col-span-2 py-1.5 rounded text-xs font-bold border border-accent-500/20 text-accent-300 hover:bg-accent-500/10 transition-colors" style="background:var(--bg-surface);">d20</button>
-                    <button onclick="quickRoll(100)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-surface);">d100</button>
+                    <button onclick="quickRoll(4)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d4</button>
+                    <button onclick="quickRoll(6)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d6</button>
+                    <button onclick="quickRoll(8)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d8</button>
+                    <button onclick="quickRoll(10)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d10</button>
+                    <button onclick="quickRoll(12)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d12</button>
+                    <button onclick="quickRoll(20)" class="col-span-2 py-1.5 rounded text-xs font-bold border border-accent-500/20 text-accent-300 hover:bg-accent-500/10 transition-colors" style="background:var(--bg-card);">d20</button>
+                    <button onclick="quickRoll(100)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d100</button>
                 </div>
                 <form id="custom-roll-form" class="flex gap-1.5" onsubmit="event.preventDefault(); customRoll();">
-                    <input type="text" id="custom-roll-input" placeholder="2d6+4" class="flex-1 rounded px-2 py-1.5 text-xs text-center font-mono focus:outline-none" style="background:var(--bg-body); border:1px solid var(--border-default); color:var(--text-primary);">
-                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:var(--accent-primary); color:var(--ink-950);">Roll</button>
+                    <input type="text" id="custom-roll-input" placeholder="2d6+4" class="flex-1 rounded px-2 py-1.5 text-xs text-center font-mono focus:outline-none" style="background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-cream);">
+                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:var(--accent); color:var(--ink-950);">Roll</button>
                 </form>
             </div>
         </div>
-        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:var(--accent-primary); color:var(--ink-950);">
+        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:var(--accent); color:var(--ink-950);">
             <span class="font-display text-sm font-bold">d20</span>
         </button>
     </div>
@@ -269,7 +241,7 @@
                     row.innerHTML = '';
                     const sel = document.createElement('select');
                     sel.className = 'flex-1';
-                    sel.style.cssText = 'font-size:10px; padding:2px 4px; border-radius:3px; background:var(--bg-body); border:1px solid var(--border-default); color:var(--text-primary);';
+                    sel.style.cssText = 'font-size:10px; padding:2px 4px; border-radius:3px; background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-cream);';
                     sel.innerHTML = '<option value="">Pick target…</option>' + combatants.map(c => `<option value="${c.instance_id}">${c.name} (${c.current_hp}/${c.max_hp})</option>`).join('');
                     const apply = document.createElement('button');
                     apply.textContent = 'Apply';
@@ -305,8 +277,8 @@
                 if (!c) return;
                 const t = document.createElement('div');
                 t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
-                t.style.background = 'var(--bg-raised)';
-                t.style.border = '1px solid var(--border-default)';
+                t.style.background = 'var(--bg-card-2)';
+                t.style.border = '1px solid var(--border-rule)';
                 const degHTML = _degBanner(log.degree);
 
                 // Phase 8: if this is a damage roll, show an Apply button that
@@ -324,7 +296,7 @@
                 }
 
                 t.classList.add('roll-toast');
-                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-primary)">${log.action || ''}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-body)">${log.detail || ''}</div>${applyHTML}`;
+                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-on-cream)">${log.action || ''}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-page)">${log.detail || ''}</div>${applyHTML}`;
                 c.prepend(t);
                 // Crit / nat-1 flourish + screen-edge flash (degree first, then
                 // fall back to sniffing the detail string for NAT 20 / NAT 1).
@@ -392,10 +364,10 @@
        Soundscapes (GM's Foundry tracks) + synthesized SFX. GM-device-only:
        lives in base.html so it loads on every GM page, never on /player. #}
     <div id="audio-widget" class="no-print" style="position:fixed; bottom:16px; right:68px; z-index:100;">
-        <div id="audio-panel" class="hidden" style="position:absolute; bottom:48px; right:0; width:230px; background:var(--bg-raised); border:1px solid var(--border-default); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden;">
-            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface); border-bottom:1px solid var(--border-subtle);">
+        <div id="audio-panel" class="hidden" style="position:absolute; bottom:48px; right:0; width:230px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden;">
+            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
                 <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent-300);">Soundscape</span>
-                <button type="button" id="audio-master" onclick="pf2eAudio.toggleMaster()" style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:3px 9px; border-radius:999px; cursor:pointer; border:1px solid var(--border-default); background:var(--bg-base); color:var(--text-muted);">Off</button>
+                <button type="button" id="audio-master" onclick="pf2eAudio.toggleMaster()" style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:3px 9px; border-radius:999px; cursor:pointer; border:1px solid var(--border-rule); background:var(--bg-page); color:var(--text-on-cream-3);">Off</button>
             </div>
             <div style="padding:10px 11px; display:flex; flex-direction:column; gap:7px;">
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
@@ -405,14 +377,14 @@
                     <button type="button" class="audio-scene audio-stop" onclick="pf2eAudio.stopAmbient()">Stop</button>
                 </div>
                 <div style="display:flex; align-items:center; gap:7px;">
-                    <span style="font-size:13px; color:var(--text-muted);">&#9834;</span>
-                    <input type="range" id="audio-volume" min="0" max="100" value="60" oninput="pf2eAudio.setVolume(this.value/100)" style="flex:1; accent-color:var(--accent-primary);">
+                    <span style="font-size:13px; color:var(--text-on-cream-3);">&#9834;</span>
+                    <input type="range" id="audio-volume" min="0" max="100" value="60" oninput="pf2eAudio.setVolume(this.value/100)" style="flex:1; accent-color:var(--accent);">
                 </div>
-                <div id="audio-hint" style="font-size:9px; color:var(--text-muted); line-height:1.4;"></div>
+                <div id="audio-hint" style="font-size:9px; color:var(--text-on-cream-3); line-height:1.4;"></div>
             </div>
         </div>
         <button type="button" id="audio-fab" onclick="pf2eAudio.togglePanel()" title="Soundscape &amp; SFX"
-                style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-raised); border:1px solid var(--border-default); color:var(--text-muted); font-size:18px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
+                style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-card-2); border:1px solid var(--border-rule); color:var(--text-on-cream-3); font-size:18px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
             &#9835;
         </button>
     </div>
@@ -421,13 +393,13 @@
             font-family:var(--font-display); font-size:10px; font-weight:700;
             letter-spacing:0.06em; text-transform:uppercase;
             padding:7px 4px; border-radius:6px; cursor:pointer;
-            background:var(--bg-base); border:1px solid var(--border-subtle); color:var(--text-secondary);
+            background:var(--bg-page); border:1px solid var(--border-card); color:var(--text-on-cream-2);
             transition:background .12s, border-color .12s, color .12s;
         }
-        #audio-widget .audio-scene:hover { border-color:var(--border-default); color:var(--text-primary); }
-        #audio-widget .audio-scene.active { background:rgba(201,163,78,0.14); border-color:var(--accent-primary); color:var(--accent-300); }
-        #audio-widget .audio-scene.audio-stop { color:var(--text-muted); }
-        #audio-widget.sound-on #audio-fab { color:var(--accent-300); border-color:var(--accent-primary); }
+        #audio-widget .audio-scene:hover { border-color:var(--border-rule); color:var(--text-on-cream); }
+        #audio-widget .audio-scene.active { background:rgba(201,163,78,0.14); border-color:var(--accent); color:var(--accent-300); }
+        #audio-widget .audio-scene.audio-stop { color:var(--text-on-cream-3); }
+        #audio-widget.sound-on #audio-fab { color:var(--accent-300); border-color:var(--accent); }
         #audio-widget #audio-master.on { background:rgba(106,156,68,0.18); border-color:rgba(106,156,68,0.5); color:#9bc06f; }
     </style>
     <script>

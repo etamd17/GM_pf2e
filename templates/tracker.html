@@ -9,12 +9,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 .trk {
-  --t-bg-base:#0a0c12; --t-bg-surface:#13161f; --t-bg-raised:#1a1e29; --t-bg-higher:#232736;
-  --t-red:#c43c3c; --t-red-b:#e85555; --t-red-d:#8a2929;
-  --t-gold:#c8a84e; --t-gold-b:#e8c866;
-  --t-teal:#4a9696; --t-purple:#9b7ede; --t-blue:#5a8ee8; --t-green:#3eba68;
-  --t-t1:#eaebf0; --t-t2:#9ca0b4; --t-t3:#5e6378; --t-t4:#3d4158;
-  --t-border:#262b3a;
+  --t-bg-base:var(--bg-page); --t-bg-surface:var(--bg-sunken); --t-bg-raised:var(--bg-card); --t-bg-higher:var(--bg-card-2);
+  --t-red:var(--ruby-300); --t-red-b:var(--ruby-200); --t-red-d:var(--ruby-400);
+  --t-gold:var(--gilt-300); --t-gold-b:var(--gilt-200);
+  --t-teal:#4a9696; --t-purple:#9b7ede; --t-blue:#5a8ee8; --t-green:var(--success);
+  --t-t1:var(--text-on-cream); --t-t2:var(--text-on-cream-2); --t-t3:var(--text-on-cream-3); --t-t4:var(--ink-600);
+  --t-border:var(--border-card);
   /* Status pills — hazards, triggered, disabled. These are pulled into JS
      template literals via getComputedStyle so the dynamic row-render code
      doesn't carry hardcoded hexes that drift from the rest of the theme. */
@@ -23,8 +23,8 @@
   --t-trig-bg:#5a1818;          /* deeper than --t-red-d so the pill reads as more urgent */
   --t-trig-fg:#fca5a5;          /* danger-300, matches the rest of the app's red-text level */
   --t-trig-border:#7a1f1f;
-  --t-disabled-bg:#1f2632;      /* sibling of bg-higher with a touch more blue */
-  --t-disabled-fg:#9ca0b4;      /* same as t2 */
+  --t-disabled-bg:var(--bg-card-2);
+  --t-disabled-fg:var(--text-on-cream-2);
   --t-row-active: rgba(196,60,60,0.12);
   color: var(--t-t1);
   font-family: 'Inter', system-ui, sans-serif;

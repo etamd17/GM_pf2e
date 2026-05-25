@@ -2364,7 +2364,7 @@
             const btn = document.getElementById('player-ruler-btn');
             if (btn) {
                 btn.classList.toggle('active', _rulerToolActive);
-                btn.style.background = _rulerToolActive ? 'var(--accent-primary)' : 'var(--bg-surface)';
+                btn.style.background = _rulerToolActive ? 'var(--accent)' : 'var(--bg-card)';
             }
             if (!_rulerToolActive) {
                 _playerRulerStart = null;
@@ -2432,7 +2432,7 @@
                 _playerRulerStart = null;
                 _playerRulerEnd = null;
                 const btn = document.getElementById('player-ruler-btn');
-                if (btn) { btn.classList.remove('active'); btn.style.background = 'var(--bg-surface)'; }
+                if (btn) { btn.classList.remove('active'); btn.style.background = 'var(--bg-card)'; }
                 render();
             } else if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 const tag = (e.target && e.target.tagName || '').toLowerCase();

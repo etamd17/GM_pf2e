@@ -7,20 +7,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { colors: {
-            base:    { 950:'#0d0d12', 900:'#191920', 800:'#24242e', 700:'#2e2e3c', 600:'#42425a', 500:'#6b6b8a', 400:'#9494b0', 300:'#b8b8cc', 200:'#d8d8e6', 100:'#ededf4' },
+            base:    { 950:'#0c0a07', 900:'#14110c', 800:'#1d1a14', 700:'#2e2920', 600:'#4a4334', 500:'#6f6755', 400:'#9a917a', 300:'#c9bfa3', 200:'#e3dac0', 100:'#f0ead7' },
             accent:  { 300:'#e0b65a', 400:'#c9a34e', 500:'#a4842b', 600:'#7d6418' },
-            gold:    { 300:'#e0b050', 400:'#c89620' },
+            gold:    { 300:'#e0b65a', 400:'#c9a34e' },
             danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' }
         }, fontFamily: { display:['Cinzel','serif'], sans:['Inter','system-ui','sans-serif'] } } } }
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        body { font-family:'Inter',system-ui,sans-serif; background:#0d0d12; color:#ededf4; min-height:100vh; }
+        body { font-family:'Inter',system-ui,sans-serif; background:#0c0a07; color:#f0ead7; min-height:100vh; }
         .font-display { font-family:'Cinzel',serif; }
         ::-webkit-scrollbar { width:6px; }
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
-
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+    <style>
         .stage {
             position:relative;
             min-height:100vh;
