@@ -102,6 +102,7 @@
 
 
     <div id="gm-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none w-72"></div>
+    <div id="pf2e-action-toast-container"></div>
 
     <!-- Dice Roller -->
     <div id="dice-widget" class="fixed {% if not is_gm and player_name %}bottom-[72px]{% else %}bottom-4{% endif %} right-4 z-[100] flex flex-col items-end">
@@ -945,5 +946,129 @@
     })();
     </script>
     {% endif %}
+    <script>
+    window.pf2eToast = function(msg, type) {
+        type = type || 'info';
+        var c = document.getElementById('pf2e-action-toast-container');
+        if (!c) return;
+        var existing = c.querySelectorAll('.pf2e-action-toast');
+        for (var i = 0; i < existing.length; i++) {
+            if (existing[i].textContent === msg) return;
+        }
+        var el = document.createElement('div');
+        el.className = 'pf2e-action-toast ' + type;
+        el.textContent = msg;
+        c.appendChild(el);
+        setTimeout(function() {
+            el.classList.add('fade-out');
+            setTimeout(function() { el.remove(); }, 300);
+        }, 3000);
+    };
+    </script>
+
+    {# ── Condition quick-reference tooltip (shared across all pages) ── #}
+    <script>
+    (function() {
+        if (document.getElementById('pf2e-cond-tooltip')) return;
+        var tip = document.createElement('div');
+        tip.id = 'pf2e-cond-tooltip';
+        tip.className = 'cond-tooltip';
+        tip.innerHTML = '<div class="cond-tooltip-name"></div><div class="cond-tooltip-desc"></div>';
+        document.body.appendChild(tip);
+
+        var _condCache = {};
+        var _activeEl = null;
+        var _hideTimer = null;
+
+        function _escHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function _condKey(el) {
+            return (el.getAttribute('data-cond-name') || '').toLowerCase().replace(/ /g, '-');
+        }
+
+        function _show(el, name, desc) {
+            tip.querySelector('.cond-tooltip-name').textContent = name.replace(/-/g, ' ');
+            tip.querySelector('.cond-tooltip-desc').textContent = desc;
+            var rect = el.getBoundingClientRect();
+            var tipW = 320;
+            var left = rect.left + rect.width / 2 - tipW / 2;
+            if (left < 8) left = 8;
+            if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+            var top = rect.bottom + 8;
+            tip.style.left = left + 'px';
+            tip.style.top = top + 'px';
+            tip.style.maxWidth = tipW + 'px';
+            tip.classList.add('visible');
+            // Reposition if tooltip goes below viewport
+            requestAnimationFrame(function() {
+                var tipRect = tip.getBoundingClientRect();
+                if (tipRect.bottom > window.innerHeight - 8) {
+                    tip.style.top = (rect.top - tipRect.height - 8) + 'px';
+                }
+            });
+        }
+
+        function _hide() {
+            tip.classList.remove('visible');
+            _activeEl = null;
+        }
+
+        function _fetch(el) {
+            var key = _condKey(el);
+            if (!key) return;
+            if (_condCache[key]) {
+                _show(el, key, _condCache[key]);
+                return;
+            }
+            fetch('/api/condition_info/' + encodeURIComponent(key))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.desc) {
+                        _condCache[key] = data.desc;
+                        if (_activeEl === el) _show(el, key, data.desc);
+                    }
+                })
+                .catch(function() {});
+        }
+
+        function _findPill(target) {
+            return target.closest('.condition-pill[data-cond-name], .condition-toggle[data-cond-name], .cond-chip[data-cond-name], .cp[data-cond-name]');
+        }
+
+        // Desktop: hover
+        document.addEventListener('mouseenter', function(e) {
+            var pill = _findPill(e.target);
+            if (!pill) return;
+            if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+            _activeEl = pill;
+            _fetch(pill);
+        }, true);
+
+        document.addEventListener('mouseleave', function(e) {
+            var pill = _findPill(e.target);
+            if (!pill) return;
+            _hideTimer = setTimeout(_hide, 120);
+        }, true);
+
+        // Mobile: tap to show, tap elsewhere to dismiss
+        document.addEventListener('touchstart', function(e) {
+            var pill = _findPill(e.target);
+            if (pill) {
+                if (_activeEl === pill) {
+                    _hide();
+                    return;
+                }
+                _activeEl = pill;
+                _fetch(pill);
+            } else if (_activeEl) {
+                _hide();
+            }
+        }, { passive: true });
+    })();
+    </script>
 </body>
 </html>

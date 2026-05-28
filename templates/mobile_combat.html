@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>{{ pc.name }} - Combat</title>
+    <script>
+        (function() {
+            try { document.documentElement.setAttribute('data-theme', 'dark'); } catch(_) {}
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 950: '#0d0d12', 900: '#191920', 800: '#24242e', 700: '#2e2e3c', 600: '#42425a', 500: '#6b6b8a', 400: '#9494b0', 300: '#b8b8cc', 200: '#d8d8e6', 100: '#ededf4' },
+                        amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' },
+                        red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 800: '#6b1525', 900: '#3D0A13' },
+                        green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22' },
+                    },
+                    fontFamily: { header: ['Cinzel', 'serif'], body: ['Inter', 'system-ui', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/static/css/system.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
+    </style>
+</head>
+<body class="mobile-combat has-player-nav">
+
+    <!-- Character Header -->
+    <div class="mobile-header">
+        <div class="mobile-char-name">{{ pc.name }}</div>
+        <div class="mobile-char-meta">{{ pc.class_name }} {{ pc.level }}</div>
+    </div>
+
+    <!-- HP Section -->
+    <div class="mobile-hp">
+        <div class="mobile-hp-row">
+            <span class="mobile-hp-label">HP</span>
+            <span class="mobile-hp-numbers" id="hp-text">
+                <span id="hp-current">{{ pc.current_hp }}</span>
+                <span class="mobile-hp-sep">/</span>
+                <span id="hp-max">{{ pc.hp }}</span>
+            </span>
+        </div>
+        <div class="hp-gauge">
+            <div class="hp-gauge-fill" id="hp-fill"
+                 style="width: {{ (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 }}%"></div>
+        </div>
+        {% set temp_hp = (pc.temp_hp|default(0))|int %}
+        {% set shield_raised = pc.shield_raised|default(false) %}
+        {% if temp_hp > 0 or shield_raised %}
+        <div class="mobile-hp-extras" id="hp-extras">
+            {% if temp_hp > 0 %}
+            <span class="mobile-extra-pill temp-hp-pill" id="temp-hp-pill">
+                Temp HP <span id="temp-hp-val">{{ temp_hp }}</span>
+            </span>
+            {% endif %}
+            {% if shield_raised %}
+            <span class="mobile-extra-pill shield-pill" id="shield-pill">
+                Shield {{ pc.shield_hp }}/{{ pc.shield_max_hp }}
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- AC Display -->
+    <div class="mobile-ac-row">
+        <div class="mobile-ac-box">
+            <span class="mobile-ac-label">AC</span>
+            <span class="mobile-ac-val" id="ac-val">{{ pc.ac }}</span>
+        </div>
+        <div class="mobile-ac-box">
+            <span class="mobile-ac-label">SPD</span>
+            <span class="mobile-ac-val">{{ pc.speed }}</span>
+        </div>
+        {% if pc.focus_max|default(0) > 0 %}
+        <div class="mobile-ac-box">
+            <span class="mobile-ac-label">Focus</span>
+            <span class="mobile-ac-val">{{ pc.current_focus }}/{{ pc.focus_max }}</span>
+        </div>
+        {% endif %}
+        <div class="mobile-ac-box">
+            <span class="mobile-ac-label">Hero</span>
+            <span class="mobile-ac-val" id="hero-pts">{{ pc.hero_points }}</span>
+        </div>
+    </div>
+
+    <!-- Active Conditions -->
+    <div class="mobile-conditions" id="conditions-area">
+        {% if conditions %}
+        {% for cond, val in conditions.items() %}
+        <span class="condition-pill" data-cond-name="{{ cond }}">
+            {{ cond|replace('_', ' ')|title }}{% if val is number and val > 1 %} {{ val }}{% endif %}
+        </span>
+        {% endfor %}
+        {% else %}
+        <span class="mobile-no-conditions">No conditions</span>
+        {% endif %}
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mobile-actions">
+        <!-- Attacks -->
+        <div class="mobile-section-label">Attacks</div>
+        {% for atk in attacks %}
+        <div class="mobile-attack-card">
+            <div class="mobile-attack-name">{{ atk.name }}</div>
+            <div class="mobile-strike-row">
+                {% for s in atk.strikes %}
+                <button class="mobile-action-btn mobile-strike-btn"
+                        onclick="rollAttack('{{ atk.name|e }}', {{ s.mod }}, '{{ atk.damage|e }}')"
+                        title="MAP {{ s.map_label }}">
+                    {{ s.label }}
+                </button>
+                {% endfor %}
+            </div>
+            <div class="mobile-damage-label">Dmg: {{ atk.damage }}</div>
+        </div>
+        {% endfor %}
+
+        <!-- Saves -->
+        <div class="mobile-section-label">Saves</div>
+        <div class="mobile-saves-grid">
+            {% set fmt = '+' %}
+            <button class="mobile-action-btn mobile-save-btn"
+                    onclick="rollSave('Fortitude', {{ saves.fortitude }})">
+                FORT {{ '{:+d}'.format(saves.fortitude) }}
+            </button>
+            <button class="mobile-action-btn mobile-save-btn"
+                    onclick="rollSave('Reflex', {{ saves.reflex }})">
+                REF {{ '{:+d}'.format(saves.reflex) }}
+            </button>
+            <button class="mobile-action-btn mobile-save-btn"
+                    onclick="rollSave('Will', {{ saves.will }})">
+                WILL {{ '{:+d}'.format(saves.will) }}
+            </button>
+        </div>
+
+        <!-- Perception -->
+        <div class="mobile-section-label">Perception</div>
+        <button class="mobile-action-btn mobile-perc-btn"
+                onclick="rollSave('Perception', {{ perception }})">
+            Perception {{ '{:+d}'.format(perception) }}
+        </button>
+    </div>
+
+    <!-- Roll Result Toast -->
+    <div id="mobile-roll-toast" class="mobile-roll-toast hidden"></div>
+
+    <!-- Player nav partial -->
+    {% set active_player_tab = 'combat' %}
+    {% include '_player_nav.html' %}
+
+    <script>
+    (function() {
+        var pcName = {{ player_name|tojson }};
+
+        // ---- Dice helpers ----
+        function rollD20() { return Math.floor(Math.random() * 20) + 1; }
+        function fmtMod(v) { return v >= 0 ? '+' + v : '' + v; }
+
+        // ---- Broadcast to GM via /api/log_roll ----
+        async function broadcastToGM(action, result, detail, degree) {
+            try {
+                var body = { name: pcName, action: action, result: result, detail: detail };
+                if (degree) body.degree = degree;
+                await fetch('/api/log_roll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch (e) {}
+        }
+
+        // ---- PF2e degree of success ----
+        function pf2eDegree(total, dc, d20) {
+            if (d20 === 20) {
+                return total >= dc ? 'crit_success' : 'success';
+            }
+            if (d20 === 1) {
+                return total < dc ? 'crit_failure' : 'failure';
+            }
+            if (total >= dc + 10) return 'crit_success';
+            if (total >= dc) return 'success';
+            if (total <= dc - 10) return 'crit_failure';
+            return 'failure';
+        }
+
+        // ---- Toast display ----
+        function showMobileToast(title, total, detail, isCrit, isFumble) {
+            var toast = document.getElementById('mobile-roll-toast');
+            var borderClass = isCrit ? 'crit' : isFumble ? 'fumble' : '';
+            var badge = isCrit ? '<span class="mobile-toast-badge crit">NAT 20</span>'
+                      : isFumble ? '<span class="mobile-toast-badge fumble">NAT 1</span>' : '';
+            toast.className = 'mobile-roll-toast ' + borderClass;
+            toast.innerHTML = '<div class="mobile-toast-header">'
+                + '<span class="mobile-toast-title">' + escapeHtml(title) + '</span>'
+                + '<button onclick="document.getElementById(\'mobile-roll-toast\').classList.add(\'hidden\')" class="mobile-toast-close">x</button>'
+                + '</div>'
+                + '<div class="mobile-toast-total">' + total + badge + '</div>'
+                + '<div class="mobile-toast-detail">' + escapeHtml(detail) + '</div>';
+            toast.classList.remove('hidden');
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(function() {
+                toast.classList.add('hidden');
+            }, 8000);
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            var d = document.createElement('div');
+            d.textContent = String(s);
+            return d.innerHTML;
+        }
+
+        // ---- Roll functions ----
+        window.rollAttack = function(weaponName, modifier, damageStr) {
+            var d20 = rollD20();
+            var total = d20 + modifier;
+            var isCrit = d20 === 20, isFumble = d20 === 1;
+            var critStr = isCrit ? ' [CRIT]' : isFumble ? ' [MISS]' : '';
+            var detail = 'Hit: 1d20 (' + d20 + ') ' + fmtMod(modifier) + ' = ' + total + critStr + ' | Dmg: ' + damageStr;
+            showMobileToast('Attack: ' + weaponName, total, detail, isCrit, isFumble);
+            broadcastToGM('Attack: ' + weaponName, '' + total, detail);
+        };
+
+        window.rollSave = function(saveName, modifier) {
+            var d20 = rollD20();
+            var total = d20 + modifier;
+            var isCrit = d20 === 20, isFumble = d20 === 1;
+            var critStr = isCrit ? ' [CRIT SUCCESS]' : isFumble ? ' [CRIT FAIL]' : '';
+            var detail = '1d20 (' + d20 + ') ' + fmtMod(modifier) + ' = ' + total + critStr;
+            showMobileToast(saveName, total, detail, isCrit, isFumble);
+            broadcastToGM(saveName, '' + total, detail);
+        };
+
+        // ---- SSE for live updates ----
+        var src = new EventSource('/api/events');
+
+        src.addEventListener('encounter_update', function(e) {
+            try { window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+        });
+
+        src.addEventListener('player_roll', function(e) {
+            try { window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+        });
+
+        src.addEventListener('pc_update', function(e) {
+            try {
+                var data = JSON.parse(e.data);
+                if (data.name !== pcName) return;
+
+                // Update HP
+                var cur = data.current_hp;
+                var max = data.max_hp;
+                var pct = data.hp_pct;
+                document.getElementById('hp-current').textContent = cur;
+                document.getElementById('hp-max').textContent = max;
+                var fill = document.getElementById('hp-fill');
+                fill.style.width = pct + '%';
+                // Color the gauge
+                if (cur <= 0) {
+                    fill.style.background = 'var(--ruby-300)';
+                } else if (pct <= 25) {
+                    fill.style.background = 'var(--ruby-200)';
+                } else if (pct <= 50) {
+                    fill.style.background = '#e8a33a';
+                } else {
+                    fill.style.background = '';
+                }
+
+                // Update AC
+                if (typeof data.ac === 'number') {
+                    var acEl = document.getElementById('ac-val');
+                    if (acEl) acEl.textContent = data.ac;
+                }
+
+                // Update hero points
+                if (typeof data.hero_points === 'number') {
+                    var hpEl = document.getElementById('hero-pts');
+                    if (hpEl) hpEl.textContent = data.hero_points;
+                }
+
+                // Update temp HP
+                var extras = document.getElementById('hp-extras');
+                var tempVal = (data.temp_hp || 0) + (data.temp_hp_manual || 0);
+                var tempPill = document.getElementById('temp-hp-pill');
+                if (tempVal > 0) {
+                    if (tempPill) {
+                        document.getElementById('temp-hp-val').textContent = tempVal;
+                    } else if (extras) {
+                        extras.insertAdjacentHTML('afterbegin',
+                            '<span class="mobile-extra-pill temp-hp-pill" id="temp-hp-pill">Temp HP <span id="temp-hp-val">' + tempVal + '</span></span>');
+                    }
+                } else if (tempPill) {
+                    tempPill.remove();
+                }
+
+                // Update conditions
+                var conds = data.conditions || {};
+                var area = document.getElementById('conditions-area');
+                var html = '';
+                var hasAny = false;
+                for (var k in conds) {
+                    if (!conds.hasOwnProperty(k)) continue;
+                    var v = conds[k];
+                    if (!v || v === 0 || v === false) continue;
+                    hasAny = true;
+                    var label = k.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+                    html += '<span class="condition-pill" data-cond-name="' + k + '">'
+                         + label + (typeof v === 'number' && v > 1 ? ' ' + v : '')
+                         + '</span>';
+                }
+                if (!hasAny) {
+                    html = '<span class="mobile-no-conditions">No conditions</span>';
+                }
+                area.innerHTML = html;
+
+            } catch(ex) { console.error('pc_update error:', ex); }
+        });
+
+        // Mark SSE as attached so _player_nav doesn't open a duplicate
+        window._navMarkSseAttached();
+    })();
+    </script>
+</body>
+</html>

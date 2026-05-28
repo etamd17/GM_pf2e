@@ -8712,6 +8712,45 @@ def api_unpin_generator(pin_id):
     _save_pinned_generators(pins)
     return jsonify({'ok': True})
 
+@app.route('/m')
+@app.route('/mobile')
+def mobile_combat():
+    """Mobile-optimized combat view for players on phones."""
+    pname = session.get('player_name', '')
+    if not pname:
+        return redirect('/player')
+    pc = PARTY_LIBRARY.get(pname)
+    if not pc:
+        return redirect('/player')
+
+    # Active conditions (non-zero / non-False only)
+    conditions = {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False}
+
+    # Attack data for quick-roll buttons
+    attacks = []
+    for a in getattr(pc, 'attacks', []):
+        strikes = a.get('strikes', [])
+        attacks.append({
+            'name': a.get('name', 'Strike'),
+            'strikes': strikes,
+            'damage': a.get('damage', ''),
+            'traits': a.get('traits', []),
+        })
+
+    # Saves + perception + AC
+    saves = {
+        'fortitude': pc.fort,
+        'reflex': pc.ref,
+        'will': pc.will,
+    }
+    perception = pc.perception
+
+    return render_template('mobile_combat.html',
+        pc=pc, player_name=pname,
+        conditions=conditions,
+        attacks=attacks, saves=saves,
+        perception=perception)
+
 @app.route('/player')
 def player_view():
     # Sync from disk to catch any characters added outside this process
@@ -9192,6 +9231,15 @@ CONDITION_REFERENCE = {
     'unnoticed': {'desc': 'Creature is unaware of your presence entirely.'},
     'wounded': {'desc': 'When you regain consciousness, increase dying by your wounded value. Wounded increases by 1 each time you gain dying. Resets on full rest.'},
 }
+
+@app.route('/api/condition_info/<name>')
+def condition_info(name):
+    """Return the mechanical description for a single PF2e condition."""
+    key = name.lower().replace(' ', '-').replace('_', '-')
+    data = CONDITION_REFERENCE.get(key)
+    if not data:
+        return jsonify({"error": "Unknown condition"}), 404
+    return jsonify({"name": key.replace('-', ' ').title(), "desc": data['desc']})
 
 @app.route('/api/compendium_search')
 def compendium_search():

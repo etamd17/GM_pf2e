@@ -55,6 +55,7 @@
                 {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
                 {% set cval = pc.conditions.get(cond, false) %}
                 <button onclick="toggleBoolCondition('{{ cond }}')" id="cond-btn-{{ cond }}" class="condition-toggle {% if cval %}active{% endif %}"
+                        data-cond-name="{{ cond }}"
                         title="{{ cond|replace('_',' ')|title }} — {{ cond_rules.get(cond, '') }}">
                     {{ cond|replace('_','-')|upper }}
                 </button>

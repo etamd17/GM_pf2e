@@ -1985,7 +1985,7 @@ function renderInitList() {
                     label += ` <span class="cp-exp" title="Expires in ${exp} round${exp === 1 ? '' : 's'}">⏱${exp}</span>`;
                 }
                 const cls = condChipClass(k);
-                condsHtml += `<span class="cp ${cls}" title="${condTooltip(k)}">${label}</span>`;
+                condsHtml += `<span class="cp ${cls}" data-cond-name="${k.replace(/_/g,'-')}" title="${condTooltip(k)}">${label}</span>`;
             }
         }
 
@@ -2280,7 +2280,7 @@ function renderActivePanel() {
                 label += ` <span class="cp-exp" title="Auto-expires in ${exp} round${exp === 1 ? '' : 's'}">⏱${exp}</span>`;
             }
             const cls = condChipClass(k);
-            html += `<span class="cond-chip ${cls}" title="${condTooltip(k)}">${label}`;
+            html += `<span class="cond-chip ${cls}" data-cond-name="${k.replace(/_/g,'-')}" title="${condTooltip(k)}">${label}`;
             if (isValued && VALUED_CONDITIONS.includes(k)) {
                 html += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
                 html += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
@@ -2561,7 +2561,7 @@ function addPC() {
     apiPost('/api/add_combatant', {type:'pc', path: sel.value});
 }
 
-function adjustHP(id, action) {
+async function adjustHP(id, action) {
     const input = document.getElementById('hp-amt-' + id);
     const amt = parseInt(input?.value) || 1;
     const dmgTypeSelect = document.getElementById('dmg-type-' + id);
@@ -2570,11 +2570,12 @@ function adjustHP(id, action) {
     fd.append('amount', amt);
     fd.append('action', action);
     fd.append('damage_type', dmgType);
-    apiPost('/api/adjust_hp/' + id, fd, null);
+    const d = await apiPost('/api/adjust_hp/' + id, fd, null);
+    if (d) window.pf2eToast(action === 'heal' ? ('Healed ' + amt + ' HP') : ('Took ' + amt + ' damage'), action === 'heal' ? 'success' : 'danger');
 }
 
 // Active-panel HP adjust (uses separate input IDs so it doesn't collide with grid row)
-function adjustHPAP(id, action) {
+async function adjustHPAP(id, action) {
     const input = document.getElementById('hp-amt-ap-' + id);
     const amt = parseInt(input?.value) || 1;
     const dmgTypeSelect = document.getElementById('dmg-type-ap-' + id);
@@ -2583,16 +2584,18 @@ function adjustHPAP(id, action) {
     fd.append('amount', amt);
     fd.append('action', action);
     fd.append('damage_type', dmgType);
-    apiPost('/api/adjust_hp/' + id, fd, null);
+    const d = await apiPost('/api/adjust_hp/' + id, fd, null);
+    if (d) window.pf2eToast(action === 'heal' ? ('Healed ' + amt + ' HP') : ('Took ' + amt + ' damage'), action === 'heal' ? 'success' : 'danger');
 }
 
 // Direct HP adjust for keyboard shortcuts (no DOM lookup needed)
-function adjustHPDirect(id, action, amount) {
+async function adjustHPDirect(id, action, amount) {
     const fd = new FormData();
     fd.append('amount', amount);
     fd.append('action', action);
     fd.append('damage_type', 'untyped');
-    apiPost('/api/adjust_hp/' + id, fd, null);
+    const d = await apiPost('/api/adjust_hp/' + id, fd, null);
+    if (d) window.pf2eToast(action === 'heal' ? ('Healed ' + amount + ' HP') : ('Took ' + amount + ' damage'), action === 'heal' ? 'success' : 'danger');
 }
 
 async function updateInit(id, val) {
@@ -2601,35 +2604,49 @@ async function updateInit(id, val) {
     await apiPost('/api/update_initiative/' + id, fd, null);
 }
 
-function condAction(id, cond, action) {
+async function condAction(id, cond, action) {
     const fd = new FormData();
     fd.append('condition', cond);
     fd.append('action', action);
-    apiPost('/api/toggle_condition/' + id, fd, null);
+    const d = await apiPost('/api/toggle_condition/' + id, fd, null);
+    if (d) {
+        const label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
+        window.pf2eToast(label + (action === 'remove' ? ' removed' : ' applied'), action === 'remove' ? 'success' : 'danger');
+    }
 }
 
-function addCondition(id) {
+async function addCondition(id) {
     const sel = document.getElementById('cond-sel-' + id);
     if (!sel) return;
+    const condName = sel.value;
     const fd = new FormData();
-    fd.append('condition', sel.value);
+    fd.append('condition', condName);
     fd.append('action', 'add');
-    apiPost('/api/toggle_condition/' + id, fd, null);
+    const d = await apiPost('/api/toggle_condition/' + id, fd, null);
+    if (d) {
+        const label = condName.charAt(0).toUpperCase() + condName.slice(1).replace('_', ' ');
+        window.pf2eToast(label + ' applied', 'danger');
+    }
     // Reset the dropdown to its first option so "apply frightened 1 to 4 goblins
     // in a row" is 4 clicks rather than 4 click-select-reselect-click cycles.
     try { sel.selectedIndex = 0; } catch(_) {}
 }
 
-function addConditionAP(id) {
+async function addConditionAP(id) {
     const sel = document.getElementById('cond-sel-ap-' + id);
     if (!sel) return;
+    const condName = sel.value;
     const roundsEl = document.getElementById('cond-rounds-ap-' + id);
     const rounds = roundsEl ? parseInt(roundsEl.value || '0', 10) : 0;
     const fd = new FormData();
-    fd.append('condition', sel.value);
+    fd.append('condition', condName);
     fd.append('action', 'add');
     if (rounds > 0) fd.append('rounds', String(rounds));
-    apiPost('/api/toggle_condition/' + id, fd, null);
+    const d = await apiPost('/api/toggle_condition/' + id, fd, null);
+    if (d) {
+        const label = condName.charAt(0).toUpperCase() + condName.slice(1).replace('_', ' ');
+        window.pf2eToast(label + ' applied', 'danger');
+    }
     try { sel.selectedIndex = 0; } catch(_) {}
     if (roundsEl) roundsEl.value = '';
 }
@@ -3247,7 +3264,7 @@ async function openStatModal(instanceId) {
                 active.forEach(([k,v]) => {
                     const label = k.replace(/_/g,'-') + (typeof v === 'number' && v > 0 ? ' ' + v : '');
                     const cls = condChipClass(k);
-                    html += `<span class="cond-chip ${cls}">${label}</span>`;
+                    html += `<span class="cond-chip ${cls}" data-cond-name="${k.replace(/_/g,'-')}">${label}</span>`;
                 });
                 html += `</div>`;
             }
@@ -3892,6 +3909,7 @@ async function sendLoot() {
         const d = await res.json();
         if (d.success) {
             toast(`Loot sent to ${target}`, 'success');
+            window.pf2eToast('Loot sent to ' + target, 'success');
             ['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('loot-panel').classList.add('hidden');
         } else {

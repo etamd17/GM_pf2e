@@ -706,7 +706,7 @@
                 <div class="conditions-row flex flex-wrap gap-1 ml-auto" {% if not pc.conditions %}style="display:none;"{% endif %}>
                     {% for cond, val in pc.conditions.items() %}
                         {% if val and val != 0 and val is not false %}
-                        <span class="condition-pill">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
+                        <span class="condition-pill" data-cond-name="{{ cond|replace('_','-') }}">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
                         {% endif %}
                     {% endfor %}
                 </div>
@@ -1122,7 +1122,7 @@
             if (val && val !== 0 && val !== false) {
                 let label = cond;
                 if (typeof val === 'number' && val > 0) label += ' ' + val;
-                html += '<span class="condition-pill">' + escHTML(label) + '</span>';
+                html += '<span class="condition-pill" data-cond-name="' + cond.replace(/_/g, '-') + '">' + escHTML(label) + '</span>';
             }
         }
         row.innerHTML = html;
@@ -1306,6 +1306,7 @@
             }
         }
         // Reset and close
+        if (typeof window.pf2eToast === 'function') window.pf2eToast('Loot distributed to party', 'success');
         ['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';

@@ -3979,4 +3979,450 @@ body.has-player-nav.map-fullscreen {
                turnBannerPulse 1.5s ease-in-out 0.4s infinite;
 }
 
+/* ── Action Toasts ─────────────────────────────────────────────────── */
+#pf2e-action-toast-container {
+    position: fixed;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+}
+.pf2e-action-toast {
+    pointer-events: auto;
+    background: var(--bg-card-2);
+    border: 1px solid var(--border-rule);
+    border-radius: var(--r-md);
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-on-dark);
+    max-width: 320px;
+    width: auto;
+    border-left: 3px solid var(--gilt-300);
+    animation: actionToastIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.pf2e-action-toast.success { border-left-color: var(--success); }
+.pf2e-action-toast.danger  { border-left-color: var(--ruby-300); }
+.pf2e-action-toast.fade-out {
+    animation: actionToastOut 0.3s ease forwards;
+}
+@keyframes actionToastIn {
+    from { transform: translateY(-12px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes actionToastOut {
+    from { opacity: 1; }
+    to   { opacity: 0; transform: translateY(-8px); }
+}
+
+/* ── Condition quick-reference tooltip ─────────────────────────────── */
+.cond-tooltip {
+    position: fixed;
+    z-index: 500;
+    max-width: 320px;
+    padding: 10px 14px;
+    background: var(--bg-card-2);
+    border: 1px solid var(--border-rule);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-2);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.cond-tooltip.visible { opacity: 1; pointer-events: auto; }
+.cond-tooltip-name {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--gilt-300);
+    margin-bottom: 6px;
+}
+.cond-tooltip-desc {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-on-dark-2);
+}
+
+/* Make condition pills and tracker condition chips feel interactive */
+.condition-pill[data-cond-name],
+.condition-toggle[data-cond-name],
+.cond-chip[data-cond-name],
+.cp[data-cond-name] {
+    cursor: pointer;
+    position: relative;
+}
+
+/* ── Mobile Combat View ───────────────────────────────────────────── */
+
+body.mobile-combat {
+    background: var(--ink-950);
+    color: var(--text-on-dark);
+    font-family: var(--font-body);
+    margin: 0;
+    padding: 12px 12px 68px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+
+/* Header */
+.mobile-header {
+    text-align: center;
+    padding: 12px 0 8px;
+}
+.mobile-char-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--gilt-200);
+    letter-spacing: 0.04em;
+}
+.mobile-char-meta {
+    font-size: 12px;
+    color: var(--text-on-dark-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+/* HP Section */
+.mobile-hp {
+    margin: 8px 0;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+}
+.mobile-hp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+.mobile-hp-label {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-on-dark-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.mobile-hp-numbers {
+    font-size: 28px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-on-dark);
+}
+.mobile-hp-sep {
+    color: var(--text-on-dark-3);
+    font-weight: 400;
+    margin: 0 2px;
+}
+
+/* HP gauge bar */
+body.mobile-combat .hp-gauge {
+    width: 100%;
+    height: 10px;
+    background: var(--ink-700);
+    border-radius: 5px;
+    overflow: hidden;
+}
+body.mobile-combat .hp-gauge-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success), #4ade80);
+    border-radius: 5px;
+    transition: width 0.4s ease, background 0.4s ease;
+}
+
+/* Temp HP / Shield pills below gauge */
+.mobile-hp-extras {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.mobile-extra-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.04em;
+}
+.mobile-extra-pill.temp-hp-pill {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+}
+.mobile-extra-pill.shield-pill {
+    background: rgba(201, 163, 78, 0.12);
+    color: var(--gilt-200);
+    border: 1px solid rgba(201, 163, 78, 0.25);
+}
+
+/* AC / Speed / Focus / Hero row */
+.mobile-ac-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+}
+.mobile-ac-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 8px;
+}
+.mobile-ac-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-on-dark-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.mobile-ac-val {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-on-dark);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+/* Conditions */
+.mobile-conditions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+    min-height: 28px;
+    align-items: center;
+}
+body.mobile-combat .condition-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(168, 58, 58, 0.18);
+    color: var(--ruby-200);
+    border: 1px solid rgba(168, 58, 58, 0.3);
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+.mobile-no-conditions {
+    font-size: 12px;
+    color: var(--text-on-dark-3);
+    font-style: italic;
+    width: 100%;
+    text-align: center;
+    padding: 4px 0;
+}
+
+/* Actions area */
+.mobile-actions {
+    margin: 8px 0 16px;
+}
+.mobile-section-label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gilt-300);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 14px 0 6px;
+    padding-left: 2px;
+}
+.mobile-section-label:first-child {
+    margin-top: 0;
+}
+
+/* Attack card */
+.mobile-attack-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.mobile-attack-name {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-on-dark);
+    margin-bottom: 6px;
+}
+.mobile-strike-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.mobile-damage-label {
+    font-size: 11px;
+    color: var(--text-on-dark-3);
+    font-family: var(--font-mono);
+}
+
+/* Action buttons (shared base) */
+.mobile-action-btn {
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+    border: 1px solid var(--border-card);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+.mobile-action-btn:active {
+    transform: scale(0.96);
+}
+
+/* Strike buttons (MAP 0 / -4 / -8 etc) */
+.mobile-strike-btn {
+    flex: 1;
+    background: var(--ink-700);
+    color: var(--gilt-100);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.mobile-strike-btn:hover,
+.mobile-strike-btn:active {
+    background: var(--ink-600);
+}
+
+/* Save buttons */
+.mobile-saves-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.mobile-save-btn {
+    background: var(--ink-700);
+    color: var(--text-on-dark);
+    text-align: center;
+    font-size: 13px;
+}
+.mobile-save-btn:hover,
+.mobile-save-btn:active {
+    background: var(--ink-600);
+}
+
+/* Perception button */
+.mobile-perc-btn {
+    display: block;
+    width: 100%;
+    background: var(--ink-700);
+    color: var(--text-on-dark);
+    text-align: center;
+    font-size: 14px;
+}
+.mobile-perc-btn:hover,
+.mobile-perc-btn:active {
+    background: var(--ink-600);
+}
+
+/* Roll toast overlay */
+.mobile-roll-toast {
+    position: fixed;
+    top: 16px;
+    left: 12px;
+    right: 12px;
+    z-index: 500;
+    background: var(--bg-card-2, var(--ink-800));
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    animation: mobileToastIn 0.25s ease forwards;
+}
+.mobile-roll-toast.hidden {
+    display: none;
+}
+.mobile-roll-toast.crit {
+    border-color: var(--gilt-300);
+    box-shadow: 0 0 20px rgba(201,163,78,0.2), 0 8px 32px rgba(0,0,0,0.6);
+}
+.mobile-roll-toast.fumble {
+    border-color: var(--ruby-300);
+    box-shadow: 0 0 20px rgba(168,58,58,0.2), 0 8px 32px rgba(0,0,0,0.6);
+}
+.mobile-toast-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+.mobile-toast-title {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gilt-300);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.mobile-toast-close {
+    background: none;
+    border: none;
+    color: var(--text-on-dark-3);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    min-height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.mobile-toast-total {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--text-on-dark);
+    line-height: 1.1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.mobile-toast-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.mobile-toast-badge.crit {
+    background: var(--gilt-400);
+    color: var(--ink-950);
+}
+.mobile-toast-badge.fumble {
+    background: var(--ruby-300);
+    color: #fff;
+}
+.mobile-toast-detail {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-on-dark-3);
+    background: var(--ink-900);
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    margin-top: 8px;
+    word-break: break-word;
+}
+@keyframes mobileToastIn {
+    from { transform: translateY(-16px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
 /* End of system.css */

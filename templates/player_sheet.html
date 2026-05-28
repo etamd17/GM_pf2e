@@ -3460,6 +3460,11 @@
                 if (data.success) {
                     _refreshConditionStrip();
                     _paintMetaQuickConds(data.conditions || {});
+                    var _v = (data.conditions || {})[cond];
+                    var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
+                    if (typeof _v === 'number' && _v > 0) window.pf2eToast(_label + ' ' + _v, 'danger');
+                    else if (_v) window.pf2eToast(_label + ' applied', 'danger');
+                    else window.pf2eToast(_label + ' removed', 'success');
                 } else if (typeof showRollToast === 'function') {
                     showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond} ${delta})`, false, true);
                 }
@@ -3866,6 +3871,10 @@
                 const data = await res.json();
                 if (data.success) {
                     _refreshConditionStrip();
+                    var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
+                    var _active = (data.conditions || {})[cond];
+                    if (_active) window.pf2eToast(_label + ' applied', 'danger');
+                    else window.pf2eToast(_label + ' removed', 'success');
                 }
             } catch(e) { console.error(e); }
         }
@@ -4289,6 +4298,14 @@
                 });
                 const data = await res.json();
                 if (data.success) {
+                    var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
+                    if (typeof val === 'boolean') {
+                        window.pf2eToast(_label + (val ? ' applied' : ' removed'), val ? 'danger' : 'success');
+                    } else if (typeof val === 'number' && val > 0) {
+                        window.pf2eToast(_label + ' ' + val, 'danger');
+                    } else {
+                        window.pf2eToast(_label + ' removed', 'success');
+                    }
                     window.location.reload();
                 } else if (typeof showRollToast === 'function') {
                     showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond}=${val})`, false, true);
