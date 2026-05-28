@@ -377,8 +377,9 @@
         @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
         @keyframes turnBannerOut { from { transform:translateY(0); opacity:1; } to { transform:translateY(-100%); opacity:0; } }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body>
+<body class="{% if not is_gm and player_name %}has-player-nav map-fullscreen{% endif %}">
     <!-- Header -->
     <div id="header">
         <a href="/player">← Player Hub</a>
@@ -966,6 +967,8 @@
             evtSource.addEventListener('encounter_update', (e) => {
                 try {
                     const data = JSON.parse(e.data);
+                    // Nav partial: turn banner + combat tab pulse
+                    if (window._navHandleEncounterUpdate) window._navHandleEncounterUpdate(data);
                     // Track the active combatant globally so drawTokens can
                     // pulse the right token even when it's another party
                     // member or a visible enemy (not just self).
@@ -974,13 +977,6 @@
                     _activeId = data.active_id || '';
                     _activeRound = data.round || 0;
                     if ((_activeId || _activeName) !== prevActive) render();
-                    if (data.active_name && playerName) {
-                        // Check if active combatant matches our assigned token
-                        const myTok = (mapState.tokens || []).find(t => t.assigned_player === playerName);
-                        if (myTok && (data.active_name === myTok.name || data.active_name === playerName)) {
-                            showTurnBanner(data.round || 0);
-                        }
-                    }
                 } catch(e) {}
             });
             
@@ -2861,6 +2857,12 @@
         // INIT
         // ===========================================
         document.addEventListener('DOMContentLoaded', init);
+    </script>
+    {% set active_player_tab = 'map' %}
+    {% include "_player_nav.html" %}
+    <script>
+    // Map page opens its own EventSource; tell nav partial not to open a second.
+    if (window._navMarkSseAttached) window._navMarkSseAttached();
     </script>
 </body>
 </html>

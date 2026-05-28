@@ -2423,6 +2423,10 @@
             body.at-deaths-door #deaths-door { opacity: 0.7; animation: none; }
         }
 
+        /* Raise FABs above the player nav bar when present */
+        body.has-player-nav .whisper-fab { bottom: 78px !important; }
+        body.has-player-nav .whisper-panel { bottom: 118px !important; }
+
         /* Whisper-to-GM input — small panel that slides up from bottom */
         .whisper-fab {
             position: fixed; bottom: 18px; right: 152px; z-index: 800;
@@ -2806,7 +2810,7 @@
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col{% if not is_gm and player_name %} has-player-nav{% endif %}">
 
     {% set stat_color = 'text-red-400' if pc.status_penalty > 0 else 'text-white' %}
     {% set accent_color = 'text-red-400' if pc.status_penalty > 0 else 'text-amber-400' %}
@@ -3968,7 +3972,8 @@
             evtSource.addEventListener('encounter_update', (e) => {
                 try {
                     const data = JSON.parse(e.data);
-                    if (data.active_name === pcName) showTurnBanner();
+                    // Delegate to nav partial for turn banner + nav tab pulse
+                    if (window._navHandleEncounterUpdate) window._navHandleEncounterUpdate(data);
                 } catch(e) {}
             });
 
@@ -5352,6 +5357,8 @@
                 _sheetMarkSseAlive();
                 try {
                     const data = JSON.parse(e.data);
+                    // Nav partial: turn banner + combat tab pulse
+                    if (window._navHandleEncounterUpdate) window._navHandleEncounterUpdate(data);
                     const wrapper = document.getElementById('encounter-bar-wrapper');
                     const initBar = document.getElementById('encounter-initiative-bar');
                     if (wrapper && initBar && data.encounter && data.encounter.length > 0) {
@@ -9577,5 +9584,16 @@
        the GM broadcasts session_dismiss). #}
     {% set curtain_role = 'player' %}
     {% include "_session_curtain.html" %}
+
+    {# Player bottom nav bar #}
+    {% set active_player_tab = 'sheet' %}
+    {% include "_player_nav.html" %}
+    <script>
+    // Mark that player_sheet.html handles its own roll toasts so the nav
+    // partial does not double-fire.
+    window._playerSheetHandlesRolls = true;
+    // Tell the nav partial we are wiring SSE from this page's connectSSE().
+    if (window._navMarkSseAttached) window._navMarkSseAttached();
+    </script>
 </body>
 </html>

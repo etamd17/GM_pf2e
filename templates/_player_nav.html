@@ -1,0 +1,237 @@
+{# Player bottom nav bar -- included on every player-facing page.
+   Requires: player_name (from context processor), active_player_tab (set before include).
+   Provides: turn notification (banner + chime + browser notification),
+             roll feed handler hooks, nav bar with turn indicator. #}
+{% if not is_gm and player_name %}
+<nav id="player-nav" class="player-nav" role="navigation" aria-label="Player navigation">
+    <a href="/player/sheet/{{ player_name|urlencode }}"
+       class="player-nav-tab{% if active_player_tab == 'sheet' %} active{% endif %}"
+       aria-label="Character sheet">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <span>Sheet</span>
+    </a>
+    <a href="/tracker"
+       class="player-nav-tab{% if active_player_tab == 'combat' %} active{% endif %}"
+       id="nav-combat-tab"
+       aria-label="Combat tracker">
+        <svg viewBox="0 0 24 24"><path d="M14.5 2.5L12 5l-2.5-2.5L7 5l-2.5-2.5L2 5v16.5l2.5-2.5L7 21.5l2.5-2.5L12 21.5l2.5-2.5 2.5 2.5 2.5-2.5L22 21.5V5l-2.5-2.5L17 5z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+        <span>Combat</span>
+        <span id="turn-alert-dot" class="turn-dot hidden"></span>
+    </a>
+    <a href="/map"
+       class="player-nav-tab{% if active_player_tab == 'map' %} active{% endif %}"
+       aria-label="Map">
+        <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        <span>Map</span>
+    </a>
+    <a href="/party"
+       class="player-nav-tab{% if active_player_tab == 'party' %} active{% endif %}"
+       aria-label="Party">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Party</span>
+    </a>
+</nav>
+
+{# Roll feed toast container (shared across all player pages) #}
+<div id="player-roll-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none" style="width:280px;"></div>
+
+<script>
+(function() {
+    // ---- Shared state ----
+    var _playerName = {{ player_name|tojson }};
+    var _isMyTurn = false;
+    var _audioCtx = null;
+    var _notifPermRequested = false;
+
+    // Expose for page-level SSE handlers to call into
+    window._playerNavName = _playerName;
+
+    // ---- Audio: two-note ascending chime ----
+    function _getAudioCtx() {
+        if (!_audioCtx) {
+            try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+            catch(e) { return null; }
+        }
+        if (_audioCtx.state === 'suspended') _audioCtx.resume();
+        return _audioCtx;
+    }
+    function _playTurnChime() {
+        var ctx = _getAudioCtx();
+        if (!ctx) return;
+        // Note 1: G5 (784 Hz), triangle wave
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.value = 784;
+        gain1.gain.setValueAtTime(0, ctx.currentTime);
+        gain1.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+        gain1.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+        osc1.connect(gain1); gain1.connect(ctx.destination);
+        osc1.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.15);
+        // Note 2: C6 (1047 Hz), triangle wave, offset 100ms
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.value = 1047;
+        gain2.gain.setValueAtTime(0, ctx.currentTime + 0.1);
+        gain2.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.11);
+        gain2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.28);
+        osc2.connect(gain2); gain2.connect(ctx.destination);
+        osc2.start(ctx.currentTime + 0.1);
+        osc2.stop(ctx.currentTime + 0.28);
+    }
+
+    // ---- Browser Notification API ----
+    function _requestNotifPermission() {
+        if (_notifPermRequested) return;
+        _notifPermRequested = true;
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }
+    // Request on first interaction
+    document.addEventListener('click', _requestNotifPermission, { once: true });
+    document.addEventListener('touchstart', _requestNotifPermission, { once: true });
+
+    function _sendBrowserNotification(round) {
+        if (!document.hidden) return;
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+            var n = new Notification('Your Turn', {
+                body: 'Round ' + (round || '?'),
+                tag: 'pf2e-turn',
+                requireInteraction: false
+            });
+            setTimeout(function() { n.close(); }, 5000);
+        } catch(e) {}
+    }
+
+    // ---- Turn banner (persistent until dismissed) ----
+    function _dismissTurnBanner() {
+        var el = document.getElementById('turn-banner');
+        if (!el) return;
+        el.style.animation = 'turnBannerSlideOut 0.3s ease forwards';
+        setTimeout(function() { el.remove(); }, 300);
+    }
+
+    window.showPlayerTurnBanner = function(round) {
+        // Remove existing
+        var existing = document.getElementById('turn-banner');
+        if (existing) existing.remove();
+
+        var banner = document.createElement('div');
+        banner.id = 'turn-banner';
+        banner.className = 'turn-banner-overlay pulsing';
+        banner.onclick = _dismissTurnBanner;
+        banner.innerHTML = '<div>Your Turn</div>'
+            + '<div class="turn-banner-sub">Round ' + (round || '?') + '</div>'
+            + '<div class="turn-banner-dismiss">tap to dismiss</div>';
+        document.body.appendChild(banner);
+
+        _playTurnChime();
+        _sendBrowserNotification(round);
+
+        // Nav bar combat tab glow
+        _setTurnActive(true);
+    };
+
+    function _setTurnActive(active) {
+        _isMyTurn = active;
+        var tab = document.getElementById('nav-combat-tab');
+        var dot = document.getElementById('turn-alert-dot');
+        if (tab) {
+            if (active) { tab.classList.add('turn-active'); }
+            else { tab.classList.remove('turn-active'); }
+        }
+        if (dot) {
+            if (active) { dot.classList.remove('hidden'); }
+            else { dot.classList.add('hidden'); }
+        }
+    }
+
+    // ---- SSE handler hooks (called by each page's existing EventSource) ----
+    window._navHandleEncounterUpdate = function(data) {
+        if (data.active_name === _playerName) {
+            if (!_isMyTurn) {
+                window.showPlayerTurnBanner(data.round);
+            }
+        } else {
+            if (_isMyTurn) {
+                _dismissTurnBanner();
+                _setTurnActive(false);
+            }
+        }
+    };
+
+    window._navHandlePlayerRoll = function(roll) {
+        // Skip own rolls
+        if (roll.name === _playerName) return;
+        // Skip if player_sheet.html already handles rolls
+        if (window._playerSheetHandlesRolls) return;
+        _showNavRollToast(roll);
+    };
+
+    function _showNavRollToast(roll) {
+        var container = document.getElementById('player-roll-toast-container');
+        if (!container) return;
+        var toast = document.createElement('div');
+        toast.style.cssText = 'pointer-events:auto; padding:10px 12px; border-radius:8px; border:1px solid var(--border-rule); background:var(--bg-card-2); box-shadow:0 4px 16px rgba(0,0,0,0.4); animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards;';
+        var isCrit = roll.detail && roll.detail.indexOf('[CRIT') >= 0;
+        toast.innerHTML = '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">'
+            + '<span style="font-weight:700; font-size:11px; color:var(--gilt-300); text-transform:uppercase; letter-spacing:0.05em;">' + _esc(roll.name) + '</span>'
+            + '<button onclick="this.closest(\'div[style]\').remove()" style="color:var(--text-on-dark-3); font-size:11px; cursor:pointer; background:none; border:none;">x</button>'
+            + '</div>'
+            + '<div style="font-size:13px; color:var(--text-on-dark-2);">' + _esc(roll.action) + ': <span style="font-weight:700; color:' + (isCrit ? 'var(--gilt-200)' : 'var(--text-on-dark)') + ';">' + _esc(roll.result) + '</span></div>'
+            + '<div style="font-size:10px; color:var(--text-on-dark-3); font-family:monospace; margin-top:4px;">' + _esc(roll.detail || '') + '</div>';
+        container.prepend(toast);
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(function() { toast.remove(); }, 300);
+        }, 6000);
+    }
+
+    function _esc(s) {
+        if (s == null) return '';
+        var d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
+
+    // ---- Fallback SSE (for pages that do not open their own EventSource) ----
+    // Wait 2s for the page to hook into us; if nobody calls the handlers,
+    // open our own connection.
+    var _navSseAttached = false;
+    window._navMarkSseAttached = function() { _navSseAttached = true; };
+
+    setTimeout(function() {
+        if (_navSseAttached) return;
+        var src = new EventSource('/api/events');
+        src.addEventListener('encounter_update', function(e) {
+            try { window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+        });
+        src.addEventListener('player_roll', function(e) {
+            try { window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+        });
+        src.onerror = function() {
+            src.close();
+            setTimeout(function() {
+                if (!_navSseAttached) {
+                    // Reconnect fallback SSE
+                    _navSseAttached = false;
+                    var s2 = new EventSource('/api/events');
+                    s2.addEventListener('encounter_update', function(e) {
+                        try { window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+                    });
+                    s2.addEventListener('player_roll', function(e) {
+                        try { window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+                    });
+                }
+            }, 5000);
+        };
+    }, 2000);
+})();
+</script>
+{% endif %}

@@ -520,6 +520,15 @@
 {% endblock %}
 
 {% block content %}
+
+{% if not is_gm %}
+<style>
+    /* Player mode: hide GM-only controls */
+    .hp-adjust-btn, .hero-adjust-btn,
+    #party-damage-toggle, #party-rest-btn { display: none !important; }
+</style>
+{% endif %}
+
 <!-- Header -->
 <div class="flex items-center justify-between mb-6">
     <div>

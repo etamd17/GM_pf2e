@@ -3850,4 +3850,133 @@ body::after {
     .roll-toast.fumble-flourish { animation: none; }
 }
 
+/* ================================================================
+   PLAYER BOTTOM NAV BAR
+   Fixed mobile-first nav for player sessions.
+   ================================================================ */
+.player-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 150;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    height: 56px;
+    background: var(--bg-sunken);
+    border-top: 1px solid var(--border-card);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.player-nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--text-on-dark-3);
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: color 0.15s ease;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+}
+.player-nav-tab svg {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor; stroke-width: 1.5;
+    stroke-linecap: round; stroke-linejoin: round;
+}
+.player-nav-tab.active {
+    color: var(--gilt-300);
+}
+.player-nav-tab:hover {
+    color: var(--text-on-dark);
+}
+
+/* Turn alert dot on Combat tab */
+.turn-dot {
+    position: absolute;
+    top: 6px; right: calc(50% - 18px);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--gilt-200);
+    box-shadow: 0 0 6px rgba(224,182,90,0.6);
+    animation: turnDotPulse 1.2s ease-in-out infinite;
+}
+.turn-dot.hidden { display: none; }
+@keyframes turnDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+/* Combat tab glow when it is the player's turn */
+.player-nav-tab.turn-active {
+    color: var(--gilt-200);
+    text-shadow: 0 0 8px rgba(224,182,90,0.4);
+}
+
+/* Body padding so content is not hidden behind the fixed nav */
+body.has-player-nav {
+    padding-bottom: 56px;
+}
+/* Map page overrides -- no body padding, nav overlays */
+body.has-player-nav.map-fullscreen {
+    padding-bottom: 0;
+}
+
+/* Turn notification banner (player-facing, persistent) */
+.turn-banner-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    background: linear-gradient(135deg, rgba(201,163,78,0.97), rgba(164,132,43,0.97));
+    color: var(--ink-950);
+    text-align: center;
+    padding: 16px 20px;
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    border-bottom: 3px solid var(--gilt-200);
+    cursor: pointer;
+    animation: turnBannerSlideIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+.turn-banner-overlay .turn-banner-sub {
+    font-size: 11px;
+    opacity: 0.7;
+    letter-spacing: 0.15em;
+    margin-top: 4px;
+    font-weight: 600;
+}
+.turn-banner-overlay .turn-banner-dismiss {
+    font-size: 10px;
+    opacity: 0.5;
+    margin-top: 6px;
+    font-weight: 400;
+    font-family: var(--font-ui);
+    letter-spacing: 0.05em;
+    text-transform: none;
+}
+@keyframes turnBannerSlideIn {
+    from { transform: translateY(-100%); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes turnBannerSlideOut {
+    from { transform: translateY(0); opacity: 1; }
+    to   { transform: translateY(-100%); opacity: 0; }
+}
+@keyframes turnBannerPulse {
+    0%, 100% { border-bottom-color: var(--gilt-200); }
+    50%      { border-bottom-color: rgba(224,182,90,0.3); }
+}
+.turn-banner-overlay.pulsing {
+    animation: turnBannerSlideIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards,
+               turnBannerPulse 1.5s ease-in-out 0.4s infinite;
+}
+
 /* End of system.css */

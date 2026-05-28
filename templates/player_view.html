@@ -154,7 +154,7 @@
         }
     </style>
 </head>
-<body class="stage{% if campaign.hero_image %} has-hero{% endif %}"
+<body class="stage{% if campaign.hero_image %} has-hero{% endif %}{% if not is_gm and player_name %} has-player-nav{% endif %}"
       {% if campaign.hero_image %}style="--hero-image: url('{{ campaign.hero_image }}');"{% endif %}>
 
     <!-- Player Nav -->
@@ -402,6 +402,13 @@
                 let d = null; try { d = JSON.parse(e.data); } catch(_) {}
                 try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
             });
+            // Nav partial: turn notification + roll feed
+            evtSrc.addEventListener('encounter_update', e => {
+                try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(_) {}
+            });
+            evtSrc.addEventListener('player_roll', e => {
+                try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(_) {}
+            });
             evtSrc.onerror = () => {
                 try { evtSrc.close(); } catch(_){}
                 _sseReconnectTries += 1;
@@ -450,5 +457,13 @@
 {% include "_session_scrapbook.html" %}
 {% set curtain_role = 'player' %}
 {% include "_session_curtain.html" %}
+
+{# Player bottom nav bar #}
+{% set active_player_tab = 'party' %}
+{% include "_player_nav.html" %}
+<script>
+// Player view opens its own EventSource; tell nav partial not to open a second.
+if (window._navMarkSseAttached) window._navMarkSseAttached();
+</script>
 </body>
 </html>

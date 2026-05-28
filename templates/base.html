@@ -61,7 +61,7 @@
          strict typography roles. New code consumes classes from here. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col{% if not is_gm and player_name %} has-player-nav{% endif %}">
 
     <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -99,7 +99,7 @@
     <div id="gm-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none w-72"></div>
 
     <!-- Dice Roller -->
-    <div id="dice-widget" class="fixed bottom-4 right-4 z-[100] flex flex-col items-end">
+    <div id="dice-widget" class="fixed {% if not is_gm and player_name %}bottom-[72px]{% else %}bottom-4{% endif %} right-4 z-[100] flex flex-col items-end">
         <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-card-2); border:1px solid var(--border-rule);">
             <div class="px-3 py-2 flex justify-between items-center" style="background:var(--bg-card); border-bottom:1px solid var(--border-card);">
                 <span class="text-xs font-semibold text-accent-300">Dice Roller</span>
@@ -645,5 +645,29 @@
        gets the "Enter the Session" control that parts the curtain for all). #}
     {% set curtain_role = 'gm' %}
     {% include "_session_curtain.html" %}
+
+    {# Player bottom nav bar + turn notifications + roll feed.
+       Only renders for joined players (not GM). The active tab is inferred
+       from the current URL path. #}
+    {% if not is_gm and player_name %}
+    {% set active_player_tab = 'party' if request.path.startswith('/party') else ('combat' if request.path.startswith('/tracker') else ('map' if request.path.startswith('/map') else 'sheet')) %}
+    {% include "_player_nav.html" %}
+    <script>
+    (function() {
+        // Wire base.html SSE to the nav partial handlers. The toast SSE
+        // at line ~315 only fires on GM pages (guarded by pathname check).
+        // Open a player-specific SSE for encounter_update + player_roll.
+        if (window._navMarkSseAttached) window._navMarkSseAttached();
+        var src = new EventSource('/api/events');
+        src.addEventListener('encounter_update', function(e) {
+            try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+        });
+        src.addEventListener('player_roll', function(e) {
+            try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+        });
+        src.onerror = function() { src.close(); setTimeout(function() { location.reload(); }, 8000); };
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

@@ -1159,6 +1159,24 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 {% block content %}
 
+{% if not is_gm %}
+<style>
+    /* Player mode: hide GM-only controls.
+       Turn cycling, roll/sort, tools menu, encounter save/load, add monster. */
+    .turn-ctl, .hb-right, .xp-bar-wrap,
+    .search-area, #add-pc-wrap, #encounter-sidebar,
+    .trk-tools-wrap, #multi-action-bar { display: none !important; }
+    /* Per-row: drag handle, remove button, elite/weak toggles, initiative input */
+    .c-drag { display: none !important; }
+    .act-btn.del { display: none !important; }
+    .ew-btn { display: none !important; }
+    /* NPC HP: hide exact numbers for players (they see hp_status text) */
+    .hp-num-gm { display: none !important; }
+    /* Active-combatant panel: hide GM-only action buttons */
+    .active-note-link { display: none !important; }
+</style>
+{% endif %}
+
 <div class="trk">
 
 {# ═══════════════════ HERO BAR ═══════════════════ #}

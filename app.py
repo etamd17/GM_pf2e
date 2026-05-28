@@ -4599,9 +4599,9 @@ def _inject_campaign_chrome():
         mood = cfg.get('scene_mood', 'calm')
         if mood not in _VALID_MOODS:
             mood = 'calm'
-        return {'nav_crest': cfg.get('crest_image', ''), 'scene_mood': mood, 'is_gm': _is_gm()}
+        return {'nav_crest': cfg.get('crest_image', ''), 'scene_mood': mood, 'is_gm': _is_gm(), 'player_name': session.get('player_name', '')}
     except Exception:
-        return {'nav_crest': '', 'scene_mood': 'calm', 'is_gm': _is_gm()}
+        return {'nav_crest': '', 'scene_mood': 'calm', 'is_gm': _is_gm(), 'player_name': session.get('player_name', '')}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -5414,8 +5414,7 @@ def api_leave_campaign():
     return jsonify({'success': True})
 
 @app.route('/party')
-@gm_required
-def party_view(): 
+def party_view():
     _sync_party_from_disk()
     return render_template('party_view.html', party=list(PARTY_LIBRARY.values()))
 
@@ -5700,7 +5699,6 @@ def api_session_export():
     return jsonify({"success": True, "markdown": body, "byte_count": len(body.encode("utf-8")), "title": title})
 
 @app.route('/tracker')
-@gm_required
 def tracker_view():
     sorted_monsters = sorted(MONSTER_LIBRARY.values(), key=lambda m: m.name)
     sorted_party = sorted(PARTY_LIBRARY.values(), key=lambda p: p.name)
