@@ -81,6 +81,11 @@
                     <a href="/gm/map" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Map</a>
                     <a href="/gmscreen" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Screen</a>
                     <a href="/generator" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Generators</a>
+                    <a href="/gm/loot" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Loot</a>
+                    <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <kbd class="hidden sm:inline" style="font-size:9px; padding:1px 4px; border-radius:3px; background:var(--bg-page); border:1px solid var(--border-card); color:var(--text-on-dark-3); font-family:var(--font-ui);">&#8984;K</kbd>
+                    </button>
                     {% else %}
                     <a href="/player" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Player Hub</a>
                     {% endif %}
@@ -666,6 +671,277 @@
             try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
         });
         src.onerror = function() { src.close(); setTimeout(function() { location.reload(); }, 8000); };
+    })();
+    </script>
+    {% endif %}
+
+    {# ════════════════ QUICK SEARCH (Cmd+K) ════════════════
+       Global rules-lookup popover. Searches spells, feats, items, and
+       conditions via /api/compendium_search. GM-only. #}
+    {% if is_gm %}
+    <div id="qs-overlay" class="hidden" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay);">
+        <div id="qs-dialog" style="position:absolute; top:14%; left:50%; transform:translateX(-50%); width:560px; max-width:92vw; max-height:72vh; display:flex; flex-direction:column; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; box-shadow:0 16px 48px rgba(0,0,0,0.6); overflow:hidden;">
+            <div style="padding:12px 16px; border-bottom:1px solid var(--border-card); display:flex; align-items:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-on-dark-3)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input id="qs-input" type="text" placeholder="Search spells, feats, items, conditions..." style="flex:1; background:transparent; border:none; outline:none; font-size:15px; color:var(--text-on-dark); font-family:var(--font-ui);">
+                <kbd style="font-size:10px; padding:2px 6px; border-radius:4px; background:var(--bg-page); color:var(--text-on-dark-3); border:1px solid var(--border-card); font-family:var(--font-ui);">esc</kbd>
+            </div>
+            <div id="qs-cats" style="padding:6px 16px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--border-card);"></div>
+            <div id="qs-results" style="flex:1; overflow-y:auto; max-height:52vh; padding:4px 0;"></div>
+        </div>
+    </div>
+    <style>
+        #qs-overlay .qs-pill {
+            font-size:11px; font-weight:600; padding:4px 12px; border-radius:999px;
+            cursor:pointer; border:1px solid var(--border-card);
+            background:transparent; color:var(--text-on-cream-2);
+            font-family:var(--font-ui); transition:all .12s;
+        }
+        #qs-overlay .qs-pill:hover { border-color:var(--border-rule); color:var(--text-on-cream); }
+        #qs-overlay .qs-pill.active { background:rgba(201,163,78,0.14); border-color:var(--gilt-300); color:var(--gilt-300); }
+        #qs-overlay .qs-row {
+            display:flex; align-items:flex-start; gap:10px; padding:8px 16px;
+            cursor:pointer; transition:background .1s;
+        }
+        #qs-overlay .qs-row:hover { background:rgba(201,163,78,0.07); }
+        #qs-overlay .qs-row.active { background:rgba(201,163,78,0.12); }
+        #qs-overlay .qs-badge {
+            display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase;
+            letter-spacing:0.06em; padding:2px 6px; border-radius:4px;
+            white-space:nowrap; flex-shrink:0; margin-top:2px;
+        }
+        #qs-overlay .qs-badge[data-t="spell"]     { background:rgba(201,163,78,0.18); color:var(--gilt-200); }
+        #qs-overlay .qs-badge[data-t="feat"]       { background:rgba(106,156,68,0.18); color:#9bc06f; }
+        #qs-overlay .qs-badge[data-t="item"]       { background:rgba(154,145,122,0.18); color:var(--ink-300); }
+        #qs-overlay .qs-badge[data-t="condition"]  { background:rgba(211,110,110,0.18); color:#d36e6e; }
+        #qs-overlay .qs-detail {
+            padding:16px; overflow-y:auto; max-height:52vh;
+            font-size:13px; line-height:1.6; color:var(--text-on-cream);
+            font-family:var(--font-ui);
+        }
+        #qs-overlay .qs-detail h3 {
+            font-family:var(--font-display); font-size:18px; color:var(--gilt-300);
+            margin:0 0 4px; font-weight:600;
+        }
+        #qs-overlay .qs-detail .qs-meta {
+            font-size:11px; color:var(--text-on-cream-3); margin-bottom:12px;
+        }
+        #qs-overlay .qs-detail .qs-desc { color:var(--text-on-cream-2); }
+        #qs-overlay .qs-back {
+            display:inline-flex; align-items:center; gap:4px; font-size:11px;
+            color:var(--gilt-300); cursor:pointer; margin-bottom:10px;
+            background:none; border:none; font-family:var(--font-ui); font-weight:600;
+            padding:0;
+        }
+        #qs-overlay .qs-back:hover { color:var(--gilt-200); }
+        #qs-overlay .qs-empty {
+            padding:32px 16px; text-align:center; font-size:13px;
+            color:var(--text-on-cream-3); font-family:var(--font-ui);
+        }
+    </style>
+    <script>
+    (function() {
+        var overlay = document.getElementById('qs-overlay');
+        var dialog  = document.getElementById('qs-dialog');
+        var input   = document.getElementById('qs-input');
+        var catsEl  = document.getElementById('qs-cats');
+        var resEl   = document.getElementById('qs-results');
+        var activeCat = 'all';
+        var debounceTimer = null;
+        var activeIdx = -1;
+        var currentResults = [];
+
+        var CATS = [
+            {id:'all',        label:'All'},
+            {id:'spells',     label:'Spells'},
+            {id:'feats',      label:'Feats'},
+            {id:'equipment',  label:'Items'},
+            {id:'conditions', label:'Conditions'}
+        ];
+
+        // Build category pills
+        CATS.forEach(function(cat) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'qs-pill' + (cat.id === activeCat ? ' active' : '');
+            btn.textContent = cat.label;
+            btn.setAttribute('data-cat', cat.id);
+            btn.addEventListener('click', function() {
+                activeCat = cat.id;
+                catsEl.querySelectorAll('.qs-pill').forEach(function(p) {
+                    p.classList.toggle('active', p.getAttribute('data-cat') === activeCat);
+                });
+                doSearch();
+                input.focus();
+            });
+            catsEl.appendChild(btn);
+        });
+
+        function open() {
+            overlay.classList.remove('hidden');
+            input.value = '';
+            resEl.innerHTML = '<div class="qs-empty">Type to search spells, feats, items, and conditions</div>';
+            activeIdx = -1;
+            currentResults = [];
+            setTimeout(function() { input.focus(); }, 30);
+        }
+        function close() {
+            overlay.classList.add('hidden');
+            input.value = '';
+            resEl.innerHTML = '';
+            activeIdx = -1;
+            currentResults = [];
+        }
+        window._qsOpen = open;
+
+        // Keyboard: Cmd+K / Ctrl+K to open
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                if (overlay.classList.contains('hidden')) open(); else close();
+            }
+        });
+
+        // Close on Escape (before global modal handler to avoid conflict)
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { e.stopPropagation(); close(); }
+            // Arrow navigation within results
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (currentResults.length) {
+                    activeIdx = Math.min(activeIdx + 1, currentResults.length - 1);
+                    highlightRow();
+                }
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (currentResults.length) {
+                    activeIdx = Math.max(activeIdx - 1, 0);
+                    highlightRow();
+                }
+            }
+            if (e.key === 'Enter' && activeIdx >= 0 && currentResults[activeIdx]) {
+                e.preventDefault();
+                showDetail(currentResults[activeIdx]);
+            }
+        });
+
+        // Close on click outside dialog
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) close();
+        });
+
+        // Debounced search
+        input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(doSearch, 200);
+        });
+
+        function doSearch() {
+            var q = input.value.trim();
+            if (q.length < 2) {
+                resEl.innerHTML = '<div class="qs-empty">Type to search spells, feats, items, and conditions</div>';
+                activeIdx = -1;
+                currentResults = [];
+                return;
+            }
+            var url = '/api/compendium_search?q=' + encodeURIComponent(q) + '&cat=' + activeCat;
+            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                currentResults = data.results || [];
+                activeIdx = -1;
+                renderResults();
+            }).catch(function() {
+                resEl.innerHTML = '<div class="qs-empty">Search failed</div>';
+            });
+        }
+
+        function renderResults() {
+            if (!currentResults.length) {
+                resEl.innerHTML = '<div class="qs-empty">No results found</div>';
+                return;
+            }
+            var html = '';
+            currentResults.forEach(function(r, i) {
+                var levelStr = (r.level !== null && r.level !== undefined) ? 'Lvl ' + r.level : '';
+                var descPreview = (r.desc || '').substring(0, 120);
+                if ((r.desc || '').length > 120) descPreview += '...';
+                html += '<div class="qs-row" data-idx="' + i + '">'
+                    + '<span class="qs-badge" data-t="' + r.type + '">' + r.type + '</span>'
+                    + '<div style="flex:1; min-width:0;">'
+                    + '<div style="display:flex; align-items:baseline; gap:6px;">'
+                    + '<span style="font-family:var(--font-display); font-size:13px; font-weight:600; color:var(--text-on-cream);">' + escHtml(r.name) + '</span>'
+                    + (levelStr ? '<span style="font-size:10px; color:var(--text-on-cream-3);">' + levelStr + '</span>' : '')
+                    + (r.meta ? '<span style="font-size:10px; color:var(--text-on-cream-3);">' + escHtml(r.meta) + '</span>' : '')
+                    + '</div>'
+                    + '<div style="font-size:11px; color:var(--text-on-cream-3); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escHtml(descPreview) + '</div>'
+                    + '</div>'
+                    + '</div>';
+            });
+            resEl.innerHTML = html;
+            resEl.querySelectorAll('.qs-row').forEach(function(row) {
+                row.addEventListener('click', function() {
+                    var idx = parseInt(row.getAttribute('data-idx'));
+                    if (currentResults[idx]) showDetail(currentResults[idx]);
+                });
+            });
+        }
+
+        function highlightRow() {
+            resEl.querySelectorAll('.qs-row').forEach(function(row, i) {
+                row.classList.toggle('active', i === activeIdx);
+                if (i === activeIdx) row.scrollIntoView({block:'nearest'});
+            });
+        }
+
+        function showDetail(r) {
+            // Conditions already have full desc from search results
+            if (r.type === 'condition') {
+                renderDetail({name: r.name, type: 'condition', description: r.desc, meta: 'Condition'});
+                return;
+            }
+            // For spells/feats/items, fetch full detail
+            resEl.innerHTML = '<div class="qs-empty">Loading...</div>';
+            var url = '/api/compendium_detail?name=' + encodeURIComponent(r.name) + '&type=' + r.type;
+            fetch(url).then(function(resp) { return resp.json(); }).then(function(data) {
+                if (data.error) { resEl.innerHTML = '<div class="qs-empty">' + escHtml(data.error) + '</div>'; return; }
+                renderDetail(data);
+            }).catch(function() {
+                resEl.innerHTML = '<div class="qs-empty">Failed to load details</div>';
+            });
+        }
+
+        function renderDetail(d) {
+            var desc = d.description || d.desc || '';
+            // Light HTML cleanup: keep basic formatting tags, strip scripts
+            desc = desc.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+            var metaParts = [];
+            if (d.type) metaParts.push(d.type.charAt(0).toUpperCase() + d.type.slice(1));
+            if (d.level !== undefined && d.level !== null) metaParts.push('Level ' + d.level);
+            if (d.traditions) metaParts.push(d.traditions);
+            if (d.category) metaParts.push(d.category);
+            if (d.traits) metaParts.push(d.traits);
+            if (d.meta && d.type === 'condition') metaParts.push(d.meta);
+
+            var html = '<div class="qs-detail">'
+                + '<button type="button" class="qs-back" id="qs-back-btn">'
+                + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>'
+                + 'Back to results</button>'
+                + '<h3>' + escHtml(d.name || '') + '</h3>'
+                + '<div class="qs-meta">' + escHtml(metaParts.join(' / ')) + '</div>'
+                + '<div class="qs-desc">' + desc + '</div>'
+                + '</div>';
+            resEl.innerHTML = html;
+            document.getElementById('qs-back-btn').addEventListener('click', function() {
+                renderResults();
+            });
+        }
+
+        function escHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
     })();
     </script>
     {% endif %}

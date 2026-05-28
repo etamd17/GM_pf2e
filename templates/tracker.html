@@ -1165,7 +1165,8 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
        Turn cycling, roll/sort, tools menu, encounter save/load, add monster. */
     .turn-ctl, .hb-right, .xp-bar-wrap,
     .search-area, #add-pc-wrap, #encounter-sidebar,
-    .trk-tools-wrap, #multi-action-bar { display: none !important; }
+    .trk-tools-wrap, #multi-action-bar,
+    #encounter-notes-display, #encounter-notes-collapsed { display: none !important; }
     /* Per-row: drag handle, remove button, elite/weak toggles, initiative input */
     .c-drag { display: none !important; }
     .act-btn.del { display: none !important; }
@@ -1296,7 +1297,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 {# ═══════════════════ SAVE/LOAD PANEL ═══════════════════ #}
 <div id="save-load-panel" class="panel hidden">
     <div class="panel-head">
-        <span class="panel-ttl">💾 Save &amp; Load Encounters</span>
+        <span class="panel-ttl">Save &amp; Load Encounters</span>
         <button class="panel-close" onclick="document.getElementById('save-load-panel').classList.add('hidden')">&times;</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1305,9 +1306,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button class="ts-btn" onclick="saveEncounter()">Save</button>
         <div class="ts-divider"></div>
         <label class="tlabel" style="margin:0;">Load</label>
-        <select id="load-select" class="ts-select" style="min-width:180px;">
+        <select id="load-select" class="ts-select" style="min-width:180px;" onchange="previewEncounterNotes()">
             {% if saved_encounters %}
-            <option value="" disabled selected>Select…</option>
+            <option value="" disabled selected>Select...</option>
             {% for enc in saved_encounters %}
             <option value="{{ enc }}">{{ enc }}</option>
             {% endfor %}
@@ -1318,6 +1319,29 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button class="ts-btn" onclick="loadEncounter()">Load</button>
         <button class="ts-btn" onclick="deleteEncounter()" style="color:var(--t-red-b);border-color:rgba(196,60,60,0.25);" title="Delete selected encounter">Del</button>
     </div>
+    <textarea id="encounter-notes-input" class="tinput" placeholder="DCs, tactics, read-aloud text, loot..."
+              rows="3" style="width:100%; margin-top:8px; resize:vertical; font-size:12px; line-height:1.5;"></textarea>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+        <span style="font-size:10px; color:var(--t-t3);">Notes are saved with the encounter and shown during play.</span>
+        <button class="ts-btn" onclick="saveEncounterNotesInline()" style="font-size:10px; padding:3px 10px;">Update Notes</button>
+    </div>
+</div>
+
+{# ═══════════════════ ENCOUNTER NOTES DISPLAY ═══════════════════ #}
+<div id="encounter-notes-display" class="panel hidden" style="margin-bottom:6px; padding:10px 13px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+            <span class="panel-ttl" style="font-size:10px;">Encounter Notes</span>
+        </div>
+        <div style="display:flex; gap:4px;">
+            <button class="panel-close" style="font-size:14px;" onclick="editEncounterNotes()" title="Edit notes">&#9998;</button>
+            <button class="panel-close" style="font-size:14px;" onclick="toggleEncounterNotesDisplay()" title="Hide notes">&minus;</button>
+        </div>
+    </div>
+    <pre id="encounter-notes-text" style="margin:6px 0 0; white-space:pre-wrap; word-wrap:break-word; font-family:inherit; font-size:12px; line-height:1.5; color:var(--t-t2);"></pre>
+</div>
+<div id="encounter-notes-collapsed" class="hidden" style="margin-bottom:6px;">
+    <button class="ts-btn" style="width:100%; font-size:10px; padding:4px 8px; opacity:0.7;" onclick="toggleEncounterNotesDisplay()" title="Show encounter notes">Encounter Notes &#9660;</button>
 </div>
 
 {# ═══════════════════ GM SECRET ROLL PANEL ═══════════════════ #}
@@ -1638,6 +1662,7 @@ const DAMAGE_TYPES = ['untyped','bludgeoning','piercing','slashing','fire','cold
 let sortableInstance = null;
 
 /* ──────────────── State ──────────────── */
+let _notesCollapsed = false;
 let STATE = {
     combatants: [],
     round: {{ round_number }},
@@ -1648,7 +1673,8 @@ let STATE = {
     diff_color: "{{ diff_color }}",
     party_level: {{ party_level }},
     party_size: {{ initial_state.party_size | default(4) }},
-    xp_thresholds: {{ initial_state.xp_thresholds | default({}) | tojson }}
+    xp_thresholds: {{ initial_state.xp_thresholds | default({}) | tojson }},
+    encounter_notes: {{ (initial_state.encounter_notes or '') | tojson }}
 };
 
 /* Bootstrap initial state from Jinja server render */
@@ -1665,6 +1691,7 @@ let STATE = {
         STATE.party_level = initial.party_level || STATE.party_level;
         STATE.party_size = initial.party_size || STATE.party_size;
         STATE.xp_thresholds = initial.xp_thresholds || STATE.xp_thresholds;
+        STATE.encounter_notes = initial.encounter_notes || '';
     }
     // Initial render runs synchronously so background tabs (where rAF is
     // throttled) still paint the tracker on first load.
@@ -1754,7 +1781,9 @@ function applyState(data) {
     STATE.party_level = data.party_level ?? STATE.party_level;
     STATE.party_size = data.party_size ?? STATE.party_size;
     STATE.xp_thresholds = data.xp_thresholds ?? STATE.xp_thresholds;
+    STATE.encounter_notes = data.encounter_notes ?? STATE.encounter_notes;
     render();
+    renderEncounterNotes();
 }
 
 
@@ -1771,6 +1800,7 @@ function _renderNow() {
     scrollActiveIntoView();
     refreshStatPanelIfOpen();
     paintMoodControl();
+    renderEncounterNotes();
 }
 
 // Keep the active combatant visible no matter how many participants are
@@ -2989,6 +3019,7 @@ function saveEncounter() {
     if (!name) { toast('Enter a name first', 'error'); return; }
     const fd = new FormData();
     fd.append('encounter_name', name);
+    fd.append('encounter_notes', document.getElementById('encounter-notes-input').value);
     apiPostRaw('/api/save_encounter', fd).then(r => {
         toast(`Saved "${name}"`, 'success');
         const sel = document.getElementById('load-select');
@@ -2999,6 +3030,9 @@ function saveEncounter() {
             sel.appendChild(opt);
         }
         document.getElementById('save-name').value = '';
+        // Push the notes into active state so the display panel updates
+        STATE.encounter_notes = document.getElementById('encounter-notes-input').value;
+        renderEncounterNotes();
     }).catch(() => toast('Save failed', 'error'));
 }
 
@@ -3027,6 +3061,73 @@ async function deleteEncounter() {
             toast('Deleted', 'success');
         } else { toast(data.error || 'Delete failed', 'error'); }
     } catch(e) { toast('Delete failed', 'error'); }
+}
+
+/* ──────────────── Encounter Notes ──────────────── */
+function renderEncounterNotes() {
+    const notes = STATE.encounter_notes || '';
+    const display = document.getElementById('encounter-notes-display');
+    const collapsed = document.getElementById('encounter-notes-collapsed');
+    const textEl = document.getElementById('encounter-notes-text');
+    if (!display || !textEl) return;
+    if (!notes) {
+        display.classList.add('hidden');
+        collapsed.classList.add('hidden');
+        return;
+    }
+    textEl.textContent = notes;
+    if (_notesCollapsed) {
+        display.classList.add('hidden');
+        collapsed.classList.remove('hidden');
+    } else {
+        display.classList.remove('hidden');
+        collapsed.classList.add('hidden');
+    }
+    // Keep the save-panel textarea in sync
+    const inp = document.getElementById('encounter-notes-input');
+    if (inp && !inp.matches(':focus')) inp.value = notes;
+}
+
+function toggleEncounterNotesDisplay() {
+    _notesCollapsed = !_notesCollapsed;
+    renderEncounterNotes();
+}
+
+function editEncounterNotes() {
+    const panel = document.getElementById('save-load-panel');
+    panel.classList.remove('hidden');
+    const inp = document.getElementById('encounter-notes-input');
+    inp.value = STATE.encounter_notes || '';
+    inp.focus();
+}
+
+function saveEncounterNotesInline() {
+    const notes = document.getElementById('encounter-notes-input').value;
+    fetch('/api/encounter_notes', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({notes: notes})
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            STATE.encounter_notes = notes;
+            renderEncounterNotes();
+            toast('Notes updated', 'success');
+        }
+    }).catch(() => toast('Failed to save notes', 'error'));
+}
+
+function previewEncounterNotes() {
+    const sel = document.getElementById('load-select');
+    if (!sel.value) return;
+    apiGet('/api/list_encounters').then(data => {
+        const enc = (data.encounters || []).find(e => e.name === sel.value);
+        const inp = document.getElementById('encounter-notes-input');
+        if (enc && enc.notes) {
+            inp.value = enc.notes;
+        } else {
+            inp.value = '';
+        }
+    }).catch(() => {});
 }
 
 async function submitCustomMonster() {

@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+{% block title %}Loot Ledger - PF2E Dashboard{% endblock %}
+
+{% block extra_head %}
+/* -- Ledger layout -- */
+.ledger-header { margin-bottom: var(--sp-6); }
+.ledger-title {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--gilt-200);
+    margin: 0 0 var(--sp-1) 0;
+}
+.ledger-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-on-dark-3);
+}
+
+/* -- Wealth summary cards -- */
+.wealth-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-6);
+}
+.wealth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    padding: var(--sp-4);
+}
+.wealth-card-name {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-on-cream);
+    margin-bottom: var(--sp-2);
+}
+.wealth-card-level {
+    font-size: 0.7rem;
+    color: var(--text-on-cream-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.wealth-coins {
+    display: flex;
+    gap: var(--sp-3);
+    margin: var(--sp-2) 0;
+    font-size: 0.8rem;
+    color: var(--text-on-cream-2);
+}
+.wealth-coins span { white-space: nowrap; }
+.coin-pp { color: #c0c0d0; }
+.coin-gp { color: var(--gilt-100); }
+.coin-sp { color: #b0b0b0; }
+.coin-cp { color: #cd7f32; }
+.wealth-total {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gilt-200);
+    margin-bottom: var(--sp-2);
+}
+.wealth-bar-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.04);
+}
+.wealth-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+.wealth-bar-label {
+    font-size: 0.65rem;
+    color: var(--text-on-cream-3);
+    margin-top: 2px;
+}
+.wealth-party-total {
+    background: var(--bg-card);
+    border: 1px solid var(--border-rule);
+    border-radius: var(--r-md);
+    padding: var(--sp-4);
+    margin-bottom: var(--sp-6);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-6);
+    align-items: center;
+}
+.wealth-party-total .stat-block {
+    text-align: center;
+}
+.stat-label {
+    font-size: 0.65rem;
+    color: var(--text-on-cream-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.stat-value {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--gilt-100);
+}
+.stat-value.ok { color: #9bc06f; }
+.stat-value.over { color: var(--gilt-200); }
+.stat-value.under { color: var(--ruby-200); }
+
+/* -- Sections -- */
+.ledger-section {
+    margin-bottom: var(--sp-6);
+}
+.section-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-on-dark);
+    margin-bottom: var(--sp-3);
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--border-rule);
+}
+
+/* -- Award form -- */
+.award-form {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    padding: var(--sp-4);
+}
+.form-row {
+    display: flex;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.form-group label {
+    font-size: 0.7rem;
+    color: var(--text-on-cream-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+.form-group input, .form-group select {
+    background: var(--bg-input);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark);
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    font-family: var(--font-ui);
+    outline: none;
+    transition: border-color var(--t-fast);
+}
+.form-group input:focus, .form-group select:focus {
+    border-color: var(--gilt-400);
+}
+.form-group input[type="number"] {
+    width: 70px;
+    -moz-appearance: textfield;
+}
+.form-group input[type="number"]::-webkit-inner-spin-button,
+.form-group input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.item-rows { margin-bottom: var(--sp-3); }
+.item-row {
+    display: flex;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+    align-items: center;
+}
+.item-row input[type="text"] { flex: 1; min-width: 120px; }
+.item-row input[type="number"] { width: 60px; }
+.btn-remove-item {
+    background: none;
+    border: none;
+    color: var(--ruby-200);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 2px 6px;
+    line-height: 1;
+}
+.btn-remove-item:hover { color: var(--ruby-100); }
+.btn-add-item {
+    background: none;
+    border: 1px dashed var(--border-rule);
+    border-radius: var(--r-sm);
+    color: var(--text-on-cream-3);
+    cursor: pointer;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    font-family: var(--font-ui);
+    transition: all var(--t-fast);
+}
+.btn-add-item:hover {
+    border-color: var(--gilt-400);
+    color: var(--gilt-200);
+}
+.btn-submit {
+    background: var(--gilt-500);
+    border: 1px solid var(--gilt-400);
+    border-radius: var(--r-sm);
+    color: var(--gilt-50);
+    cursor: pointer;
+    padding: 8px 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    transition: all var(--t-fast);
+}
+.btn-submit:hover {
+    background: var(--gilt-400);
+}
+.btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* -- History entries -- */
+.history-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.history-entry {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--sp-3);
+}
+.history-entry:hover {
+    border-color: rgba(201,163,78,0.18);
+}
+.history-main { flex: 1; min-width: 0; }
+.history-meta {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: center;
+    margin-bottom: 4px;
+}
+.history-time {
+    font-size: 0.7rem;
+    color: var(--text-on-cream-3);
+}
+.history-recipient {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--gilt-200);
+}
+.history-details {
+    font-size: 0.8rem;
+    color: var(--text-on-cream-2);
+}
+.history-note {
+    font-size: 0.75rem;
+    color: var(--text-on-cream-3);
+    font-style: italic;
+    margin-top: 2px;
+}
+.history-delete {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    color: var(--text-on-cream-3);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    font-family: var(--font-ui);
+    transition: all var(--t-fast);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.history-delete:hover {
+    border-color: var(--ruby-300);
+    color: var(--ruby-200);
+}
+.history-empty {
+    text-align: center;
+    padding: var(--sp-6);
+    color: var(--text-on-cream-3);
+    font-size: 0.85rem;
+}
+.loading-msg {
+    text-align: center;
+    padding: var(--sp-8);
+    color: var(--text-on-cream-3);
+    font-size: 0.85rem;
+}
+{% endblock %}
+
+{% block content %}
+<div class="ledger-header">
+    <h1 class="ledger-title">Loot Ledger</h1>
+    <div class="ledger-subtitle" id="ledger-subtitle">Loading...</div>
+</div>
+
+<!-- Party wealth overview -->
+<div class="wealth-party-total" id="party-total-bar">
+    <div class="stat-block">
+        <div class="stat-label">Party Level</div>
+        <div class="stat-value" id="party-level">--</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">Total Party Wealth</div>
+        <div class="stat-value" id="party-total-wealth">--</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">Expected / PC</div>
+        <div class="stat-value" id="expected-wealth">--</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">Ledger Entries</div>
+        <div class="stat-value" id="entry-count">--</div>
+    </div>
+</div>
+
+<!-- Per-PC wealth cards -->
+<div class="wealth-grid" id="wealth-grid"></div>
+
+<!-- Award loot form -->
+<div class="ledger-section">
+    <h2 class="section-title">Award Loot</h2>
+    <div class="award-form" id="award-form">
+        <div class="form-row">
+            <div class="form-group" style="min-width:160px;">
+                <label for="award-recipient">Recipient</label>
+                <select id="award-recipient">
+                    <option value="">-- select --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="award-note">Note</label>
+                <input type="text" id="award-note" placeholder="e.g. Bandit leader hoard" style="min-width:180px;">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>PP</label>
+                <input type="number" id="award-pp" min="0" value="0">
+            </div>
+            <div class="form-group">
+                <label>GP</label>
+                <input type="number" id="award-gp" min="0" value="0">
+            </div>
+            <div class="form-group">
+                <label>SP</label>
+                <input type="number" id="award-sp" min="0" value="0">
+            </div>
+            <div class="form-group">
+                <label>CP</label>
+                <input type="number" id="award-cp" min="0" value="0">
+            </div>
+        </div>
+        <div>
+            <label style="font-size:0.7rem; color:var(--text-on-cream-3); text-transform:uppercase; letter-spacing:0.08em; font-weight:600; display:block; margin-bottom:4px;">Items</label>
+            <div class="item-rows" id="item-rows">
+                <div class="item-row">
+                    <input type="text" placeholder="Item name" class="item-name" style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:var(--r-sm); color:var(--text-on-dark); padding:6px 10px; font-size:0.85rem; font-family:var(--font-ui);">
+                    <input type="number" min="1" value="1" class="item-qty" style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:var(--r-sm); color:var(--text-on-dark); padding:6px 10px; font-size:0.85rem; font-family:var(--font-ui); width:60px; -moz-appearance:textfield;">
+                    <button type="button" class="btn-remove-item" onclick="this.closest('.item-row').remove()" title="Remove">&times;</button>
+                </div>
+            </div>
+            <button type="button" class="btn-add-item" id="btn-add-item">+ Add item</button>
+        </div>
+        <div style="margin-top:var(--sp-4); display:flex; gap:var(--sp-3); align-items:center;">
+            <button type="button" class="btn-submit" id="btn-award" disabled>Record Award</button>
+            <span id="award-status" style="font-size:0.75rem; color:var(--text-on-cream-3);"></span>
+        </div>
+    </div>
+</div>
+
+<!-- History -->
+<div class="ledger-section">
+    <h2 class="section-title">Award History</h2>
+    <div id="history-list" class="history-list">
+        <div class="loading-msg">Loading ledger...</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let DATA = null;
+
+    function formatTime(iso) {
+        try {
+            const d = new Date(iso);
+            const mo = d.toLocaleString('en-US', {month:'short'});
+            const day = d.getDate();
+            const hr = d.getHours();
+            const min = String(d.getMinutes()).padStart(2, '0');
+            const ampm = hr >= 12 ? 'pm' : 'am';
+            const h12 = hr % 12 || 12;
+            return mo + ' ' + day + ', ' + h12 + ':' + min + ampm;
+        } catch(e) { return iso || ''; }
+    }
+
+    function coinStr(coins) {
+        const parts = [];
+        if (coins.pp) parts.push('<span class="coin-pp">' + coins.pp + ' pp</span>');
+        if (coins.gp) parts.push('<span class="coin-gp">' + coins.gp + ' gp</span>');
+        if (coins.sp) parts.push('<span class="coin-sp">' + coins.sp + ' sp</span>');
+        if (coins.cp) parts.push('<span class="coin-cp">' + coins.cp + ' cp</span>');
+        return parts.join(', ') || '--';
+    }
+
+    function esc(s) {
+        const el = document.createElement('span');
+        el.textContent = s;
+        return el.innerHTML;
+    }
+
+    function renderWealth(data) {
+        const grid = document.getElementById('wealth-grid');
+        const expected = data.expected_wealth_per_pc || 175;
+        let totalWealth = 0;
+
+        grid.innerHTML = '';
+        data.party_wealth.forEach(function(pc) {
+            totalWealth += pc.total_gp;
+            const pct = Math.min(Math.round((pc.total_gp / expected) * 100), 200);
+            let barColor = 'var(--success)';
+            let statusClass = 'ok';
+            if (pct > 120) { barColor = 'var(--gilt-300)'; statusClass = 'over'; }
+            else if (pct < 60) { barColor = 'var(--ruby-300)'; statusClass = 'under'; }
+
+            const card = document.createElement('div');
+            card.className = 'wealth-card';
+            card.innerHTML =
+                '<div class="wealth-card-name">' + esc(pc.name) + '</div>' +
+                '<div class="wealth-card-level">Level ' + pc.level + '</div>' +
+                '<div class="wealth-coins">' + coinStr(pc) + '</div>' +
+                '<div class="wealth-total">' + pc.total_gp.toLocaleString(undefined, {maximumFractionDigits:1}) + ' gp total</div>' +
+                '<div class="wealth-bar-track"><div class="wealth-bar-fill" style="width:' + Math.min(pct, 100) + '%; background:' + barColor + ';"></div></div>' +
+                '<div class="wealth-bar-label">' + pct + '% of expected ' + expected.toLocaleString() + ' gp</div>';
+            grid.appendChild(card);
+        });
+
+        document.getElementById('party-level').textContent = data.party_level;
+        document.getElementById('party-total-wealth').textContent = totalWealth.toLocaleString(undefined, {maximumFractionDigits:1}) + ' gp';
+        document.getElementById('expected-wealth').textContent = expected.toLocaleString() + ' gp';
+        document.getElementById('entry-count').textContent = data.entries.length;
+
+        const avgWealth = data.party_wealth.length ? totalWealth / data.party_wealth.length : 0;
+        const totalEl = document.getElementById('party-total-wealth');
+        totalEl.className = 'stat-value';
+        if (avgWealth > expected * 1.2) totalEl.classList.add('over');
+        else if (avgWealth < expected * 0.6) totalEl.classList.add('under');
+        else totalEl.classList.add('ok');
+
+        document.getElementById('ledger-subtitle').textContent =
+            data.party_wealth.length + ' party members  --  Level ' + data.party_level +
+            '  --  ' + data.entries.length + ' awards logged';
+    }
+
+    function renderHistory(entries) {
+        const list = document.getElementById('history-list');
+        if (!entries.length) {
+            list.innerHTML = '<div class="history-empty">No loot awards recorded yet. Use the form above or send loot from the tracker.</div>';
+            return;
+        }
+        const sorted = entries.slice().sort(function(a, b) {
+            return (b.timestamp || '').localeCompare(a.timestamp || '');
+        });
+        list.innerHTML = '';
+        sorted.forEach(function(e) {
+            const details = [];
+            if (e.items && e.items.length) {
+                const itemParts = e.items.map(function(it) {
+                    return esc(it.name) + (it.qty > 1 ? ' x' + it.qty : '');
+                });
+                details.push(itemParts.join(', '));
+            }
+            const cs = coinStr(e.coins || {});
+            if (cs !== '--') details.push(cs);
+
+            const row = document.createElement('div');
+            row.className = 'history-entry';
+            row.innerHTML =
+                '<div class="history-main">' +
+                    '<div class="history-meta">' +
+                        '<span class="history-recipient">' + esc(e.recipient || '???') + '</span>' +
+                        '<span class="history-time">' + formatTime(e.timestamp) + '</span>' +
+                    '</div>' +
+                    '<div class="history-details">' + (details.join(' + ') || 'no items or coins') + '</div>' +
+                    (e.note ? '<div class="history-note">' + esc(e.note) + '</div>' : '') +
+                '</div>' +
+                '<button class="history-delete" data-id="' + esc(e.id) + '">Delete</button>';
+            list.appendChild(row);
+        });
+
+        list.querySelectorAll('.history-delete').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (!confirm('Delete this ledger entry?')) return;
+                deleteEntry(btn.dataset.id);
+            });
+        });
+    }
+
+    function populateRecipients(partyWealth) {
+        const sel = document.getElementById('award-recipient');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">-- select --</option>';
+        partyWealth.forEach(function(pc) {
+            const opt = document.createElement('option');
+            opt.value = pc.name;
+            opt.textContent = pc.name;
+            sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+        updateSubmitState();
+    }
+
+    function updateSubmitState() {
+        const recipient = document.getElementById('award-recipient').value;
+        const hasCoins = ['pp','gp','sp','cp'].some(function(k) {
+            return parseInt(document.getElementById('award-' + k).value || 0) > 0;
+        });
+        const hasItems = Array.from(document.querySelectorAll('.item-name')).some(function(inp) {
+            return inp.value.trim().length > 0;
+        });
+        document.getElementById('btn-award').disabled = !recipient || (!hasCoins && !hasItems);
+    }
+
+    function loadData() {
+        fetch('/api/loot_ledger')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                DATA = d;
+                renderWealth(d);
+                renderHistory(d.entries);
+                populateRecipients(d.party_wealth);
+            })
+            .catch(function(err) {
+                document.getElementById('history-list').innerHTML =
+                    '<div class="history-empty">Failed to load ledger data.</div>';
+            });
+    }
+
+    function submitAward() {
+        const recipient = document.getElementById('award-recipient').value;
+        if (!recipient) return;
+
+        const items = [];
+        document.querySelectorAll('.item-row').forEach(function(row) {
+            const name = row.querySelector('.item-name').value.trim();
+            const qty = parseInt(row.querySelector('.item-qty').value || 1) || 1;
+            if (name) items.push({name: name, qty: qty});
+        });
+
+        const coins = {
+            pp: parseInt(document.getElementById('award-pp').value || 0) || 0,
+            gp: parseInt(document.getElementById('award-gp').value || 0) || 0,
+            sp: parseInt(document.getElementById('award-sp').value || 0) || 0,
+            cp: parseInt(document.getElementById('award-cp').value || 0) || 0,
+        };
+        const note = document.getElementById('award-note').value.trim();
+
+        if (!items.length && !coins.pp && !coins.gp && !coins.sp && !coins.cp) return;
+
+        document.getElementById('btn-award').disabled = true;
+        document.getElementById('award-status').textContent = 'Saving...';
+
+        fetch('/api/loot_ledger/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({recipient: recipient, items: items, coins: coins, note: note})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) {
+                document.getElementById('award-status').textContent = 'Saved!';
+                // Reset form
+                document.getElementById('award-note').value = '';
+                ['pp','gp','sp','cp'].forEach(function(k) {
+                    document.getElementById('award-' + k).value = '0';
+                });
+                document.getElementById('item-rows').innerHTML =
+                    '<div class="item-row">' +
+                        '<input type="text" placeholder="Item name" class="item-name" style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:var(--r-sm); color:var(--text-on-dark); padding:6px 10px; font-size:0.85rem; font-family:var(--font-ui);">' +
+                        '<input type="number" min="1" value="1" class="item-qty" style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:var(--r-sm); color:var(--text-on-dark); padding:6px 10px; font-size:0.85rem; font-family:var(--font-ui); width:60px; -moz-appearance:textfield;">' +
+                        '<button type="button" class="btn-remove-item" onclick="this.closest(\'.item-row\').remove()" title="Remove">&times;</button>' +
+                    '</div>';
+                attachInputListeners();
+                setTimeout(function() { document.getElementById('award-status').textContent = ''; }, 2000);
+                loadData();
+            } else {
+                document.getElementById('award-status').textContent = 'Error: ' + (d.error || 'failed');
+                document.getElementById('btn-award').disabled = false;
+            }
+        })
+        .catch(function() {
+            document.getElementById('award-status').textContent = 'Network error';
+            document.getElementById('btn-award').disabled = false;
+        });
+    }
+
+    function deleteEntry(id) {
+        fetch('/api/loot_ledger/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) loadData();
+        });
+    }
+
+    function addItemRow() {
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        row.innerHTML =
+            '<input type="text" placeholder="Item name" class="item-name" style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:var(--r-sm); color:var(--text-on-dark); padding:6px 10px; font-size:0.85rem; font-family:var(--font-ui);">' +
+            '<input type="number" min="1" value="1" class="item-qty" style="background:var(--bg-input); border:1px solid var(--border-card); border-radius:var(--r-sm); color:var(--text-on-dark); padding:6px 10px; font-size:0.85rem; font-family:var(--font-ui); width:60px; -moz-appearance:textfield;">' +
+            '<button type="button" class="btn-remove-item" onclick="this.closest(\'.item-row\').remove()" title="Remove">&times;</button>';
+        document.getElementById('item-rows').appendChild(row);
+        row.querySelector('.item-name').addEventListener('input', updateSubmitState);
+        row.querySelector('.item-name').focus();
+    }
+
+    function attachInputListeners() {
+        document.getElementById('award-recipient').addEventListener('change', updateSubmitState);
+        ['pp','gp','sp','cp'].forEach(function(k) {
+            document.getElementById('award-' + k).addEventListener('input', updateSubmitState);
+        });
+        document.querySelectorAll('.item-name').forEach(function(inp) {
+            inp.addEventListener('input', updateSubmitState);
+        });
+    }
+
+    // Init
+    document.getElementById('btn-add-item').addEventListener('click', addItemRow);
+    document.getElementById('btn-award').addEventListener('click', submitAward);
+    attachInputListeners();
+    loadData();
+})();
+</script>
+{% endblock %}

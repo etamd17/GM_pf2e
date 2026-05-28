@@ -123,7 +123,7 @@ GM_API_PREFIXES = (
     '/api/toggle_condition/', '/api/set_persistent_damage/', '/api/toggle_elite_weak/',
     '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
     '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
-    '/api/save_encounter', '/api/load_encounter', '/api/delete_encounter',
+    '/api/save_encounter', '/api/load_encounter', '/api/delete_encounter', '/api/encounter_notes',
     '/api/save_stage',
     '/api/roll_all_initiative', '/api/reorder_initiative',
     # GM-only loot/check dispatch + party-wide daily prep. Players see
@@ -155,6 +155,7 @@ GM_API_PREFIXES = (
     # Character library admin (delete a PC, upload a handout to the table).
     '/api/delete_character/', '/api/handout_upload',
     '/api/generate/',
+    '/api/loot_ledger',
 )
 
 @app.before_request
@@ -252,6 +253,7 @@ CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images /
 # PF2E_AUDIO_DIR overrides both. Distinct from the map soundboard AUDIO_DIR.
 CAMPAIGN_AUDIO_DIR = os.environ.get('PF2E_AUDIO_DIR') or os.path.join(DATA_DIR, 'campaign_audio')
 CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
+LOOT_LEDGER_FILE = os.path.join(DATA_DIR, 'loot_ledger.json')  # Persistent party loot log
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
@@ -265,7 +267,30 @@ PENDING_INITIATIVES = {}
 ACTIVE_ENCOUNTER = []
 TURN_INDEX = 0
 ROUND_NUMBER = 1
+ENCOUNTER_NOTES = ''
 COMBAT_LOGS = []
+
+
+# --- LOOT LEDGER (persistent party treasure log) ---
+def _load_loot_ledger():
+    """Load the persistent loot ledger from disk."""
+    if os.path.exists(LOOT_LEDGER_FILE):
+        try:
+            with open(LOOT_LEDGER_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {"entries": [], "session_counter": 0}
+
+
+def _save_loot_ledger(ledger):
+    """Persist the loot ledger to disk."""
+    try:
+        with open(LOOT_LEDGER_FILE, 'w', encoding='utf-8') as f:
+            json.dump(ledger, f, indent=2)
+    except IOError:
+        pass
+
 
 # --- SESSION HIGHLIGHTS (Chunk 6: Session Complete scrapbook) ---
 # A structured accumulator filled as play happens (the combat log is free-text
@@ -543,6 +568,7 @@ def _do_persist_encounter_state():
         encounter_data = {
             "round": ROUND_NUMBER,
             "turn_index": TURN_INDEX,
+            "notes": ENCOUNTER_NOTES,
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -4411,7 +4437,7 @@ def load_libraries():
 
 def _restore_encounter_autosave():
     """Restore the active encounter from autosave file on startup."""
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES
     autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
     if not os.path.exists(autosave_path):
         return
@@ -4421,6 +4447,7 @@ def _restore_encounter_autosave():
         combatants = raw.get('combatants', [])
         ROUND_NUMBER = raw.get('round', 1)
         TURN_INDEX = raw.get('turn_index', 0)
+        ENCOUNTER_NOTES = raw.get('notes', '')
         ACTIVE_ENCOUNTER.clear()
         for item in combatants:
             new_c = None
@@ -5519,6 +5546,89 @@ def _save_story_threads(beats):
         f.write('\n')
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  LOOT LEDGER — persistent party treasury and award log
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route('/gm/loot')
+@gm_required
+def loot_ledger_view():
+    """Persistent loot ledger page -- wealth tracking and award history."""
+    return render_template('loot_ledger.html')
+
+
+@app.route('/api/loot_ledger')
+@gm_required
+def api_loot_ledger():
+    """Return full loot ledger plus current party wealth summary."""
+    ledger = _load_loot_ledger()
+    party_wealth = []
+    for name, pc in PARTY_LIBRARY.items():
+        total_gp = (int(getattr(pc, 'pp', 0) or 0) * 10 +
+                    int(getattr(pc, 'gp', 0) or 0) +
+                    int(getattr(pc, 'sp', 0) or 0) * 0.1 +
+                    int(getattr(pc, 'cp', 0) or 0) * 0.01)
+        party_wealth.append({
+            'name': name,
+            'level': pc.level,
+            'pp': int(getattr(pc, 'pp', 0) or 0),
+            'gp': int(getattr(pc, 'gp', 0) or 0),
+            'sp': int(getattr(pc, 'sp', 0) or 0),
+            'cp': int(getattr(pc, 'cp', 0) or 0),
+            'total_gp': round(total_gp, 1),
+        })
+    # Wealth-by-level reference from PF2E guidelines
+    from pf2e_generator import PF2EGenerator
+    gen = PF2EGenerator()
+    avg_level = max(1, round(sum(pc.level for pc in PARTY_LIBRARY.values()) / max(len(PARTY_LIBRARY), 1)))
+    expected = gen._wealth_by_level.get(min(max(avg_level, 1), 20), 175)
+    return jsonify({
+        'entries': ledger.get('entries', []),
+        'party_wealth': party_wealth,
+        'expected_wealth_per_pc': expected,
+        'party_level': avg_level,
+    })
+
+
+@app.route('/api/loot_ledger/add', methods=['POST'])
+@gm_required
+def api_loot_ledger_add():
+    """Manually add a ledger entry (for retroactive logging)."""
+    data = request.get_json(silent=True) or {}
+    recipient = (data.get('recipient') or '').strip()
+    items = data.get('items') or []
+    coins = data.get('coins') or {}
+    note = (data.get('note') or '').strip()
+    if not recipient:
+        return jsonify({"success": False, "error": "recipient required"}), 400
+    ledger = _load_loot_ledger()
+    from datetime import datetime as _dt_ledger
+    ledger['entries'].append({
+        'id': str(uuid.uuid4()),
+        'timestamp': _dt_ledger.now().isoformat(),
+        'recipient': recipient,
+        'items': [{'name': it.get('name', ''), 'qty': int(it.get('qty', 1) or 1)}
+                  for it in items if isinstance(it, dict) and it.get('name')],
+        'coins': {k: int(v or 0) for k, v in coins.items() if k in ('pp', 'gp', 'sp', 'cp')},
+        'note': note,
+    })
+    _save_loot_ledger(ledger)
+    return jsonify({"success": True})
+
+
+@app.route('/api/loot_ledger/delete', methods=['POST'])
+@gm_required
+def api_loot_ledger_delete():
+    """Delete a ledger entry by ID."""
+    entry_id = (request.get_json(silent=True) or {}).get('id', '')
+    if not entry_id:
+        return jsonify({"success": False}), 400
+    ledger = _load_loot_ledger()
+    ledger['entries'] = [e for e in ledger['entries'] if e.get('id') != entry_id]
+    _save_loot_ledger(ledger)
+    return jsonify({"success": True})
+
+
 def _extract_beats_via_claude(session_notes, existing_beats):
     """Send session-note markdown + existing beats to Claude and get back a
     merged beats array. Returns (beats_list, error_reason)."""
@@ -5835,6 +5945,7 @@ def _get_tracker_state():
             'active_name': active_name, 'encounter_xp': encounter_xp,
             'diff_label': diff_label, 'diff_color': diff_color, 'party_level': party_level,
             'party_size': party_size, 'xp_thresholds': xp_thresholds,
+            'encounter_notes': ENCOUNTER_NOTES,
         }
     _TRACKER_STATE_CACHE = result
     _TRACKER_STATE_CACHE_TIME = now
@@ -6018,11 +6129,11 @@ def api_session_boss_reveal(instance_id):
 
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
-    global TURN_INDEX, ROUND_NUMBER
+    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES
     if ACTIVE_ENCOUNTER:
         names = [c.name for c in ACTIVE_ENCOUNTER]
         _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
-    ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
+    ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -7962,6 +8073,7 @@ def save_encounter():
         encounter_data = {
             "round": ROUND_NUMBER,
             "turn_index": TURN_INDEX,
+            "notes": request.form.get('encounter_notes', ENCOUNTER_NOTES),
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -7992,7 +8104,7 @@ def save_encounter():
 
 @app.route('/api/load_encounter', methods=['POST'])
 def load_encounter():
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP, ENCOUNTER_NOTES
     name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
     if not name:
         return jsonify({"success": False, "error": "encounter_name required"}), 400
@@ -8007,7 +8119,7 @@ def load_encounter():
     except (OSError, json.JSONDecodeError) as e:
         return jsonify({"success": False, "error": f"encounter file is unreadable or corrupt: {e}"}), 500
     if name and os.path.exists(enc_path):
-        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1
+        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
 
         # Support both old format (list) and new format (dict with metadata)
         if isinstance(raw, list):
@@ -8019,6 +8131,7 @@ def load_encounter():
                 combatants = []
             ROUND_NUMBER = raw.get('round', 1)
             TURN_INDEX = raw.get('turn_index', 0)
+            ENCOUNTER_NOTES = raw.get('notes', '')
             saved_map = raw.get('map')
         else:
             combatants = []
@@ -8124,9 +8237,10 @@ def list_encounters():
                     'name': m.get('name'),
                     'image': m.get('image'),
                 }
+            notes = raw.get('notes', '') if isinstance(raw, dict) else ''
         except Exception:
-            mtime, kind, count, bound = 0, 'encounter', 0, None
-        items.append({"name": name, "kind": kind, "count": count, "mtime": mtime, "map": bound})
+            mtime, kind, count, bound, notes = 0, 'encounter', 0, None, ''
+        items.append({"name": name, "kind": kind, "count": count, "mtime": mtime, "map": bound, "notes": notes})
     items.sort(key=lambda it: -it.get('mtime', 0))
     return jsonify({"encounters": items})
 
@@ -8211,6 +8325,18 @@ def delete_encounter():
         return jsonify({'success': True, 'deleted': safe_name})
     else:
         return jsonify({'success': False, 'error': 'Encounter not found'}), 404
+
+
+@app.route('/api/encounter_notes', methods=['GET', 'POST'])
+def encounter_notes_api():
+    """Get or update the encounter notes for the active encounter."""
+    global ENCOUNTER_NOTES
+    if request.method == 'POST':
+        ENCOUNTER_NOTES = (request.json or {}).get('notes', '')
+        _persist_encounter_state()
+        return jsonify({"success": True})
+    return jsonify({"notes": ENCOUNTER_NOTES})
+
 
 @app.route('/gmscreen')
 @gm_required
@@ -9024,19 +9150,78 @@ def _get_compendium_db():
     _compendium_tls.conn = conn
     return conn
 
+# ── PF2e Conditions (fixed reference set) ──────────────────────────────
+# Not in the compendium DB; kept in-memory for quick-search and GM screen.
+CONDITION_REFERENCE = {
+    'blinded': {'desc': 'All terrain is difficult terrain. You fail Perception checks requiring sight. Immune to visual effects. -4 status penalty to Perception checks. Attacks have the flat-footed condition against you.'},
+    'broken': {'desc': 'Cannot be used for its normal function until repaired. An item is broken when damage reduces its HP below its BT.'},
+    'clumsy': {'desc': 'Penalty to Dex-based checks and DCs, including AC, Reflex saves, and Dex-based attack rolls.'},
+    'concealed': {'desc': 'DC 5 flat check to target with attacks, spells, or other effects.'},
+    'confused': {'desc': 'You are flat-footed, cannot Delay or Ready, and must use all actions to Strike or cast offensive cantrips at the nearest creature.'},
+    'controlled': {'desc': 'Another creature decides your actions. You gain no actions of your own.'},
+    'dazzled': {'desc': 'DC 5 flat check to target concealed creatures. All creatures are concealed to you.'},
+    'deafened': {'desc': 'You automatically critically fail Perception checks requiring hearing. -2 status penalty to Perception and initiative. If you Cast a Spell with verbal component, DC 5 flat check or the spell is lost.'},
+    'doomed': {'desc': 'Your dying value threshold is reduced. You die at dying 4 minus your doomed value.'},
+    'drained': {'desc': 'Penalty to Constitution-based checks. Lose HP equal to level times drained value. Cannot recover these HP until drained is reduced.'},
+    'dying': {'desc': 'You are unconscious. You must make recovery checks at the start of each turn. At dying 4 (or lower if doomed), you die.'},
+    'encumbered': {'desc': '10-foot penalty to all Speeds and clumsy 1.'},
+    'enfeebled': {'desc': 'Penalty to Strength-based checks and DCs, including melee attack rolls, damage rolls, and Athletics checks.'},
+    'fascinated': {'desc': 'Cannot use hostile actions. Penalty to Perception and skill checks. Cannot voluntarily move closer to the source.'},
+    'fatigued': {'desc': '-1 status penalty to AC and saving throws. Cannot reduce below fatigued. Recover after a full night rest.'},
+    'flat-footed': {'desc': '-2 circumstance penalty to AC.'},
+    'fleeing': {'desc': 'Must spend actions to move away from the source of fleeing. Cannot Delay or Ready.'},
+    'frightened': {'desc': 'Status penalty to all checks and DCs. Decreases by 1 at end of each turn.'},
+    'grabbed': {'desc': 'You are immobilized and flat-footed. If you attempt a manipulate action, you must succeed at a DC 5 flat check or the action is lost.'},
+    'hidden': {'desc': 'Creatures that cannot perceive you are flat-footed to you. DC 11 flat check when targeting you.'},
+    'immobilized': {'desc': 'Cannot use any action with the move trait.'},
+    'invisible': {'desc': 'You cannot be seen. You are undetected to everyone. DC 11 flat check to target. You are not flat-footed to anyone.'},
+    'observed': {'desc': 'You are clearly visible. No special benefits or penalties.'},
+    'off-guard': {'desc': '-2 circumstance penalty to AC. (Remaster name for flat-footed)'},
+    'paralyzed': {'desc': 'You are flat-footed and cannot act. Your body is immobile.'},
+    'petrified': {'desc': 'Turned to stone. You cannot act or sense anything. Immune to damage but not destruction.'},
+    'prone': {'desc': 'Flat-footed and -2 circumstance penalty to attack rolls. Must Stand (1 action) to remove. Melee attacks gain +2 vs you; ranged attacks take -2.'},
+    'quickened': {'desc': 'Gain 1 extra action each turn. Many effects limit what the extra action can be used for.'},
+    'restrained': {'desc': 'You are immobilized and flat-footed. You cannot use actions with the attack or manipulate trait except to attempt to Escape.'},
+    'sickened': {'desc': 'Status penalty to all checks and DCs. You cannot willingly ingest anything. Can retch as an action to attempt a Fortitude save to reduce.'},
+    'slowed': {'desc': 'Lose actions at the start of your turn equal to slowed value.'},
+    'stunned': {'desc': 'Lose actions. Stunned value is reduced by actions lost. Similar to slowed but value decrements.'},
+    'stupefied': {'desc': 'Penalty to Intelligence, Wisdom, and Charisma-based checks. When casting a spell, DC 5+stupefied flat check or the spell is lost.'},
+    'unconscious': {'desc': 'You are flat-footed, cannot act or sense anything normally. You fall prone and drop held items.'},
+    'undetected': {'desc': 'Creature does not know your location. DC 11 flat check to target your space. If target is wrong, attack is lost.'},
+    'unfriendly': {'desc': 'The creature does not wish you well. Will not help willingly.'},
+    'unnoticed': {'desc': 'Creature is unaware of your presence entirely.'},
+    'wounded': {'desc': 'When you regain consciousness, increase dying by your wounded value. Wounded increases by 1 each time you gain dying. Resets on full rest.'},
+}
+
 @app.route('/api/compendium_search')
 def compendium_search():
-    """Search the PF2E compendium database across feats, spells, and equipment."""
+    """Search the PF2E compendium database across feats, spells, equipment, and conditions."""
     query = request.args.get('q', '').strip()
-    category = request.args.get('cat', 'all')  # all, feats, spells, equipment
+    category = request.args.get('cat', 'all')  # all, feats, spells, equipment, conditions
     if not query or len(query) < 2:
         return jsonify({"results": []})
 
-    conn = _get_compendium_db()
-    if conn is None:
-        return jsonify({"results": [], "error": "Database not found"})
-    c = conn.cursor()
     results = []
+
+    # Conditions: in-memory lookup (no DB needed)
+    if category in ('all', 'conditions'):
+        q_lower = query.lower()
+        for cname, cdata in CONDITION_REFERENCE.items():
+            if q_lower in cname:
+                results.append({
+                    'type': 'condition',
+                    'name': cname.replace('-', ' ').title(),
+                    'level': None,
+                    'meta': 'Condition',
+                    'desc': cdata['desc']
+                })
+
+    conn = _get_compendium_db()
+    if conn is None and category != 'conditions':
+        return jsonify({"results": results, "error": "Database not found"})
+    if conn is None:
+        return jsonify({"results": results})
+    c = conn.cursor()
     search_term = f"%{query}%"
 
     try:
@@ -9096,6 +9281,14 @@ def compendium_detail():
     entry_type = request.args.get('type', '')
     if not name:
         return jsonify({"error": "No name provided"}), 400
+
+    # Conditions are in-memory, no DB query needed
+    if entry_type == 'condition':
+        key = name.lower().replace(' ', '-')
+        cdata = CONDITION_REFERENCE.get(key)
+        if cdata:
+            return jsonify({'name': name, 'type': 'condition', 'description': cdata['desc'], 'meta': 'Condition'})
+        return jsonify({"error": "Not found"}), 404
 
     conn = _get_compendium_db()
     if conn is None:
@@ -9678,6 +9871,22 @@ def send_loot_to_player():
     # Session-scrapbook hook (Chunk 6): record loot per recipient.
     try:
         _record_loot(target, items, coins)
+    except Exception:
+        pass
+    # Persistent loot ledger: append a timestamped entry for wealth tracking.
+    try:
+        ledger = _load_loot_ledger()
+        from datetime import datetime as _dt_loot
+        ledger['entries'].append({
+            'id': str(uuid.uuid4()),
+            'timestamp': _dt_loot.now().isoformat(),
+            'recipient': target,
+            'items': [{'name': it.get('name', ''), 'qty': int(it.get('qty', 1) or 1)}
+                      for it in items if isinstance(it, dict) and it.get('name')],
+            'coins': {k: int(v or 0) for k, v in coins.items() if k in ('pp', 'gp', 'sp', 'cp')},
+            'note': (data.get('note') or '').strip(),
+        })
+        _save_loot_ledger(ledger)
     except Exception:
         pass
     # Tell the target player's sheet to refresh (and surface a toast).
