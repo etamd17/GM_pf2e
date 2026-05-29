@@ -1153,6 +1153,158 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 /* Note: the GM Checks Cheat-Sheet drawer lives on gmscreen.html now —
    the tracker is for active combat flow only. See templates/gmscreen.html. */
 
+/* ═══ SESSION TIMER (Feature 10) ═══ */
+.trk .session-timer {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:2px 10px; border-radius:8px;
+  background: rgba(200,168,78,0.10);
+  border: 1px solid rgba(200,168,78,0.25);
+  font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600;
+  color: var(--t-gold); letter-spacing:.5px;
+  white-space: nowrap;
+}
+.trk .session-timer .st-label {
+  font-size:9px; text-transform:uppercase; letter-spacing:1px;
+  color: var(--t-t3); font-weight:700;
+}
+.trk .session-timer .st-time {
+  font-size:13px; font-weight:700;
+  color: var(--t-gold-b);
+}
+.trk .st-btn {
+  background:transparent; border:1px solid rgba(200,168,78,0.30);
+  color:var(--t-t3); cursor:pointer; font-size:10px; padding:2px 6px;
+  border-radius:4px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+}
+.trk .st-btn:hover { color:var(--t-gold); border-color:var(--t-gold); }
+.trk .st-btn.active { color:var(--t-gold); background:rgba(200,168,78,0.12); border-color:var(--t-gold); }
+
+/* ═══ DAMAGE PREVIEW (Feature 12) ═══ */
+.trk .dmg-preview {
+  font-size:10px; font-weight:700; letter-spacing:.3px;
+  padding:2px 6px; margin-top:3px;
+  border-radius:4px;
+  display:none;
+  font-family:'JetBrains Mono',monospace;
+}
+.trk .dmg-preview.show { display:block; }
+.trk .dmg-preview.weak { background:rgba(196,60,60,0.12); color:var(--t-red-b); }
+.trk .dmg-preview.resist { background:rgba(62,186,104,0.12); color:var(--t-green); }
+.trk .dmg-preview.immune { background:rgba(155,126,222,0.12); color:var(--t-purple); }
+.trk .dmg-preview.neutral { background:rgba(200,168,78,0.08); color:var(--t-t3); }
+
+/* ═══ PERSISTENT DAMAGE DC (Feature 13) ═══ */
+.trk .pd-dc {
+  font-size:9px; font-weight:700; letter-spacing:.3px;
+  color:var(--t-gold); padding:1px 5px; border-radius:3px;
+  background:rgba(200,168,78,0.10); border:1px solid rgba(200,168,78,0.25);
+  display:inline-block; margin-left:4px;
+}
+
+/* ═══ DEATH & DYING TRACKER (Feature 14) ═══ */
+.trk .dying-tracker {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 10px; margin:6px 0;
+  border-radius:6px;
+  background:rgba(196,60,60,0.08); border:1px solid rgba(196,60,60,0.25);
+}
+.trk .dying-tracker .dt-label {
+  font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px;
+  color:var(--t-red-b);
+}
+.trk .dying-tracker .dt-pips {
+  display:flex; gap:3px;
+}
+.trk .dying-tracker .dt-pip {
+  width:14px; height:14px; border-radius:50%;
+  border:2px solid rgba(196,60,60,0.5);
+  background:transparent;
+  transition: background .2s, border-color .2s;
+}
+.trk .dying-tracker .dt-pip.filled {
+  background:var(--t-red-b);
+  border-color:var(--t-red-b);
+  box-shadow: 0 0 6px rgba(196,60,60,0.5);
+}
+.trk .dying-tracker .dt-pip.death {
+  background:#ff4444;
+  border-color:#ff4444;
+  box-shadow: 0 0 12px rgba(255,68,68,0.7);
+  animation: deathPulse 0.8s ease-in-out infinite;
+}
+.trk .dying-tracker .dt-sep {
+  width:1px; height:18px; background:rgba(196,60,60,0.25); margin:0 4px;
+}
+.trk .dying-tracker .dt-wounded {
+  font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px;
+  color:var(--t-gold); padding:2px 6px; border-radius:4px;
+  background:rgba(200,168,78,0.10); border:1px solid rgba(200,168,78,0.25);
+}
+@keyframes deathPulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(255,68,68,0.5); }
+  50% { box-shadow: 0 0 18px rgba(255,68,68,0.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trk .dying-tracker .dt-pip.death { animation: none; }
+}
+.trk .death-alert {
+  padding:8px 14px; margin:6px 0;
+  border-radius:6px;
+  background:rgba(196,60,60,0.18); border:2px solid var(--t-red);
+  color:var(--t-red-b); font-family:'Cinzel',serif;
+  font-size:13px; font-weight:700; letter-spacing:.5px;
+  text-align:center;
+  animation: deathAlertPulse 1.2s ease-in-out infinite;
+}
+@keyframes deathAlertPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trk .death-alert { animation: none; }
+}
+
+/* ═══ GM TACTICS NOTES (Feature 22) ═══ */
+.trk .tactics-wrap {
+  margin-top:8px;
+}
+.trk .tactics-toggle {
+  font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  color:var(--t-t3); cursor:pointer;
+  background:transparent; border:1px dashed var(--t-border);
+  padding:3px 8px; border-radius:4px;
+  display:inline-flex; align-items:center; gap:4px;
+}
+.trk .tactics-toggle:hover { color:var(--t-gold); border-color:var(--t-gold); }
+.trk .tactics-toggle.has-note { color:var(--t-gold); border-style:solid; border-color:rgba(200,168,78,0.35); }
+.trk .tactics-area {
+  width:100%; min-height:60px; max-height:200px; resize:vertical;
+  margin-top:4px; padding:6px 8px;
+  font-size:11px; line-height:1.4; color:var(--t-t1);
+  font-family:'Crimson Pro',serif;
+  background:var(--t-bg-higher); border:1px solid var(--t-border); border-radius:4px;
+  outline:none;
+}
+.trk .tactics-area:focus { border-color:var(--t-gold); box-shadow:0 0 0 2px rgba(200,168,78,0.15); }
+.trk .tactics-area::placeholder { color:var(--t-t4); font-style:italic; }
+
+/* ═══ COMBATANT ROW DYING INDICATOR (Feature 14 — grid row) ═══ */
+.trk .combatant.dying-active {
+  background:
+    linear-gradient(90deg, rgba(196,60,60,0.10) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(196,60,60,0.04) 0%, transparent 100%) !important;
+  box-shadow: inset 3px 0 0 var(--t-red);
+}
+.trk .dying-badge {
+  font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+  color:#ff6b6b; background:rgba(196,60,60,0.20); border:1px solid rgba(196,60,60,0.40);
+  padding:1px 5px; border-radius:3px; display:inline-block; margin-left:4px;
+  animation: deathPulse 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .trk .dying-badge { animation: none; }
+}
+
 /* Utility */
 .trk .hidden { display:none !important; }
 {% endblock %}
@@ -1192,6 +1344,11 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <span id="sync-indicator" class="sync-dot" title="Player sheets are in sync. Pulses gold when a tracker change broadcasts.">
             <span class="sync-dot-glyph"></span>
             <span class="sync-dot-label">Synced</span>
+        </span>
+        <span id="session-timer" class="session-timer" style="display:none;">
+            <span class="st-label">Elapsed</span>
+            <span class="st-time" id="session-timer-val">00:00</span>
+            {% if is_gm %}<button class="st-btn" id="session-timer-btn" onclick="toggleSessionTimer()" title="Start/stop the encounter timer">Start</button>{% endif %}
         </span>
     </div>
     <div class="hb-turn">
@@ -1674,7 +1831,8 @@ let STATE = {
     party_level: {{ party_level }},
     party_size: {{ initial_state.party_size | default(4) }},
     xp_thresholds: {{ initial_state.xp_thresholds | default({}) | tojson }},
-    encounter_notes: {{ (initial_state.encounter_notes or '') | tojson }}
+    encounter_notes: {{ (initial_state.encounter_notes or '') | tojson }},
+    session_timer_start: {{ (initial_state.session_timer_start or 'null') | tojson }}
 };
 
 /* Bootstrap initial state from Jinja server render */
@@ -1692,6 +1850,7 @@ let STATE = {
         STATE.party_size = initial.party_size || STATE.party_size;
         STATE.xp_thresholds = initial.xp_thresholds || STATE.xp_thresholds;
         STATE.encounter_notes = initial.encounter_notes || '';
+        STATE.session_timer_start = initial.session_timer_start || null;
     }
     // Initial render runs synchronously so background tabs (where rAF is
     // throttled) still paint the tracker on first load.
@@ -1782,6 +1941,7 @@ function applyState(data) {
     STATE.party_size = data.party_size ?? STATE.party_size;
     STATE.xp_thresholds = data.xp_thresholds ?? STATE.xp_thresholds;
     STATE.encounter_notes = data.encounter_notes ?? STATE.encounter_notes;
+    STATE.session_timer_start = data.session_timer_start ?? STATE.session_timer_start;
     render();
     renderEncounterNotes();
 }
@@ -1801,6 +1961,7 @@ function _renderNow() {
     refreshStatPanelIfOpen();
     paintMoodControl();
     renderEncounterNotes();
+    renderSessionTimer();
 }
 
 // Keep the active combatant visible no matter how many participants are
@@ -1969,7 +2130,11 @@ function renderInitList() {
         const isActive = idx === STATE.turn_index;
         const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
         const isDying = c.conditions && c.conditions.dying > 0;
-        const rowCls = `combatant ${isActive ? 'active' : ''} ${c.delaying ? 'delaying' : ''} ${isDying ? 'down' : ''}`;
+        const dyingVal = c.conditions ? (c.conditions.dying || 0) : 0;
+        const doomedVal = c.conditions ? (c.conditions.doomed || 0) : 0;
+        const maxDying = Math.max(1, 4 - doomedVal);
+        const isAtDeath = dyingVal >= maxDying && dyingVal > 0;
+        const rowCls = `combatant ${isActive ? 'active' : ''} ${c.delaying ? 'delaying' : ''} ${isDying ? 'down dying-active' : ''}`;
 
         // Conditions HTML (read-only in grid; full controls in hero card).
         // Append a rounds-remaining badge when the GM set an auto-expiry timer.
@@ -2035,7 +2200,9 @@ function renderInitList() {
                 : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();useAction('${c.instance_id}','reaction',1)" title="Reaction available — click to mark spent (Reactive Strike, Shield Block, etc.)">RXN</button>`;
             subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}${hiddenBadge} · ${_mrxn}`;
         }
-        if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span>`;
+        if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span> <span class="pd-dc" title="DC 15 flat check (DC 10 assisted)">DC 15</span>`;
+        if (isAtDeath) subText += ` · <span class="dying-badge">DEAD</span>`;
+        else if (isDying) subText += ` · <span class="dying-badge">Dying ${dyingVal}</span>`;
 
         // Elite/Weak (NPC only)
         let ewHtml = '';
@@ -2216,11 +2383,14 @@ function renderActivePanel() {
         <div class="c-hp-ctrl">
             <input type="number" id="hp-amt-ap-${c.instance_id}" value="1" min="1" placeholder="amt"
                    title="Enter applies damage · Shift+Enter heals"
-                   onkeydown="if(event.key==='Enter'){adjustHPAP('${c.instance_id}', event.shiftKey ? 'heal' : 'damage');event.preventDefault();}">
-            <select id="dmg-type-ap-${c.instance_id}" title="Damage type (affects resist/weak)">${dmgOpts}</select>
-            <button class="minus" onclick="adjustHPAP('${c.instance_id}','damage')" title="Apply damage (Enter)">−</button>
+                   onkeydown="if(event.key==='Enter'){adjustHPAP('${c.instance_id}', event.shiftKey ? 'heal' : 'damage');event.preventDefault();}"
+                   oninput="updateDamagePreview('${c.instance_id}', true)">
+            <select id="dmg-type-ap-${c.instance_id}" title="Damage type (affects resist/weak)"
+                    onchange="updateDamagePreview('${c.instance_id}', true)">${dmgOpts}</select>
+            <button class="minus" onclick="adjustHPAP('${c.instance_id}','damage')" title="Apply damage (Enter)">&#x2212;</button>
             <button class="plus" onclick="adjustHPAP('${c.instance_id}','heal')" title="Heal (Shift+Enter)">+</button>
         </div>
+        <div class="dmg-preview" id="dmg-preview-ap-${c.instance_id}"></div>
     </div>`;
 
     // Defenses (NPC)
@@ -2266,9 +2436,39 @@ function renderActivePanel() {
         </div>`;
     }
 
+    // Death & Dying Tracker (Feature 14)
+    const _dyingVal = c.conditions ? (c.conditions.dying || 0) : 0;
+    const _woundedVal = c.conditions ? (c.conditions.wounded || 0) : 0;
+    const _doomedVal = c.conditions ? (c.conditions.doomed || 0) : 0;
+    const _maxDying = Math.max(1, 4 - _doomedVal);
+    if (_dyingVal > 0 || _woundedVal > 0) {
+        html += `<div class="dying-tracker">`;
+        if (_dyingVal > 0) {
+            html += `<span class="dt-label">Dying</span><div class="dt-pips">`;
+            for (let i = 1; i <= 4; i++) {
+                const filled = i <= _dyingVal;
+                const isDeath = i >= _maxDying && filled;
+                html += `<div class="dt-pip ${filled ? (isDeath ? 'death' : 'filled') : ''}"></div>`;
+            }
+            html += `</div>`;
+        }
+        if (_woundedVal > 0) {
+            if (_dyingVal > 0) html += `<div class="dt-sep"></div>`;
+            html += `<span class="dt-wounded">Wounded ${_woundedVal}</span>`;
+        }
+        if (_doomedVal > 0) {
+            html += `<div class="dt-sep"></div>`;
+            html += `<span class="dt-wounded" style="color:var(--t-red-b);border-color:rgba(196,60,60,0.35);background:rgba(196,60,60,0.10);">Doomed ${_doomedVal} (death at dying ${_maxDying})</span>`;
+        }
+        html += `</div>`;
+        if (_dyingVal >= _maxDying) {
+            html += `<div class="death-alert">${c.name.toUpperCase()} IS DEAD</div>`;
+        }
+    }
+
     // Conditions
     const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false) : [];
-    html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click × to remove</span>' : ''}</div>`;
+    html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click x to remove</span>' : ''}</div>`;
     if (activeConds.length) {
         const expiry = c.condition_expiry || {};
         html += `<div class="cond-row">`;
@@ -2305,6 +2505,7 @@ function renderActivePanel() {
     // Persistent damage. PCs use structured list[dict]; monsters keep the
     // legacy free-text string. For PCs the GM gets per-entry roll/remove
     // buttons (DC 15 flat check ends the entry on success).
+    // Feature 13: Show flat-check DC inline.
     html += `<div class="pd-block" style="margin-top:6px;">`;
     if (c.is_pc) {
         const pdList = Array.isArray(c.persistent_damage_list) ? c.persistent_damage_list : [];
@@ -2312,16 +2513,13 @@ function renderActivePanel() {
             html += `<div class="pd-list">`;
             pdList.forEach((e, i) => {
                 const label = `${e.damage || '?'}${e.type ? ' ' + e.type : ''}`;
-                // Escape for the inline JS string literal (single-quoted in onclick).
-                // `escapeHtml` would HTML-entity the apostrophe in names like "Go'el";
-                // the browser would decode it back to ' inside the attribute and the
-                // onclick string would terminate early. JS-escape backslashes the quote.
                 const nameJs = c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 html += `<div class="pd-entry">
                     <span class="pd-lbl">PD</span>
                     <span class="pd-text">${escapeHtml(label)}${e.source ? ` <span class="pd-src">(${escapeHtml(e.source)})</span>` : ''}</span>
-                    <button class="act-btn" onclick="rollPersistentFlatCheck('${nameJs}', ${i})" title="Roll DC 15 flat check — on success the persistent damage ends">Roll DC 15</button>
-                    <button class="act-btn" onclick="removePersistentDamage('${nameJs}', ${i})" title="Remove without rolling (e.g. cleansed by a spell)">×</button>
+                    <span class="pd-dc" title="DC 15 flat check to end (DC 10 with assisted recovery)">DC 15</span>
+                    <button class="act-btn" onclick="rollPersistentFlatCheck('${nameJs}', ${i})" title="Roll DC 15 flat check -- on success the persistent damage ends">Roll DC 15</button>
+                    <button class="act-btn" onclick="removePersistentDamage('${nameJs}', ${i})" title="Remove without rolling (e.g. cleansed by a spell)">x</button>
                 </div>`;
             });
             html += `</div>`;
@@ -2350,15 +2548,34 @@ function renderActivePanel() {
             <button onclick="addPersistentDamage('${c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}','${c.instance_id}')">Add</button>
         </div>`;
     } else {
+        const _monsterPD = c.persistent_damage || '';
         html += `<div class="pd-row">
             <span class="pd-lbl">PD</span>
-            <input type="text" id="pd-ap-${c.instance_id}" value="${c.persistent_damage || ''}" placeholder="e.g. 1d6 fire">
+            <input type="text" id="pd-ap-${c.instance_id}" value="${_monsterPD}" placeholder="e.g. 1d6 fire">
+            ${_monsterPD ? '<span class="pd-dc" title="DC 15 flat check to end (DC 10 with assisted recovery)">DC 15</span>' : ''}
             <button onclick="setPDAP('${c.instance_id}')">Set</button>
         </div>`;
     }
     html += `</div>`;
 
-    // Strikes — render inline MAP−5 / MAP−10 (and agile variants) alongside
+    // GM Creature Tactics Notes (Feature 22) — only for non-PC combatants, GM view only.
+    {% if is_gm %}
+    if (!c.is_pc) {
+        const _hasTactics = !!(c.tactics || '').trim();
+        html += `<div class="tactics-wrap">
+            <button class="tactics-toggle ${_hasTactics ? 'has-note' : ''}" onclick="toggleTactics('${c.instance_id}')">
+                ${_hasTactics ? 'Tactics Notes' : '+ Tactics Notes'}
+            </button>
+            <div id="tactics-body-${c.instance_id}" style="display:${_hasTactics ? 'block' : 'none'};">
+                <textarea class="tactics-area" id="tactics-area-${c.instance_id}"
+                    placeholder="Combat tactics, positioning notes, trigger conditions..."
+                    oninput="saveTactics('${c.instance_id}')">${escapeHtml(c.tactics || '')}</textarea>
+            </div>
+        </div>`;
+    }
+    {% endif %}
+
+    // Strikes — render inline MAP-5 / MAP-10 (and agile variants) alongside
     // the primary attack so the GM doesn't have to subtract in their head when
     // the monster takes a second/third swing.
     if (c.strikes && c.strikes.length) {
@@ -3497,6 +3714,179 @@ refreshLog();
 
 
 /* ──────────────── SSE + Polling ──────────────── */
+/* ═══════════════════ FEATURE 10: SESSION TIMER ═══════════════════ */
+let _sessionTimerInterval = null;
+
+function renderSessionTimer() {
+    const el = document.getElementById('session-timer');
+    const valEl = document.getElementById('session-timer-val');
+    const btnEl = document.getElementById('session-timer-btn');
+    if (!el) return;
+
+    const hasCombatants = (STATE.combatants || []).length > 0;
+    const timerStart = STATE.session_timer_start;
+
+    // Show the timer area whenever there are combatants
+    el.style.display = hasCombatants ? '' : 'none';
+
+    if (timerStart) {
+        // Timer is running
+        if (btnEl) { btnEl.textContent = 'Stop'; btnEl.classList.add('active'); }
+        _startTimerTick();
+    } else {
+        // Timer stopped
+        if (btnEl) { btnEl.textContent = 'Start'; btnEl.classList.remove('active'); }
+        if (valEl) valEl.textContent = '00:00';
+        _stopTimerTick();
+    }
+}
+
+function _startTimerTick() {
+    _stopTimerTick();
+    _tickTimer();
+    _sessionTimerInterval = setInterval(_tickTimer, 1000);
+}
+
+function _stopTimerTick() {
+    if (_sessionTimerInterval) { clearInterval(_sessionTimerInterval); _sessionTimerInterval = null; }
+}
+
+function _tickTimer() {
+    const valEl = document.getElementById('session-timer-val');
+    if (!valEl || !STATE.session_timer_start) return;
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - STATE.session_timer_start);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    valEl.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+}
+
+function toggleSessionTimer() {
+    const action = STATE.session_timer_start ? 'stop' : 'start';
+    apiPost('/api/session_timer/' + action);
+}
+
+/* ═══════════════════ FEATURE 12: DAMAGE TYPE AUTO-CALC PREVIEW ═══════════════════ */
+
+function computeDamagePreview(amount, damageType, combatant) {
+    // Only for non-PC combatants with W/R/I data
+    if (!combatant || combatant.is_pc) return null;
+    if (!damageType || damageType === 'untyped') return null;
+    if (!amount || amount <= 0) return null;
+
+    const dtype = damageType.toLowerCase().trim();
+    const immunities = (combatant.immunities || []).map(i => (typeof i === 'string' ? i : '').toLowerCase().trim());
+    const physicalTypes = new Set(['bludgeoning', 'piercing', 'slashing']);
+    const hasNoDefenses = !combatant.immunities?.length && !combatant.resistances?.length && !combatant.weaknesses?.length;
+    if (hasNoDefenses) return null;
+
+    // Check immunities
+    if (immunities.includes(dtype)) {
+        return { final: 0, note: 'IMMUNE to ' + damageType, cls: 'immune' };
+    }
+    if (immunities.includes('physical') && physicalTypes.has(dtype)) {
+        return { final: 0, note: 'IMMUNE to physical', cls: 'immune' };
+    }
+
+    let final = amount;
+    let notes = [];
+    let cls = 'neutral';
+
+    // Resistances
+    for (const rStr of (combatant.resistances || [])) {
+        const parsed = _parseDmgTypeVal(rStr);
+        if (parsed.type === dtype || (parsed.type === 'physical' && physicalTypes.has(dtype)) || parsed.type === 'all') {
+            final = Math.max(0, final - parsed.val);
+            notes.push('resist ' + parsed.val);
+            cls = 'resist';
+            break;
+        }
+    }
+
+    // Weaknesses
+    for (const wStr of (combatant.weaknesses || [])) {
+        const parsed = _parseDmgTypeVal(wStr);
+        if (parsed.type === dtype || (parsed.type === 'physical' && physicalTypes.has(dtype))) {
+            final = final + parsed.val;
+            notes.push('weak ' + parsed.val);
+            cls = 'weak';
+            break;
+        }
+    }
+
+    if (notes.length === 0) return null;
+    const noteStr = amount + ' ' + damageType + ' -> ' + final + ' (' + notes.join(', ') + ')';
+    return { final, note: noteStr, cls };
+}
+
+function _parseDmgTypeVal(str) {
+    if (typeof str !== 'string') return { type: '', val: 0 };
+    // Remove exception clauses like "(except cold iron)"
+    const clean = str.replace(/\s*\(.*?\)\s*/g, '').trim();
+    const parts = clean.split(/\s+/);
+    const val = parseInt(parts[parts.length - 1]) || 0;
+    const type = val > 0 ? parts.slice(0, -1).join(' ').toLowerCase() : clean.toLowerCase();
+    return { type, val };
+}
+
+function updateDamagePreview(instanceId, isActivePanel) {
+    const prefix = isActivePanel ? 'ap-' : '';
+    const inputEl = document.getElementById('hp-amt-' + prefix + instanceId);
+    const selectEl = document.getElementById('dmg-type-' + prefix + instanceId);
+    const previewEl = document.getElementById('dmg-preview-' + prefix + instanceId);
+    if (!inputEl || !selectEl || !previewEl) return;
+
+    const amount = parseInt(inputEl.value) || 0;
+    const dmgType = selectEl.value;
+    const c = STATE.combatants.find(x => x.instance_id === instanceId);
+    const preview = computeDamagePreview(amount, dmgType, c);
+
+    if (preview) {
+        previewEl.textContent = preview.note;
+        previewEl.className = 'dmg-preview show ' + preview.cls;
+    } else {
+        previewEl.className = 'dmg-preview';
+        previewEl.textContent = '';
+    }
+}
+
+
+/* ═══════════════════ FEATURE 22: GM CREATURE TACTICS NOTES ═══════════════════ */
+
+let _tacticsDebounce = {};
+
+function toggleTactics(instanceId) {
+    const wrap = document.getElementById('tactics-body-' + instanceId);
+    if (!wrap) return;
+    const isHidden = wrap.style.display === 'none';
+    wrap.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        const area = document.getElementById('tactics-area-' + instanceId);
+        if (area) area.focus();
+    }
+}
+
+function saveTactics(instanceId) {
+    const area = document.getElementById('tactics-area-' + instanceId);
+    if (!area) return;
+    const text = area.value;
+
+    // Debounce: wait 600ms after last keystroke
+    if (_tacticsDebounce[instanceId]) clearTimeout(_tacticsDebounce[instanceId]);
+    _tacticsDebounce[instanceId] = setTimeout(() => {
+        fetch('/api/set_combatant_tactics/' + instanceId, {
+            method: 'POST',
+            headers: JSON_HEADERS,
+            body: JSON.stringify({ tactics: text })
+        }).catch(() => {});
+        // Update local state so re-renders keep the text
+        const c = STATE.combatants.find(x => x.instance_id === instanceId);
+        if (c) c.tactics = text;
+    }, 600);
+}
+
+
+/* ═══════════════════ SSE + TIMER INIT ═══════════════════ */
+
 let evtSource = null;
 let _trackerSseLastMsg = 0;
 function _trackerMarkSseAlive() { _trackerSseLastMsg = Date.now(); }
@@ -3548,6 +3938,7 @@ function connectSSE() {
             STATE.round = sse.round ?? STATE.round;
             STATE.turn_index = sse.turn_index ?? STATE.turn_index;
             STATE.active_name = sse.active_name ?? null;
+            if (sse.session_timer_start !== undefined) STATE.session_timer_start = sse.session_timer_start;
             render();
         } catch(_) {
             apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
@@ -3557,6 +3948,14 @@ function connectSSE() {
     evtSource.addEventListener('combat_log', function(e) {
         _trackerMarkSseAlive();
         try { _appendLogEntry(JSON.parse(e.data)); } catch(_) {}
+    });
+    evtSource.addEventListener('session_timer', function(e) {
+        _trackerMarkSseAlive();
+        try {
+            const d = JSON.parse(e.data);
+            STATE.session_timer_start = d.start || null;
+            renderSessionTimer();
+        } catch(_) {}
     });
     evtSource.onerror = function() {
         // Will auto-reconnect after a delay
@@ -3793,29 +4192,77 @@ async function doRecallKnowledge() {
         if (!data.success) { toast(data.error || 'Failed', 'error'); return; }
 
         const r = data.result;
-        const degreeColors = {
-            critical_success: 'var(--t-green)', success: 'var(--t-teal)',
-            failure: 'var(--t-t3)', critical_failure: 'var(--t-red-b)'
+        const degreeCfg = {
+            critical_success: {color:'#fbbf24', bg:'rgba(251,191,36,0.10)', border:'rgba(251,191,36,0.30)', label:'CRITICAL SUCCESS', icon:'&#9733;'},
+            success:          {color:'#22c55e', bg:'rgba(34,197,94,0.10)',  border:'rgba(34,197,94,0.30)',  label:'SUCCESS',          icon:'&#10003;'},
+            failure:          {color:'var(--t-t3)', bg:'rgba(100,100,100,0.08)', border:'var(--t-border)', label:'FAILURE', icon:'&#8212;'},
+            critical_failure: {color:'#ef4444', bg:'rgba(239,68,68,0.10)', border:'rgba(239,68,68,0.30)', label:'CRITICAL FAILURE', icon:'&#9888;'}
         };
-        const color = degreeColors[r.degree] || 'var(--t-t2)';
+        const cfg = degreeCfg[r.degree] || degreeCfg.failure;
 
-        let html = `<div style="background:rgba(26,30,41,0.8);border:1px solid var(--t-border);border-radius:8px;padding:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-size:12px;font-weight:700;color:var(--t-t1);">${r.pc_name} → ${r.target}</span>
-                <span class="mono" style="font-size:12px;font-weight:700;color:${color};text-transform:uppercase;">${r.degree_label}</span>
+        let html = `<div style="background:rgba(26,30,41,0.8);border:1px solid var(--t-border);border-radius:8px;overflow:hidden;">`;
+        html += `<div style="background:${cfg.bg};border-bottom:1px solid ${cfg.border};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:16px;color:${cfg.color};">${cfg.icon}</span>
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:${cfg.color};letter-spacing:0.06em;">${cfg.label}</div>
+                    <div style="font-size:10px;color:var(--t-t3);margin-top:1px;">${r.pc_name} recalls about ${r.target}</div>
+                </div>
             </div>
-            <div style="font-size:10px;color:var(--t-t3);margin-bottom:8px;font-family:'JetBrains Mono',monospace;">
-                ${r.skill} check: d20(${r.d20}) + ${r.modifier} = ${r.total} vs DC ${r.dc}
-            </div>`;
+            <div style="text-align:right;">
+                <div class="mono" style="font-size:12px;font-weight:700;color:var(--t-t1);">${r.total}</div>
+                <div style="font-size:9px;color:var(--t-t3);">vs DC ${r.dc}</div>
+            </div>
+        </div>`;
+        html += `<div style="padding:8px 14px;background:rgba(20,24,34,0.5);font-size:10px;color:var(--t-t3);font-family:'JetBrains Mono',monospace;border-bottom:1px solid var(--t-border);">
+            ${r.skill} check: d20(${r.d20}) + ${r.modifier} = ${r.total}${r.d20 === 20 ? ' [NAT 20]' : ''}${r.d20 === 1 ? ' [NAT 1]' : ''}
+        </div>`;
 
-        if (r.revealed_info && r.revealed_info.length) {
-            html += `<div style="border-top:1px solid var(--t-border);padding-top:8px;margin-top:8px;">`;
-            r.revealed_info.forEach(info => {
-                html += `<div style="font-size:11px;color:var(--t-t1);font-family:'Crimson Pro',serif;margin-bottom:4px;line-height:1.4;">• ${info}</div>`;
+        if (r.degree === 'critical_success' || r.degree === 'success') {
+            const critKeywords = ['Weakest save', 'AC:', 'Notable abilities', 'Best attack'];
+            const successItems = [], critItems = [];
+            (r.revealed_info || []).forEach(info => {
+                if (critKeywords.some(kw => info.startsWith(kw))) critItems.push(info);
+                else successItems.push(info);
             });
+            html += `<div style="padding:12px 14px;">`;
+            if (successItems.length) {
+                html += `<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.20);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+                    <div style="font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#22c55e;margin-bottom:6px;">Known Lore</div>`;
+                successItems.forEach(info => {
+                    const ci = info.indexOf(':');
+                    if (ci > 0 && ci < 25) {
+                        html += `<div style="display:flex;gap:6px;margin-bottom:4px;font-size:11px;line-height:1.4;">
+                            <span style="font-weight:700;color:var(--t-t1);white-space:nowrap;">${info.substring(0,ci)}:</span>
+                            <span style="color:var(--t-t2);">${info.substring(ci+1).trim()}</span></div>`;
+                    } else html += `<div style="font-size:11px;color:var(--t-t1);margin-bottom:4px;line-height:1.4;">${info}</div>`;
+                });
+                html += `</div>`;
+            }
+            if (critItems.length) {
+                html += `<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.20);border-radius:6px;padding:10px 12px;">
+                    <div style="font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#fbbf24;margin-bottom:6px;">Deep Knowledge</div>`;
+                critItems.forEach(info => {
+                    const ci = info.indexOf(':');
+                    if (ci > 0 && ci < 25) {
+                        html += `<div style="display:flex;gap:6px;margin-bottom:4px;font-size:11px;line-height:1.4;">
+                            <span style="font-weight:700;color:var(--t-t1);white-space:nowrap;">${info.substring(0,ci)}:</span>
+                            <span style="color:#fbbf24;">${info.substring(ci+1).trim()}</span></div>`;
+                    } else html += `<div style="font-size:11px;color:var(--t-t1);margin-bottom:4px;line-height:1.4;">${info}</div>`;
+                });
+                html += `</div>`;
+            }
             html += `</div>`;
         } else if (r.degree === 'failure') {
-            html += `<div style="font-size:11px;color:var(--t-t3);font-style:italic;">No useful information recalled.</div>`;
+            html += `<div style="padding:14px;text-align:center;">
+                <div style="font-size:12px;color:var(--t-t3);font-style:italic;">No useful information recalled.</div></div>`;
+        } else if (r.degree === 'critical_failure') {
+            html += `<div style="padding:12px 14px;"><div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:10px 12px;">
+                <div style="font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#ef4444;margin-bottom:6px;">False Information</div>`;
+            (r.revealed_info || []).forEach(info => {
+                html += `<div style="font-size:11px;color:#fca5a5;line-height:1.4;margin-bottom:4px;">${info}</div>`;
+            });
+            html += `</div></div>`;
         }
         html += `</div>`;
 
@@ -3975,7 +4422,7 @@ async function sendCheckRequest() {
     };
     document.body.appendChild(fab);
 
-    const messages = [];  // {kind:'whisper'|'journal', pc, text, ts}
+    const messages = [];  // {kind:'whisper'|'journal'|'nomination', pc, text, ts}
     function repaint() {
         const list = document.getElementById('gm-inbox-list');
         if (!list) return;
@@ -3986,13 +4433,41 @@ async function sendCheckRequest() {
         const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         list.innerHTML = messages.slice(-50).reverse().map(m => {
             const t = new Date((m.ts || 0) * 1000).toLocaleTimeString();
-            const tag = m.kind === 'journal' ? 'recap' : 'whisper';
-            return `<div class="gm-msg kind-${m.kind === 'journal' ? 'journal' : 'whisper'}">
+            const tag = m.kind === 'journal' ? 'recap' : (m.kind === 'nomination' ? 'nomination' : 'whisper');
+            let body = m.kind === 'nomination' ? m.text : esc(m.text);
+            let actions = '';
+            if (m.kind === 'nomination' && m.actionable) {
+                actions = `<div style="margin-top:6px;display:flex;gap:6px;">
+                    <button onclick="approveNomination('${esc(m.nominee)}', this)" style="padding:3px 10px;border-radius:4px;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#86EFAC;font-size:11px;font-weight:700;cursor:pointer;">Approve +1 HP</button>
+                    <button onclick="this.closest('.gm-msg').style.opacity='0.4';this.closest('.gm-msg').querySelector('div[style*=margin-top]').remove();" style="padding:3px 10px;border-radius:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#FCA5A5;font-size:11px;font-weight:700;cursor:pointer;">Dismiss</button>
+                </div>`;
+            }
+            return `<div class="gm-msg kind-${m.kind === 'journal' ? 'journal' : (m.kind === 'nomination' ? 'whisper' : 'whisper')}">
                 <div class="gm-msg-meta">${tag} &middot; <strong>${esc(m.pc)}</strong> &middot; ${t}</div>
-                <div class="gm-msg-body">${esc(m.text)}</div>
+                <div class="gm-msg-body">${body}${actions}</div>
             </div>`;
         }).join('');
     }
+    window.approveNomination = async function(nominee, btn) {
+        try {
+            const res = await fetch('/api/approve_hero_nomination', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nominee: nominee })
+            });
+            const d = await res.json();
+            if (d.success) {
+                toast(nominee + ' awarded a Hero Point (now ' + d.hero_points + ')', 'success');
+                const row = btn.closest('.gm-msg');
+                if (row) {
+                    const actDiv = row.querySelector('div[style*="margin-top"]');
+                    if (actDiv) actDiv.innerHTML = '<span style="color:#86EFAC;font-size:11px;font-weight:700;">Approved</span>';
+                }
+            } else {
+                toast(d.error || 'Failed to approve', 'error');
+            }
+        } catch (_) { toast('Network error', 'error'); }
+    };
     function repaintFab() {
         const n = parseInt(fab.dataset.unread || '0', 10);
         if (n > 0) {
@@ -4045,6 +4520,28 @@ async function sendCheckRequest() {
                     ts: d.ts
                 });
                 repaint();
+            } catch(_) {}
+        });
+        // Hero Point Nomination (Tier 4 #19)
+        es.addEventListener('hero_nomination', (e) => {
+            try {
+                const d = JSON.parse(e.data || '{}');
+                const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const nomId = d.id || '';
+                messages.push({
+                    kind: 'nomination', pc: d.nominator,
+                    text: `Nominated <b>${esc(d.nominee)}</b> for a Hero Point: "${esc(d.reason)}"`,
+                    ts: d.ts,
+                    nominee: d.nominee,
+                    nomId: nomId,
+                    actionable: true
+                });
+                if (inbox.style.display !== 'block') {
+                    fab.dataset.unread = String(parseInt(fab.dataset.unread || '0', 10) + 1);
+                    repaintFab();
+                }
+                repaint();
+                try { toast(d.nominator + ' nominated ' + d.nominee + ' for a Hero Point', 'info'); } catch(_) {}
             } catch(_) {}
         });
     } catch(e) { console.error('GM inbox SSE failed:', e); }

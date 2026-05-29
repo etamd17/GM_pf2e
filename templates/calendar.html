@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}In-Game Calendar{% endblock %}
+{% block extra_head %}
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .cal-header { font-family: var(--font-display); font-size: 10px; font-weight: 700;
+        letter-spacing: 0.08em; text-transform: uppercase; color: var(--gilt-200);
+        text-align: center; padding: 8px 4px; }
+    .cal-cell { min-height: 60px; padding: 6px; border-radius: var(--r-sm);
+        background: var(--bg-card); border: 1px solid var(--border-card);
+        cursor: pointer; transition: border-color var(--t-fast); position: relative; }
+    .cal-cell:hover { border-color: var(--border-rule); }
+    .cal-cell.today { border-color: var(--gilt-300); background: rgba(201,163,78,0.08); }
+    .cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+    .cal-day-num { font-size: 13px; font-weight: 700; color: var(--text-on-dark); }
+    .cal-cell.today .cal-day-num { color: var(--gilt-100); }
+    .cal-event-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gilt-300);
+        display: inline-block; margin: 1px; }
+    .cal-nav-btn { font-family: var(--font-display); font-size: 11px; font-weight: 700;
+        padding: 8px 14px; border-radius: var(--r-sm); cursor: pointer;
+        background: var(--bg-card); border: 1px solid var(--border-card);
+        color: var(--text-on-dark-2); transition: all var(--t-fast); }
+    .cal-nav-btn:hover { border-color: var(--gilt-300); color: var(--gilt-100); }
+    .cal-advance-btn { background: rgba(201,163,78,0.12); border: 1px solid rgba(201,163,78,0.35);
+        color: var(--gilt-100); }
+{% endblock %}
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <header style="margin-bottom: var(--sp-5);">
+        <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">In-World Time</div>
+        <h1 class="font-display" style="font-size:24px; color:var(--gilt-100); margin:0;">Golarion Calendar</h1>
+    </header>
+
+    <!-- Current date display -->
+    <div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-4); margin-bottom:var(--sp-4); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--sp-3);">
+        <div>
+            <div id="current-date" class="font-display" style="font-size:20px; color:var(--gilt-100);"></div>
+            <div id="current-weekday" style="font-size:12px; color:var(--text-on-dark-3);"></div>
+        </div>
+        <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+            <button class="cal-nav-btn" onclick="advanceDays(-7)">-7 days</button>
+            <button class="cal-nav-btn" onclick="advanceDays(-1)">-1 day</button>
+            <button class="cal-advance-btn cal-nav-btn" onclick="advanceDays(1)">+1 day</button>
+            <button class="cal-advance-btn cal-nav-btn" onclick="advanceDays(7)">+7 days</button>
+        </div>
+    </div>
+
+    <!-- Month navigation -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-3);">
+        <button class="cal-nav-btn" onclick="changeMonth(-1)">&larr; Prev</button>
+        <div style="display:flex; align-items:center; gap:var(--sp-3);">
+            <select id="month-select" onchange="setMonth()" style="font-family:var(--font-display); font-size:14px; font-weight:600; background:var(--bg-card); border:1px solid var(--border-card); color:var(--gilt-100); border-radius:var(--r-sm); padding:6px 10px;">
+                {% for m in months %}
+                <option value="{{ loop.index0 }}">{{ m.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="number" id="year-input" value="{{ calendar.year }}" min="1" max="9999"
+                   onchange="setYear()"
+                   style="width:80px; font-family:var(--font-display); font-size:14px; font-weight:600; background:var(--bg-card); border:1px solid var(--border-card); color:var(--gilt-100); border-radius:var(--r-sm); padding:6px 10px; text-align:center;">
+            <span style="font-size:12px; color:var(--text-on-dark-3);">AR</span>
+        </div>
+        <button class="cal-nav-btn" onclick="changeMonth(1)">Next &rarr;</button>
+    </div>
+
+    <!-- Calendar grid -->
+    <div class="cal-grid" style="margin-bottom:var(--sp-4);">
+        {% for wd in weekdays %}
+        <div class="cal-header">{{ wd[:3] }}</div>
+        {% endfor %}
+    </div>
+    <div id="cal-body" class="cal-grid"></div>
+
+    <!-- Events for selected day -->
+    <div style="margin-top:var(--sp-4); display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-4);">
+        <div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-4);">
+            <div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Add Event</div>
+            <input type="text" id="evt-title" placeholder="Event title"
+                   style="width:100%; margin-bottom:6px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px 8px;">
+            <textarea id="evt-note" rows="2" placeholder="Notes (optional)"
+                      style="width:100%; margin-bottom:6px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px 8px; resize:vertical;"></textarea>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <span id="evt-day-label" style="font-size:11px; color:var(--text-on-dark-3);"></span>
+                <button onclick="addEvent()" style="font-size:11px; padding:6px 14px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100);">Add</button>
+            </div>
+        </div>
+        <div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-4);">
+            <div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Events</div>
+            <div id="events-list" style="font-size:12px; color:var(--text-on-dark-2);"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+var CAL = {{ calendar | tojson }};
+var MONTHS = {{ months | tojson }};
+var WEEKDAYS = {{ weekdays | tojson }};
+var viewMonth = CAL.month;
+var viewYear = CAL.year;
+var selectedDay = CAL.day;
+
+function renderCalendar() {
+    document.getElementById('month-select').value = viewMonth;
+    document.getElementById('year-input').value = viewYear;
+
+    var mi = MONTHS[viewMonth];
+    // Compute first day of week for this month
+    var total = 0;
+    for (var y = 1; y < viewYear; y++) {
+        for (var m = 0; m < 12; m++) total += MONTHS[m].days;
+    }
+    for (var m = 0; m < viewMonth; m++) total += MONTHS[m].days;
+    var firstDow = total % 7;
+
+    var html = '';
+    for (var i = 0; i < firstDow; i++) {
+        html += '<div class="cal-cell empty"></div>';
+    }
+    for (var d = 1; d <= mi.days; d++) {
+        var isToday = (viewYear === CAL.year && viewMonth === CAL.month && d === CAL.day);
+        var isSel = (d === selectedDay && viewYear === CAL.year && viewMonth === CAL.month);
+        var cls = 'cal-cell' + (isToday ? ' today' : '');
+        var evts = (CAL.events || []).filter(function(e) {
+            return e.year === viewYear && e.month === viewMonth && e.day === d;
+        });
+        var dots = evts.map(function() { return '<span class="cal-event-dot"></span>'; }).join('');
+        html += '<div class="' + cls + '" onclick="selectDay(' + d + ')" style="' + (isSel ? 'box-shadow:inset 0 0 0 2px var(--gilt-300);' : '') + '">';
+        html += '<div class="cal-day-num">' + d + '</div>';
+        if (dots) html += '<div style="margin-top:2px;">' + dots + '</div>';
+        html += '</div>';
+    }
+    document.getElementById('cal-body').innerHTML = html;
+
+    // Update current date display
+    var dow_total = total + (CAL.day - 1);
+    var dow_name = WEEKDAYS[dow_total % 7];
+    document.getElementById('current-date').textContent = CAL.day + ' ' + MONTHS[CAL.month].name + ', ' + CAL.year + ' AR';
+    document.getElementById('current-weekday').textContent = dow_name;
+
+    renderEvents();
+}
+
+function selectDay(d) {
+    selectedDay = d;
+    renderCalendar();
+}
+
+function renderEvents() {
+    var evts = (CAL.events || []).filter(function(e) {
+        return e.year === viewYear && e.month === viewMonth && e.day === selectedDay;
+    });
+    var el = document.getElementById('events-list');
+    document.getElementById('evt-day-label').textContent = selectedDay + ' ' + MONTHS[viewMonth].name;
+    if (!evts.length) {
+        el.innerHTML = '<div style="color:var(--text-on-dark-3); font-style:italic;">No events on this day.</div>';
+        return;
+    }
+    el.innerHTML = evts.map(function(e) {
+        return '<div style="display:flex; justify-content:space-between; align-items:flex-start; padding:6px 0; border-bottom:1px dashed var(--border-card);">' +
+            '<div><div style="font-weight:600; color:var(--gilt-100);">' + esc(e.title) + '</div>' +
+            (e.note ? '<div style="font-size:11px; color:var(--text-on-dark-3); margin-top:2px;">' + esc(e.note) + '</div>' : '') +
+            '</div>' +
+            '<button onclick="removeEvent(\'' + e.id + '\')" style="color:var(--text-on-dark-3); background:transparent; border:none; cursor:pointer; font-size:14px;">&times;</button>' +
+            '</div>';
+    }).join('');
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+async function advanceDays(n) {
+    var r = await fetch('/api/calendar/advance', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({days: n})});
+    var j = await r.json();
+    if (j.success) {
+        CAL.year = j.year; CAL.month = j.month; CAL.day = j.day;
+        viewMonth = j.month; viewYear = j.year; selectedDay = j.day;
+        renderCalendar();
+    }
+}
+
+function changeMonth(delta) {
+    viewMonth += delta;
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    selectedDay = 1;
+    renderCalendar();
+}
+
+function setMonth() {
+    viewMonth = parseInt(document.getElementById('month-select').value);
+    selectedDay = 1;
+    renderCalendar();
+}
+
+function setYear() {
+    viewYear = parseInt(document.getElementById('year-input').value) || viewYear;
+    renderCalendar();
+}
+
+async function addEvent() {
+    var title = document.getElementById('evt-title').value.trim();
+    if (!title) return;
+    var note = document.getElementById('evt-note').value.trim();
+    var r = await fetch('/api/calendar/event', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({action:'add', year:viewYear, month:viewMonth, day:selectedDay, title:title, note:note})});
+    var j = await r.json();
+    if (j.success) {
+        CAL.events = j.events;
+        document.getElementById('evt-title').value = '';
+        document.getElementById('evt-note').value = '';
+        renderCalendar();
+    }
+}
+
+async function removeEvent(id) {
+    var r = await fetch('/api/calendar/event', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({action:'remove', id:id})});
+    var j = await r.json();
+    if (j.success) { CAL.events = j.events; renderCalendar(); }
+}
+
+renderCalendar();
+</script>
+{% endblock %}

@@ -82,6 +82,7 @@
                     <a href="/gmscreen" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Screen</a>
                     <a href="/generator" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Generators</a>
                     <a href="/gm/loot" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Loot</a>
+                    <a href="/status" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Status</a>
                     <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <kbd class="hidden sm:inline" style="font-size:9px; padding:1px 4px; border-radius:3px; background:var(--bg-page); border:1px solid var(--border-card); color:var(--text-on-dark-3); font-family:var(--font-ui);">&#8984;K</kbd>
@@ -1069,6 +1070,446 @@
             }
         }, { passive: true });
     })();
+    </script>
+
+    {# ════════════════ PARTY CHAT (Tier 4, feature 20) ════════════════
+       Collapsible chat panel visible to GM and players. Messages are
+       in-memory on the server, broadcast via SSE. #}
+    <div id="chat-widget" class="no-print" style="position:fixed; {% if not is_gm and player_name %}bottom:72px{% else %}bottom:16px{% endif %}; left:16px; z-index:100;">
+        <div id="chat-panel" class="hidden" style="position:absolute; bottom:48px; left:0; width:300px; max-height:400px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column;">
+            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
+                <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-300);">Party Chat</span>
+                <button type="button" onclick="toggleChatPanel()" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <div id="chat-messages" style="flex:1; overflow-y:auto; padding:8px; max-height:280px; min-height:100px;"></div>
+            <form id="chat-form" onsubmit="event.preventDefault(); sendChat();" style="padding:8px; border-top:1px solid var(--border-card); display:flex; gap:6px;">
+                <input type="text" id="chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off" style="flex:1; font-size:12px; padding:6px 8px; border-radius:6px; background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-dark); font-family:var(--font-ui); outline:none;">
+                <button type="submit" style="padding:6px 12px; font-size:11px; font-weight:700; border-radius:6px; background:var(--accent); border:none; color:var(--ink-950); cursor:pointer;">Send</button>
+            </form>
+        </div>
+        <button type="button" onclick="toggleChatPanel()" id="chat-fab" title="Party Chat" style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-card-2); border:1px solid var(--border-rule); color:var(--text-on-dark-3); font-size:16px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; position:relative;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span id="chat-unread" class="hidden" style="position:absolute; top:-2px; right:-2px; width:10px; height:10px; border-radius:50%; background:var(--ruby-300);"></span>
+        </button>
+    </div>
+    <script>
+    (function() {
+        var chatPanel = document.getElementById('chat-panel');
+        var chatMessages = document.getElementById('chat-messages');
+        var chatInput = document.getElementById('chat-input');
+        var chatUnread = document.getElementById('chat-unread');
+        var chatOpen = false;
+        var chatLoaded = false;
+
+        window.toggleChatPanel = function() {
+            chatOpen = !chatOpen;
+            chatPanel.classList.toggle('hidden', !chatOpen);
+            if (chatOpen) {
+                chatUnread.classList.add('hidden');
+                if (!chatLoaded) { loadChat(); chatLoaded = true; }
+                chatInput.focus();
+            }
+        };
+
+        function loadChat() {
+            fetch('/api/chat').then(function(r){return r.json();}).then(function(data) {
+                chatMessages.innerHTML = '';
+                (data.messages || []).forEach(function(m) { appendMsg(m); });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }).catch(function(){});
+        }
+
+        function appendMsg(m) {
+            var div = document.createElement('div');
+            div.style.cssText = 'margin-bottom:6px; font-size:12px; line-height:1.4;';
+            var senderColor = m.sender === 'GM' ? 'var(--gilt-300)' : 'var(--text-on-dark)';
+            div.innerHTML = '<span style="font-weight:700; color:' + senderColor + ';">' + _esc(m.sender) + '</span> '
+                + '<span style="font-size:9px; color:var(--text-on-dark-3);">' + _esc(m.timestamp || '') + '</span>'
+                + '<div style="color:var(--text-on-dark-2); margin-top:1px;">' + _esc(m.text) + '</div>';
+            chatMessages.appendChild(div);
+        }
+
+        window.sendChat = function() {
+            var text = chatInput.value.trim();
+            if (!text) return;
+            chatInput.value = '';
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
+            }).catch(function(){});
+        };
+
+        // Listen for chat_message SSE events
+        function hookSSE() {
+            try {
+                var src = new EventSource('/api/events');
+                src.addEventListener('chat_message', function(e) {
+                    try {
+                        var m = JSON.parse(e.data);
+                        appendMsg(m);
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                        if (!chatOpen) {
+                            chatUnread.classList.remove('hidden');
+                        }
+                    } catch(ex) {}
+                });
+                src.onerror = function() {
+                    src.close();
+                    setTimeout(hookSSE, 5000);
+                };
+            } catch(ex) {}
+        }
+        // Delay to let page-level SSE connect first
+        setTimeout(hookSSE, 3000);
+
+        function _esc(s) {
+            if (s == null) return '';
+            var d = document.createElement('div');
+            d.textContent = String(s);
+            return d.innerHTML;
+        }
+    })();
+    </script>
+
+    {# ════════════════ KEYBOARD SHORTCUTS FOR GM (Tier 4, feature 28) ════════════════ #}
+    {% if is_gm %}
+    <div id="kb-help-card" class="hidden modal-backdrop" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay); display:flex; align-items:center; justify-content:center;">
+        <div style="background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; max-width:400px; width:90vw; padding:var(--sp-5);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
+                <h2 class="font-display" style="font-size:16px; color:var(--gilt-100);">Keyboard Shortcuts</h2>
+                <button onclick="document.getElementById('kb-help-card').classList.add('hidden'); document.getElementById('kb-help-card').style.display='none';" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
+            </div>
+            <table style="width:100%; font-size:12px; color:var(--text-on-dark-2);">
+                <tr><td style="padding:4px 0;"><kbd class="kbd">N</kbd></td><td>Next turn</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">P</kbd></td><td>Previous turn</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">Cmd+K</kbd></td><td>Quick Search</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">C</kbd></td><td>Open condition toggle (active combatant)</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">H</kbd></td><td>Open HP adjust (active combatant)</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">?</kbd></td><td>Show this help card</td></tr>
+            </table>
+        </div>
+    </div>
+    <script>
+    (function() {
+        document.addEventListener('keydown', function(e) {
+            // Skip when typing in inputs
+            var tag = (e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+            // Skip if modifier keys (except shift for ?)
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+            var key = e.key;
+            if (key === '?') {
+                e.preventDefault();
+                var card = document.getElementById('kb-help-card');
+                if (card.classList.contains('hidden')) {
+                    card.classList.remove('hidden');
+                    card.style.display = 'flex';
+                } else {
+                    card.classList.add('hidden');
+                    card.style.display = 'none';
+                }
+                return;
+            }
+
+            if (key === 'n' || key === 'N') {
+                e.preventDefault();
+                fetch('/api/cycle_turn/next', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}}).catch(function(){});
+                return;
+            }
+            if (key === 'p' || key === 'P') {
+                e.preventDefault();
+                fetch('/api/cycle_turn/prev', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}}).catch(function(){});
+                return;
+            }
+            if (key === 'c' || key === 'C') {
+                e.preventDefault();
+                // Try to click the condition toggle for the active combatant
+                var condBtn = document.querySelector('.combatant-row.active-turn .condition-toggle-btn, .combatant-row.active-turn [data-action="conditions"]');
+                if (condBtn) condBtn.click();
+                return;
+            }
+            if (key === 'h' || key === 'H') {
+                e.preventDefault();
+                // Try to click the HP adjust for the active combatant
+                var hpBtn = document.querySelector('.combatant-row.active-turn .hp-adjust-btn, .combatant-row.active-turn [data-action="hp"]');
+                if (hpBtn) hpBtn.click();
+                return;
+            }
+        });
+    })();
+    </script>
+    {% endif %}
+
+    {# ════════════════ COMBAT SFX (Tier 4, feature 29) ════════════════
+       Extends pf2eAudio with additional synthesized SFX for combat events.
+       Triggers on SSE events for hits, misses, damage, healing, conditions. #}
+    <script>
+    (function() {
+        // Combat SFX engine -- extends pf2eAudio with new synthesized sounds
+        var SFX_KEY = 'pf2e_sfx_enabled';
+        var sfxEnabled = true;
+        try { sfxEnabled = localStorage.getItem(SFX_KEY) !== '0'; } catch(e) {}
+
+        var _sfxCtx = null;
+        function _ac() {
+            if (!_sfxCtx) {
+                try { _sfxCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
+            }
+            if (_sfxCtx && _sfxCtx.state === 'suspended') _sfxCtx.resume().catch(function(){});
+            return _sfxCtx;
+        }
+
+        function _sfxEnv(node, gain, t0, attack, decay) {
+            node.gain.setValueAtTime(0.0001, t0);
+            node.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), t0 + attack);
+            node.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+        }
+
+        function _noiseBuffer(dur) {
+            var c = _ac(); if (!c) return null;
+            var n = Math.floor(c.sampleRate * dur);
+            var buf = c.createBuffer(1, n, c.sampleRate);
+            var d = buf.getChannelData(0);
+            for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+            return buf;
+        }
+
+        // Hit: short thud (low-frequency sine burst)
+        function sfxHit() {
+            var c = _ac(); if (!c || !sfxEnabled) return;
+            var t = c.currentTime;
+            var o = c.createOscillator(); o.type = 'sine';
+            o.frequency.setValueAtTime(100, t);
+            o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+            var g = c.createGain(); o.connect(g).connect(c.destination);
+            _sfxEnv(g, 0.3, t, 0.004, 0.15);
+            o.start(t); o.stop(t + 0.2);
+        }
+
+        // Miss: breathy whoosh (filtered noise sweep)
+        function sfxMiss() {
+            var c = _ac(); if (!c || !sfxEnabled) return;
+            var t = c.currentTime;
+            var src = c.createBufferSource(); src.buffer = _noiseBuffer(0.2);
+            var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.5;
+            bp.frequency.setValueAtTime(800, t);
+            bp.frequency.exponentialRampToValueAtTime(2400, t + 0.15);
+            var g = c.createGain(); src.connect(bp).connect(g).connect(c.destination);
+            _sfxEnv(g, 0.12, t, 0.01, 0.18);
+            src.start(t); src.stop(t + 0.22);
+        }
+
+        // Heal: ascending chime (two sine tones)
+        function sfxHeal() {
+            var c = _ac(); if (!c || !sfxEnabled) return;
+            var t = c.currentTime;
+            [523, 784].forEach(function(f, i) {
+                var o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+                var g = c.createGain(); o.connect(g).connect(c.destination);
+                var when = t + i * 0.08;
+                _sfxEnv(g, 0.14, when, 0.005, 0.4);
+                o.start(when); o.stop(when + 0.5);
+            });
+        }
+
+        // Damage taken: short grunt-like noise
+        function sfxDamageTaken() {
+            var c = _ac(); if (!c || !sfxEnabled) return;
+            var t = c.currentTime;
+            var o = c.createOscillator(); o.type = 'sawtooth';
+            o.frequency.setValueAtTime(90, t);
+            o.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+            var g = c.createGain(); o.connect(g).connect(c.destination);
+            _sfxEnv(g, 0.2, t, 0.003, 0.12);
+            o.start(t); o.stop(t + 0.15);
+        }
+
+        // Condition applied: low tone
+        function sfxCondition() {
+            var c = _ac(); if (!c || !sfxEnabled) return;
+            var t = c.currentTime;
+            var o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 220;
+            var g = c.createGain(); o.connect(g).connect(c.destination);
+            _sfxEnv(g, 0.1, t, 0.01, 0.3);
+            o.start(t); o.stop(t + 0.35);
+        }
+
+        // Expose on window for SSE hooks
+        window.pf2eSFX = {
+            hit: sfxHit, miss: sfxMiss, heal: sfxHeal,
+            damageTaken: sfxDamageTaken, condition: sfxCondition,
+            isEnabled: function() { return sfxEnabled; },
+            setEnabled: function(on) {
+                sfxEnabled = !!on;
+                try { localStorage.setItem(SFX_KEY, sfxEnabled ? '1' : '0'); } catch(e) {}
+            },
+            toggle: function() { window.pf2eSFX.setEnabled(!sfxEnabled); return sfxEnabled; }
+        };
+
+        // Hook into SSE events for SFX triggers
+        function hookSFXtoSSE() {
+            try {
+                var src = new EventSource('/api/events');
+                src.addEventListener('player_roll', function(e) {
+                    if (!sfxEnabled) return;
+                    try {
+                        var d = JSON.parse(e.data);
+                        var deg = d.degree || '';
+                        var action = (d.action || '').toLowerCase();
+                        if (deg === 'crit_success') {
+                            // crit already handled by pf2eAudio
+                        } else if (deg === 'crit_failure') {
+                            // fumble already handled by pf2eAudio
+                        } else if (deg === 'success' && (action.indexOf('strike') >= 0 || action.indexOf('attack') >= 0)) {
+                            sfxHit();
+                        } else if (deg === 'failure' && (action.indexOf('strike') >= 0 || action.indexOf('attack') >= 0)) {
+                            sfxMiss();
+                        }
+                    } catch(ex) {}
+                });
+                src.addEventListener('pc_update', function(e) {
+                    if (!sfxEnabled) return;
+                    try {
+                        var d = JSON.parse(e.data);
+                        if (d.hp_delta && d.hp_delta < 0) sfxDamageTaken();
+                        else if (d.hp_delta && d.hp_delta > 0) sfxHeal();
+                    } catch(ex) {}
+                });
+                src.onerror = function() {
+                    src.close();
+                    setTimeout(hookSFXtoSSE, 5000);
+                };
+            } catch(ex) {}
+        }
+        setTimeout(hookSFXtoSSE, 3500);
+    })();
+    </script>
+
+    {# ════════════════ PLAYER JOURNAL (Tier 4, feature 26) ════════════════ #}
+    {% if not is_gm and player_name %}
+    <div id="journal-widget" class="no-print" style="position:fixed; bottom:72px; left:72px; z-index:100;">
+        <div id="journal-panel" class="hidden" style="position:absolute; bottom:48px; left:0; width:320px; max-height:420px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column;">
+            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
+                <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-300);">Journal</span>
+                <button type="button" onclick="toggleJournalPanel()" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <div id="journal-entries" style="flex:1; overflow-y:auto; padding:8px; max-height:260px; min-height:60px;"></div>
+            <form id="journal-form" onsubmit="event.preventDefault(); addJournalEntry();" style="padding:8px; border-top:1px solid var(--border-card);">
+                <textarea id="journal-input" placeholder="Write a note..." maxlength="2000" rows="2" style="width:100%; font-size:12px; padding:6px 8px; border-radius:6px; background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-dark); font-family:var(--font-ui); outline:none; resize:vertical;"></textarea>
+                <button type="submit" style="margin-top:4px; padding:6px 14px; font-size:11px; font-weight:700; border-radius:6px; background:var(--accent); border:none; color:var(--ink-950); cursor:pointer;">Add Entry</button>
+            </form>
+        </div>
+        <button type="button" onclick="toggleJournalPanel()" title="Session Journal" style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-card-2); border:1px solid var(--border-rule); color:var(--text-on-dark-3); font-size:16px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </button>
+    </div>
+    <script>
+    (function() {
+        var panel = document.getElementById('journal-panel');
+        var entries = document.getElementById('journal-entries');
+        var input = document.getElementById('journal-input');
+        var journalOpen = false;
+        var loaded = false;
+
+        window.toggleJournalPanel = function() {
+            journalOpen = !journalOpen;
+            panel.classList.toggle('hidden', !journalOpen);
+            if (journalOpen && !loaded) { loadJournal(); loaded = true; }
+        };
+
+        function loadJournal() {
+            fetch('/api/journal').then(function(r){return r.json();}).then(function(data) {
+                renderEntries(data.entries || []);
+            }).catch(function(){});
+        }
+
+        function renderEntries(list) {
+            if (!list.length) {
+                entries.innerHTML = '<div style="font-size:12px; color:var(--text-on-dark-3); padding:16px; text-align:center;">No journal entries yet</div>';
+                return;
+            }
+            entries.innerHTML = '';
+            list.forEach(function(e, i) {
+                var div = document.createElement('div');
+                div.style.cssText = 'padding:6px 4px; border-bottom:1px solid var(--border-card); font-size:12px;';
+                var d = document.createElement('div');
+                d.textContent = e.text;
+                d.style.cssText = 'color:var(--text-on-dark-2); line-height:1.5; white-space:pre-wrap;';
+                var meta = document.createElement('div');
+                meta.style.cssText = 'display:flex; justify-content:space-between; margin-top:3px;';
+                meta.innerHTML = '<span style="font-size:10px; color:var(--text-on-dark-3);">' + (e.timestamp || '') + '</span>'
+                    + '<button onclick="deleteJournalEntry(' + i + ')" style="font-size:10px; color:var(--text-on-dark-3); background:none; border:none; cursor:pointer;">delete</button>';
+                div.appendChild(d);
+                div.appendChild(meta);
+                entries.appendChild(div);
+            });
+            entries.scrollTop = entries.scrollHeight;
+        }
+
+        window.addJournalEntry = function() {
+            var text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            fetch('/api/journal', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
+            }).then(function(r){return r.json();}).then(function(data) {
+                if (data.entries) renderEntries(data.entries);
+            }).catch(function(){});
+        };
+
+        window.deleteJournalEntry = function(idx) {
+            fetch('/api/journal/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({index: idx})
+            }).then(function(r){return r.json();}).then(function(data) {
+                if (data.entries) renderEntries(data.entries);
+            }).catch(function(){});
+        };
+    })();
+    </script>
+    {% endif %}
+
+    {# ════════════════ SFX TOGGLE IN AUDIO PANEL ════════════════ #}
+    <script>
+    (function() {
+        // Add SFX toggle to the audio panel if it exists
+        var audioPanel = document.getElementById('audio-panel');
+        if (audioPanel) {
+            var panelContent = audioPanel.querySelector('div:last-child');
+            if (panelContent) {
+                var sfxDiv = document.createElement('div');
+                sfxDiv.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding-top:6px; border-top:1px solid var(--border-card); margin-top:4px;';
+                var sfxOn = window.pf2eSFX && window.pf2eSFX.isEnabled();
+                sfxDiv.innerHTML = '<span style="font-size:10px; color:var(--text-on-cream-2);">Combat SFX</span>'
+                    + '<button type="button" id="sfx-toggle" onclick="var on=window.pf2eSFX&&window.pf2eSFX.toggle(); this.textContent=on?\'On\':\'Off\'; this.classList.toggle(\'on\',on);" style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:3px 9px; border-radius:999px; cursor:pointer; border:1px solid var(--border-rule); background:var(--bg-page); color:var(--text-on-cream-3);">'
+                    + (sfxOn ? 'On' : 'Off') + '</button>';
+                panelContent.appendChild(sfxDiv);
+                if (sfxOn) {
+                    var btn = document.getElementById('sfx-toggle');
+                    if (btn) btn.classList.add('on');
+                }
+            }
+        }
+    })();
+    </script>
+
+    {# ════════════════ PWA: Service Worker + Manifest (Tier 4, feature 31) ════════════════ #}
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0c0a07">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PF2E GM">
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(function(){});
+        });
+    }
     </script>
 </body>
 </html>

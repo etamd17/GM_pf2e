@@ -67,6 +67,7 @@
                         </span>
                         <span id="current-hero" style="display:none;">{{ pc.hero_points }}</span>
                         <button onclick="modifyHero('increase')" class="resource-chip-btn" aria-label="Gain hero point">+</button>
+                        <button onclick="openHeroNomination()" class="nominate-btn no-print" title="Nominate a party member for a Hero Point">Nominate</button>
                     </span>
                     {% if pc.focus_max > 0 %}
                     <span class="resource-chip no-print" title="Focus Pool ({{ pc.current_focus }}/{{ pc.focus_max }}) — spent by focus spells, restored by Refocus">

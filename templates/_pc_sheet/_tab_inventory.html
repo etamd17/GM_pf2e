@@ -119,6 +119,17 @@
                             {% endfor %}
                         </div>
                     </details>
+
+                    {# ── Consumables & Ammunition (Tier 4 #18) ──────────────
+                       Filters equipment for potions, scrolls, bombs, ammo,
+                       elixirs, and other consumables. Shows +/- controls for
+                       quick quantity tracking without a page reload. #}
+                    <div id="consumables-section" class="mt-6" style="display:none;">
+                        <div class="flex justify-between items-center mb-3 pb-2" style="border-bottom:1px solid var(--border-default);">
+                            <h4 class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-muted);">Consumables & Ammunition</h4>
+                        </div>
+                        <div id="consumables-list"></div>
+                    </div>
                 </div>
 
                 <div class="panel-card flex flex-col">

@@ -539,6 +539,183 @@
         #ac-block { border-left: 2px solid var(--gilt-dim, rgba(201,163,78,0.55)); }
         #ac-block .ss-val { font-size: 28px; }
 
+        /* === FAVORITES BAR (Tier 4 #16) === */
+        .favorites-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 16px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .favorites-bar:empty { display: none; }
+        .fav-label {
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--t3);
+            white-space: nowrap;
+            margin-right: 2px;
+        }
+        .fav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 12px;
+            font-weight: 600;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .fav-btn:hover {
+            border-color: rgba(196,60,60,0.3);
+            background: var(--bg-hover);
+        }
+        .fav-btn:active { transform: scale(0.97); }
+        .fav-btn .fav-mod {
+            font-family: var(--font-display);
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--gold);
+            font-variant-numeric: lining-nums tabular-nums;
+        }
+        .fav-btn .fav-name {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .fav-config-btn {
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--t3);
+            font-size: 10px;
+            cursor: pointer;
+            margin-left: auto;
+            transition: color 0.15s;
+        }
+        .fav-config-btn:hover { color: var(--gold); border-color: var(--gold); }
+        /* Pin icon on rollable items */
+        .pin-fav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            background: transparent;
+            border: none;
+            color: var(--t4);
+            cursor: pointer;
+            font-size: 11px;
+            transition: color 0.15s;
+            padding: 0;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+        .pin-fav-btn:hover { color: var(--gold); }
+        .pin-fav-btn.pinned { color: var(--gold); }
+
+        /* === SPELL POPOVER (Tier 4 #17) ===
+           Inline popover that appears near the spell entry on tap/hover.
+           Reuses the spell-card styling but positioned as a popover. */
+        .spell-popover-wrap {
+            position: relative;
+        }
+        .spell-popover {
+            position: fixed;
+            z-index: 600;
+            width: min(440px, 92vw);
+            max-height: 70vh;
+            overflow-y: auto;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            animation: fadeIn 0.12s ease-out;
+        }
+        .spell-popover .spell-card-header { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); }
+        .spell-popover .spell-card-body { padding: 10px 14px 14px; }
+
+        /* === CONSUMABLES (Tier 4 #18) === */
+        .consumable-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-subtle);
+        }
+        .consumable-row + .consumable-row { margin-top: 4px; }
+        .consumable-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .consumable-qty {
+            font-family: var(--font-display);
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--gold);
+            min-width: 24px;
+            text-align: center;
+            font-variant-numeric: lining-nums tabular-nums;
+        }
+        .consumable-adj {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 4px;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-base);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.12s, color 0.12s;
+        }
+        .consumable-adj:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .consumable-adj.use {
+            border-color: rgba(196,60,60,0.25);
+            color: var(--red-b);
+        }
+        .consumable-adj.use:hover {
+            background: rgba(196,60,60,0.12);
+        }
+
+        /* === HERO NOMINATION (Tier 4 #19) === */
+        .nominate-btn {
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(200,168,78,0.1);
+            border: 1px solid rgba(200,168,78,0.3);
+            color: var(--gold);
+            cursor: pointer;
+            transition: background 0.12s;
+        }
+        .nominate-btn:hover { background: rgba(200,168,78,0.2); }
+
         /* === CONDITION BAR === */
         .condition-bar {
             background: rgba(239,68,68,0.06);
@@ -2854,6 +3031,9 @@
     <!-- SHEET BODY                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20">
+
+        <!-- Favorite Actions Bar (Tier 4 #16) — populated by JS from localStorage -->
+        <div id="favorites-bar" class="favorites-bar no-print" aria-label="Favorite actions quick-roll bar"></div>
 
         <!-- Encounter Initiative Bar (populated live via SSE) -->
         <div class="no-print" id="encounter-bar-wrapper" style="display:none; background:rgba(251,191,36,0.03); border-bottom:1px solid rgba(251,191,36,0.1);">
@@ -9576,6 +9756,564 @@
         });
         row.innerHTML = html.join('');
     })();
+
+    // ═════════════════════════════════════════════════════════════════
+    // TIER 4 FEATURE #16 — FAVORITE ACTIONS BAR
+    // Pin up to 4 most-used rolls to a sticky bar below the stats strip.
+    // Persists to localStorage under pf2e_favorites_<pcname>.
+    // ═════════════════════════════════════════════════════════════════
+    (function initFavoritesBar() {
+        const LS_KEY = 'pf2e_favorites_' + pcName;
+        const MAX_FAVS = 4;
+        const bar = document.getElementById('favorites-bar');
+        if (!bar) return;
+
+        function load() {
+            try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
+            catch (_) { return []; }
+        }
+        function save(favs) {
+            try { localStorage.setItem(LS_KEY, JSON.stringify(favs)); } catch (_) {}
+        }
+
+        // Build default favorites from the sheet data if none are stored.
+        function buildDefaults() {
+            const defs = [];
+            // 1) First weapon attack
+            const atkBtn = document.querySelector('button[onclick^="rollAttack"]');
+            if (atkBtn) {
+                const m = atkBtn.getAttribute('onclick').match(/rollAttack\('([^']+)',\s*([-\d]+)/);
+                if (m) defs.push({ name: 'Attack: ' + m[1], type: 'attack', roll: 'rollAttack', args: atkBtn.getAttribute('onclick') });
+            }
+            // 2) Perception
+            const percBlock = document.querySelector('.ss-block[onclick*="Perception"]');
+            if (percBlock) {
+                const pm = percBlock.getAttribute('onclick').match(/rollSkill\('([^']+)',\s*([-\d]+)/);
+                if (pm) defs.push({ name: pm[1], type: 'skill', mod: parseInt(pm[2]) });
+            }
+            // 3) First save (Fort)
+            const fortBlock = document.querySelector('.ss-block[onclick*="Fortitude"]');
+            if (fortBlock) {
+                const fm = fortBlock.getAttribute('onclick').match(/rollSkill\('([^']+)',\s*([-\d]+)/);
+                if (fm) defs.push({ name: fm[1], type: 'skill', mod: parseInt(fm[2]) });
+            }
+            return defs;
+        }
+
+        function render() {
+            let favs = load();
+            if (!favs.length) {
+                favs = buildDefaults();
+                if (favs.length) save(favs);
+            }
+            if (!favs.length) { bar.innerHTML = ''; return; }
+
+            let html = '<span class="fav-label">Quick Roll</span>';
+            favs.forEach((f, i) => {
+                const modStr = (typeof f.mod === 'number') ? ((f.mod >= 0 ? '+' : '') + f.mod) : '';
+                html += `<button class="fav-btn" onclick="fireFavorite(${i})" title="Quick roll: ${f.name}">`;
+                html += `<span class="fav-name">${f.name}</span>`;
+                if (modStr) html += `<span class="fav-mod">${modStr}</span>`;
+                html += `</button>`;
+            });
+            html += `<button class="fav-config-btn" onclick="openFavConfig()" title="Configure favorite actions">Config</button>`;
+            bar.innerHTML = html;
+        }
+
+        window.fireFavorite = function(idx) {
+            const favs = load();
+            const f = favs[idx];
+            if (!f) return;
+            if (f.type === 'skill' && typeof f.mod === 'number') {
+                rollSkill(f.name, f.mod);
+            } else if (f.type === 'attack' && f.args) {
+                try { eval(f.args); } catch (_) {}
+            }
+        };
+
+        window.openFavConfig = function() {
+            const favs = load();
+            // Collect all rollable items from the page
+            const candidates = [];
+            // Skills
+            document.querySelectorAll('.skill-row[data-roll-name]').forEach(el => {
+                const name = el.getAttribute('data-roll-name');
+                const mod = parseInt(el.getAttribute('data-roll-mod'));
+                if (name && !isNaN(mod)) candidates.push({ name, type: 'skill', mod });
+            });
+            // Saves + Perception from stats strip
+            document.querySelectorAll('.ss-block.rollable-element[data-roll-name]').forEach(el => {
+                const name = el.getAttribute('data-roll-name');
+                const mod = parseInt(el.getAttribute('data-roll-mod'));
+                if (name && !isNaN(mod)) candidates.push({ name, type: 'skill', mod });
+            });
+            // Ability checks
+            document.querySelectorAll('.ability-block.rollable-element[data-roll-name]').forEach(el => {
+                const name = el.getAttribute('data-roll-name');
+                const mod = parseInt(el.getAttribute('data-roll-mod'));
+                if (name && !isNaN(mod)) candidates.push({ name, type: 'skill', mod });
+            });
+            // Weapon attacks
+            document.querySelectorAll('button[onclick^="rollAttack"]').forEach(btn => {
+                const m = btn.getAttribute('onclick').match(/rollAttack\('([^']+)',\s*([-\d]+)/);
+                if (m) candidates.push({ name: 'Attack: ' + m[1], type: 'attack', mod: parseInt(m[2]), args: btn.getAttribute('onclick') });
+            });
+
+            // Dedup by name
+            const seen = new Set();
+            const uniq = candidates.filter(c => { if (seen.has(c.name)) return false; seen.add(c.name); return true; });
+
+            const overlay = document.createElement('div');
+            overlay.className = 'spell-card-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+            let slotsHTML = '';
+            for (let i = 0; i < MAX_FAVS; i++) {
+                const cur = favs[i];
+                const opts = uniq.map(c =>
+                    `<option value="${c.name.replace(/"/g,'&quot;')}" ${cur && cur.name === c.name ? 'selected' : ''}>${c.name} (${c.mod >= 0 ? '+' : ''}${c.mod})</option>`
+                ).join('');
+                slotsHTML += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:6px;background:var(--bg-raised);">
+                    <span class="font-header text-[10px]" style="color:var(--gold);letter-spacing:.12em;min-width:50px;">SLOT ${i+1}</span>
+                    <select data-fav-slot="${i}" style="flex:1;background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:4px 6px;border-radius:4px;">
+                        <option value="">-- Empty --</option>
+                        ${opts}
+                    </select>
+                </div>`;
+            }
+
+            overlay.innerHTML = `
+                <div class="spell-card" onclick="event.stopPropagation()" style="max-width:480px;">
+                    <div class="spell-card-header">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-header text-xl" style="color:var(--gold);">Configure Favorites</h3>
+                            <button onclick="this.closest('.spell-card-overlay').remove()" class="text-xl leading-none" style="color:var(--text-muted);">x</button>
+                        </div>
+                        <div class="text-xs mt-1" style="color:var(--text-muted);">Pin up to ${MAX_FAVS} actions for quick rolling. They appear in the bar below the stats strip.</div>
+                    </div>
+                    <div class="spell-card-body" style="padding:16px;">
+                        ${slotsHTML}
+                    </div>
+                    <div class="spell-card-footer">
+                        <button id="fav-save" class="px-4 py-2 rounded text-sm font-bold" style="background:rgba(200,168,78,0.15);border:1px solid rgba(200,168,78,0.3);color:var(--gold);">Save</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+
+            overlay.querySelector('#fav-save').addEventListener('click', () => {
+                const newFavs = [];
+                for (let i = 0; i < MAX_FAVS; i++) {
+                    const sel = overlay.querySelector(`select[data-fav-slot="${i}"]`);
+                    const val = sel ? sel.value : '';
+                    if (val) {
+                        const match = uniq.find(c => c.name === val);
+                        if (match) newFavs.push(match);
+                    }
+                }
+                save(newFavs);
+                render();
+                overlay.remove();
+            });
+        };
+
+        // Pin toggle — called from rollable items
+        window.toggleFavPin = function(name, type, mod, args) {
+            let favs = load();
+            const idx = favs.findIndex(f => f.name === name);
+            if (idx >= 0) {
+                favs.splice(idx, 1);
+            } else if (favs.length < MAX_FAVS) {
+                favs.push({ name, type, mod: parseInt(mod), args: args || null });
+            }
+            save(favs);
+            render();
+            updatePinIcons();
+        };
+
+        function updatePinIcons() {
+            const favs = load();
+            const names = new Set(favs.map(f => f.name));
+            document.querySelectorAll('.pin-fav-btn').forEach(btn => {
+                const n = btn.getAttribute('data-pin-name');
+                btn.classList.toggle('pinned', names.has(n));
+            });
+        }
+
+        // Inject pin buttons into skill rows and save blocks
+        function injectPinButtons() {
+            // Skill rows
+            document.querySelectorAll('.skill-row[data-roll-name]').forEach(el => {
+                const name = el.getAttribute('data-roll-name');
+                const mod = el.getAttribute('data-roll-mod');
+                if (!name || el.querySelector('.pin-fav-btn')) return;
+                const btn = document.createElement('button');
+                btn.className = 'pin-fav-btn no-print';
+                btn.setAttribute('data-pin-name', name);
+                btn.title = 'Pin to favorites bar';
+                btn.textContent = '★';
+                btn.onclick = (e) => { e.stopPropagation(); toggleFavPin(name, 'skill', mod); };
+                el.appendChild(btn);
+            });
+            // Save blocks in stats strip
+            document.querySelectorAll('.ss-block.rollable-element[data-roll-name]').forEach(el => {
+                const name = el.getAttribute('data-roll-name');
+                const mod = el.getAttribute('data-roll-mod');
+                if (!name || el.querySelector('.pin-fav-btn')) return;
+                const btn = document.createElement('button');
+                btn.className = 'pin-fav-btn no-print';
+                btn.setAttribute('data-pin-name', name);
+                btn.title = 'Pin to favorites bar';
+                btn.textContent = '★';
+                btn.onclick = (e) => { e.stopPropagation(); toggleFavPin(name, 'skill', mod); };
+                el.appendChild(btn);
+            });
+            updatePinIcons();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { render(); injectPinButtons(); });
+    })();
+
+
+    // ═════════════════════════════════════════════════════════════════
+    // TIER 4 FEATURE #17 — SPELL CARD POPOVER
+    // Tap/hover a spell entry to see full description inline as a
+    // floating popover near the entry. Fetches from compendium_detail
+    // if not already cached. Reuses the existing _spellDescCache and
+    // spell-card styling.
+    // ═════════════════════════════════════════════════════════════════
+    (function initSpellPopover() {
+        const _fetchCache = {};  // name -> promise or data
+        let activePopover = null;
+
+        async function fetchSpellData(spellName) {
+            const key = spellName.toLowerCase();
+            // Check local pre-populated cache first
+            if (window._spellDescCache && window._spellDescCache[key]) {
+                return window._spellDescCache[key];
+            }
+            // Check fetch cache
+            if (_fetchCache[key]) return _fetchCache[key];
+            // Fetch from server
+            const p = fetch('/api/compendium_detail?type=spell&name=' + encodeURIComponent(spellName))
+                .then(r => r.json())
+                .then(d => {
+                    if (d.error) return null;
+                    const result = {
+                        name: d.name || spellName,
+                        desc: d.description || '',
+                        actions: d.actions || d.action_cost || '',
+                        level: d.level || 0,
+                        tradition: d.traditions || '',
+                        type: d.type || 'spell',
+                        range: d.range || '',
+                        targets: d.targets || '',
+                        save: d.save || d.defense || '',
+                        duration: d.duration || '',
+                        area: d.area || '',
+                        traits: d.traits || ''
+                    };
+                    // Store in main cache for openSpellCard
+                    if (window._spellDescCache) window._spellDescCache[key] = result;
+                    _fetchCache[key] = result;
+                    return result;
+                })
+                .catch(() => null);
+            _fetchCache[key] = p;
+            return p;
+        }
+
+        function closePopover() {
+            if (activePopover) {
+                activePopover.remove();
+                activePopover = null;
+            }
+        }
+
+        function positionPopover(pop, anchorRect) {
+            // Position near the anchor, ensuring it stays on screen
+            const pad = 8;
+            let top = anchorRect.bottom + pad;
+            let left = anchorRect.left;
+            // If it would overflow the bottom, put it above
+            if (top + 320 > window.innerHeight) {
+                top = Math.max(pad, anchorRect.top - 340);
+            }
+            // Horizontal clamp
+            const pw = Math.min(440, window.innerWidth * 0.92);
+            if (left + pw > window.innerWidth - pad) {
+                left = Math.max(pad, window.innerWidth - pw - pad);
+            }
+            pop.style.top = top + 'px';
+            pop.style.left = left + 'px';
+        }
+
+        async function showPopover(entry) {
+            closePopover();
+            const spellName = (entry.getAttribute('data-spell-name') || '').trim();
+            if (!spellName) return;
+            // Use the original-case name from the text content if possible
+            const nameEl = entry.querySelector('.text-sm.font-bold');
+            const displayName = nameEl ? nameEl.textContent.trim() : spellName;
+
+            const data = await fetchSpellData(displayName);
+            if (!data || !data.desc) return;
+
+            const pop = document.createElement('div');
+            pop.className = 'spell-popover';
+            activePopover = pop;
+
+            // Build meta tags (compact)
+            const rank = parseInt(entry.getAttribute('data-spell-rank') || '0');
+            const rankColors = ['#6B7280','#60A5FA','#4ADE80','#FBBF24','#F97316','#F43F5E','#A855F7','#6366F1','#EC4899','#EF4444','#FFD700'];
+            const rankColor = rankColors[rank] || '#6B7280';
+            const cantripRank = (typeof CANTRIP_RANK === 'number' && CANTRIP_RANK > 0) ? CANTRIP_RANK : rank;
+            const rankLabel = rank === 0 ? `Cantrip (R${cantripRank})` : `Rank ${rank}`;
+
+            let metaTags = `<span class="spell-card-meta-tag" style="background:${rankColor}22; border:1px solid ${rankColor}44; color:${rankColor};">${rankLabel}</span>`;
+            if (data.tradition) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.2); color:#C4B5FD;">${data.tradition}</span>`;
+
+            const meta = (typeof parseSpellMeta === 'function') ? parseSpellMeta(data.desc, data.actions) : {};
+            if (meta.range || data.range) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2); color:#FDE68A;">Range ${meta.range || data.range}</span>`;
+            if (meta.save || data.save) metaTags += `<span class="spell-card-meta-tag" style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:#FCA5A5;">${meta.save || data.save} Save</span>`;
+            if (meta.duration || data.duration) metaTags += `<span class="spell-card-meta-tag" style="background:var(--border-subtle); border:1px solid var(--border-default); color:var(--text-secondary);">${meta.duration || data.duration}</span>`;
+
+            let actionHTML = '';
+            if (data.actions && typeof buildActionPips === 'function') {
+                actionHTML = buildActionPips(data.actions);
+            }
+
+            // Parse heightened
+            let mainDesc = data.desc || '';
+            let heightenedHTML = '';
+            const heightenRegex = /(<p>)?<strong>Heightened\s*(\([^)]+\))<\/strong>\s*(.*?)(<\/p>|$)/gi;
+            const hEntries = [];
+            let hMatch;
+            while ((hMatch = heightenRegex.exec(data.desc || '')) !== null) {
+                hEntries.push({ level: hMatch[2], text: hMatch[3].trim() });
+                mainDesc = mainDesc.replace(hMatch[0], '');
+            }
+            mainDesc = mainDesc.replace(/<hr[^>]*>\s*$/i, '');
+            if (hEntries.length > 0) {
+                heightenedHTML = `<div style="margin-top:8px;padding:6px 10px;background:rgba(142,212,212,0.08);border-left:3px solid #8ED4D4;border-radius:0 4px 4px 0;">
+                    <div style="font-size:10px;color:#8ED4D4;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Heightened</div>
+                    ${hEntries.map(e => `<div style="margin-bottom:3px;font-size:12px;color:#b8b8cc;"><span style="color:#8ED4D4;font-weight:600;">${e.level}</span> ${e.text}</div>`).join('')}
+                </div>`;
+            }
+
+            pop.innerHTML = `
+                <div class="spell-card-header">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-header text-lg" style="color:var(--text-primary);">${displayName}</h3>
+                            ${actionHTML ? `<div>${actionHTML}</div>` : ''}
+                        </div>
+                        <button onclick="this.closest('.spell-popover').remove()" class="text-lg leading-none" style="color:var(--text-muted);cursor:pointer;">x</button>
+                    </div>
+                    <div class="spell-card-meta" style="margin-top:6px;">${metaTags}</div>
+                </div>
+                <div class="spell-card-body foundry-content" style="font-size:13px;">${mainDesc}${heightenedHTML}</div>`;
+
+            document.body.appendChild(pop);
+            positionPopover(pop, entry.getBoundingClientRect());
+        }
+
+        // Event delegation: on any spell-entry, show popover on long-press/hover
+        let hoverTimer = null;
+        document.addEventListener('pointerover', (e) => {
+            const entry = e.target.closest('.spell-entry');
+            if (!entry) return;
+            clearTimeout(hoverTimer);
+            // Desktop: show after a brief hover delay
+            if (e.pointerType === 'mouse') {
+                hoverTimer = setTimeout(() => showPopover(entry), 400);
+            }
+        });
+        document.addEventListener('pointerout', (e) => {
+            clearTimeout(hoverTimer);
+            const entry = e.target.closest('.spell-entry');
+            if (!entry) return;
+            // Close if mouse leaves the spell entry (but not if it enters the popover)
+            const related = e.relatedTarget;
+            if (related && (related.closest('.spell-popover') || related.closest('.spell-entry'))) return;
+            // Delay close so moving to popover doesn't flicker
+            setTimeout(() => {
+                if (activePopover && !activePopover.matches(':hover')) closePopover();
+            }, 200);
+        });
+        // Mobile: tap to toggle
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.spell-popover')) return;
+            if (activePopover && !e.target.closest('.spell-entry')) {
+                closePopover();
+            }
+        });
+        // Touch: long-press on spell entry
+        let touchTimer = null;
+        document.addEventListener('touchstart', (e) => {
+            const entry = e.target.closest('.spell-entry');
+            if (!entry) return;
+            touchTimer = setTimeout(() => {
+                e.preventDefault();
+                showPopover(entry);
+            }, 500);
+        }, { passive: false });
+        document.addEventListener('touchend', () => clearTimeout(touchTimer));
+        document.addEventListener('touchmove', () => clearTimeout(touchTimer));
+    })();
+
+
+    // ═════════════════════════════════════════════════════════════════
+    // TIER 4 FEATURE #18 — CONSUMABLE & AMMUNITION TRACKING
+    // Filters equipment for consumables and renders +/- controls.
+    // Persists via POST to /api/adjust_consumable/<pcName>.
+    // ═════════════════════════════════════════════════════════════════
+    (function initConsumables() {
+        const equipment = {{ pc.equipment | tojson | safe }};
+        if (!Array.isArray(equipment) || !equipment.length) return;
+
+        // Pattern-match consumable-type items
+        const consumablePatterns = [
+            /potion/i, /elixir/i, /scroll\s+of/i, /bomb/i, /antidote/i,
+            /antiplague/i, /mutagen/i, /poison/i, /talisman/i,
+            /arrow/i, /bolt/i, /ammunition/i, /bullet/i, /sling\s*stone/i,
+            /javelin/i, /shuriken/i, /dart/i,
+            /oil\s+of/i, /salve/i, /catalyst/i, /snare/i, /caltrops/i,
+            /ration/i, /torch/i
+        ];
+
+        const consumables = equipment.filter(it => {
+            const name = (typeof it === 'string') ? it : (it.name || (Array.isArray(it) ? it[0] : ''));
+            return consumablePatterns.some(p => p.test(name));
+        }).map(it => {
+            if (Array.isArray(it)) return { name: it[0], qty: parseInt(it[1]) || 1 };
+            return { name: it.name || '', qty: parseInt(it.qty) || 1 };
+        });
+
+        if (!consumables.length) return;
+
+        const section = document.getElementById('consumables-section');
+        const list = document.getElementById('consumables-list');
+        if (!section || !list) return;
+        section.style.display = 'block';
+
+        function renderConsumables() {
+            list.innerHTML = consumables.map((c, i) => `
+                <div class="consumable-row" data-consumable-idx="${i}">
+                    <span class="consumable-name" title="${c.name}">${c.name}</span>
+                    <button class="consumable-adj use" onclick="adjustConsumable(${i}, -1)" title="Use one">-</button>
+                    <span class="consumable-qty" id="cons-qty-${i}">${c.qty}</span>
+                    <button class="consumable-adj" onclick="adjustConsumable(${i}, 1)" title="Add one">+</button>
+                </div>
+            `).join('');
+        }
+
+        window.adjustConsumable = async function(idx, delta) {
+            const c = consumables[idx];
+            if (!c) return;
+            const newQty = Math.max(0, c.qty + delta);
+            // Optimistic update
+            c.qty = newQty;
+            const qtyEl = document.getElementById('cons-qty-' + idx);
+            if (qtyEl) qtyEl.textContent = newQty;
+
+            try {
+                const res = await fetch('/api/adjust_consumable/' + pcNameEncoded, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: c.name, delta: delta })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    if (typeof showRollToast === 'function') {
+                        const verb = delta < 0 ? 'Used' : 'Added';
+                        showRollToast(verb + ': ' + c.name, '', 'Qty now ' + newQty + '. GM notified.', false, false, [], null);
+                    }
+                    if (newQty <= 0) {
+                        consumables.splice(idx, 1);
+                        renderConsumables();
+                        if (!consumables.length) section.style.display = 'none';
+                    }
+                }
+            } catch (_) {}
+        };
+
+        renderConsumables();
+    })();
+
+
+    // ═════════════════════════════════════════════════════════════════
+    // TIER 4 FEATURE #19 — HERO POINT NOMINATIONS
+    // Players can nominate party members for hero points. GM sees
+    // the nomination in the tracker inbox and can approve/dismiss.
+    // ═════════════════════════════════════════════════════════════════
+    (function initHeroNominations() {
+        const partyNames = {{ (party_names | default([])) | tojson | safe }};
+
+        window.openHeroNomination = function() {
+            // Build nominee list (exclude self)
+            const others = partyNames.filter(n => n !== pcName);
+            if (!others.length) {
+                if (typeof window.pf2eToast === 'function') window.pf2eToast('No other party members to nominate.', 'info');
+                return;
+            }
+
+            const overlay = document.createElement('div');
+            overlay.className = 'spell-card-overlay';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+            const opts = others.map(n =>
+                `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`
+            ).join('');
+
+            overlay.innerHTML = `
+                <div class="spell-card" onclick="event.stopPropagation()" style="max-width:420px;">
+                    <div class="spell-card-header">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-header text-xl" style="color:var(--gold);">Nominate for Hero Point</h3>
+                            <button onclick="this.closest('.spell-card-overlay').remove()" class="text-xl leading-none" style="color:var(--text-muted);">x</button>
+                        </div>
+                        <div class="text-xs mt-1" style="color:var(--text-muted);">Nominate a party member who did something cool. The GM will approve or dismiss it.</div>
+                    </div>
+                    <div class="spell-card-body" style="padding:16px;">
+                        <div style="margin-bottom:12px;">
+                            <label class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-muted);">Nominee</label>
+                            <select id="nom-nominee" style="width:100%;background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:6px 8px;border-radius:4px;margin-top:4px;">${opts}</select>
+                        </div>
+                        <div>
+                            <label class="font-header text-[10px] tracking-wider uppercase" style="color:var(--text-muted);">Reason (optional)</label>
+                            <input type="text" id="nom-reason" placeholder="Made an amazing play..." style="width:100%;background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);padding:6px 8px;border-radius:4px;margin-top:4px;">
+                        </div>
+                    </div>
+                    <div class="spell-card-footer">
+                        <button id="nom-submit" class="px-4 py-2 rounded text-sm font-bold" style="background:rgba(200,168,78,0.15);border:1px solid rgba(200,168,78,0.3);color:var(--gold);">Send Nomination</button>
+                    </div>
+                </div>`;
+
+            document.body.appendChild(overlay);
+
+            overlay.querySelector('#nom-submit').addEventListener('click', async () => {
+                const nominee = overlay.querySelector('#nom-nominee').value;
+                const reason = overlay.querySelector('#nom-reason').value || '';
+                try {
+                    const res = await fetch('/api/hero_nomination', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nominator: pcName, nominee: nominee, reason: reason })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        if (typeof window.pf2eToast === 'function') window.pf2eToast('Nomination sent to GM!', 'success');
+                        overlay.remove();
+                    } else {
+                        if (typeof window.pf2eToast === 'function') window.pf2eToast(d.error || 'Failed to send', 'danger');
+                    }
+                } catch (_) {
+                    if (typeof window.pf2eToast === 'function') window.pf2eToast('Network error', 'danger');
+                }
+            });
+        };
+    })();
+
     </script>
 
     {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Party Status Board{% endblock %}
+{% block extra_head %}
+    .sb-card { background: var(--bg-card); border: 1px solid var(--border-card);
+        border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
+        transition: border-color var(--t-fast); }
+    .sb-name { font-family: var(--font-display); font-size: 22px; font-weight: 700;
+        color: var(--gilt-100); letter-spacing: 0.02em; }
+    .sb-class { font-size: 12px; color: var(--text-on-dark-3); margin-top: 2px; }
+    .sb-hp-bar { height: 12px; border-radius: 6px; background: var(--bg-page);
+        overflow: hidden; margin-top: 6px; }
+    .sb-hp-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
+    .sb-hp-text { font-size: 18px; font-weight: 800; font-family: var(--font-display); margin-top: 4px; }
+    .sb-stat { display: flex; align-items: center; gap: 6px; font-size: 13px;
+        padding: 4px 10px; border-radius: var(--r-sm); background: var(--bg-base);
+        border: 1px solid var(--border-card); }
+    .sb-stat-label { font-size: 10px; color: var(--text-on-dark-3); text-transform: uppercase;
+        letter-spacing: 0.06em; }
+    .sb-stat-val { font-weight: 700; color: var(--gilt-100); }
+    .sb-cond { display: inline-block; font-size: 10px; font-weight: 700;
+        letter-spacing: 0.04em; text-transform: uppercase;
+        padding: 2px 8px; border-radius: 4px; margin: 2px;
+        background: rgba(168,58,58,0.15); border: 1px solid rgba(168,58,58,0.3);
+        color: #d36e6e; }
+    .sb-explore { font-size: 11px; padding: 3px 10px; border-radius: 999px;
+        background: rgba(201,163,78,0.1); border: 1px solid rgba(201,163,78,0.25);
+        color: var(--gilt-200); }
+{% endblock %}
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto;">
+    <header style="text-align: center; margin-bottom: var(--sp-5);">
+        <h1 class="font-display" style="font-size: 28px; color: var(--gilt-100); margin: 0; letter-spacing: 0.04em;">Party Status</h1>
+        <p style="font-size: 12px; color: var(--text-on-dark-3); margin: var(--sp-1) 0 0;">Live party overview -- updates automatically</p>
+    </header>
+
+    <div id="party-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4);">
+        {% for pc in party %}
+        <div class="sb-card" id="sb-{{ pc.name | replace(' ', '-') }}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <div class="sb-name">{{ pc.name }}</div>
+                    <div class="sb-class">{{ pc.ancestry }} {{ pc.class_name }} {{ pc.level }}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="sb-stat-label">AC</div>
+                    <div style="font-size: 20px; font-weight: 800; color: var(--text-on-dark); font-family: var(--font-display);">{{ pc.ac }}</div>
+                </div>
+            </div>
+
+            <!-- HP bar -->
+            <div class="sb-hp-bar">
+                <div class="sb-hp-fill" data-pc="{{ pc.name }}"
+                     style="width: {{ pc.hp_pct }}%; background: {% if pc.hp_pct > 50 %}#6a9c44{% elif pc.hp_pct > 25 %}#e0b65a{% else %}#d36e6e{% endif %};"></div>
+            </div>
+            <div class="sb-hp-text" data-hp="{{ pc.name }}"
+                 style="color: {% if pc.hp_pct > 50 %}#6a9c44{% elif pc.hp_pct > 25 %}#e0b65a{% else %}#d36e6e{% endif %};">
+                {{ pc.current_hp }} / {{ pc.max_hp }}
+                {% if pc.temp_hp > 0 %}<span style="font-size: 13px; color: var(--gilt-200);">+{{ pc.temp_hp }} temp</span>{% endif %}
+            </div>
+
+            <!-- Stats row -->
+            <div style="display: flex; gap: 8px; margin-top: var(--sp-3); flex-wrap: wrap;">
+                <div class="sb-stat">
+                    <span class="sb-stat-label">Hero</span>
+                    <span class="sb-stat-val" data-hero="{{ pc.name }}">{{ pc.hero_points }}</span>
+                </div>
+                {% if pc.focus_max > 0 %}
+                <div class="sb-stat">
+                    <span class="sb-stat-label">Focus</span>
+                    <span class="sb-stat-val" data-focus="{{ pc.name }}">{{ pc.focus_current }}/{{ pc.focus_max }}</span>
+                </div>
+                {% endif %}
+                {% if pc.exploration_activity %}
+                <span class="sb-explore" data-explore="{{ pc.name }}">{{ pc.exploration_activity }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Conditions -->
+            <div style="margin-top: var(--sp-2);" data-conds="{{ pc.name }}">
+                {% for cond, val in pc.conditions.items() %}
+                <span class="sb-cond condition-pill" data-cond-name="{{ cond }}">{{ cond }}{% if val is number and val > 1 %} {{ val }}{% endif %}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not party %}
+        <div style="grid-column: 1 / -1; text-align: center; padding: var(--sp-7); color: var(--text-on-dark-3);">
+            <div class="font-display" style="font-size: 16px; color: var(--gilt-200); margin-bottom: var(--sp-2);">No Characters Loaded</div>
+            <p style="font-size: 12px;">Import characters from Pathbuilder on the Party page.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Live updates via SSE
+try {
+    var src = new EventSource('/api/events');
+    src.addEventListener('pc_update', function(e) {
+        var data = JSON.parse(e.data);
+        var name = data.name;
+        if (!name) return;
+
+        var pct = data.hp_pct || (data.max_hp > 0 ? Math.round(data.current_hp / data.max_hp * 100) : 0);
+        var color = pct > 50 ? '#6a9c44' : pct > 25 ? '#e0b65a' : '#d36e6e';
+
+        // HP bar
+        var fills = document.querySelectorAll('[data-pc="' + name + '"]');
+        fills.forEach(function(el) {
+            el.style.width = pct + '%';
+            el.style.background = color;
+        });
+
+        // HP text
+        var hpEls = document.querySelectorAll('[data-hp="' + name + '"]');
+        hpEls.forEach(function(el) {
+            var temp = data.temp_hp || 0;
+            el.style.color = color;
+            el.innerHTML = data.current_hp + ' / ' + data.max_hp +
+                (temp > 0 ? ' <span style="font-size:13px; color:var(--gilt-200);">+' + temp + ' temp</span>' : '');
+        });
+
+        // Hero points
+        var heroEls = document.querySelectorAll('[data-hero="' + name + '"]');
+        heroEls.forEach(function(el) {
+            if (data.hero_points !== undefined) el.textContent = data.hero_points;
+        });
+
+        // Focus
+        var focusEls = document.querySelectorAll('[data-focus="' + name + '"]');
+        focusEls.forEach(function(el) {
+            if (data.focus !== undefined) el.textContent = data.focus + '/' + (data.focus_max || el.textContent.split('/')[1] || '?');
+        });
+
+        // Exploration activity
+        var expEls = document.querySelectorAll('[data-explore="' + name + '"]');
+        expEls.forEach(function(el) {
+            el.textContent = data.exploration_activity || '';
+            el.style.display = data.exploration_activity ? '' : 'none';
+        });
+
+        // Conditions
+        var condEls = document.querySelectorAll('[data-conds="' + name + '"]');
+        condEls.forEach(function(el) {
+            var conds = data.conditions || {};
+            var html = '';
+            for (var k in conds) {
+                if (conds[k] && conds[k] !== 0 && conds[k] !== false) {
+                    var label = k;
+                    if (typeof conds[k] === 'number' && conds[k] > 1) label += ' ' + conds[k];
+                    html += '<span class="sb-cond condition-pill" data-cond-name="' + k + '">' + label + '</span>';
+                }
+            }
+            el.innerHTML = html;
+        });
+    });
+} catch(e) {}
+</script>
+{% endblock %}

@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Skill Challenge{% endblock %}
+{% block extra_head %}
+    .sc-pip { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-card);
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: all var(--t-fast); font-size: 11px; font-weight: 700; }
+    .sc-pip.success { background: rgba(106,156,68,0.3); border-color: #6a9c44; color: #9bc06f; }
+    .sc-pip.failure { background: rgba(168,58,58,0.3); border-color: #a83a3a; color: #d36e6e; }
+    .sc-mark-btn { font-size: 12px; font-weight: 700; padding: 10px 16px; border-radius: var(--r-sm);
+        cursor: pointer; transition: all var(--t-fast); flex: 1; }
+{% endblock %}
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <header style="margin-bottom: var(--sp-5);">
+        <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Structured Encounters</div>
+        <h1 class="font-display" style="font-size:24px; color:var(--gilt-100); margin:0;">Skill Challenge</h1>
+        <p style="font-size:12px; color:var(--text-on-dark-3); margin:var(--sp-1) 0 0;">For chases, negotiations, heists, and other non-combat encounters.</p>
+    </header>
+
+    <!-- Create panel -->
+    <div id="create-panel" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-4); margin-bottom:var(--sp-4);">
+        <div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-3);">New Challenge</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3);">
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em;">Challenge Name</label>
+                <input type="text" id="sc-name" value="Chase Through the Market" style="width:100%; margin-top:4px; font-size:13px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:8px;">
+            </div>
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em;">DC</label>
+                <input type="number" id="sc-dc" value="15" min="5" max="50" style="width:100%; margin-top:4px; font-size:13px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:8px;">
+            </div>
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em;">Required Successes</label>
+                <input type="number" id="sc-req" value="4" min="1" max="20" style="width:100%; margin-top:4px; font-size:13px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:8px;">
+            </div>
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em;">Max Failures</label>
+                <input type="number" id="sc-fail" value="3" min="1" max="20" style="width:100%; margin-top:4px; font-size:13px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:8px;">
+            </div>
+        </div>
+        <div style="margin-top:var(--sp-3);">
+            <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em;">Relevant Skills (comma-separated)</label>
+            <input type="text" id="sc-skills" value="Athletics, Acrobatics, Stealth, Perception" style="width:100%; margin-top:4px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:8px;">
+        </div>
+        <button onclick="createChallenge()" style="margin-top:var(--sp-3); font-family:var(--font-display); font-size:12px; font-weight:700; padding:10px 20px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100); letter-spacing:0.06em; text-transform:uppercase;">Start Challenge</button>
+    </div>
+
+    <!-- Active challenge -->
+    <div id="active-panel" style="display:none;">
+        <div style="background:var(--bg-card); border:1px solid var(--gilt-300); border-radius:var(--r-md); padding:var(--sp-5); margin-bottom:var(--sp-4);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-3);">
+                <h2 id="ch-name" class="font-display" style="font-size:20px; color:var(--gilt-100); margin:0;"></h2>
+                <span id="ch-status-badge" class="font-display" style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; padding:4px 12px; border-radius:999px;"></span>
+            </div>
+            <div style="font-size:12px; color:var(--text-on-dark-3); margin-bottom:var(--sp-2);">
+                DC <span id="ch-dc" style="font-weight:700; color:var(--gilt-100);"></span>
+                &mdash; Skills: <span id="ch-skills" style="color:var(--text-on-dark-2);"></span>
+            </div>
+
+            <!-- Progress pips -->
+            <div style="margin-bottom:var(--sp-4);">
+                <div style="margin-bottom:var(--sp-2);">
+                    <div style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Successes</div>
+                    <div id="success-pips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Failures</div>
+                    <div id="failure-pips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+                </div>
+            </div>
+
+            <!-- Mark result controls -->
+            <div id="mark-controls">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-2); margin-bottom:var(--sp-3);">
+                    <div>
+                        <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase;">PC</label>
+                        <select id="mark-pc" style="width:100%; margin-top:4px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px;"></select>
+                    </div>
+                    <div>
+                        <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase;">Skill</label>
+                        <select id="mark-skill" style="width:100%; margin-top:4px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px;"></select>
+                    </div>
+                </div>
+                <div style="display:flex; gap:var(--sp-2);">
+                    <button class="sc-mark-btn" onclick="markResult('crit_success')" style="background:rgba(106,156,68,0.2); border:1px solid rgba(106,156,68,0.5); color:#9bc06f;">Crit Success</button>
+                    <button class="sc-mark-btn" onclick="markResult('success')" style="background:rgba(106,156,68,0.1); border:1px solid rgba(106,156,68,0.3); color:#6a9c44;">Success</button>
+                    <button class="sc-mark-btn" onclick="markResult('failure')" style="background:rgba(168,58,58,0.1); border:1px solid rgba(168,58,58,0.3); color:#a83a3a;">Failure</button>
+                    <button class="sc-mark-btn" onclick="markResult('crit_failure')" style="background:rgba(168,58,58,0.2); border:1px solid rgba(168,58,58,0.5); color:#d36e6e;">Crit Failure</button>
+                </div>
+            </div>
+
+            <!-- Log -->
+            <div style="margin-top:var(--sp-4); border-top:1px dashed var(--border-card); padding-top:var(--sp-3);">
+                <div class="font-display" style="font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-2);">Roll Log</div>
+                <div id="ch-log" style="max-height:200px; overflow-y:auto; font-size:12px;"></div>
+            </div>
+
+            <!-- End challenge -->
+            <div style="margin-top:var(--sp-3); display:flex; justify-content:flex-end;">
+                <button onclick="endChallenge()" style="font-size:11px; padding:6px 14px; border-radius:var(--r-sm); cursor:pointer; background:transparent; border:1px solid var(--border-card); color:var(--text-on-dark-3);">End Challenge</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var activeChallenge = null;
+var partyNames = [];
+
+// Load party names for the PC selector
+fetch('/api/player_state').then(function(r) { return r.json(); }).then(function(data) {
+    var combatants = (data && data.combatants) || [];
+    partyNames = combatants.filter(function(c) { return c.is_pc; }).map(function(c) { return c.name; });
+    if (!partyNames.length) {
+        // Fallback: try party view
+        fetch('/party').catch(function(){});
+    }
+}).catch(function(){});
+
+// Check for existing challenge
+fetch('/api/skill_challenge').then(function(r) { return r.json(); }).then(function(data) {
+    if (data.challenge && data.challenge.status === 'active') {
+        activeChallenge = data.challenge;
+        renderChallenge();
+    }
+}).catch(function(){});
+
+async function createChallenge() {
+    var payload = {
+        name: document.getElementById('sc-name').value.trim() || 'Skill Challenge',
+        dc: parseInt(document.getElementById('sc-dc').value) || 15,
+        required_successes: parseInt(document.getElementById('sc-req').value) || 4,
+        max_failures: parseInt(document.getElementById('sc-fail').value) || 3,
+        skills: document.getElementById('sc-skills').value,
+    };
+    var r = await fetch('/api/skill_challenge/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    var j = await r.json();
+    if (j.success) {
+        activeChallenge = j.challenge;
+        renderChallenge();
+    }
+}
+
+function renderChallenge() {
+    if (!activeChallenge) {
+        document.getElementById('create-panel').style.display = '';
+        document.getElementById('active-panel').style.display = 'none';
+        return;
+    }
+    document.getElementById('create-panel').style.display = 'none';
+    document.getElementById('active-panel').style.display = '';
+
+    var ch = activeChallenge;
+    document.getElementById('ch-name').textContent = ch.name;
+    document.getElementById('ch-dc').textContent = ch.dc;
+    document.getElementById('ch-skills').textContent = (ch.skills || []).join(', ') || 'Any';
+
+    // Status badge
+    var badge = document.getElementById('ch-status-badge');
+    if (ch.status === 'victory') {
+        badge.textContent = 'Victory'; badge.style.background = 'rgba(106,156,68,0.2)'; badge.style.color = '#9bc06f'; badge.style.border = '1px solid rgba(106,156,68,0.4)';
+    } else if (ch.status === 'defeat') {
+        badge.textContent = 'Defeat'; badge.style.background = 'rgba(168,58,58,0.2)'; badge.style.color = '#d36e6e'; badge.style.border = '1px solid rgba(168,58,58,0.4)';
+    } else {
+        badge.textContent = 'Active'; badge.style.background = 'rgba(201,163,78,0.12)'; badge.style.color = 'var(--gilt-100)'; badge.style.border = '1px solid rgba(201,163,78,0.35)';
+    }
+
+    // Success pips
+    var spips = '';
+    for (var i = 0; i < ch.required_successes; i++) {
+        spips += '<div class="sc-pip' + (i < ch.successes ? ' success' : '') + '">' + (i < ch.successes ? '+' : '') + '</div>';
+    }
+    document.getElementById('success-pips').innerHTML = spips;
+
+    // Failure pips
+    var fpips = '';
+    for (var i = 0; i < ch.max_failures; i++) {
+        fpips += '<div class="sc-pip' + (i < ch.failures ? ' failure' : '') + '">' + (i < ch.failures ? 'X' : '') + '</div>';
+    }
+    document.getElementById('failure-pips').innerHTML = fpips;
+
+    // Controls visibility
+    document.getElementById('mark-controls').style.display = ch.status === 'active' ? '' : 'none';
+
+    // PC select
+    var pcSel = document.getElementById('mark-pc');
+    pcSel.innerHTML = partyNames.map(function(n) { return '<option value="' + n + '">' + n + '</option>'; }).join('') ||
+        '<option value="">No PCs loaded</option>';
+
+    // Skill select
+    var skillSel = document.getElementById('mark-skill');
+    var skills = ch.skills && ch.skills.length ? ch.skills : ['Athletics','Acrobatics','Stealth','Perception','Diplomacy','Intimidation','Deception','Society','Nature','Arcana','Religion','Occultism'];
+    skillSel.innerHTML = skills.map(function(s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+
+    // Log
+    var logHtml = (ch.log || []).map(function(entry) {
+        var color = entry.result === 'success' ? '#6a9c44' : entry.result === 'crit_success' ? '#9bc06f' : entry.result === 'crit_failure' ? '#d36e6e' : '#a83a3a';
+        var label = entry.result === 'crit_success' ? 'CRIT SUCCESS' : entry.result === 'crit_failure' ? 'CRIT FAILURE' : entry.result.toUpperCase();
+        return '<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed var(--border-card);">' +
+            '<span style="color:var(--text-on-dark-2);">' + (entry.pc || '?') + ' (' + (entry.skill || '?') + ')</span>' +
+            '<span style="font-weight:700; color:' + color + ';">' + label + '</span>' +
+            '</div>';
+    }).join('');
+    document.getElementById('ch-log').innerHTML = logHtml || '<div style="color:var(--text-on-dark-3); font-style:italic;">No rolls yet.</div>';
+}
+
+async function markResult(result) {
+    if (!activeChallenge) return;
+    var r = await fetch('/api/skill_challenge/mark', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            id: activeChallenge.id,
+            result: result,
+            pc_name: document.getElementById('mark-pc').value,
+            skill: document.getElementById('mark-skill').value,
+        })
+    });
+    var j = await r.json();
+    if (j.success) {
+        activeChallenge = j.challenge;
+        renderChallenge();
+    }
+}
+
+async function endChallenge() {
+    if (!activeChallenge) return;
+    await fetch('/api/skill_challenge/end', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: activeChallenge.id})
+    });
+    activeChallenge = null;
+    renderChallenge();
+}
+
+// SSE updates
+try {
+    var src = new EventSource('/api/events');
+    src.addEventListener('skill_challenge', function(e) {
+        var data = JSON.parse(e.data);
+        if (data.status === 'ended') {
+            activeChallenge = null;
+        } else {
+            activeChallenge = data;
+        }
+        renderChallenge();
+    });
+} catch(e) {}
+</script>
+{% endblock %}

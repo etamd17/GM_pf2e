@@ -156,6 +156,8 @@ GM_API_PREFIXES = (
     '/api/delete_character/', '/api/handout_upload',
     '/api/generate/',
     '/api/loot_ledger',
+    '/api/session_timer/',
+    '/api/set_combatant_tactics/',
 )
 
 @app.before_request
@@ -269,6 +271,21 @@ TURN_INDEX = 0
 ROUND_NUMBER = 1
 ENCOUNTER_NOTES = ''
 COMBAT_LOGS = []
+# Session timer: epoch timestamp (seconds) when the current encounter started.
+# None means timer not running. Set by /api/session_timer/start, cleared on
+# encounter clear. Broadcast via SSE so player views can show elapsed time.
+SESSION_TIMER_START = None
+
+# --- PARTY CHAT (Tier 4, feature 20) ---
+# In-memory message list: [{sender, text, timestamp}]. Clears on server restart.
+CHAT_MESSAGES = []
+CHAT_LOCK = threading.Lock()
+_CHAT_MAX = 200
+
+# --- CAMPAIGN STATS (Tier 4, feature 30) ---
+CAMPAIGN_STATS_FILE = os.path.join(DATA_DIR, 'campaign_stats.json')
+JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
+os.makedirs(JOURNAL_DIR, exist_ok=True)
 
 
 # --- LOOT LEDGER (persistent party treasure log) ---
@@ -569,6 +586,7 @@ def _do_persist_encounter_state():
             "round": ROUND_NUMBER,
             "turn_index": TURN_INDEX,
             "notes": ENCOUNTER_NOTES,
+            "session_timer_start": SESSION_TIMER_START,
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -594,6 +612,8 @@ def _do_persist_encounter_state():
                 'visible_to_players': getattr(c, 'visible_to_players', True),
                 # Boss-reveal title (Chunk 4d) — keep it across reloads.
                 'epithet': getattr(c, 'epithet', ''),
+                # GM creature tactics notes — per-combatant free-text.
+                'tactics': getattr(c, 'tactics', ''),
             }
             encounter_data['combatants'].append(entry)
     try:
@@ -1004,6 +1024,7 @@ def _do_broadcast_encounter_state():
             'active_name': active_name,
             'active_id': active_id,
             'turn_index': TURN_INDEX,
+            'session_timer_start': SESSION_TIMER_START,
             # Flag used by the player filter below — avoids re-reading globals
             # inside the filter, which runs after ENCOUNTER_LOCK is released.
             '_active_visible': getattr(active_c, 'visible_to_players', True) if active_c else True,
@@ -3580,6 +3601,9 @@ class Monster:
         # Dramatic title shown on the boss-reveal card (Chunk 4d), e.g.
         # "The Caged Wrath". Empty = no reveal card fires for this creature.
         self.epithet = ''
+        # GM creature tactics notes — per-combatant free-text, persisted
+        # with encounter save/load. Hidden from players.
+        self.tactics = ''
         self.name = safe_str(data.get('name', 'Unknown Monster'))
         system = data.get('system') or {}
         if not isinstance(system, dict): system = {}
@@ -4437,7 +4461,7 @@ def load_libraries():
 
 def _restore_encounter_autosave():
     """Restore the active encounter from autosave file on startup."""
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
     autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
     if not os.path.exists(autosave_path):
         return
@@ -4448,6 +4472,7 @@ def _restore_encounter_autosave():
         ROUND_NUMBER = raw.get('round', 1)
         TURN_INDEX = raw.get('turn_index', 0)
         ENCOUNTER_NOTES = raw.get('notes', '')
+        SESSION_TIMER_START = raw.get('session_timer_start', None)
         ACTIVE_ENCOUNTER.clear()
         for item in combatants:
             new_c = None
@@ -4488,6 +4513,9 @@ def _restore_encounter_autosave():
                     new_c.visible_to_players = bool(item['visible_to_players']) if not new_c.is_pc else True
                 if 'epithet' in item and not new_c.is_pc:
                     new_c.epithet = str(item['epithet'] or '')
+                # GM creature tactics notes.
+                if 'tactics' in item:
+                    new_c.tactics = str(item['tactics'] or '')
                 ACTIVE_ENCOUNTER.append(new_c)
         if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
         if ACTIVE_ENCOUNTER:
@@ -5338,6 +5366,11 @@ def api_session_begin():
     # Fresh session → wipe the highlights accumulator so the wrap-up scrapbook
     # only reflects tonight (Chunk 6).
     _reset_session_highlights(cfg.get('session_number', 1))
+    # Campaign stats hook (Tier 4, feature 30)
+    try:
+        _bump_campaign_stat('sessions_started')
+    except Exception:
+        pass
     payload = {
         'campaign_name': cfg.get('name', 'The Campaign'),
         'crest_image': cfg.get('crest_image', ''),
@@ -5868,6 +5901,8 @@ def _get_tracker_state():
                 # Boss-reveal title (Chunk 4d) — the tracker renders an
                 # epithet input off this so the GM can edit it inline.
                 'epithet': getattr(c, 'epithet', ''),
+                # GM creature tactics notes — per-combatant free-text.
+                'tactics': getattr(c, 'tactics', ''),
                 # Hazard-specific fields the tracker uses to render the
                 # Trigger / Disable buttons + display routine text. Always
                 # emitted so the client can branch on `is_hazard`.
@@ -5946,6 +5981,7 @@ def _get_tracker_state():
             'diff_label': diff_label, 'diff_color': diff_color, 'party_level': party_level,
             'party_size': party_size, 'xp_thresholds': xp_thresholds,
             'encounter_notes': ENCOUNTER_NOTES,
+            'session_timer_start': SESSION_TIMER_START,
         }
     _TRACKER_STATE_CACHE = result
     _TRACKER_STATE_CACHE_TIME = now
@@ -6127,13 +6163,54 @@ def api_session_boss_reveal(instance_id):
     _broadcast_boss_reveal(reveal_name, reveal_epithet, reveal_level)
     return jsonify({'success': True, 'instance_id': instance_id})
 
+@app.route('/api/session_timer/<action>', methods=['POST'])
+@gm_required
+def session_timer(action):
+    """Start, stop, or reset the encounter session timer. Broadcasts via SSE
+    so every client (GM + players) starts ticking in sync."""
+    global SESSION_TIMER_START
+    if action == 'start':
+        SESSION_TIMER_START = int(time.time())
+    elif action == 'stop':
+        SESSION_TIMER_START = None
+    elif action == 'reset':
+        SESSION_TIMER_START = int(time.time())
+    else:
+        return jsonify({'success': False, 'error': 'action must be start|stop|reset'}), 400
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    sse_broadcast('session_timer', {'start': SESSION_TIMER_START})
+    return jsonify({'success': True, 'session_timer_start': SESSION_TIMER_START})
+
+
+@app.route('/api/set_combatant_tactics/<instance_id>', methods=['POST'])
+@gm_required
+def set_combatant_tactics(instance_id):
+    """GM-only: set/update the per-creature tactics note. Persisted with
+    encounter save/load. Hidden from players (GM view only)."""
+    data = request.get_json(silent=True) or {}
+    tactics_text = str(data.get('tactics', '') or '')[:2000]
+    target = None
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id:
+                target = c
+                break
+        if target is None:
+            return jsonify({'success': False, 'error': 'Combatant not found'}), 404
+        target.tactics = tactics_text
+    _persist_encounter_state()
+    return jsonify({'success': True, 'instance_id': instance_id, 'tactics': tactics_text})
+
+
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
-    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES
+    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
     if ACTIVE_ENCOUNTER:
         names = [c.name for c in ACTIVE_ENCOUNTER]
         _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
     ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
+    SESSION_TIMER_START = None
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -6612,6 +6689,11 @@ def adjust_hp(instance_id):
                         _record_big_hit(c.name, amount, c.is_pc)
                     except Exception:
                         pass
+                    # Campaign stats hook (Tier 4, feature 30)
+                    try:
+                        _bump_campaign_stat('total_damage_dealt', amount)
+                    except Exception:
+                        pass
                     # PCs route through the same temp-HP-aware damage
                     # path the player sheet uses. Without this the GM's
                     # tracker "−damage" button silently bypassed the
@@ -6701,6 +6783,11 @@ def adjust_hp(instance_id):
                     if c.current_hp > 0 and was_dying:
                         c.conditions['dying'] = 0; c.conditions['wounded'] = c.conditions.get('wounded', 0) + 1
                         _combat_log(f"{c.name} recovered from Dying! (Wounded {c.conditions['wounded']})", 'critical')
+                    # Campaign stats hook (Tier 4, feature 30)
+                    try:
+                        _bump_campaign_stat('total_healing', amount)
+                    except Exception:
+                        pass
                 if c.is_pc and c.name in PARTY_LIBRARY:
                     PARTY_LIBRARY[c.name].current_hp = c.current_hp
                     PARTY_LIBRARY[c.name].conditions['dying'] = c.conditions['dying']
@@ -7345,8 +7432,18 @@ def toggle_condition(instance_id):
             new_val = combatant.conditions.get(condition, 0)
             if isinstance(new_val, bool):
                 _combat_log(f"{combatant.name} {'gained' if new_val else 'lost'} {condition.replace('_','-').title()}", 'condition')
+                if new_val:
+                    try:
+                        _bump_campaign_stat('conditions_applied')
+                    except Exception:
+                        pass
             else:
-                _combat_log(f"{combatant.name}: {condition.title()} → {new_val}", 'condition')
+                _combat_log(f"{combatant.name}: {condition.title()} -> {new_val}", 'condition')
+                if new_val > 0 and action in ('increase', 'add'):
+                    try:
+                        _bump_campaign_stat('conditions_applied')
+                    except Exception:
+                        pass
             _persist_encounter_state()
             _broadcast_encounter_state()
             break
@@ -7664,7 +7761,12 @@ def cycle_turn(direction):
         old_index = TURN_INDEX
         for _ in range(len(ACTIVE_ENCOUNTER)):
             TURN_INDEX = (TURN_INDEX + 1) % len(ACTIVE_ENCOUNTER)
-            if TURN_INDEX <= old_index: ROUND_NUMBER += 1
+            if TURN_INDEX <= old_index:
+                ROUND_NUMBER += 1
+                try:
+                    _bump_campaign_stat('total_combat_rounds')
+                except Exception:
+                    pass
             if not getattr(ACTIVE_ENCOUNTER[TURN_INDEX], 'delaying', False):
                 break
             old_index = TURN_INDEX
@@ -8074,6 +8176,7 @@ def save_encounter():
             "round": ROUND_NUMBER,
             "turn_index": TURN_INDEX,
             "notes": request.form.get('encounter_notes', ENCOUNTER_NOTES),
+            "session_timer_start": SESSION_TIMER_START,
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -8091,6 +8194,8 @@ def save_encounter():
                 'visible_to_players': getattr(c, 'visible_to_players', True),
                 # Boss-reveal title (Chunk 4d) — saved with the encounter.
                 'epithet': getattr(c, 'epithet', ''),
+                # GM creature tactics notes.
+                'tactics': getattr(c, 'tactics', ''),
             }
             encounter_data['combatants'].append(entry)
         # Snapshot the current map alongside the encounter so Load Encounter
@@ -8104,7 +8209,7 @@ def save_encounter():
 
 @app.route('/api/load_encounter', methods=['POST'])
 def load_encounter():
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP, ENCOUNTER_NOTES
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP, ENCOUNTER_NOTES, SESSION_TIMER_START
     name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
     if not name:
         return jsonify({"success": False, "error": "encounter_name required"}), 400
@@ -8132,6 +8237,7 @@ def load_encounter():
             ROUND_NUMBER = raw.get('round', 1)
             TURN_INDEX = raw.get('turn_index', 0)
             ENCOUNTER_NOTES = raw.get('notes', '')
+            SESSION_TIMER_START = raw.get('session_timer_start', None)
             saved_map = raw.get('map')
         else:
             combatants = []
@@ -8175,6 +8281,9 @@ def load_encounter():
                     new_c.visible_to_players = bool(item['visible_to_players']) if not new_c.is_pc else True
                 if 'epithet' in item and not new_c.is_pc:
                     new_c.epithet = str(item['epithet'] or '')
+                # GM creature tactics notes.
+                if 'tactics' in item:
+                    new_c.tactics = str(item['tactics'] or '')
                 ACTIVE_ENCOUNTER.append(new_c)
 
         # Validate turn index
@@ -8869,7 +8978,7 @@ def player_sheet(pc_name):
         # they roll as whoever they pick in the tracker.
         if not _is_gm():
             session['player_name'] = pc_name
-        return render_template('player_sheet.html', pc=PARTY_LIBRARY[pc_name], weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR, armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([{'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]))
+        return render_template('player_sheet.html', pc=PARTY_LIBRARY[pc_name], weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR, armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([{'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]), party_names=list(PARTY_LIBRARY.keys()))
     return redirect(url_for('player_view'))
 
 @app.route('/api/player_state')
@@ -9119,6 +9228,16 @@ def log_roll():
     # Session-scrapbook hook (Chunk 6): tally crits / nat-1s for party PCs.
     try:
         _record_crit_fumble(actor_name, log_entry['action'], log_entry['detail'], degree)
+    except Exception:
+        pass
+
+    # Campaign stats hook (Tier 4, feature 30)
+    try:
+        _bump_campaign_stat('total_rolls')
+        if degree == 'crit_success':
+            _bump_campaign_stat('total_crits')
+        elif degree == 'crit_failure':
+            _bump_campaign_stat('total_fumbles')
     except Exception:
         pass
 
@@ -10087,6 +10206,94 @@ def remove_item(pc_name):
         
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
+
+# ─── CONSUMABLE QUANTITY ADJUSTMENT ──────────────────────────────────
+@app.route('/api/adjust_consumable/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
+def adjust_consumable(pc_name):
+    data = request.json or {}
+    item_name = data.get('name', '').strip()
+    delta = int(data.get('delta', 0))
+    if not item_name or delta == 0:
+        return jsonify({"success": False, "error": "Missing name or delta"}), 400
+    file_path = get_pc_file_path(pc_name)
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"success": False, "error": "PC not found"}), 404
+    with open(file_path, 'r', encoding='utf-8') as f:
+        pc_json = json.load(f)
+    build = pc_json.get('build', pc_json)
+    equipment = build.get('equipment') or []
+    new_qty = None
+    for eq in equipment:
+        if isinstance(eq, list) and len(eq) >= 2 and eq[0] == item_name:
+            eq[1] = max(0, int(eq[1]) + delta)
+            new_qty = eq[1]
+            break
+        elif isinstance(eq, dict) and eq.get('name') == item_name:
+            eq['qty'] = max(0, int(eq.get('qty', 0)) + delta)
+            new_qty = eq['qty']
+            break
+    if new_qty is None:
+        return jsonify({"success": False, "error": "Item not found"}), 404
+    if new_qty <= 0:
+        build['equipment'] = [
+            eq for eq in equipment
+            if not ((isinstance(eq, list) and eq[0] == item_name) or
+                    (isinstance(eq, dict) and eq.get('name') == item_name))
+        ]
+    save_and_reload_character(pc_name, pc_json, file_path)
+    try:
+        verb = 'used' if delta < 0 else 'gained'
+        _combat_log(f"{pc_name} {verb} {abs(delta)}x {item_name} (now {new_qty})", 'system')
+    except Exception:
+        pass
+    return jsonify({"success": True, "item": item_name, "qty": new_qty})
+
+
+# ─── HERO POINT NOMINATIONS ─────────────────────────────────────────
+@app.route('/api/hero_nomination', methods=['POST'])
+def hero_nomination():
+    data = request.json or {}
+    nominator = data.get('nominator', '').strip()
+    nominee = data.get('nominee', '').strip()
+    reason = data.get('reason', '').strip() or 'No reason given'
+    if not nominator or not nominee:
+        return jsonify({"success": False, "error": "Missing nominator or nominee"}), 400
+    if nominee not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Nominee not in party"}), 404
+    payload = {
+        "nominator": nominator,
+        "nominee": nominee,
+        "reason": reason,
+        "ts": int(time.time()),
+        "id": str(uuid.uuid4())[:8]
+    }
+    try:
+        sse_broadcast('hero_nomination', payload)
+        _combat_log(f"{nominator} nominated {nominee} for a Hero Point: {reason}", 'system')
+    except Exception:
+        pass
+    return jsonify({"success": True})
+
+
+@app.route('/api/approve_hero_nomination', methods=['POST'])
+@gm_required
+def approve_hero_nomination():
+    data = request.json or {}
+    nominee = data.get('nominee', '').strip()
+    if not nominee or nominee not in PARTY_LIBRARY:
+        return jsonify({"success": False, "error": "Invalid nominee"}), 400
+    def _mutate(pc):
+        if pc.hero_points < 3:
+            pc.hero_points += 1
+        return True
+    try:
+        _, pc = apply_pc_delta(nominee, _mutate)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    _combat_log(f"{nominee} awarded a Hero Point via nomination (now {pc.hero_points})", 'system')
+    return jsonify({"success": True, "nominee": nominee, "hero_points": pc.hero_points})
+
 
 @app.route('/api/add_weapon/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
@@ -15286,6 +15493,652 @@ def clear_map():
         ACTIVE_MAP.update(fresh)
     _broadcast_map_state()
     return jsonify({'success': True})
+
+
+# =====================================================================
+#  PARTY CHAT (Tier 4, feature 20) -- lightweight group chat visible to
+#  all players + GM. In-memory only, clears on restart. SSE broadcast
+#  for real-time delivery.
+# =====================================================================
+
+@app.route('/api/chat', methods=['GET'])
+def api_chat_get():
+    """Return the last N chat messages."""
+    with CHAT_LOCK:
+        msgs = list(CHAT_MESSAGES[-50:])
+    return jsonify({'messages': msgs})
+
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat_send():
+    """Send a chat message. GM sees 'GM' as sender; players use their name."""
+    data = request.get_json(silent=True) or {}
+    text = (data.get('text') or '').strip()
+    if not text or len(text) > 500:
+        return jsonify({'error': 'Message must be 1-500 characters'}), 400
+    if _is_gm():
+        sender = 'GM'
+    else:
+        sender = session.get('player_name') or 'Anonymous'
+    from datetime import datetime
+    msg = {
+        'sender': sender,
+        'text': text,
+        'timestamp': datetime.now().strftime('%H:%M:%S'),
+    }
+    with CHAT_LOCK:
+        CHAT_MESSAGES.append(msg)
+        if len(CHAT_MESSAGES) > _CHAT_MAX:
+            CHAT_MESSAGES.pop(0)
+    sse_broadcast('chat_message', msg)
+    _bump_campaign_stat('chat_messages_sent')
+    return jsonify({'success': True, 'message': msg})
+
+
+# =====================================================================
+#  SESSION RECAP (Tier 4, feature 21) -- compile session data from the
+#  scrapbook, combat log, and loot ledger into a formatted recap.
+# =====================================================================
+
+@app.route('/api/session_recap')
+@gm_required
+def api_session_recap():
+    """Compile a formatted session recap from available session data."""
+    with SESSION_HIGHLIGHTS_LOCK:
+        sh = copy.deepcopy(SESSION_HIGHLIGHTS)
+
+    started = sh.get('started_at', '')
+    session_num = sh.get('session_number', '?')
+
+    duration_str = ''
+    if started:
+        try:
+            st = time.strptime(started, '%Y-%m-%d %H:%M')
+            start_epoch = time.mktime(st)
+            elapsed_min = int((time.time() - start_epoch) / 60)
+            hours, mins = divmod(elapsed_min, 60)
+            duration_str = f"{hours}h {mins}m" if hours else f"{mins}m"
+        except Exception:
+            pass
+
+    encounter_count = len(ACTIVE_ENCOUNTER)
+    crits = sh.get('crits', [])
+    fumbles = sh.get('fumbles', [])
+    big_hits = sh.get('big_hits', [])
+    big_hits_sorted = sorted(big_hits, key=lambda x: x.get('amount', 0), reverse=True)[:5]
+    loot = sh.get('loot', [])
+
+    hp_events = []
+    for log_e in COMBAT_LOGS:
+        action_str = str(log_e.get('action', ''))
+        if 'Dying' in action_str or 'damage' in action_str.lower() or 'heal' in action_str.lower():
+            hp_events.append({'name': log_e.get('name', ''), 'action': action_str, 'time': log_e.get('time', '')})
+
+    lines = []
+    lines.append(f"SESSION {session_num} RECAP")
+    lines.append(f"Date: {started or 'Unknown'}")
+    if duration_str:
+        lines.append(f"Duration: {duration_str}")
+    lines.append("")
+
+    if crits:
+        lines.append(f"CRITICAL HITS ({len(crits)}):")
+        for c in crits[:10]:
+            lines.append(f"  - {c.get('pc', '?')}: {c.get('action', '')} (Round {c.get('round', '?')})")
+        lines.append("")
+
+    if fumbles:
+        lines.append(f"CRITICAL FAILURES ({len(fumbles)}):")
+        for f_entry in fumbles[:10]:
+            lines.append(f"  - {f_entry.get('pc', '?')}: {f_entry.get('action', '')} (Round {f_entry.get('round', '?')})")
+        lines.append("")
+
+    if big_hits_sorted:
+        lines.append("BIGGEST HITS:")
+        for bh in big_hits_sorted:
+            lines.append(f"  - {bh.get('target', '?')} took {bh.get('amount', 0)} damage (Round {bh.get('round', '?')})")
+        lines.append("")
+
+    if loot:
+        lines.append("LOOT AWARDED:")
+        for lt in loot:
+            items_str = ', '.join(f"{i['name']} x{i['qty']}" for i in lt.get('items', []))
+            coins = lt.get('coins', {})
+            coins_parts = [f"{coins.get(d, 0)} {d}" for d in ('pp', 'gp', 'sp', 'cp') if coins.get(d, 0)]
+            coins_str = ', '.join(coins_parts)
+            parts = [p for p in [items_str, coins_str] if p]
+            lines.append(f"  - {lt.get('pc', '?')}: {'; '.join(parts) if parts else '(empty)'}")
+        lines.append("")
+
+    if hp_events:
+        lines.append(f"NOTABLE HP EVENTS ({len(hp_events)}):")
+        for he in hp_events[:15]:
+            lines.append(f"  - [{he.get('time', '')}] {he.get('name', '')}: {he.get('action', '')}")
+        lines.append("")
+
+    lines.append(f"Total combat log entries: {len(COMBAT_LOGS)}")
+    lines.append(f"Current round: {ROUND_NUMBER}")
+    lines.append(f"Combatants in encounter: {encounter_count}")
+
+    recap_text = '\n'.join(lines)
+    return jsonify({
+        'success': True,
+        'recap': recap_text,
+        'session_number': session_num,
+        'started_at': started,
+        'duration': duration_str,
+        'crits': len(crits),
+        'fumbles': len(fumbles),
+        'loot_count': len(loot),
+        'log_entries': len(COMBAT_LOGS),
+    })
+
+
+# =====================================================================
+#  PLAYER JOURNAL (Tier 4, feature 26)
+# =====================================================================
+
+def _journal_path(name):
+    safe = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
+    return os.path.join(JOURNAL_DIR, f'{safe}.json')
+
+
+def _load_journal(name):
+    path = _journal_path(name)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {'entries': []}
+
+
+def _save_journal(name, journal):
+    path = _journal_path(name)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(journal, f, indent=2, ensure_ascii=False)
+    except IOError:
+        pass
+
+
+@app.route('/api/journal')
+def api_journal_get():
+    """Read the calling player's journal entries."""
+    player = session.get('player_name')
+    if not player and not _is_gm():
+        return jsonify({'error': 'Not joined as a player'}), 403
+    name = request.args.get('name') or player
+    if not name:
+        return jsonify({'error': 'No player name specified'}), 400
+    if name != player and not _is_gm():
+        return jsonify({'error': 'Forbidden'}), 403
+    journal = _load_journal(name)
+    return jsonify(journal)
+
+
+@app.route('/api/journal', methods=['POST'])
+def api_journal_append():
+    """Append an entry to the calling player's journal."""
+    player = session.get('player_name')
+    if not player and not _is_gm():
+        return jsonify({'error': 'Not joined as a player'}), 403
+    data = request.get_json(silent=True) or {}
+    text = (data.get('text') or '').strip()
+    if not text or len(text) > 2000:
+        return jsonify({'error': 'Entry must be 1-2000 characters'}), 400
+    name = data.get('name') or player
+    if not name:
+        return jsonify({'error': 'No player name specified'}), 400
+    if name != player and not _is_gm():
+        return jsonify({'error': 'Forbidden'}), 403
+    from datetime import datetime
+    journal = _load_journal(name)
+    journal['entries'].append({
+        'text': text,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    })
+    journal['entries'] = journal['entries'][-500:]
+    _save_journal(name, journal)
+    return jsonify({'success': True, 'entries': journal['entries']})
+
+
+@app.route('/api/journal/delete', methods=['POST'])
+def api_journal_delete():
+    """Delete a journal entry by index."""
+    player = session.get('player_name')
+    if not player and not _is_gm():
+        return jsonify({'error': 'Not joined as a player'}), 403
+    data = request.get_json(silent=True) or {}
+    idx = data.get('index')
+    name = data.get('name') or player
+    if not name:
+        return jsonify({'error': 'No player name specified'}), 400
+    if name != player and not _is_gm():
+        return jsonify({'error': 'Forbidden'}), 403
+    journal = _load_journal(name)
+    try:
+        idx = int(idx)
+        if 0 <= idx < len(journal['entries']):
+            journal['entries'].pop(idx)
+            _save_journal(name, journal)
+    except (TypeError, ValueError):
+        pass
+    return jsonify({'success': True, 'entries': journal['entries']})
+
+
+# =====================================================================
+#  TIER 4 NEW GM TOOLS (features 11, 15, 23, 24, 25, 27)
+# =====================================================================
+
+# -- In-Game Calendar (Golarion) --------------------------------------
+CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
+GOLARION_MONTHS = [
+    {'name': 'Abadius',   'days': 31},
+    {'name': 'Calistril', 'days': 28},
+    {'name': 'Pharast',   'days': 31},
+    {'name': 'Gozran',    'days': 30},
+    {'name': 'Desnus',    'days': 31},
+    {'name': 'Sarenith',  'days': 30},
+    {'name': 'Erastus',   'days': 31},
+    {'name': 'Arodus',    'days': 31},
+    {'name': 'Rova',      'days': 30},
+    {'name': 'Lamashan',  'days': 31},
+    {'name': 'Neth',      'days': 30},
+    {'name': 'Kuthona',   'days': 31},
+]
+GOLARION_WEEKDAYS = ['Moonday', 'Toilday', 'Wealday', 'Oathday', 'Fireday', 'Starday', 'Sunday']
+
+def _load_calendar():
+    if os.path.exists(CALENDAR_FILE):
+        try:
+            with open(CALENDAR_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {'year': 4724, 'month': 0, 'day': 1, 'events': []}
+
+def _save_calendar(cal):
+    with open(CALENDAR_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cal, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+def _golarion_day_of_week(year, month, day):
+    total = 0
+    for y in range(1, year):
+        total += sum(m['days'] for m in GOLARION_MONTHS)
+    for mi in range(month):
+        total += GOLARION_MONTHS[mi]['days']
+    total += day - 1
+    return total % 7
+
+@app.route('/gm/calendar')
+@gm_required
+def gm_calendar():
+    cal = _load_calendar()
+    return render_template('calendar.html', calendar=cal,
+                           months=GOLARION_MONTHS, weekdays=GOLARION_WEEKDAYS)
+
+@app.route('/api/calendar', methods=['GET'])
+@gm_required
+def api_calendar_get():
+    cal = _load_calendar()
+    mi = GOLARION_MONTHS[cal['month']]
+    dow = _golarion_day_of_week(cal['year'], cal['month'], cal['day'])
+    return jsonify({'success': True, 'year': cal['year'], 'month': cal['month'],
+        'month_name': mi['name'], 'day': cal['day'], 'days_in_month': mi['days'],
+        'weekday': GOLARION_WEEKDAYS[dow], 'events': cal.get('events', []),
+        'months': [m['name'] for m in GOLARION_MONTHS]})
+
+@app.route('/api/calendar/advance', methods=['POST'])
+@gm_required
+def api_calendar_advance():
+    data = request.json or {}
+    days = int(data.get('days', 1))
+    cal = _load_calendar()
+    for _ in range(abs(days)):
+        if days > 0:
+            cal['day'] += 1
+            if cal['day'] > GOLARION_MONTHS[cal['month']]['days']:
+                cal['day'] = 1
+                cal['month'] += 1
+                if cal['month'] >= 12:
+                    cal['month'] = 0
+                    cal['year'] += 1
+        else:
+            cal['day'] -= 1
+            if cal['day'] < 1:
+                cal['month'] -= 1
+                if cal['month'] < 0:
+                    cal['month'] = 11
+                    cal['year'] -= 1
+                cal['day'] = GOLARION_MONTHS[cal['month']]['days']
+    _save_calendar(cal)
+    mi = GOLARION_MONTHS[cal['month']]
+    dow = _golarion_day_of_week(cal['year'], cal['month'], cal['day'])
+    return jsonify({'success': True, 'year': cal['year'], 'month': cal['month'],
+        'month_name': mi['name'], 'day': cal['day'], 'days_in_month': mi['days'],
+        'weekday': GOLARION_WEEKDAYS[dow]})
+
+@app.route('/api/calendar/set', methods=['POST'])
+@gm_required
+def api_calendar_set():
+    data = request.json or {}
+    cal = _load_calendar()
+    if 'year' in data: cal['year'] = int(data['year'])
+    if 'month' in data: cal['month'] = max(0, min(11, int(data['month'])))
+    if 'day' in data:
+        max_day = GOLARION_MONTHS[cal['month']]['days']
+        cal['day'] = max(1, min(max_day, int(data['day'])))
+    _save_calendar(cal)
+    return jsonify({'success': True})
+
+@app.route('/api/calendar/event', methods=['POST'])
+@gm_required
+def api_calendar_event():
+    data = request.json or {}
+    cal = _load_calendar()
+    if data.get('action') == 'remove':
+        eid = data.get('id')
+        cal['events'] = [e for e in cal.get('events', []) if e.get('id') != eid]
+    else:
+        evt = {'id': str(uuid.uuid4())[:8],
+               'year': int(data.get('year', cal['year'])),
+               'month': int(data.get('month', cal['month'])),
+               'day': int(data.get('day', cal['day'])),
+               'title': str(data.get('title', ''))[:200],
+               'note': str(data.get('note', ''))[:500]}
+        cal.setdefault('events', []).append(evt)
+    _save_calendar(cal)
+    return jsonify({'success': True, 'events': cal.get('events', [])})
+
+# -- Encounter Templates ----------------------------------------------
+PF2E_ENCOUNTER_BUDGETS = [
+    {'label': 'Trivial', 'xp': 40,  'desc': 'Barely a challenge'},
+    {'label': 'Low',     'xp': 60,  'desc': 'A straightforward fight'},
+    {'label': 'Moderate','xp': 80,  'desc': 'A meaningful challenge'},
+    {'label': 'Severe',  'xp': 120, 'desc': 'Dangerous and draining'},
+    {'label': 'Extreme', 'xp': 160, 'desc': 'Potentially deadly'},
+]
+CREATURE_XP_BY_DIFF = {-4: 10, -3: 15, -2: 20, -1: 30, 0: 40, 1: 60, 2: 80, 3: 120, 4: 160}
+
+@app.route('/gm/encounter_templates')
+@gm_required
+def gm_encounter_templates():
+    return render_template('encounter_templates.html',
+                           budgets=PF2E_ENCOUNTER_BUDGETS, xp_table=CREATURE_XP_BY_DIFF)
+
+@app.route('/api/encounter_templates/creatures')
+@gm_required
+def api_encounter_template_creatures():
+    try: party_level = int(request.args.get('party_level', 3))
+    except (TypeError, ValueError): party_level = 3
+    results = []
+    for path, m in MONSTER_LIBRARY.items():
+        diff = m.level - party_level
+        if -4 <= diff <= 4:
+            xp = CREATURE_XP_BY_DIFF.get(diff, 40)
+            results.append({'name': m.name, 'level': m.level, 'diff': diff,
+                'xp': xp, 'traits': list(getattr(m, 'traits', []) or [])[:5], 'path': path})
+    results.sort(key=lambda r: (r['level'], r['name']))
+    return jsonify({'success': True, 'creatures': results[:200]})
+
+# -- Skill Challenge Mode ---------------------------------------------
+ACTIVE_SKILL_CHALLENGES = {}
+
+@app.route('/gm/skill_challenge')
+@gm_required
+def gm_skill_challenge():
+    return render_template('skill_challenge.html', challenges=ACTIVE_SKILL_CHALLENGES)
+
+@app.route('/api/skill_challenge', methods=['GET'])
+def api_skill_challenge_get():
+    if not ACTIVE_SKILL_CHALLENGES:
+        return jsonify({'success': True, 'challenge': None})
+    key = list(ACTIVE_SKILL_CHALLENGES.keys())[-1]
+    return jsonify({'success': True, 'challenge': ACTIVE_SKILL_CHALLENGES[key]})
+
+@app.route('/api/skill_challenge/create', methods=['POST'])
+@gm_required
+def api_skill_challenge_create():
+    data = request.json or {}
+    cid = str(uuid.uuid4())[:8]
+    ch = {'id': cid, 'name': str(data.get('name', 'Skill Challenge'))[:100],
+          'required_successes': max(1, int(data.get('required_successes', 4))),
+          'max_failures': max(1, int(data.get('max_failures', 3))),
+          'dc': int(data.get('dc', 15)),
+          'skills': [s.strip() for s in str(data.get('skills', '')).split(',') if s.strip()][:10],
+          'successes': 0, 'failures': 0, 'log': [], 'status': 'active'}
+    ACTIVE_SKILL_CHALLENGES[cid] = ch
+    sse_broadcast('skill_challenge', ch)
+    return jsonify({'success': True, 'challenge': ch})
+
+@app.route('/api/skill_challenge/mark', methods=['POST'])
+@gm_required
+def api_skill_challenge_mark():
+    data = request.json or {}
+    cid = data.get('id')
+    result = data.get('result', 'success')
+    if not cid or cid not in ACTIVE_SKILL_CHALLENGES:
+        return jsonify({'error': 'Challenge not found'}), 404
+    ch = ACTIVE_SKILL_CHALLENGES[cid]
+    if ch['status'] != 'active':
+        return jsonify({'error': 'Challenge is no longer active'}), 400
+    ch['log'].append({'pc': data.get('pc_name', ''), 'skill': data.get('skill', ''), 'result': result})
+    if result == 'success': ch['successes'] += 1
+    elif result == 'crit_success': ch['successes'] += 2
+    elif result == 'crit_failure': ch['failures'] += 2
+    else: ch['failures'] += 1
+    if ch['successes'] >= ch['required_successes']: ch['status'] = 'victory'
+    elif ch['failures'] >= ch['max_failures']: ch['status'] = 'defeat'
+    sse_broadcast('skill_challenge', ch)
+    return jsonify({'success': True, 'challenge': ch})
+
+@app.route('/api/skill_challenge/end', methods=['POST'])
+@gm_required
+def api_skill_challenge_end():
+    data = request.json or {}
+    cid = data.get('id')
+    if cid and cid in ACTIVE_SKILL_CHALLENGES: del ACTIVE_SKILL_CHALLENGES[cid]
+    sse_broadcast('skill_challenge', {'id': cid, 'status': 'ended'})
+    return jsonify({'success': True})
+
+# -- Rest & Recovery Wizard -------------------------------------------
+@app.route('/gm/rest')
+@gm_required
+def gm_rest_wizard():
+    party = []
+    for name, pc in PARTY_LIBRARY.items():
+        party.append({'name': name, 'current_hp': pc.current_hp, 'max_hp': pc.hp,
+            'level': pc.level, 'con_mod': int(getattr(pc, 'mods', {}).get('con', 0) or 0),
+            'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
+            'focus_current': getattr(pc, 'current_focus', 0),
+            'focus_max': getattr(pc, 'focus_max', 0),
+            'class_name': getattr(pc, 'class_name', '')})
+    return render_template('rest_wizard.html', party=party)
+
+@app.route('/api/rest/treat_wounds', methods=['POST'])
+@gm_required
+def api_treat_wounds():
+    data = request.json or {}
+    target_name = data.get('target', '')
+    try: dc = int(data.get('dc', 15))
+    except (TypeError, ValueError): dc = 15
+    healer_name = data.get('healer', '')
+    if target_name not in PARTY_LIBRARY:
+        return jsonify({'error': 'PC not found'}), 404
+    pc = PARTY_LIBRARY[target_name]
+    med_mod = 0
+    healer = PARTY_LIBRARY.get(healer_name)
+    if healer:
+        sk_list = getattr(healer, 'skills', [])
+        if isinstance(sk_list, list):
+            for sk in sk_list:
+                if isinstance(sk, dict) and sk.get('name', '').lower() == 'medicine':
+                    med_mod = sk.get('total', 0); break
+        elif isinstance(sk_list, dict): med_mod = sk_list.get('medicine', 0)
+    d20 = random.randint(1, 20)
+    adjusted = d20 + med_mod
+    if d20 == 20: adjusted += 10
+    if d20 == 1:  adjusted -= 10
+    diff = adjusted - dc
+    if diff >= 10:   degree = 'critical_success'
+    elif diff >= 0:  degree = 'success'
+    elif diff > -10: degree = 'failure'
+    else:            degree = 'critical_failure'
+    hp_change, rolls, detail = 0, [], 'No effect'
+    bonus = {20: 10, 30: 30, 40: 50}.get(dc, 0)
+    if degree == 'critical_success':
+        rolls = [random.randint(1, 8) for _ in range(4)]
+        hp_change = sum(rolls) + bonus
+        detail = f"4d8: [{', '.join(str(r) for r in rolls)}]{' + ' + str(bonus) if bonus else ''} = {hp_change} HP healed"
+    elif degree == 'success':
+        rolls = [random.randint(1, 8) for _ in range(2)]
+        hp_change = sum(rolls) + bonus
+        detail = f"2d8: [{', '.join(str(r) for r in rolls)}]{' + ' + str(bonus) if bonus else ''} = {hp_change} HP healed"
+    elif degree == 'critical_failure':
+        r = random.randint(1, 8); hp_change = -r
+        detail = f"1d8 damage: [{r}] = {r} HP lost"
+    if hp_change > 0: pc.current_hp = min(pc.hp, pc.current_hp + hp_change)
+    elif hp_change < 0: pc.current_hp = max(0, pc.current_hp + hp_change)
+    if hp_change != 0: _broadcast_pc_state(target_name)
+    return jsonify({'success': True, 'target': target_name, 'healer': healer_name,
+        'd20': d20, 'modifier': med_mod, 'total': d20 + med_mod, 'dc': dc,
+        'degree': degree, 'hp_change': hp_change, 'detail': detail,
+        'new_hp': pc.current_hp, 'max_hp': pc.hp})
+
+@app.route('/api/rest/apply', methods=['POST'])
+@gm_required
+def api_rest_apply():
+    data = request.json or {}
+    rest_type = data.get('type', 'long')
+    refocus = data.get('refocus', [])
+    results = []
+    for name, pc in PARTY_LIBRARY.items():
+        changes = {'name': name}
+        if rest_type == 'long':
+            con_mod = int(getattr(pc, 'mods', {}).get('con', 0) or 0)
+            hp_before = pc.current_hp
+            pc.current_hp = min(pc.hp, pc.current_hp + max(1, con_mod) * pc.level)
+            changes['hp_regained'] = pc.current_hp - hp_before
+            changes['new_hp'] = pc.current_hp
+            drained_val = max(0, pc.conditions.get('drained', 0) - 1)
+            doomed_val = pc.conditions.get('doomed', 0)
+            pc.conditions = {'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0,
+                'doomed': doomed_val, 'drained': drained_val, 'fatigued': 0,
+                'stunned': 0, 'slowed': 0, 'stupefied': 0, 'enfeebled': 0, 'clumsy': 0,
+                'prone': False, 'off_guard': False, 'concealed': False,
+                'hidden': False, 'undetected': False}
+            changes['conditions_cleared'] = True
+            pc.current_focus = pc.focus_max
+            changes['focus'] = pc.current_focus
+            pc.temp_hp_manual = 0
+            try: pc.temp_hp = pc.toggle_effects_summary.get('temp_hp', 0)
+            except Exception: pc.temp_hp = 0
+        if name in refocus and rest_type == 'short':
+            pc.current_focus = min(pc.focus_max, pc.current_focus + 1)
+            changes['focus_regained'] = True
+            changes['focus'] = pc.current_focus
+        file_path = get_pc_file_path(name)
+        if file_path and os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
+            build = pc_json.get('build', pc_json)
+            build['current_hp'] = pc.current_hp
+            build['current_focus'] = pc.current_focus
+            build['conditions'] = dict(pc.conditions)
+            if rest_type == 'long':
+                build['expended_slots'] = {}; build['prepared_spells'] = {}; build['cast_prep'] = {}
+            save_and_reload_character(name, pc_json, file_path)
+        _broadcast_pc_state(name)
+        results.append(changes)
+    return jsonify({'success': True, 'results': results})
+
+# -- Quick Status Board -----------------------------------------------
+@app.route('/status')
+def status_board():
+    party = []
+    for name, pc in PARTY_LIBRARY.items():
+        party.append({'name': name, 'current_hp': pc.current_hp, 'max_hp': pc.hp,
+            'hp_pct': round(pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0,
+            'level': pc.level, 'class_name': getattr(pc, 'class_name', ''),
+            'ancestry': getattr(pc, 'ancestry', ''),
+            'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
+            'hero_points': getattr(pc, 'hero_points', 1),
+            'exploration_activity': str(getattr(pc, 'exploration_activity', '') or ''),
+            'focus_current': getattr(pc, 'current_focus', 0),
+            'focus_max': getattr(pc, 'focus_max', 0),
+            'temp_hp': int(getattr(pc, 'temp_hp', 0) or 0),
+            'ac': int(getattr(pc, 'ac', 0) or 0)})
+    return render_template('status_board.html', party=party)
+
+
+# =====================================================================
+#  CAMPAIGN STATS (Tier 4, feature 30)
+# =====================================================================
+
+def _load_campaign_stats():
+    if os.path.exists(CAMPAIGN_STATS_FILE):
+        try:
+            with open(CAMPAIGN_STATS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {
+        'total_rolls': 0, 'total_crits': 0, 'total_fumbles': 0,
+        'total_damage_dealt': 0, 'total_healing': 0,
+        'total_combat_rounds': 0, 'total_encounters': 0,
+        'hero_points_awarded': 0, 'conditions_applied': 0,
+        'sessions_started': 0, 'chat_messages_sent': 0,
+    }
+
+
+def _save_campaign_stats(stats):
+    try:
+        with open(CAMPAIGN_STATS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(stats, f, indent=2)
+    except IOError:
+        pass
+
+
+def _bump_campaign_stat(key, amount=1):
+    """Thread-safe increment of a campaign stat counter."""
+    stats = _load_campaign_stats()
+    stats[key] = stats.get(key, 0) + amount
+    _save_campaign_stats(stats)
+
+
+@app.route('/gm/stats')
+@gm_required
+def gm_stats():
+    """Campaign stats dashboard."""
+    stats = _load_campaign_stats()
+    return render_template('campaign_stats.html', stats=stats)
+
+
+@app.route('/api/campaign_stats')
+@gm_required
+def api_campaign_stats():
+    return jsonify(_load_campaign_stats())
+
+
+# =====================================================================
+#  SERVICE WORKER + MANIFEST (Tier 4, feature 31 - PWA)
+# =====================================================================
+
+@app.route('/sw.js')
+def service_worker():
+    """Serve the service worker from the root path (scope requirement)."""
+    return send_from_directory(os.path.join(BASE_DIR, 'static'), 'sw.js',
+                               mimetype='application/javascript')
+
+
+@app.route('/manifest.json')
+def web_manifest():
+    """Serve the web app manifest from the root path."""
+    return send_from_directory(os.path.join(BASE_DIR, 'static'), 'manifest.json',
+                               mimetype='application/manifest+json')
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Rest & Recovery{% endblock %}
+{% block extra_head %}
+    .rw-step { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md);
+        padding: var(--sp-4); margin-bottom: var(--sp-3); }
+    .rw-step.active { border-color: var(--gilt-300); }
+    .rw-step-num { width: 28px; height: 28px; border-radius: 50%; display: inline-flex;
+        align-items: center; justify-content: center; font-family: var(--font-display);
+        font-size: 13px; font-weight: 700; margin-right: 10px; flex-shrink: 0; }
+    .rw-step-num.done { background: rgba(106,156,68,0.2); color: #9bc06f; border: 1px solid rgba(106,156,68,0.4); }
+    .rw-step-num.current { background: rgba(201,163,78,0.15); color: var(--gilt-100); border: 1px solid rgba(201,163,78,0.4); }
+    .rw-step-num.pending { background: var(--bg-base); color: var(--text-on-dark-3); border: 1px solid var(--border-card); }
+    .rw-pc-card { background: var(--bg-base); border: 1px solid var(--border-card); border-radius: var(--r-sm);
+        padding: var(--sp-3); }
+    .rw-hp-bar { height: 6px; border-radius: 3px; background: var(--bg-page); overflow: hidden; margin-top: 4px; }
+    .rw-hp-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+{% endblock %}
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <header style="margin-bottom: var(--sp-5);">
+        <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Downtime</div>
+        <h1 class="font-display" style="font-size:24px; color:var(--gilt-100); margin:0;">Rest & Recovery Wizard</h1>
+    </header>
+
+    <!-- Step 1: Select rest type -->
+    <div class="rw-step active" id="step-1">
+        <div style="display:flex; align-items:center; margin-bottom:var(--sp-3);">
+            <span class="rw-step-num current" id="sn-1">1</span>
+            <div>
+                <div class="font-display" style="font-size:14px; color:var(--gilt-100);">Rest Type</div>
+                <div style="font-size:11px; color:var(--text-on-dark-3);">Choose the type of rest the party is taking.</div>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3);">
+            <button onclick="selectRest('short')" id="btn-short"
+                    style="padding:var(--sp-4); border-radius:var(--r-sm); cursor:pointer; background:var(--bg-base); border:2px solid var(--border-card); text-align:left; transition:all var(--t-fast);">
+                <div class="font-display" style="font-size:14px; font-weight:700; color:var(--gilt-100);">10-Minute Rest</div>
+                <div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px;">Refocus, Treat Wounds. No condition clearing or spell recovery.</div>
+            </button>
+            <button onclick="selectRest('long')" id="btn-long"
+                    style="padding:var(--sp-4); border-radius:var(--r-sm); cursor:pointer; background:var(--bg-base); border:2px solid var(--border-card); text-align:left; transition:all var(--t-fast);">
+                <div class="font-display" style="font-size:14px; font-weight:700; color:var(--gilt-100);">8-Hour Rest</div>
+                <div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px;">Full recovery: HP regen, conditions clear, spell slots restore, focus refills.</div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 2: Treat Wounds -->
+    <div class="rw-step" id="step-2" style="display:none;">
+        <div style="display:flex; align-items:center; margin-bottom:var(--sp-3);">
+            <span class="rw-step-num pending" id="sn-2">2</span>
+            <div>
+                <div class="font-display" style="font-size:14px; color:var(--gilt-100);">Treat Wounds</div>
+                <div style="font-size:11px; color:var(--text-on-dark-3);">Roll Medicine to heal party members. Immune for 1 hour per target after attempt.</div>
+            </div>
+        </div>
+        <div style="background:var(--bg-base); border:1px solid var(--border-card); border-radius:var(--r-sm); padding:var(--sp-3); margin-bottom:var(--sp-3); font-size:11px;">
+            <div style="display:grid; grid-template-columns:auto 1fr 1fr 1fr 1fr; gap:6px 12px; color:var(--text-on-dark-3);">
+                <span style="font-weight:700;">DC</span><span>Trained</span><span>Expert</span><span>Master</span><span>Legendary</span>
+                <span style="font-weight:700;">Value</span><span>15</span><span>20</span><span>30</span><span>40</span>
+                <span style="font-weight:700;">Heal</span><span>2d8</span><span>2d8+10</span><span>2d8+30</span><span>2d8+50</span>
+                <span style="font-weight:700;">Crit</span><span>4d8</span><span>4d8+10</span><span>4d8+30</span><span>4d8+50</span>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr auto auto; gap:var(--sp-2); align-items:end; margin-bottom:var(--sp-3);">
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase;">Healer</label>
+                <select id="tw-healer" style="width:100%; margin-top:4px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px;">
+                    {% for pc in party %}
+                    <option value="{{ pc.name }}">{{ pc.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase;">Target</label>
+                <select id="tw-target" style="width:100%; margin-top:4px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px;">
+                    {% for pc in party %}
+                    <option value="{{ pc.name }}">{{ pc.name }} ({{ pc.current_hp }}/{{ pc.max_hp }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase;">DC</label>
+                <select id="tw-dc" style="margin-top:4px; font-size:12px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:6px;">
+                    <option value="15">DC 15 (Trained)</option>
+                    <option value="20">DC 20 (Expert)</option>
+                    <option value="30">DC 30 (Master)</option>
+                    <option value="40">DC 40 (Legendary)</option>
+                </select>
+            </div>
+            <button onclick="treatWounds()" style="font-size:12px; font-weight:700; padding:8px 16px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100);">Roll</button>
+        </div>
+        <div id="tw-results" style="display:flex; flex-direction:column; gap:6px;"></div>
+        <button onclick="nextStep(3)" style="margin-top:var(--sp-3); font-size:11px; padding:8px 20px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100);">Continue</button>
+    </div>
+
+    <!-- Step 3: Refocus -->
+    <div class="rw-step" id="step-3" style="display:none;">
+        <div style="display:flex; align-items:center; margin-bottom:var(--sp-3);">
+            <span class="rw-step-num pending" id="sn-3">3</span>
+            <div>
+                <div class="font-display" style="font-size:14px; color:var(--gilt-100);">Refocus</div>
+                <div style="font-size:11px; color:var(--text-on-dark-3);">Select PCs who have focus points to recover (10-min activity).</div>
+            </div>
+        </div>
+        <div id="refocus-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+        <button onclick="nextStep(4)" style="margin-top:var(--sp-3); font-size:11px; padding:8px 20px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100);">Continue</button>
+    </div>
+
+    <!-- Step 4: Apply & Summary -->
+    <div class="rw-step" id="step-4" style="display:none;">
+        <div style="display:flex; align-items:center; margin-bottom:var(--sp-3);">
+            <span class="rw-step-num pending" id="sn-4">4</span>
+            <div>
+                <div class="font-display" style="font-size:14px; color:var(--gilt-100);">Apply Rest</div>
+                <div style="font-size:11px; color:var(--text-on-dark-3);" id="step4-desc">Apply all rest effects to the party.</div>
+            </div>
+        </div>
+        <div id="rest-summary" style="margin-bottom:var(--sp-3);"></div>
+        <button onclick="applyRest()" id="apply-btn" style="font-family:var(--font-display); font-size:13px; font-weight:700; padding:12px 24px; border-radius:var(--r-sm); cursor:pointer; background:linear-gradient(180deg,#e0b65a,#a4842b); border:1px solid rgba(240,216,138,0.6); color:#0c0a07; letter-spacing:0.06em; text-transform:uppercase;">Apply Rest Effects</button>
+        <div id="apply-result" style="margin-top:var(--sp-3);"></div>
+    </div>
+</div>
+
+<script>
+var PARTY = {{ party | tojson }};
+var restType = null;
+var currentStep = 1;
+
+function selectRest(type) {
+    restType = type;
+    document.getElementById('btn-short').style.borderColor = type === 'short' ? 'var(--gilt-300)' : 'var(--border-card)';
+    document.getElementById('btn-long').style.borderColor = type === 'long' ? 'var(--gilt-300)' : 'var(--border-card)';
+    document.getElementById('step-2').style.display = '';
+    document.getElementById('step-3').style.display = '';
+    document.getElementById('step-4').style.display = '';
+    nextStep(2);
+    renderRefocus();
+    if (type === 'long') {
+        document.getElementById('step4-desc').textContent = 'Applies: HP regen (Con x Level), clears fatigued/wounded/dying, reduces drained by 1, restores focus/spell slots.';
+    } else {
+        document.getElementById('step4-desc').textContent = 'Applies refocus selections. Treat Wounds results are already applied.';
+    }
+}
+
+function nextStep(step) {
+    currentStep = step;
+    for (var i = 1; i <= 4; i++) {
+        var sn = document.getElementById('sn-' + i);
+        if (i < step) { sn.className = 'rw-step-num done'; }
+        else if (i === step) { sn.className = 'rw-step-num current'; }
+        else { sn.className = 'rw-step-num pending'; }
+    }
+}
+
+function renderRefocus() {
+    var el = document.getElementById('refocus-list');
+    var focusPCs = PARTY.filter(function(pc) { return pc.focus_max > 0; });
+    if (!focusPCs.length) {
+        el.innerHTML = '<div style="font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No PCs have focus points.</div>';
+        return;
+    }
+    el.innerHTML = focusPCs.map(function(pc) {
+        var deficit = pc.focus_max - pc.focus_current;
+        return '<label class="rw-pc-card" style="display:flex; align-items:center; gap:10px; cursor:pointer;">' +
+            '<input type="checkbox" class="refocus-cb" value="' + pc.name + '"' + (deficit > 0 && restType === 'short' ? ' checked' : '') + '>' +
+            '<div style="flex:1;">' +
+            '<div style="font-size:13px; font-weight:600; color:var(--text-on-dark);">' + pc.name + ' <span style="font-size:11px; color:var(--text-on-dark-3);">(' + pc.class_name + ')</span></div>' +
+            '<div style="font-size:11px; color:var(--text-on-dark-3);">Focus: ' + pc.focus_current + '/' + pc.focus_max + (deficit > 0 ? ' -- can recover 1' : ' -- full') + '</div>' +
+            '</div></label>';
+    }).join('');
+}
+
+async function treatWounds() {
+    var healer = document.getElementById('tw-healer').value;
+    var target = document.getElementById('tw-target').value;
+    var dc = parseInt(document.getElementById('tw-dc').value);
+    var r = await fetch('/api/rest/treat_wounds', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({healer: healer, target: target, dc: dc})
+    });
+    var j = await r.json();
+    if (!j.success) return;
+    var degreeColors = {critical_success: '#9bc06f', success: '#6a9c44', failure: 'var(--text-on-dark-3)', critical_failure: '#d36e6e'};
+    var degreeLabels = {critical_success: 'CRIT SUCCESS', success: 'SUCCESS', failure: 'FAILURE', critical_failure: 'CRIT FAILURE'};
+    var html = '<div class="rw-pc-card">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<span style="font-size:13px; font-weight:600; color:var(--text-on-dark);">' + j.healer + ' treats ' + j.target + '</span>' +
+        '<span style="font-size:11px; font-weight:700; color:' + degreeColors[j.degree] + ';">' + degreeLabels[j.degree] + '</span>' +
+        '</div>' +
+        '<div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px; font-family:monospace;">d20(' + j.d20 + ') + ' + j.modifier + ' = ' + j.total + ' vs DC ' + j.dc + '</div>' +
+        '<div style="font-size:12px; color:var(--text-on-dark-2); margin-top:4px;">' + j.detail + '</div>' +
+        '<div style="font-size:11px; color:var(--text-on-dark-3); margin-top:2px;">HP: ' + j.new_hp + '/' + j.max_hp + '</div>' +
+        '</div>';
+    document.getElementById('tw-results').innerHTML += html;
+    // Update the target dropdown to reflect new HP
+    var opts = document.getElementById('tw-target').options;
+    for (var i = 0; i < opts.length; i++) {
+        if (opts[i].value === j.target) {
+            opts[i].textContent = j.target + ' (' + j.new_hp + '/' + j.max_hp + ')';
+        }
+    }
+}
+
+async function applyRest() {
+    var refocus = [];
+    document.querySelectorAll('.refocus-cb:checked').forEach(function(cb) { refocus.push(cb.value); });
+    var btn = document.getElementById('apply-btn');
+    btn.disabled = true; btn.textContent = 'Applying...';
+    var r = await fetch('/api/rest/apply', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: restType, refocus: refocus})
+    });
+    var j = await r.json();
+    btn.disabled = false; btn.textContent = 'Apply Rest Effects';
+    if (!j.success) return;
+    var html = '<div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#9bc06f; margin-bottom:var(--sp-2);">Rest Applied</div>';
+    (j.results || []).forEach(function(res) {
+        html += '<div class="rw-pc-card" style="margin-bottom:6px;">' +
+            '<div style="font-size:13px; font-weight:600; color:var(--text-on-dark);">' + res.name + '</div>';
+        if (res.hp_regained !== undefined) html += '<div style="font-size:11px; color:#6a9c44;">HP restored: +' + res.hp_regained + ' (now ' + res.new_hp + ')</div>';
+        if (res.conditions_cleared) html += '<div style="font-size:11px; color:var(--text-on-dark-3);">Conditions cleared (fatigued, wounded, dying, etc.)</div>';
+        if (res.focus !== undefined) html += '<div style="font-size:11px; color:var(--gilt-100);">Focus: ' + res.focus + '</div>';
+        if (res.focus_regained) html += '<div style="font-size:11px; color:var(--gilt-100);">Refocused (+1 focus)</div>';
+        html += '</div>';
+    });
+    document.getElementById('apply-result').innerHTML = html;
+    nextStep(5);
+}
+</script>
+{% endblock %}
