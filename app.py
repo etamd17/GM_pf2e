@@ -59,6 +59,24 @@ app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uu
 # a fat tarball push (vault_data) but well under Railway's worker memory.
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
 
+
+# Cache-bust static assets: append each file's mtime as `?v=` to every
+# url_for('static', ...) link. Browsers cache CSS/JS aggressively, so without
+# this a deploy that changes e.g. system.css can leave users staring at a stale
+# stylesheet until a manual hard refresh. The mtime changes whenever the file is
+# rewritten (including on each Railway deploy), so the version updates itself and
+# we never have to hand-bump a number. Never let this break rendering.
+@app.url_defaults
+def _static_cache_bust(endpoint, values):
+    if endpoint != 'static' or not values or not values.get('filename'):
+        return
+    try:
+        fpath = os.path.join(app.static_folder, values['filename'])
+        values['v'] = int(os.stat(fpath).st_mtime)
+    except Exception:
+        pass
+
+
 # --- GM ACCESS CONTROL ---
 GM_PASSWORD = os.environ.get('GM_PASSWORD', '')  # Set in Railway env vars
 

@@ -146,11 +146,11 @@
                     Session Recap
                 </button>
             </div>
-            <div id="session-recap-modal" class="hidden modal-backdrop" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay); display:flex; align-items:center; justify-content:center;">
+            <div id="session-recap-modal" class="hidden modal-backdrop" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay); display:none; align-items:center; justify-content:center;" onclick="closeSessionRecap()">
                 <div style="background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; max-width:640px; width:92vw; max-height:80vh; overflow:auto; padding:var(--sp-5);" onclick="event.stopPropagation()">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
                         <h2 class="font-display" style="font-size:16px; color:var(--gilt-100);">Session Recap</h2>
-                        <button onclick="document.getElementById('session-recap-modal').classList.add('hidden')" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
+                        <button onclick="closeSessionRecap()" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
                     </div>
                     <pre id="session-recap-text" style="font-size:12px; line-height:1.6; color:var(--text-on-dark-2); white-space:pre-wrap; font-family:var(--font-ui); background:var(--bg-page); border:1px solid var(--border-card); border-radius:8px; padding:var(--sp-4); max-height:60vh; overflow:auto;">Loading...</pre>
                     <div style="margin-top:var(--sp-3); display:flex; gap:8px;">
@@ -163,11 +163,17 @@
                 var modal = document.getElementById('session-recap-modal');
                 modal.classList.remove('hidden');
                 modal.style.display = 'flex';
+                document.getElementById('session-recap-text').textContent = 'Loading...';
                 fetch('/api/session_recap').then(function(r){return r.json();}).then(function(data) {
                     document.getElementById('session-recap-text').textContent = data.recap || 'No session data yet.';
                 }).catch(function() {
                     document.getElementById('session-recap-text').textContent = 'Failed to load recap.';
                 });
+            }
+            function closeSessionRecap() {
+                var modal = document.getElementById('session-recap-modal');
+                modal.classList.add('hidden');
+                modal.style.display = 'none';
             }
             function copyRecap() {
                 var text = document.getElementById('session-recap-text').textContent;

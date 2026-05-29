@@ -1088,6 +1088,15 @@ body.tracker, .layout, .grid-wrap, .tool-strip, .panel {
     pointer-events: none !important;
 }
 
+/* These overlay panels/modals carry an inline `display:flex` for layout,
+   which beats Tailwind's non-!important `.hidden`. Force the hide so their
+   class-based toggles — and their initial hidden state — actually work. */
+#chat-panel.hidden,
+#journal-panel.hidden,
+#kb-help-card.hidden {
+    display: none !important;
+}
+
 /* ── 23. Force dark page chrome regardless of legacy theme attrs ───── */
 
 html, body { background-color: var(--bg-page) !important; }
