@@ -5808,7 +5808,7 @@
         }
         window.degreeBanner = degreeBanner;
 
-        function showRollToast(title, total, detail, isCrit, isFumble, diceResults, dc) {
+        function showRollToast(title, total, detail, isCrit, isFumble, diceResults, dc, rerollFn) {
             const container = document.getElementById('roll-toast-container');
             const toast = document.createElement('div');
             const mode = getDiceMode();
@@ -5864,6 +5864,19 @@
             const totalClass = isPlain ? 'text-2xl' : 'text-3xl';
             const dismissMs = isPlain ? 4000 : 8000;
 
+            // Hero-point reroll (live-play QoL): when the caller supplies a reroll
+            // closure and the PC still has hero points, offer a one-click reroll
+            // that spends a point and re-rolls the same check in place. Existing
+            // callers that pass no closure are unaffected.
+            let rerollHTML = '';
+            if (typeof rerollFn === 'function') {
+                const heroEl = document.getElementById('hero-pips');
+                const heroCount = heroEl ? parseInt(heroEl.getAttribute('data-current') || '0', 10) : 0;
+                if (heroCount > 0) {
+                    rerollHTML = `<button data-hero-reroll style="margin-top:7px; width:100%; padding:5px 10px; font-size:11px; font-weight:700; letter-spacing:0.03em; border-radius:5px; background:rgba(201,163,78,0.14); border:1px solid rgba(201,163,78,0.45); color:#e0c068; cursor:pointer;">&#9826; Hero Point &mdash; Reroll (${heroCount} left)</button>`;
+                }
+            }
+
             toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl ${padClass} relative overflow-hidden pointer-events-auto`;
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
@@ -5879,8 +5892,18 @@
                 ${degreeHTML}
                 ${penaltyHTML}
                 <div class="text-[9px] text-gray-600 mt-1 italic">Sent to GM </div>
+                ${rerollHTML}
             `;
             container.prepend(toast);
+            if (rerollHTML) {
+                const _rr = toast.querySelector('[data-hero-reroll]');
+                if (_rr) _rr.onclick = async () => {
+                    _rr.disabled = true;
+                    try { await modifyHero('decrease'); } catch (_) {}
+                    toast.remove();
+                    rerollFn();
+                };
+            }
             // Crit / nat-1 flourish + screen-edge flash (Chunk 4).
             if (isCrit) {
                 toast.classList.add('crit-flourish');
@@ -5923,10 +5946,10 @@
                     isCrit: isCrit,
                     isFumble: isFumble
                 }).then(() => {
-                    showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}], dc);
+                    showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}], dc, () => rollSkill(skillName, modifier, dc));
                 });
             } else {
-                showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}], dc);
+                showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}], dc, () => rollSkill(skillName, modifier, dc));
             }
         }
 
