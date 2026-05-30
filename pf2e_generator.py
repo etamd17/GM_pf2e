@@ -1263,6 +1263,198 @@ class RobustPF2eGenerator:
             "A doorway standing alone in an open field, leading nowhere — or somewhere",
         ]
 
+        # ── Rapid-fire data (one-tap, one-line outputs for live play) ──
+        self.omens = [
+            "Every dog in the district has gone silent at once.",
+            "The temple bells rang at midnight though no one pulled the rope.",
+            "A two-headed calf was born on the outskirts last night.",
+            "The river ran red for an hour at dawn, then cleared.",
+            "Crows have gathered on the rooftops for three days straight.",
+            "Milk soured in every pail across the village overnight.",
+            "A comet hangs low and unmoving in the western sky.",
+            "The shrine's statues are weeping a clear, sweet sap.",
+            "Shadows in the square fell the wrong way at noon.",
+            "Every mirror in the inn cracked in the same instant.",
+            "The well water tastes of salt though the sea is leagues away.",
+            "Newborns have stopped crying; they only stare and listen.",
+            "A flock of birds dropped dead in a perfect circle.",
+            "The smith's fire burns blue and gives no heat.",
+            "Frost crept across the windows in high summer.",
+            "An old gravestone now bears a living person's name.",
+        ]
+        self.bounty_crimes = [
+            "arson at the granary", "the theft of a noble's signet",
+            "smuggling alchemical contraband", "the murder of a city guard",
+            "desertion from the watch", "impersonating a Hellknight",
+            "robbing the founder's crypt", "counterfeiting trade scrip",
+            "kidnapping the harbormaster's heir", "poisoning a temple well",
+            "inciting a dockworkers' riot", "heresy against the local faith",
+            "horse theft and assault", "running an unlicensed fighting ring",
+            "selling forbidden necromantic texts", "piracy on the coast road",
+        ]
+        self.trinkets = [
+            "a tarnished locket holding a stranger's portrait",
+            "a brass key that fits no known lock",
+            "a vial of sand that never stops slowly swirling",
+            "a toy soldier carved from black coral",
+            "a folded map of a coastline that doesn't exist",
+            "a single die that always lands on the same number",
+            "a dried flower pressed in a banned book",
+            "a ring sized for a finger far too large",
+            "a coin from a kingdom that fell two centuries ago",
+            "a glass eye that is faintly warm to the touch",
+            "a love letter, water-stained and never sent",
+            "a tooth set in silver on a leather cord",
+            "a music box that plays only when unwatched",
+            "a feather that weighs as much as a brick",
+            "a deck of cards missing every face card",
+            "a small iron bell with no clapper",
+        ]
+        self.room_details = [
+            "Claw marks rake the far wall, fresh and shoulder-high.",
+            "A draft carries the smell of cold stone and old smoke.",
+            "Water drips somewhere unseen, echoing off the ceiling.",
+            "Faded murals show a procession toward a faceless figure.",
+            "A toppled chair sits in a ring of long-dried candle wax.",
+            "Dust lies thick everywhere except one clean, body-sized patch.",
+            "Rusted chains hang from iron rings set into the floor.",
+            "Someone scratched forty tally marks beside the door.",
+            "A half-eaten meal waits on the table, untouched by rot.",
+            "The far corner is unnaturally dark, swallowing the light.",
+            "Roots have split the floor, reaching toward the center.",
+            "A shattered mirror keeps one intact, reflective shard.",
+            "Cold ash fills the hearth, but the stones are still warm.",
+            "Bootprints in the dust lead to the wall — and stop.",
+            "A ledger lies open, its last entry trailing off mid-word.",
+            "The ceiling is studded with the cocoons of something gone.",
+        ]
+
+        # ── Rich-card data (faction / deity / villain / dungeon room) ──
+        self.faction_goals = [
+            "monopolize the regional trade in a single vital good",
+            "recover a relic they claim by ancient right",
+            "install a sympathetic figure on the seat of power",
+            "purge the area of a rival creed or bloodline",
+            "awaken (or contain) something sleeping beneath the city",
+            "rewrite the record to erase a past crime",
+            "build a web of blackmail over the ruling class",
+            "open — or seal forever — a gate to another plane",
+        ]
+        self.faction_methods = [
+            "patient infiltration and well-placed bribes",
+            "open intimidation and street violence",
+            "forged documents, blackmail, and leverage",
+            "charity and public works that buy loyalty",
+            "quiet murder of anyone who learns too much",
+            "religious fervor and mass recruitment",
+            "smuggling, fencing, and control of the docks",
+            "arcane surveillance and bound spies",
+        ]
+        self.faction_assets = [
+            "a safehouse beneath a respectable business",
+            "a turncoat inside the city watch",
+            "a war-chest of laundered coin",
+            "a caged monster kept as a deterrent",
+            "a press churning out propaganda",
+            "a corrupt magistrate who quashes their cases",
+            "a hidden archive of damning secrets",
+            "a fast ship and a captain who asks no questions",
+        ]
+        self.deity_portfolios = [
+            "broken oaths and second chances", "the tide and the drowned",
+            "forge-fire and honest labor", "secrets kept and secrets sold",
+            "the hunt, the chase, and the kill", "plague, fever, and grim mercy",
+            "the harvest and the hungry season", "dreams, omens, and the unseen",
+            "war-songs and the glorious dead", "thresholds, locks, and travelers",
+        ]
+        self.deity_edicts = [
+            "never refuse a guest shelter", "repay every debt threefold",
+            "bury the dead, whoever they were", "speak no lie to a child",
+            "finish what you begin", "share the first of every catch or harvest",
+            "strike only those who can strike back", "keep the old roads open",
+        ]
+        self.deity_anathema = [
+            "abandon a sworn companion in danger", "profit from another's grief",
+            "let a murderer go unnamed", "burn a library or archive",
+            "break bread with one who betrayed you", "kill a guest under your roof",
+            "enslave a thinking creature", "desecrate a grave for coin",
+        ]
+        self.deity_symbols = [
+            "a broken chain bent into a circle", "a single eye within a wave",
+            "an anvil struck by a falling star", "a key swallowing its own teeth",
+            "a stag's skull crowned with thorns", "a black candle, unlit",
+            "a sheaf of wheat bound in iron wire", "a closed door with no handle",
+        ]
+        self.deity_titles = [
+            "the Unbroken", "the Drowned Mother", "the Last Lantern",
+            "the Patient One", "the Bone Herald", "the Open Door",
+            "the Kindly Knife", "the Ninefold Eye", "the Gray Pilgrim",
+        ]
+        self.villain_schemes = [
+            "to become functionally immortal by ruinous means",
+            "to topple a just ruler and seize the throne in the chaos",
+            "to summon a patron and bargain away the region",
+            "to engineer a disaster they can profit from rebuilding",
+            "to harvest something vital from the populace, slowly",
+            "to rewrite an ancient binding pact in their own favor",
+            "to unite the area's gangs under one bloody banner",
+            "to prove a forbidden theory whatever the body count",
+        ]
+        self.villain_methods = [
+            "proxies and cut-outs — never their own hands",
+            "overwhelming force and public spectacle",
+            "favors, seduction, and a web of obligations",
+            "ritual murder timed to celestial events",
+            "economic strangulation and engineered scarcity",
+            "impersonation and stolen authority",
+            "fear: disappearances, threats, and made examples",
+            "false benevolence, beloved while they bleed the place dry",
+        ]
+        self.villain_weaknesses = [
+            "a living witness to their first crime hides nearby",
+            "their power depends on an object they cannot keep close",
+            "an estranged sibling knows the lie at their core",
+            "they must return to one site to renew their strength",
+            "a debt to a worse creature is about to come due",
+            "their lieutenant's loyalty is one insult from breaking",
+            "their true name, spoken aloud, unravels a key protection",
+            "vanity — they cannot resist explaining themselves to an equal",
+        ]
+        self.room_feature_set = [
+            "a collapsed section choked with rubble",
+            "a stagnant pool reflecting the ceiling",
+            "a row of crumbling statues facing the door",
+            "a cold hearth big enough to stand inside",
+            "tiered stone benches around a central pit",
+            "a spiral stair descending into the dark",
+            "shelves heavy with rotted scrolls and jars",
+            "a mosaic floor depicting a forgotten battle",
+            "iron cages swaying on rusted chains",
+            "a dry fountain shaped like a coiled serpent",
+        ]
+        self.room_exit_set = [
+            "a low archway, half-blocked by debris",
+            "a heavy iron door, barred from this side",
+            "a curtain of chains over a black passage",
+            "a crack just wide enough to squeeze through",
+            "twin doors carved with warning glyphs",
+            "a trapdoor beneath a shifted rug",
+            "an open balcony over the room below",
+            "a flooded tunnel sloping downward",
+        ]
+        self.room_content_set = [
+            "nothing obvious — but the dust has been disturbed",
+            "a days-old corpse clutching a sealed letter",
+            "a locked chest whose key is elsewhere",
+            "a sleeping creature best left undisturbed",
+            "a shrine that demands a small offering",
+            "a terrified survivor in hiding",
+            "a magical residue that prickles the skin",
+            "scattered coins and a single fine item",
+            "a puzzle-lock guarding the only way forward",
+            "supplies a careful party can put to use",
+        ]
+
     # ── Helper methods ────────────────────────────────────────────────
 
     def _tier(self, level):
@@ -2445,3 +2637,127 @@ class RobustPF2eGenerator:
         for key, value in replacements.items():
             result = result.replace(key, value)
         return result
+
+    # ════════════════════════════════════════════════════════════════
+    #  RAPID-FIRE GENERATORS — one-tap, one-line snippets for the
+    #  Generators page "Rapid Fire" bar. level/biome are accepted for a
+    #  uniform signature; most rapid generators ignore them.
+    # ════════════════════════════════════════════════════════════════
+    def get_rapid_name(self, level=1, biome="City"):
+        return f"<b>{self._npc_name()}</b> <em>— {self._ancestry()} {random.choice(self.professions).lower()}</em>"
+
+    def get_rapid_tavern(self, level=1, biome="City"):
+        return f"<b>{random.choice(self.tavern_names)}</b>"
+
+    def get_rapid_shop(self, level=1, biome="City"):
+        return f"<b>{random.choice(self.shop_names)}</b> <em>— {random.choice(self.shop_types)[0].lower()}</em>"
+
+    def get_rapid_place(self, level=1, biome="City"):
+        return f"<b>{self._settlement_name()}</b>"
+
+    def get_rapid_twist(self, level=1, biome="City"):
+        return f"<b>Twist —</b> {random.choice(self.quest_complications)}"
+
+    def get_rapid_omen(self, level=1, biome="City"):
+        return f"<b>Omen —</b> {random.choice(self.omens)}"
+
+    def get_rapid_bounty(self, level=1, biome="City"):
+        reward = max(level, 1) * random.choice([10, 15, 20, 25, 50])
+        dead_or_alive = ", dead or alive" if random.random() < 0.4 else ""
+        return (f"<b>WANTED:</b> {self._npc_name()}, {self._ancestry()} "
+                f"{random.choice(self.professions).lower()} — for {random.choice(self.bounty_crimes)}. "
+                f"<em>Reward: {reward} gp{dead_or_alive}.</em>")
+
+    def get_rapid_loot(self, level=1, biome="City"):
+        coins = self._currency(level)
+        if random.random() < 0.55:
+            item = random.choice([
+                "a folded, unsent letter", "a set of bone dice",
+                "a ring of mismatched keys", "a vial of cheap spirits",
+                "a pawn ticket", "a lucky copper on a cord",
+                "a half-eaten ration", "a stolen brooch", "a dog-eared chapbook",
+            ])
+            return f"<b>On them —</b> {coins}, and {item}."
+        return f"<b>On them —</b> {coins}."
+
+    def get_rapid_trinket(self, level=1, biome="City"):
+        return f"<b>Trinket —</b> {random.choice(self.trinkets)}"
+
+    def get_rapid_room(self, level=1, biome="City"):
+        return f"<b>Detail —</b> {random.choice(self.room_details)}"
+
+    # ════════════════════════════════════════════════════════════════
+    #  NEW RICH CARDS — full detail blocks in the standard card style.
+    # ════════════════════════════════════════════════════════════════
+    def get_faction(self, level=1, biome="City"):
+        adj = random.choice(['Gilded', 'Ashen', 'Silent', 'Crimson', 'Iron', 'Hollow', 'Verdant', 'Pale'])
+        noun = random.choice(['Hand', 'Compact', 'Choir', 'Ledger', 'Veil', 'Circle', 'Tide', 'Order'])
+        front = random.choice(['a merchant guild', 'a charitable temple', 'a social club',
+                               'a mercenary company', 'a scholarly society', 'a trade union'])
+        return (
+            f"<b>The {adj} {noun}</b><br>"
+            f"<b>Public face:</b> {front}.<br>"
+            f"<b>True goal:</b> To {random.choice(self.faction_goals)}.<br>"
+            f"<b>Methods:</b> {random.choice(self.faction_methods).capitalize()}.<br>"
+            f"<b>Led by:</b> {self._npc_name()}, a {random.choice(self.traits)} {self._ancestry()} who {random.choice(self.quirks)}.<br>"
+            f"<b>Asset:</b> {random.choice(self.faction_assets).capitalize()}.<br>"
+            f"<b>Weakness:</b> {random.choice(self.villain_weaknesses).capitalize()}.<br>"
+            f"<b>Read them:</b> DC {self._dc(level)} Society to know their reputation; DC {self._dc_hard(level)} to learn the true goal."
+        )
+
+    def get_deity(self, level=1, biome="City"):
+        name = self._npc_name().split()[0]
+        font = random.choice(["heal", "harm", "heal or harm"])
+        return (
+            f"<b>{name}, {random.choice(self.deity_titles)}</b><br>"
+            f"<b>Portfolio:</b> {random.choice(self.deity_portfolios).capitalize()}.<br>"
+            f"<b>Symbol:</b> {random.choice(self.deity_symbols).capitalize()}.<br>"
+            f"<b>Divine font:</b> {font}.<br>"
+            f"<b>Edict:</b> {random.choice(self.deity_edicts).capitalize()}.<br>"
+            f"<b>Anathema:</b> Never {random.choice(self.deity_anathema)}.<br>"
+            f"<b>Typical faithful:</b> a {random.choice(self.professions).lower()} or {random.choice(self.professions).lower()}.<br>"
+            f"<em>Use as a small cult, a forgotten god, or a regional aspect of a known deity.</em>"
+        )
+
+    def get_villain(self, level=1, biome="City"):
+        return (
+            f"<b>{self._npc_name()} — {random.choice(self.traits).title()} {self._ancestry()} {random.choice(self.professions)}</b><br>"
+            f"<b>Scheme:</b> {random.choice(self.villain_schemes).capitalize()}.<br>"
+            f"<b>Methods:</b> {random.choice(self.villain_methods).capitalize()}.<br>"
+            f"<b>Tell:</b> They {random.choice(self.quirks)}.<br>"
+            f"<b>Lieutenant:</b> {self._npc_name()}, a {random.choice(self.traits)} {self._ancestry()} who handles the wet work.<br>"
+            f"<b>Weakness:</b> {random.choice(self.villain_weaknesses).capitalize()}.<br>"
+            f"<b>Build as:</b> a {random.choice(['Moderate', 'Severe', 'Extreme'])}-threat boss for a level {level} party (APL+2 to +4).<br>"
+            f"<b>Uncover it:</b> DC {self._dc_hard(level)} to connect them to the scheme."
+        )
+
+    def get_dungeon_room(self, level=1, biome="City"):
+        lines = [
+            "<b>Dungeon Room</b>",
+            f"<b>Feature:</b> The room holds {random.choice(self.room_feature_set)}.",
+            f"<b>Atmosphere:</b> {random.choice(self.room_details)}",
+            f"<b>Exits:</b> {random.choice(self.room_exit_set).capitalize()}; and the way you came.",
+            f"<b>Contents:</b> {random.choice(self.room_content_set).capitalize()}.",
+        ]
+        if random.random() < 0.5:
+            lines.append(f"<b>Danger:</b> {self._monster(level, biome)} lurks here, or a DC {self._dc(level)} hazard waits to trigger.")
+        lines.append(f"<b>Search:</b> DC {self._dc(level)} Perception for the hidden; DC {self._dc_hard(level)} for the truly concealed.")
+        return "<br>".join(lines)
+
+    def get_travel_encounter(self, level=1, biome="City"):
+        bd = self.biomes.get(biome, self.biomes["City"])
+        fl = random.choice(bd["flavor"])
+        lines = [
+            f"<b>Travel Encounter ({biome})</b>",
+            f"<b>Setting:</b> The party is near {fl}.",
+            f"<b>Event:</b> {random.choice(self.travel_events)}",
+        ]
+        roll = random.random()
+        if roll < 0.45:
+            lines.append(f"<b>Threat:</b> It turns hostile — {self._monster(level, biome)} is involved.")
+        elif roll < 0.7:
+            lines.append(f"<b>Catch:</b> {random.choice(self.quest_complications)}")
+        else:
+            lines.append("<b>Boon:</b> Handled well, this yields a useful contact, shortcut, or rumor.")
+        lines.append(f"<b>Checks:</b> DC {self._dc(level)} Perception to notice it early; DC {self._dc_hard(level)} Survival to avoid or exploit the terrain.")
+        return "<br>".join(lines)
