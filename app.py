@@ -6056,7 +6056,6 @@ def api_tracker_state():
     return _tracker_json_response()
 
 @app.route('/api/add_combatant', methods=['POST'])
-@gm_required
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
     path = request.form.get('path') or (request.json or {}).get('path')
@@ -6085,7 +6084,6 @@ def add_party():
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/remove_combatant/<instance_id>', methods=['POST'])
-@gm_required
 def remove_combatant(instance_id):
     global ACTIVE_ENCOUNTER, TURN_INDEX
     ACTIVE_ENCOUNTER = [c for c in ACTIVE_ENCOUNTER if c.instance_id != instance_id]
@@ -6269,7 +6267,6 @@ def set_combatant_tactics(instance_id):
 
 
 @app.route('/api/clear_encounter', methods=['POST'])
-@gm_required
 def clear_encounter():
     global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
     if ACTIVE_ENCOUNTER:
@@ -6293,7 +6290,6 @@ def get_combat_log():
     return jsonify({"log": entries, "count": len(entries)})
 
 @app.route('/api/combat_log/clear', methods=['POST'])
-@gm_required
 def clear_combat_log():
     """Clear the combat log."""
     COMBAT_LOGS.clear()
@@ -6306,7 +6302,6 @@ def clear_combat_log():
 GM_SECRET_LOG = []  # Rolls only the GM can see
 
 @app.route('/api/gm_secret_roll', methods=['POST'])
-@gm_required
 def gm_secret_roll():
     """Roll dice secretly — result only visible to GM, not broadcast to players."""
     data = request.json or {}
@@ -7452,7 +7447,6 @@ def update_pc_condition(pc_name):
     return jsonify({"success": False})
 
 @app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
-@gm_required
 def toggle_condition(instance_id):
     condition = request.form.get('condition')
     action = request.form.get('action')
@@ -8234,7 +8228,6 @@ def _sanitize_encounter_name(name: str) -> str:
 
 
 @app.route('/api/save_encounter', methods=['POST'])
-@gm_required
 def save_encounter():
     raw_name = request.form.get('encounter_name')
     name = _sanitize_encounter_name(raw_name or '')
@@ -8278,7 +8271,6 @@ def save_encounter():
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/load_encounter', methods=['POST'])
-@gm_required
 def load_encounter():
     global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP, ENCOUNTER_NOTES, SESSION_TIMER_START
     name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
@@ -8835,7 +8827,6 @@ def dm_generator():
     return render_template('generator.html', data=data, current_level=party_level, current_biome=biome)
 
 @app.route('/api/generate/<element_type>', methods=['POST'])
-@gm_required
 def api_generate(element_type):
     if element_type not in VALID_GENERATOR_TYPES:
         return jsonify({'error': 'Invalid generator type'}), 400
@@ -10006,7 +9997,6 @@ def cast_spell(pc_name):
 # (and optional DC) to broadcast — every player's sheet pops a small
 # banner with a "Roll +N" button using their own modifier.
 @app.route('/api/request_check', methods=['POST'])
-@gm_required
 def request_check_from_players():
     data = request.get_json(silent=True) or {}
     skill = (data.get('skill') or '').strip()
@@ -10940,7 +10930,6 @@ def set_focus_spells(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/delete_character/<pc_name>', methods=['POST'])
-@gm_required
 def delete_character(pc_name):
     """Delete a character from the party library."""
     file_path = get_pc_file_path(pc_name)
