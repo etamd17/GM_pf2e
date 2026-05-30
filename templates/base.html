@@ -969,6 +969,43 @@
             setTimeout(function() { el.remove(); }, 300);
         }, 3000);
     };
+
+    // Shared modal controller for centered overlays built on .pf2e-modal:
+    //   <div id="x" class="pf2e-modal" style="position:fixed; inset:0; ...">
+    //       <div onclick="event.stopPropagation()"> ...card... </div>
+    //   </div>
+    // open()/close() toggle a single .is-open class; CSS shows it
+    // (.pf2e-modal.is-open { display:flex }). There is no inline `display`, so
+    // the class can't be beaten by one — the footgun behind the stuck-modal bug.
+    // Backdrop-click and Escape close the topmost open modal automatically.
+    (function() {
+        var stack = [];
+        function resolve(x) { return typeof x === 'string' ? document.getElementById(x) : x; }
+        window.pf2eModal = {
+            open: function(x) {
+                var m = resolve(x); if (!m) return;
+                m.classList.add('is-open');
+                var i = stack.indexOf(m); if (i !== -1) stack.splice(i, 1);
+                stack.push(m);
+            },
+            close: function(x) {
+                var m = resolve(x); if (!m) return;
+                m.classList.remove('is-open');
+                var i = stack.indexOf(m); if (i !== -1) stack.splice(i, 1);
+            }
+        };
+        document.addEventListener('click', function(e) {
+            var t = e.target;
+            if (t && t.classList && t.classList.contains('pf2e-modal') && t.classList.contains('is-open')) {
+                window.pf2eModal.close(t);
+            }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && stack.length) {
+                window.pf2eModal.close(stack[stack.length - 1]);
+            }
+        });
+    })();
     </script>
 
     {# ── Condition quick-reference tooltip (shared across all pages) ── #}

@@ -1097,6 +1097,13 @@ body.tracker, .layout, .grid-wrap, .tool-strip, .panel {
     display: none !important;
 }
 
+/* Shared modal convention (window.pf2eModal). The backdrop is hidden until
+   .is-open is added; there is NO inline `display` on the element, so the class
+   always wins. New modals should use this instead of hand-rolled hidden/inline
+   toggles, which is what caused the stuck-modal bug. */
+.pf2e-modal { display: none; }
+.pf2e-modal.is-open { display: flex; align-items: center; justify-content: center; }
+
 /* ── 23. Force dark page chrome regardless of legacy theme attrs ───── */
 
 html, body { background-color: var(--bg-page) !important; }
