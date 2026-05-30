@@ -1907,6 +1907,30 @@ async function apiPost(url, body, contentType) {
     }
 }
 
+// Fire a mutating POST and surface failures to the user instead of swallowing
+// them (the old `.catch(() => {})` pattern made a failed click look like
+// nothing happened). Unlike apiPost it does NOT touch tracker STATE — these
+// actions rely on the SSE broadcast to re-render. Returns the parsed body on
+// success, or null on any failure (network, HTTP error, or success:false).
+async function apiAction(url, body) {
+    try {
+        const res = await apiPostRaw(url, body, body ? 'json' : undefined);
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        if (!res.ok || data.success === false) {
+            toast(data.error || 'Action failed', 'error');
+            pulseSync(false);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        console.error('Action error:', url, e);
+        toast('Action failed', 'error');
+        pulseSync(false);
+        return null;
+    }
+}
+
 // Pulse the sync indicator. ok=true → gold pulse (broadcast went out).
 // ok=false → red error state until the next successful POST.
 let _syncResetTimer = null;
@@ -2920,44 +2944,32 @@ function addPersistentDamage(pcName, instanceId) {
     const typ = (document.getElementById('pd-type-' + instanceId) || {}).value || '';
     const src = (document.getElementById('pd-src-' + instanceId) || {}).value || '';
     if (!dmg.trim()) return;
-    fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ damage: dmg, type: typ, source: src }),
-    }).then(r => r.json()).then(j => {
-        if (!j || !j.success) return;
+    apiAction('/api/persistent_damage/' + encodeURIComponent(pcName) + '/add', { damage: dmg, type: typ, source: src }).then(j => {
+        if (!j) return;
         const dEl = document.getElementById('pd-dmg-' + instanceId);
         const sEl = document.getElementById('pd-src-' + instanceId);
         if (dEl) dEl.value = '';
         if (sEl) sEl.value = '';
-    }).catch(() => {});
+    });
 }
 function removePersistentDamage(pcName, idx) {
-    fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/remove/' + idx, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    }).catch(() => {});
+    apiAction('/api/persistent_damage/' + encodeURIComponent(pcName) + '/remove/' + idx, {});
 }
 function rollPersistentFlatCheck(pcName, idx) {
-    fetch('/api/persistent_damage/' + encodeURIComponent(pcName) + '/flat_check/' + idx, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    }).catch(() => {});
+    apiAction('/api/persistent_damage/' + encodeURIComponent(pcName) + '/flat_check/' + idx, {});
 }
 
 function useAction(instanceId, slot, delta) {
-    fetch('/api/use_action/' + encodeURIComponent(instanceId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot, delta }),
-    }).catch(() => {});
+    apiAction('/api/use_action/' + encodeURIComponent(instanceId), { slot, delta });
 }
 
 // Hazard actions (#12). Server-side at /api/hazard/<id>/{trigger,disable,reset}.
 // All three are GM-only POSTs that emit a combat-log entry and re-broadcast
 // the encounter; the SSE listener will re-render this row with the new
 // triggered/disabled flags so the buttons reshape automatically.
-function hazardTrigger(id) { apiPostRaw('/api/hazard/' + id + '/trigger', {}); }
-function hazardDisable(id) { apiPostRaw('/api/hazard/' + id + '/disable', {}); }
-function hazardReset(id)   { apiPostRaw('/api/hazard/' + id + '/reset',   {}); }
+function hazardTrigger(id) { apiAction('/api/hazard/' + id + '/trigger', {}); }
+function hazardDisable(id) { apiAction('/api/hazard/' + id + '/disable', {}); }
+function hazardReset(id)   { apiAction('/api/hazard/' + id + '/reset',   {}); }
 
 // Inline HTML escaper used by the hazard routine display in renderCombatant.
 // Keep small + dependency-free so it lives next to the other tracker
@@ -3110,22 +3122,14 @@ async function multiApplyCondition() {
 }
 
 function toggleReaction(pcName, used) {
-    fetch('/api/set_reaction/' + encodeURIComponent(pcName), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ used: !!used })
-    }).catch(() => {});
+    apiAction('/api/set_reaction/' + encodeURIComponent(pcName), { used: !!used });
 }
 
 function rollRecovery(instanceId) {
-    fetch('/api/recovery_check/' + encodeURIComponent(instanceId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-    }).then(r => r.json()).then(j => {
-        if (!j || !j.success) return;
+    apiAction('/api/recovery_check/' + encodeURIComponent(instanceId), {}).then(j => {
+        if (!j) return;
         _showRecoveryToast(j);
-    }).catch(() => {});
+    });
 }
 function applyRecovery(instanceId) {
     const widget = document.querySelector(`.recovery-widget[data-id="${instanceId}"]`);
@@ -3136,15 +3140,11 @@ function applyRecovery(instanceId) {
         input && input.focus();
         return;
     }
-    fetch('/api/recovery_check/' + encodeURIComponent(instanceId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ d20: v })
-    }).then(r => r.json()).then(j => {
-        if (!j || !j.success) return;
+    apiAction('/api/recovery_check/' + encodeURIComponent(instanceId), { d20: v }).then(j => {
+        if (!j) return;
         if (input) input.value = '';
         _showRecoveryToast(j);
-    }).catch(() => {});
+    });
 }
 function _showRecoveryToast(j) {
     const labels = {crit_success:'CRIT SUCCESS', success:'SUCCESS', failure:'FAILURE', crit_failure:'CRIT FAIL'};
