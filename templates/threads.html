@@ -220,7 +220,7 @@
     });
 
     const panel = document.getElementById('thread-detail');
-    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     function showBeat(id) {
         const b = byId[id]; if (!b || !panel) return;
         const npcs = (b.npcs || []).map(esc).join(', ') || '--';

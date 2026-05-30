@@ -424,7 +424,7 @@ async function loadPinnedSection() {
     } catch (e) { console.error('Load pins error:', e); }
 }
 
-function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 // Load pinned section on page load
 loadPinnedSection();

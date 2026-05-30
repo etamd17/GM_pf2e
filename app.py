@@ -6664,6 +6664,15 @@ def upload_handout_image():
     if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
         return jsonify({"error": "Invalid image format"}), 400
 
+    # Cap per-file size. The global MAX_CONTENT_LENGTH is 64 MB — far larger
+    # than any handout needs — so measure this file (seek to end, no read into
+    # memory) and reject oversized uploads before writing to disk.
+    f.seek(0, os.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 10 * 1024 * 1024:
+        return jsonify({"error": "Image too large (max 10 MB)"}), 400
+
     filename = f"{uuid.uuid4().hex[:12]}{ext}"
     filepath = os.path.join(upload_dir, filename)
     f.save(filepath)

@@ -434,7 +434,7 @@
         };
         let mCtx = { type: null, data: [], active: null, meta: {}, tab: 'all', activeTabs: false };
 
-        function esc(str) { return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+        function esc(str) { return String(str == null ? '' : str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
         document.getElementById('lbl-target-level').innerText = targetLevel;
         const _lvlBannerEl = document.getElementById('lvl-banner-num');
