@@ -1349,15 +1349,26 @@
                     }
                     if (count > 1) label += ` ${i + 1}`;
 
-                    let val = state.feats_selected[key] ? state.feats_selected[key].name : "Select Feat...";
-                    let subtitle = state.feats_selected[key] ? "Locked In" : `${label} *`;
+                    // Flag a selected feat whose prerequisites are no longer
+                    // met — covers the "Ignore Pre-Reqs" override and the case
+                    // where a skill increase backing the feat was un-picked.
+                    let sel = state.feats_selected[key];
+                    let illegal = sel && typeof meetsPrereqs === 'function' && !meetsPrereqs(sel);
+                    let val = sel ? sel.name : "Select Feat...";
+                    let subtitle = sel ? (illegal ? "Prerequisite not met" : "Locked In") : `${label} *`;
+                    let subColor = illegal ? 'text-red-400' : (sel ? 'text-green-400' : '');
+                    let cardBorder = illegal ? 'border border-red-700/70' : '';
+                    let reqLine = illegal
+                        ? `<div class="text-[11px] text-red-400 mt-1">Requires ${esc(sel.prerequisites_raw || 'an unmet prerequisite')}</div>`
+                        : '';
 
                     html += `
-                    <div class="choice-card bg-gray-900 hover:bg-gray-800" data-feat-slot-type="${ft}" onclick="openModal('${ft}', {key: '${key}'})">
+                    <div class="choice-card bg-gray-900 hover:bg-gray-800 ${cardBorder}" data-feat-slot-type="${ft}" onclick="openModal('${ft}', {key: '${key}'})">
                         <div class="flex justify-between items-center w-full">
                             <div>
-                                <div class="subtitle ${state.feats_selected[key] ? 'text-green-400' : ''}">${subtitle}</div>
+                                <div class="subtitle ${subColor}">${subtitle}</div>
                                 <div class="title">${val}</div>
+                                ${reqLine}
                             </div>
                             <span class="text-gray-500 font-bold text-xl">&rarr;</span>
                         </div>
@@ -1822,9 +1833,10 @@
                     (byType[base] = byType[base] || []).push(state.feats_selected[k]);
                 });
                 const orderedTypes = TYPE_ORDER.filter(t => byType[t]).concat(Object.keys(byType).filter(t => !TYPE_ORDER.includes(t)));
-                const rows = orderedTypes.map(t => byType[t].map(f =>
-                    `<li class="flex items-center gap-2"><span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">${TYPE_LABELS[t] || esc(t.replace('_',' '))}</span><span class="font-bold text-white">${esc(f.name)}</span></li>`
-                ).join('')).join('');
+                const rows = orderedTypes.map(t => byType[t].map(f => {
+                    const bad = (typeof meetsPrereqs === 'function') && !meetsPrereqs(f);
+                    return `<li class="flex items-center gap-2"><span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">${TYPE_LABELS[t] || esc(t.replace('_',' '))}</span><span class="font-bold ${bad ? 'text-red-400' : 'text-white'}">${esc(f.name)}</span>${bad ? ` <span class="text-[10px] text-red-400">(prereq not met)</span>` : ''}</li>`;
+                }).join('')).join('');
                 html += `<div class="mb-6"><h4 class="${SECTION_H}">New Feats</h4><ul class="text-sm text-gray-300 space-y-1">${rows}</ul></div>`;
             }
 
@@ -2312,14 +2324,20 @@
                     window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
                     return;
                 }
-                // L3+L9+L13: validator returned a missing-slot list. Show it
-                // and offer a force-save option so homebrew/variant rules
-                // aren't blocked.
+                // Validator rejected the save: either required slots are
+                // unfilled (`missing`) or a pick is illegal (`illegal`, e.g.
+                // a feat whose prerequisites aren't met). Show the combined
+                // list and offer a force-save so homebrew/variant rules and
+                // explicit "Ignore Pre-Reqs" overrides aren't blocked.
                 btn.disabled = false;
                 btn.innerText = 'Submit Level Up';
-                if (data.missing && data.missing.length) {
-                    const lines = data.missing.map(m => '  • ' + m).join('\n');
-                    if (confirm('Cannot finalize — missing required choices:\n\n' + lines + '\n\nSave anyway? (homebrew / variant rules)')) {
+                const blockers = [].concat(data.missing || [], data.illegal || []);
+                if (blockers.length) {
+                    const lines = blockers.map(m => '  • ' + m).join('\n');
+                    const heading = (data.illegal && data.illegal.length)
+                        ? 'Cannot finalize — some picks are illegal or incomplete:'
+                        : 'Cannot finalize — missing required choices:';
+                    if (confirm(heading + '\n\n' + lines + '\n\nSave anyway? (homebrew / variant rules)')) {
                         const r2 = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.assign({}, payload, {force_save: true})) });
                         const d2 = await r2.json();
                         if (d2.success) {

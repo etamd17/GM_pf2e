@@ -12166,6 +12166,34 @@ def submit_levelup(pc_name):
             elif new_level < 15 and rank > 6: rank = 6
             build['proficiencies'][sk_lower] = rank
 
+    # --- FEAT PREREQUISITE VALIDATION ---
+    # Reject feats taken THIS level whose prerequisites aren't met (e.g.
+    # Battle Medicine without trained Medicine). Checked against the
+    # proficiency table AFTER this level's skill increases are applied, so
+    # a skill trained this level can satisfy a same-level skill feat (RAW).
+    # Only SKILL_FEAT_PREREQS-known feats are gated; unknown feats pass, so
+    # there are no false positives on class/ancestry/archetype feats. Gated
+    # behind force_save so homebrew/variant picks can override — mirroring
+    # the wizard's "Ignore Pre-Reqs" checkbox. Nothing is persisted until
+    # save_and_reload_character below, so returning here is side-effect free.
+    if not data.get('force_save'):
+        illegal = []
+        for ft in (build.get('feats') or []):
+            if not isinstance(ft, list) or len(ft) < 4:
+                continue
+            if ft[3] != new_level:
+                continue  # only validate feats added at THIS level
+            chk = check_feat_prereqs(ft[0], build['proficiencies'])
+            if chk and not chk.get('met', True):
+                illegal.append(f"{ft[0]} requires {chk.get('reason', 'an unmet prerequisite')}")
+        if illegal:
+            return jsonify({
+                "success": False,
+                "illegal": illegal,
+                "error": "Level-up has illegal picks: " + "; ".join(illegal)
+                         + ". Pass force_save=true to override.",
+            }), 400
+
     if 'spellCasters' in data:
         build['spellCasters'] = data['spellCasters']
 
