@@ -309,7 +309,7 @@
 
         <div id="step-review" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
             <h2 class="text-3xl font-bold text-white mb-2">Review Changes</h2>
-            <p class="text-gray-400 mb-8">Verify your level up choices before locking them into the database.</p>
+            <p class="text-gray-400 mb-8">Here's everything you gained this level. Review it before locking it in.</p>
             <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl" id="ui-review-content"></div>
             {# Optional retrain (downtime activity, not a level-up choice
                proper) — hidden by default so the page only shows what
@@ -1677,9 +1677,54 @@
 
         function cancelRetrain(idx) { state.retrained_feats.splice(idx, 1); buildRetrainUI(); }
 
+        // ── Level-up recap helpers (Review step) ───────────────────────
+        // Mirror the backend heuristic: a feat that raises the focus pool
+        // mentions "focus point" + "maximum" in its description. Used to
+        // surface "+N Focus Point" in the recap.
+        function _focusPointsGainedThisLevel() {
+            let n = 0;
+            Object.values(state.feats_selected || {}).forEach(f => {
+                const d = ((f && (f.desc || f.description)) || '').toLowerCase();
+                if (d.includes('focus point') && d.includes('maximum')) n++;
+            });
+            return n;
+        }
+
+        // For each non-focus caster, the spell ranks whose slot count grew
+        // this level (mirrors the Magic step's slotDiff logic) so the recap
+        // can show "Rank 2 spell slots unlocked".
+        function _newSpellSlotsThisLevel() {
+            const out = [];
+            (state.spellCasters || []).forEach((caster) => {
+                let tLower = (caster.castingType || caster.spellcastingType || caster.type || 'unknown').toLowerCase();
+                if (tLower.includes('focus') || tLower.includes('innate') || tLower.includes('alchemical')) return;
+                let cType = null;
+                if (tLower.includes('spontaneous')) cType = tLower.includes('bounded') ? 'bounded_spontaneous' : 'spontaneous';
+                else if (tLower.includes('prepared')) cType = tLower.includes('bounded') ? 'bounded_prepared' : 'prepared';
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                if (!cType || !SPELL_SLOTS[cType]) return;
+                const oldS = SPELL_SLOTS[cType][currentLevel] || [];
+                const newS = SPELL_SLOTS[cType][targetLevel] || [];
+                const ranks = [];
+                for (let r = 1; r <= 10; r++) {
+                    const o = oldS[r - 1] || 0, nw = newS[r - 1] || 0;
+                    if (nw > o) ranks.push({ rank: r, count: nw, brandNew: o === 0 });
+                }
+                if (ranks.length) out.push({ name: caster.name || caster.magicTradition || 'Spellcasting', ranks });
+            });
+            return out;
+        }
+
         function renderReview() {
             const ui = document.getElementById('ui-review-content');
+            const SECTION_H = 'text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase';
             let html = "";
+
+            // "Here's what you gained" framing at the top of the recap.
+            html += `<div class="mb-6 text-center">
+                <div class="text-[11px] uppercase tracking-[0.18em] text-amber-500 font-bold mb-1">Here's what you gained</div>
+                <div class="text-lg font-bold text-white">Advancing to Level ${targetLevel}</div>
+            </div>`;
 
             // Show HP gain for this level
             let classHp = (pc.attributes || {}).classhp || 8;
@@ -1694,7 +1739,7 @@
             let oldHp = pc.hp || 0;
             let newHp = oldHp + hpPerLevel;
             html += `<div class="mb-6 bg-red-950/20 border border-red-900/50 rounded-lg p-4">
-                <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Hit Points</h4>
+                <h4 class="${SECTION_H}">Hit Points</h4>
                 <div class="flex items-center gap-4">
                     <span class="text-2xl font-bold text-red-400">${oldHp}</span>
                     <span class="text-gray-500">→</span>
@@ -1703,50 +1748,109 @@
                 </div>
             </div>`;
 
-            // Show automatic class feature bumps
+            const friendlyNames = {
+                'perception': 'Perception', 'fortitude': 'Fortitude', 'reflex': 'Reflex', 'will': 'Will',
+                'simple': 'Simple Weapons', 'martial': 'Martial Weapons', 'advanced': 'Advanced Weapons', 'unarmed': 'Unarmed',
+                'unarmored': 'Unarmored', 'light': 'Light Armor', 'medium': 'Medium Armor', 'heavy': 'Heavy Armor',
+                'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC', 'ac': 'Armor Class'
+            };
+
+            // Class & subclass features unlocked — named features and the
+            // choices made on the Class Picks step (Divine Ally, Domain,
+            // junctions, doctrines surfaced as picks, etc.).
+            const _clf = state.class_level_features || [];
+            const _picks = state.class_picks_selected || {};
+            if (_clf.length > 0) {
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Class Features</h4><ul class="text-sm text-gray-300 space-y-1">` +
+                _clf.map(f => {
+                    if (f.type === 'choice') {
+                        const pick = _picks[f.name];
+                        const picked = pick
+                            ? `<span class="font-bold text-white">${esc(f.name)}</span> <span class="text-gray-500">—</span> <span class="font-bold text-amber-400">${esc(pick)}</span>`
+                            : `<span class="font-bold text-white">${esc(f.name)}</span> <span class="text-red-400 text-xs">(no choice yet)</span>`;
+                        return `<li class="flex items-start gap-2"><span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></span><span>${picked}</span></li>`;
+                    }
+                    return `<li class="flex items-start gap-2"><span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0"></span><span class="font-bold text-white">${esc(f.name)}</span></li>`;
+                }).join('') + `</ul></div>`;
+            }
+
+            // Show automatic class feature bumps (proficiency increases)
             let bumpKeys = Object.keys(state.auto_bumps || {});
             if (bumpKeys.length > 0) {
-                const friendlyNames = {
-                    'perception': 'Perception', 'fortitude': 'Fortitude', 'reflex': 'Reflex', 'will': 'Will',
-                    'simple': 'Simple Weapons', 'martial': 'Martial Weapons', 'advanced': 'Advanced Weapons', 'unarmed': 'Unarmed',
-                    'unarmored': 'Unarmored', 'light': 'Light Armor', 'medium': 'Medium Armor', 'heavy': 'Heavy Armor',
-                    'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC'
-                };
-                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Automatic Class Features</h4><div class="flex flex-wrap gap-2">` +
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Proficiency Increases</h4><div class="flex flex-wrap gap-2">` +
                 bumpKeys.map(k => {
                     let name = friendlyNames[k] || k;
                     let rank = RANK_NAMES[state.auto_bumps[k]] || state.auto_bumps[k];
                     return `<span class="bg-green-900/30 border border-green-800 px-2 py-1 rounded text-xs font-bold text-green-400">${name} → ${rank}</span>`;
                 }).join('') + `</div></div>`;
             }
-            
+
             // Show Monk Path to Perfection choice
             if (state.monk_path_choice && pcClass === 'monk' && monkPathConfig[targetLevel]) {
                 let pathConf = monkPathConfig[targetLevel];
                 let saveName = state.monk_path_choice.charAt(0).toUpperCase() + state.monk_path_choice.slice(1);
                 let rankName = RANK_NAMES[pathConf.target_rank] || `Rank ${pathConf.target_rank}`;
-                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">${pathConf.feature_name}</h4>
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">${pathConf.feature_name}</h4>
                     <span class="bg-purple-900/30 border border-purple-800 px-3 py-1.5 rounded text-sm font-bold text-purple-300">🙏 ${saveName} → ${rankName}</span>
                 </div>`;
             }
-            
+
             if(reqs.ability_boosts) {
-                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Ability Boosts</h4><div class="flex gap-2">` + 
-                state.free_boosts_selected.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-green-400 uppercase">+${s}</span>`).join('') + `</div></div>`;
+                const boosts = state.free_boosts_selected;
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Ability Boosts</h4>` +
+                (boosts.length
+                    ? `<div class="flex gap-2">` + boosts.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-green-400 uppercase">+${esc(s)}</span>`).join('') + `</div>`
+                    : `<div class="text-xs text-red-400 italic">No boosts selected yet — pick four.</div>`) + `</div>`;
             }
             if(reqs.skill_increase) {
-                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">Skill Increases</h4><div class="flex flex-wrap gap-2">` + 
-                state.skill_increases_selected.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-amber-500 capitalize">${s.replace('lore:', 'Lore: ')}</span>`).join('') + `</div></div>`;
+                const incs = state.skill_increases_selected;
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Skill Increases</h4>` +
+                (incs.length
+                    ? `<div class="flex flex-wrap gap-2">` + incs.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-amber-500 capitalize">${esc(s.replace('lore:', 'Lore: '))}</span>`).join('') + `</div>`
+                    : `<div class="text-xs text-red-400 italic">No skill increases selected yet.</div>`) + `</div>`;
             }
+
+            // New feats, grouped by type so the player reads "Ancestry /
+            // Class / General / Skill / Archetype" at a glance.
             let fKeys = Object.keys(state.feats_selected);
             if(fKeys.length > 0) {
-                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">New Feats</h4><ul class="text-sm text-gray-300 space-y-1">` + 
-                fKeys.map(k => `<li><span class="text-gray-500 mr-2">[${k.replace('_',' ').toUpperCase()}]</span> <span class="font-bold text-white">${state.feats_selected[k].name}</span></li>`).join('') + `</ul></div>`;
+                const TYPE_ORDER = ['ancestry_feat','class_feat','general_feat','skill_feat','archetype_feat'];
+                const TYPE_LABELS = {ancestry_feat:'Ancestry', class_feat:'Class', general_feat:'General', skill_feat:'Skill', archetype_feat:'Archetype'};
+                const byType = {};
+                fKeys.forEach(k => {
+                    const base = k.replace(/_\d+$/, '');
+                    (byType[base] = byType[base] || []).push(state.feats_selected[k]);
+                });
+                const orderedTypes = TYPE_ORDER.filter(t => byType[t]).concat(Object.keys(byType).filter(t => !TYPE_ORDER.includes(t)));
+                const rows = orderedTypes.map(t => byType[t].map(f =>
+                    `<li class="flex items-center gap-2"><span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">${TYPE_LABELS[t] || esc(t.replace('_',' '))}</span><span class="font-bold text-white">${esc(f.name)}</span></li>`
+                ).join('')).join('');
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">New Feats</h4><ul class="text-sm text-gray-300 space-y-1">${rows}</ul></div>`;
             }
-            if(state.new_spells.length > 0) {
-                html += `<div class="mb-6"><h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase">New Spells</h4><div class="flex flex-wrap gap-2">` + 
-                state.new_spells.map(s => `<span class="bg-gray-950 border border-blue-900/50 px-2 py-1 rounded text-xs font-bold text-blue-300">${s.name} [L${s.lvl}]</span>`).join('') + `</div></div>`;
+
+            // Spells, slots & focus. New spell ranks/slots are computed from
+            // the slot tables; learned spells come from the Magic step; a
+            // focus-pool gain is inferred from the selected feats.
+            const newSlots = _newSpellSlotsThisLevel();
+            const focusGained = _focusPointsGainedThisLevel();
+            if (newSlots.length || state.new_spells.length || focusGained > 0) {
+                let inner = '';
+                if (newSlots.length) {
+                    inner += `<div class="mb-2"><div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Spell Slots</div><div class="flex flex-wrap gap-2">` +
+                    newSlots.map(c => c.ranks.map(r =>
+                        `<span class="bg-gray-950 border border-purple-900/40 px-2 py-1 rounded text-xs font-bold text-purple-300">${r.brandNew ? 'New ' : ''}Rank ${r.rank} <span class="text-gray-500 font-normal">×${r.count}</span></span>`
+                    ).join('')).join('') + `</div></div>`;
+                }
+                if (focusGained > 0) {
+                    inner += `<div class="mb-2"><div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Focus</div><span class="bg-gray-950 border border-pink-900/40 px-2 py-1 rounded text-xs font-bold text-pink-300">+${focusGained} Focus Point${focusGained > 1 ? 's' : ''}</span></div>`;
+                }
+                if (state.new_spells.length) {
+                    inner += `<div><div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Learned</div><div class="flex flex-wrap gap-2">` +
+                    state.new_spells.map(s => `<span class="bg-gray-950 border border-blue-900/50 px-2 py-1 rounded text-xs font-bold text-blue-300">${esc(s.name)} [${s.lvl === 0 ? 'C' : 'R' + s.lvl}]</span>`).join('') + `</div></div>`;
+                }
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Spells, Slots &amp; Focus</h4>${inner}</div>`;
             }
+
             ui.innerHTML = html || "<div class='text-gray-500 italic text-center'>No changes recorded yet.</div>";
         }
 
