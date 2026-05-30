@@ -294,6 +294,7 @@ MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
 AUDIO_DIR = os.path.join(MAP_DIR, 'audio')  # GM-uploaded soundboard clips
 TILES_DIR = os.path.join(MAP_DIR, 'tiles')  # Decorative tile-layer images
 CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
+HANDOUTS_DIR = os.path.join(DATA_DIR, 'uploads', 'handouts')  # GM-uploaded handout images (persistent volume, survives redeploys)
 # Campaign soundscape audio. On Railway this is the persistent volume
 # (DATA_DIR=/data → /data/campaign_audio) where GM-uploaded tracks live and
 # survive redeploys; locally DATA_DIR defaults to the repo, so the
@@ -306,7 +307,7 @@ DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-on
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
 # Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, AUDIO_DIR, TILES_DIR, CAMPAIGN_ASSETS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, AUDIO_DIR, TILES_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -1292,7 +1293,15 @@ PF2E_WEAPON_CATEGORIES = {
 pf2e_gen = RobustPF2eGenerator()
 
 # --- SECURITY: Whitelisted generator types to prevent arbitrary method calls ---
-VALID_GENERATOR_TYPES = {'npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event'}
+VALID_GENERATOR_TYPES = {
+    'npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter',
+    'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event',
+    # New rich cards
+    'faction', 'deity', 'villain', 'dungeon_room', 'travel_encounter',
+    # Rapid-fire one-line generators (on-demand only, via the Rapid Fire bar)
+    'rapid_name', 'rapid_tavern', 'rapid_shop', 'rapid_place', 'rapid_twist',
+    'rapid_omen', 'rapid_bounty', 'rapid_loot', 'rapid_trinket', 'rapid_room',
+}
 
 # --- SECURITY: Allowed image extensions for vault image serving ---
 ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}  # .svg dropped — SVG can carry inline JS / event handlers; if you need to host one, store it as a static asset.
@@ -6656,8 +6665,10 @@ def upload_handout_image():
     if not f.filename:
         return jsonify({"error": "Empty filename"}), 400
 
-    # Save to static/uploads/handouts/
-    upload_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'handouts')
+    # Save to the persistent data volume (HANDOUTS_DIR = <DATA_DIR>/uploads/handouts),
+    # NOT the app's static folder — on Railway the app filesystem is ephemeral, so
+    # static-folder uploads vanish on the next deploy. Served via /handouts/<file>.
+    upload_dir = HANDOUTS_DIR
     os.makedirs(upload_dir, exist_ok=True)
 
     ext = os.path.splitext(f.filename)[1].lower()
@@ -6677,7 +6688,7 @@ def upload_handout_image():
     filepath = os.path.join(upload_dir, filename)
     f.save(filepath)
 
-    url = f"/static/uploads/handouts/{filename}"
+    url = f"/handouts/{filename}"
     return jsonify({"success": True, "url": url})
 
 
@@ -8829,7 +8840,7 @@ def dm_generator():
     default_level = max([p.level for p in PARTY_LIBRARY.values()]) if PARTY_LIBRARY else 1
     party_level = request.args.get('level', type=int) or default_level
     biome = request.args.get('biome', 'City')
-    gen_types = ['npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event']
+    gen_types = ['npc', 'tavern', 'shop', 'loot', 'magic_item', 'puzzle', 'quest', 'encounter', 'weather', 'trap', 'rumor', 'settlement', 'treasure_hoard', 'random_event', 'faction', 'deity', 'villain', 'dungeon_room', 'travel_encounter']
     data = {}
     for k in gen_types:
         try:
@@ -11171,6 +11182,15 @@ def serve_campaign_asset(filename):
     CAMPAIGN_ASSETS_DIR. Public — the campaign intro page is the
     players' login surface and references this URL."""
     return send_from_directory(CAMPAIGN_ASSETS_DIR, filename, max_age=3600)
+
+
+@app.route('/handouts/<filename>')
+def serve_handout_image(filename):
+    """Serve GM-uploaded handout images from HANDOUTS_DIR (the Railway volume
+    in production, so they survive redeploys). Public — players need to view
+    handouts the GM pushed to them. send_from_directory guards against path
+    traversal; the <filename> converter already rejects slashes."""
+    return send_from_directory(HANDOUTS_DIR, filename, max_age=3600)
 
 
 _AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}

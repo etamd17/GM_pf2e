@@ -221,6 +221,43 @@
         border-radius: 4px;
     }
     .gen-toolbar-input:focus { outline: none; border-color: rgba(142,212,212,0.35); }
+
+    /* ── Rapid Fire bar: one-tap, one-line generators for live play ── */
+    .rapid-bar { background:#191920; border:1px solid rgba(142,212,212,0.14); border-radius:10px; margin-bottom:1.25rem; overflow:hidden; }
+    .rapid-bar-head { display:flex; align-items:center; gap:10px; padding:9px 14px; background:linear-gradient(180deg,#25303a,#20262e); border-bottom:1px solid rgba(255,255,255,0.05); }
+    .rapid-bar-title { font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#8ED4D4; }
+    .rapid-bar-hint { font-size:10.5px; color:#6b6b8a; flex:1; }
+    .rapid-clear { font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:5px; padding:3px 9px; cursor:pointer; }
+    .rapid-clear:hover { color:#e06060; border-color:rgba(224,96,96,0.3); }
+    .rapid-buttons { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:10px 14px; }
+    .rapid-group-label { font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:#5a5a74; font-weight:700; margin:0 2px 0 10px; }
+    .rapid-group-label:first-child { margin-left:0; }
+    .rapid-btn { font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:#cfe9e9; background:rgba(142,212,212,0.08); border:1px solid rgba(142,212,212,0.22); border-radius:6px; padding:5px 11px; cursor:pointer; transition:background 0.12s, border-color 0.12s, transform 0.12s; }
+    .rapid-btn:hover { background:rgba(142,212,212,0.18); border-color:rgba(142,212,212,0.5); transform:translateY(-1px); }
+    .rapid-btn:active { transform:translateY(0); }
+    .rapid-results { padding:0 14px 12px; display:flex; flex-direction:column; gap:6px; }
+    .rapid-results:empty { display:none; }
+    .rapid-result { display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); }
+    .rapid-result.rapid-new { animation:rapid-flash 0.6s ease-out; }
+    @keyframes rapid-flash { from { background:rgba(142,212,212,0.16); } to { background:rgba(255,255,255,0.02); } }
+    .rapid-result-text { flex:1; min-width:0; font-size:12.5px; line-height:1.5; }
+    .rapid-copy, .rapid-dismiss { background:transparent; border:none; cursor:pointer; flex-shrink:0; font-size:13px; line-height:1; padding:2px 4px; opacity:0.55; color:#b8b8cc; }
+    .rapid-copy:hover { opacity:1; color:#8ED4D4; }
+    .rapid-dismiss:hover { opacity:1; color:#e06060; }
+
+    /* ── Category filter chips ── */
+    .gen-filter { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:1rem; }
+    .gen-filter-chip { font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:4px 13px; cursor:pointer; transition:color 0.12s, background 0.12s, border-color 0.12s; }
+    .gen-filter-chip:hover { color:#cfe9e9; border-color:rgba(142,212,212,0.3); }
+    .gen-filter-chip.active { color:#0d0d12; background:#8ED4D4; border-color:#8ED4D4; }
+    .masonry-item.gen-hidden { display:none; }
+
+    /* ── Per-card copy button + collapse ── */
+    .copy-btn { background:transparent; border:1px solid transparent; border-radius:4px; padding:3px 6px; cursor:pointer; opacity:0.55; transition:opacity 0.15s, border-color 0.15s, color 0.15s; font-size:13px; line-height:1; color:#b8b8cc; }
+    .copy-btn:hover { opacity:1; border-color:rgba(142,212,212,0.25); color:#8ED4D4; }
+    .collapse-caret { font-size:9px; color:#6b6b8a; transition:transform 0.18s; display:inline-block; }
+    .gen-card.collapsed .collapse-caret { transform:rotate(-90deg); }
+    .gen-card.collapsed .gen-card-body { display:none; }
 </style>
 {% endblock %}
 
@@ -253,6 +290,41 @@
         </div>
     </div>
 
+    {# ── Rapid Fire bar — one-tap, one-line generators for live play ── #}
+    <div class="rapid-bar">
+        <div class="rapid-bar-head">
+            <span class="rapid-bar-title">&#x26A1; Rapid Fire</span>
+            <span class="rapid-bar-hint">One tap &rarr; one line. Click a result to copy it.</span>
+            <button class="rapid-clear" onclick="clearRapid()">Clear</button>
+        </div>
+        <div class="rapid-buttons">
+            <span class="rapid-group-label">Names</span>
+            <button class="rapid-btn" onclick="rapidFire('rapid_name', this)">Name</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_tavern', this)">Tavern</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_shop', this)">Shop</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_place', this)">Place</button>
+            <span class="rapid-group-label">Story</span>
+            <button class="rapid-btn" onclick="rapidFire('rapid_twist', this)">Twist</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_omen', this)">Omen</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_bounty', this)">Bounty</button>
+            <span class="rapid-group-label">Stuff</span>
+            <button class="rapid-btn" onclick="rapidFire('rapid_loot', this)">Loot</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_trinket', this)">Trinket</button>
+            <button class="rapid-btn" onclick="rapidFire('rapid_room', this)">Room</button>
+        </div>
+        <div id="rapid-results" class="rapid-results"></div>
+    </div>
+
+    {# ── Category filter ── #}
+    <div class="gen-filter">
+        <button class="gen-filter-chip active" onclick="filterCards('all', this)">All</button>
+        <button class="gen-filter-chip" onclick="filterCards('combat', this)">Combat</button>
+        <button class="gen-filter-chip" onclick="filterCards('npc', this)">NPCs</button>
+        <button class="gen-filter-chip" onclick="filterCards('place', this)">Places</button>
+        <button class="gen-filter-chip" onclick="filterCards('treasure', this)">Treasure</button>
+        <button class="gen-filter-chip" onclick="filterCards('lore', this)">Lore</button>
+    </div>
+
     {# ── Pinned Section (collapsed by default) ── #}
     <div id="pinned-section" class="pinned-section" style="display:none;">
         <div class="pinned-header" onclick="togglePinned()">
@@ -276,13 +348,14 @@
     ──────────────────────────────────────────────────────────────────── #}
     <div class="masonry">
 
-        {% macro gen_card(id, title, glyph) %}
-        <div class="masonry-item gen-card">
+        {% macro gen_card(id, title, glyph, cat) %}
+        <div class="masonry-item gen-card" data-cat="{{ cat }}">
             <div class="gen-card-header">
-                <span class="gen-card-title">
-                    <span class="glyph">{{ glyph | safe }}</span>{{ title }}
+                <span class="gen-card-title" onclick="toggleCollapse(this)" style="cursor:pointer;" title="Collapse / expand">
+                    <span class="collapse-caret">&#9660;</span><span class="glyph">{{ glyph | safe }}</span>{{ title }}
                 </span>
                 <span style="display:flex;gap:4px;align-items:center;">
+                    <button onclick="copyCard('{{ id }}', this)" class="copy-btn" title="Copy"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
                     <button onclick="pinCard('{{ id }}', this)" class="pin-btn" title="Pin this result"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10v5l-2 2v4l-3-2-3 2V9L3 7V2z"/></svg></button>
                     <button onclick="rerollSingle('{{ id }}', this)" class="reroll-btn" title="Reroll">&#x2684;</button>
                 </span>
@@ -291,23 +364,29 @@
         </div>
         {% endmacro %}
 
-        {{ gen_card('encounter',      'Encounter',       '&#9876;') }}
-        {{ gen_card('random_event',   'Random Event',    '&#9889;') }}
-        {{ gen_card('weather',        'Weather',         '&#9729;') }}
-        {{ gen_card('trap',           'Trap / Hazard',   '&#9888;') }}
-        {{ gen_card('puzzle',         'Puzzle',          '&#9881;') }}
+        {{ gen_card('encounter',        'Encounter',        '&#9876;',  'combat') }}
+        {{ gen_card('random_event',     'Random Event',     '&#9889;',  'combat') }}
+        {{ gen_card('weather',          'Weather',          '&#9729;',  'combat') }}
+        {{ gen_card('trap',             'Trap / Hazard',    '&#9888;',  'combat') }}
+        {{ gen_card('travel_encounter', 'Travel Encounter', '&#10146;', 'combat') }}
 
-        {{ gen_card('npc',            'Random NPC',      '&#9823;') }}
-        {{ gen_card('rumor',          'Rumor',           '&#9993;') }}
-        {{ gen_card('quest',          'Quest Hook',      '&#9758;') }}
+        {{ gen_card('npc',              'Random NPC',       '&#9823;',  'npc') }}
+        {{ gen_card('villain',          'Villain Seed',     '&#9760;',  'npc') }}
+        {{ gen_card('faction',          'Faction',          '&#9873;',  'npc') }}
+        {{ gen_card('rumor',            'Rumor',            '&#9993;',  'npc') }}
+        {{ gen_card('quest',            'Quest Hook',       '&#9758;',  'npc') }}
 
-        {{ gen_card('settlement',     'Settlement',      '&#9962;') }}
-        {{ gen_card('tavern',         'Tavern',          '&#9738;') }}
-        {{ gen_card('shop',           'Shop',            '&#9878;') }}
+        {{ gen_card('settlement',       'Settlement',       '&#9962;',  'place') }}
+        {{ gen_card('tavern',           'Tavern',           '&#9738;',  'place') }}
+        {{ gen_card('shop',             'Shop',             '&#9878;',  'place') }}
+        {{ gen_card('dungeon_room',     'Dungeon Room',     '&#8962;',  'place') }}
 
-        {{ gen_card('loot',           'Loot',            '&#9830;') }}
-        {{ gen_card('magic_item',     'Magic Item',      '&#10038;') }}
-        {{ gen_card('treasure_hoard', 'Treasure Hoard',  '&#9733;') }}
+        {{ gen_card('loot',             'Loot',             '&#9830;',  'treasure') }}
+        {{ gen_card('magic_item',       'Magic Item',       '&#10038;', 'treasure') }}
+        {{ gen_card('treasure_hoard',   'Treasure Hoard',   '&#9733;',  'treasure') }}
+
+        {{ gen_card('puzzle',           'Puzzle',           '&#9881;',  'lore') }}
+        {{ gen_card('deity',            'Deity / Cult',     '&#10013;', 'lore') }}
 
     </div>
 </div>
@@ -351,8 +430,75 @@ function rerollAll() {
     icon.classList.remove('spin-anim');
     void icon.offsetWidth;
     icon.classList.add('spin-anim');
-    const types = ['npc','tavern','shop','loot','magic_item','puzzle','quest','encounter','weather','trap','rumor','settlement','treasure_hoard','random_event'];
+    const types = ['npc','tavern','shop','loot','magic_item','puzzle','quest','encounter','weather','trap','rumor','settlement','treasure_hoard','random_event','faction','deity','villain','dungeon_room','travel_encounter'];
     types.forEach(t => rerollSingle(t, null));
+}
+
+/* ── Rapid Fire: one-tap, one-line generators ── */
+async function rapidFire(type, btn) {
+    if (btn) { btn.classList.remove('spin-anim'); void btn.offsetWidth; btn.classList.add('spin-anim'); }
+    const level = document.getElementById('gen-level').value;
+    const biome = document.getElementById('gen-biome').value;
+    try {
+        const res = await fetch(`/api/generate/${type}`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({level, biome})
+        });
+        const data = await res.json();
+        if (!res.ok || !data.html) { if (window.pf2eToast) pf2eToast('Generate failed', 'error'); return; }
+        addRapidResult(data.html);
+    } catch (e) {
+        console.error('Rapid error:', e);
+        if (window.pf2eToast) pf2eToast('Generate failed', 'error');
+    }
+}
+
+function addRapidResult(html) {
+    const strip = document.getElementById('rapid-results');
+    const row = document.createElement('div');
+    row.className = 'rapid-result rapid-new';
+    row.innerHTML = '<div class="rapid-result-text gen-content"></div>'
+        + '<button class="rapid-copy" title="Copy">&#10697;</button>'
+        + '<button class="rapid-dismiss" title="Dismiss">&times;</button>';
+    row.querySelector('.rapid-result-text').innerHTML = html;
+    row.querySelector('.rapid-copy').onclick = function() {
+        copyText(row.querySelector('.rapid-result-text').innerText, this);
+    };
+    row.querySelector('.rapid-dismiss').onclick = function() { row.remove(); };
+    strip.prepend(row);
+    while (strip.children.length > 12) strip.lastElementChild.remove();
+    setTimeout(() => row.classList.remove('rapid-new'), 600);
+}
+
+function clearRapid() { document.getElementById('rapid-results').innerHTML = ''; }
+
+/* ── Copy to clipboard (rapid results + full cards) ── */
+function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(function() {
+        if (btn) { const o = btn.innerHTML; btn.innerHTML = '&#10003;'; setTimeout(function(){ btn.innerHTML = o; }, 900); }
+        if (window.pf2eToast) pf2eToast('Copied', 'info');
+    }).catch(function() { if (window.pf2eToast) pf2eToast('Copy failed', 'error'); });
+}
+
+function copyCard(type, btn) {
+    const el = document.getElementById(`content-${type}`);
+    if (el) copyText(el.innerText, btn);
+}
+
+/* ── Collapse / expand a single card ── */
+function toggleCollapse(titleEl) {
+    const card = titleEl.closest('.gen-card');
+    if (card) card.classList.toggle('collapsed');
+}
+
+/* ── Category filter ── */
+function filterCards(cat, chip) {
+    document.querySelectorAll('.gen-filter-chip').forEach(c => c.classList.remove('active'));
+    if (chip) chip.classList.add('active');
+    document.querySelectorAll('.masonry .gen-card').forEach(card => {
+        const show = (cat === 'all') || (card.getAttribute('data-cat') === cat);
+        card.classList.toggle('gen-hidden', !show);
+    });
 }
 
 // Sync the URL ?level / ?biome with the inputs so a refresh restores
