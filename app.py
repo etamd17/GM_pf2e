@@ -12,8 +12,10 @@ import random
 import time
 import queue
 import threading
+import tempfile
 from functools import wraps
 from pathlib import Path
+from werkzeug.exceptions import HTTPException
 
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
 from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES, get_required_slots_at_level
@@ -75,6 +77,32 @@ def _static_cache_bust(endpoint, values):
         values['v'] = int(os.stat(fpath).st_mtime)
     except Exception:
         pass
+
+
+def _atomic_write_json(path, obj, indent=2):
+    """Write JSON to a temp file then atomically os.replace() it into place.
+
+    A plain open(path, 'w') truncates immediately, so if the process is killed
+    mid-write (Railway SIGKILLs the worker on every redeploy) the file can be
+    left empty or half-written -- which is how a character sheet gets corrupted
+    and you only find out next session. os.replace() is atomic on POSIX, so a
+    reader (or a crash) never sees a partial file. The temp file shares the
+    target's directory so the replace stays on one filesystem.
+    """
+    directory = os.path.dirname(path) or '.'
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(obj, f, indent=indent)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 # --- GM ACCESS CONTROL ---
@@ -636,8 +664,7 @@ def _do_persist_encounter_state():
             encounter_data['combatants'].append(entry)
     try:
         os.makedirs(ENCOUNTER_DIR, exist_ok=True)
-        with open(os.path.join(ENCOUNTER_DIR, '_autosave.json'), 'w', encoding='utf-8') as f:
-            json.dump(encounter_data, f, indent=2)
+        _atomic_write_json(os.path.join(ENCOUNTER_DIR, '_autosave.json'), encounter_data, indent=2)
     except Exception as e:
         print(f"[ENCOUNTER PERSIST ERROR] {e}")
 
@@ -1456,8 +1483,7 @@ def reload_single_character(file_path):
 def save_and_reload_character(pc_name, pc_json, file_path):
     """Save a character JSON to disk and reload just that character (not the whole compendium)."""
     try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(pc_json, f, indent=4)
+        _atomic_write_json(file_path, pc_json, indent=4)
         # Update the cache in case the name or file changed
         _PC_FILE_CACHE[pc_name] = os.path.basename(file_path)
         reload_single_character(file_path)
@@ -1518,8 +1544,7 @@ def _do_persist_pc_combat_state(pc_name):
         build['persistent_damage'] = persistent_damage
         build['exploration_activity'] = exploration_activity
         build['pc_active_effects'] = pc_active_effects
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(pc_json, f, indent=2)
+        _atomic_write_json(file_path, pc_json, indent=2)
     except Exception as e:
         print(f"[PERSIST ERROR] {pc_name}: {e}")
 
@@ -4558,6 +4583,26 @@ def health_check():
 def page_not_found(e):
     return render_template('404.html'), 404
 
+@app.errorhandler(Exception)
+def handle_uncaught(e):
+    """Turn any uncaught exception on an /api/ route into a JSON error.
+
+    Without this, an unhandled error returns Flask's HTML 500 page, which makes
+    the client's fetch().then(r => r.json()) throw on parse -- so the action
+    fails silently (the player/GM clicks and nothing happens, no error). For
+    /api/ paths we always return JSON; non-API routes keep normal HTML pages.
+    The 404 handler above still wins for 404s (it is more specific).
+    """
+    code = e.code if isinstance(e, HTTPException) else 500
+    if request.path.startswith('/api/'):
+        if not isinstance(e, HTTPException):
+            app.logger.exception('Unhandled error on %s', request.path)
+        return jsonify(success=False, error=str(e)), code
+    if isinstance(e, HTTPException):
+        return e
+    app.logger.exception('Unhandled error on %s', request.path)
+    return 'Internal Server Error', 500
+
 @app.route('/api/perf')
 def perf_metrics():
     """Lightweight perf snapshot for at-the-table debugging. Returns SSE
@@ -6011,6 +6056,7 @@ def api_tracker_state():
     return _tracker_json_response()
 
 @app.route('/api/add_combatant', methods=['POST'])
+@gm_required
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
     path = request.form.get('path') or (request.json or {}).get('path')
@@ -6039,6 +6085,7 @@ def add_party():
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/remove_combatant/<instance_id>', methods=['POST'])
+@gm_required
 def remove_combatant(instance_id):
     global ACTIVE_ENCOUNTER, TURN_INDEX
     ACTIVE_ENCOUNTER = [c for c in ACTIVE_ENCOUNTER if c.instance_id != instance_id]
@@ -6222,6 +6269,7 @@ def set_combatant_tactics(instance_id):
 
 
 @app.route('/api/clear_encounter', methods=['POST'])
+@gm_required
 def clear_encounter():
     global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
     if ACTIVE_ENCOUNTER:
@@ -6245,6 +6293,7 @@ def get_combat_log():
     return jsonify({"log": entries, "count": len(entries)})
 
 @app.route('/api/combat_log/clear', methods=['POST'])
+@gm_required
 def clear_combat_log():
     """Clear the combat log."""
     COMBAT_LOGS.clear()
@@ -6257,6 +6306,7 @@ def clear_combat_log():
 GM_SECRET_LOG = []  # Rolls only the GM can see
 
 @app.route('/api/gm_secret_roll', methods=['POST'])
+@gm_required
 def gm_secret_roll():
     """Roll dice secretly — result only visible to GM, not broadcast to players."""
     data = request.json or {}
@@ -7402,6 +7452,7 @@ def update_pc_condition(pc_name):
     return jsonify({"success": False})
 
 @app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
+@gm_required
 def toggle_condition(instance_id):
     condition = request.form.get('condition')
     action = request.form.get('action')
@@ -8183,6 +8234,7 @@ def _sanitize_encounter_name(name: str) -> str:
 
 
 @app.route('/api/save_encounter', methods=['POST'])
+@gm_required
 def save_encounter():
     raw_name = request.form.get('encounter_name')
     name = _sanitize_encounter_name(raw_name or '')
@@ -8226,6 +8278,7 @@ def save_encounter():
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/load_encounter', methods=['POST'])
+@gm_required
 def load_encounter():
     global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP, ENCOUNTER_NOTES, SESSION_TIMER_START
     name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
@@ -8782,6 +8835,7 @@ def dm_generator():
     return render_template('generator.html', data=data, current_level=party_level, current_biome=biome)
 
 @app.route('/api/generate/<element_type>', methods=['POST'])
+@gm_required
 def api_generate(element_type):
     if element_type not in VALID_GENERATOR_TYPES:
         return jsonify({'error': 'Invalid generator type'}), 400
@@ -9952,6 +10006,7 @@ def cast_spell(pc_name):
 # (and optional DC) to broadcast — every player's sheet pops a small
 # banner with a "Roll +N" button using their own modifier.
 @app.route('/api/request_check', methods=['POST'])
+@gm_required
 def request_check_from_players():
     data = request.get_json(silent=True) or {}
     skill = (data.get('skill') or '').strip()
@@ -10885,6 +10940,7 @@ def set_focus_spells(pc_name):
     return jsonify({"success": True})
 
 @app.route('/api/delete_character/<pc_name>', methods=['POST'])
+@gm_required
 def delete_character(pc_name):
     """Delete a character from the party library."""
     file_path = get_pc_file_path(pc_name)

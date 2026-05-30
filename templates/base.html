@@ -281,6 +281,10 @@
             function showToast(log) {
                 const c = document.getElementById('gm-toast-container');
                 if (!c) return;
+                // Escape roll fields before they hit innerHTML below: /api/log_roll
+                // is unauthenticated and forwards action/detail verbatim, so an
+                // attacker could otherwise inject script into every GM/player screen.
+                const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
                 const t = document.createElement('div');
                 t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
                 t.style.background = 'var(--bg-card-2)';
@@ -302,7 +306,7 @@
                 }
 
                 t.classList.add('roll-toast');
-                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${log.name || ''}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-on-cream)">${log.action || ''}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-page)">${log.detail || ''}</div>${applyHTML}`;
+                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${esc(log.name)}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-on-cream)">${esc(log.action)}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-page)">${esc(log.detail)}</div>${applyHTML}`;
                 c.prepend(t);
                 // Crit / nat-1 flourish + screen-edge flash (degree first, then
                 // fall back to sniffing the detail string for NAT 20 / NAT 1).

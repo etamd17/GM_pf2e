@@ -4142,11 +4142,11 @@
                     toast.style.opacity = '0.85';
                     toast.innerHTML = `
                         <div class="flex justify-between items-start">
-                            <span class="font-bold text-xs tracking-wide uppercase" style="color:var(--color-spell);">${roll.name}</span>
+                            <span class="font-bold text-xs tracking-wide uppercase" style="color:var(--color-spell);">${_escHtml(roll.name)}</span>
                             <button onclick="this.closest('.roll-toast').remove()" class="text-gray-600 hover:text-white text-xs ml-2">×</button>
                         </div>
-                        <div class="text-sm text-gray-300 mt-1">${roll.action}: <span class="font-bold ${isCrit ? 'text-amber-400' : 'text-white'}">${roll.result}</span></div>
-                        <div class="text-[10px] text-gray-500 font-mono mt-1">${roll.detail || ''}</div>
+                        <div class="text-sm text-gray-300 mt-1">${_escHtml(roll.action)}: <span class="font-bold ${isCrit ? 'text-amber-400' : 'text-white'}">${_escHtml(roll.result)}</span></div>
+                        <div class="text-[10px] text-gray-500 font-mono mt-1">${_escHtml(roll.detail)}</div>
                     `;
                     container.prepend(toast);
                     setTimeout(() => {
