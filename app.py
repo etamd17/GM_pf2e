@@ -716,7 +716,10 @@ def _start_persistence_thread():
 _sse_subscribers = []
 _sse_lock = threading.Lock()
 _sse_last_cleanup = time.time()
-_SSE_MAX_SUBSCRIBERS = 50  # Hard cap to prevent memory leaks
+_SSE_MAX_SUBSCRIBERS = 200  # Hard cap to prevent memory leaks. Sized for a full
+# table across several devices, each tab holding multiple EventSource
+# connections; broadcasts iterate this list so it stays bounded, but 50 was low
+# enough that reload churn could evict a live connection (see subscribe logic).
 _SSE_STALE_TIMEOUT = 120  # Seconds before a non-consuming queue is considered stale
 
 # SSE keepalive thread — fires a real `keepalive` event every 25s so:
@@ -9178,9 +9181,13 @@ def sse_stream():
         q = queue.Queue(maxsize=50)
         entry = (q, is_gm)
         with _sse_lock:
-            # Enforce max subscriber cap
+            # Enforce max subscriber cap. Reap dead subscribers first: a full
+            # queue means that client stopped draining (closed/asleep tab), so we
+            # evict those zombies before ever dropping a live connection. Only if
+            # we're still at the cap after reaping do we drop the oldest.
             if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
-                # Remove oldest subscriber
+                _sse_subscribers[:] = [s for s in _sse_subscribers if not s[0].full()]
+            if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
                 _sse_subscribers.pop(0)
             _sse_subscribers.append(entry)
         try:
