@@ -287,24 +287,81 @@ def _gzip_response(response):
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)  # Railway volume mount or local
-MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')
-PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
-ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
-CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
-HANDOUTS_DIR = os.path.join(DATA_DIR, 'uploads', 'handouts')  # GM-uploaded handout images (persistent volume, survives redeploys)
-# Campaign soundscape audio. On Railway this is the persistent volume
-# (DATA_DIR=/data → /data/campaign_audio) where GM-uploaded tracks live and
-# survive redeploys; locally DATA_DIR defaults to the repo, so the
-# campaign_audio symlink to a local Foundry folder still works for dev.
-# PF2E_AUDIO_DIR overrides both.
-CAMPAIGN_AUDIO_DIR = os.environ.get('PF2E_AUDIO_DIR') or os.path.join(DATA_DIR, 'campaign_audio')
-CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
-LOOT_LEDGER_FILE = os.path.join(DATA_DIR, 'loot_ledger.json')  # Persistent party loot log
-DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
+MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')         # shared bestiary (system content, not per-campaign)
+DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')         # ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
-# Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+# --- Active-campaign path binding -------------------------------------------
+# The app operates on ONE active campaign at a time (the live slot). Every
+# per-campaign data path is (re)bound to that campaign by _bind_campaign_paths();
+# load_campaign() re-binds + reloads when the active campaign changes. When no
+# campaign has been migrated yet (server_state has no live id) we fall back to
+# the legacy flat layout so the app keeps working unchanged pre-migration.
+from core import storage as _storage
+
+_AUDIO_OVERRIDE = os.environ.get('PF2E_AUDIO_DIR')  # dev: external Foundry audio folder
+ACTIVE_CAMPAIGN_ID = None
+PARTY_DIR = ENCOUNTER_DIR = CAMPAIGN_ASSETS_DIR = HANDOUTS_DIR = CAMPAIGN_AUDIO_DIR = None
+CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
+SCRAPBOOK_FILE = SCRAPBOOK_DIR = PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
+
+
+def _bind_campaign_paths(cid):
+    """Point every per-campaign path global at campaign `cid`, or at the legacy
+    flat layout when cid is None. Single source of truth for campaign data
+    locations -- existing code keeps using PARTY_DIR/ENCOUNTER_DIR/etc unchanged."""
+    global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
+    global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
+    global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
+    ACTIVE_CAMPAIGN_ID = cid
+    if cid:
+        PARTY_DIR = _storage.party_dir(cid)
+        ENCOUNTER_DIR = _storage.encounter_dir(cid)
+        CAMPAIGN_ASSETS_DIR = _storage.campaign_assets_dir(cid)
+        HANDOUTS_DIR = _storage.handouts_dir(cid)
+        CAMPAIGN_AUDIO_DIR = _AUDIO_OVERRIDE or _storage.campaign_audio_dir(cid)
+        CAMPAIGN_FILE = _storage.campaign_file(cid)
+        LOOT_LEDGER_FILE = _storage.loot_ledger_file(cid)
+        CAMPAIGN_STATS_FILE = _storage.campaign_stats_file(cid)
+        JOURNAL_DIR = _storage.journal_dir(cid)
+        SCRAPBOOK_FILE = _storage.session_highlights_file(cid)
+        SCRAPBOOK_DIR = _storage.scrapbook_dir(cid)
+        PINNED_GENERATORS_FILE = _storage.pinned_generators_file(cid)
+        CALENDAR_FILE = _storage.calendar_file(cid)
+        STORY_THREADS_FILE = _storage.story_threads_file(cid)
+        _storage.ensure_campaign_dirs(cid)
+    else:
+        PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
+        ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
+        CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')
+        HANDOUTS_DIR = os.path.join(DATA_DIR, 'uploads', 'handouts')
+        CAMPAIGN_AUDIO_DIR = _AUDIO_OVERRIDE or os.path.join(DATA_DIR, 'campaign_audio')
+        CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')
+        LOOT_LEDGER_FILE = os.path.join(DATA_DIR, 'loot_ledger.json')
+        CAMPAIGN_STATS_FILE = os.path.join(DATA_DIR, 'campaign_stats.json')
+        JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
+        SCRAPBOOK_FILE = os.path.join(DATA_DIR, 'session_highlights.json')
+        SCRAPBOOK_DIR = os.path.join(DATA_DIR, 'scrapbooks')
+        PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
+        CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
+        STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
+
+
+def load_campaign(cid):
+    """Switch the active campaign: re-bind paths and reload all campaign-scoped
+    in-memory state. `cid` may be None to fall back to the legacy flat layout."""
+    _bind_campaign_paths(cid)
+    load_libraries()
+    _load_session_state()
+    _load_session_highlights()
+    return ACTIVE_CAMPAIGN_ID
+
+
+_bind_campaign_paths(_storage.get_live_campaign_id())
+
+# Ensure shared + active-campaign data directories exist (fresh deployments).
+os.makedirs(MONSTER_DIR, exist_ok=True)
+for _dir in [PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -327,8 +384,8 @@ CHAT_LOCK = threading.Lock()
 _CHAT_MAX = 200
 
 # --- CAMPAIGN STATS (Tier 4, feature 30) ---
-CAMPAIGN_STATS_FILE = os.path.join(DATA_DIR, 'campaign_stats.json')
-JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
+# CAMPAIGN_STATS_FILE / JOURNAL_DIR are bound to the active campaign in
+# _bind_campaign_paths(); ensure the journals dir exists for either layout.
 os.makedirs(JOURNAL_DIR, exist_ok=True)
 
 
@@ -4849,8 +4906,7 @@ def _anthropic_complete(prompt, max_tokens=800):
 # Auto-mined highlights + GM-authored RP moments + a Claude narrative, pushed
 # to every screen at session end and saved on the volume to revisit.
 # ══════════════════════════════════════════════════════════════════════════
-SCRAPBOOK_FILE = os.path.join(DATA_DIR, 'session_highlights.json')
-SCRAPBOOK_DIR = os.path.join(DATA_DIR, 'scrapbooks')
+# SCRAPBOOK_FILE / SCRAPBOOK_DIR are bound to the active campaign in _bind_campaign_paths().
 
 
 def _persist_session_highlights():
@@ -5527,7 +5583,7 @@ def _load_story_threads():
     the Obsidian vault and hands it over; it's dropped in here. Returns a list
     of beat dicts (empty on any error)."""
     try:
-        with open(os.path.join(BASE_DIR, 'story_threads.json'), encoding='utf-8') as f:
+        with open(STORY_THREADS_FILE, encoding='utf-8') as f:
             return json.load(f).get('beats') or []
     except (OSError, ValueError):
         return []
@@ -5543,7 +5599,7 @@ def gm_threads():
 
 
 def _save_story_threads(beats):
-    path = os.path.join(BASE_DIR, 'story_threads.json')
+    path = STORY_THREADS_FILE
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({'beats': beats}, f, indent=2, ensure_ascii=False)
         f.write('\n')
@@ -8637,8 +8693,7 @@ def api_generate(element_type):
     data = request.get_json()
     return jsonify({'html': getattr(pf2e_gen, f'get_{element_type}')(int(data.get('level', 1)), data.get('biome', 'City'))})
 
-# --- Pinned generators ---
-PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
+# --- Pinned generators --- (PINNED_GENERATORS_FILE bound in _bind_campaign_paths)
 
 def _load_pinned_generators():
     if os.path.exists(PINNED_GENERATORS_FILE):
@@ -12841,7 +12896,7 @@ def api_journal_delete():
 # =====================================================================
 
 # -- In-Game Calendar (Golarion) --------------------------------------
-CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
+# CALENDAR_FILE bound to the active campaign in _bind_campaign_paths().
 GOLARION_MONTHS = [
     {'name': 'Abadius',   'days': 31},
     {'name': 'Calistril', 'days': 28},
