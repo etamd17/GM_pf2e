@@ -119,48 +119,83 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 if GM_PASSWORD:
     app.config['SESSION_COOKIE_SECURE'] = True
 
+# Account-based auth (multi-campaign). When any user account exists we authorize
+# via the logged-in user's per-campaign role; with no accounts yet (tests /
+# un-bootstrapped) we fall back to the legacy GM_PASSWORD behavior below.
+from core import auth as _auth, campaigns as _campaigns
+
+
+def _account_mode():
+    return _auth.any_users_exist()
+
+
+def _active_campaign_doc():
+    cid = session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
+    return _campaigns.get_campaign(cid)
+
+
 def gm_required(f):
-    """Decorator: requires GM password to access route."""
+    """Decorator: GM of the active campaign (account mode) or the GM password
+    (legacy). _is_gm() encodes both modes."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not GM_PASSWORD:
-            return f(*args, **kwargs)  # No password set = open access (local dev)
-        if session.get('gm_authenticated'):
+        if _is_gm():
             return f(*args, **kwargs)
-        # API callers expect JSON; HTML callers expect a redirect to login.
         if request.path.startswith('/api/'):
-            return jsonify({"error": "GM authentication required"}), 403
-        return redirect('/gm/login')
+            return jsonify({"error": "GM access required"}), 403
+        return redirect('/login' if _account_mode() else '/gm/login')
     return decorated
 
 def _is_gm():
-    """Return True if the caller is effectively the GM.
+    """True if the caller is effectively the GM of the active campaign.
 
-    Mirrors gm_required: when GM_PASSWORD is unset we're in local dev, so
-    everyone is treated as GM. Use this instead of session.get('gm_authenticated')
-    in endpoints that also need to distinguish 'player view' (filtered) vs
-    'GM view' (raw). Otherwise local dev shows the GM the filtered player state.
-    """
+    Account mode: the logged-in user is a GM member of the active campaign (or a
+    site admin). Legacy mode (no accounts): GM_PASSWORD unset = open local dev,
+    otherwise the gm_authenticated session flag."""
+    if _account_mode():
+        u = _auth.current_user()
+        if not u:
+            return False
+        return bool(u.get('is_admin')) or _campaigns.is_gm(_active_campaign_doc(), u['id'])
     return (not GM_PASSWORD) or session.get('gm_authenticated', False)
 
 def require_pc_self_or_gm(f):
-    """Decorator: allow only the GM or the PC's owner (`session.player_name == pc_name`).
-
-    Player sheet mutators take `<pc_name>` from the URL; without this guard
-    any player could `fetch('/api/long_rest/AnotherPC')` and edit a sibling's
-    character. Local dev (no GM_PASSWORD) is open access, same as gm_required.
-    """
+    """Decorator: only the GM or the character's owner may mutate a PC's sheet.
+    Account mode checks owner_user_id on the character; legacy uses the
+    player_name session. Open in legacy local dev (no GM_PASSWORD)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not GM_PASSWORD:
-            return f(*args, **kwargs)
-        if session.get('gm_authenticated'):
+        if _is_gm():
             return f(*args, **kwargs)
         pc_name = kwargs.get('pc_name')
+        if _account_mode():
+            u = _auth.current_user()
+            if u and pc_name and _user_owns_pc(u['id'], pc_name):
+                return f(*args, **kwargs)
+            return jsonify({"error": "forbidden — not your character"}), 403
+        if not GM_PASSWORD:
+            return f(*args, **kwargs)
         if pc_name and session.get('player_name') == pc_name:
             return f(*args, **kwargs)
         return jsonify({"error": "forbidden — not your character"}), 403
     return decorated
+
+
+def _user_owns_pc(user_id, pc_name):
+    """True if user_id owns the character shown as pc_name in the active campaign."""
+    cid = session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
+    if not cid:
+        return False
+    pdir = _storage.party_dir(cid)
+    if not os.path.isdir(pdir):
+        return False
+    for fn in os.listdir(pdir):
+        if not fn.endswith('.json'):
+            continue
+        doc = _storage.load_json(os.path.join(pdir, fn))
+        if _storage.is_wrapped(doc) and _campaigns._character_name(doc) == pc_name:
+            return doc.get('owner_user_id') == user_id
+    return False
 
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
@@ -208,13 +243,10 @@ GM_API_PREFIXES = (
 
 @app.before_request
 def check_gm_access():
-    """Block GM API routes for unauthenticated users."""
-    if not GM_PASSWORD:
-        return  # No password = open access
+    """Block GM-only API routes for non-GM callers (account or legacy mode)."""
     path = request.path
-    if any(path.startswith(prefix) for prefix in GM_API_PREFIXES):
-        if not session.get('gm_authenticated'):
-            return jsonify({"error": "GM authentication required"}), 403
+    if any(path.startswith(prefix) for prefix in GM_API_PREFIXES) and not _is_gm():
+        return jsonify({"error": "GM access required"}), 403
 
 
 # ═════════════════════════════════════════════════════════════════════
