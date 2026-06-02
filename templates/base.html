@@ -78,7 +78,6 @@
                     {% if is_gm %}
                     <a href="/tracker" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Tracker</a>
                     <a href="/gm/threads" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Threads</a>
-                    <a href="/gm/map" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Map</a>
                     <a href="/gmscreen" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Screen</a>
                     <a href="/generator" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Generators</a>
                     <a href="/gm/loot" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Loot</a>
@@ -661,7 +660,7 @@
        Only renders for joined players (not GM). The active tab is inferred
        from the current URL path. #}
     {% if not is_gm and player_name %}
-    {% set active_player_tab = 'party' if request.path.startswith('/party') else ('combat' if request.path.startswith('/tracker') else ('map' if request.path.startswith('/map') else 'sheet')) %}
+    {% set active_player_tab = 'party' if request.path.startswith('/party') else ('combat' if request.path.startswith('/tracker') else 'sheet') %}
     {% include "_player_nav.html" %}
     <script>
     (function() {
