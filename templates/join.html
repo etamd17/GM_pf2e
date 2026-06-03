@@ -1,0 +1,25 @@
+{% extends "_account_base.html" %}
+{% block title %}Join{% endblock %}
+{% block content %}
+<h1>Join a campaign</h1>
+{% if invite %}
+<p class="sub">You've been invited to join as <strong>{{ invite.role }}</strong>.</p>
+{% else %}
+<p class="sub">Enter your invite code to join a campaign.</p>
+{% endif %}
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="POST" action="/join">
+  <label>Invite code</label>
+  <input name="code" value="{{ code }}" required placeholder="ABCD-EFGH" {% if not code %}autofocus{% endif %}>
+  {% if not logged_in %}
+  <label>Display name</label>
+  <input name="display_name" placeholder="your name">
+  <label>Username</label>
+  <input name="username" required>
+  <label>Password</label>
+  <input name="password" type="password" required placeholder="at least 6 characters">
+  {% endif %}
+  <button type="submit">{% if logged_in %}Join campaign{% else %}Create account &amp; join{% endif %}</button>
+</form>
+{% if not logged_in %}<p class="foot muted">Already have an account? <a href="/login">Sign in first</a></p>{% endif %}
+{% endblock %}

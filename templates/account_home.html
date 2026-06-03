@@ -1,0 +1,38 @@
+{% extends "_account_base.html" %}
+{% block title %}My table{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.display_name }}</h1>
+<p class="sub">Your campaigns and characters.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
+
+<div class="section-title">My Campaigns</div>
+{% if campaigns %}
+<ul class="list">
+  {% for c in campaigns %}
+  <li class="row">
+    <div>
+      <strong>{{ c.name }}</strong>
+      <div class="meta">{{ c.system|upper }}{% if c.id == active_campaign_id %} &middot; <span class="badge">active</span>{% endif %}</div>
+    </div>
+    <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">Open</button></form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No campaigns yet.</p>{% endif %}
+
+<div class="section-title">My Characters</div>
+{% if characters %}
+<ul class="list">
+  {% for ch in characters %}
+  <li class="row">
+    <div>
+      <strong>{{ ch.name }}</strong>
+      <div class="meta">{{ ch.system|upper }} &middot; {{ ch.campaign_name }}</div>
+    </div>
+    <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Open</button></form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No characters yet.</p>{% endif %}
+
+<p class="foot muted"><a href="/logout">Sign out</a></p>
+{% endblock %}

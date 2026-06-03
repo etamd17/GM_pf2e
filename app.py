@@ -56,6 +56,8 @@ _load_dotenv_file()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
+from datetime import timedelta as _timedelta
+app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity for player/GM sessions
 # Reject oversized uploads at the WSGI layer so a multi-GB POST can't OOM
 # the dyno before our per-endpoint size checks run. Bumped high enough for
 # a fat tarball push (vault_data) but well under Railway's worker memory.
@@ -5583,6 +5585,119 @@ def gm_login():
 def gm_logout():
     session.pop('gm_authenticated', None)
     return redirect('/player')
+
+
+# ── Account auth + campaign selection (multi-campaign) ──────────────────────
+SETUP_TOKEN = os.environ.get('SETUP_TOKEN', '')
+
+
+def _safe_next(default):
+    nxt = request.args.get('next', default) or default
+    return default if (not nxt.startswith('/') or nxt.startswith('//')) else nxt
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """One-time bootstrap of the first (admin/GM) account. Self-disables once any
+    account exists; gated by the SETUP_TOKEN env var when one is set."""
+    if _auth.any_users_exist():
+        return redirect('/login')
+    if request.method == 'POST':
+        if SETUP_TOKEN and request.form.get('setup_token', '') != SETUP_TOKEN:
+            return render_template('setup.html', error='Wrong setup token.', need_token=True), 403
+        try:
+            u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
+                                  display_name=request.form.get('display_name'), is_admin=True)
+        except ValueError as e:
+            return render_template('setup.html', error=str(e), need_token=bool(SETUP_TOKEN)), 400
+        _auth.login_user(u, remember=True)
+        return redirect('/me')
+    return render_template('setup.html', error=None, need_token=bool(SETUP_TOKEN))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not _auth.any_users_exist():
+        return redirect('/setup')
+    if request.method == 'POST':
+        u = _auth.verify_credentials(request.form.get('username', ''), request.form.get('password', ''))
+        if not u:
+            return render_template('login.html', error='Wrong username or password.'), 401
+        _auth.login_user(u, remember=True)
+        return redirect(_safe_next('/me'))
+    return render_template('login.html', error=None)
+
+
+@app.route('/logout')
+def logout():
+    _auth.logout_user()
+    return redirect('/login')
+
+
+@app.route('/me')
+@_auth.login_required
+def account_home():
+    """My Campaigns + My Characters for the logged-in user."""
+    u = _auth.current_user()
+    return render_template('account_home.html', user=u,
+                           campaigns=_campaigns.campaigns_for_user(u['id']),
+                           characters=_campaigns.characters_for_user(u['id']),
+                           active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
+
+
+@app.route('/campaign/<cid>/activate', methods=['POST'])
+@_auth.login_required
+def activate_campaign(cid):
+    """Set the session's active campaign; a GM/admin also takes the live slot."""
+    u = _auth.current_user()
+    camp = _campaigns.get_campaign(cid)
+    is_member = bool(_campaigns.user_role(camp, u['id'])) or u.get('is_admin')
+    if not camp or not is_member:
+        return jsonify({'error': 'not a member of that campaign'}), 403
+    session['active_campaign_id'] = cid
+    gm = _campaigns.is_gm(camp, u['id']) or u.get('is_admin')
+    if gm:
+        _storage.set_live_campaign_id(cid)
+        load_campaign(cid)
+    return redirect('/gm' if gm else '/player')
+
+
+def _claim_by_id(cid, character_id, user_id):
+    pdir = _storage.party_dir(cid)
+    for fn in (os.listdir(pdir) if os.path.isdir(pdir) else []):
+        if fn.endswith('.json'):
+            doc = _storage.load_json(os.path.join(pdir, fn))
+            if _storage.is_wrapped(doc) and doc.get('id') == character_id:
+                _campaigns.claim_character(cid, fn, user_id)
+                return True
+    return False
+
+
+@app.route('/join', methods=['GET', 'POST'])
+def join():
+    """Invite-code claim: create/sign-in an account, join the campaign, claim a PC."""
+    code = (request.values.get('code') or '').strip()
+    inv = _auth.get_invite(code) if code else None
+    if request.method == 'POST':
+        if not inv:
+            return render_template('join.html', error='Invalid or expired invite code.', code=code,
+                                   invite=None, logged_in=bool(_auth.current_user())), 400
+        u = _auth.current_user()
+        if not u:
+            try:
+                u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
+                                      display_name=request.form.get('display_name'))
+            except ValueError as e:
+                return render_template('join.html', error=str(e), code=code, invite=inv, logged_in=False), 400
+            _auth.login_user(u, remember=True)
+        _auth.consume_invite(code)
+        _campaigns.add_member(inv['campaign_id'], u['id'], inv['role'], character_id=inv.get('character_id'))
+        if inv.get('character_id'):
+            _claim_by_id(inv['campaign_id'], inv['character_id'], u['id'])
+        session['active_campaign_id'] = inv['campaign_id']
+        return redirect('/me')
+    return render_template('join.html', error=None, code=code, invite=inv, logged_in=bool(_auth.current_user()))
+
 
 @app.route('/gm')
 @gm_required
