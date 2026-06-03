@@ -5658,12 +5658,7 @@ def logout():
 @_auth.login_required
 def account_home():
     """My Campaigns + My Characters for the logged-in user."""
-    u = _auth.current_user()
-    camps = _campaigns.campaigns_for_user(u['id'])
-    gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
-    return render_template('account_home.html', user=u, campaigns=camps, gm_campaign_ids=gm_ids,
-                           characters=_campaigns.characters_for_user(u['id']),
-                           active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
+    return _me_render()
 
 
 @app.route('/campaign/<cid>/activate', methods=['POST'])
@@ -5743,6 +5738,81 @@ def join():
         session['active_campaign_id'] = inv['campaign_id']
         return redirect('/me')
     return render_template('join.html', error=None, code=code, invite=inv, logged_in=bool(_auth.current_user()))
+
+
+def _me_render(**extra):
+    u = _auth.current_user()
+    camps = _campaigns.campaigns_for_user(u['id'])
+    gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
+    ctx = dict(user=u, campaigns=camps, gm_campaign_ids=gm_ids,
+               characters=_campaigns.characters_for_user(u['id']),
+               active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
+    ctx.update(extra)
+    return render_template('account_home.html', **ctx)
+
+
+@app.context_processor
+def _inject_account_ctx():
+    """Expose the logged-in account user + active campaign to every template (nav switcher)."""
+    u = None
+    try:
+        if _account_mode():
+            u = _auth.current_user()
+    except Exception:
+        u = None
+    return {'account_user': u, 'active_campaign': (_active_campaign_doc() if u else None)}
+
+
+@app.route('/campaigns/new', methods=['GET', 'POST'])
+@_auth.login_required
+def new_campaign():
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        system = request.form.get('system') or 'pf2e'
+        if not name:
+            return render_template('new_campaign.html', error='Please name the campaign.'), 400
+        if system not in _storage.SUPPORTED_SYSTEMS:
+            system = 'pf2e'
+        camp = _campaigns.create_campaign(name, system, _auth.current_user()['id'])
+        session['active_campaign_id'] = camp['id']
+        return redirect('/me')
+    return render_template('new_campaign.html', error=None)
+
+
+@app.route('/me/password', methods=['POST'])
+@_auth.login_required
+def change_my_password():
+    u = _auth.current_user()
+    if not _auth.verify_credentials(u['username'], request.form.get('current_password', '')):
+        return _me_render(pw_error='Current password is incorrect.'), 400
+    try:
+        _auth.set_password(u['id'], request.form.get('new_password', ''))
+    except ValueError as e:
+        return _me_render(pw_error=str(e)), 400
+    return _me_render(pw_msg='Password updated.')
+
+
+@app.route('/admin/users')
+@_auth.login_required
+def admin_users():
+    if not _auth.current_user().get('is_admin'):
+        return jsonify({'error': 'admin only'}), 403
+    return render_template('admin_users.html', users=_auth.list_users(),
+                           notice=session.pop('_pw_reset_notice', None))
+
+
+@app.route('/admin/users/<uid>/reset', methods=['POST'])
+@_auth.login_required
+def admin_reset_password(uid):
+    if not _auth.current_user().get('is_admin'):
+        return jsonify({'error': 'admin only'}), 403
+    target = _auth.get_user(uid)
+    if target:
+        import secrets as _secrets
+        temp = _secrets.token_urlsafe(6)
+        _auth.set_password(uid, temp)
+        session['_pw_reset_notice'] = {'username': target['username'], 'temp': temp}
+    return redirect('/admin/users')
 
 
 @app.route('/gm')

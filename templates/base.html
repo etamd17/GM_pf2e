@@ -71,6 +71,9 @@
                     <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">PF2E</span>
                 </a>
                 <div class="nav-links flex items-center gap-1 text-xs font-medium flex-nowrap">
+                    {% if account_user %}
+                    <a href="/me" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Switch campaign / my characters">{% if active_campaign %}{{ active_campaign.name }}{% else %}My Table{% endif %} &#9662;</a>
+                    {% endif %}
                     {% if is_gm %}
                     <a href="/gm" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Hub</a>
                     {% endif %}

@@ -4,7 +4,7 @@
 <h1>Welcome, {{ user.display_name }}</h1>
 <p class="sub">Your campaigns and characters.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
 
-<div class="section-title">My Campaigns</div>
+<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">My Campaigns <a href="/campaigns/new" style="font-size:12px;font-weight:400;">+ New</a></div>
 {% if campaigns %}
 <ul class="list">
   {% for c in campaigns %}
@@ -37,5 +37,18 @@
 </ul>
 {% else %}<p class="muted">No characters yet.</p>{% endif %}
 
-<p class="foot muted"><a href="/logout">Sign out</a></p>
+<div class="section-title">Account</div>
+{% if pw_msg %}<div class="err" style="background:rgba(58,120,120,0.15);border-color:rgba(125,196,196,0.4);color:#A8DEDE;">{{ pw_msg }}</div>{% endif %}
+{% if pw_error %}<div class="err">{{ pw_error }}</div>{% endif %}
+<form method="POST" action="/me/password">
+  <label>Change password &mdash; current</label>
+  <input name="current_password" type="password" required>
+  <label>New password</label>
+  <input name="new_password" type="password" required placeholder="at least 6 characters">
+  <button type="submit">Update password</button>
+</form>
+<p class="foot muted">
+  {% if user.is_admin %}<a href="/admin/users">Manage users</a> &middot; {% endif %}
+  <a href="/logout">Sign out</a>
+</p>
 {% endblock %}

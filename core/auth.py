@@ -66,6 +66,10 @@ def any_users_exist():
     return bool(_load_users()['users'])
 
 
+def list_users():
+    return list(_load_users()['users'].values())
+
+
 def create_user(username, password, display_name=None, is_admin=False):
     username = (username or '').strip()
     if not username or not password:
