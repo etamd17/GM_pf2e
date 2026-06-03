@@ -251,6 +251,26 @@ def check_gm_access():
         return jsonify({"error": "GM access required"}), 403
 
 
+# CSRF defense for the account/admin state-changing routes: reject cross-origin
+# POSTs (with SameSite=Lax cookies as the backstop). A classic CSRF auto-submit
+# from another site carries that site's Origin and is blocked; same-origin form
+# posts carry a matching Origin/Referer. The game's existing fetch mutations are
+# out of scope here -- they rely on SameSite + per-campaign authorization.
+_CSRF_GUARD_PREFIXES = ('/setup', '/login', '/join', '/me/password',
+                        '/campaigns/', '/campaign/', '/admin/')
+
+
+@app.before_request
+def _csrf_guard():
+    if request.method != 'POST':
+        return
+    if not any(request.path.startswith(p) for p in _CSRF_GUARD_PREFIXES):
+        return
+    origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
+    if origin and not origin.startswith(request.host_url.rstrip('/')):
+        return ('Cross-origin request blocked.', 400)
+
+
 # ═════════════════════════════════════════════════════════════════════
 #  GZIP COMPRESSION
 #  The tracker page is ~1.8 MB uncompressed (mostly the inlined monster
