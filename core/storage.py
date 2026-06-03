@@ -191,23 +191,26 @@ def campaign_member(user_id, role, character_id=None):
 
 
 def wrap_character(chid, cid, system, system_data, *, owner_user_id=None, play_state=None):
-    """Wrap native character data in the campaign-aware envelope. For PF2e,
-    `system_data` is the existing party_data file content verbatim, so the
-    existing Character loader keeps reading it unchanged."""
-    return {
+    """FLAT-ADDITIVE envelope: merge campaign/ownership metadata INTO the native
+    character dict (which keeps its top-level `build`, `success`, etc.). This way
+    every existing reader/writer of a party_data file -- the Character loader, the
+    combat-state persistence, level-up, conditions -- keeps working unchanged,
+    while new code reads the top-level envelope keys (id, owner_user_id, system).
+    """
+    doc = dict(system_data) if isinstance(system_data, dict) else {'data': system_data}
+    doc.update({
         'schema_version': SCHEMA_VERSION,
         'id': chid,
         'campaign_id': _check_id(cid, 'campaign_id'),
         'owner_user_id': owner_user_id,
         'system': system,
-        'system_data': system_data,
-        'play_state': play_state or {},
-    }
+    })
+    return doc
 
 
 def is_wrapped(doc):
     """True if a character doc already carries the envelope (migration idempotency)."""
-    return isinstance(doc, dict) and doc.get('schema_version') == SCHEMA_VERSION and 'system_data' in doc
+    return isinstance(doc, dict) and doc.get('schema_version') == SCHEMA_VERSION and 'owner_user_id' in doc
 
 
 # --------------------------------------------------------------------------

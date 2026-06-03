@@ -5596,6 +5596,25 @@ def _safe_next(default):
     return default if (not nxt.startswith('/') or nxt.startswith('//')) else nxt
 
 
+def _auto_migrate_legacy(admin_user_id):
+    """First-run convenience: if a legacy flat game exists and nothing is migrated
+    yet, copy it into Campaign #1 (owned by the new admin) and go live. Safe -- the
+    migration copies and preserves the originals as backup."""
+    try:
+        if _campaigns.list_campaigns():
+            return
+        legacy_party = os.path.join(DATA_DIR, 'party_data')
+        if not (os.path.isdir(legacy_party) and any(f.endswith('.json') for f in os.listdir(legacy_party))):
+            return
+        from tools.migrate_to_campaigns import migrate as _run_migration
+        new_cid = _run_migration(created_by=admin_user_id)
+        if new_cid:
+            session['active_campaign_id'] = new_cid
+            load_campaign(new_cid)
+    except Exception as e:
+        app.logger.warning(f"setup auto-migration skipped: {e}")
+
+
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     """One-time bootstrap of the first (admin/GM) account. Self-disables once any
@@ -5611,6 +5630,7 @@ def setup():
         except ValueError as e:
             return render_template('setup.html', error=str(e), need_token=bool(SETUP_TOKEN)), 400
         _auth.login_user(u, remember=True)
+        _auto_migrate_legacy(u['id'])
         return redirect('/me')
     return render_template('setup.html', error=None, need_token=bool(SETUP_TOKEN))
 

@@ -83,10 +83,8 @@ def campaigns_for_user(user_id):
 # Characters across campaigns (ownership) -- for 'My Characters' + claim flow
 # --------------------------------------------------------------------------
 def _character_name(doc):
-    sd = doc.get('system_data') or {}
-    if doc.get('system') == 'pf2e':
-        return (sd.get('build') or {}).get('name') or sd.get('name') or '?'
-    return sd.get('name') or '?'
+    # flat-additive envelope: native fields (build/name) live at the top level
+    return (doc.get('build') or {}).get('name') or doc.get('name') or '?'
 
 
 def characters_for_user(user_id):
