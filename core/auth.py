@@ -207,6 +207,17 @@ def consume_invite(code):
     return inv
 
 
+def active_invite_for_character(campaign_id, character_id):
+    """An existing still-valid invite for this campaign+character, or None -- so a
+    GM's invites page is idempotent instead of minting a new code on every load."""
+    for inv in _load_invites()['invites'].values():
+        if (inv.get('campaign_id') == campaign_id and inv.get('character_id') == character_id
+                and inv['uses_left'] > 0
+                and (not inv.get('expires_at') or time.time() <= inv['expires_at'])):
+            return inv
+    return None
+
+
 # --------------------------------------------------------------------------
 # CSRF (per-session token; checked on state-changing requests)
 # --------------------------------------------------------------------------

@@ -1,0 +1,19 @@
+{% extends "_account_base.html" %}
+{% block title %}Player invites{% endblock %}
+{% block content %}
+<h1>Player invites &mdash; {{ campaign.name }}</h1>
+<p class="sub">Send each player their link. They'll create an account and claim that character.</p>
+<ul class="list">
+  {% for r in rows %}
+  <li class="row">
+    <div>
+      <strong>{{ r.name }}</strong>
+      <div class="meta">
+        {% if r.claimed %}<span class="badge">claimed</span>{% else %}<code class="muted">/join?code={{ r.code }}</code>{% endif %}
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+<p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+{% endblock %}

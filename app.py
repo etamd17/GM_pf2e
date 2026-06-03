@@ -5659,8 +5659,9 @@ def logout():
 def account_home():
     """My Campaigns + My Characters for the logged-in user."""
     u = _auth.current_user()
-    return render_template('account_home.html', user=u,
-                           campaigns=_campaigns.campaigns_for_user(u['id']),
+    camps = _campaigns.campaigns_for_user(u['id'])
+    gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
+    return render_template('account_home.html', user=u, campaigns=camps, gm_campaign_ids=gm_ids,
                            characters=_campaigns.characters_for_user(u['id']),
                            active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
 
@@ -5680,6 +5681,31 @@ def activate_campaign(cid):
         _storage.set_live_campaign_id(cid)
         load_campaign(cid)
     return redirect('/gm' if gm else '/player')
+
+
+@app.route('/campaign/<cid>/invites')
+@_auth.login_required
+def campaign_invites(cid):
+    """GM/admin: per-character join links for players to claim their PCs."""
+    u = _auth.current_user()
+    camp = _campaigns.get_campaign(cid)
+    if not camp or not (_campaigns.is_gm(camp, u['id']) or u.get('is_admin')):
+        return jsonify({'error': 'GM only'}), 403
+    rows = []
+    pdir = _storage.party_dir(cid)
+    for fn in (sorted(os.listdir(pdir)) if os.path.isdir(pdir) else []):
+        if not fn.endswith('.json'):
+            continue
+        doc = _storage.load_json(os.path.join(pdir, fn))
+        if not _storage.is_wrapped(doc):
+            continue
+        claimed = bool(doc.get('owner_user_id'))
+        code = None
+        if not claimed:
+            inv = _auth.active_invite_for_character(cid, doc.get('id'))
+            code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
+        rows.append({'name': _campaigns._character_name(doc), 'claimed': claimed, 'code': code})
+    return render_template('campaign_invites.html', campaign=camp, rows=rows)
 
 
 def _claim_by_id(cid, character_id, user_id):
