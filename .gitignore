@@ -54,3 +54,6 @@ uploads/
 # Built Cosmere player characters — runtime store on the volume (DATA_DIR),
 # kept out of the PF2e party_data. Never committed.
 cosmere_pcs/
+
+# Per-player session-notes scratchpads — runtime state on the volume.
+session_notes/

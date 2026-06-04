@@ -6563,6 +6563,67 @@ def cosmere_pc_sheet(pid):
     )
 
 
+# ── Session notes: a per-owner, per-campaign free-form scratchpad ──────────
+# System-agnostic: a place for any player (or the GM) to jot down whatever they
+# want during a session. Stored next to the campaign's journals.
+def _session_notes_dir():
+    return os.path.join(os.path.dirname(JOURNAL_DIR), 'session_notes')
+
+
+def _notes_owner():
+    """A safe storage key for the current player/GM."""
+    raw = session.get('user_id') or session.get('player_name') or 'gm'
+    return re.sub(r'[^A-Za-z0-9_-]', '_', str(raw))[:64] or 'gm'
+
+
+def _notes_path(owner):
+    return os.path.join(_session_notes_dir(), owner + '.json')
+
+
+def _load_notes_text(owner):
+    p = _notes_path(owner)
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding='utf-8') as f:
+                return json.load(f).get('text', '')
+        except Exception:
+            pass
+    return ''
+
+
+def _save_notes_text(owner, text):
+    os.makedirs(_session_notes_dir(), exist_ok=True)
+    _atomic_write_json(_notes_path(owner), {'text': (text or '')[:20000]}, indent=2)
+
+
+@app.route('/notes')
+def session_notes_page():
+    return render_template('notes.html', notes=_load_notes_text(_notes_owner()))
+
+
+@app.route('/api/notes', methods=['GET', 'POST'])
+def api_notes():
+    owner = _notes_owner()
+    if request.method == 'POST':
+        text = (request.get_json(silent=True) or {}).get('text', '')
+        _save_notes_text(owner, text if isinstance(text, str) else '')
+        return jsonify({'ok': True})
+    return jsonify({'text': _load_notes_text(owner)})
+
+
+@app.route('/cosmere/pc/<pid>/notes', methods=['POST'])
+def cosmere_pc_notes(pid):
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    text = (request.get_json(silent=True) or {}).get('text', '')
+    b = doc.get('build') or {}
+    b['notes'] = (text if isinstance(text, str) else '')[:20000]
+    doc['build'] = b
+    _save_cosmere_pc(doc)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/add_combatant', methods=['POST'])
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')

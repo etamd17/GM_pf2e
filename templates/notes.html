@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Session Notes{% endblock %}
+{% block extra_head %}
+<style>
+  .nt-wrap { max-width:860px; }
+  .nt-head { display:flex; justify-content:space-between; align-items:baseline;
+             border-bottom:1px solid var(--border-card); padding-bottom:.6rem; margin-bottom:.4rem; }
+  .nt-title { font-family:var(--font-display, serif); font-size:1.6rem; color:#5eead4; }
+  .nt-status { font-size:12px; color:var(--text-on-dark-3); }
+  #nt-area { width:100%; min-height:62vh; background:var(--bg-sunken,#131922); color:#e8eef5;
+             border:1px solid var(--border-card); border-radius:10px; padding:1rem; font-size:14px;
+             line-height:1.6; resize:vertical; }
+  #nt-area:focus { outline:none; border-color:rgba(56,189,248,.5); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="nt-wrap">
+  <div class="nt-head">
+    <span class="nt-title">Session Notes</span>
+    <span class="nt-status" id="nt-status">Saved</span>
+  </div>
+  <p class="nt-status" style="margin:.4rem 0 .7rem;">Jot down anything during the session — your notes save automatically.</p>
+  <textarea id="nt-area" placeholder="Your notes…">{{ notes }}</textarea>
+</div>
+<script>
+const area=document.getElementById('nt-area'), status=document.getElementById('nt-status');
+let timer=null, last=area.value;
+function save(){
+  if(area.value===last){ status.textContent='Saved'; return; }
+  status.textContent='Saving…';
+  fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:area.value})})
+    .then(r=>r.json()).then(()=>{ last=area.value; status.textContent='Saved'; })
+    .catch(()=>{ status.textContent='Save failed — retrying'; clearTimeout(timer); timer=setTimeout(save,2000); });
+}
+area.addEventListener('input',()=>{ status.textContent='Editing…'; clearTimeout(timer); timer=setTimeout(save,800); });
+window.addEventListener('beforeunload',()=>{
+  if(area.value!==last && navigator.sendBeacon)
+    navigator.sendBeacon('/api/notes', new Blob([JSON.stringify({text:area.value})],{type:'application/json'}));
+});
+</script>
+{% endblock %}

@@ -198,6 +198,22 @@
     {% endfor %}
   </div>
   {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
+
+  <div class="cs-section-h">Session Notes</div>
+  <textarea id="pc-notes" placeholder="Jot down anything during the session — saves automatically."
+            style="width:100%; min-height:140px; background:var(--bg-sunken,#131922); color:#e8eef5; border:1px solid var(--border-card); border-radius:9px; padding:.75rem; font-size:13px; line-height:1.6; resize:vertical;">{{ build.notes }}</textarea>
+  <div id="pc-notes-status" style="font-size:11px; color:var(--text-on-dark-3); margin-top:.25rem;">Saved</div>
+  <script>
+  (function(){
+    const a=document.getElementById('pc-notes'), s=document.getElementById('pc-notes-status');
+    let t=null, last=a.value;
+    function save(){ if(a.value===last){ s.textContent='Saved'; return; } s.textContent='Saving…';
+      fetch('/cosmere/pc/{{ actor_id }}/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:a.value})})
+        .then(r=>r.json()).then(()=>{ last=a.value; s.textContent='Saved'; }).catch(()=>s.textContent='Save failed'); }
+    a.addEventListener('input',()=>{ s.textContent='Editing…'; clearTimeout(t); t=setTimeout(save,800); });
+    window.addEventListener('beforeunload',()=>{ if(a.value!==last && navigator.sendBeacon) navigator.sendBeacon('/cosmere/pc/{{ actor_id }}/notes', new Blob([JSON.stringify({text:a.value})],{type:'application/json'})); });
+  })();
+  </script>
   {% endif %}
 </div>
 {% endblock %}
