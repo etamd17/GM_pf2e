@@ -10,11 +10,13 @@ from __future__ import annotations
 import os
 
 import app
+from systems.cosmere import origins as O
 
 _VALID = {
     'name': 'Test Radiant', 'level': 1, 'path': 'warrior',
     'attributes': {'str': 2, 'spd': 3, 'int': 2, 'wil': 2, 'awa': 3, 'pre': 0},  # 12 pts
-    'skills': {'ath': 2, 'hwp': 2, 'prc': 1},                                    # 5 ranks
+    'skills': {'ath': 2, 'hwp': 2, 'prc': 1},                                    # 5 ranks (Athletics = starting skill)
+    'talents': [O.path_key_talent('warrior')],                                   # Vigilant Stance (path key talent)
     'expertises': ['Alethi', 'Soldiering'],
 }
 

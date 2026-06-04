@@ -6426,18 +6426,48 @@ def _cosmere_cultures():
     return sorted({d.get('name', '') for d in systems.cosmere.load_pack('cultures') if d.get('name')})
 
 
+def _talent_prereq_summary(pr):
+    """A short human-readable summary of a talent's Foundry prerequisites."""
+    if not isinstance(pr, dict) or not pr:
+        return ''
+    parts = []
+    for grp in pr.values():
+        if not isinstance(grp, dict):
+            continue
+        t = grp.get('type')
+        if t == 'skill':
+            parts.append('%s rank %s' % (systems.cosmere.SKILL_NAMES.get(grp.get('skill'), grp.get('skill')), grp.get('rank')))
+        elif t == 'talent':
+            parts.append(' or '.join(x.get('label', '?') for x in (grp.get('talents') or [])))
+        elif t == 'attribute':
+            parts.append('%s %s' % (grp.get('attribute'), grp.get('value')))
+        elif t == 'goal':
+            parts.append('a completed goal')
+        elif t == 'connection':
+            parts.append('a connection')
+        elif t:
+            parts.append(str(t))
+    return ' + '.join(p for p in parts if p)
+
+
 def _cosmere_path_talents():
-    """{path_id: [{id, name}]} for the builder's talent picker."""
+    """{path_id: [{id, name, key, prereq}]} for the builder's talent picker
+    (key talents first; each carries a prerequisite summary)."""
     out = {}
     for d in systems.cosmere.load_pack('heroic-paths'):
         if d.get('type') != 'talent':
             continue
-        p = (d.get('system', {}).get('path') or '').lower()
+        s = d.get('system', {})
+        p = (s.get('path') or '').lower()
         if not p:
             continue
-        out.setdefault(p, []).append({'id': d.get('_id'), 'name': d.get('name', '')})
+        pr = s.get('prerequisites') or {}
+        out.setdefault(p, []).append({
+            'id': d.get('_id'), 'name': d.get('name', ''),
+            'key': pr == {}, 'prereq': _talent_prereq_summary(pr),
+        })
     for p in out:
-        out[p].sort(key=lambda t: t['name'].lower())
+        out[p].sort(key=lambda t: (not t['key'], t['name'].lower()))   # key talents first
     return out
 
 
@@ -6453,6 +6483,7 @@ def _cosmere_builder_context(build):
         paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
         path_talents=_cosmere_path_talents(),
         radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
+        path_info=systems.cosmere.origins.PATH_INFO,
         budgets=dict(
             attr_points=build.attr_points_available(),
             skill_ranks=build.skill_ranks_available(),

@@ -20,8 +20,9 @@ never raises on a "wrong" build).
 """
 from __future__ import annotations
 
-from systems.cosmere import SKILL_ATTR, SURGE_SKILLS, PATHS
+from systems.cosmere import SKILL_ATTR, SKILL_NAMES, SURGE_SKILLS, PATHS
 from systems.cosmere import radiant as _radiant
+from systems.cosmere import origins as _origins
 from systems.cosmere.actor import cosmere_max_health, tier_of
 from systems.cosmere.items import Inventory
 
@@ -171,6 +172,20 @@ class CosmereBuild:
         """The order's two surge skills — available once the First Ideal is sworn."""
         return self.surge_codes() if (self.radiant_order and self.first_ideal_sworn) else ()
 
+    # -- heroic path grants (key talent + starting skill) ------------------
+    def path_start_skill(self):
+        return _origins.path_start_skill(self.path)
+
+    def path_key_talent(self):
+        return _origins.path_key_talent(self.path)
+
+    def has_key_talent(self) -> bool:
+        kt = self.path_key_talent()
+        if not kt:
+            return False
+        return any(isinstance(t, dict) and (t.get('id') == kt['id'] or t.get('name') == kt['name'])
+                   for t in self.talents)
+
     def talents_available(self) -> int:
         return total_talents(self.level, self.epic_talent_choices)
 
@@ -240,6 +255,14 @@ class CosmereBuild:
 
         if self.path not in PATHS:
             issues.append("Choose a heroic path.")
+        else:
+            ks = self.path_start_skill()
+            if ks and self.skills.get(ks, 0) < 1:
+                issues.append("Your path's starting skill (%s) should have at least 1 rank." % SKILL_NAMES.get(ks, ks))
+            if not self.has_key_talent():
+                kt = self.path_key_talent()
+                if kt:
+                    issues.append("Add your path's key talent: %s." % kt['name'])
         return issues
 
     @property

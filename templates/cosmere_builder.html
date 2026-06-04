@@ -59,11 +59,12 @@
   <div class="row">
     <div><label>Ancestry</label><select id="f-ancestry">
       {% for anc in ['Human','Singer'] %}<option {{ 'selected' if build.ancestry==anc }}>{{ anc }}</option>{% endfor %}</select></div>
-    <div><label>Culture (grants 2 expertises)</label><select id="f-culture"><option value="">—</option>
+    <div><label>Culture (a cultural expertise)</label><select id="f-culture" onchange="onCulture()"><option value="">—</option>
       {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
     <div><label>Heroic Path</label><select id="f-path" onchange="onPath()"><option value="">—</option>
       {% for p in paths %}<option value="{{ p }}" {{ 'selected' if build.path==p }}>{{ p|capitalize }}</option>{% endfor %}</select></div>
   </div>
+  <div id="path-info" class="muted" style="margin-top:.35rem;"></div>
 
   <div class="sec-h">Radiant Path — Surgebinding <span class="muted" style="text-transform:none; letter-spacing:0;">(optional; a First Ideal requires level 2+)</span></div>
   <div class="row">
@@ -159,6 +160,8 @@ const PATH_TALENTS = {{ path_talents|tojson }};
 const ORDERS = {{ radiant_orders|tojson }};
 const SURGE_INFO = {{ surges|tojson }};
 const FIRST_IDEAL = {{ first_ideal|tojson }};
+const PATH_INFO = {{ path_info|tojson }};
+const SKILL_NAMES = {{ skill_names|tojson }};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -179,8 +182,26 @@ function onLevel(){recompute();}
 function onPath(){
   const p=v('f-path'); const sel=document.getElementById('talent-pick');
   const list=(PATH_TALENTS[p]||[]);
-  sel.innerHTML='<option value="">'+(list.length?'— select a talent —':'(no talents for this path)')+'</option>'
-    + list.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  sel.innerHTML='<option value="">'+(list.length?'— select a talent —':'(choose a path first)')+'</option>'
+    + list.map(t=>`<option value="${t.id}">${t.key?'★ ':''}${t.name}${t.prereq?' — needs '+t.prereq:''}</option>`).join('');
+  const info=PATH_INFO[p], box=document.getElementById('path-info');
+  if(info){
+    box.innerHTML=`Grants key talent <b style="color:#5eead4">${info.key_talent}</b> and a free rank in <b>${SKILL_NAMES[info.start_skill]}</b> (starting skill).`;
+    // auto-grant the key talent (swap out any other path's key talent)
+    const otherKeys=Object.values(PATH_INFO).map(x=>x.key_talent_id);
+    TALENTS=TALENTS.filter(t=>!otherKeys.includes(t.id) || t.id===info.key_talent_id);
+    if(!TALENTS.some(t=>t.id===info.key_talent_id)) TALENTS.unshift({id:info.key_talent_id, name:info.key_talent, key:true});
+    renderTalents();
+    const si=document.querySelector(`.skill-rank[data-code="${info.start_skill}"]`);   // ensure the +1 starting rank
+    if(si && (+si.value||0)<1) si.value=1;
+  } else { box.innerHTML=''; }
+  recompute();
+}
+function onCulture(){
+  const c=v('f-culture'); if(!c) return;
+  const ta=document.getElementById('f-expertises');
+  const lines=ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!lines.includes(c)){ lines.unshift(c); ta.value=lines.join('\n'); recompute(); }   // pre-fill the cultural expertise
 }
 function onOrder(){
   const o=ORDERS[v('f-order')];
@@ -221,8 +242,10 @@ function addTalent(){
 }
 function renderTalents(){
   document.getElementById('talent-list').innerHTML = TALENTS.map((t,i)=>
-    `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`).join('')
-    || '<span class="muted">None selected</span>';
+    t.key
+      ? `<span class="chip" title="Path key talent (granted)"><b style="color:#5eead4">★ ${t.name||t.id}</b></span>`
+      : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
+  ).join('') || '<span class="muted">None selected</span>';
 }
 function addItem(){
   const id=document.getElementById('item-pick').value; if(!id)return;

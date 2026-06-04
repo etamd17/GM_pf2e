@@ -9,6 +9,7 @@ from __future__ import annotations
 import systems.cosmere as cos
 from systems.cosmere import items as I
 from systems.cosmere.actor import CosmereActor
+from systems.cosmere import origins as O
 from systems.cosmere.build import (
     CosmereBuild, attribute_points, total_skill_ranks, free_skill_ranks,
     total_talents, ancestry_bonus_talents, max_skill_rank, expertises_total,
@@ -73,7 +74,8 @@ def _sample():
     return CosmereBuild({
         'name': 'Test Hero', 'level': 1, 'path': 'warrior',
         'attributes': {'str': 2, 'spd': 3, 'int': 2, 'wil': 2, 'awa': 3, 'pre': 0},
-        'skills': {'ath': 2, 'hwp': 2, 'prc': 1},   # 5 ranks
+        'skills': {'ath': 2, 'hwp': 2, 'prc': 1},   # 5 ranks (Athletics = the path's starting skill)
+        'talents': [O.path_key_talent('warrior')],  # Vigilant Stance (path key talent)
         'expertises': ['Alethi', 'Soldiering'],
     })
 

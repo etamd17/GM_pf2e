@@ -12,6 +12,7 @@ import os
 import app
 import systems.cosmere as cos
 import systems.cosmere.radiant as R
+from systems.cosmere import origins as O
 from systems.cosmere.build import CosmereBuild
 from systems.cosmere.actor import CosmereActor
 
@@ -51,7 +52,8 @@ def _windrunner(level=2, ideals=1):
         'name': 'Kal', 'level': level, 'path': 'warrior',
         'radiant_order': 'windrunners', 'ideals_sworn': ideals, 'spren_name': 'Syl',
         'attributes': {'str': 3, 'spd': 3, 'int': 1, 'wil': 2, 'awa': 2, 'pre': 1},
-        'skills': {'adh': 1, 'grv': 1},
+        'skills': {'ath': 1, 'adh': 1, 'grv': 1},        # ath = warrior starting skill
+        'talents': [O.path_key_talent('warrior')],       # Vigilant Stance (path key talent)
     })
 
 
