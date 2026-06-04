@@ -59,3 +59,17 @@ def test_builder_shows_path_grants():
     body = app.app.test_client().get('/cosmere/builder').data.decode()
     # The path-info wiring + key-talent data are present for the JS to use.
     assert 'Vigilant Stance' in body and 'starting skill' in body.lower()
+
+
+def test_starting_kits_resolve_to_catalog():
+    kits = {k['key']: k for k in app._cosmere_starting_kits()}
+    assert set(kits) == set(O.STARTING_KITS)
+    names = [i['name'] for i in kits['military']['items']]
+    assert 'Chain' in names and 'Longsword' in names      # armor + weapon resolved to catalog
+    assert kits['military']['marks'] == '2d6'
+    assert kits['prisoner']['items'] == []                 # prisoner grants no gear items
+
+
+def test_builder_offers_starting_kits():
+    body = app.app.test_client().get('/cosmere/builder').data.decode()
+    assert 'Starting kit' in body and 'Academic Kit' in body and 'Underworld Kit' in body

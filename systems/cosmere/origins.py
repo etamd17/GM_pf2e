@@ -54,6 +54,31 @@ SINGER_FORMS = {
 }
 
 
+# Starting kits (rulebook Ch.7, chosen at creation step 6). Armor/weapon names
+# map to the item catalog where possible; equipment + marks are narrative and
+# shown as a note. Weapon choices default to a sensible catalog option.
+STARTING_KITS = {
+    'academic':   {'name': 'Academic',   'armor': 'Uniform', 'weapons': ['Staff'],
+                   'equipment': 'Backpack, writing supplies, a reference book, vials, and a dose of weak poison.',
+                   'marks': '3d12', 'bonus': 'Gain the Literature expertise (free).'},
+    'artisan':    {'name': 'Artisan',    'armor': 'Leather', 'weapons': ['Hammer'],
+                   'equipment': 'A chest of tools, surgical supplies, and a musical instrument.',
+                   'marks': '4d8', 'bonus': ''},
+    'military':   {'name': 'Military',   'armor': 'Chain', 'weapons': ['Longsword', 'Shortspear'],
+                   'equipment': 'A uniform, waterskin, whetstone, blanket, and 10 days of rations.',
+                   'marks': '2d6', 'bonus': ''},
+    'courtier':   {'name': 'Courtier',   'armor': None, 'weapons': ['Sidesword'],
+                   'equipment': 'Fine clothing and a bottle of violet wine.',
+                   'marks': '4d20', 'bonus': 'A noble patron supports your standard of living (Connection).'},
+    'prisoner':   {'name': 'Prisoner',   'armor': None, 'weapons': [],
+                   'equipment': 'Manacles and ragged clothing.',
+                   'marks': '0', 'bonus': 'A Radiant spren has begun bonding you (two First-Ideal milestones already marked).'},
+    'underworld': {'name': 'Underworld', 'armor': 'Leather', 'weapons': ['Knife', 'Shortspear'],
+                   'equipment': 'A crowbar, lockpick, 50 ft of rope, and an oil lantern.',
+                   'marks': '1d20', 'bonus': ''},
+}
+
+
 def singer_form(key):
     return SINGER_FORMS.get((key or '').lower())
 

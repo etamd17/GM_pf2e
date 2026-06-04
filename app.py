@@ -6471,6 +6471,27 @@ def _cosmere_path_talents():
     return out
 
 
+def _cosmere_starting_kits():
+    """The rulebook starting kits, with armor/weapons resolved to catalog items
+    (id+name) so the builder can add them; equipment/marks/bonus are notes."""
+    import systems.cosmere.origins as _o
+    import systems.cosmere.items as _it
+    out = []
+    for key, k in _o.STARTING_KITS.items():
+        items = []
+        if k['armor']:
+            a = _it.by_name(k['armor'])
+            if a:
+                items.append({'id': a['id'], 'name': a['name']})
+        for wn in k['weapons']:
+            w = _it.by_name(wn)
+            if w:
+                items.append({'id': w['id'], 'name': w['name']})
+        out.append({'key': key, 'name': k['name'], 'items': items,
+                    'equipment': k['equipment'], 'marks': k['marks'], 'bonus': k['bonus']})
+    return out
+
+
 def _cosmere_builder_context(build):
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
@@ -6486,6 +6507,7 @@ def _cosmere_builder_context(build):
         path_info=systems.cosmere.origins.PATH_INFO,
         singer_forms=systems.cosmere.origins.SINGER_FORMS,
         singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
+        starting_kits=_cosmere_starting_kits(),
         budgets=dict(
             attr_points=build.attr_points_available(),
             skill_ranks=build.skill_ranks_available(),

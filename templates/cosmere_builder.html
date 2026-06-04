@@ -143,6 +143,12 @@
 
   <div class="sec-h">Inventory</div>
   <div class="row">
+    <div style="flex:1;"><label>Starting kit (adds gear)</label>
+      <select id="kit-pick" onchange="onKit()"><option value="">&mdash; none &mdash;</option>
+        {% for k in starting_kits %}<option value="{{ k.key }}">{{ k.name }} Kit</option>{% endfor %}</select></div>
+  </div>
+  <div id="kit-info" class="muted" style="margin:.3rem 0 .55rem;"></div>
+  <div class="row">
     <div style="flex:1;"><label>Add an item</label>
       <select id="item-pick">
         <option value="">—</option>
@@ -173,6 +179,7 @@ const PATH_INFO = {{ path_info|tojson }};
 const SKILL_NAMES = {{ skill_names|tojson }};
 const SINGER_FORMS = {{ singer_forms|tojson }};
 const SINGER_CHANGE_FORM = {{ singer_change_form|tojson }};
+const STARTING_KITS = {{ starting_kits|tojson }};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -272,6 +279,13 @@ function renderTalents(){
       ? `<span class="chip" title="Path key talent (granted)"><b style="color:#5eead4">★ ${t.name||t.id}</b></span>`
       : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
   ).join('') || '<span class="muted">None selected</span>';
+}
+function onKit(){
+  const k=STARTING_KITS.find(x=>x.key===v('kit-pick')), box=document.getElementById('kit-info');
+  if(!k){ box.innerHTML=''; return; }
+  k.items.forEach(it=>{ if(!INV.some(e=>e.id===it.id)) INV.push({id:it.id, qty:1, equipped:true}); });
+  renderInv();
+  box.innerHTML=`<b>${k.name} Kit</b> — ${k.equipment} <b>Marks:</b> ${k.marks}.`+(k.bonus?` <i>${k.bonus}</i>`:'');
 }
 function addItem(){
   const id=document.getElementById('item-pick').value; if(!id)return;

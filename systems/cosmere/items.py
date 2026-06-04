@@ -107,6 +107,16 @@ def get_raw(item_id) -> dict | None:
     return _RAW.get(item_id)
 
 
+def by_name(name) -> dict | None:
+    """A normalized catalog item by (case-insensitive) name."""
+    _build()
+    n = (name or '').strip().lower()
+    for it in _CATALOG.values():
+        if it['name'].lower() == n:
+            return it
+    return None
+
+
 _DEFLECT_TYPES = {'impact': True, 'keen': True, 'energy': True,
                   'spirit': False, 'vital': False, 'heal': False}
 
