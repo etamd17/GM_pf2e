@@ -50,3 +50,7 @@ pinned_generators.json
 calendar.json
 journals/
 uploads/
+
+# Built Cosmere player characters — runtime store on the volume (DATA_DIR),
+# kept out of the PF2e party_data. Never committed.
+cosmere_pcs/

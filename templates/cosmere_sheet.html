@@ -58,11 +58,29 @@
         {% if a.tier is not none %}<span class="cs-tag">Tier {{ a.tier }}</span>{% endif %}
         {% if a.role %}<span class="cs-tag">{{ a.role|capitalize }}</span>{% endif %}
         {% if a.size %}<span class="cs-tag">{{ a.size|capitalize }}</span>{% endif %}
+        {% if pc and build %}
+          {% if build.path %}<span class="cs-tag">{{ build.path|capitalize }}</span>{% endif %}
+          {% if build.culture %}<span class="cs-tag">{{ build.culture }}</span>{% endif %}
+          {% if build.ancestry %}<span class="cs-tag">{{ build.ancestry }}</span>{% endif %}
+          {% if build.is_radiant %}<span class="cs-tag">Radiant</span>{% endif %}
+        {% endif %}
         <span class="cs-tag">Cosmere RPG</span>
       </div>
     </div>
-    <a class="cs-back" href="/cosmere/bestiary">&larr; Bestiary</a>
+    <div style="display:flex; gap:.6rem; align-items:center;">
+      {% if pc %}
+        <a class="cs-back" href="{{ edit_url }}" style="color:#5eead4;">Edit / Level Up</a>
+        <a class="cs-back" href="/cosmere/pcs">&larr; Characters</a>
+      {% else %}
+        <a class="cs-back" href="/cosmere/bestiary">&larr; Bestiary</a>
+      {% endif %}
+    </div>
   </div>
+  {% if pc and warnings %}
+  <div style="margin-bottom:1rem; padding:.55rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px;">
+    <b>Build notes:</b> {{ warnings|join(' · ') }}
+  </div>
+  {% endif %}
 
   {# --- Defenses + resources --- #}
   <div class="cs-grid cs-cards">
@@ -140,5 +158,32 @@
       {% endif %}
     </div>
   </div>
+
+  {% if pc %}
+  <div class="cs-section-h">Expertises</div>
+  <div class="cs-chips">
+    {% for e in build.expertises %}<span class="cs-chip">{{ e }}</span>{% else %}<span style="color:var(--text-on-dark-3); font-size:12px;">None</span>{% endfor %}
+  </div>
+
+  <div class="cs-section-h">Talents</div>
+  {% if build.talents %}
+  <div class="cs-chips">{% for t in build.talents %}<span class="cs-chip df">{{ t.name if t.name is defined else t }}</span>{% endfor %}</div>
+  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">None selected</div>{% endif %}
+
+  <div class="cs-section-h">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
+  {% if inventory %}
+  <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
+    {% for it in inventory %}
+    <div class="cs-ability" style="margin-bottom:0;{% if it.equipped %} border-color:rgba(56,189,248,.5);{% endif %}">
+      <div class="an" style="{% if not it.equipped %}color:#e8eef5;{% endif %}">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</div>
+      <div class="ad">
+        {{ it.kind|capitalize }}{% if it.damage %} &middot; {{ it.damage.formula }} {{ it.damage.type }}{% endif %}{% if it.deflect %} &middot; Deflect {{ it.deflect }}{% endif %}
+        {% if it.traits %}<div class="cs-chips" style="margin-top:.3rem;">{% for tr in it.traits %}<span class="cs-chip">{{ tr }}</span>{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
+  {% endif %}
 </div>
 {% endblock %}

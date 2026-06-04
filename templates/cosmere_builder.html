@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Cosmere Character Builder{% endblock %}
+{% block extra_head %}
+<style>
+  .bld { --ac:#38bdf8; --ac2:#5eead4; color:#e8eef5; max-width:1100px; }
+  .bld h2 { font-family:var(--font-display,serif); font-size:1.5rem; color:var(--ac2); }
+  .bld .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3);
+                margin:1.4rem 0 .55rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem;
+                display:flex; justify-content:space-between; align-items:baseline; }
+  .bld .budget { font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .bld .budget.over { color:#f87171; }
+  .bld .budget.ok { color:var(--ac2); }
+  .bld label { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-on-dark-3); display:block; margin-bottom:3px; }
+  .bld input, .bld select, .bld textarea { background:var(--bg-page,#0d1117); color:#e8eef5;
+      border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; font-size:13px; width:100%; }
+  .bld input[type=number] { width:64px; text-align:center; }
+  .bld textarea { min-height:54px; resize:vertical; }
+  .row { display:flex; gap:.8rem; flex-wrap:wrap; align-items:flex-end; }
+  .grid { display:grid; gap:.6rem; }
+  .g-attrs { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }
+  .g-skills { grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
+  .card { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px; padding:.6rem .7rem; }
+  .skill { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+  .skill .nm { font-size:13px; } .skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; }
+  .skill .mod { font-family:'JetBrains Mono',monospace; color:var(--ac2); font-weight:700; min-width:28px; text-align:right; }
+  .stepper { display:flex; align-items:center; gap:4px; }
+  .stepper button { background:var(--bg-page); border:1px solid var(--border-card); color:#e8eef5; border-radius:6px; width:24px; height:24px; cursor:pointer; }
+  .btn { background:rgba(56,189,248,.16); border:1px solid rgba(56,189,248,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
+  .btn:hover { background:rgba(56,189,248,.26); }
+  .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
+  .chip-row { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.5rem; }
+  .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:rgba(56,189,248,.10); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
+  .chip b { color:var(--ac2); } .chip .x { cursor:pointer; color:#f87171; font-weight:700; }
+  .topbar { position:sticky; top:0; z-index:5; background:var(--bg-page,#0d1117); padding:.7rem 0; border-bottom:1px solid var(--border-card);
+            display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; }
+  .inv-row { display:flex; align-items:center; gap:.6rem; padding:.35rem .5rem; border-bottom:1px solid var(--border-card); font-size:13px; }
+  .inv-row .gname { flex:1; }
+  .muted { color:var(--text-on-dark-3); font-size:11.5px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="bld">
+  <div class="topbar">
+    <div><label>Character Name</label><input id="f-name" value="{{ build.name }}" style="width:230px;"></div>
+    <div><label>Level</label>
+      <div class="stepper"><button type="button" onclick="bumpLevel(-1)">&minus;</button>
+        <input id="f-level" type="number" min="1" max="30" value="{{ build.level }}" onchange="onLevel()">
+        <button type="button" onclick="bumpLevel(1)">+</button></div>
+    </div>
+    <div style="flex:1;"></div>
+    <div id="validity" class="muted"></div>
+    <button class="btn primary" onclick="save()">Save Character</button>
+  </div>
+
+  <h2 style="margin-top:1rem;">{{ 'Edit' if pid else 'New' }} Cosmere Character</h2>
+  <p class="muted">Rules are guided by the rulebook — over-budget choices are flagged but never blocked (your GM can override).</p>
+
+  <div class="sec-h">Identity</div>
+  <div class="row">
+    <div><label>Ancestry</label><select id="f-ancestry">
+      {% for anc in ['Human','Singer'] %}<option {{ 'selected' if build.ancestry==anc }}>{{ anc }}</option>{% endfor %}</select></div>
+    <div><label>Culture (grants 2 expertises)</label><select id="f-culture"><option value="">—</option>
+      {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
+    <div><label>Heroic Path</label><select id="f-path" onchange="onPath()"><option value="">—</option>
+      {% for p in paths %}<option value="{{ p }}" {{ 'selected' if build.path==p }}>{{ p|capitalize }}</option>{% endfor %}</select></div>
+    <div><label>Radiant?</label><input type="checkbox" id="f-radiant" {{ 'checked' if build.is_radiant }} onchange="onRadiant()" style="width:auto;"></div>
+  </div>
+
+  <div class="sec-h">Attributes <span id="b-attr" class="budget"></span></div>
+  <div class="grid g-attrs">
+    {% for k in ['str','spd','int','wil','awa','pre'] %}
+    <div class="card"><label>{{ attr_names[k] }}</label>
+      <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()"></div>
+    {% endfor %}
+  </div>
+  <p class="muted">12 points at creation, max 3 per attribute (hard cap 5; +1 every 3rd level).</p>
+
+  <div class="sec-h">Skills <span id="b-skill" class="budget"></span></div>
+  <div class="grid g-skills" id="basic-skills">
+    {% for code, name in skill_names.items() if code not in surge_skills %}
+    <div class="card skill">
+      <div class="nm">{{ name }} <small>{{ skill_attr[code] }}</small></div>
+      <div class="stepper">
+        <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
+        <input class="skill-rank" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
+        <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+      </div>
+      <div class="mod" id="mod-{{ code }}">+0</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div id="surge-skills" class="grid g-skills" style="margin-top:.6rem; display:none;">
+    {% for code, name in skill_names.items() if code in surge_skills %}
+    <div class="card skill">
+      <div class="nm">{{ name }} <small>surge · {{ skill_attr[code] }}</small></div>
+      <div class="stepper">
+        <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
+        <input class="skill-rank surge" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
+        <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+      </div>
+      <div class="mod" id="mod-{{ code }}">+0</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="sec-h">Expertises <span id="b-exp" class="budget"></span></div>
+  <textarea id="f-expertises" placeholder="One per line" oninput="recompute()">{{ build.expertises|join('\n') }}</textarea>
+
+  <div class="sec-h">Talents <span id="b-tal" class="budget"></span></div>
+  <div class="row">
+    <div style="flex:1;"><label>Add a talent from your path</label>
+      <select id="talent-pick"><option value="">— choose path first —</option></select></div>
+    <button class="btn" type="button" onclick="addTalent()">Add Talent</button>
+  </div>
+  <div class="chip-row" id="talent-list"></div>
+
+  <div class="sec-h">Inventory</div>
+  <div class="row">
+    <div style="flex:1;"><label>Add an item</label>
+      <select id="item-pick">
+        <option value="">—</option>
+        {% for it in catalog %}<option value="{{ it.id }}">{{ it.name }} ({{ it.kind }}{% if it.damage %} · {{ it.damage.formula }} {{ it.damage.type }}{% elif it.deflect %} · deflect {{ it.deflect }}{% endif %})</option>{% endfor %}
+      </select></div>
+    <button class="btn" type="button" onclick="addItem()">Add Item</button>
+  </div>
+  <div id="inv-list" style="margin-top:.5rem;"></div>
+
+  <div class="sec-h">Story</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;">
+    <div><label>Purpose</label><textarea id="f-purpose">{{ build.purpose }}</textarea></div>
+    <div><label>Obstacle</label><textarea id="f-obstacle">{{ build.obstacle }}</textarea></div>
+    <div><label>Goals</label><textarea id="f-goals">{{ build.goals }}</textarea></div>
+    <div><label>Appearance / Notes</label><textarea id="f-appearance">{{ build.appearance }}</textarea></div>
+  </div>
+</div>
+
+<script>
+const PID = {{ pid|tojson }};
+const SKILL_ATTR = {{ skill_attr|tojson }};
+const SURGE = {{ surge_skills|tojson }};
+const PATH_TALENTS = {{ path_talents|tojson }};
+const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
+let TALENTS = {{ build.talents|tojson }};
+let INV = {{ build.inventory|tojson }};
+
+const ATTR_KEYS=['str','spd','int','wil','awa','pre'];
+const ATTR_INC=[3,6,9,12,15,18], TIER_START=[1,6,11,16,21], MR={1:2,2:3,3:4,4:5,5:5};
+const tierOf=l=>Math.min(5,Math.floor((Math.max(1,l)-1)/5)+1);
+const maxRank=l=>MR[tierOf(l)];
+const attrPoints=l=>12+ATTR_INC.filter(x=>x<=l).length;
+const skillBudget=l=>4+2*(Math.min(l,20)-1)+1;
+const ancestryBonus=l=>TIER_START.filter(x=>x<=l).length;
+const talentBudget=l=>Math.min(l,20)+ancestryBonus(l);
+const v=id=>document.getElementById(id).value;
+const lvl=()=>Math.max(1,+document.getElementById('f-level').value||1);
+
+function bumpLevel(d){const e=document.getElementById('f-level');e.value=Math.max(1,(+e.value||1)+d);onLevel();}
+function onLevel(){recompute();}
+function onPath(){
+  const p=v('f-path'); const sel=document.getElementById('talent-pick');
+  const list=(PATH_TALENTS[p]||[]);
+  sel.innerHTML='<option value="">'+(list.length?'— select a talent —':'(no talents for this path)')+'</option>'
+    + list.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+}
+function onRadiant(){document.getElementById('surge-skills').style.display=document.getElementById('f-radiant').checked?'grid':'none';recompute();}
+
+function bumpSkill(code,d){
+  const inp=document.querySelector(`.skill-rank[data-code="${code}"]`);
+  inp.value=Math.max(0,(+inp.value||0)+d); recompute();
+}
+function addTalent(){
+  const sel=document.getElementById('talent-pick'); const id=sel.value; if(!id)return;
+  const name=sel.options[sel.selectedIndex].text;
+  if(!TALENTS.some(t=>t.id===id)){TALENTS.push({id,name}); renderTalents(); recompute();}
+}
+function renderTalents(){
+  document.getElementById('talent-list').innerHTML = TALENTS.map((t,i)=>
+    `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`).join('')
+    || '<span class="muted">None selected</span>';
+}
+function addItem(){
+  const id=document.getElementById('item-pick').value; if(!id)return;
+  const ex=INV.find(e=>e.id===id); if(ex){ex.qty=(ex.qty||1)+1;} else {INV.push({id,qty:1,equipped:false});}
+  renderInv();
+}
+function renderInv(){
+  document.getElementById('inv-list').innerHTML = INV.map((e,i)=>{
+    const it=ITEM_INDEX[e.id]||{name:e.id,kind:'?'};
+    const meta=it.damage?`${it.damage.formula} ${it.damage.type}`:(it.deflect?`deflect ${it.deflect}`:it.kind);
+    return `<div class="inv-row">
+      <span class="gname"><b>${it.name}</b> <span class="muted">${meta}</span></span>
+      <label style="display:flex;gap:4px;align-items:center;text-transform:none;font-size:12px;color:#aeb8c4;">
+        <input type="checkbox" style="width:auto;" ${e.equipped?'checked':''} onchange="INV[${i}].equipped=this.checked;recompute()"> equipped</label>
+      <input type="number" min="1" value="${e.qty||1}" style="width:52px;" onchange="INV[${i}].qty=Math.max(1,+this.value||1)">
+      <span class="x" style="cursor:pointer;color:#f87171;font-weight:700;" onclick="INV.splice(${i},1);renderInv();recompute()">&times;</span>
+    </div>`;
+  }).join('') || '<span class="muted">Empty</span>';
+}
+
+function setBudget(id,spent,avail){
+  const e=document.getElementById(id);
+  e.textContent=`${spent} / ${avail}`;
+  e.className='budget '+(spent>avail?'over':'ok');
+  return spent<=avail;
+}
+function recompute(){
+  const L=lvl();
+  // attributes
+  let aSum=0, aCapBad=false; const atL1=L===1;
+  ATTR_KEYS.forEach(k=>{const x=+v('attr-'+k)||0; aSum+=x; if(x>5||(atL1&&x>3))aCapBad=true;});
+  const okA=setBudget('b-attr',aSum,attrPoints(L)) && !aCapBad;
+  // skills + mods
+  let sSum=0, rankBad=false; const cap=maxRank(L);
+  document.querySelectorAll('.skill-rank').forEach(inp=>{
+    const r=+inp.value||0, code=inp.dataset.code, attr=inp.dataset.attr;
+    sSum+=r; if(r>cap)rankBad=true;
+    const mod=r+(+v('attr-'+attr)||0);
+    document.getElementById('mod-'+code).textContent=(mod>=0?'+':'')+mod;
+  });
+  const okS=setBudget('b-skill',sSum,skillBudget(L)) && !rankBad;
+  // expertises
+  const exp=v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean).length;
+  const okE=setBudget('b-exp',exp,2+Math.max(0,+v('attr-int')||0));
+  // talents
+  const okT=setBudget('b-tal',TALENTS.length,talentBudget(L));
+  document.getElementById('validity').textContent =
+    (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L)+' · max skill rank '+cap
+                         : 'Over budget (allowed — will be flagged)';
+}
+function collect(){
+  const attrs={}; ATTR_KEYS.forEach(k=>attrs[k]=+v('attr-'+k)||0);
+  const skills={}; document.querySelectorAll('.skill-rank').forEach(inp=>{const r=+inp.value||0; if(r>0)skills[inp.dataset.code]=r;});
+  return {
+    name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
+    path:v('f-path'), is_radiant:document.getElementById('f-radiant').checked,
+    attributes:attrs, skills, talents:TALENTS, inventory:INV,
+    expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
+    purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'),
+  };
+}
+function save(){
+  fetch('/cosmere/builder',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:PID, build:collect()})})
+  .then(r=>r.json()).then(d=>{ if(d&&d.ok){ window.location.href=d.url; } else { alert('Save failed'); } })
+  .catch(()=>alert('Save failed'));
+}
+// init
+onPath(); onRadiant(); renderTalents(); renderInv(); recompute();
+</script>
+{% endblock %}

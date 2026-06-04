@@ -1,0 +1,86 @@
+"""Cosmere builder + leveler UI (Phase 4) — routes end-to-end.
+
+Drives the builder routes through the Flask test client: the form renders, a
+posted build is saved + rendered as a sheet, over-budget builds are flagged but
+still saved (guided, not blocked), and the leveler pre-bumps the level. Created
+PCs are cleaned from the runtime store afterward.
+"""
+from __future__ import annotations
+
+import os
+
+import app
+
+_VALID = {
+    'name': 'Test Radiant', 'level': 1, 'path': 'warrior',
+    'attributes': {'str': 2, 'spd': 3, 'int': 2, 'wil': 2, 'awa': 3, 'pre': 0},  # 12 pts
+    'skills': {'ath': 2, 'hwp': 2, 'prc': 1},                                    # 5 ranks
+    'expertises': ['Alethi', 'Soldiering'],
+}
+
+
+def _client():
+    return app.app.test_client()
+
+
+def _cleanup(pid):
+    p = app._cosmere_pc_path(pid)
+    if p and os.path.isfile(p):
+        os.remove(p)
+
+
+def test_builder_form_renders():
+    r = _client().get('/cosmere/builder')
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert 'Heroic Path' in body and 'Attributes' in body and 'Save Character' in body
+
+
+def test_builder_post_saves_valid_build_and_sheet_renders():
+    c = _client()
+    r = c.post('/cosmere/builder', json={'id': None, 'build': _VALID})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['ok'] and d['url'].startswith('/cosmere/pc/')
+    pid = d['id']
+    try:
+        assert d['issues'] == []                       # on-budget -> no warnings
+        s = c.get(d['url'])
+        assert s.status_code == 200
+        body = s.data.decode()
+        assert 'Test Radiant' in body
+        assert 'Physical' in body and '15' in body     # phy defense 10+STR(2)+SPD(3)
+        assert 'Warrior' in body                       # path chip on the PC sheet
+        lst = c.get('/cosmere/pcs')
+        assert lst.status_code == 200 and b'Test Radiant' in lst.data
+    finally:
+        _cleanup(pid)
+
+
+def test_over_budget_build_is_flagged_not_blocked():
+    c = _client()
+    bad = dict(_VALID, attributes={'str': 5, 'spd': 5, 'int': 3, 'wil': 2, 'awa': 2, 'pre': 2})  # >12, >3
+    r = c.post('/cosmere/builder', json={'build': bad})
+    d = r.get_json()
+    pid = d['id']
+    try:
+        assert d['ok'] is True                         # saved anyway (guided)
+        assert any('Attributes' in i for i in d['issues'])
+    finally:
+        _cleanup(pid)
+
+
+def test_leveler_prebumps_level():
+    c = _client()
+    pid = c.post('/cosmere/builder', json={'build': _VALID}).get_json()['id']
+    try:
+        up = c.get('/cosmere/builder?pc=%s&levelup=1' % pid)
+        assert up.status_code == 200
+        # the level stepper now shows 2
+        assert 'id="f-level" type="number" min="1" max="30" value="2"' in up.data.decode()
+    finally:
+        _cleanup(pid)
+
+
+def test_unknown_pc_sheet_is_404():
+    assert _client().get('/cosmere/pc/deadbeef').status_code == 404

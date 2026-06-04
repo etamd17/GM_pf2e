@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Cosmere Characters{% endblock %}
+{% block extra_head %}
+<style>
+  .cb-head { display:flex; align-items:center; justify-content:space-between; gap:.7rem;
+             border-bottom:1px solid var(--border-card); padding-bottom:.7rem; margin-bottom:1.1rem; }
+  .cb-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:#5eead4; }
+  .cb-new { text-decoration:none; font-size:13px; padding:.45rem .9rem; border-radius:8px;
+            background:rgba(56,189,248,.14); border:1px solid rgba(56,189,248,.45); color:#38bdf8; }
+  .cb-new:hover { background:rgba(56,189,248,.22); }
+  .cb-grid { display:grid; gap:.7rem; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); }
+  .cb-card { display:block; text-decoration:none; background:var(--bg-sunken,#131922);
+             border:1px solid var(--border-card); border-radius:11px; padding:.85rem 1rem; }
+  .cb-card:hover { border-color:rgba(56,189,248,.5); }
+  .cb-nm { font-size:15px; font-weight:600; color:#e8eef5; }
+  .cb-meta { margin-top:.4rem; display:flex; gap:.35rem; flex-wrap:wrap; }
+  .cb-chip { font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:999px;
+             background:rgba(56,189,248,.10); border:1px solid rgba(56,189,248,.3); color:#38bdf8; }
+  .cb-empty { color:var(--text-on-dark-3); font-size:13px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="cb-head">
+  <span class="cb-title">Cosmere Characters</span>
+  <span style="display:flex; gap:.6rem;">
+    <a class="cb-new" href="/cosmere/bestiary" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);">Bestiary</a>
+    <a class="cb-new" href="/cosmere/builder">+ New Character</a>
+  </span>
+</div>
+{% if pcs %}
+<div class="cb-grid">
+  {% for pc in pcs %}
+  <a class="cb-card" href="/cosmere/pc/{{ pc.id }}">
+    <div class="cb-nm">{{ pc.name }}</div>
+    <div class="cb-meta">
+      <span class="cb-chip">Level {{ pc.level }}</span>
+      {% if pc.path %}<span class="cb-chip">{{ pc.path }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="cb-empty">No Cosmere characters yet. Use <b>+ New Character</b> to build one with the rulebook-guided creator.</p>
+{% endif %}
+{% endblock %}

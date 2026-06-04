@@ -6378,6 +6378,143 @@ def cosmere_sheet(actor_id):
     )
 
 
+# ── Cosmere PCs: builder + leveler + saved-character store ─────────────────
+# Built Cosmere PCs live in their own flat store (DATA_DIR/cosmere_pcs/), NOT
+# the active PF2e campaign's party_data -- so they never enter the PF2e
+# PARTY_LIBRARY (whose routes assume the PF2e Character shape). A real Cosmere
+# campaign binding is a later phase.
+COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
+
+
+def _cosmere_pc_path(pid):
+    if not re.match(r'^[0-9a-f]{32}$', pid or ''):
+        return None
+    return os.path.join(COSMERE_PC_DIR, pid + '.json')
+
+
+def _load_cosmere_pc(pid):
+    p = _cosmere_pc_path(pid)
+    if not p or not os.path.isfile(p):
+        return None
+    try:
+        with open(p, encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _list_cosmere_pcs():
+    out = []
+    if os.path.isdir(COSMERE_PC_DIR):
+        for fn in sorted(os.listdir(COSMERE_PC_DIR)):
+            if fn.endswith('.json'):
+                d = _load_cosmere_pc(fn[:-5])
+                if d:
+                    out.append(d)
+    return out
+
+
+def _save_cosmere_pc(doc):
+    os.makedirs(COSMERE_PC_DIR, exist_ok=True)
+    pid = doc.get('id') or uuid.uuid4().hex
+    doc['id'] = pid
+    _atomic_write_json(_cosmere_pc_path(pid), doc, indent=2)
+    return pid
+
+
+def _cosmere_cultures():
+    return sorted({d.get('name', '') for d in systems.cosmere.load_pack('cultures') if d.get('name')})
+
+
+def _cosmere_path_talents():
+    """{path_id: [{id, name}]} for the builder's talent picker."""
+    out = {}
+    for d in systems.cosmere.load_pack('heroic-paths'):
+        if d.get('type') != 'talent':
+            continue
+        p = (d.get('system', {}).get('path') or '').lower()
+        if not p:
+            continue
+        out.setdefault(p, []).append({'id': d.get('_id'), 'name': d.get('name', '')})
+    for p in out:
+        out[p].sort(key=lambda t: t['name'].lower())
+    return out
+
+
+def _cosmere_builder_context(build):
+    import systems.cosmere.build as _cb
+    return dict(
+        build=build.to_dict(),
+        catalog=systems.cosmere.items.catalog(),
+        skill_names=systems.cosmere.SKILL_NAMES, skill_attr=systems.cosmere.SKILL_ATTR,
+        surge_skills=list(systems.cosmere.SURGE_SKILLS),
+        attr_names=systems.cosmere.ATTR_NAMES,
+        paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
+        path_talents=_cosmere_path_talents(),
+        budgets=dict(
+            attr_points=build.attr_points_available(),
+            skill_ranks=build.skill_ranks_available(),
+            max_skill_rank=_cb.max_skill_rank(build.level),
+            talents=build.talents_available(),
+            expertises=build.expertises_available(),
+        ),
+    )
+
+
+@app.route('/cosmere/pcs')
+def cosmere_pcs():
+    pcs = [{'id': d['id'], 'name': d.get('name', 'Unknown'),
+            'level': (d.get('build') or {}).get('level', 1),
+            'path': (d.get('build') or {}).get('path', '')}
+           for d in _list_cosmere_pcs()]
+    return render_template('cosmere_pcs.html', pcs=pcs)
+
+
+@app.route('/cosmere/builder', methods=['GET', 'POST'])
+def cosmere_builder():
+    import systems.cosmere.build as _cb
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        build = _cb.CosmereBuild(data.get('build') or data)
+        issues = build.validate()
+        existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
+        doc = {
+            'id': (existing or {}).get('id') or uuid.uuid4().hex,
+            'system': 'cosmere', 'name': build.name,
+            'owner_user_id': session.get('user_id'),
+            'build': build.to_dict(),
+        }
+        _save_cosmere_pc(doc)
+        return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
+                        'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
+    # GET — new build, or edit/level an existing one
+    existing = _load_cosmere_pc(request.args.get('pc')) if request.args.get('pc') else None
+    build = _cb.CosmereBuild((existing or {}).get('build')) if existing else _cb.CosmereBuild()
+    if request.args.get('levelup') and existing:
+        build.level += 1     # pre-bump for the leveler flow; the player allocates, then saves
+    ctx = _cosmere_builder_context(build)
+    return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), **ctx)
+
+
+@app.route('/cosmere/pc/<pid>')
+def cosmere_pc_sheet(pid):
+    import systems.cosmere.build as _cb
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    build = _cb.CosmereBuild(doc.get('build'))
+    actor = systems.cosmere.CosmereActor(build.to_actor_doc())
+    return render_template(
+        'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid,
+        actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
+        skill_names=systems.cosmere.SKILL_NAMES,
+        attr_names=systems.cosmere.ATTR_NAMES,
+        defense_names=systems.cosmere.DEFENSE_NAMES,
+        pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
+        warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
+    )
+
+
 @app.route('/api/add_combatant', methods=['POST'])
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
