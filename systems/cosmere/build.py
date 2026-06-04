@@ -23,6 +23,7 @@ from __future__ import annotations
 from systems.cosmere import SKILL_ATTR, SKILL_NAMES, SURGE_SKILLS, PATHS
 from systems.cosmere import radiant as _radiant
 from systems.cosmere import origins as _origins
+from systems.cosmere import talents as _talents
 from systems.cosmere.actor import cosmere_max_health, tier_of
 from systems.cosmere.items import Inventory
 
@@ -108,6 +109,7 @@ class CosmereBuild:
         self.ancestry = d.get('ancestry') or 'Human'
         self.culture = d.get('culture') or ''
         self.path = (d.get('path') or '').lower()
+        self.singer_form = (d.get('singer_form') or '').lower()   # Singer ancestry only
         self.attributes = {k: int((d.get('attributes') or {}).get(k, 0) or 0) for k in ATTR_KEYS}
         self.skills = {c: int(v) for c, v in (d.get('skills') or {}).items()
                        if c in SKILL_ATTR and int(v or 0) > 0}
@@ -192,28 +194,55 @@ class CosmereBuild:
     def expertises_available(self) -> int:
         return expertises_total(self.attributes['int'])
 
-    # -- derived statistics (rulebook formulas) -----------------------------
+    # -- singer ancestry / forms -------------------------------------------
+    @property
+    def is_singer(self) -> bool:
+        return (self.ancestry or '').lower() == 'singer'
+
+    def form(self):
+        return _origins.singer_form(self.singer_form) if self.is_singer else None
+
+    def eff_attributes(self) -> dict:
+        """Attributes including the active Singer form's bonuses (a form may
+        raise stats above the normal maximum)."""
+        a = dict(self.attributes)
+        f = self.form()
+        if f:
+            for k, v in (f.get('attrs') or {}).items():
+                a[k] = a.get(k, 0) + v
+        return a
+
+    # -- derived statistics (rulebook formulas; use in-form attributes) -----
     def defenses(self) -> dict:
-        a = self.attributes
+        a = self.eff_attributes()
         return {'phy': 10 + a['str'] + a['spd'],
                 'cog': 10 + a['int'] + a['wil'],
                 'spi': 10 + a['awa'] + a['pre']}
 
     def health_max(self) -> int:
-        return cosmere_max_health(self.level, self.attributes['str'])
+        return cosmere_max_health(self.level, self.eff_attributes()['str'])
 
     def focus_max(self) -> int:
-        return 2 + self.attributes['wil']
+        f = self.form()
+        return 2 + self.eff_attributes()['wil'] + (f['focus'] if f else 0)
 
     def investiture_max(self) -> int:
-        a = self.attributes
+        a = self.eff_attributes()
         return (2 + max(a['awa'], a['pre'])) if self.is_radiant else 0
 
     def skill_mods(self) -> dict:
-        return {c: self.skills.get(c, 0) + self.attributes[SKILL_ATTR[c]] for c in SKILL_ATTR}
+        a = self.eff_attributes()
+        return {c: self.skills.get(c, 0) + a[SKILL_ATTR[c]] for c in SKILL_ATTR}
 
     def deflect_value(self) -> int:
-        return self.inventory.deflect_value()
+        f = self.form()
+        return self.inventory.deflect_value() + (f['deflect'] if f else 0)
+
+    def _deflect_block(self) -> dict:
+        v = self.deflect_value()
+        return {'natural': 0, 'bonus': 0, 'override': v, 'useOverride': bool(v),
+                'source': 'armor', 'types': {'impact': True, 'keen': True, 'energy': True,
+                                             'spirit': False, 'vital': False, 'heal': False}}
 
     # -- validation (guided; never raises) ----------------------------------
     def validate(self) -> list:
@@ -263,6 +292,19 @@ class CosmereBuild:
                 kt = self.path_key_talent()
                 if kt:
                     issues.append("Add your path's key talent: %s." % kt['name'])
+
+        # Singer ancestry must take Change Form (its key talent).
+        if self.is_singer and not any(isinstance(t, dict) and t.get('id') == _origins.SINGER_CHANGE_FORM['id']
+                                      for t in self.talents):
+            issues.append("Add the Singer key talent: Change Form.")
+
+        # Talent prerequisites (guided) — warn on any unmet prerequisite.
+        taken = [t.get('name', '') for t in self.talents if isinstance(t, dict)]
+        for t in self.talents:
+            if isinstance(t, dict) and t.get('id'):
+                miss = _talents.unmet(t['id'], taken, self.skills, self.attributes)
+                if miss:
+                    issues.append("%s needs %s." % (t.get('name', 'A talent'), ' + '.join(miss)))
         return issues
 
     @property
@@ -273,7 +315,7 @@ class CosmereBuild:
     def to_dict(self) -> dict:
         return {
             'name': self.name, 'level': self.level, 'ancestry': self.ancestry,
-            'culture': self.culture, 'path': self.path,
+            'culture': self.culture, 'path': self.path, 'singer_form': self.singer_form,
             'attributes': dict(self.attributes), 'skills': dict(self.skills),
             'path_skill': self.path_skill, 'expertises': list(self.expertises),
             'talents': list(self.talents), 'is_radiant': self.is_radiant,
@@ -288,7 +330,8 @@ class CosmereBuild:
         """A Foundry-shaped character doc that CosmereActor renders (the bridge
         from a build to a live sheet/tracker actor). All stats are left to
         CosmereActor to compute from attributes+level (matching this engine)."""
-        a = self.attributes
+        a = self.eff_attributes()                    # in-form attributes (Singer)
+        form_focus = (self.form() or {}).get('focus', 0)
         unlocked_surges = set(self.surges_unlocked())
         skills = {}
         for c, attr in SKILL_ATTR.items():
@@ -310,13 +353,14 @@ class CosmereBuild:
                          for d in ('phy', 'cog', 'spi')},
             'resources': {
                 'hea': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': 0}},
-                'foc': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': 0}},
+                'foc': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': form_focus}},
                 'inv': {'value': None, 'max': inv_max},
             },
             'skills': skills,
-            'deflect': self.inventory.deflect_block(),
+            'deflect': self._deflect_block(),
             'expertises': list(self.expertises),
             'ancestry': self.ancestry, 'culture': self.culture, 'path': self.path,
+            'singer_form': self.singer_form,
             'radiant_order': self.radiant_order, 'spren': self.spren_name,
             'ideals_sworn': self.ideals_sworn,
             'cosmere_build': self.to_dict(),     # stashed so the build can be re-edited / leveled

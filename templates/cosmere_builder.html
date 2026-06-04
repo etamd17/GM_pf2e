@@ -57,7 +57,7 @@
 
   <div class="sec-h">Identity</div>
   <div class="row">
-    <div><label>Ancestry</label><select id="f-ancestry">
+    <div><label>Ancestry</label><select id="f-ancestry" onchange="onAncestry()">
       {% for anc in ['Human','Singer'] %}<option {{ 'selected' if build.ancestry==anc }}>{{ anc }}</option>{% endfor %}</select></div>
     <div><label>Culture (a cultural expertise)</label><select id="f-culture" onchange="onCulture()"><option value="">—</option>
       {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
@@ -65,6 +65,15 @@
       {% for p in paths %}<option value="{{ p }}" {{ 'selected' if build.path==p }}>{{ p|capitalize }}</option>{% endfor %}</select></div>
   </div>
   <div id="path-info" class="muted" style="margin-top:.35rem;"></div>
+  <div id="singer-section" style="display:none; margin-top:.55rem;">
+    <div class="row">
+      <div style="min-width:210px;"><label>Singer Starting Form</label>
+        <select id="f-singer-form" onchange="onForm()"><option value="">— Dullform (no form) —</option>
+          {% for key, f in singer_forms.items() if key != 'dullform' %}<option value="{{ key }}" {{ 'selected' if build.singer_form==key }}>{{ f.name }} ({{ f.group }})</option>{% endfor %}</select></div>
+      <div style="flex:1;" id="form-info" class="muted"></div>
+    </div>
+    <p class="muted" style="margin-top:.3rem;">Singers gain <b>Change Form</b> (key talent) at level 1 and begin in a chosen form; a form's bonuses apply to your stats while assumed.</p>
+  </div>
 
   <div class="sec-h">Radiant Path — Surgebinding <span class="muted" style="text-transform:none; letter-spacing:0;">(optional; a First Ideal requires level 2+)</span></div>
   <div class="row">
@@ -162,6 +171,8 @@ const SURGE_INFO = {{ surges|tojson }};
 const FIRST_IDEAL = {{ first_ideal|tojson }};
 const PATH_INFO = {{ path_info|tojson }};
 const SKILL_NAMES = {{ skill_names|tojson }};
+const SINGER_FORMS = {{ singer_forms|tojson }};
+const SINGER_CHANGE_FORM = {{ singer_change_form|tojson }};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -202,6 +213,21 @@ function onCulture(){
   const ta=document.getElementById('f-expertises');
   const lines=ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
   if(!lines.includes(c)){ lines.unshift(c); ta.value=lines.join('\n'); recompute(); }   // pre-fill the cultural expertise
+}
+function onAncestry(){
+  const isSinger = v('f-ancestry')==='Singer';
+  document.getElementById('singer-section').style.display = isSinger?'block':'none';
+  TALENTS = TALENTS.filter(t=>t.id!==SINGER_CHANGE_FORM.id);            // swap Change Form in/out
+  if(isSinger) TALENTS.unshift({id:SINGER_CHANGE_FORM.id, name:SINGER_CHANGE_FORM.name, key:true});
+  renderTalents(); onForm(); recompute();
+}
+function onForm(){
+  const f=SINGER_FORMS[v('f-singer-form')], box=document.getElementById('form-info');
+  if(!box) return;
+  if(f){ const d=Object.entries(f.attrs||{}).map(([k,x])=>k.toUpperCase()+' +'+x);
+    if(f.deflect) d.push('Deflect +'+f.deflect); if(f.focus) d.push('Focus +'+f.focus);
+    box.innerHTML=`<b style="color:#5eead4">${f.name}</b> — ${d.join(', ')||'no stat change'}<br>${f.note}`; }
+  else box.innerHTML='';
 }
 function onOrder(){
   const o=ORDERS[v('f-order')];
@@ -302,7 +328,7 @@ function collect(){
   const skills={}; document.querySelectorAll('.skill-rank').forEach(inp=>{const r=+inp.value||0; if(r>0)skills[inp.dataset.code]=r;});
   return {
     name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
-    path:v('f-path'),
+    path:v('f-path'), singer_form:v('f-singer-form'),
     radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, spren_name:v('f-spren'),
     attributes:attrs, skills, talents:TALENTS, inventory:INV,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
@@ -316,6 +342,6 @@ function save(){
   .catch(()=>alert('Save failed'));
 }
 // init
-onPath(); onOrder(); renderTalents(); renderInv(); recompute();
+onPath(); onAncestry(); onOrder(); renderTalents(); renderInv(); recompute();
 </script>
 {% endblock %}

@@ -6484,6 +6484,8 @@ def _cosmere_builder_context(build):
         path_talents=_cosmere_path_talents(),
         radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
         path_info=systems.cosmere.origins.PATH_INFO,
+        singer_forms=systems.cosmere.origins.SINGER_FORMS,
+        singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
         budgets=dict(
             attr_points=build.attr_points_available(),
             skill_ranks=build.skill_ranks_available(),
@@ -6560,6 +6562,7 @@ def cosmere_pc_sheet(pid):
         radiant=systems.cosmere.radiant.order(build.radiant_order),
         first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
         surge_names=systems.cosmere.radiant.SURGES,
+        singer_form=systems.cosmere.origins.singer_form(build.singer_form),
     )
 
 

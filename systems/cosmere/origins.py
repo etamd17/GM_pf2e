@@ -32,6 +32,32 @@ ANCESTRY_INFO = {
 }
 
 
+# Singer forms (rulebook Ch.2). While assumed, a form grants stat changes
+# (these can raise stats above the normal maximum). At level 1 a Singer gains
+# Change Form plus one connected Forms talent (a pair), then learns more forms
+# via the Singer talent tree as they level.
+SINGER_CHANGE_FORM = {'id': 'singer-change-form', 'name': 'Change Form (Singer Key)'}
+SINGER_FORMS = {
+    'dullform':      {'name': 'Dullform',      'group': 'Base',        'attrs': {},                 'deflect': 0, 'focus': 0, 'note': 'The default, unremarkable form.'},
+    'artform':       {'name': 'Artform',       'group': 'Finesse',     'attrs': {'awa': 1},         'deflect': 0, 'focus': 0, 'note': 'Painting & Music expertises; advantage on Crafting and entertaining.'},
+    'nimbleform':    {'name': 'Nimbleform',    'group': 'Finesse',     'attrs': {'spd': 1},         'deflect': 0, 'focus': 2, 'note': 'Agile and focused.'},
+    'mediationform': {'name': 'Mediationform', 'group': 'Wisdom',      'attrs': {'pre': 1},         'deflect': 0, 'focus': 0, 'note': 'Aid without spending focus.'},
+    'scholarform':   {'name': 'Scholarform',   'group': 'Wisdom',      'attrs': {'int': 1},         'deflect': 0, 'focus': 0, 'note': 'A temporary expertise and a cognitive skill rank.'},
+    'warform':       {'name': 'Warform',       'group': 'Resolve',     'attrs': {'str': 1},         'deflect': 1, 'focus': 0, 'note': 'Carapace armor; enhanced jumping.'},
+    'workform':      {'name': 'Workform',      'group': 'Resolve',     'attrs': {'wil': 1},         'deflect': 0, 'focus': 0, 'note': 'Ignore Exhausted; disguise as a parshman.'},
+    'direform':      {'name': 'Direform',      'group': 'Destruction', 'attrs': {'str': 2},         'deflect': 2, 'focus': 0, 'note': 'Reactive Strikes can Grapple.'},
+    'stormform':     {'name': 'Stormform',     'group': 'Destruction', 'attrs': {'str': 1, 'spd': 1}, 'deflect': 1, 'focus': 0, 'note': 'Unleash Lightning (ranged energy attack).'},
+    'envoyform':     {'name': 'Envoyform',     'group': 'Expansion',   'attrs': {'int': 1, 'pre': 1}, 'deflect': 0, 'focus': 0, 'note': 'Know all languages; insight into intentions.'},
+    'relayform':     {'name': 'Relayform',     'group': 'Expansion',   'attrs': {'spd': 2},         'deflect': 0, 'focus': 0, 'note': 'Ignore Slowed; advantage on Agility/Stealth/Thievery.'},
+    'decayform':     {'name': 'Decayform',     'group': 'Mystery',     'attrs': {'wil': 2},         'deflect': 0, 'focus': 0, 'note': 'Prevent a target from recovering health or focus.'},
+    'nightform':     {'name': 'Nightform',     'group': 'Mystery',     'attrs': {'awa': 1, 'int': 1}, 'deflect': 0, 'focus': 2, 'note': 'Preroll d20s to replace rolls.'},
+}
+
+
+def singer_form(key):
+    return SINGER_FORMS.get((key or '').lower())
+
+
 def path_info(key):
     return PATH_INFO.get((key or '').lower())
 

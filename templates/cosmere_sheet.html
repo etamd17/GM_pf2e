@@ -62,6 +62,7 @@
           {% if build.path %}<span class="cs-tag">{{ build.path|capitalize }}</span>{% endif %}
           {% if build.culture %}<span class="cs-tag">{{ build.culture }}</span>{% endif %}
           {% if build.ancestry %}<span class="cs-tag">{{ build.ancestry }}</span>{% endif %}
+          {% if singer_form %}<span class="cs-tag" title="{{ singer_form.note }}">Form: {{ singer_form.name }}</span>{% endif %}
           {% if build.is_radiant %}<span class="cs-tag">Radiant</span>{% endif %}
         {% endif %}
         <span class="cs-tag">Cosmere RPG</span>
