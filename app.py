@@ -1034,6 +1034,7 @@ def _do_broadcast_encounter_state():
                 'instance_id': c.instance_id,
                 'name': c.name,
                 'is_pc': c.is_pc,
+                'system': getattr(c, 'system', 'pf2e'),
                 'ac': getattr(c, 'ac', None),
                 'initiative': c.initiative,
                 'is_active': (i == TURN_INDEX),
@@ -1073,6 +1074,8 @@ def _do_broadcast_encounter_state():
             # Monsters reuse the same reaction_used field as PCs.
             if 'reaction_used' not in entry:
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+            if entry.get('system') == 'cosmere' and hasattr(c, 'tracker_block'):
+                entry['cosmere'] = c.tracker_block()
             combatants.append(entry)
         payload = {
             'encounter': combatants,
@@ -6204,6 +6207,7 @@ def _get_tracker_state():
         for i, c in enumerate(ACTIVE_ENCOUNTER):
             entry = {
                 'instance_id': c.instance_id, 'name': c.name, 'is_pc': c.is_pc,
+                'system': getattr(c, 'system', 'pf2e'),
                 'initiative': c.initiative, 'is_active': (i == TURN_INDEX),
                 'level': c.level, 'ac': c.ac, 'current_hp': c.current_hp, 'max_hp': c.hp,
                 'fort': c.fort, 'ref': c.ref, 'will': c.will,
@@ -6299,6 +6303,10 @@ def _get_tracker_state():
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
                 entry['traits'] = getattr(c, 'traits', [])
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+            # Cosmere combatants carry an extra stat block (defenses/deflect/
+            # resources); the tracker UI branches on `system` to render it.
+            if entry['system'] == 'cosmere' and hasattr(c, 'tracker_block'):
+                entry['cosmere'] = c.tracker_block()
             combatants.append(entry)
         party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
         encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
@@ -6323,6 +6331,53 @@ def api_tracker_state():
     """GET endpoint for full tracker state (AJAX polling fallback)."""
     return _tracker_json_response()
 
+# ── Cosmere RPG (Phase 3): bestiary browsing, sheet view, tracker add ──────
+def _cosmere_doc_by_id(actor_id):
+    """An ingested Cosmere adversary doc by its Foundry _id (or None)."""
+    for d in systems.cosmere.load_pack('companions-and-adversaries'):
+        if d.get('_id') == actor_id and d.get('type') == 'adversary':
+            return d
+    return None
+
+
+def _cosmere_combatant(actor_id):
+    """A fresh CosmereActor for the tracker (independent mutable combat state)."""
+    doc = _cosmere_doc_by_id(actor_id)
+    return systems.cosmere.CosmereActor(doc) if doc else None
+
+
+@app.route('/cosmere/bestiary')
+def cosmere_bestiary():
+    """Browse the ingested Cosmere adversaries (read-only reference)."""
+    advs = []
+    for d in systems.cosmere.load_pack('companions-and-adversaries'):
+        if d.get('type') != 'adversary':
+            continue
+        s = d.get('system', {})
+        advs.append({
+            'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
+            'tier': s.get('tier'), 'role': s.get('role'), 'size': s.get('size'),
+        })
+    advs.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
+    return render_template('cosmere_bestiary.html', adversaries=advs)
+
+
+@app.route('/cosmere/sheet/<actor_id>')
+def cosmere_sheet(actor_id):
+    """Render one Cosmere actor's character sheet."""
+    doc = _cosmere_doc_by_id(actor_id)
+    if not doc:
+        return ('Unknown Cosmere actor', 404)
+    actor = systems.cosmere.CosmereActor(doc)
+    return render_template(
+        'cosmere_sheet.html', a=actor.to_summary(), actor_id=actor_id,
+        actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
+        skill_names=systems.cosmere.SKILL_NAMES,
+        attr_names=systems.cosmere.ATTR_NAMES,
+        defense_names=systems.cosmere.DEFENSE_NAMES,
+    )
+
+
 @app.route('/api/add_combatant', methods=['POST'])
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
@@ -6335,6 +6390,11 @@ def add_combatant():
         new_c = copy.deepcopy(PARTY_LIBRARY[path])
         new_c.instance_id = str(uuid.uuid4())
         ACTIVE_ENCOUNTER.append(new_c)
+    elif c_type == 'cosmere' and path:
+        new_c = _cosmere_combatant(path)
+        if new_c is not None:
+            new_c.instance_id = str(uuid.uuid4())
+            ACTIVE_ENCOUNTER.append(new_c)
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()

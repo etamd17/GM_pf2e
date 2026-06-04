@@ -1,0 +1,88 @@
+"""Cosmere sheet + tracker integration (Phase 3).
+
+Proves a Cosmere actor is viewable (sheet + bestiary routes) and can ride in the
+combat tracker -- the serializers emit a `system` tag plus a `cosmere` stat block
+additively, and PF2e combatants are left byte-identical. Imports `app` (conftest
+puts the repo root on sys.path).
+"""
+from __future__ import annotations
+
+import app
+from systems.cosmere import load_pack
+
+
+def _adv_id(name='Archer'):
+    return next(
+        d['_id'] for d in load_pack('companions-and-adversaries')
+        if d.get('name') == name and d.get('type') == 'adversary'
+    )
+
+
+# -- sheet / bestiary routes ------------------------------------------------
+
+def test_cosmere_bestiary_route():
+    r = app.app.test_client().get('/cosmere/bestiary')
+    assert r.status_code == 200
+    assert b'Cosmere Bestiary' in r.data
+    assert b'Archer' in r.data
+
+
+def test_cosmere_sheet_route_renders_actor():
+    r = app.app.test_client().get('/cosmere/sheet/' + _adv_id('Archer'))
+    assert r.status_code == 200
+    body = r.data.decode()
+    assert 'Archer' in body
+    assert 'Physical' in body and 'Deflect' in body
+    assert '13' in body              # the physical defense value
+
+
+def test_cosmere_sheet_unknown_is_404():
+    r = app.app.test_client().get('/cosmere/sheet/notarealid')
+    assert r.status_code == 404
+
+
+# -- tracker add factory ----------------------------------------------------
+
+def test_cosmere_combatant_factory():
+    a = app._cosmere_combatant(_adv_id('Archer'))
+    assert a is not None and a.name == 'Archer' and a.system == 'cosmere'
+    assert app._cosmere_combatant('bogus-id') is None
+
+
+# -- tracker-state contract -------------------------------------------------
+
+def test_cosmere_combatant_in_tracker_state():
+    actor = app._cosmere_combatant(_adv_id('Archer'))
+    actor.instance_id = 'cos-test-1'
+    saved, saved_idx = list(app.ACTIVE_ENCOUNTER), app.TURN_INDEX
+    try:
+        app.ACTIVE_ENCOUNTER.append(actor)
+        app._invalidate_tracker_cache()
+        state = app._get_tracker_state()
+        ent = next(c for c in state['combatants'] if c['instance_id'] == 'cos-test-1')
+        assert ent['system'] == 'cosmere'
+        assert ent['cosmere']['defenses'] == {'phy': 13, 'cog': 13, 'spi': 13}
+        assert ent['cosmere']['deflect']['value'] == 1
+        assert 'energy' in ent['cosmere']['deflect']['types']
+        assert ent['current_hp'] == 12 and ent['max_hp'] == 12
+        # PF2e combatants are untouched: tagged pf2e, no cosmere block.
+        for c in state['combatants']:
+            if c['instance_id'] != 'cos-test-1':
+                assert c.get('system') == 'pf2e'
+                assert 'cosmere' not in c
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = saved
+        app.TURN_INDEX = saved_idx
+        app._invalidate_tracker_cache()
+
+
+def test_cosmere_combatant_broadcast_does_not_crash():
+    actor = app._cosmere_combatant(_adv_id('Archer'))
+    actor.instance_id = 'cos-test-2'
+    saved = list(app.ACTIVE_ENCOUNTER)
+    try:
+        app.ACTIVE_ENCOUNTER.append(actor)
+        app._do_broadcast_encounter_state()   # must not raise with a Cosmere combatant present
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = saved
+        app._invalidate_tracker_cache()

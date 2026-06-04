@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }} — Cosmere{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cs-wrap { --cs-accent:#38bdf8; --cs-accent-2:#5eead4; --cs-glow:rgba(56,189,248,.18); color:var(--text-on-dark-1, #e8eef5); }
+  .cs-head { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+             border-bottom:1px solid var(--border-card); padding-bottom:.85rem; margin-bottom:1.1rem; }
+  .cs-name { font-family:var(--font-display, serif); font-size:2rem; font-weight:700; letter-spacing:.01em;
+             color:var(--cs-accent-2); text-shadow:0 0 18px var(--cs-glow); line-height:1.1; }
+  .cs-sub { margin-top:.3rem; display:flex; gap:.4rem; flex-wrap:wrap; }
+  .cs-tag { font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:2px 9px; border-radius:999px;
+            background:rgba(56,189,248,.10); border:1px solid rgba(56,189,248,.35); color:var(--cs-accent); }
+  .cs-back { font-size:12px; color:var(--text-on-dark-3); text-decoration:none; }
+  .cs-back:hover { color:var(--cs-accent); }
+  .cs-grid { display:grid; gap:.7rem; }
+  .cs-cards { grid-template-columns:repeat(auto-fit, minmax(118px,1fr)); margin-bottom:1.1rem; }
+  .cs-card { background:var(--bg-sunken, #131922); border:1px solid var(--border-card); border-radius:10px;
+             padding:.7rem .8rem; text-align:center; }
+  .cs-card .l { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); }
+  .cs-card .v { font-family:'JetBrains Mono',monospace; font-size:1.7rem; font-weight:700; color:var(--cs-accent-2); }
+  .cs-card .v.sm { font-size:1.15rem; }
+  .cs-card .x { font-size:11px; color:var(--text-on-dark-3); }
+  .cs-def { border-color:rgba(56,189,248,.35); box-shadow:0 0 0 1px rgba(56,189,248,.05) inset; }
+  .cs-hpbar { height:7px; border-radius:4px; background:rgba(255,255,255,.08); margin-top:.35rem; overflow:hidden; }
+  .cs-hpfill { height:100%; background:linear-gradient(90deg,#34d399,#5eead4); }
+  .cs-section-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3);
+                  margin:1.3rem 0 .6rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem; }
+  .cs-attrs { grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); }
+  .cs-skills { grid-template-columns:repeat(auto-fill, minmax(165px,1fr)); }
+  .cs-skill { display:flex; align-items:center; justify-content:space-between; gap:.4rem;
+              background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:8px; padding:.4rem .6rem; }
+  .cs-skill.locked { opacity:.42; }
+  .cs-skill .nm { font-size:13px; }
+  .cs-skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; }
+  .cs-skill .mod { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--cs-accent-2); }
+  .cs-skill .rk { font-size:9px; color:var(--cs-accent); }
+  .cs-chips { display:flex; gap:.35rem; flex-wrap:wrap; }
+  .cs-chip { font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,.05);
+             border:1px solid var(--border-card); }
+  .cs-chip.df { color:var(--cs-accent); border-color:rgba(56,189,248,.4); }
+  .cs-ability { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px;
+                padding:.6rem .75rem; margin-bottom:.5rem; }
+  .cs-ability .an { font-weight:600; color:var(--cs-accent-2); font-size:14px; }
+  .cs-ability .ad { font-size:12.5px; color:var(--text-on-dark-2,#aeb8c4); margin-top:.2rem; line-height:1.45; }
+  .cs-2col { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; }
+  @media (max-width:720px){ .cs-2col{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cs-wrap">
+  <div class="cs-head">
+    <div>
+      <div class="cs-name">{{ a.name }}</div>
+      <div class="cs-sub">
+        <span class="cs-tag">{{ a.type|capitalize }}</span>
+        {% if a.tier is not none %}<span class="cs-tag">Tier {{ a.tier }}</span>{% endif %}
+        {% if a.role %}<span class="cs-tag">{{ a.role|capitalize }}</span>{% endif %}
+        {% if a.size %}<span class="cs-tag">{{ a.size|capitalize }}</span>{% endif %}
+        <span class="cs-tag">Cosmere RPG</span>
+      </div>
+    </div>
+    <a class="cs-back" href="/cosmere/bestiary">&larr; Bestiary</a>
+  </div>
+
+  {# --- Defenses + resources --- #}
+  <div class="cs-grid cs-cards">
+    {% for key in ['phy','cog','spi'] %}
+    <div class="cs-card cs-def">
+      <div class="l">{{ defense_names[key] }}</div>
+      <div class="v">{{ a.defenses[key] }}</div>
+      <div class="x">Defense</div>
+    </div>
+    {% endfor %}
+    <div class="cs-card">
+      <div class="l">Health</div>
+      <div class="v">{{ a.health.value }}<span class="x">/{{ a.health.max }}</span></div>
+      <div class="cs-hpbar"><div class="cs-hpfill" style="width:{{ (100 * a.health.value / a.health.max)|round|int if a.health.max else 0 }}%"></div></div>
+    </div>
+    <div class="cs-card">
+      <div class="l">Focus</div><div class="v sm">{{ a.focus_max }}</div>
+    </div>
+    <div class="cs-card">
+      <div class="l">Investiture</div><div class="v sm">{{ a.investiture_max }}</div>
+    </div>
+    <div class="cs-card">
+      <div class="l">Deflect</div><div class="v sm">{{ a.deflect.value }}</div>
+      <div class="cs-chips" style="justify-content:center;margin-top:.3rem;">
+        {% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df">{{ t }}</span>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# --- Attributes --- #}
+  <div class="cs-section-h">Attributes</div>
+  <div class="cs-grid cs-attrs">
+    {% for key in ['str','spd','int','wil','awa','pre'] %}
+    <div class="cs-card">
+      <div class="l">{{ attr_names[key] }}</div>
+      <div class="v">{{ a.attributes[key] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# --- Skills --- #}
+  <div class="cs-section-h">Skills <span style="text-transform:none;letter-spacing:0;">(Surge skills dimmed until a Radiant unlocks them)</span></div>
+  <div class="cs-grid cs-skills">
+    {% for code, label in skill_names.items() if code in a.skills %}
+    {% set sk = a.skills[code] %}
+    <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}">
+      <div class="nm">{{ label }} <small>{{ sk.attribute }}</small>{% if sk.rank %} <span class="rk">R{{ sk.rank }}</span>{% endif %}</div>
+      <div class="mod">{{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# --- Abilities --- #}
+  <div class="cs-2col">
+    <div>
+      {% if strikes %}
+      <div class="cs-section-h">Strikes</div>
+      {% for s in strikes %}
+      <div class="cs-ability"><div class="an">{{ s.name }}</div>
+        <div class="ad">{{ s.damage }}{% if s.type %} <span class="cs-chip">{{ s.type }}</span>{% endif %}</div></div>
+      {% endfor %}
+      {% endif %}
+      {% if traits %}
+      <div class="cs-section-h">Traits</div>
+      <div class="cs-chips">{% for t in traits %}<span class="cs-chip">{{ t }}</span>{% endfor %}</div>
+      {% endif %}
+    </div>
+    <div>
+      {% if actions %}
+      <div class="cs-section-h">Actions &amp; Abilities</div>
+      {% for ab in actions %}
+      <div class="cs-ability"><div class="an">{{ ab.name }}</div>
+        {% if ab.description %}<div class="ad">{{ ab.description }}</div>{% endif %}</div>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

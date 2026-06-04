@@ -53,6 +53,26 @@ SYSTEM = GameSystem(key='cosmere', label='Cosmere RPG', combat=_COMBAT)
 SYSTEM.bind_actor_factory(CosmereActor)
 
 
+# Display names for the 3-letter Foundry codes (sheets / tracker).
+ATTR_NAMES = {
+    'str': 'Strength', 'spd': 'Speed', 'int': 'Intellect',
+    'wil': 'Willpower', 'awa': 'Awareness', 'pre': 'Presence',
+}
+DEFENSE_NAMES = {'phy': 'Physical', 'cog': 'Cognitive', 'spi': 'Spiritual'}
+SKILL_NAMES = {
+    # 18 basic skills
+    'agi': 'Agility', 'ath': 'Athletics', 'cra': 'Crafting', 'dec': 'Deception',
+    'ded': 'Deduction', 'dis': 'Discipline', 'hwp': 'Heavy Weaponry',
+    'inm': 'Intimidation', 'ins': 'Insight', 'lea': 'Leadership', 'lor': 'Lore',
+    'lwp': 'Light Weaponry', 'med': 'Medicine', 'prc': 'Perception',
+    'prs': 'Persuasion', 'stl': 'Stealth', 'sur': 'Survival', 'thv': 'Thievery',
+    # 10 Surge skills (unlocked only for Radiants)
+    'abr': 'Abrasion', 'adh': 'Adhesion', 'chs': 'Cohesion', 'dvs': 'Division',
+    'grv': 'Gravitation', 'ill': 'Illumination', 'prg': 'Progression',
+    'trp': 'Transportation', 'trs': 'Transformation', 'tsn': 'Tension',
+}
+
+
 # --- ingested content ------------------------------------------------------
 _CONTENT_DIR = os.path.join(os.path.dirname(__file__), 'content')
 

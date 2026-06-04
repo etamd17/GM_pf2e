@@ -21,6 +21,8 @@ health/focus/deflect), we honor it; otherwise we compute from the rulebook.
 """
 from __future__ import annotations
 
+import re
+
 # Defense = 10 + the two governing attributes (rulebook Ch.3).
 _DEFENSE_ATTRS = {
     'phy': ('str', 'spd'),   # Physical
@@ -61,6 +63,15 @@ def _i(value, default=0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _text(value) -> str:
+    """Plain text from a Foundry description (a ``{value: html}`` dict or str)."""
+    if isinstance(value, dict):
+        value = value.get('value', '')
+    if not isinstance(value, str):
+        return ''
+    return re.sub(r'<[^>]+>', '', value).strip()
 
 
 class CosmereActor:
@@ -140,6 +151,61 @@ class CosmereActor:
                 'unlocked': bool(node.get('unlocked', True)),
             }
 
+        # --- abilities from embedded items (adversary actions/weapons/traits) ---
+        self.actions, self.strikes, self.traits = [], [], []
+        items = doc.get('items', []) if isinstance(doc, dict) else []
+        for it in (items or []):
+            if not isinstance(it, dict):
+                continue
+            itype, iname = it.get('type'), it.get('name', '')
+            isys = it.get('system', {}) if isinstance(it.get('system'), dict) else {}
+            if itype == 'action':
+                self.actions.append({'name': iname, 'description': _text(isys.get('description'))})
+            elif itype == 'weapon':
+                dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
+                self.strikes.append({'name': iname, 'damage': dmg.get('formula', ''), 'type': dmg.get('type', '')})
+            elif itype == 'trait':
+                self.traits.append(iname)
+
+        # --- mutable combat state (used when this actor is a tracker combatant) ---
+        self.instance_id = ''
+        self.initiative = 0
+        self.is_hazard = False
+        self.visible_to_players = True
+        self.delaying = False
+        self.elite_weak = 0
+        self.reaction_used = False
+        self.actions_used = 0
+        self.max_actions = 3          # Cosmere: elect fast(2)/slow(3); default to slow
+        self.conditions = {}          # Cosmere conditions {name: value|bool}
+        self.condition_expiry = {}
+        # Health drives the tracker HP bar. Expose PF2e-shaped aliases so the
+        # existing tracker serializers/templates run UNMODIFIED; the true Cosmere
+        # stats live in tracker_block()/to_summary() and the UI branches on
+        # `system`. These aliases are non-crash fallbacks, not the source of truth.
+        self.current_hp = self.health
+        self.hp = self.health_max
+        self.max_hp = self.health_max
+        self.current_focus = self.focus_max
+        self.speed = 25
+        self.hero_points = 0
+        self.persistent_damage = [] if self.is_pc else ''
+        self.ac = self.defenses.get('phy', 10)
+        self.base_ac = self.ac
+        self.fort = self.defenses.get('phy', 10)
+        self.ref = self.defenses.get('cog', 10)
+        self.will = self.defenses.get('spi', 10)
+        self.perception = self.skills.get('prc', {}).get('mod', 0)
+        # Empty PF2e-shaped collections so both tracker render branches are safe.
+        self.feats = []
+        self.spell_casters = []
+        self.spell_attack = 0
+        self.spell_dc = 0
+        self.immunities = []
+        self.resistances = []
+        self.weaknesses = []
+        self.attacks = []
+
     # -- helpers ------------------------------------------------------------
     def _attr(self, key) -> int:
         a = self._sys.get('attributes', {}).get(key, {}) if key else {}
@@ -166,6 +232,22 @@ class CosmereActor:
         return self._resolve(self._max_node(res, key), computed)
 
     # -- serialization ------------------------------------------------------
+    def tracker_block(self) -> dict:
+        """Compact Cosmere stats for the system-aware combat tracker."""
+        types = self.deflect.get('types') or {}
+        return {
+            'defenses': dict(self.defenses),
+            'deflect': {
+                'value': self.deflect.get('value', 0),
+                'types': [t for t, on in types.items() if on],
+            },
+            'health': {'value': self.current_hp, 'max': self.health_max},
+            'focus_max': self.focus_max,
+            'investiture_max': self.investiture_max,
+            'attributes': dict(self.attributes),
+            'tier': self.tier, 'role': self.role, 'size': self.size,
+        }
+
     def to_summary(self) -> dict:
         """A flat, JSON-friendly snapshot for sheets / tests / the tracker."""
         return {
