@@ -5,6 +5,11 @@ __pycache__/
 venv/
 .env
 
+# Agent worktrees — git linked-worktree checkouts under .claude/ are local
+# scratch; never commit their checkouts or pointer files.
+# (.claude/launch.json is tracked and intentionally kept.)
+.claude/worktrees/
+
 # Local-only Pathbuilder PC exports — used for verifying class progressions
 # and calculation fixes. PCs reach the live site through the in-app
 # JSON-upload + character-creator flow, NOT via the repo.
