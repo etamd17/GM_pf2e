@@ -91,6 +91,11 @@
           <button type="button" onclick="bumpIdeals(1)">+</button></div></div>
       <div style="flex:1;" id="ideal-info" class="muted"></div>
     </div>
+    <div class="row" style="margin-top:.5rem;">
+      <div style="flex:1;"><label>Add a Radiant talent (spren-bond tree + your surges)</label>
+        <select id="radiant-talent-pick"><option value="">&mdash; choose an order &mdash;</option></select></div>
+      <button class="btn" type="button" onclick="addRadiantTalent()">Add Talent</button>
+    </div>
   </div>
 
   <div class="sec-h">Attributes <span id="b-attr" class="budget"></span></div>
@@ -180,6 +185,8 @@ const SKILL_NAMES = {{ skill_names|tojson }};
 const SINGER_FORMS = {{ singer_forms|tojson }};
 const SINGER_CHANGE_FORM = {{ singer_change_form|tojson }};
 const STARTING_KITS = {{ starting_kits|tojson }};
+const RADIANT_SURGE_TALENTS = {{ radiant_surge_talents|tojson }};
+const RADIANT_ORDER_TALENTS = {{ radiant_order_talents|tojson }};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -236,12 +243,32 @@ function onForm(){
     box.innerHTML=`<b style="color:#5eead4">${f.name}</b> — ${d.join(', ')||'no stat change'}<br>${f.note}`; }
   else box.innerHTML='';
 }
+function prereqLabel(p){
+  if(!p) return '';
+  if(p.ideal) return ' (First Ideal)';
+  if(p.talent) return ' — needs '+p.talent;
+  if(p.text) return ' — '+p.text;
+  return '';
+}
 function onOrder(){
-  const o=ORDERS[v('f-order')];
+  const k=v('f-order'), o=ORDERS[k];
   document.getElementById('radiant-detail').style.display=o?'block':'none';
   const info=document.getElementById('order-info');
   info.innerHTML = o ? `<b style="color:#5eead4">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
+  const sel=document.getElementById('radiant-talent-pick');   // spren-bond tree + the order's two surge trees
+  if(o){
+    let list=(RADIANT_ORDER_TALENTS[k]||[]).map(t=>({name:t.name,prereq:t.prereq,group:'Bond'}));
+    o.surges.forEach(s=>(RADIANT_SURGE_TALENTS[s]||[]).forEach(t=>list.push({name:t.name,prereq:t.prereq,group:SURGE_INFO[s].name})));
+    sel.innerHTML='<option value="">— select a Radiant talent —</option>'+list.map((t,i)=>`<option value="${i}">[${t.group}] ${t.name}${prereqLabel(t.prereq)}</option>`).join('');
+    sel._list=list;
+  } else { sel.innerHTML='<option value="">— choose an order —</option>'; sel._list=[]; }
   onIdeals();
+}
+function addRadiantTalent(){
+  const sel=document.getElementById('radiant-talent-pick'), i=sel.value; if(i==='') return;
+  const t=(sel._list||[])[+i]; if(!t) return;
+  const id='radiant:'+t.name;
+  if(!TALENTS.some(x=>x.id===id)){ TALENTS.push({id, name:t.name}); renderTalents(); recompute(); }
 }
 function bumpIdeals(d){const e=document.getElementById('f-ideals'); e.value=Math.max(0,Math.min(5,(+e.value||0)+d)); onIdeals();}
 function onIdeals(){

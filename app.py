@@ -6495,6 +6495,7 @@ def _cosmere_starting_kits():
 def _cosmere_builder_context(build):
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
+    import systems.cosmere.radiant_talents as _rt
     return dict(
         build=build.to_dict(),
         catalog=systems.cosmere.items.catalog(),
@@ -6508,6 +6509,7 @@ def _cosmere_builder_context(build):
         singer_forms=systems.cosmere.origins.SINGER_FORMS,
         singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
         starting_kits=_cosmere_starting_kits(),
+        radiant_surge_talents=_rt.SURGE_TALENTS, radiant_order_talents=_rt.ORDER_TALENTS,
         budgets=dict(
             attr_points=build.attr_points_available(),
             skill_ranks=build.skill_ranks_available(),
