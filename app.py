@@ -352,6 +352,7 @@ COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 # campaign has been migrated yet (server_state has no live id) we fall back to
 # the legacy flat layout so the app keeps working unchanged pre-migration.
 from core import storage as _storage
+import systems  # system registry (pf2e, later cosmere); actor dispatch by envelope `system`
 
 _AUDIO_OVERRIDE = os.environ.get('PF2E_AUDIO_DIR')  # dev: external Foundry audio folder
 ACTIVE_CAMPAIGN_ID = None
@@ -1490,10 +1491,10 @@ def reload_single_character(file_path):
             data = json.load(f)
         if isinstance(data, list):
             for idx, char_data in enumerate(data):
-                pc = Character(char_data, f"{os.path.basename(file_path)}[{idx}]")
+                pc = make_actor(char_data, f"{os.path.basename(file_path)}[{idx}]")
                 PARTY_LIBRARY[pc.name] = pc
         else:
-            pc = Character(data, os.path.basename(file_path))
+            pc = make_actor(data, os.path.basename(file_path))
             PARTY_LIBRARY[pc.name] = pc
     except Exception as e:
         print(f"Reload Error for {file_path}: {e}")
@@ -1728,7 +1729,11 @@ class Character:
         build = data.get('build') or data
         self._build_ref = build
         if not isinstance(build, dict): build = {}
-        
+
+        # Which game system this actor belongs to (flat-additive envelope key;
+        # defaults to pf2e for legacy/unstamped PCs). Dispatched on at load time.
+        self.system = str((data.get('system') if isinstance(data, dict) else None) or 'pf2e').lower()
+
         self.name = safe_str(build.get('name'), 'Unknown Hero')
         self.level = safe_int(build.get('level'), 1)
         # Automatic Bonus Progression is a PF2e *variant* rule (CRB Gamemastery
@@ -3649,6 +3654,23 @@ class Character:
             base,
         )
 
+
+def _pf2e_make_actor(doc, file_path=''):
+    """Actor factory bound into the pf2e registry entry (see systems/)."""
+    return Character(doc, file_path)
+
+
+# Bind the concrete PF2e actor class into the registry now that Character is
+# defined. systems/ stays decoupled from app.py; the host binds at startup.
+systems.get('pf2e').bind_actor_factory(_pf2e_make_actor)
+
+
+def make_actor(doc, file_path=''):
+    """Load a stored character envelope into the actor class for its `system`
+    (defaulting to pf2e). The single dispatch seam for multi-system PCs."""
+    return systems.actor_for_doc(doc, file_path)
+
+
 class Monster:
     def __init__(self, data, file_path=""):
         self.file_path = file_path
@@ -4507,11 +4529,11 @@ def load_libraries():
                 continue
             try:
                 if isinstance(data, list):
-                    for idx, char_data in enumerate(data): 
-                        pc = Character(char_data, f"{file}[{idx}]")
+                    for idx, char_data in enumerate(data):
+                        pc = make_actor(char_data, f"{file}[{idx}]")
                         PARTY_LIBRARY[pc.name] = pc
-                else: 
-                    pc = Character(data, file)
+                else:
+                    pc = make_actor(data, file)
                     PARTY_LIBRARY[pc.name] = pc
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
