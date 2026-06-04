@@ -72,6 +72,22 @@ SKILL_NAMES = {
     'trp': 'Transportation', 'trs': 'Transformation', 'tsn': 'Tension',
 }
 
+# Governing attribute per skill code (authoritative — matches the Foundry actor
+# data; guarded by tests). skill mod = ranks + this attribute's score.
+SKILL_ATTR = {
+    # 18 basic
+    'agi': 'spd', 'ath': 'str', 'cra': 'int', 'dec': 'pre', 'ded': 'int',
+    'dis': 'wil', 'hwp': 'str', 'inm': 'wil', 'ins': 'awa', 'lea': 'pre',
+    'lor': 'int', 'lwp': 'spd', 'med': 'int', 'prc': 'awa', 'prs': 'pre',
+    'stl': 'spd', 'sur': 'awa', 'thv': 'spd',
+    # 10 Surge
+    'abr': 'spd', 'adh': 'pre', 'chs': 'wil', 'dvs': 'int', 'grv': 'awa',
+    'ill': 'pre', 'prg': 'awa', 'trp': 'int', 'trs': 'wil', 'tsn': 'str',
+}
+SURGE_SKILLS = ('abr', 'adh', 'chs', 'dvs', 'grv', 'ill', 'prg', 'trp', 'trs', 'tsn')
+BASIC_SKILLS = tuple(c for c in SKILL_ATTR if c not in SURGE_SKILLS)
+PATHS = ('agent', 'envoy', 'hunter', 'leader', 'scholar', 'warrior')
+
 
 # --- ingested content ------------------------------------------------------
 _CONTENT_DIR = os.path.join(os.path.dirname(__file__), 'content')
