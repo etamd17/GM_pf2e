@@ -48,6 +48,12 @@ class CombatProfile:
     stacking_rule: str            # 'typed_best_worst' (pf2e) | 'named' (cosmere)
     # conditions
     conditions: tuple             # tuple[Condition]
+    # --- optional, system-specific extensions (defaulted, so PF2e stays valid) ---
+    death_model: str = 'dying_wounded'  # 'dying_wounded' (pf2e) | 'injuries' (cosmere)
+    phases: tuple = ()                  # named turn phases (cosmere's 4-phase queue); () = sorted-initiative list
+    fast_actions: int = 0               # actions when electing 'fast' (cosmere); 0 = n/a
+    slow_actions: int = 0               # actions when electing 'slow' (cosmere); 0 = n/a
+    deflectable_damage: tuple = ()      # damage types Deflect reduces (cosmere); () = no deflect
 
     def condition_keys(self) -> tuple:
         """Just the condition keys, in catalog order."""

@@ -46,7 +46,7 @@ def test_system_for_doc_is_strict_about_unknowns():
         systems.system_for_doc({'system': 'dnd5e'})
     # An unregistered default is equally strict.
     with pytest.raises(systems.UnknownSystemError):
-        systems.system_for_doc({}, default='cosmere')
+        systems.system_for_doc({}, default='dnd5e')
 
 
 def test_register_rejects_non_systems():

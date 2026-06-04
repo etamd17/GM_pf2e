@@ -1,0 +1,5568 @@
+[
+ {
+  "_id": "TIgbgwcilBiHWeD3",
+  "flags": {},
+  "folder": null,
+  "name": "Armor",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "qTYLKqLK29e5CTQp",
+  "color": null,
+  "description": "",
+  "flags": {},
+  "folder": null,
+  "name": "Equipment",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "QreXY0o5p2yzF3Vc",
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "name": "Improvised",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "RBFoWUCw2wosgSJA",
+  "flags": {},
+  "folder": null,
+  "name": "Loot",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "4H9VQhin9BB78Fw4",
+  "flags": {},
+  "folder": null,
+  "name": "Weapons",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "xLer8raOT6EkLfWN",
+  "effects": [],
+  "flags": {},
+  "folder": "TIgbgwcilBiHWeD3",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Breastplate.webp",
+  "name": "Breastplate",
+  "system": {
+   "alwaysEquipped": false,
+   "deflect": 2,
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Deflect Value</strong> 2; <strong>Traits</strong> Cumbersome [3]; <strong>Expert Traits</strong> Presentable;</p><p><strong>Price</strong> 120 mk; <strong>Weight</strong> 30 lb.;</p>"
+   },
+   "equip": {
+    "type": "wear"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "breastplate",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 120
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": true,
+     "defaultValue": 3
+    },
+    "presentable": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "weight": {
+    "unit": "lb",
+    "value": 30
+   }
+  },
+  "type": "armor"
+ },
+ {
+  "_id": "6y5hONLMQa4O2wnU",
+  "effects": [],
+  "flags": {},
+  "folder": "TIgbgwcilBiHWeD3",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_chainmail.webp",
+  "name": "Chain",
+  "system": {
+   "alwaysEquipped": false,
+   "deflect": 2,
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Deflect Value</strong> 2; <strong>Traits</strong> Cumbersome [3]; <strong>Expert Traits</strong> Loses Cumbersome;</p><p><strong>Price</strong> 80 mk; <strong>Weight</strong> 25 lb.;</p>"
+   },
+   "equip": {
+    "type": "wear"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "chain",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "value": 80
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": true,
+     "defaultValue": 3,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "weight": {
+    "unit": "lb",
+    "value": 25
+   }
+  },
+  "type": "armor"
+ },
+ {
+  "_id": "t97DN6FAh7BMNvcP",
+  "effects": [],
+  "flags": {},
+  "folder": "TIgbgwcilBiHWeD3",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Full_Plate.webp",
+  "name": "Full Plate",
+  "system": {
+   "alwaysEquipped": false,
+   "deflect": 4,
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Deflect Value</strong> 4; <strong>Traits</strong> Cumbersome [5]; <strong>Expert Traits</strong> —;</p><p><strong>Price</strong> 1,600 mk; <strong>Weight</strong> 55 lb.;</p>"
+   },
+   "equip": {
+    "type": "wear"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "full-plate",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "value": 1600
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": true,
+     "defaultValue": 5
+    }
+   },
+   "weight": {
+    "unit": "lb",
+    "value": 55
+   }
+  },
+  "type": "armor"
+ },
+ {
+  "_id": "GlrRu1goky9ifKCl",
+  "effects": [],
+  "flags": {},
+  "folder": "TIgbgwcilBiHWeD3",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_half_plate.webp",
+  "name": "Half Plate",
+  "system": {
+   "alwaysEquipped": false,
+   "deflect": 3,
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Deflect Value</strong> 3; <strong>Traits</strong> Cumbersome [4]; <strong>Expert Traits</strong> Cumbersome [3] instead of [4];</p><p><strong>Price</strong> 400 mk; <strong>Weight</strong> 40 lb.;</p>"
+   },
+   "equip": {
+    "type": "wear"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "half-plate",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "value": 400
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": true,
+     "defaultValue": 4,
+     "expertise": {
+      "value": 3
+     }
+    }
+   },
+   "weight": {
+    "unit": "lb",
+    "value": 40
+   }
+  },
+  "type": "armor"
+ },
+ {
+  "_id": "dxty96So3kGZVhv5",
+  "effects": [],
+  "flags": {},
+  "folder": "TIgbgwcilBiHWeD3",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_leather.webp",
+  "name": "Leather",
+  "system": {
+   "alwaysEquipped": false,
+   "deflect": 1,
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Deflect Value</strong> 1; <strong>Traits</strong> —; <strong>Expert Traits</strong> Presentable;</p><p><strong>Price</strong> 60 mk; <strong>Weight</strong> 10 lb.;</p>"
+   },
+   "equip": {
+    "type": "wear"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "leather",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "value": 60
+   },
+   "quantity": 1,
+   "traits": {
+    "presentable": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "weight": {
+    "unit": "lb",
+    "value": 10
+   }
+  },
+  "type": "armor"
+ },
+ {
+  "_id": "SRLLAWCE7rwS40Pv",
+  "effects": [],
+  "flags": {},
+  "folder": "TIgbgwcilBiHWeD3",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Uniform.webp",
+  "name": "Uniform",
+  "system": {
+   "alwaysEquipped": false,
+   "deflect": 0,
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Deflect Value</strong> 0; <strong>Traits</strong> Presentable; <strong>Expert Traits</strong> —;</p><p><strong>Price</strong> 40 mk; <strong>Weight</strong> 5 lb.;</p>"
+   },
+   "equip": {
+    "type": "wear"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "uniform",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "value": 40
+   },
+   "quantity": 1,
+   "traits": {
+    "presentable": {
+     "defaultActive": true
+    }
+   },
+   "weight": {
+    "unit": "lb",
+    "value": 5
+   }
+  },
+  "type": "armor"
+ },
+ {
+  "_id": "Ax8bMMXceZzT1J9e",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/drinks/alcohol-beer-stein-wooden-brown.webp",
+  "name": "Alcohol (1 serving)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.5-50 mkk; <strong>Weight</strong> 0.2 lb.;</p><p>Every culture of Roshar has its own intoxicating traditions, such as beers, mudbeers, ciders, honu, shiki, juices, and lagers.</p><p>In Vorin society, almost all forms of alcohol are referred to as “wine” regardless of their ingredients. Such wines are known by their distinct colors, which are infused into each beverage so they can be distinguished at a glance. From least intoxicating to most, the types of wine are:</p><table><tbody><tr><td data-colwidth=\"95\"><p>Color</p></td><td><p>Effect</p></td></tr><tr><td data-colwidth=\"95\"><p>Pink</p></td><td><p>Noted as being floral and aiding alertness.</p><p>Less intoxicating than milk</p></td></tr><tr><td data-colwidth=\"95\"><p>Orange</p></td><td><p>A non-intoxicating wine that tastes of fruit with notes of ginger. Most popular with members of the clergy.</p></td></tr><tr><td data-colwidth=\"95\"><p>Yellow</p></td><td><p>Offers a bold and deep flavor “without guilt.”</p><p>Minimally intoxicating</p></td></tr><tr><td data-colwidth=\"95\"><p>Auburn</p></td><td><p>Spicy with an earthy aroma. Brewed with fermented fruit.</p></td></tr><tr><td data-colwidth=\"95\"><p>Red</p></td><td><p>Flavorful wine with a pleasant burn.</p></td></tr><tr><td data-colwidth=\"95\"><p>Sapphire</p></td><td><p>Nutty with notes of honey, made with fermented lavis grain</p></td></tr><tr><td data-colwidth=\"95\"><p>Blue</p></td><td><p>Carries complex notes of berry and lemon.</p></td></tr><tr><td data-colwidth=\"95\"><p>Violet</p></td><td><p>Potent liquor with an aroma of spiced sandalwood.</p><p>Considered the most flavorful of the wines</p></td></tr></tbody></table>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.5
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "EtOTdo7HEPUYg1l4",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/drinks/alcohol-jug-spirits-brown.webp",
+  "name": "Alcohol (bottle)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1-300 mkk; <strong>Weight</strong> 2-4 lb.;</p><p>Every culture of Roshar has its own intoxicating traditions, such as beers, mudbeers, ciders, honu, shiki, juices, and lagers.</p><p>In Vorin society, almost all forms of alcohol are referred to as “wine” regardless of their ingredients. Such wines are known by their distinct colors, which are infused into each beverage so they can be distinguished at a glance. From least intoxicating to most, the types of wine are:</p><table><tbody><tr><td data-colwidth=\"95\"><p>Color</p></td><td><p>Effect</p></td></tr><tr><td data-colwidth=\"95\"><p>Pink</p></td><td><p>Noted as being floral and aiding alertness.</p><p>Less intoxicating than milk</p></td></tr><tr><td data-colwidth=\"95\"><p>Orange</p></td><td><p>A non-intoxicating wine that tastes of fruit with notes of ginger. Most popular with members of the clergy.</p></td></tr><tr><td data-colwidth=\"95\"><p>Yellow</p></td><td><p>Offers a bold and deep flavor “without guilt.”</p><p>Minimally intoxicating</p></td></tr><tr><td data-colwidth=\"95\"><p>Auburn</p></td><td><p>Spicy with an earthy aroma. Brewed with fermented fruit.</p></td></tr><tr><td data-colwidth=\"95\"><p>Red</p></td><td><p>Flavorful wine with a pleasant burn.</p></td></tr><tr><td data-colwidth=\"95\"><p>Sapphire</p></td><td><p>Nutty with notes of honey, made with fermented lavis grain</p></td></tr><tr><td data-colwidth=\"95\"><p>Blue</p></td><td><p>Carries complex notes of berry and lemon.</p></td></tr><tr><td data-colwidth=\"95\"><p>Violet</p></td><td><p>Potent liquor with an aroma of spiced sandalwood.</p><p>Considered the most flavorful of the wines</p></td></tr></tbody></table>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "Wl0TlHmr1byqb9Ls",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/drinks/tea-jug-glowing-brown-pink.webp",
+  "name": "Anesthetic (5 doses)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "spe",
+     "value": null
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 5,
+     "recharge": null,
+     "type": "use",
+     "value": 5
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 75 mk; <strong>Weight</strong> 1.5 lb.;</p><p>Usually made from fathom bark or winterwort, you can apply a dose of anesthetic ointment to an injury after a short or long rest to reduce its recovery time by <span style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji'\">[[/r 1d4]]</span> days. Each injury can be treated with anesthetic only once per day.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 75
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "t0oc6ADwgqQMHI8A",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-bottle-labeled-medicine-capped-red-black.webp",
+  "name": "Antiseptic (potent, 5 doses)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "spe",
+     "value": null
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 5,
+     "recharge": null,
+     "type": "use",
+     "value": 5
+    }
+   },
+   "damage": {
+    "formula": "2d6",
+    "type": "heal"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 50 mk; <strong>Weight</strong> 1 lb.;</p><p>Knobweed milk, fourleaf sap, and lister’s oil can all be used to make a strong antiseptic. A dose can be applied to a character after a short rest to restore [[/r 2d6]] health.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 50
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "hWD3H4XLoyjwkwnd",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-bottle-labeled-medicine-capped-red-black.webp",
+  "name": "Antiseptic (weak, 5 doses)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "spe",
+     "value": null
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 5,
+     "recharge": null,
+     "type": "use",
+     "value": 5
+    }
+   },
+   "damage": {
+    "formula": "1d6",
+    "type": "heal"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 25 mk; <strong>Weight</strong> 1 lb.;</p><p> A dose of weak antiseptic, such as that made from larmic mucus, can be applied to a character after a short rest to restore  [[/r 1d6]] health.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 25
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "g7wp6B76l6FPLCpj",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/bags/pack-leather-white-tan.webp",
+  "name": "Backpack",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 8 mk; <strong>Weight</strong> 5 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 8
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "5cvMonV3oiBFhuJd",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/barrels/barrel-oak-banded-tan.webp",
+  "name": "Barrel",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 15 mk; <strong>Weight</strong> 70 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 15
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 70
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "Y190QA0BpnAtdfl9",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/commodities/cloth/cloth-roll-orange.webp",
+  "name": "Blanket",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 2 mk; <strong>Weight</strong> 2 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "aEWkmpwm8ADHz2Q1",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Book.webp",
+  "name": "Book (reference)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": null,
+     "value": null
+    },
+    "flavor": "",
+    "skill": null,
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10–500 mk; <strong>Weight</strong> 1–5 lb.;</p><p>Each reference book contains information on a particular topic, such as a historical era, engineering, biology, architecture, or crafting a particular type of fabrial. When you have time to reference a book while making a related test using your <strong>Intellect</strong> attribute, you’re considered to have an expertise in the topic (see “Expertise Benefits” in chapter 3).</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "MoUFXEtYNV2x9PLz",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Bottle_Clay.webp",
+  "name": "Bottle (crem)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.5 mk; <strong>Weight</strong> 3 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.5
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "eag6Tzp50qP6ZSbR",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Bottle_Glass.webp",
+  "name": "Bottle (glass)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 2 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "xAbLSkWTFIfF5mjX",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/misc/bucket-steel.webp",
+  "name": "Bucket",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 2 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "XWnG7IsaVfRIULF2",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/lights/candle-unlit-tan.webp",
+  "name": "Candle",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.2 mk; <strong>Weight</strong> 0.2 lb.;</p><p> While lit, the candle sheds light in a 15-foot radius. It burns for up to 6 hours before becoming unusable.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "UQVUFD1E6xHxMXTL",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/bags/case-scroll-leather-tan.webp",
+  "name": "Case (leather)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 4 mk; <strong>Weight</strong> 1 lb.;</p><p>A sealable, cylindrical case that can store up to ten pages of paper or parchment and protect them from the weather.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 4
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "Bystka90e7cqadwo",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/fasteners/chain-steel-grey.webp",
+  "name": "Chain (thick, 10 feet)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 10 lb.;</p><p>This sturdy chain can be used in securing cargo, shackling prisoners, and other situations where strength is essential. This chain can be broken by succeeding on a DC 30 <strong>Athletics</strong> test or by dealing 15 damage to it</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 10
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "9LsAo2FryXTcHnnZ",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/fasteners/chain-brass-yellow.webp",
+  "name": "Chain (thin, 1 foot)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 0.5 lb.;</p><p>This thin chain is often used in jewelry and Soulcasters, usually made of precious metals in fine links. This chain can be broken by succeeding on a DC 20 <strong>Athletics</strong> test or by dealing 5 damage to it.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "cYClVA9bvZYDUw1K",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Chest.webp",
+  "name": "Chest",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 30 mk; <strong>Weight</strong> 25 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 30
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 25
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "SZLmzHRi3n9zqpO8",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/equipment/chest/shirt-collared-brown.webp",
+  "name": "Clothing (common)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 2 mk; <strong>Weight</strong> 3 lb.;</p><p>Plain clothes are made of affordable materials and are generally undyed, helping you fit in among the commonfolk. While wearing these clothes, you gain an advantage on <strong>spiritual</strong> tests made to convince others you’re from the lower class.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "9Z2IGrA7MAorXfB1",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/equipment/chest/robe-collared-blue.webp",
+  "name": "Clothing (fine)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 50–200 mk; <strong>Weight</strong> 6 lb.;</p><p>Fine clothes are made of silks or other high-quality materials, colored using expensive dyes, and often stitched with fine embroidery. Wearing fine clothes helps you to blend into high society, such as noble banquets, without arousing suspicion. While wearing these clothes, you gain an advantage on <strong>spiritual</strong> tests made to convince others you’re from the upper class.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 50
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 6
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "moMefd103M5JGLNx",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/equipment/chest/shirt-simple-grey.webp",
+  "name": "Clothing (ragged)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.5 mk; <strong>Weight</strong> 1.5 lb.;</p><p>This clothing may have once been of fine or common make, but it’s now barely holding together. While wearing these clothes, you gain an advantage on <strong>spiritual</strong> tests made to convince others you’re destitute</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.5
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "TtqfZFRd4bAEfEuU",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/hand/pickaxe-steel-grey.webp",
+  "name": "Crowbar",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 3 lb.;</p><p>You can use a crowbar to gain an advantage on <strong>Athletics</strong> tests where the crowbar’s leverage can be applied.</p><p></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "ktvj23zgmpAHneXy",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/instruments/megaphone.webp",
+  "name": "Ear Trumpet",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 50 mk; <strong>Weight</strong> 1 lb.;</p><p>Distant sounds heard through an ear trumpet can be perceived as though at half the distance. At the GM’s discretion, more powerful ear trumpets may be available at higher prices.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 50
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "Z6aQuxMZaTZTBwRv",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/survival/wetskin-leather-purple.webp",
+  "name": "Flask",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "nqOz2mX8i5WVjuaa",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Sparkflicker.webp",
+  "name": "Flint and Steel",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 4 mk; <strong>Weight</strong> 1.5 lb.;</p><p>A flint and steel can be used as <em class=\"cosmere-icon\" data-tooltip=\"1 Action\">1</em> to light abundant fuel within reach. Starting a fire under more challenging circumstances can take 1 minute or more. Herdazians often wear a tool called a sparkflicker as jewelry or other ornamentation; they can use this like flint and steel by quickly running their crystalline fingernails along it.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 4
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "wxqRzS3bkSu9P6Us",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/food/plate-fish-grilled-brown.webp",
+  "name": "Food (fine, 1 day)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 25 mk; <strong>Weight</strong> 0.5 lb.;</p><p>Fine food can be found in high-class restaurants and on the tables of nobles’ feasts.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 25
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "ETmexaHpuN26SKOf",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/grains/bread-loaf-boule-tan.webp",
+  "name": "Food (ration, 1 day)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": null,
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.2 mk; <strong>Weight</strong> 0.5 lb.;</p><p>Rations are foods created for extended travel, such as jerky and hard-baked lavis cakes. They generally lack flavor, but if kept dry, they remain edible indefinitely.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "36QMlnmzORM20vyU",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/food/cooked-kebab-meat-skewer-orange.webp",
+  "name": "Food (street, 1 day)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 3 mk; <strong>Weight</strong> 1.5 lb.;</p><p>Every culture of Roshar has its own street confections, ranging from loaves of bread to more specific cultural foods like Herdazian chouta.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 3
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "2rSLME2ExPqGVhOD",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/fasteners/chain-hook-grey.webp",
+  "name": "Grappling Hook",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": null,
+     "value": null
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "skill": null,
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 4 lb.;</p><p>A grappling hook is typically attached to the end of a rope to aid in scaling or descending from walls and cliffs. A securely anchored grappling hook grants an advantage on <strong>Athletics</strong> tests made to climb using its attached rope.</p><p>You can use an @UUID[Compendium.cosmere-rpg.actions.Item.iqjFbO4BLuTSt4cQ]{Interact} action to attach the grappling hook to an anchor within reach without making a test. Alternatively, you can throw and attach it to a suitable anchor within 20 feet of you by succeeding on an <strong>Agility</strong> or <strong>Athletics</strong> test (DC set by the GM).</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 4
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "iqUiycqvN1RT7zsb",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/smithing/hammer-maul-steel-grey.webp",
+  "name": "Hammer (handheld)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 4 mk; <strong>Weight</strong> 3 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 4
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "C5JbKlzjhMb5BCt1",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/scribal/ink-quill-red.webp",
+  "name": "Ink (1-ounce bottle)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 40 mk; <strong>Weight</strong> 0.2 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 40
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "L9rfws3QW6esZa2n",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/scribal/pen-steel-grey-brown.webp",
+  "name": "Ink Pen",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.1 mk; <strong>Weight</strong> 0.1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "8jiTAUlkwCBPPBn7",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/kitchenware/jug-wrapped-red.webp",
+  "name": "Jug",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 2 mk; <strong>Weight</strong> 4 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 4
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "pz0fnW7XPXuFVzfj",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/misc/ladder.webp",
+  "name": "Ladder (10-foot)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 5 mk; <strong>Weight</strong> 20 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 5
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 20
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "8278hojFUEdJ8asc",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/lights/lantern-iron-yellow.webp",
+  "name": "Lantern (oil)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 2 lb.;</p><p>While lit, this lantern sheds light in a 30-foot radius. It burns for up to 6 hours per pint of oil.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "bsY2Vk9cqqol50Mi",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/lights/lantern-iron-yellow.webp",
+  "name": "Lantern (sphere)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 2 lb.;</p><p>This lantern includes a locked cage, usually just under 1 foot in diameter, into which infused spheres can be placed to shed light. Depending on how full the lantern is, it sheds a different radius of light: 60 feet when entirely filled with spheres, 30 feet when half full, 15 feet when quarter-filled, and 5 feet when at least 1 mark or broam is within it. The lock can be opened with its included key or a successful DC 15 <strong>Thievery</strong> test</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "fcLjn9zc7Q0N1LK1",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/misc/lock-steel-blue.webp",
+  "name": "Lock and Key",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 50 mk; <strong>Weight</strong> 1 lb.;</p><p>This sturdy lock can be opened with its included key or a successful DC 20 <strong>Thievery</strong> test. At the GM’s discretion, locks that require higher DCs may be available at higher prices.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 50
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "AP0Relfu1xrRSW5A",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/hand/lockpicks-steel-grey.webp",
+  "name": "Lockpick",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 5 mk; <strong>Weight</strong> 0.5 lb.;</p><p>You can use a lockpick to gain an advantage on <strong>Thievery</strong> tests made to pick a lock. After this test is resolved, the GM can spend <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\" style=\"color:rgb(173,19,19)\">c</span> to cause the lockpick to break.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 5
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "sfOmwcZkWFsAH3vj",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/scribal/magnifying-glass.webp",
+  "name": "Magnifying Lens",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 400 mk; <strong>Weight</strong> 0.2 lb.;</p><p>You can use a magnifying lens to gain an advantage on skill tests made to appraise or inspect a small or highly detailed item.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 400
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "1B2y1GOYjXkFPnDv",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Manacles.webp",
+  "name": "Manacles",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 6 lb.;</p><p>These metal restraints, which come with a key, can bind the wrists or ankles of a Large or smaller character. They can be escaped with a successful DC 25 <strong>Agility</strong> test, broken by succeeding on a DC 25 <strong>Athletics</strong> test or by dealing 15 damage to them, or lockpicked by succeeding on a DC 20 <strong>Thievery</strong> test. At the GM’s discretion, manacles that require higher DCs may be available at higher prices.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 6
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "1D7DMIDmAkD2qSsE",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/survival/mirror-plain.webp",
+  "name": "Mirror (handheld)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 25 mk; <strong>Weight</strong> 2 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 25
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "2ch99zKHQAmMDDvT",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/instruments/flute-simple-wood.webp",
+  "name": "Musical Instrument",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1–50 mk; <strong>Weight</strong> 0.5–20 lb.;</p><p>Every culture of Roshar has its preferred instruments and musical stylings. Instruments are often used for enjoyment, passing time, or busking for chips. When playing an instrument, you can determine the quality of your performance by making a skill test using a related skill (such as <strong>Agility</strong> for a stringed instrument, <strong>Athletics</strong> for drums, or <strong>Discipline</strong> for an instrument with many keys). If you have an expertise in that instrument, you gain an advantage on the test.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "AHdOOVbbGn8iAijr",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/fishing/net-simple-tan.webp",
+  "name": "Net (fishing)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 15 lb.;</p><p>This net of fine mesh is used to ensnare fish. You can use this net to gain an advantage on physical tests related to fishing.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 15
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "OqScvHsaAx9OQC70",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/fishing/net-simple-brown.webp",
+  "name": "Net (hunting)",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "skill": "ath",
+    "type": "skill_test",
+    "uses": null
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "skill": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 4 mk; <strong>Weight</strong> 5 lb.;</p><p>This net of thick rope can ensnare animals or enemies. While holding this net, you can use <em class=\"cosmere-icon\" data-tooltip=\"1 Action\">1</em> to make an <strong>Athletics</strong> test against the Physical defense of a Large or smaller character within 15 feet of you. On a hit, the character is <strong>Restrained</strong> and knocked <strong>Prone</strong>. That character or another within reach can use the @UUID[Compendium.cosmere-rpg.actions.Item.iqjFbO4BLuTSt4cQ]{Interact} action to make a DC 15 <strong>Athletics</strong> test, freeing the trapped character on a success. If a character is <strong>Restrained</strong> by multiple nets, they must be freed from each separately.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 4
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "bi2zCzju2StdcD8W",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-flask-corked-yellow.webp",
+  "name": "Oil (1 flask)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 1 lb.;</p><p> Oil generally comes in a 1-pint flask made of dried crem. Oil is flammable and can be used to fuel oil lanterns, to create dangerous terrain in a space, or as an improvised weapon (sling). When you hit or graze a target with this improvised weapon, you coat the target in oil in addition to the normal damage. Following the attack, regardless of the result, the crem flask breaks and  any unused oil is lost.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "lJPHqUMvQu8WGTv7",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/documents/paper-plain-white.webp",
+  "name": "Paper or Parchment (1 sheet)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.5 mk; <strong>Weight</strong> 0.1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.5
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "cwL7YLMZGYcS0q65",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-bottle-labeled-stopped-purple.webp",
+  "name": "Perfume (1 vial)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 0.5 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "f84CZl47SNkOqv4A",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/hand/pickaxe-steel-white.webp",
+  "name": "Pick (mining)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 10 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 10
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "OiallgGGlDszCskh",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/kitchenware/jug-terracotta-orange.webp",
+  "name": "Pitcher",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 2 mk; <strong>Weight</strong> 4 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 4
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "PUl6WUqoodh5qRu0",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-flask-capped-yellow-green.webp",
+  "name": "Poison (effectual, 1 dose)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 1,
+     "recharge": null,
+     "type": "use",
+     "value": 1
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 50 mk; <strong>Weight</strong> 0.2 lb.;</p><p>Often manufactured using Roshar’s deadly blackbane plant, poison comes in single-dose glass vials. As <em class=\"cosmere-icon\" data-tooltip=\"1 Action\">1</em> , you can pour it into food, liquid, or a container, or you can apply the poison to a melee weapon or a piece of ammunition you’re holding. When you do, the GM may require you to make a <strong>Stealth</strong> test to avoid discovery. When a character ingests the poison or is hit by an attack using the poisoned weapon or ammunition, the poison is expended, and the character suffers the following effects:</p><p><strong>Effectual Poison.</strong> The target must succeed on a DC 14 <strong>Athletics</strong> test or take 2d8 vital damage and be <strong>Stunned</strong> for 1 hour.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 50
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "lLknxxWUF0BDDr28",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-jar-corked-labeled-poison-skull-green.webp",
+  "name": "Poison (potent, 1 dose)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 1,
+     "recharge": null,
+     "type": "use",
+     "value": 1
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 120 mk; <strong>Weight</strong> 0.2 lb.;</p><p>Often manufactured using Roshar’s deadly blackbane plant, poison comes in single-dose glass vials. As <em class=\"cosmere-icon\" data-tooltip=\"1 Action\">1</em> , you can pour it into food, liquid, or a container, or you can apply the poison to a melee weapon or a piece of ammunition you’re holding. When you do, the GM may require you to make a <strong>Stealth</strong> test to avoid discovery. When a character ingests the poison or is hit by an attack using the poisoned weapon or ammunition, the poison is expended, and the character suffers the following effects:</p><p><strong>Potent Poison.</strong> The target must succeed on a DC 16 <strong>Athletics</strong> test or take 3d10 vital damage and be <strong>Stunned</strong> for 1 hour. While <strong>Stunned</strong> in this way, the target is <strong>Immobilized</strong>.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 120
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "jlZoxCcsuNTxwJUo",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/potion-tube-corked-green.webp",
+  "name": "Poison (weak, 1 dose)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 1,
+     "recharge": null,
+     "type": "use",
+     "value": 1
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 0.2 lb.;</p><p>Often manufactured using Roshar’s deadly blackbane plant, poison comes in single-dose glass vials. As <em class=\"cosmere-icon\" data-tooltip=\"1 Action\">1</em> , you can pour it into food, liquid, or a container, or you can apply the poison to a melee weapon or a piece of ammunition you’re holding. When you do, the GM may require you to make a <strong>Stealth</strong> test to avoid discovery. When a character ingests the poison or is hit by an attack using the poisoned weapon or ammunition, the poison is expended, and the character suffers the following effects:</p><p><strong>Weak Poison.</strong> The target must succeed on a DC 12 <strong>Athletics</strong> test or take 1d6 vital damage.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "t2JCxvssYjeBRKKt",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/cooking/cauldron-empty.webp",
+  "name": "Pot (iron)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 8 mk; <strong>Weight</strong> 10 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 8
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 10
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "4IQumMw1alca7Y6y",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/bags/coinpouch-simple-leather-tan.webp",
+  "name": "Pouch",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "srbUHbEivIaTpdDR",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/commodities/tech/wheel-wooden.webp",
+  "name": "Pulley system",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 100 mk; <strong>Weight</strong> 12 lb.;</p><p>Most commonly used by engineers and artifabrians, this system includes four pulley wheels, 30 feet of rope, and a hook. When you have time to set up a pulley apparatus before lifting an object, you treat the object as being a quarter of its normal weight.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 100
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 12
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "Ey4SP9Ne3xFD2FQx",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Rope.webp",
+  "name": "Rope (50 feet)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 30 mk; <strong>Weight</strong> 5 lb.;</p><p>Rope is usually made of seasilk (or less commonly, lavis grain or rockbud fibers) and sold in 50-foot lengths that can be cut and tied to change its length as needed. It can be cut by dealing 2 damage to it, or it can be ripped apart with a successful DC 20 <strong>Athletics </strong>test.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 30
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "h1uaED8PVGyJTQlh",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/containers/bags/duffel-simple-leather.webp",
+  "name": "Sack",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.2 mk; <strong>Weight</strong> 0.5 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "3cSUoevOKoTJLsi0",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/hand/scale-balances-merchant-brown.webp",
+  "name": "Scale",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 3 lb.;</p><p> Most commonly used by scholars, ardents, appraisers, and gem cutters, a scale can accurately determine the weight of an object (to a maximum of 2 pounds)</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "TKC0YHl2jsjTHLII",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/hand/shovel-spade-steel-brown-grey.webp",
+  "name": "Shovel",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 8 mk; <strong>Weight</strong> 5 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 8
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "sIQUnzsOsgmJB5Rp",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/survival/soap.webp",
+  "name": "Soap",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 0.1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "ttOzXRJ7yp1OVmnB",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/navigation/spyglass-telescope-brass.webp",
+  "name": "Spyglass",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 500 mk; <strong>Weight</strong> 1 lb.;</p><p>Distant objects viewed through a spyglass can be perceived as though at half the distance. At the GM’s discretion, spyglasses that allow distant objects to appear even closer may be available at higher prices.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 500
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "iTRQRGVW3ikGLsZa",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Surgery_Kit.webp",
+  "name": "Surgical Supplies",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": null,
+     "value": null
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 10,
+     "recharge": null,
+     "type": "use",
+     "value": 10
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 20 mk; <strong>Weight</strong> 3 lb.;</p><p>This satchel contains enough bandages, salves, splints, and other medical supplies to be used 10 times. When you make a <strong>Medicine</strong> test to treat a wounded character (or to similarly use these medical supplies), you can expend one of these uses to gain an advantage on the test.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "oTsNnLcq5wkNa74q",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/drinks/alcohol-beer-stein-wooden-metal-brown.webp",
+  "name": "Tankard",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "68OdzTgwrmX574ea",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/environment/settlement/tent.webp",
+  "name": "Tent (two-person)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 20 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 20
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "QIZPolZmEpdZTBtf",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/laboratory/bowl-herbs-green.webp",
+  "name": "Treatment (medical, 1 dose)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "spe",
+     "value": null
+    },
+    "flavor": "",
+    "type": "utility",
+    "uses": {
+     "max": 1,
+     "recharge": null,
+     "type": "use",
+     "value": 1
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 10 mk; <strong>Weight</strong> 0.2 lb.;</p><p>Rosharan surgeons treat ailments with a variety of treatments, generally made from bitterleaf or bloodivy. During a short rest, you can use a dose of such a treatment to cure a character of one of the following conditions, given that its source isn’t a permanent injury: <strong>Disoriented</strong>, <strong>Exhausted</strong> (reduces the penalty by 1), or <strong>Stunned</strong>.</p>"
+   },
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 10
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "8vqNzFDXNaJ0N9He",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/tools/hand/wrench-iron-grey.webp",
+  "name": "Tuning Fork",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 50 mk; <strong>Weight</strong> 0.5 lb;</p><p>A tuning fork can transfer Stormlight from one sphere or gemstone to another. While using a tuning fork, you can use spheres to recharge fabrials, @UUID[Compendium.cosmere-rpg.items.Item.NDRl7pSNVLR2mqYj]{Shardplate}, and @UUID[Compendium.cosmere-rpg.items.Item.72GKzVSmaHCrqymp]{half-shards} as if the spheres were unencased gemstones.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 50
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "pmCJVW855Q3Kj6dW",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/commodities/gems/gem-cluster-blue-white.webp",
+  "name": "Unencased Gem (infused)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 2 mk; <strong>Weight</strong> 0.01 lb;</p><p>Unlike spheres with gemstones encased in glass, unencased gems leak Stormlight quickly, going dun within several days depending on their cut. This permeability allows unencased gems to recharge fabrials and @UUID[Compendium.cosmere-rpg.items.Item.NDRl7pSNVLR2mqYj]{Shardplate}. Radiants can also breathe in Stormlight from unencased gems as if they were spheres, gaining the same benefit.</p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.01
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "4ZMOsAEhyT9fh9QJ",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/consumables/potions/bottle-round-empty-glass.webp",
+  "name": "Vial (glass)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 4 mk; <strong>Weight</strong> 0.2 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 4
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.2
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "8O838hHucR4nPkGe",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/sundries/survival/waterskin-leather-brown.webp",
+  "name": "Waterskin",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 1 mk; <strong>Weight</strong> 1 lb. (empty);</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "7zMp6r8UwwD5umpQ",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/commodities/stone/masonry-block-cube-grey.webp",
+  "name": "Wax (1 block)",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 2 mk; <strong>Weight</strong> 0.5 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0.5
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "BzmBoKuzdiNO2iD4",
+  "effects": [],
+  "flags": {},
+  "folder": "qTYLKqLK29e5CTQp",
+  "img": "icons/commodities/stone/masonry-block-cube-grey-teal.webp",
+  "name": "Whetstone",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Price</strong> 0.2 mk; <strong>Weight</strong> 1 lb.;</p><p><em>This item is included for narrative purposes and does not have any specific statistics or rules.</em></p>"
+   },
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.2
+   },
+   "quantity": 1,
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "ShN69NVA44VZlj7I",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_amethyst_broam.webp",
+  "name": "Amethyst Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 100
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "ElQYMqAgN7Ws8l6q",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_amethyst_chip.webp",
+  "name": "Amethyst Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 5
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "P5iYzp1HVdcsJBBV",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_amethyst_mark.webp",
+  "name": "Amethyst Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 25
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "Nqecgn0W2MfF50wU",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_diamond_broam.webp",
+  "name": "Diamond Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 4
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "rsOVx9qvjzeBkBdq",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_diamond_chip.webp",
+  "name": "Diamond Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 0.2
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "sehxreTsfKdN4lnZ",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_diamond_mark.webp",
+  "name": "Diamond Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 1
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "xQJ59AeMTHgiT13P",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_emerald_broam.webp",
+  "name": "Emerald Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 200
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "WJqFwNJKos3OssaP",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_emerald_chip.webp",
+  "name": "Emerald Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "D7SxcgvihZrlPk68",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_emerald_mark.webp",
+  "name": "Emerald Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 50
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "QJcCYknHDiN6Bb63",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_garnet_broam.webp",
+  "name": "Garnet Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "OE319oCF44DH9v6t",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_garnet_chip.webp",
+  "name": "Garnet Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "eQFNhBiUkAhR3y7p",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_garnet_mark.webp",
+  "name": "Garnet Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 5
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "iVRMfoYN9sJVGkzo",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_heliodor_broam.webp",
+  "name": "Heliodor Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "3ZBgln8wncApnReq",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_heliodor_chip.webp",
+  "name": "Heliodor Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "VquxoyyqswV6jYQs",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_heliodor_mark.webp",
+  "name": "Heliodor Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 5
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "b1SlcSNsoJqHXJWA",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_ruby_broam.webp",
+  "name": "Ruby Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 40
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "qC2Ajk8HxElfKSyq",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_ruby_chip.webp",
+  "name": "Ruby Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "pvV7IxISGvYB7A5n",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_ruby_mark.webp",
+  "name": "Ruby Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 10
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "qdwGjcuj3yQaABXM",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_sapphire_broam.webp",
+  "name": "Sapphire Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 100
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "mqTmN6iY6peGIC8f",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_sapphire_chip.webp",
+  "name": "Sapphire Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 5
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "NRMcotMZIeIvsh4o",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_sapphire_mark.webp",
+  "name": "Sapphire Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 25
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "Xe2T7Cv6kyQlZXNp",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_smokestone_broam.webp",
+  "name": "Smokestone Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 40
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "vLRxOXRyML6aI4Yw",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_smokestone_chip.webp",
+  "name": "Smokestone Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "1kWoBnXwBekVRIBB",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_smokestone_mark.webp",
+  "name": "Smokestone Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "bx1K6SuXn5Haxayx",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_topaz_broam.webp",
+  "name": "Topaz Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 20
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "Ms8oOPpjnqMykYiC",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_topaz_chip.webp",
+  "name": "Topaz Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "7bo1FpreFHrB5ev0",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_topaz_mark.webp",
+  "name": "Topaz Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "value": 5
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "6PjDKOYbZ27Wg102",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_zircon_broam.webp",
+  "name": "Zircon Broam",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 40
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "4u8Y8oy2Hvf4KRGO",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_zircon_chip.webp",
+  "name": "Zircon Chip",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 2
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "9zslwCVw3PbHhRz4",
+  "effects": [],
+  "flags": {},
+  "folder": "RBFoWUCw2wosgSJA",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/spheres/sphere_zircon_mark.webp",
+  "name": "Zircon Mark",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": ""
+   },
+   "events": {},
+   "isMoney": true,
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "loot"
+ },
+ {
+  "_id": "C4o8jIXuVulD9qS9",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Axe.webp",
+  "name": "Axe",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "skill": "hwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 60,
+     "unit": "ft",
+     "value": 20
+    },
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": "str",
+    "formula": "1d6",
+    "skill": "hwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d6 keen; <strong>Range</strong> Melee; <strong>Traits</strong> Thrown [20/60]; <strong>Expert Traits</strong> Offhand;</p><p><strong>Type</strong> Heavy Weapon; <strong>Weapons Skill</strong> Heavy; <strong>Price</strong> 20 mk; <strong>Weight</strong> 2 lb.;</p>"
+   },
+   "equip": {
+    "hold": "one_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "axe",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "offhand": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "thrown": {
+     "defaultActive": true
+    }
+   },
+   "type": "heavy_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "OBPoBfwLrZg0Unz6",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Hammer.webp",
+  "name": "Hammer",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "hwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d10",
+    "skill": "hwp",
+    "type": "impact"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d10 impact; <strong>Range</strong> Melee; <strong>Traits</strong> Two-Handed; <strong>Expert Traits</strong> Momentum;</p><p><strong>Type</strong> Heavy Weapon; <strong>Weapons Skill</strong> Heavy; <strong>Price</strong> 40 mk; <strong>Weight</strong> 8 lb.;</p>"
+   },
+   "equip": {
+    "hold": "two_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "hammer",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 40
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "momentum": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "two_handed": {
+     "defaultActive": true
+    }
+   },
+   "type": "heavy_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 8
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "sV3aKGbE4z2hIp7A",
+  "effects": [],
+  "flags": {},
+  "folder": "QreXY0o5p2yzF3Vc",
+  "img": "icons/weapons/misc/whip-red-yellow.webp",
+  "name": "Improvised Weapon (Heavy)",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "hwp",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "skill": "hwp",
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> 1d — ; <strong>Range</strong> —; <strong>Traits</strong> Fragile; <strong>Expert Traits</strong> Unique;</p><p><strong>Type</strong> Special Weapon; <strong>Weapons Skill</strong> Heavy; <strong>Price</strong> —; <strong>Weight</strong> —;</p><p><em>Edit this Improvised Weapon statblock to match the most fitting weapon from the Heavy Weapons table<br><br></em>In the heat of the moment, you might wish to attack with an object that isn’t a traditional weapon (such as hitting someone with a pot) or use a weapon in an unconventional way (such as swinging a shortbow at someone like a staff). If you can pick an object up in one or both hands, you can use it as an improvised weapon!</p><p><strong>Expertise.</strong> Unlike other entries on the Special Weapons table, you can choose Improvised Weapons as a weapon expertise. If you do, your improvised weapon attacks benefit from the expert traits of the weapon most similar to it, even if you don’t have expertise in that similar weapon.</p><p><strong>Using an Improvised Weapon.</strong> When you attack with an improvised weapon, the GM decides which non-special light or heavy weapon it is most similar to. Make the attack as though with that weapon, but add the Fragile trait (see “Weapon Traits”)</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "improvised-weapon-heavy",
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 0
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": true
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": false
+    },
+    "unique": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "F11gb7uLyp1HYo3u",
+  "effects": [],
+  "flags": {},
+  "folder": "QreXY0o5p2yzF3Vc",
+  "img": "icons/weapons/misc/whip-red-yellow.webp",
+  "name": "Improvised Weapon (Light)",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "lwp",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "skill": "lwp",
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> 1d — ; <strong>Range</strong> —; <strong>Traits</strong> Fragile; <strong>Expert Traits</strong> Unique;</p><p><strong>Type</strong> Special Weapon; <strong>Weapons Skill</strong> —; <strong>Price</strong> —; <strong>Weight</strong> —;</p><p><em>Edit this Improvised Weapon statblock to match the most fitting weapon from the Light Weapons table<br><br></em>In the heat of the moment, you might wish to attack with an object that isn’t a traditional weapon (such as hitting someone with a pot) or use a weapon in an unconventional way (such as swinging a shortbow at someone like a staff). If you can pick an object up in one or both hands, you can use it as an improvised weapon! </p><p><strong>Expertise.</strong> Unlike other entries on the Special Weapons table, you can choose Improvised Weapons as a weapon expertise. If you do, your improvised weapon attacks benefit from the expert traits of the weapon most similar to it, even if you don’t have expertise in that similar weapon.</p><p><strong>Using an Improvised Weapon.</strong> When you attack with an improvised weapon, the GM decides which non-special light or heavy weapon it is most similar to. Make the attack as though with that weapon, but add the Fragile trait (see “Weapon Traits”)</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "improvised-weapon-light",
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 0
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": true
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": false
+    },
+    "unique": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "k0aKCdFJU0m2lZbv",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Knife.webp",
+  "name": "Knife",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "lwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 60,
+     "unit": "ft",
+     "value": 20
+    },
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d4",
+    "skill": "lwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d4 keen; <strong>Range</strong> Melee; <strong>Traits</strong> Discreet; <strong>Expert Traits</strong> Offhand, Thrown [20/60];</p>"
+   },
+   "equip": {
+    "hold": "one_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "knife",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 8
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "discreet": {
+     "defaultActive": true
+    },
+    "offhand": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "thrown": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 1
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "ex4dg2bXFpC5HTv6",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_longspear.webp",
+  "name": "Longspear",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "hwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "unit": "ft",
+     "value": 5
+    },
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d8",
+    "skill": "hwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d8 keen; <strong>Range</strong> Melee [+5]; <strong>Traits</strong> Two-Handed; <strong>Expert Traits</strong> Defensive;</p><p><strong>Type</strong> Heavy Weapon; <strong>Weapons Skill</strong> Heavy; <strong>Price</strong> 15 mk; <strong>Weight</strong> 9 lb.;</p>"
+   },
+   "equip": {
+    "hold": "two_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "longspear",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 15
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "defensive": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "reach": {
+     "defaultActive": true
+    },
+    "two_handed": {
+     "defaultActive": true
+    }
+   },
+   "type": "heavy_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 9
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "yzR4gLjOV6njxdde",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Longsword.webp",
+  "name": "Longsword",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "hwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d8",
+    "skill": "hwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d8 keen; <strong>Range</strong> Melee; <strong>Traits</strong> Quickdraw, Two-Handed; <strong>Expert Traits</strong> Unique: loses Two-Handed trait;</p><p><strong>Type</strong> Heavy Weapon; <strong>Weapons Skill</strong> Heavy; <strong>Price</strong> 60 mk; <strong>Weight</strong> 3 lb.;</p>"
+   },
+   "equip": {
+    "hold": "two_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "longsword",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 60
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": true
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": true,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "unique": {
+     "defaultActive": false
+    }
+   },
+   "type": "heavy_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "5sH5poLPx75U008u",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Mace.webp",
+  "name": "Mace",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "lwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d6",
+    "skill": "lwp",
+    "type": "impact"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d6 impact; <strong>Range</strong> Melee; <strong>Traits</strong> —; <strong>Expert Traits</strong> Momentum;</p><p><strong>Type</strong> Light Weapon; <strong>Weapons Skill</strong> Light; <strong>Price</strong> 20 mk; <strong>Weight</strong> 3 lb.;</p>"
+   },
+   "equip": {
+    "hold": "one_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "mace",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 20
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "momentum": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "fV3Adif5imyAc5m5",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Shield.webp",
+  "name": "Shield",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "hwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d4",
+    "skill": "hwp",
+    "type": "impact"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d4 impact; <strong>Range</strong> Melee; <strong>Traits</strong> Defensive; <strong>Expert Traits</strong> Offhand;</p><p><strong>Type</strong> Heavy Weapon; <strong>Weapons Skill</strong> Heavy; <strong>Price</strong> 10 mk; <strong>Weight</strong> 2 lb.;</p>"
+   },
+   "equip": {
+    "hold": "one_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "shield",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "defensive": {
+     "defaultActive": true
+    },
+    "offhand": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    }
+   },
+   "type": "heavy_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "VuNjyCtkobEQKdOx",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Shortbow.webp",
+  "name": "Shortbow",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "lwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 320,
+     "unit": "ft",
+     "value": 80
+    },
+    "type": "ranged"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d6",
+    "skill": "lwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d6 keen; <strong>Range</strong> Ranged [80/320]; <strong>Traits</strong> Two-Handed; <strong>Expert Traits</strong> Quickdraw;</p><p><strong>Type</strong> Light Weapon; <strong>Weapons Skill</strong> Light; <strong>Price</strong> 80 mk; <strong>Weight</strong> 2 lb.;</p>"
+   },
+   "equip": {
+    "hold": "two_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "shortbow",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 80
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "dangerous": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "deadly": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "defensive": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "discreet": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "fragile": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "indirect": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "momentum": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "offhand": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "pierce": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "quickdraw": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "reach": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "thrown": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "two_handed": {
+     "defaultActive": true
+    },
+    "unique": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "5CvSwkwuSRArPTM2",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Shortspear.webp",
+  "name": "Shortspear",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "lwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d8",
+    "skill": "lwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d8 keen; <strong>Range</strong> Melee; <strong>Traits</strong> Two-handed; <strong>Expert Traits</strong> Unique: loses Two-Handed trait;</p><p><strong>Type</strong> Light Weapon; <strong>Weapons Skill</strong> Light; <strong>Price</strong> 10 mk; <strong>Weight</strong> 3 lb.;</p>"
+   },
+   "equip": {
+    "hold": "two_handed",
+    "type": "hold"
+   },
+   "equipped": true,
+   "expertise": false,
+   "id": "shortspear",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 10
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "dangerous": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "deadly": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "defensive": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "discreet": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "fragile": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "indirect": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "momentum": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "offhand": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "pierce": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "quickdraw": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "reach": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "thrown": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "two_handed": {
+     "defaultActive": true,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "unique": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 3
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "0mE1SpjOuNtgR0eq",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Shortsword.webp",
+  "name": "Sidesword",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "lwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d6",
+    "skill": "lwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d6 keen; <strong>Range</strong> Melee; <strong>Traits</strong> Quickdraw; <strong>Expert Traits</strong> Offhand;</p><p><strong>Type</strong> Light Weapon; <strong>Weapons Skill</strong> Light; <strong>Price</strong> 40 mk; <strong>Weight</strong> 2 lb.;</p>"
+   },
+   "equip": {
+    "hold": "one_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "sidesword",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 40
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "offhand": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "quickdraw": {
+     "defaultActive": true
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 2
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "zyDACVYDa0N9N31r",
+  "effects": [],
+  "flags": {},
+  "folder": "4H9VQhin9BB78Fw4",
+  "img": "systems/cosmere-rpg/assets/icons/stormlight/items/foundry_items/ICON_Staff.webp",
+  "name": "Staff",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "modifierFormula": "",
+    "skill": "lwp",
+    "type": "skill_test"
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d6",
+    "skill": "lwp",
+    "type": "impact"
+   },
+   "description": {
+    "chat": "",
+    "value": "<p><strong>Damage</strong> 1d6 impact; <strong>Range</strong> Melee; <strong>Traits</strong> Discreet, Two-Handed; <strong>Expert Traits</strong> Defensive;</p><p><strong>Type</strong> Light Weapon; <strong>Weapons Skill</strong> Light; <strong>Price</strong> 1 mk; <strong>Weight</strong> 4 lb.;</p>"
+   },
+   "equip": {
+    "hold": "two_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "staff",
+   "price": {
+    "currency": "spheres",
+    "denomination": {
+     "primary": "mark"
+    },
+    "unit": "spheres.mark",
+    "value": 1
+   },
+   "quantity": 1,
+   "resources": null,
+   "traits": {
+    "defensive": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "discreet": {
+     "defaultActive": true
+    },
+    "two_handed": {
+     "defaultActive": true
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 4
+   }
+  },
+  "type": "weapon"
+ }
+]
