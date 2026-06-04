@@ -21,6 +21,7 @@ never raises on a "wrong" build).
 from __future__ import annotations
 
 from systems.cosmere import SKILL_ATTR, SURGE_SKILLS, PATHS
+from systems.cosmere import radiant as _radiant
 from systems.cosmere.actor import cosmere_max_health, tier_of
 from systems.cosmere.items import Inventory
 
@@ -112,7 +113,13 @@ class CosmereBuild:
         self.path_skill = d.get('path_skill')
         self.expertises = [e for e in (d.get('expertises') or []) if e]
         self.talents = [t for t in (d.get('talents') or []) if t]   # [{id, name}]
-        self.is_radiant = bool(d.get('is_radiant'))
+        # Radiant / Surgebinding (Ch.5): an order grants Investiture + Stormlight
+        # actions; swearing its First Ideal unlocks its two surge skills.
+        self.radiant_order = (d.get('radiant_order') or '').lower()
+        self.ideals_sworn = max(0, min(_radiant.IDEAL_COUNT, int(d.get('ideals_sworn', 0) or 0)))
+        self.spren_name = d.get('spren_name', '')
+        self.ideal_words = list(d.get('ideal_words') or [])
+        self.is_radiant = bool(self.radiant_order) or bool(d.get('is_radiant'))
         self.inventory = Inventory(d.get('inventory'))
         self.epic_choices = list(d.get('epic_choices') or [])       # per L21+ level: 'skill' | 'talent'
         self.goals = d.get('goals', '')
@@ -144,7 +151,25 @@ class CosmereBuild:
         return sum(self.skills.values())
 
     def skill_ranks_available(self) -> int:
-        return total_skill_ranks(self.level, self.epic_skill_choices)
+        # Swearing the First Ideal grants a free rank in each of the order's
+        # two surge skills (beyond the normal advancement budget).
+        return total_skill_ranks(self.level, self.epic_skill_choices) + len(self.surges_unlocked())
+
+    # -- radiant / surgebinding --------------------------------------------
+    @property
+    def first_ideal_sworn(self) -> bool:
+        return self.ideals_sworn >= 1
+
+    def order(self):
+        return _radiant.order(self.radiant_order)
+
+    def surge_codes(self) -> tuple:
+        o = self.order()
+        return tuple(o['surges']) if o else ()
+
+    def surges_unlocked(self) -> tuple:
+        """The order's two surge skills — available once the First Ideal is sworn."""
+        return self.surge_codes() if (self.radiant_order and self.first_ideal_sworn) else ()
 
     def talents_available(self) -> int:
         return total_talents(self.level, self.epic_talent_choices)
@@ -195,8 +220,15 @@ class CosmereBuild:
         ssp, ssa = self.skill_ranks_spent(), self.skill_ranks_available()
         if ssp > ssa:
             issues.append(f"Skills: {ssp} of {ssa} ranks spent.")
-        if not self.is_radiant and any(c in SURGE_SKILLS for c in self.skills):
-            issues.append("Surge skills require a Radiant path.")
+        unlocked = set(self.surges_unlocked())
+        stray_surge = [c for c in self.skills if c in SURGE_SKILLS and c not in unlocked]
+        if stray_surge:
+            issues.append("Surge skills require swearing your order's First Ideal: "
+                          + ', '.join(_radiant.surge_name(c) for c in sorted(stray_surge)) + '.')
+        if self.radiant_order and self.radiant_order not in _radiant.RADIANT_ORDERS:
+            issues.append("Unknown Radiant order.")
+        if self.radiant_order and self.level < _radiant.RADIANT_MIN_LEVEL:
+            issues.append("Becoming Radiant (a First Ideal) requires level %d+." % _radiant.RADIANT_MIN_LEVEL)
 
         exp_av = self.expertises_available()
         if len(self.expertises) > exp_av:
@@ -222,6 +254,8 @@ class CosmereBuild:
             'attributes': dict(self.attributes), 'skills': dict(self.skills),
             'path_skill': self.path_skill, 'expertises': list(self.expertises),
             'talents': list(self.talents), 'is_radiant': self.is_radiant,
+            'radiant_order': self.radiant_order, 'ideals_sworn': self.ideals_sworn,
+            'spren_name': self.spren_name, 'ideal_words': list(self.ideal_words),
             'inventory': self.inventory.to_list(), 'epic_choices': list(self.epic_choices),
             'goals': self.goals, 'purpose': self.purpose, 'obstacle': self.obstacle,
             'appearance': self.appearance, 'notes': self.notes,
@@ -232,13 +266,14 @@ class CosmereBuild:
         from a build to a live sheet/tracker actor). All stats are left to
         CosmereActor to compute from attributes+level (matching this engine)."""
         a = self.attributes
+        unlocked_surges = set(self.surges_unlocked())
         skills = {}
         for c, attr in SKILL_ATTR.items():
             skills[c] = {
                 'attribute': attr,
                 'rank': self.skills.get(c, 0),
                 'mod': {'override': None, 'useOverride': False, 'bonus': 0},
-                'unlocked': (c not in SURGE_SKILLS) or self.is_radiant,
+                'unlocked': (c not in SURGE_SKILLS) or (c in unlocked_surges),
             }
         inv_max = ({'override': self.investiture_max(), 'useOverride': True, 'bonus': 0}
                    if self.is_radiant else {'override': None, 'useOverride': False, 'bonus': 0})
@@ -259,10 +294,17 @@ class CosmereBuild:
             'deflect': self.inventory.deflect_block(),
             'expertises': list(self.expertises),
             'ancestry': self.ancestry, 'culture': self.culture, 'path': self.path,
+            'radiant_order': self.radiant_order, 'spren': self.spren_name,
+            'ideals_sworn': self.ideals_sworn,
             'cosmere_build': self.to_dict(),     # stashed so the build can be re-edited / leveled
         }
-        return {'name': self.name, 'type': 'character', 'system': system,
-                'items': self.inventory.foundry_weapon_items()}
+        items = self.inventory.foundry_weapon_items()
+        if self.is_radiant:
+            # A First Ideal talent grants the three Stormlight actions (Ch.5).
+            for act in _radiant.STORMLIGHT_ACTIONS:
+                items.append({'type': 'action', 'name': act['name'],
+                              'system': {'description': {'value': act['description']}}})
+        return {'name': self.name, 'type': 'character', 'system': system, 'items': items}
 
     @classmethod
     def from_actor_doc(cls, doc) -> 'CosmereBuild':

@@ -6443,6 +6443,7 @@ def _cosmere_path_talents():
 
 def _cosmere_builder_context(build):
     import systems.cosmere.build as _cb
+    import systems.cosmere.radiant as _rad
     return dict(
         build=build.to_dict(),
         catalog=systems.cosmere.items.catalog(),
@@ -6451,6 +6452,7 @@ def _cosmere_builder_context(build):
         attr_names=systems.cosmere.ATTR_NAMES,
         paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
         path_talents=_cosmere_path_talents(),
+        radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
         budgets=dict(
             attr_points=build.attr_points_available(),
             skill_ranks=build.skill_ranks_available(),
@@ -6512,6 +6514,9 @@ def cosmere_pc_sheet(pid):
         defense_names=systems.cosmere.DEFENSE_NAMES,
         pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
         warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
+        radiant=systems.cosmere.radiant.order(build.radiant_order),
+        first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
+        surge_names=systems.cosmere.radiant.SURGES,
     )
 
 

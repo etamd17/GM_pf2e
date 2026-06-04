@@ -110,6 +110,20 @@
     </div>
   </div>
 
+  {# --- Radiant (Surgebinding) --- #}
+  {% if pc and radiant %}
+  <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}</div>
+  <div class="cs-card" style="text-align:left; border-color:rgba(56,189,248,.4);">
+    <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:#5eead4;">{{ build.spren_name or radiant.spren }}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}{{ surge_names[s].name }}{% if not loop.last %} + {% endif %}{% endfor %}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
+    </div>
+    <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
+    {% if build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
+  </div>
+  {% endif %}
+
   {# --- Attributes --- #}
   <div class="cs-section-h">Attributes</div>
   <div class="cs-grid cs-attrs">

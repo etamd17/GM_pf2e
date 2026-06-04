@@ -63,7 +63,24 @@
       {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
     <div><label>Heroic Path</label><select id="f-path" onchange="onPath()"><option value="">—</option>
       {% for p in paths %}<option value="{{ p }}" {{ 'selected' if build.path==p }}>{{ p|capitalize }}</option>{% endfor %}</select></div>
-    <div><label>Radiant?</label><input type="checkbox" id="f-radiant" {{ 'checked' if build.is_radiant }} onchange="onRadiant()" style="width:auto;"></div>
+  </div>
+
+  <div class="sec-h">Radiant Path — Surgebinding <span class="muted" style="text-transform:none; letter-spacing:0;">(optional; a First Ideal requires level 2+)</span></div>
+  <div class="row">
+    <div style="min-width:210px;"><label>Radiant Order</label>
+      <select id="f-order" onchange="onOrder()"><option value="">&mdash; Not Radiant &mdash;</option>
+        {% for key, o in radiant_orders.items() %}<option value="{{ key }}" {{ 'selected' if build.radiant_order==key }}>{{ o.name }}</option>{% endfor %}</select></div>
+    <div style="flex:1;" id="order-info" class="muted"></div>
+  </div>
+  <div id="radiant-detail" style="display:none; margin-top:.6rem;">
+    <div class="row">
+      <div style="min-width:210px;"><label>Spren name (optional)</label><input id="f-spren" value="{{ build.spren_name }}"></div>
+      <div><label>Ideals sworn (of 5)</label>
+        <div class="stepper"><button type="button" onclick="bumpIdeals(-1)">&minus;</button>
+          <input id="f-ideals" type="number" min="0" max="5" value="{{ build.ideals_sworn }}" readonly style="background:var(--bg-sunken); width:48px;">
+          <button type="button" onclick="bumpIdeals(1)">+</button></div></div>
+      <div style="flex:1;" id="ideal-info" class="muted"></div>
+    </div>
   </div>
 
   <div class="sec-h">Attributes <span id="b-attr" class="budget"></span></div>
@@ -139,6 +156,9 @@ const PID = {{ pid|tojson }};
 const SKILL_ATTR = {{ skill_attr|tojson }};
 const SURGE = {{ surge_skills|tojson }};
 const PATH_TALENTS = {{ path_talents|tojson }};
+const ORDERS = {{ radiant_orders|tojson }};
+const SURGE_INFO = {{ surges|tojson }};
+const FIRST_IDEAL = {{ first_ideal|tojson }};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -162,7 +182,33 @@ function onPath(){
   sel.innerHTML='<option value="">'+(list.length?'— select a talent —':'(no talents for this path)')+'</option>'
     + list.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
 }
-function onRadiant(){document.getElementById('surge-skills').style.display=document.getElementById('f-radiant').checked?'grid':'none';recompute();}
+function onOrder(){
+  const o=ORDERS[v('f-order')];
+  document.getElementById('radiant-detail').style.display=o?'block':'none';
+  const info=document.getElementById('order-info');
+  info.innerHTML = o ? `<b style="color:#5eead4">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
+  onIdeals();
+}
+function bumpIdeals(d){const e=document.getElementById('f-ideals'); e.value=Math.max(0,Math.min(5,(+e.value||0)+d)); onIdeals();}
+function onIdeals(){
+  const n=+v('f-ideals')||0, o=v('f-order');
+  let html='<b>First Ideal:</b> <i>'+FIRST_IDEAL+'</i>';
+  if(o){ html += n>=1 ? `<br>Sworn ${n} of 5${n>=5?' — the 5th Ideal is unreachable in play.':'.'} Surges unlocked.`
+                      : '<br>Order chosen — grants Investiture. Swear the First Ideal to unlock your surges.'; }
+  document.getElementById('ideal-info').innerHTML=html;
+  updateSurges(); recompute();
+}
+function updateSurges(){
+  const o=ORDERS[v('f-order')], sworn=(+v('f-ideals')||0)>=1, show=!!(o&&sworn);
+  const cont=document.getElementById('surge-skills');
+  cont.style.display = show?'grid':'none';
+  document.querySelectorAll('#surge-skills .card').forEach(card=>{
+    const inp=card.querySelector('.skill-rank'), code=inp.dataset.code;
+    const on=show && o.surges.includes(code);
+    card.style.display = on?'flex':'none';
+    if(on && (+inp.value||0)<1) inp.value=1;       // free rank from swearing the First Ideal
+  });
+}
 
 function bumpSkill(code,d){
   const inp=document.querySelector(`.skill-rank[data-code="${code}"]`);
@@ -217,7 +263,8 @@ function recompute(){
     const mod=r+(+v('attr-'+attr)||0);
     document.getElementById('mod-'+code).textContent=(mod>=0?'+':'')+mod;
   });
-  const okS=setBudget('b-skill',sSum,skillBudget(L)) && !rankBad;
+  const sworn = v('f-order') && (+v('f-ideals')||0)>=1;   // First Ideal grants 2 free surge ranks
+  const okS=setBudget('b-skill',sSum,skillBudget(L)+(sworn?2:0)) && !rankBad;
   // expertises
   const exp=v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean).length;
   const okE=setBudget('b-exp',exp,2+Math.max(0,+v('attr-int')||0));
@@ -232,7 +279,8 @@ function collect(){
   const skills={}; document.querySelectorAll('.skill-rank').forEach(inp=>{const r=+inp.value||0; if(r>0)skills[inp.dataset.code]=r;});
   return {
     name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
-    path:v('f-path'), is_radiant:document.getElementById('f-radiant').checked,
+    path:v('f-path'),
+    radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, spren_name:v('f-spren'),
     attributes:attrs, skills, talents:TALENTS, inventory:INV,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
     purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'),
@@ -245,6 +293,6 @@ function save(){
   .catch(()=>alert('Save failed'));
 }
 // init
-onPath(); onRadiant(); renderTalents(); renderInv(); recompute();
+onPath(); onOrder(); renderTalents(); renderInv(); recompute();
 </script>
 {% endblock %}
