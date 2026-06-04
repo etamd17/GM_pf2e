@@ -6465,11 +6465,23 @@ def _cosmere_builder_context(build):
 
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
-    pcs = [{'id': d['id'], 'name': d.get('name', 'Unknown'),
-            'level': (d.get('build') or {}).get('level', 1),
-            'path': (d.get('build') or {}).get('path', '')}
-           for d in _list_cosmere_pcs()]
-    return render_template('cosmere_pcs.html', pcs=pcs)
+    import systems.cosmere.build as _cb
+    import systems.cosmere.radiant as _rad
+    cards = []
+    for d in _list_cosmere_pcs():
+        b = _cb.CosmereBuild(d.get('build'))
+        o = _rad.order(b.radiant_order)
+        cards.append({
+            'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
+            'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
+            'deflect': b.deflect_value(), 'investiture': b.investiture_max(),
+            'is_radiant': b.is_radiant,
+            'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
+            'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
+            'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+        })
+    cards.sort(key=lambda c: c['name'].lower())
+    return render_template('cosmere_pcs.html', pcs=cards)
 
 
 @app.route('/cosmere/builder', methods=['GET', 'POST'])

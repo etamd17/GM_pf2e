@@ -64,6 +64,25 @@ SURGE_SCALING = {1: 'd4 / Small', 2: 'd6 / Medium', 3: 'd8 / Large',
                  4: 'd10 / Huge', 5: 'd12 / Gargantuan'}
 
 
+# UI accent colors per order (thematic, not canon mechanics) for character cards.
+ORDER_COLORS = {
+    'windrunners': '#38bdf8',    # sky blue
+    'skybreakers': '#818cf8',    # indigo
+    'dustbringers': '#ef4444',   # ember red
+    'edgedancers': '#34d399',    # cultivation green
+    'truthwatchers': '#2dd4bf',  # mist teal
+    'lightweavers': '#c084fc',   # cryptic violet
+    'elsecallers': '#60a5fa',    # ink blue
+    'willshapers': '#fb923c',    # freedom orange
+    'stonewards': '#d6a86a',     # peak stone
+}
+DEFAULT_ACCENT = '#5eead4'       # neutral Cosmere cyan (non-Radiant)
+
+
+def order_color(key) -> str:
+    return ORDER_COLORS.get((key or '').lower(), DEFAULT_ACCENT)
+
+
 def order_keys() -> tuple:
     return tuple(RADIANT_ORDERS.keys())
 
