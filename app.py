@@ -55,6 +55,12 @@ def _load_dotenv_file():
 _load_dotenv_file()
 
 app = Flask(__name__)
+# Behind Railway's TLS-terminating proxy the app sees the proxy->app hop as plain
+# HTTP. Trust one hop of X-Forwarded-Proto/Host/For so request.scheme/host reflect
+# the real HTTPS origin the browser used -- otherwise request.host_url is http://...
+# and the same-origin CSRF check, secure cookies, and external URLs all break.
+from werkzeug.middleware.proxy_fix import ProxyFix as _ProxyFix
+app.wsgi_app = _ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
 from datetime import timedelta as _timedelta
 app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity for player/GM sessions
@@ -317,7 +323,14 @@ def _csrf_guard():
     if not any(request.path.startswith(p) for p in _CSRF_GUARD_PREFIXES):
         return
     origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
-    if origin and not origin.startswith(request.host_url.rstrip('/')):
+    if not origin:
+        return  # no Origin/Referer -> rely on the SameSite=Lax cookie backstop
+    # Compare HOSTS, not full URLs: scheme can legitimately differ behind a
+    # TLS-terminating proxy (browser https, forwarded header may vary), but a
+    # genuine cross-site CSRF post carries a different host.
+    from urllib.parse import urlparse as _urlparse
+    origin_host = _urlparse(origin).netloc
+    if origin_host and origin_host != request.host:
         return ('Cross-origin request blocked.', 400)
 
 
