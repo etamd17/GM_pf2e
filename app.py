@@ -136,6 +136,22 @@ def _active_campaign_doc():
     return _campaigns.get_campaign(cid)
 
 
+def _active_system():
+    """The TTRPG system of the active campaign ('pf2e' | 'cosmere').
+
+    Single source of truth for system-aware chrome: the nav, the home lobby, and
+    any surface that must render one system's rules/stats without bleed. Defaults
+    to 'pf2e' (legacy single-system installs + when no campaign is active)."""
+    try:
+        camp = _active_campaign_doc()
+        system = (camp or {}).get('system')
+        if system in _storage.SUPPORTED_SYSTEMS:
+            return system
+    except Exception:
+        pass
+    return 'pf2e'
+
+
 def gm_required(f):
     """Decorator: GM of the active campaign (account mode) or the GM password
     (legacy). _is_gm() encodes both modes."""
@@ -368,6 +384,7 @@ def _bind_campaign_paths(cid):
     global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
     global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
     global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
+    global COSMERE_PC_DIR
     ACTIVE_CAMPAIGN_ID = cid
     if cid:
         PARTY_DIR = _storage.party_dir(cid)
@@ -384,6 +401,7 @@ def _bind_campaign_paths(cid):
         PINNED_GENERATORS_FILE = _storage.pinned_generators_file(cid)
         CALENDAR_FILE = _storage.calendar_file(cid)
         STORY_THREADS_FILE = _storage.story_threads_file(cid)
+        COSMERE_PC_DIR = _storage.cosmere_pc_dir(cid)
         _storage.ensure_campaign_dirs(cid)
     else:
         PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
@@ -400,6 +418,7 @@ def _bind_campaign_paths(cid):
         PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
         CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
         STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
+        COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
 
 
 def load_campaign(cid):
@@ -5552,7 +5571,13 @@ def index():
     player hub. Already-joined players see a 'continue' tile instead of the
     full picker. The GM gets an Enter button that drops them straight into
     /gm.
+
+    System-aware: a Cosmere campaign lands on the Cosmere hub instead of the
+    PF2e party lobby (PARTY_LIBRARY is PF2e-only), so the whole app presents one
+    system with no bleed.
     """
+    if _active_system() == 'cosmere':
+        return redirect('/cosmere/pcs')
     _sync_party_from_disk()
     is_gm = _is_gm()
     state = {}  # vault removed; the campaign-intro state row is config-driven now
@@ -5739,6 +5764,10 @@ def activate_campaign(cid):
     if gm:
         _storage.set_live_campaign_id(cid)
         load_campaign(cid)
+    # System-aware landing: a Cosmere campaign goes to the Cosmere hub (the PF2e
+    # GM/Player hubs are PF2e-only) so the whole app switches systems with no bleed.
+    if (camp.get('system') or 'pf2e') == 'cosmere':
+        return redirect('/cosmere/pcs')
     return redirect('/gm' if gm else '/player')
 
 
@@ -5817,14 +5846,20 @@ def _me_render(**extra):
 
 @app.context_processor
 def _inject_account_ctx():
-    """Expose the logged-in account user + active campaign to every template (nav switcher)."""
+    """Expose the logged-in account user, the active campaign, and its system to
+    every template -- so the nav switcher + all system-aware chrome render the
+    right TTRPG (no PF2e/Cosmere bleed) off one source of truth."""
     u = None
     try:
         if _account_mode():
             u = _auth.current_user()
     except Exception:
         u = None
-    return {'account_user': u, 'active_campaign': (_active_campaign_doc() if u else None)}
+    return {
+        'account_user': u,
+        'active_campaign': (_active_campaign_doc() if u else None),
+        'active_system': _active_system(),
+    }
 
 
 @app.route('/campaigns/new', methods=['GET', 'POST'])
@@ -6402,7 +6437,9 @@ def cosmere_sheet(actor_id):
 # the active PF2e campaign's party_data -- so they never enter the PF2e
 # PARTY_LIBRARY (whose routes assume the PF2e Character shape). A real Cosmere
 # campaign binding is a later phase.
-COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
+# COSMERE_PC_DIR is bound per-campaign by _bind_campaign_paths() (campaign-scoped
+# when a campaign is live, legacy flat DATA_DIR/cosmere_pcs otherwise) -- do NOT
+# reassign it here; this module loads after the import-time bind and would clobber it.
 
 
 def _cosmere_pc_path(pid):
@@ -6437,6 +6474,17 @@ def _save_cosmere_pc(doc):
     os.makedirs(COSMERE_PC_DIR, exist_ok=True)
     pid = doc.get('id') or uuid.uuid4().hex
     doc['id'] = pid
+    # Bind to the active campaign + owner so 'My Characters' and character->system
+    # inference work (the PC file already lives under the campaign's cosmere_pcs/).
+    if ACTIVE_CAMPAIGN_ID and not doc.get('campaign_id'):
+        doc['campaign_id'] = ACTIVE_CAMPAIGN_ID
+    try:
+        if _account_mode():
+            u = _auth.current_user()
+            if u and not doc.get('owner_user_id'):
+                doc['owner_user_id'] = u['id']
+    except Exception:
+        pass
     _atomic_write_json(_cosmere_pc_path(pid), doc, indent=2)
     return pid
 

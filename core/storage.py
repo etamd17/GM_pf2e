@@ -85,6 +85,7 @@ def session_highlights_file(cid):  return os.path.join(campaign_dir(cid), 'sessi
 def story_threads_file(cid):       return os.path.join(campaign_dir(cid), 'story_threads.json')
 def pinned_generators_file(cid):   return os.path.join(campaign_dir(cid), 'pinned_generators.json')
 def calendar_file(cid):            return os.path.join(campaign_dir(cid), 'calendar.json')
+def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
 
 
 # The per-campaign subdirectories created for every campaign.
@@ -96,6 +97,7 @@ CAMPAIGN_SUBDIRS = (
     'campaign_audio',
     'journals',
     'scrapbooks',
+    'cosmere_pcs',
 )
 
 

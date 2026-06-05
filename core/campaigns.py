@@ -91,22 +91,38 @@ def characters_for_user(user_id):
     out = []
     for c in list_campaigns():
         cid = c['id']
+        # PF2e PCs (flat-additive party_data wrappers).
         pdir = storage.party_dir(cid)
-        if not os.path.isdir(pdir):
-            continue
-        for fn in os.listdir(pdir):
-            if not fn.endswith('.json'):
-                continue
-            doc = storage.load_json(os.path.join(pdir, fn))
-            if storage.is_wrapped(doc) and doc.get('owner_user_id') == user_id:
-                out.append({
-                    'campaign_id': cid,
-                    'campaign_name': c.get('name'),
-                    'system': c.get('system'),
-                    'file': fn,
-                    'id': doc.get('id'),
-                    'name': _character_name(doc),
-                })
+        if os.path.isdir(pdir):
+            for fn in os.listdir(pdir):
+                if not fn.endswith('.json'):
+                    continue
+                doc = storage.load_json(os.path.join(pdir, fn))
+                if storage.is_wrapped(doc) and doc.get('owner_user_id') == user_id:
+                    out.append({
+                        'campaign_id': cid,
+                        'campaign_name': c.get('name'),
+                        'system': c.get('system'),
+                        'file': fn,
+                        'id': doc.get('id'),
+                        'name': _character_name(doc),
+                    })
+        # Cosmere PCs (campaign-scoped cosmere_pcs/ store; name lives at the top).
+        cdir = storage.cosmere_pc_dir(cid)
+        if os.path.isdir(cdir):
+            for fn in os.listdir(cdir):
+                if not fn.endswith('.json'):
+                    continue
+                doc = storage.load_json(os.path.join(cdir, fn))
+                if isinstance(doc, dict) and doc.get('owner_user_id') == user_id:
+                    out.append({
+                        'campaign_id': cid,
+                        'campaign_name': c.get('name'),
+                        'system': c.get('system') or 'cosmere',
+                        'file': fn,
+                        'id': doc.get('id'),
+                        'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
+                    })
     return out
 
 
