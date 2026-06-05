@@ -98,6 +98,14 @@ def test_cosmere_damage_deflect_and_injury_spiral():
     assert a.current_hp == 4 and 'unconscious' not in a.conditions
 
 
+def test_plot_die_route():
+    r = app.app.test_client().post('/api/plot_die')
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['type'] in ('blank', 'opportunity', 'complication')
+    assert 'label' in d and isinstance(d.get('spend'), list)
+
+
 def test_cosmere_combatant_broadcast_does_not_crash():
     actor = app._cosmere_combatant(_adv_id('Archer'))
     actor.instance_id = 'cos-test-2'

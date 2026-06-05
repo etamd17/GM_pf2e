@@ -95,6 +95,31 @@ def roll_plot_die():
     return plot_die(random.randint(0, 5))
 
 
+# How an Opportunity (player) or Complication (GM) can be spent (Ch.0/13).
+PLOT_DIE_SPEND = {
+    'opportunity': ['Aid an Ally — advantage on their next test',
+                    'Collect Yourself — recover 1 focus',
+                    'Critically Hit — turn a hit into a critical hit',
+                    'a narrative benefit'],
+    'complication': ['Hinder — the GM imposes a disadvantage',
+                     'Distract — the target loses 1 focus',
+                     'a narrative complication'],
+    'blank': [],
+}
+
+
+def plot_die_result(face_index):
+    """A full Plot Die roll: type + bonus + a display label + spend options."""
+    r = plot_die(face_index)
+    r['spend'] = list(PLOT_DIE_SPEND.get(r['type'], []))
+    r['label'] = r['type'].capitalize() + (' +%d' % r['bonus'] if r['bonus'] else '')
+    return r
+
+
+def roll_plot_die_full():
+    return plot_die_result(random.randint(0, 5))
+
+
 # --- turn order: the 4-phase fast/slow queue (Ch.10) -----------------------
 # Each round, every actor elects FAST (2 actions, acts early) or SLOW (3
 # actions, acts late). The round resolves in four phases; within a phase, higher

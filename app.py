@@ -6651,6 +6651,20 @@ def cosmere_pc_notes(pid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/plot_die', methods=['POST'])
+def api_plot_die():
+    """Roll the Cosmere Plot Die — a d6 side-channel when the stakes are raised."""
+    import systems.cosmere.combat as _cc
+    r = _cc.roll_plot_die_full()
+    who = session.get('player_name') or ('GM' if _is_gm() else 'Someone')
+    sev = 'critical' if r['type'] == 'complication' else 'success'
+    try:
+        _combat_log(f"{who} rolled the Plot Die — {r['label']}.", sev)
+    except Exception:
+        pass
+    return jsonify(r)
+
+
 @app.route('/api/add_combatant', methods=['POST'])
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')

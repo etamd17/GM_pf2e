@@ -69,6 +69,19 @@ def test_plot_die_faces():
     assert all(f['bonus'] == 0 for f in faces if f['type'] != 'complication')
 
 
+def test_plot_die_result_has_label_and_spend():
+    for i in range(6):
+        r = C.plot_die_result(i)
+        assert r['type'] in ('blank', 'opportunity', 'complication') and r['label']
+        assert isinstance(r['spend'], list)
+        if r['type'] == 'opportunity':
+            assert any('focus' in s for s in r['spend'])      # Collect Yourself
+        if r['type'] == 'complication':
+            assert '+' in r['label']                          # shows the +2/+4 bonus
+        if r['type'] == 'blank':
+            assert r['spend'] == []
+
+
 # -- 4-phase turn queue (Ch.10) ---------------------------------------------
 
 def test_fast_slow_actions():
