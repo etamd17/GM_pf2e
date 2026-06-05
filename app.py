@@ -5572,12 +5572,12 @@ def index():
     full picker. The GM gets an Enter button that drops them straight into
     /gm.
 
-    System-aware: a Cosmere campaign lands on the Cosmere hub instead of the
+    System-aware: a Cosmere campaign lands on the Cosmere hubs instead of the
     PF2e party lobby (PARTY_LIBRARY is PF2e-only), so the whole app presents one
-    system with no bleed.
+    system with no bleed -- the GM on the roster, a player on their character.
     """
     if _active_system() == 'cosmere':
-        return redirect('/cosmere/pcs')
+        return redirect('/cosmere/pcs' if _is_gm() else '/cosmere/player')
     _sync_party_from_disk()
     is_gm = _is_gm()
     state = {}  # vault removed; the campaign-intro state row is config-driven now
@@ -5764,10 +5764,10 @@ def activate_campaign(cid):
     if gm:
         _storage.set_live_campaign_id(cid)
         load_campaign(cid)
-    # System-aware landing: a Cosmere campaign goes to the Cosmere hub (the PF2e
+    # System-aware landing: a Cosmere campaign goes to the Cosmere hubs (the PF2e
     # GM/Player hubs are PF2e-only) so the whole app switches systems with no bleed.
     if (camp.get('system') or 'pf2e') == 'cosmere':
-        return redirect('/cosmere/pcs')
+        return redirect('/cosmere/pcs' if gm else '/cosmere/player')
     return redirect('/gm' if gm else '/player')
 
 
@@ -5793,6 +5793,21 @@ def campaign_invites(cid):
             inv = _auth.active_invite_for_character(cid, doc.get('id'))
             code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
         rows.append({'name': _campaigns._character_name(doc), 'claimed': claimed, 'code': code})
+    # Cosmere PCs (campaign-scoped store) get join links the same way.
+    cdir = _storage.cosmere_pc_dir(cid)
+    for fn in (sorted(os.listdir(cdir)) if os.path.isdir(cdir) else []):
+        if not fn.endswith('.json'):
+            continue
+        doc = _storage.load_json(os.path.join(cdir, fn))
+        if not isinstance(doc, dict) or not doc.get('id'):
+            continue
+        claimed = bool(doc.get('owner_user_id'))
+        code = None
+        if not claimed:
+            inv = _auth.active_invite_for_character(cid, doc.get('id'))
+            code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
+        rows.append({'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
+                     'claimed': claimed, 'code': code})
     return render_template('campaign_invites.html', campaign=camp, rows=rows)
 
 
@@ -5803,6 +5818,18 @@ def _claim_by_id(cid, character_id, user_id):
             doc = _storage.load_json(os.path.join(pdir, fn))
             if _storage.is_wrapped(doc) and doc.get('id') == character_id:
                 _campaigns.claim_character(cid, fn, user_id)
+                return True
+    # Cosmere PCs live in the campaign's cosmere_pcs/ store (not flat-wrapped):
+    # stamp owner_user_id directly so the player hub + 'My Characters' find it.
+    cdir = _storage.cosmere_pc_dir(cid)
+    for fn in (os.listdir(cdir) if os.path.isdir(cdir) else []):
+        if fn.endswith('.json'):
+            p = os.path.join(cdir, fn)
+            doc = _storage.load_json(p)
+            if isinstance(doc, dict) and doc.get('id') == character_id:
+                doc['owner_user_id'] = user_id
+                doc.setdefault('campaign_id', cid)
+                _atomic_write_json(p, doc, indent=2)
                 return True
     return False
 
@@ -6660,6 +6687,58 @@ def cosmere_pc_sheet(pid):
         first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
         surge_names=systems.cosmere.radiant.SURGES,
         singer_form=systems.cosmere.origins.singer_form(build.singer_form),
+    )
+
+
+def _cosmere_player_card(doc):
+    """A rich, at-a-glance hero card for the Cosmere player hub: the stat block
+    (defenses / deflect / health / focus / investiture), the six attributes, and
+    the Radiant summary (order / spren / ideals / surges). Mirrors the stat-block
+    cards used elsewhere; the full sheet carries skills + abilities."""
+    import systems.cosmere.build as _cb
+    import systems.cosmere.radiant as _rad
+    b = _cb.CosmereBuild(doc.get('build'))
+    o = _rad.order(b.radiant_order)
+    return {
+        'id': doc['id'], 'name': doc.get('name', 'Unknown'),
+        'ancestry': b.ancestry, 'culture': b.culture, 'path': b.path,
+        'level': b.level, 'tier': b.tier,
+        'attributes': b.eff_attributes(),
+        'defenses': b.defenses(), 'deflect': b.deflect_value(),
+        'health': b.health_max(), 'focus': b.focus_max(), 'investiture': b.investiture_max(),
+        'is_radiant': b.is_radiant,
+        'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
+        'ideals': b.ideals_sworn, 'first_ideal': b.first_ideal_sworn,
+        'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
+        'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+    }
+
+
+@app.route('/cosmere/player')
+def cosmere_player_hub():
+    """A Cosmere-native player landing: the player's own character(s) in the
+    active campaign, with quick links to the full sheet, level-up, live combat,
+    and notes. The global dice + Plot Die widget rides along from base.html. No
+    PF2e bleed -- this is the Cosmere sibling of /player."""
+    u = _auth.current_user() if _account_mode() else None
+    all_pcs = _list_cosmere_pcs()
+    mine = [d for d in all_pcs if u and d.get('owner_user_id') == u.get('id')] if u else []
+    # Fall back to the campaign membership's assigned character if ownership
+    # wasn't stamped (e.g. a GM-built PC handed off without a claim).
+    if u and not mine:
+        camp = _active_campaign_doc()
+        cid_char = None
+        for m in (camp or {}).get('members', []):
+            if m.get('user_id') == u.get('id'):
+                cid_char = m.get('character_id')
+                break
+        if cid_char:
+            mine = [d for d in all_pcs if d.get('id') == cid_char]
+    cards = [_cosmere_player_card(d) for d in mine]
+    return render_template(
+        'cosmere_player.html', cards=cards, has_pc=bool(cards),
+        roster_count=len(all_pcs), is_gm=_is_gm(),
+        attr_names=systems.cosmere.ATTR_NAMES, defense_names=systems.cosmere.DEFENSE_NAMES,
     )
 
 

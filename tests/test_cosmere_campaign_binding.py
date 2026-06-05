@@ -91,3 +91,53 @@ def test_cosmere_campaign_binding_end_to_end():
         print('COSMERE_BINDING_OK')
     ''')
     assert 'COSMERE_BINDING_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_cosmere_player_hub_claim_flow():
+    """A player claims a Cosmere character via a GM invite and lands on their own
+    Cosmere player hub -- the Cosmere sibling of /player, no PF2e bleed."""
+    r = _run('''
+        import tempfile, os, re, json, uuid
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        from core import storage, auth, campaigns
+        gm = A.app.test_client()
+
+        assert gm.post('/setup', data={'username': 'gm', 'password': 'secret1', 'display_name': 'GM'}).status_code == 302
+        assert gm.post('/campaigns/new', data={'name': 'Roshar', 'system': 'cosmere'}).status_code == 302
+        cid = [i for i in storage.list_campaign_ids() if campaigns.get_campaign(i)['name'] == 'Roshar'][0]
+        assert gm.post('/campaign/' + cid + '/activate').status_code == 302   # GM takes the live slot -> paths bind
+
+        # GM prepares an UNCLAIMED Cosmere PC for a player (owner unset, in the campaign store)
+        pid = uuid.uuid4().hex
+        doc = {'id': pid, 'system': 'cosmere', 'name': 'Shallan',
+               'build': {'name': 'Shallan', 'radiant_order': 'lightweavers', 'ideals_sworn': 1, 'level': 2}}
+        with open(os.path.join(storage.cosmere_pc_dir(cid), pid + '.json'), 'w') as f:
+            json.dump(doc, f)
+
+        # the invites page lists the Cosmere PC + mints a join code
+        page = gm.get('/campaign/' + cid + '/invites').data
+        assert b'Shallan' in page
+        code = re.findall(rb'code=([A-Z2-9]{4}-[A-Z2-9]{4})', page)[0].decode()
+
+        # a brand-new player claims it -> owner stamped on the Cosmere PC doc
+        p = A.app.test_client()
+        assert p.post('/join', data={'code': code, 'username': 'vasher', 'password': 'pw12345'}).status_code == 302
+        puid = auth.get_user_by_username('vasher')['id']
+        claimed = storage.load_json(os.path.join(storage.cosmere_pc_dir(cid), pid + '.json'))
+        assert claimed['owner_user_id'] == puid and claimed['campaign_id'] == cid
+
+        # activating as the player lands on the Cosmere PLAYER hub (not the GM roster, not PF2e /player)
+        ar = p.post('/campaign/' + cid + '/activate')
+        assert ar.status_code == 302 and ar.headers['Location'].endswith('/cosmere/player'), ar.headers.get('Location')
+        hub = p.get('/cosmere/player')
+        assert hub.status_code == 200
+        body = hub.data.decode()
+        assert 'Shallan' in body and 'Full sheet' in body and 'Lightweavers' in body
+        assert 'My Character' in body and 'GM Hub' not in body and 'Builder' not in body   # player nav, no GM/PF2e bleed
+        # the PC shows in the player's 'My Characters'
+        assert any(m['name'] == 'Shallan' and m['system'] == 'cosmere' for m in campaigns.characters_for_user(puid))
+
+        print('COSMERE_PLAYER_HUB_OK')
+    ''')
+    assert 'COSMERE_PLAYER_HUB_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
