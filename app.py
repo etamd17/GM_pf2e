@@ -152,6 +152,24 @@ def _active_system():
     return 'pf2e'
 
 
+def _cosmere_player_char_name():
+    """The current player's own Cosmere character name in the active campaign --
+    for the mobile nav's turn ping (matched against encounter_update.active_name).
+    Returns '' for the GM, non-Cosmere campaigns, or an unclaimed player."""
+    try:
+        if not _account_mode() or _is_gm() or _active_system() != 'cosmere':
+            return ''
+        u = _auth.current_user()
+        if not u:
+            return ''
+        for d in _list_cosmere_pcs():
+            if d.get('owner_user_id') == u.get('id'):
+                return d.get('name') or ''
+    except Exception:
+        pass
+    return ''
+
+
 def gm_required(f):
     """Decorator: GM of the active campaign (account mode) or the GM password
     (legacy). _is_gm() encodes both modes."""
@@ -5792,8 +5810,9 @@ def campaign_invites(cid):
         if not claimed:
             inv = _auth.active_invite_for_character(cid, doc.get('id'))
             code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
-        rows.append({'name': _campaigns._character_name(doc), 'claimed': claimed, 'code': code})
-    # Cosmere PCs (campaign-scoped store) get join links the same way.
+        rows.append({'name': _campaigns._character_name(doc), 'claimed': claimed, 'code': code, 'kind': 'pf2e'})
+    # Cosmere PCs (campaign-scoped store) get join links the same way, and a
+    # GM-built PC can be HANDED OFF (released) so a player can claim it.
     cdir = _storage.cosmere_pc_dir(cid)
     for fn in (sorted(os.listdir(cdir)) if os.path.isdir(cdir) else []):
         if not fn.endswith('.json'):
@@ -5801,13 +5820,19 @@ def campaign_invites(cid):
         doc = _storage.load_json(os.path.join(cdir, fn))
         if not isinstance(doc, dict) or not doc.get('id'):
             continue
-        claimed = bool(doc.get('owner_user_id'))
+        owner_id = doc.get('owner_user_id')
+        claimed = bool(owner_id)
+        owner_name = ''
+        if claimed:
+            ow = _auth.get_user(owner_id)
+            owner_name = (ow.get('display_name') or ow.get('username')) if ow else 'a player'
         code = None
         if not claimed:
             inv = _auth.active_invite_for_character(cid, doc.get('id'))
             code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
         rows.append({'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
-                     'claimed': claimed, 'code': code})
+                     'claimed': claimed, 'code': code, 'kind': 'cosmere',
+                     'id': doc['id'], 'owner': owner_name})
     return render_template('campaign_invites.html', campaign=camp, rows=rows)
 
 
@@ -5886,6 +5911,7 @@ def _inject_account_ctx():
         'account_user': u,
         'active_campaign': (_active_campaign_doc() if u else None),
         'active_system': _active_system(),
+        'cosmere_player_char': _cosmere_player_char_name(),
     }
 
 
@@ -6512,9 +6538,13 @@ def _save_cosmere_pc(doc):
     if ACTIVE_CAMPAIGN_ID and not doc.get('campaign_id'):
         doc['campaign_id'] = ACTIVE_CAMPAIGN_ID
     try:
-        if _account_mode():
+        # Default owner = the saver, but only when the caller didn't decide
+        # ownership explicitly (the builder sets the key -- None for a GM-built
+        # PC left assignable, a user id for a player's own -- so this won't fire
+        # for it; it's a fallback for any other caller).
+        if _account_mode() and 'owner_user_id' not in doc:
             u = _auth.current_user()
-            if u and not doc.get('owner_user_id'):
+            if u:
                 doc['owner_user_id'] = u['id']
     except Exception:
         pass
@@ -6638,7 +6668,8 @@ def cosmere_pcs():
             'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
         })
     cards.sort(key=lambda c: c['name'].lower())
-    return render_template('cosmere_pcs.html', pcs=cards)
+    return render_template('cosmere_pcs.html', pcs=cards,
+                           is_gm=_is_gm(), active_cid=ACTIVE_CAMPAIGN_ID)
 
 
 @app.route('/cosmere/builder', methods=['GET', 'POST'])
@@ -6649,12 +6680,20 @@ def cosmere_builder():
         build = _cb.CosmereBuild(data.get('build') or data)
         issues = build.validate()
         existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
+        if existing is not None:
+            owner = existing.get('owner_user_id')                  # preserve owner on edit / level-up
+        else:
+            # A GM building the party leaves PCs UNCLAIMED (assignable via a join
+            # link); a player building their own character owns it immediately.
+            owner = None if _is_gm() else session.get('user_id')
         doc = {
             'id': (existing or {}).get('id') or uuid.uuid4().hex,
             'system': 'cosmere', 'name': build.name,
-            'owner_user_id': session.get('user_id'),
+            'owner_user_id': owner,
             'build': build.to_dict(),
         }
+        if existing and existing.get('campaign_id'):
+            doc['campaign_id'] = existing['campaign_id']
         _save_cosmere_pc(doc)
         return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
                         'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
@@ -6801,6 +6840,24 @@ def cosmere_pc_notes(pid):
     doc['build'] = b
     _save_cosmere_pc(doc)
     return jsonify({'ok': True})
+
+
+@app.route('/cosmere/pc/<pid>/release', methods=['POST'])
+def cosmere_pc_release(pid):
+    """Hand a Cosmere character off to a player: clear its ownership so the
+    invites page mints a fresh join code for it. GM of the active campaign only
+    (the PC is implicitly scoped -- COSMERE_PC_DIR is the live campaign's store)."""
+    if not _is_gm():
+        return jsonify({'error': 'GM only'}), 403
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    doc['owner_user_id'] = None
+    _save_cosmere_pc(doc)
+    cid = ACTIVE_CAMPAIGN_ID or doc.get('campaign_id')
+    if request.is_json:
+        return jsonify({'ok': True})
+    return redirect('/campaign/%s/invites' % cid if cid else '/cosmere/pcs')
 
 
 @app.route('/api/plot_die', methods=['POST'])

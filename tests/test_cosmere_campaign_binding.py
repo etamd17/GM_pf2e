@@ -69,14 +69,13 @@ def test_cosmere_campaign_binding_end_to_end():
         pdir = storage.cosmere_pc_dir(cos_cid)
         assert os.path.isfile(os.path.join(pdir, pid + '.json')), os.listdir(pdir)
         doc = storage.load_json(os.path.join(pdir, pid + '.json'))
-        assert doc['campaign_id'] == cos_cid and doc['owner_user_id'] == gm_id and doc['name'] == 'Kaladin'
+        # GM-built -> campaign-bound but UNCLAIMED (assignable via a join link)
+        assert doc['campaign_id'] == cos_cid and doc['owner_user_id'] is None and doc['name'] == 'Kaladin'
         # NOT written to the legacy flat store
         assert not os.path.isfile(os.path.join(os.environ['DATA_DIR'], 'cosmere_pcs', pid + '.json'))
 
-        # it shows up in 'My Characters' tagged cosmere
-        mine = campaigns.characters_for_user(gm_id)
-        kal = [m for m in mine if m['name'] == 'Kaladin']
-        assert kal and kal[0]['system'] == 'cosmere' and kal[0]['campaign_id'] == cos_cid, mine
+        # unclaimed -> not in anyone's 'My Characters' yet, but on the roster
+        assert not any(m['name'] == 'Kaladin' for m in campaigns.characters_for_user(gm_id))
         assert b'Kaladin' in c.get('/cosmere/pcs').data
 
         # switch to the PF2e campaign -> home is the PF2e lobby (no Cosmere bleed)
@@ -141,3 +140,52 @@ def test_cosmere_player_hub_claim_flow():
         print('COSMERE_PLAYER_HUB_OK')
     ''')
     assert 'COSMERE_PLAYER_HUB_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_cosmere_gm_build_then_handoff():
+    """The GM builds a character for the party (it stays UNCLAIMED), a player
+    claims it via the minted link, and the GM can hand it off again (release)
+    to free a fresh link. The clean GM-prep workflow."""
+    r = _run('''
+        import tempfile, os, re
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        from core import storage, auth, campaigns
+        gm = A.app.test_client()
+        gm.post('/setup', data={'username': 'gm', 'password': 'secret1', 'display_name': 'GM'})
+        gm.post('/campaigns/new', data={'name': 'Roshar', 'system': 'cosmere'})
+        cid = [i for i in storage.list_campaign_ids() if campaigns.get_campaign(i)['name'] == 'Roshar'][0]
+        gm.post('/campaign/' + cid + '/activate')
+
+        def pc_owner():
+            return storage.load_json(os.path.join(storage.cosmere_pc_dir(cid), pid + '.json')).get('owner_user_id')
+
+        # GM builds a PC for a player -> UNCLAIMED (assignable), and an edit keeps it that way
+        pid = gm.post('/cosmere/builder', json={'build': {'name': 'Shallan', 'radiant_order': 'lightweavers'}}).get_json()['id']
+        assert pc_owner() is None
+        gm.post('/cosmere/builder', json={'id': pid, 'build': {'name': 'Shallan', 'radiant_order': 'lightweavers', 'level': 2}})
+        assert pc_owner() is None                                  # edit preserves (un)ownership
+
+        # invites page lists it WITH a join code
+        page = gm.get('/campaign/' + cid + '/invites').data
+        assert b'Shallan' in page
+        code = re.findall(rb'code=([A-Z2-9]{4}-[A-Z2-9]{4})', page)[0].decode()
+
+        # a player claims it -> owner set; invites now shows it claimed by that player
+        p = A.app.test_client()
+        assert p.post('/join', data={'code': code, 'username': 'shln', 'password': 'pw12345', 'display_name': 'ShallanP'}).status_code == 302
+        puid = auth.get_user_by_username('shln')['id']
+        assert pc_owner() == puid
+        page2 = gm.get('/campaign/' + cid + '/invites').data
+        assert b'claimed' in page2 and b'ShallanP' in page2
+
+        # a non-GM cannot hand off
+        assert p.post('/cosmere/pc/' + pid + '/release').status_code == 403
+        # the GM hands it off -> ownership cleared, a fresh join code is minted
+        assert gm.post('/cosmere/pc/' + pid + '/release').status_code in (302, 200)
+        assert pc_owner() is None
+        assert re.findall(rb'code=([A-Z2-9]{4}-[A-Z2-9]{4})', gm.get('/campaign/' + cid + '/invites').data)
+
+        print('COSMERE_HANDOFF_OK')
+    ''')
+    assert 'COSMERE_HANDOFF_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)

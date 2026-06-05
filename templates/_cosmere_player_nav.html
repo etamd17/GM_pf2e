@@ -1,0 +1,63 @@
+{# Cosmere player bottom nav bar -- the Cosmere sibling of _player_nav.html.
+   Included from base.html for joined Cosmere players (not the GM). Reuses the
+   shared .player-nav / .player-nav-tab / .turn-dot styles from system.css.
+   Requires: active_player_tab (set before include), cosmere_player_char (the
+   player's character name, for the turn ping). #}
+<nav id="player-nav" class="player-nav" role="navigation" aria-label="Player navigation">
+    <a href="/cosmere/player"
+       class="player-nav-tab{% if active_player_tab == 'sheet' %} active{% endif %}"
+       aria-label="My character">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <span>Character</span>
+    </a>
+    <a href="/tracker"
+       class="player-nav-tab{% if active_player_tab == 'combat' %} active{% endif %}"
+       id="nav-combat-tab"
+       aria-label="Combat tracker">
+        <svg viewBox="0 0 24 24"><path d="M14.5 2.5L12 5l-2.5-2.5L7 5l-2.5-2.5L2 5v16.5l2.5-2.5L7 21.5l2.5-2.5L12 21.5l2.5-2.5 2.5 2.5 2.5-2.5L22 21.5V5l-2.5-2.5L17 5z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+        <span>Combat</span>
+        <span id="turn-alert-dot" class="turn-dot hidden"></span>
+    </a>
+    <a href="/cosmere/pcs"
+       class="player-nav-tab{% if active_player_tab == 'party' %} active{% endif %}"
+       aria-label="The party">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Party</span>
+    </a>
+    <a href="/notes"
+       class="player-nav-tab{% if active_player_tab == 'notes' %} active{% endif %}"
+       aria-label="Session notes">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+        <span>Notes</span>
+    </a>
+</nav>
+
+{# Turn ping: light up the Combat tab when this player's character is up. Keys
+   on the character name broadcast in encounter_update.active_name. Self-contained
+   (no PF2e nav JS dependency). #}
+<script>
+(function() {
+    var CHAR = {{ (cosmere_player_char or '')|tojson }};
+    if (!CHAR) return;
+    var _active = false;
+    function _setActive(on) {
+        _active = on;
+        var tab = document.getElementById('nav-combat-tab');
+        var dot = document.getElementById('turn-alert-dot');
+        if (tab) tab.classList.toggle('turn-active', !!on);
+        if (dot) dot.classList.toggle('hidden', !on);
+    }
+    function _onEncounter(data) {
+        try { _setActive(data && data.active_name === CHAR); } catch (e) {}
+    }
+    // Reuse a page-level SSE if one exists; otherwise open our own.
+    if (window._navMarkSseAttached) window._navMarkSseAttached();
+    window._navHandleEncounterUpdate = _onEncounter;
+    try {
+        var src = new EventSource('/api/events');
+        src.addEventListener('encounter_update', function(e) {
+            try { _onEncounter(JSON.parse(e.data)); } catch (ex) {}
+        });
+    } catch (e) {}
+})();
+</script>

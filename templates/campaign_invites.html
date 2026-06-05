@@ -2,16 +2,25 @@
 {% block title %}Player invites{% endblock %}
 {% block content %}
 <h1>Player invites &mdash; {{ campaign.name }}</h1>
-<p class="sub">Send each player their link. They'll create an account and claim that character.</p>
+<p class="sub">Send each player their link. They'll create an account and claim that character. A character you built yourself can be <em>handed off</em> to free its link.</p>
 <ul class="list">
   {% for r in rows %}
   <li class="row">
     <div>
       <strong>{{ r.name }}</strong>
       <div class="meta">
-        {% if r.claimed %}<span class="badge">claimed</span>{% else %}<code class="muted">/join?code={{ r.code }}</code>{% endif %}
+        {% if r.claimed %}
+          <span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span>
+        {% else %}
+          <code class="muted">/join?code={{ r.code }}</code>
+        {% endif %}
       </div>
     </div>
+    {% if r.kind == 'cosmere' and r.claimed %}
+    <form method="POST" action="/cosmere/pc/{{ r.id }}/release" onsubmit="return confirm('Hand off {{ r.name }}? This frees their join link so a player can claim it.');">
+      <button type="submit" title="Clear ownership and mint a fresh join link">Hand off</button>
+    </form>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>

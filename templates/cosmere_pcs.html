@@ -33,6 +33,7 @@
 <div class="cb-head">
   <span class="cb-title">Cosmere Characters</span>
   <span style="display:flex; gap:.6rem;">
+    {% if is_gm and active_cid %}<a class="cb-new" href="/campaign/{{ active_cid }}/invites" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);" title="Player join links + hand off a character">Invites</a>{% endif %}
     <a class="cb-new" href="/cosmere/bestiary" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);">Bestiary</a>
     <a class="cb-new" href="/cosmere/builder">+ New Character</a>
   </span>
