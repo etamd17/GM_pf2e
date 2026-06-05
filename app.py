@@ -4723,9 +4723,16 @@ def handle_uncaught(e):
     """
     code = e.code if isinstance(e, HTTPException) else 500
     if request.path.startswith('/api/'):
-        if not isinstance(e, HTTPException):
+        if isinstance(e, HTTPException):
+            # Intentional, developer-set message (e.g. "GM access required").
+            msg = e.description or e.name
+        else:
+            # NEVER surface raw exception text to the client: a FileNotFoundError
+            # etc. carries absolute server paths. Log it server-side, return a
+            # generic message.
             app.logger.exception('Unhandled error on %s', request.path)
-        return jsonify(success=False, error=str(e)), code
+            msg = 'Internal server error'
+        return jsonify(success=False, error=msg), code
     if isinstance(e, HTTPException):
         return e
     app.logger.exception('Unhandled error on %s', request.path)
@@ -14360,7 +14367,10 @@ def web_manifest():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    debug = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
+    # Secure default: the interactive Werkzeug debugger (source view + an RCE
+    # console) must never come up unless FLASK_DEBUG is explicitly 'true'. Prod
+    # runs under gunicorn (this __main__ block doesn't execute there) regardless.
+    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     # Launch the debounced persistence flush thread. With Flask debug reloader,
     # _start_persistence_thread() becomes a no-op in the parent process because
     # the daemon thread is tied to the child; the WERKZEUG_RUN_MAIN check keeps
