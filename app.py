@@ -312,7 +312,7 @@ def check_gm_access():
 # from another site carries that site's Origin and is blocked; same-origin form
 # posts carry a matching Origin/Referer. The game's existing fetch mutations are
 # out of scope here -- they rely on SameSite + per-campaign authorization.
-_CSRF_GUARD_PREFIXES = ('/setup', '/login', '/join', '/me/password',
+_CSRF_GUARD_PREFIXES = ('/setup', '/login', '/register', '/join', '/me/password',
                         '/campaigns/', '/campaign/', '/admin/')
 
 
@@ -5785,6 +5785,26 @@ def login():
     return render_template('login.html', error=None)
 
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Open self-registration: anyone can create an account, then create + run
+    their own campaigns. The very first account is still the admin via /setup."""
+    if not _auth.any_users_exist():
+        return redirect('/setup')          # first account must be the admin
+    if _auth.current_user():
+        return redirect('/me')             # already signed in
+    if request.method == 'POST':
+        try:
+            u = _auth.create_user(
+                request.form.get('username', ''), request.form.get('password', ''),
+                display_name=request.form.get('display_name'))
+        except ValueError as e:
+            return render_template('register.html', error=str(e)), 400
+        _auth.login_user(u, remember=True)
+        return redirect('/me')
+    return render_template('register.html', error=None)
+
+
 @app.route('/logout')
 def logout():
     _auth.logout_user()
@@ -5862,7 +5882,79 @@ def campaign_invites(cid):
         rows.append({'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
                      'claimed': claimed, 'code': code, 'kind': 'cosmere',
                      'id': doc['id'], 'owner': owner_name})
-    return render_template('campaign_invites.html', campaign=camp, rows=rows)
+    # Member roster (name + role) for management.
+    members = []
+    for m in camp.get('members', []):
+        mu = _auth.get_user(m.get('user_id'))
+        members.append({
+            'user_id': m.get('user_id'),
+            'name': (mu.get('display_name') or mu.get('username')) if mu else '(unknown user)',
+            'role': m.get('role'),
+            'is_self': m.get('user_id') == u['id'],
+        })
+    # Open (character-less) invite codes the GM minted -- generic player / co-GM.
+    open_invites = [{'code': inv['code'], 'role': inv.get('role', 'player')}
+                    for inv in _auth.list_active_invites(cid) if not inv.get('character_id')]
+    return render_template('campaign_invites.html', campaign=camp, rows=rows,
+                           members=members, gm_total=_campaigns.gm_count(camp),
+                           open_invites=open_invites)
+
+
+def _require_campaign_gm(cid):
+    """(user, campaign) when the caller is the campaign's GM or a site admin,
+    else (user, None). Central gate for the campaign-management routes."""
+    u = _auth.current_user()
+    camp = _campaigns.get_campaign(cid)
+    if not camp or not (_campaigns.is_gm(camp, u['id']) or u.get('is_admin')):
+        return u, None
+    return u, camp
+
+
+@app.route('/campaign/<cid>/invite', methods=['POST'])
+@_auth.login_required
+def campaign_mint_invite(cid):
+    """GM mints a generic join code -- a build-your-own player, or a co-GM."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    role = 'gm' if request.form.get('role') == 'gm' else 'player'
+    _auth.create_invite(cid, role, created_by=u['id'])
+    return redirect('/campaign/%s/invites' % cid)
+
+
+@app.route('/campaign/<cid>/invite/<code>/revoke', methods=['POST'])
+@_auth.login_required
+def campaign_revoke_invite(cid, code):
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    inv = _auth.get_invite(code)
+    if inv and inv.get('campaign_id') == cid:
+        _auth.revoke_invite(code)
+    return redirect('/campaign/%s/invites' % cid)
+
+
+@app.route('/campaign/<cid>/members/<uid>/remove', methods=['POST'])
+@_auth.login_required
+def campaign_remove_member(cid, uid):
+    """GM removes a player from the campaign (refuses to strand the last GM)."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    _campaigns.remove_member(cid, uid)
+    return redirect('/campaign/%s/invites' % cid)
+
+
+@app.route('/campaign/<cid>/members/<uid>/role', methods=['POST'])
+@_auth.login_required
+def campaign_set_role(cid, uid):
+    """GM promotes a player to co-GM, or demotes a co-GM (never the last GM)."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    role = 'gm' if request.form.get('role') == 'gm' else 'player'
+    _campaigns.set_member_role(cid, uid, role)
+    return redirect('/campaign/%s/invites' % cid)
 
 
 def _claim_by_id(cid, character_id, user_id):

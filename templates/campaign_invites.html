@@ -1,19 +1,64 @@
 {% extends "_account_base.html" %}
-{% block title %}Player invites{% endblock %}
+{% block title %}Manage campaign{% endblock %}
 {% block content %}
-<h1>Player invites &mdash; {{ campaign.name }}</h1>
-<p class="sub">Send each player their link. They'll create an account and claim that character. A character you built yourself can be <em>handed off</em> to free its link.</p>
+<h1>{{ campaign.name }} &mdash; manage</h1>
+<p class="sub">Add players, hand out characters, and manage who's in your campaign.</p>
+
+<div class="section-title">Members</div>
+{% if members %}
+<ul class="list">
+  {% for m in members %}
+  <li class="row">
+    <div>
+      <strong>{{ m.name }}</strong>{% if m.is_self %} <span class="muted">(you)</span>{% endif %}
+      <div class="meta"><span class="badge">{{ m.role|upper }}</span></div>
+    </div>
+    {% if not m.is_self %}
+    <div style="display:flex;gap:8px;align-items:center;">
+      {% if m.role == 'player' %}
+      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="gm"><button type="submit" title="Promote to co-GM">Make GM</button></form>
+      {% elif gm_total > 1 %}
+      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="player"><button type="submit" title="Demote to player">Make player</button></form>
+      {% endif %}
+      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/remove" onsubmit="return confirm('Remove {{ m.name }} from {{ campaign.name }}?');"><button type="submit">Remove</button></form>
+    </div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No members yet.</p>{% endif %}
+
+<div class="section-title">Invite people</div>
+<p class="sub">Share a join link. They create an account (or sign in) and join your campaign.</p>
+<div style="display:flex;gap:10px;margin-bottom:12px;">
+  <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="player"><button type="submit">+ Player link</button></form>
+  <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="gm"><button type="submit">+ Co-GM link</button></form>
+</div>
+{% if open_invites %}
+<ul class="list">
+  {% for inv in open_invites %}
+  <li class="row">
+    <div>
+      <code class="muted">{{ url_for('join', code=inv.code, _external=True) }}</code>
+      <div class="meta"><span class="badge">{{ inv.role|upper }}</span></div>
+    </div>
+    <form method="POST" action="/campaign/{{ campaign.id }}/invite/{{ inv.code }}/revoke"><button type="submit" title="Cancel this code">Revoke</button></form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if rows %}
+<div class="section-title">Characters</div>
+<p class="sub">A character link claims that specific character. A character you built yourself can be <em>handed off</em> to free its link.</p>
 <ul class="list">
   {% for r in rows %}
   <li class="row">
     <div>
       <strong>{{ r.name }}</strong>
       <div class="meta">
-        {% if r.claimed %}
-          <span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span>
-        {% else %}
-          <code class="muted">/join?code={{ r.code }}</code>
-        {% endif %}
+        {% if r.claimed %}<span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span>
+        {% else %}<code class="muted">{{ url_for('join', code=r.code, _external=True) }}</code>{% endif %}
       </div>
     </div>
     {% if r.kind == 'cosmere' and r.claimed %}
@@ -24,5 +69,7 @@
   </li>
   {% endfor %}
 </ul>
+{% endif %}
+
 <p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
 {% endblock %}
