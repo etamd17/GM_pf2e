@@ -2328,6 +2328,23 @@ function renderInitList() {
     _restoreMultiSelection();
 }
 
+// Cosmere stat boxes for the hero card + stat modal (no PF2e AC/saves bleed).
+function cosmereStatBoxes(cm) {
+    const defl = (cm.deflect && cm.deflect.value) || 0;
+    return `<div class="hs-box"><div class="l">Phys</div><div class="v">${cm.defenses.phy}</div></div>
+        <div class="hs-box"><div class="l">Cog</div><div class="v">${cm.defenses.cog}</div></div>
+        <div class="hs-box"><div class="l">Spir</div><div class="v">${cm.defenses.spi}</div></div>
+        <div class="hs-box"><div class="l">Deflect</div><div class="v">${defl}</div></div>
+        <div class="hs-box"><div class="l">Focus</div><div class="v">${cm.focus_max != null ? cm.focus_max : '—'}</div></div>
+        <div class="hs-box"><div class="l">Invest</div><div class="v">${cm.investiture_max != null ? cm.investiture_max : 0}</div></div>`;
+}
+function cosmereAttrBoxes(cm) {
+    const A = cm.attributes || {};
+    return `<div class="hero-stats" style="grid-template-columns:repeat(6,1fr);">` +
+        ['str', 'spd', 'int', 'wil', 'awa', 'pre'].map(k =>
+            `<div class="hs-box"><div class="l">${k}</div><div class="v" style="font-size:14px;">${A[k] || 0}</div></div>`).join('') +
+        `</div>`;
+}
 function renderActivePanel() {
     const wrap = document.getElementById('active-panel-wrap');
     const layout = document.getElementById('main-layout');
@@ -2346,7 +2363,9 @@ function renderActivePanel() {
     const apName = document.getElementById('ap-name');
     const apSub = document.getElementById('ap-subtitle');
     if (apName) apName.textContent = c.name + eliteTag;
-    if (apSub) apSub.textContent = c.is_pc ? `PC - Level ${c.level}` : `Creature ${c.level}`;
+    if (apSub) apSub.textContent = (c.system === 'cosmere' && c.cosmere)
+        ? `${c.is_pc ? 'Hero' : (c.cosmere.role || 'Adversary')} · Tier ${c.cosmere.tier || 1}${c.cosmere.injuries ? ' · Injuries ' + c.cosmere.injuries : ''}`
+        : (c.is_pc ? `PC - Level ${c.level}` : `Creature ${c.level}`);
 
     const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
     const portCls = c.is_pc ? 'pc' : '';
@@ -2385,8 +2404,10 @@ function renderActivePanel() {
         </div>
     </div>`;
 
-    // Stat grid (6 boxes)
-    html += `<div class="hero-stats">
+    // Stat grid (6 boxes) — Cosmere combatants show defenses/resources + attributes, not PF2e AC/saves.
+    html += (c.system === 'cosmere' && c.cosmere)
+        ? `<div class="hero-stats">${cosmereStatBoxes(c.cosmere)}</div>${cosmereAttrBoxes(c.cosmere)}`
+        : `<div class="hero-stats">
         <div class="hs-box ac"><div class="l">AC</div><div class="v">${c.ac}</div></div>
         <div class="hs-box spd"><div class="l">Speed</div><div class="v">${c.speed || '—'}</div></div>
         <div class="hs-box perc"><div class="l">Perc</div><div class="v">+${c.perception}</div></div>
@@ -3433,9 +3454,13 @@ async function openStatModal(instanceId) {
         document.getElementById('sm-name').textContent = d.name + eliteLabel;
         const posIdx = STATE.combatants.findIndex(c => c.instance_id === instanceId);
         const posStr = posIdx >= 0 ? `  ·  ${posIdx + 1} / ${STATE.combatants.length}` : '';
-        const subText = d.is_pc
-            ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '- ' + d.subclass : ''}`
-            : `Creature ${d.level}`;
+        const _scm = (posIdx >= 0 && STATE.combatants[posIdx] && STATE.combatants[posIdx].system === 'cosmere')
+            ? STATE.combatants[posIdx].cosmere : null;
+        const subText = _scm
+            ? `${d.is_pc ? 'Hero' : (_scm.role || 'Adversary')} · Tier ${_scm.tier || 1}${_scm.injuries ? ' · Injuries ' + _scm.injuries : ''}`
+            : (d.is_pc
+                ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '- ' + d.subclass : ''}`
+                : `Creature ${d.level}`);
         document.getElementById('sm-subtitle').innerHTML = `${escapeHtml(subText)}<span class="sp-pos">${posStr}</span>`;
 
         let html = '';
@@ -3452,8 +3477,11 @@ async function openStatModal(instanceId) {
             html += `</div>`;
         }
 
-        // Stat grid
-        html += `<div class="hero-stats">
+        // Stat grid — Cosmere combatants show defenses/resources + attributes.
+        if (_scm) {
+            html += `<div class="hero-stats">${cosmereStatBoxes(_scm)}</div>${cosmereAttrBoxes(_scm)}`;
+        } else {
+            html += `<div class="hero-stats">
             <div class="hs-box ac"><div class="l">AC</div><div class="v">${d.ac}</div></div>
             <div class="hs-box spd"><div class="l">Spd</div><div class="v">${d.speed || '—'}</div></div>
             <div class="hs-box perc"><div class="l">Perc</div><div class="v">+${d.perception}</div></div>
@@ -3461,6 +3489,7 @@ async function openStatModal(instanceId) {
             <div class="hs-box r"><div class="l">Ref</div><div class="v">+${d.ref}</div></div>
             <div class="hs-box w"><div class="l">Will</div><div class="v">+${d.will}</div></div>
         </div>`;
+        }
 
         // HP
         const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
