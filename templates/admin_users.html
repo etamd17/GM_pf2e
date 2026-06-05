@@ -1,0 +1,24 @@
+{% extends "_account_base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<p class="sub">Reset a player's password if they're locked out, then send them the temporary one.</p>
+{% if notice %}
+<div class="err" style="background:rgba(58,120,120,0.15);border-color:rgba(125,196,196,0.4);color:#A8DEDE;">
+  Temporary password for <strong>{{ notice.username }}</strong>: <code>{{ notice.temp }}</code><br>
+  Share it &mdash; they can change it under My Table &rsaquo; Account.
+</div>
+{% endif %}
+<ul class="list">
+  {% for u in users %}
+  <li class="row">
+    <div>
+      <strong>{{ u.display_name }}</strong>
+      <div class="meta">{{ u.username }}{% if u.is_admin %} &middot; <span class="badge">admin</span>{% endif %}</div>
+    </div>
+    <form method="POST" action="/admin/users/{{ u.id }}/reset"><button type="submit">Reset password</button></form>
+  </li>
+  {% endfor %}
+</ul>
+<p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+{% endblock %}

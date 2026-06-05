@@ -1,0 +1,54 @@
+{% extends "_account_base.html" %}
+{% block title %}My table{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.display_name }}</h1>
+<p class="sub">Your campaigns and characters.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
+
+<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">My Campaigns <a href="/campaigns/new" style="font-size:12px;font-weight:400;">+ New</a></div>
+{% if campaigns %}
+<ul class="list">
+  {% for c in campaigns %}
+  <li class="row">
+    <div>
+      <strong>{{ c.name }}</strong>
+      <div class="meta">{{ c.system|upper }}{% if c.id == active_campaign_id %} &middot; <span class="badge">active</span>{% endif %}</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      {% if c.id in gm_campaign_ids %}<a href="/campaign/{{ c.id }}/invites" style="font-size:12px;">Invites</a>{% endif %}
+      <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">Open</button></form>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No campaigns yet.</p>{% endif %}
+
+<div class="section-title">My Characters</div>
+{% if characters %}
+<ul class="list">
+  {% for ch in characters %}
+  <li class="row">
+    <div>
+      <strong>{{ ch.name }}</strong>
+      <div class="meta">{{ ch.system|upper }} &middot; {{ ch.campaign_name }}</div>
+    </div>
+    <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Open</button></form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No characters yet.</p>{% endif %}
+
+<div class="section-title">Account</div>
+{% if pw_msg %}<div class="err" style="background:rgba(58,120,120,0.15);border-color:rgba(125,196,196,0.4);color:#A8DEDE;">{{ pw_msg }}</div>{% endif %}
+{% if pw_error %}<div class="err">{{ pw_error }}</div>{% endif %}
+<form method="POST" action="/me/password">
+  <label>Change password &mdash; current</label>
+  <input name="current_password" type="password" required>
+  <label>New password</label>
+  <input name="new_password" type="password" required placeholder="at least 6 characters">
+  <button type="submit">Update password</button>
+</form>
+<p class="foot muted">
+  {% if user.is_admin %}<a href="/admin/users">Manage users</a> &middot; {% endif %}
+  <a href="/logout">Sign out</a>
+</p>
+{% endblock %}

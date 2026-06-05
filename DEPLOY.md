@@ -1,266 +1,106 @@
 # Deploying GM_pf2e to Railway
 
-## Prerequisites
-- A [Railway](https://railway.app) account ($5/mo Hobby plan)
-- A [GitHub](https://github.com) account
-- Git installed on your Mac
+Production runs on **Railway**, which **auto-deploys the `main` branch**. The app
+is a single **gunicorn gevent worker** (see `Procfile` / `railway.toml`) — this is
+mandatory: SSE (live tracker, roll feed) relies on one worker with greenlets, so
+never raise `--workers` above 1.
 
-## Step 1: Organize Your Project
+Persistent data lives on a **Railway volume** mounted at `/data` (set
+`DATA_DIR=/data`). Everything the app writes — accounts, campaigns, party data,
+uploads — is under there. Never write to the app's own filesystem; it's ephemeral
+and wiped on every deploy.
 
-Make sure your project has this structure:
-```
-~/GM_pf2e/
-├── app.py
-├── class_matrix.py
-├── pf2e_database.db
-├── pf2e_generator.py
-├── build_db.py
-├── requirements.txt
-├── Procfile
-├── railway.toml
-├── runtime.txt
-├── .gitignore
-└── templates/
-    ├── base.html
-    ├── player_sheet.html
-    ├── player_view.html
-    ├── player_builder.html
-    ├── player_levelup.html
-    ├── tracker.html
-    ├── party_view.html
-    ├── vault.html
-    ├── gmscreen.html
-    ├── encounter_builder.html
-    └── generator.html
-```
+> The app is **multi-system + account-based**: users log in, then pick a campaign
+> (each campaign declares its system — PF2e or Cosmere), and the whole app
+> presents that system. The first account is created at `/setup`.
 
-## Step 2: Push to GitHub
+---
+
+## Environment variables
+
+| Var | Needed | Why |
+|-----|--------|-----|
+| `DATA_DIR` | **yes** | Point at the mounted volume, e.g. `/data`. All persistent data lives here. |
+| `SECRET_KEY` | **yes** | Flask session signing key. **If unset it is randomized per process**, so every restart/redeploy logs everyone out. Set a long, stable, random string. |
+| `SETUP_TOKEN` | **yes** | Gates `/setup` (first-admin bootstrap). Without it, anyone who reaches the URL before you do can claim the admin account. Set a random string; you enter it on the setup form. |
+| `FLASK_DEBUG` | recommended | Set `false` in production. |
+| `GM_PASSWORD` | optional | Legacy GM gate (pre-accounts mode). Once accounts exist the GM is a campaign member, so this isn't the primary auth and can be left unset. |
+
+---
+
+## Routine updates (already on accounts)
 
 ```bash
-cd ~/GM_pf2e
-git init
-git add -A
-git commit -m "Initial deploy"
+git add -A && git commit -m "…" && git push      # to main
 ```
 
-Create a PRIVATE repo at https://github.com/new called GM_pf2e, then:
+Railway auto-deploys. Volume data persists across deploys.
 
-```bash
-git remote add origin https://github.com/YOUR_USERNAME/GM_pf2e.git
-git branch -M main
-git push -u origin main
-```
+---
 
-## Step 3: Deploy on Railway
+## Staging deploy — preview the new login + campaign/character select risk-free
 
-1. Go to https://railway.app and sign in
-2. Click "New Project" then "Deploy from GitHub Repo"
-3. Select your GM_pf2e repository
-4. Railway auto-detects Python and starts building
+The branch `phase1-accounts-campaigns` is on GitHub. Stand up a **separate**
+Railway service from it so you can click through the whole new flow without
+touching production.
 
-## Step 4: Add Persistent Storage
+1. Railway → **New Service** → deploy from the `GM_pf2e` repo, **branch =
+   `phase1-accounts-campaigns`** (a brand-new service, not the prod one).
+2. Add a **Volume** to it, mount path `/data`.
+3. Set variables: `DATA_DIR=/data`, `SECRET_KEY=<random>`, `SETUP_TOKEN=<random>`,
+   `FLASK_DEBUG=false`. (Leave `GM_PASSWORD` unset.)
+4. **Settings → Networking → Generate Domain.** Open the staging URL — it boots
+   empty (no data yet).
+5. Go to `/setup`, enter your `SETUP_TOKEN`, create your admin/GM account → you
+   land on `/me` (the new "select your game" home).
+6. Create a **Cosmere RPG** campaign, build a character, mint a player invite —
+   exercise the entire flow. None of this affects production.
 
-1. Click your service then Settings then Volumes
-2. Click "+ New Volume"
-3. Mount path: `/data`
-4. Click "Create Volume"
+When staging looks right, do the production cutover.
 
-## Step 5: Set Environment Variables
+---
 
-In your service Variables tab, add:
+## Production cutover — flip the live table to accounts + campaigns
 
-- `DATA_DIR` = `/data`
-- `FLASK_DEBUG` = `false`
-- `GM_PASSWORD` = (pick a password only you know)
+Merging this branch to `main` deploys the whole pivot (map removed, accounts,
+campaigns, Cosmere). The cutover has a **deliberate trigger**: deploying alone
+keeps the existing PF2e game working in *legacy mode*; running `/setup` is what
+flips it to accounts and migrates the data.
 
-The GM_PASSWORD protects all GM pages (tracker, vault, party view,
-encounter builder, GM screen). Players only see /player/* routes.
-When you visit /tracker or /party etc, you will be prompted for the password.
-Locally with no GM_PASSWORD set, everything is open as before.
+**Before merging**
 
-## Step 6: Generate a Domain
+1. **Back up the volume** — Railway → the prod volume → snapshot, or archive
+   `/data` and download it. This is the rollback safety net.
+2. **Dry-run the migration** against current prod data:
+   `DATA_DIR=/data python3 tools/migrate_to_campaigns.py --dry-run` — confirms the
+   legacy game maps cleanly into Campaign #1. The migration **leaves the original
+   flat files in place** as a backup.
+3. **Set env vars** on the prod service: `SECRET_KEY` (stable!), `SETUP_TOKEN`,
+   `DATA_DIR=/data`.
+4. Open a PR `phase1-accounts-campaigns` → `main`; let **CI** (pytest +
+   template-parse) go green; merge. Railway auto-deploys.
 
-1. Settings then Networking
-2. Click "Generate Domain"
-3. Share the URL with your players
+**After deploy — do this outside a session window**
 
-Players go to: yourapp.up.railway.app (lands on Player Hub)
-You go to: yourapp.up.railway.app/gm/login (enter password, then full GM access)
+5. The app is live in legacy mode: your existing PF2e game still works, the map
+   is gone, Cosmere is available but no campaigns exist yet.
+6. Hit `/setup`, enter `SETUP_TOKEN`, create your **GM/admin** account. This
+   auto-migrates the flat game into "Campaign #1" (your party + PCs) and turns on
+   the login wall + campaign/character select.
+7. Verify the migrated campaign (party + PCs present), then mint **player invite
+   codes** at `/campaign/<id>/invites` and send them to your players.
 
-## Updating
+**Rollback** — the migration leaves the original flat files untouched, so
+reverting `main` returns to the previous app reading those files. Keep the
+volume backup from step 1 until you've confirmed the new world is healthy.
 
-```bash
-cd ~/GM_pf2e
-git add -A
-git commit -m "description of changes"
-git push
-```
+---
 
-Railway auto-deploys. Character data on the volume persists.
+## Player vs GM access
 
-## Step 7 (optional): Obsidian vault sync
-
-The Notes feature reads campaign content from `vault_data/` on the server.
-That directory needs a Railway persistent volume so it survives redeploys,
-and a separate `tools/push_vault.py` run from your Mac to populate it.
-
-### Attach a Railway volume
-
-1. Project → service → **Variables** tab → **+ New Variable**:
-   `PF2E_VAULT_DATA = /app/vault_data`
-2. **Settings** tab → scroll to **Volumes** → **+ Add Volume**:
-   - Mount path: `/app/vault_data`
-   - Size: 1 GB is plenty for typical campaign content (no SRD needed)
-3. Redeploy. The volume is now empty; the next push will fill it.
-
-### Push your vault from your Mac
-
-```bash
-cd ~/GM_pf2e
-python3 tools/push_vault.py --url https://yourapp.up.railway.app
-```
-
-You'll be prompted for the GM password (set on Railway as `GM_PASSWORD`).
-The first run uploads everything (minus `zzrules/` SRD content, large
-attachments > 5 MB, and per-machine `.obsidian/` config). Subsequent runs
-ship only files you've modified since the last push.
-
-Common one-liner aliases for `~/.zshrc`:
-
-```bash
-alias pf2e-push='cd ~/GM_pf2e && python3 tools/push_vault.py --url https://yourapp.up.railway.app'
-alias pf2e-pull='cd ~/GM_pf2e && python3 tools/pull_vault.py --url https://yourapp.up.railway.app'
-```
-
-### Pull session-export markdown back to your local vault
-
-When you click **End Session — Export** on the GM hub, the app writes a
-session-recap markdown into `vault_data/Sessions/` on the server. To bring
-that file back to your local Obsidian vault for editing:
-
-```bash
-python3 tools/pull_vault.py --url https://yourapp.up.railway.app
-```
-
-Pulls only files modified after your last successful push. Safe to run
-repeatedly.
-
-### When to push
-
-- Before each session, after prep in Obsidian
-- After Cowork-written summaries land in your local vault
-- Whenever you've added new NPCs / locations you want available in the
-  drawer during the session
-
-## Step 8 (recommended): Git-backed vault sync — no more manual push
-
-This replaces the `tools/push_vault.py` workflow with a continuous,
-bidirectional sync. Once configured:
-
-- Edit in Obsidian → Obsidian Git plugin auto-commits + pushes every N
-  minutes → Railway's background poller picks it up.
-- Edit on the website (or click "End Session — Export") → server
-  immediately `git commit` + `git push`s the change to the same repo
-  → Obsidian Git pulls it on its next interval and it shows up in your
-  local vault.
-
-You keep using `push_vault.py` for the **first** upload (or anytime you
-want a clean bulk reset). After that, all sync is automatic.
-
-### One-time setup
-
-**1. Create a private GitHub repo for the vault**
-
-Make a new repo at https://github.com/new — name it something like
-`pf2e-vault`, mark it **Private**. Don't initialize with anything
-(no README, no .gitignore).
-
-**2. Bootstrap the repo from your local vault**
-
-```bash
-cd ~/Documents/Pathfinder\ Campaigns   # or wherever your vault lives
-git init -b main
-echo "zzrules/" > .gitignore   # optional: skip the 16k SRD subtree
-echo ".obsidian/workspace*" >> .gitignore
-git add .
-git commit -m "initial vault import"
-git remote add origin https://github.com/YOUR_USERNAME/pf2e-vault.git
-git push -u origin main
-```
-
-**3. Install Obsidian Git inside Obsidian**
-
-Settings → Community plugins → Browse → search "Obsidian Git" → install
-→ enable. Then in its settings:
-- **Auto pull interval (minutes):** 5
-- **Auto push interval (minutes):** 5
-- **Commit message:** anything — `vault: {{date}} {{hostname}}` works
-- (Optional) Enable "Pull updates on startup"
-
-The plugin will now keep your local vault and the GitHub repo in sync
-without any manual `git push`.
-
-**4. Generate a GitHub Personal Access Token for Railway**
-
-GitHub → Settings → Developer settings → Personal access tokens → Fine-grained
-tokens → **Generate new token**. Configure:
-- **Token name:** `pf2e-railway-vault-sync`
-- **Expiration:** 1 year (or however long you're comfortable)
-- **Resource owner:** your account
-- **Repository access:** Only select repositories → pick `pf2e-vault`
-- **Permissions:** Repository permissions → **Contents: Read and write**
-
-Copy the token (`github_pat_...`) — you'll only see it once.
-
-**5. Add env vars on Railway**
-
-Project → service → Variables → **+ New Variable** for each:
-
-```
-PF2E_VAULT_GIT_URL          https://github.com/YOUR_USERNAME/pf2e-vault.git
-PF2E_VAULT_GIT_TOKEN        github_pat_...   (from step 4)
-PF2E_VAULT_GIT_BRANCH       main
-PF2E_VAULT_PULL_INTERVAL_SEC 120
-PF2E_VAULT_GIT_USER_NAME    PF2E Bot
-PF2E_VAULT_GIT_USER_EMAIL   pf2e-bot@noreply
-```
-
-Redeploy. On the first boot, the server clones your vault repo into
-`/app/vault_data` and starts the background poller.
-
-### Verify it's working
-
-`https://yourapp.up.railway.app/api/notes/health` returns a JSON blob
-that now includes a `git_sync` section:
-
-```json
-{
-  "available": true,
-  "source": "vault_data",
-  "git_sync": {
-    "enabled": true,
-    "branch": "main",
-    "initialized": true,
-    "last_pull_ok": true,
-    "last_pull_at": 1715300000.0,
-    "head_sha": "a1b2c3d...",
-    "pull_interval_sec": 120
-  }
-}
-```
-
-If `enabled: false` → an env var is missing. If `initialized: false` →
-the clone failed; check `last_pull_error` for the underlying git error
-(invalid token, wrong URL, etc.).
-
-### What this changes
-
-| Edit happens here | Reaches the other side via | Latency |
-|---|---|---|
-| Obsidian on your Mac | Obsidian Git auto-push → Railway background pull | ≤ 5 min + 2 min |
-| Website / drawer editor | Server immediate commit+push → Obsidian Git auto-pull | < 1 sec + ≤ 5 min |
-| "End Session — Export" | Same as above — written to `Sessions/<title>.md` | < 1 sec + ≤ 5 min |
-
-You never need to run `push_vault.py` again unless you want to do a
-clean bulk re-upload. `pull_vault.py` is also obsolete — your local
-vault is already in sync.
+- Players log in and land on their **player hub** for the active system
+  (PF2e `/player`, Cosmere `/cosmere/player`).
+- The GM lands on the **GM side** (PF2e `/gm`, Cosmere `/cosmere/pcs`).
+- Every system is required to declare both hubs in its registry entry
+  (`systems/<key>/__init__.py` → `SystemUI`), so this split holds for any future
+  system automatically.

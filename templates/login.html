@@ -1,0 +1,15 @@
+{% extends "_account_base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<h1>Sign in</h1>
+<p class="sub">Log in to your campaigns and characters.</p>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="POST">
+  <label>Username</label>
+  <input name="username" required autofocus>
+  <label>Password</label>
+  <input name="password" type="password" required>
+  <button type="submit">Sign in</button>
+</form>
+<p class="foot muted">Have an invite code? <a href="/join">Join a campaign</a></p>
+{% endblock %}

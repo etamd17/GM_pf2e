@@ -5,6 +5,11 @@ __pycache__/
 venv/
 .env
 
+# Agent worktrees — git linked-worktree checkouts under .claude/ are local
+# scratch; never commit their checkouts or pointer files.
+# (.claude/launch.json is tracked and intentionally kept.)
+.claude/worktrees/
+
 # Local-only Pathbuilder PC exports — used for verifying class progressions
 # and calculation fixes. PCs reach the live site through the in-app
 # JSON-upload + character-creator flow, NOT via the repo.
@@ -34,3 +39,21 @@ campaign_audio
 # scrapbooks. Never committed.
 session_highlights.json
 scrapbooks/
+
+# Per-campaign runtime state. In account/campaign mode these live under
+# DATA_DIR/campaigns/<id>/; in the legacy flat layout the app writes them to
+# the DATA_DIR root (locally, the repo root). Runtime state, never committed.
+# (story_threads.json is intentionally tracked as seed content — not listed here.)
+campaign_stats.json
+loot_ledger.json
+pinned_generators.json
+calendar.json
+journals/
+uploads/
+
+# Built Cosmere player characters — runtime store on the volume (DATA_DIR),
+# kept out of the PF2e party_data. Never committed.
+cosmere_pcs/
+
+# Per-player session-notes scratchpads — runtime state on the volume.
+session_notes/

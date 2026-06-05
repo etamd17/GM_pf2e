@@ -56,6 +56,8 @@ _load_dotenv_file()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
+from datetime import timedelta as _timedelta
+app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity for player/GM sessions
 # Reject oversized uploads at the WSGI layer so a multi-GB POST can't OOM
 # the dyno before our per-endpoint size checks run. Bumped high enough for
 # a fat tarball push (vault_data) but well under Railway's worker memory.
@@ -119,48 +121,133 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 if GM_PASSWORD:
     app.config['SESSION_COOKIE_SECURE'] = True
 
+# Account-based auth (multi-campaign). When any user account exists we authorize
+# via the logged-in user's per-campaign role; with no accounts yet (tests /
+# un-bootstrapped) we fall back to the legacy GM_PASSWORD behavior below.
+from core import auth as _auth, campaigns as _campaigns
+
+
+def _account_mode():
+    return _auth.any_users_exist()
+
+
+def _active_campaign_doc():
+    cid = session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
+    return _campaigns.get_campaign(cid)
+
+
+def _active_system():
+    """The TTRPG system of the active campaign ('pf2e' | 'cosmere').
+
+    Single source of truth for system-aware chrome: the nav, the home lobby, and
+    any surface that must render one system's rules/stats without bleed. Defaults
+    to 'pf2e' (legacy single-system installs + when no campaign is active)."""
+    try:
+        camp = _active_campaign_doc()
+        system = (camp or {}).get('system')
+        if system in _storage.SUPPORTED_SYSTEMS:
+            return system
+    except Exception:
+        pass
+    return 'pf2e'
+
+
+def _cosmere_player_char_name():
+    """The current player's own Cosmere character name in the active campaign --
+    for the mobile nav's turn ping (matched against encounter_update.active_name).
+    Returns '' for the GM, non-Cosmere campaigns, or an unclaimed player."""
+    try:
+        if not _account_mode() or _is_gm() or _active_system() != 'cosmere':
+            return ''
+        u = _auth.current_user()
+        if not u:
+            return ''
+        for d in _list_cosmere_pcs():
+            if d.get('owner_user_id') == u.get('id'):
+                return d.get('name') or ''
+    except Exception:
+        pass
+    return ''
+
+
+def _active_system_ui():
+    """The active system's UI descriptor -- its GM/player hub routes, nav brand,
+    and nav link sets. Single source the redirects + nav read from, so there's no
+    per-system branching in the app and a new system can't skip either hub."""
+    try:
+        return systems.get(_active_system()).ui
+    except Exception:
+        return systems.get(systems.DEFAULT_SYSTEM).ui
+
+
+def _system_home(gm: bool) -> str:
+    """The active system's GM-side or player-side landing route."""
+    ui = _active_system_ui()
+    return ui.gm_home if gm else ui.player_home
+
+
 def gm_required(f):
-    """Decorator: requires GM password to access route."""
+    """Decorator: GM of the active campaign (account mode) or the GM password
+    (legacy). _is_gm() encodes both modes."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not GM_PASSWORD:
-            return f(*args, **kwargs)  # No password set = open access (local dev)
-        if session.get('gm_authenticated'):
+        if _is_gm():
             return f(*args, **kwargs)
-        # API callers expect JSON; HTML callers expect a redirect to login.
         if request.path.startswith('/api/'):
-            return jsonify({"error": "GM authentication required"}), 403
-        return redirect('/gm/login')
+            return jsonify({"error": "GM access required"}), 403
+        return redirect('/login' if _account_mode() else '/gm/login')
     return decorated
 
 def _is_gm():
-    """Return True if the caller is effectively the GM.
+    """True if the caller is effectively the GM of the active campaign.
 
-    Mirrors gm_required: when GM_PASSWORD is unset we're in local dev, so
-    everyone is treated as GM. Use this instead of session.get('gm_authenticated')
-    in endpoints that also need to distinguish 'player view' (filtered) vs
-    'GM view' (raw). Otherwise local dev shows the GM the filtered player state.
-    """
+    Account mode: the logged-in user is a GM member of the active campaign (or a
+    site admin). Legacy mode (no accounts): GM_PASSWORD unset = open local dev,
+    otherwise the gm_authenticated session flag."""
+    if _account_mode():
+        u = _auth.current_user()
+        if not u:
+            return False
+        return bool(u.get('is_admin')) or _campaigns.is_gm(_active_campaign_doc(), u['id'])
     return (not GM_PASSWORD) or session.get('gm_authenticated', False)
 
 def require_pc_self_or_gm(f):
-    """Decorator: allow only the GM or the PC's owner (`session.player_name == pc_name`).
-
-    Player sheet mutators take `<pc_name>` from the URL; without this guard
-    any player could `fetch('/api/long_rest/AnotherPC')` and edit a sibling's
-    character. Local dev (no GM_PASSWORD) is open access, same as gm_required.
-    """
+    """Decorator: only the GM or the character's owner may mutate a PC's sheet.
+    Account mode checks owner_user_id on the character; legacy uses the
+    player_name session. Open in legacy local dev (no GM_PASSWORD)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not GM_PASSWORD:
-            return f(*args, **kwargs)
-        if session.get('gm_authenticated'):
+        if _is_gm():
             return f(*args, **kwargs)
         pc_name = kwargs.get('pc_name')
+        if _account_mode():
+            u = _auth.current_user()
+            if u and pc_name and _user_owns_pc(u['id'], pc_name):
+                return f(*args, **kwargs)
+            return jsonify({"error": "forbidden — not your character"}), 403
+        if not GM_PASSWORD:
+            return f(*args, **kwargs)
         if pc_name and session.get('player_name') == pc_name:
             return f(*args, **kwargs)
         return jsonify({"error": "forbidden — not your character"}), 403
     return decorated
+
+
+def _user_owns_pc(user_id, pc_name):
+    """True if user_id owns the character shown as pc_name in the active campaign."""
+    cid = session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
+    if not cid:
+        return False
+    pdir = _storage.party_dir(cid)
+    if not os.path.isdir(pdir):
+        return False
+    for fn in os.listdir(pdir):
+        if not fn.endswith('.json'):
+            continue
+        doc = _storage.load_json(os.path.join(pdir, fn))
+        if _storage.is_wrapped(doc) and _campaigns._character_name(doc) == pc_name:
+            return doc.get('owner_user_id') == user_id
+    return False
 
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
@@ -208,13 +295,30 @@ GM_API_PREFIXES = (
 
 @app.before_request
 def check_gm_access():
-    """Block GM API routes for unauthenticated users."""
-    if not GM_PASSWORD:
-        return  # No password = open access
+    """Block GM-only API routes for non-GM callers (account or legacy mode)."""
     path = request.path
-    if any(path.startswith(prefix) for prefix in GM_API_PREFIXES):
-        if not session.get('gm_authenticated'):
-            return jsonify({"error": "GM authentication required"}), 403
+    if any(path.startswith(prefix) for prefix in GM_API_PREFIXES) and not _is_gm():
+        return jsonify({"error": "GM access required"}), 403
+
+
+# CSRF defense for the account/admin state-changing routes: reject cross-origin
+# POSTs (with SameSite=Lax cookies as the backstop). A classic CSRF auto-submit
+# from another site carries that site's Origin and is blocked; same-origin form
+# posts carry a matching Origin/Referer. The game's existing fetch mutations are
+# out of scope here -- they rely on SameSite + per-campaign authorization.
+_CSRF_GUARD_PREFIXES = ('/setup', '/login', '/join', '/me/password',
+                        '/campaigns/', '/campaign/', '/admin/')
+
+
+@app.before_request
+def _csrf_guard():
+    if request.method != 'POST':
+        return
+    if not any(request.path.startswith(p) for p in _CSRF_GUARD_PREFIXES):
+        return
+    origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
+    if origin and not origin.startswith(request.host_url.rstrip('/')):
+        return ('Cross-origin request blocked.', 400)
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -287,27 +391,85 @@ def _gzip_response(response):
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)  # Railway volume mount or local
-MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')
-PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
-ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
-MAP_DIR = os.path.join(DATA_DIR, 'maps')  # VTT map images and state
-AUDIO_DIR = os.path.join(MAP_DIR, 'audio')  # GM-uploaded soundboard clips
-TILES_DIR = os.path.join(MAP_DIR, 'tiles')  # Decorative tile-layer images
-CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')  # Hero images / splash backgrounds
-HANDOUTS_DIR = os.path.join(DATA_DIR, 'uploads', 'handouts')  # GM-uploaded handout images (persistent volume, survives redeploys)
-# Campaign soundscape audio. On Railway this is the persistent volume
-# (DATA_DIR=/data → /data/campaign_audio) where GM-uploaded tracks live and
-# survive redeploys; locally DATA_DIR defaults to the repo, so the
-# campaign_audio symlink to a local Foundry folder still works for dev.
-# PF2E_AUDIO_DIR overrides both. Distinct from the map soundboard AUDIO_DIR.
-CAMPAIGN_AUDIO_DIR = os.environ.get('PF2E_AUDIO_DIR') or os.path.join(DATA_DIR, 'campaign_audio')
-CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')  # Intro screen metadata
-LOOT_LEDGER_FILE = os.path.join(DATA_DIR, 'loot_ledger.json')  # Persistent party loot log
-DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')  # Ships with repo, read-only
+MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')         # shared bestiary (system content, not per-campaign)
+DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')         # ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
-# Ensure data directories exist (important for fresh deployments)
-for _dir in [MONSTER_DIR, PARTY_DIR, ENCOUNTER_DIR, MAP_DIR, AUDIO_DIR, TILES_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
+# --- Active-campaign path binding -------------------------------------------
+# The app operates on ONE active campaign at a time (the live slot). Every
+# per-campaign data path is (re)bound to that campaign by _bind_campaign_paths();
+# load_campaign() re-binds + reloads when the active campaign changes. When no
+# campaign has been migrated yet (server_state has no live id) we fall back to
+# the legacy flat layout so the app keeps working unchanged pre-migration.
+from core import storage as _storage
+import systems  # system registry (pf2e, later cosmere); actor dispatch by envelope `system`
+
+_AUDIO_OVERRIDE = os.environ.get('PF2E_AUDIO_DIR')  # dev: external Foundry audio folder
+ACTIVE_CAMPAIGN_ID = None
+PARTY_DIR = ENCOUNTER_DIR = CAMPAIGN_ASSETS_DIR = HANDOUTS_DIR = CAMPAIGN_AUDIO_DIR = None
+CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
+SCRAPBOOK_FILE = SCRAPBOOK_DIR = PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
+
+
+def _bind_campaign_paths(cid):
+    """Point every per-campaign path global at campaign `cid`, or at the legacy
+    flat layout when cid is None. Single source of truth for campaign data
+    locations -- existing code keeps using PARTY_DIR/ENCOUNTER_DIR/etc unchanged."""
+    global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
+    global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
+    global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
+    global COSMERE_PC_DIR
+    ACTIVE_CAMPAIGN_ID = cid
+    if cid:
+        PARTY_DIR = _storage.party_dir(cid)
+        ENCOUNTER_DIR = _storage.encounter_dir(cid)
+        CAMPAIGN_ASSETS_DIR = _storage.campaign_assets_dir(cid)
+        HANDOUTS_DIR = _storage.handouts_dir(cid)
+        CAMPAIGN_AUDIO_DIR = _AUDIO_OVERRIDE or _storage.campaign_audio_dir(cid)
+        CAMPAIGN_FILE = _storage.campaign_file(cid)
+        LOOT_LEDGER_FILE = _storage.loot_ledger_file(cid)
+        CAMPAIGN_STATS_FILE = _storage.campaign_stats_file(cid)
+        JOURNAL_DIR = _storage.journal_dir(cid)
+        SCRAPBOOK_FILE = _storage.session_highlights_file(cid)
+        SCRAPBOOK_DIR = _storage.scrapbook_dir(cid)
+        PINNED_GENERATORS_FILE = _storage.pinned_generators_file(cid)
+        CALENDAR_FILE = _storage.calendar_file(cid)
+        STORY_THREADS_FILE = _storage.story_threads_file(cid)
+        COSMERE_PC_DIR = _storage.cosmere_pc_dir(cid)
+        _storage.ensure_campaign_dirs(cid)
+    else:
+        PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
+        ENCOUNTER_DIR = os.path.join(DATA_DIR, 'saved_encounters')
+        CAMPAIGN_ASSETS_DIR = os.path.join(DATA_DIR, 'campaign_assets')
+        HANDOUTS_DIR = os.path.join(DATA_DIR, 'uploads', 'handouts')
+        CAMPAIGN_AUDIO_DIR = _AUDIO_OVERRIDE or os.path.join(DATA_DIR, 'campaign_audio')
+        CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')
+        LOOT_LEDGER_FILE = os.path.join(DATA_DIR, 'loot_ledger.json')
+        CAMPAIGN_STATS_FILE = os.path.join(DATA_DIR, 'campaign_stats.json')
+        JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
+        SCRAPBOOK_FILE = os.path.join(DATA_DIR, 'session_highlights.json')
+        SCRAPBOOK_DIR = os.path.join(DATA_DIR, 'scrapbooks')
+        PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
+        CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
+        STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
+        COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
+
+
+def load_campaign(cid):
+    """Switch the active campaign: re-bind paths and reload all campaign-scoped
+    in-memory state. `cid` may be None to fall back to the legacy flat layout."""
+    _bind_campaign_paths(cid)
+    load_libraries()
+    _load_session_state()
+    _load_session_highlights()
+    return ACTIVE_CAMPAIGN_ID
+
+
+_bind_campaign_paths(_storage.get_live_campaign_id())
+
+# Ensure shared + active-campaign data directories exist (fresh deployments).
+os.makedirs(MONSTER_DIR, exist_ok=True)
+for _dir in [PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.path.join(PARTY_DIR, 'portraits')]:
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
@@ -330,8 +492,8 @@ CHAT_LOCK = threading.Lock()
 _CHAT_MAX = 200
 
 # --- CAMPAIGN STATS (Tier 4, feature 30) ---
-CAMPAIGN_STATS_FILE = os.path.join(DATA_DIR, 'campaign_stats.json')
-JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
+# CAMPAIGN_STATS_FILE / JOURNAL_DIR are bound to the active campaign in
+# _bind_campaign_paths(); ensure the journals dir exists for either layout.
 os.makedirs(JOURNAL_DIR, exist_ok=True)
 
 
@@ -386,108 +548,6 @@ def _mvp_tally():
         for choice in SESSION_HIGHLIGHTS['mvp_votes'].values():
             counts[choice] = counts.get(choice, 0) + 1
     return counts
-
-# --- VTT MAP STATE ---
-ACTIVE_MAP = {
-    'id': None,
-    'name': None,
-    'image': None,  # filename
-    'grid_size': 70,  # pixels per square
-    'grid_offset_x': 0,
-    'grid_offset_y': 0,
-    'tokens': [],  # [{id, name, x, y, size, color, hp, max_hp, ac, speed, is_pc, conditions, assigned_player, visible_to_players, initiative}]
-    'walls': [],  # [{id, points: [[x,y],...], type: 'normal'|'terrain'|'invisible'|'ethereal'|'door', closed: bool, open: bool, secret: bool, hidden_dc: int, discovered_by: [player_name]}]
-    'explored': [],  # List of "x,y" strings for explored grid cells
-    'difficult_terrain': [],  # [{x, y}] grid cells with difficult terrain
-    'spawn_point': None,  # {x, y} grid position for party spawn
-    'player_control': True,  # Can players move their own tokens?
-    'gm_notes': [],  # [{id, x, y, text, color, icon}] GM-only pins/notes (never sent to players)
-    # --- Lighting (Phase 2) --------------------------------------------------
-    # ambient_light drives the client's fog layer. NOTE: we deliberately do not
-    # reuse `vision_mode` here — that field was already taken to describe the
-    # fog-reveal policy (e.g. 'explored' = cells stay seen after the PC leaves).
-    #   'bright' — no darkness; walls still block LOS (outdoors / default)
-    #   'dim'    — everything dim unless a light covers it
-    #   'dark'   — pitch black unless lit or viewer has darkvision
-    'ambient_light': 'bright',
-    # Stand-alone light sources placed by the GM. Tokens with their own
-    # emit_light field carry their own attached torch; lights listed here are
-    # free-standing (braziers, wall sconces, dropped torches).
-    #   {id, x, y, bright, dim, color, enabled, attached_to: token_id|null,
-    #    name}
-    # Radii are in squares (grid units), not pixels.
-    'lights': [],
-    # --- Templates (Phase 3) -------------------------------------------------
-    # AOE templates — burst (circle from point), emanation (circle from token),
-    # cone (PF2e 90° wedge by default), line (rectangle). Radii/lengths are in
-    # squares; pixel coords on the map.
-    #   {id, type: 'burst'|'emanation'|'cone'|'line',
-    #    x, y,                       # origin (pixel coords)
-    #    attached_to: token_id|null, # emanation follows this token
-    #    radius, length, width,      # in squares (type-dependent)
-    #    direction, angle,           # degrees — direction is aim, angle is spread
-    #    color, name, owner, source, temporary}
-    'templates': [],
-    # --- Drawings layer (annotations) ----------------------------------------
-    # Freehand strokes, arrows, rectangles, labels — visible to players,
-    # authored by the GM. Distinct from walls (which block sight) and
-    # tokens (which take a turn). Used for things like "the trap is here",
-    # tactical sketches, or labelling rooms. Stored as pixel-coord lists
-    # so they scale with the map image.
-    #   {id, type: 'freehand', points: [[x,y],...], color, width, label?, author}
-    'drawings': [],
-    # --- Soundboard ----------------------------------------------------------
-    # GM-uploaded ambient / SFX clips. Server stores the file in
-    # MAP_DIR/audio/; this list carries the metadata so every viewer
-    # knows what's available + which clip is currently playing. The
-    # GM hits Play in the sidebar → server fires SSE `audio_play` →
-    # every client triggers the same <audio>. Same for `audio_stop`.
-    #   {id, name, filename, ext, mime, size, uploaded_at}
-    'audio_clips': [],
-    # --- Tile layer -------------------------------------------------
-    # Decorative images that sit above the map background but below
-    # tokens. Useful for set dressing: a torchlit chandelier, a
-    # banner, a campfire overlay. Doesn't block sight; doesn't take
-    # a turn. The tile asset lives under MAP_DIR/tiles/; the dict
-    # below carries placement + render metadata.
-    #   {id, filename, x, y, w, h, rotation, opacity, z}
-    'tiles': [],
-}
-MAP_LOCK = threading.Lock()
-
-
-def _fresh_map_state(overrides=None):
-    """Return a brand-new ACTIVE_MAP-shaped dict carrying the FULL
-    schema — every new field that's been added since launch. Use this
-    on every reinit path (clear_map, load_map's new-map branch,
-    load_encounter's saved_map merge) so the codebase has ONE place
-    that knows what an ACTIVE_MAP looks like.
-
-    The bug it prevents: older saved encounters' `map` snapshots
-    pre-date `audio_clips` / `drawings` / `fog` / etc. The previous
-    pattern was `ACTIVE_MAP.clear(); ACTIVE_MAP.update(snapshot)`,
-    which left those fields entirely absent — every subsequent
-    `ACTIVE_MAP['fog'].append(...)` (and equivalents) then raised
-    KeyError mid-session.
-    """
-    state = copy.deepcopy(ACTIVE_MAP_DEFAULTS)
-    if overrides:
-        # Shallow-merge: overrides win on per-key collisions, but
-        # missing keys in `overrides` keep the schema default. We
-        # deep-copy nested mutables out of the override so the caller
-        # can't accidentally alias into ACTIVE_MAP.
-        for k, v in overrides.items():
-            if isinstance(v, (list, dict)):
-                state[k] = copy.deepcopy(v)
-            else:
-                state[k] = v
-    return state
-
-
-# Snapshot the canonical schema at import time. ACTIVE_MAP itself is
-# mutated in place across the app, so we keep the pristine shape here
-# for the helper above to clone from.
-ACTIVE_MAP_DEFAULTS = copy.deepcopy(ACTIVE_MAP)
 
 # Reentrant lock for encounter/PC state mutations. Used by internal helpers
 # (_combat_log, _broadcast_*, _get_tracker_state, _do_persist_*) so that
@@ -1027,6 +1087,7 @@ def _do_broadcast_encounter_state():
                 'instance_id': c.instance_id,
                 'name': c.name,
                 'is_pc': c.is_pc,
+                'system': getattr(c, 'system', 'pf2e'),
                 'ac': getattr(c, 'ac', None),
                 'initiative': c.initiative,
                 'is_active': (i == TURN_INDEX),
@@ -1066,6 +1127,8 @@ def _do_broadcast_encounter_state():
             # Monsters reuse the same reaction_used field as PCs.
             if 'reaction_used' not in entry:
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+            if entry.get('system') == 'cosmere' and hasattr(c, 'tracker_block'):
+                entry['cosmere'] = c.tracker_block()
             combatants.append(entry)
         payload = {
             'encounter': combatants,
@@ -1484,10 +1547,10 @@ def reload_single_character(file_path):
             data = json.load(f)
         if isinstance(data, list):
             for idx, char_data in enumerate(data):
-                pc = Character(char_data, f"{os.path.basename(file_path)}[{idx}]")
+                pc = make_actor(char_data, f"{os.path.basename(file_path)}[{idx}]")
                 PARTY_LIBRARY[pc.name] = pc
         else:
-            pc = Character(data, os.path.basename(file_path))
+            pc = make_actor(data, os.path.basename(file_path))
             PARTY_LIBRARY[pc.name] = pc
     except Exception as e:
         print(f"Reload Error for {file_path}: {e}")
@@ -1666,13 +1729,32 @@ def require_combatant(instance_id):
             return c, i, None
     return None, None, (jsonify({'success': False, 'error': 'Combatant not found in encounter'}), 404)
 
+def _sort_cosmere_phases():
+    """Order a Cosmere encounter into the 4-phase queue (Ch.10): fast_pc ->
+    fast_npc -> slow_pc -> slow_npc; within a phase, higher Speed first, then
+    the initiative d20."""
+    import systems.cosmere.combat as _cc
+    items = [{
+        '_c': c, 'is_pc': bool(getattr(c, 'is_pc', False)),
+        'choice': getattr(c, 'speed_choice', 'slow'),
+        'speed': int((getattr(c, 'attributes', {}) or {}).get('spd', 0) or 0),
+        'tiebreak': int(getattr(c, 'initiative', 0) or 0),
+    } for c in ACTIVE_ENCOUNTER]
+    ACTIVE_ENCOUNTER[:] = [it['_c'] for it in _cc.order_combatants(items)]
+
+
 def _sort_encounter():
     global ACTIVE_ENCOUNTER, TURN_INDEX
     active_id = None
     if ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER):
         active_id = ACTIVE_ENCOUNTER[TURN_INDEX].instance_id
-        
-    ACTIVE_ENCOUNTER.sort(key=lambda x: x.initiative, reverse=True)
+
+    # A pure-Cosmere encounter resolves in the 4-phase fast/slow queue;
+    # any PF2e (or mixed) encounter keeps the initiative sort.
+    if ACTIVE_ENCOUNTER and all(getattr(c, 'system', 'pf2e') == 'cosmere' for c in ACTIVE_ENCOUNTER):
+        _sort_cosmere_phases()
+    else:
+        ACTIVE_ENCOUNTER.sort(key=lambda x: x.initiative, reverse=True)
     if active_id:
         for i, c in enumerate(ACTIVE_ENCOUNTER):
             if c.instance_id == active_id:
@@ -1722,7 +1804,11 @@ class Character:
         build = data.get('build') or data
         self._build_ref = build
         if not isinstance(build, dict): build = {}
-        
+
+        # Which game system this actor belongs to (flat-additive envelope key;
+        # defaults to pf2e for legacy/unstamped PCs). Dispatched on at load time.
+        self.system = str((data.get('system') if isinstance(data, dict) else None) or 'pf2e').lower()
+
         self.name = safe_str(build.get('name'), 'Unknown Hero')
         self.level = safe_int(build.get('level'), 1)
         # Automatic Bonus Progression is a PF2e *variant* rule (CRB Gamemastery
@@ -3643,6 +3729,23 @@ class Character:
             base,
         )
 
+
+def _pf2e_make_actor(doc, file_path=''):
+    """Actor factory bound into the pf2e registry entry (see systems/)."""
+    return Character(doc, file_path)
+
+
+# Bind the concrete PF2e actor class into the registry now that Character is
+# defined. systems/ stays decoupled from app.py; the host binds at startup.
+systems.get('pf2e').bind_actor_factory(_pf2e_make_actor)
+
+
+def make_actor(doc, file_path=''):
+    """Load a stored character envelope into the actor class for its `system`
+    (defaulting to pf2e). The single dispatch seam for multi-system PCs."""
+    return systems.actor_for_doc(doc, file_path)
+
+
 class Monster:
     def __init__(self, data, file_path=""):
         self.file_path = file_path
@@ -4501,11 +4604,11 @@ def load_libraries():
                 continue
             try:
                 if isinstance(data, list):
-                    for idx, char_data in enumerate(data): 
-                        pc = Character(char_data, f"{file}[{idx}]")
+                    for idx, char_data in enumerate(data):
+                        pc = make_actor(char_data, f"{file}[{idx}]")
                         PARTY_LIBRARY[pc.name] = pc
-                else: 
-                    pc = Character(data, file)
+                else:
+                    pc = make_actor(data, file)
                     PARTY_LIBRARY[pc.name] = pc
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
@@ -4954,8 +5057,7 @@ def _anthropic_complete(prompt, max_tokens=800):
 # Auto-mined highlights + GM-authored RP moments + a Claude narrative, pushed
 # to every screen at session end and saved on the volume to revisit.
 # ══════════════════════════════════════════════════════════════════════════
-SCRAPBOOK_FILE = os.path.join(DATA_DIR, 'session_highlights.json')
-SCRAPBOOK_DIR = os.path.join(DATA_DIR, 'scrapbooks')
+# SCRAPBOOK_FILE / SCRAPBOOK_DIR are bound to the active campaign in _bind_campaign_paths().
 
 
 def _persist_session_highlights():
@@ -5503,7 +5605,14 @@ def index():
     player hub. Already-joined players see a 'continue' tile instead of the
     full picker. The GM gets an Enter button that drops them straight into
     /gm.
+
+    System-aware: a non-default system lands on its own hubs (registry-driven --
+    GM side vs player side) instead of the PF2e party lobby (PARTY_LIBRARY is
+    PF2e-only), so the whole app presents one system with no bleed. The default
+    system (PF2e) owns this root lobby.
     """
+    if _active_system() != systems.DEFAULT_SYSTEM:
+        return redirect(_system_home(_is_gm()))
     _sync_party_from_disk()
     is_gm = _is_gm()
     state = {}  # vault removed; the campaign-intro state row is config-driven now
@@ -5601,6 +5710,280 @@ def gm_logout():
     session.pop('gm_authenticated', None)
     return redirect('/player')
 
+
+# ── Account auth + campaign selection (multi-campaign) ──────────────────────
+SETUP_TOKEN = os.environ.get('SETUP_TOKEN', '')
+
+
+def _safe_next(default):
+    nxt = request.args.get('next', default) or default
+    return default if (not nxt.startswith('/') or nxt.startswith('//')) else nxt
+
+
+def _auto_migrate_legacy(admin_user_id):
+    """First-run convenience: if a legacy flat game exists and nothing is migrated
+    yet, copy it into Campaign #1 (owned by the new admin) and go live. Safe -- the
+    migration copies and preserves the originals as backup."""
+    try:
+        if _campaigns.list_campaigns():
+            return
+        legacy_party = os.path.join(DATA_DIR, 'party_data')
+        if not (os.path.isdir(legacy_party) and any(f.endswith('.json') for f in os.listdir(legacy_party))):
+            return
+        from tools.migrate_to_campaigns import migrate as _run_migration
+        new_cid = _run_migration(created_by=admin_user_id)
+        if new_cid:
+            session['active_campaign_id'] = new_cid
+            load_campaign(new_cid)
+    except Exception as e:
+        app.logger.warning(f"setup auto-migration skipped: {e}")
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """One-time bootstrap of the first (admin/GM) account. Self-disables once any
+    account exists; gated by the SETUP_TOKEN env var when one is set."""
+    if _auth.any_users_exist():
+        return redirect('/login')
+    if request.method == 'POST':
+        if SETUP_TOKEN and request.form.get('setup_token', '') != SETUP_TOKEN:
+            return render_template('setup.html', error='Wrong setup token.', need_token=True), 403
+        try:
+            u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
+                                  display_name=request.form.get('display_name'), is_admin=True)
+        except ValueError as e:
+            return render_template('setup.html', error=str(e), need_token=bool(SETUP_TOKEN)), 400
+        _auth.login_user(u, remember=True)
+        _auto_migrate_legacy(u['id'])
+        return redirect('/me')
+    return render_template('setup.html', error=None, need_token=bool(SETUP_TOKEN))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not _auth.any_users_exist():
+        return redirect('/setup')
+    if request.method == 'POST':
+        u = _auth.verify_credentials(request.form.get('username', ''), request.form.get('password', ''))
+        if not u:
+            return render_template('login.html', error='Wrong username or password.'), 401
+        _auth.login_user(u, remember=True)
+        return redirect(_safe_next('/me'))
+    return render_template('login.html', error=None)
+
+
+@app.route('/logout')
+def logout():
+    _auth.logout_user()
+    return redirect('/login')
+
+
+@app.route('/me')
+@_auth.login_required
+def account_home():
+    """My Campaigns + My Characters for the logged-in user."""
+    return _me_render()
+
+
+@app.route('/campaign/<cid>/activate', methods=['POST'])
+@_auth.login_required
+def activate_campaign(cid):
+    """Set the session's active campaign; a GM/admin also takes the live slot."""
+    u = _auth.current_user()
+    camp = _campaigns.get_campaign(cid)
+    is_member = bool(_campaigns.user_role(camp, u['id'])) or u.get('is_admin')
+    if not camp or not is_member:
+        return jsonify({'error': 'not a member of that campaign'}), 403
+    session['active_campaign_id'] = cid
+    gm = _campaigns.is_gm(camp, u['id']) or u.get('is_admin')
+    if gm:
+        _storage.set_live_campaign_id(cid)
+        load_campaign(cid)
+    # System-aware landing, registry-driven: every system declares a GM home and
+    # a player home, so this works for any system with no per-system branching.
+    ui = systems.get(camp.get('system') or systems.DEFAULT_SYSTEM).ui
+    return redirect(ui.gm_home if gm else ui.player_home)
+
+
+@app.route('/campaign/<cid>/invites')
+@_auth.login_required
+def campaign_invites(cid):
+    """GM/admin: per-character join links for players to claim their PCs."""
+    u = _auth.current_user()
+    camp = _campaigns.get_campaign(cid)
+    if not camp or not (_campaigns.is_gm(camp, u['id']) or u.get('is_admin')):
+        return jsonify({'error': 'GM only'}), 403
+    rows = []
+    pdir = _storage.party_dir(cid)
+    for fn in (sorted(os.listdir(pdir)) if os.path.isdir(pdir) else []):
+        if not fn.endswith('.json'):
+            continue
+        doc = _storage.load_json(os.path.join(pdir, fn))
+        if not _storage.is_wrapped(doc):
+            continue
+        claimed = bool(doc.get('owner_user_id'))
+        code = None
+        if not claimed:
+            inv = _auth.active_invite_for_character(cid, doc.get('id'))
+            code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
+        rows.append({'name': _campaigns._character_name(doc), 'claimed': claimed, 'code': code, 'kind': 'pf2e'})
+    # Cosmere PCs (campaign-scoped store) get join links the same way, and a
+    # GM-built PC can be HANDED OFF (released) so a player can claim it.
+    cdir = _storage.cosmere_pc_dir(cid)
+    for fn in (sorted(os.listdir(cdir)) if os.path.isdir(cdir) else []):
+        if not fn.endswith('.json'):
+            continue
+        doc = _storage.load_json(os.path.join(cdir, fn))
+        if not isinstance(doc, dict) or not doc.get('id'):
+            continue
+        owner_id = doc.get('owner_user_id')
+        claimed = bool(owner_id)
+        owner_name = ''
+        if claimed:
+            ow = _auth.get_user(owner_id)
+            owner_name = (ow.get('display_name') or ow.get('username')) if ow else 'a player'
+        code = None
+        if not claimed:
+            inv = _auth.active_invite_for_character(cid, doc.get('id'))
+            code = inv['code'] if inv else _auth.create_invite(cid, 'player', character_id=doc.get('id'), created_by=u['id'])
+        rows.append({'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
+                     'claimed': claimed, 'code': code, 'kind': 'cosmere',
+                     'id': doc['id'], 'owner': owner_name})
+    return render_template('campaign_invites.html', campaign=camp, rows=rows)
+
+
+def _claim_by_id(cid, character_id, user_id):
+    pdir = _storage.party_dir(cid)
+    for fn in (os.listdir(pdir) if os.path.isdir(pdir) else []):
+        if fn.endswith('.json'):
+            doc = _storage.load_json(os.path.join(pdir, fn))
+            if _storage.is_wrapped(doc) and doc.get('id') == character_id:
+                _campaigns.claim_character(cid, fn, user_id)
+                return True
+    # Cosmere PCs live in the campaign's cosmere_pcs/ store (not flat-wrapped):
+    # stamp owner_user_id directly so the player hub + 'My Characters' find it.
+    cdir = _storage.cosmere_pc_dir(cid)
+    for fn in (os.listdir(cdir) if os.path.isdir(cdir) else []):
+        if fn.endswith('.json'):
+            p = os.path.join(cdir, fn)
+            doc = _storage.load_json(p)
+            if isinstance(doc, dict) and doc.get('id') == character_id:
+                doc['owner_user_id'] = user_id
+                doc.setdefault('campaign_id', cid)
+                _atomic_write_json(p, doc, indent=2)
+                return True
+    return False
+
+
+@app.route('/join', methods=['GET', 'POST'])
+def join():
+    """Invite-code claim: create/sign-in an account, join the campaign, claim a PC."""
+    code = (request.values.get('code') or '').strip()
+    inv = _auth.get_invite(code) if code else None
+    if request.method == 'POST':
+        if not inv:
+            return render_template('join.html', error='Invalid or expired invite code.', code=code,
+                                   invite=None, logged_in=bool(_auth.current_user())), 400
+        u = _auth.current_user()
+        if not u:
+            try:
+                u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
+                                      display_name=request.form.get('display_name'))
+            except ValueError as e:
+                return render_template('join.html', error=str(e), code=code, invite=inv, logged_in=False), 400
+            _auth.login_user(u, remember=True)
+        _auth.consume_invite(code)
+        _campaigns.add_member(inv['campaign_id'], u['id'], inv['role'], character_id=inv.get('character_id'))
+        if inv.get('character_id'):
+            _claim_by_id(inv['campaign_id'], inv['character_id'], u['id'])
+        session['active_campaign_id'] = inv['campaign_id']
+        return redirect('/me')
+    return render_template('join.html', error=None, code=code, invite=inv, logged_in=bool(_auth.current_user()))
+
+
+def _me_render(**extra):
+    u = _auth.current_user()
+    camps = _campaigns.campaigns_for_user(u['id'])
+    gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
+    ctx = dict(user=u, campaigns=camps, gm_campaign_ids=gm_ids,
+               characters=_campaigns.characters_for_user(u['id']),
+               active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
+    ctx.update(extra)
+    return render_template('account_home.html', **ctx)
+
+
+@app.context_processor
+def _inject_account_ctx():
+    """Expose the logged-in account user, the active campaign, and its system to
+    every template -- so the nav switcher + all system-aware chrome render the
+    right TTRPG (no PF2e/Cosmere bleed) off one source of truth."""
+    u = None
+    try:
+        if _account_mode():
+            u = _auth.current_user()
+    except Exception:
+        u = None
+    return {
+        'account_user': u,
+        'active_campaign': (_active_campaign_doc() if u else None),
+        'active_system': _active_system(),
+        'cosmere_player_char': _cosmere_player_char_name(),
+        'system_ui': _active_system_ui(),
+    }
+
+
+@app.route('/campaigns/new', methods=['GET', 'POST'])
+@_auth.login_required
+def new_campaign():
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        system = request.form.get('system') or 'pf2e'
+        if not name:
+            return render_template('new_campaign.html', error='Please name the campaign.'), 400
+        if system not in _storage.SUPPORTED_SYSTEMS:
+            system = 'pf2e'
+        camp = _campaigns.create_campaign(name, system, _auth.current_user()['id'])
+        session['active_campaign_id'] = camp['id']
+        return redirect('/me')
+    return render_template('new_campaign.html', error=None)
+
+
+@app.route('/me/password', methods=['POST'])
+@_auth.login_required
+def change_my_password():
+    u = _auth.current_user()
+    if not _auth.verify_credentials(u['username'], request.form.get('current_password', '')):
+        return _me_render(pw_error='Current password is incorrect.'), 400
+    try:
+        _auth.set_password(u['id'], request.form.get('new_password', ''))
+    except ValueError as e:
+        return _me_render(pw_error=str(e)), 400
+    return _me_render(pw_msg='Password updated.')
+
+
+@app.route('/admin/users')
+@_auth.login_required
+def admin_users():
+    if not _auth.current_user().get('is_admin'):
+        return jsonify({'error': 'admin only'}), 403
+    return render_template('admin_users.html', users=_auth.list_users(),
+                           notice=session.pop('_pw_reset_notice', None))
+
+
+@app.route('/admin/users/<uid>/reset', methods=['POST'])
+@_auth.login_required
+def admin_reset_password(uid):
+    if not _auth.current_user().get('is_admin'):
+        return jsonify({'error': 'admin only'}), 403
+    target = _auth.get_user(uid)
+    if target:
+        import secrets as _secrets
+        temp = _secrets.token_urlsafe(6)
+        _auth.set_password(uid, temp)
+        session['_pw_reset_notice'] = {'username': target['username'], 'temp': temp}
+    return redirect('/admin/users')
+
+
 @app.route('/gm')
 @gm_required
 def gm_hub():
@@ -5614,7 +5997,15 @@ def gm_hub():
     Also renders an excerpt of `Now Playing.md` from the Obsidian vault if
     available — turns the hub into a real session-prep dashboard rather
     than just a navigation index.
+
+    System-aware: this PF2e command center is PF2e's GM home; any system whose GM
+    home is elsewhere is redirected there (registry-driven), so there's no
+    cross-system bleed (campaign settings / invites live on /me +
+    /campaign/<id>/invites for both systems).
     """
+    gm_home = _active_system_ui().gm_home
+    if gm_home != '/gm':
+        return redirect(gm_home)
     now_playing = None  # vault removed; manual session summary wired in separately
     return render_template(
         'gm_hub.html',
@@ -5632,7 +6023,7 @@ def _load_story_threads():
     the Obsidian vault and hands it over; it's dropped in here. Returns a list
     of beat dicts (empty on any error)."""
     try:
-        with open(os.path.join(BASE_DIR, 'story_threads.json'), encoding='utf-8') as f:
+        with open(STORY_THREADS_FILE, encoding='utf-8') as f:
             return json.load(f).get('beats') or []
     except (OSError, ValueError):
         return []
@@ -5648,7 +6039,7 @@ def gm_threads():
 
 
 def _save_story_threads(beats):
-    path = os.path.join(BASE_DIR, 'story_threads.json')
+    path = STORY_THREADS_FILE
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({'beats': beats}, f, indent=2, ensure_ascii=False)
         f.write('\n')
@@ -5948,6 +6339,7 @@ def _get_tracker_state():
         for i, c in enumerate(ACTIVE_ENCOUNTER):
             entry = {
                 'instance_id': c.instance_id, 'name': c.name, 'is_pc': c.is_pc,
+                'system': getattr(c, 'system', 'pf2e'),
                 'initiative': c.initiative, 'is_active': (i == TURN_INDEX),
                 'level': c.level, 'ac': c.ac, 'current_hp': c.current_hp, 'max_hp': c.hp,
                 'fort': c.fort, 'ref': c.ref, 'will': c.will,
@@ -6043,6 +6435,10 @@ def _get_tracker_state():
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
                 entry['traits'] = getattr(c, 'traits', [])
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+            # Cosmere combatants carry an extra stat block (defenses/deflect/
+            # resources); the tracker UI branches on `system` to render it.
+            if entry['system'] == 'cosmere' and hasattr(c, 'tracker_block'):
+                entry['cosmere'] = c.tracker_block()
             combatants.append(entry)
         party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
         encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
@@ -6067,6 +6463,436 @@ def api_tracker_state():
     """GET endpoint for full tracker state (AJAX polling fallback)."""
     return _tracker_json_response()
 
+# ── Cosmere RPG (Phase 3): bestiary browsing, sheet view, tracker add ──────
+def _cosmere_doc_by_id(actor_id):
+    """An ingested Cosmere adversary doc by its Foundry _id (or None)."""
+    for d in systems.cosmere.load_pack('companions-and-adversaries'):
+        if d.get('_id') == actor_id and d.get('type') == 'adversary':
+            return d
+    return None
+
+
+def _cosmere_combatant(actor_id):
+    """A fresh CosmereActor for the tracker (independent mutable combat state)."""
+    doc = _cosmere_doc_by_id(actor_id)
+    return systems.cosmere.CosmereActor(doc) if doc else None
+
+
+@app.route('/cosmere/bestiary')
+def cosmere_bestiary():
+    """Browse the ingested Cosmere adversaries (read-only reference)."""
+    advs = []
+    for d in systems.cosmere.load_pack('companions-and-adversaries'):
+        if d.get('type') != 'adversary':
+            continue
+        s = d.get('system', {})
+        advs.append({
+            'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
+            'tier': s.get('tier'), 'role': s.get('role'), 'size': s.get('size'),
+        })
+    advs.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
+    return render_template('cosmere_bestiary.html', adversaries=advs)
+
+
+@app.route('/cosmere/sheet/<actor_id>')
+def cosmere_sheet(actor_id):
+    """Render one Cosmere actor's character sheet."""
+    doc = _cosmere_doc_by_id(actor_id)
+    if not doc:
+        return ('Unknown Cosmere actor', 404)
+    actor = systems.cosmere.CosmereActor(doc)
+    return render_template(
+        'cosmere_sheet.html', a=actor.to_summary(), actor_id=actor_id,
+        actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
+        skill_names=systems.cosmere.SKILL_NAMES,
+        attr_names=systems.cosmere.ATTR_NAMES,
+        defense_names=systems.cosmere.DEFENSE_NAMES,
+    )
+
+
+# ── Cosmere PCs: builder + leveler + saved-character store ─────────────────
+# Built Cosmere PCs live in their own flat store (DATA_DIR/cosmere_pcs/), NOT
+# the active PF2e campaign's party_data -- so they never enter the PF2e
+# PARTY_LIBRARY (whose routes assume the PF2e Character shape). A real Cosmere
+# campaign binding is a later phase.
+# COSMERE_PC_DIR is bound per-campaign by _bind_campaign_paths() (campaign-scoped
+# when a campaign is live, legacy flat DATA_DIR/cosmere_pcs otherwise) -- do NOT
+# reassign it here; this module loads after the import-time bind and would clobber it.
+
+
+def _cosmere_pc_path(pid):
+    if not re.match(r'^[0-9a-f]{32}$', pid or ''):
+        return None
+    return os.path.join(COSMERE_PC_DIR, pid + '.json')
+
+
+def _load_cosmere_pc(pid):
+    p = _cosmere_pc_path(pid)
+    if not p or not os.path.isfile(p):
+        return None
+    try:
+        with open(p, encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _list_cosmere_pcs():
+    out = []
+    if os.path.isdir(COSMERE_PC_DIR):
+        for fn in sorted(os.listdir(COSMERE_PC_DIR)):
+            if fn.endswith('.json'):
+                d = _load_cosmere_pc(fn[:-5])
+                if d:
+                    out.append(d)
+    return out
+
+
+def _save_cosmere_pc(doc):
+    os.makedirs(COSMERE_PC_DIR, exist_ok=True)
+    pid = doc.get('id') or uuid.uuid4().hex
+    doc['id'] = pid
+    # Bind to the active campaign + owner so 'My Characters' and character->system
+    # inference work (the PC file already lives under the campaign's cosmere_pcs/).
+    if ACTIVE_CAMPAIGN_ID and not doc.get('campaign_id'):
+        doc['campaign_id'] = ACTIVE_CAMPAIGN_ID
+    try:
+        # Default owner = the saver, but only when the caller didn't decide
+        # ownership explicitly (the builder sets the key -- None for a GM-built
+        # PC left assignable, a user id for a player's own -- so this won't fire
+        # for it; it's a fallback for any other caller).
+        if _account_mode() and 'owner_user_id' not in doc:
+            u = _auth.current_user()
+            if u:
+                doc['owner_user_id'] = u['id']
+    except Exception:
+        pass
+    _atomic_write_json(_cosmere_pc_path(pid), doc, indent=2)
+    return pid
+
+
+def _cosmere_cultures():
+    return sorted({d.get('name', '') for d in systems.cosmere.load_pack('cultures') if d.get('name')})
+
+
+def _talent_prereq_summary(pr):
+    """A short human-readable summary of a talent's Foundry prerequisites."""
+    if not isinstance(pr, dict) or not pr:
+        return ''
+    parts = []
+    for grp in pr.values():
+        if not isinstance(grp, dict):
+            continue
+        t = grp.get('type')
+        if t == 'skill':
+            parts.append('%s rank %s' % (systems.cosmere.SKILL_NAMES.get(grp.get('skill'), grp.get('skill')), grp.get('rank')))
+        elif t == 'talent':
+            parts.append(' or '.join(x.get('label', '?') for x in (grp.get('talents') or [])))
+        elif t == 'attribute':
+            parts.append('%s %s' % (grp.get('attribute'), grp.get('value')))
+        elif t == 'goal':
+            parts.append('a completed goal')
+        elif t == 'connection':
+            parts.append('a connection')
+        elif t:
+            parts.append(str(t))
+    return ' + '.join(p for p in parts if p)
+
+
+def _cosmere_path_talents():
+    """{path_id: [{id, name, key, prereq}]} for the builder's talent picker
+    (key talents first; each carries a prerequisite summary)."""
+    out = {}
+    for d in systems.cosmere.load_pack('heroic-paths'):
+        if d.get('type') != 'talent':
+            continue
+        s = d.get('system', {})
+        p = (s.get('path') or '').lower()
+        if not p:
+            continue
+        pr = s.get('prerequisites') or {}
+        out.setdefault(p, []).append({
+            'id': d.get('_id'), 'name': d.get('name', ''),
+            'key': pr == {}, 'prereq': _talent_prereq_summary(pr),
+        })
+    for p in out:
+        out[p].sort(key=lambda t: (not t['key'], t['name'].lower()))   # key talents first
+    return out
+
+
+def _cosmere_starting_kits():
+    """The rulebook starting kits, with armor/weapons resolved to catalog items
+    (id+name) so the builder can add them; equipment/marks/bonus are notes."""
+    import systems.cosmere.origins as _o
+    import systems.cosmere.items as _it
+    out = []
+    for key, k in _o.STARTING_KITS.items():
+        items = []
+        if k['armor']:
+            a = _it.by_name(k['armor'])
+            if a:
+                items.append({'id': a['id'], 'name': a['name']})
+        for wn in k['weapons']:
+            w = _it.by_name(wn)
+            if w:
+                items.append({'id': w['id'], 'name': w['name']})
+        out.append({'key': key, 'name': k['name'], 'items': items,
+                    'equipment': k['equipment'], 'marks': k['marks'], 'bonus': k['bonus']})
+    return out
+
+
+def _cosmere_builder_context(build):
+    import systems.cosmere.build as _cb
+    import systems.cosmere.radiant as _rad
+    import systems.cosmere.radiant_talents as _rt
+    return dict(
+        build=build.to_dict(),
+        catalog=systems.cosmere.items.catalog(),
+        skill_names=systems.cosmere.SKILL_NAMES, skill_attr=systems.cosmere.SKILL_ATTR,
+        surge_skills=list(systems.cosmere.SURGE_SKILLS),
+        attr_names=systems.cosmere.ATTR_NAMES,
+        paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
+        path_talents=_cosmere_path_talents(),
+        radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
+        path_info=systems.cosmere.origins.PATH_INFO,
+        singer_forms=systems.cosmere.origins.SINGER_FORMS,
+        singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
+        starting_kits=_cosmere_starting_kits(),
+        radiant_surge_talents=_rt.SURGE_TALENTS, radiant_order_talents=_rt.ORDER_TALENTS,
+        budgets=dict(
+            attr_points=build.attr_points_available(),
+            skill_ranks=build.skill_ranks_available(),
+            max_skill_rank=_cb.max_skill_rank(build.level),
+            talents=build.talents_available(),
+            expertises=build.expertises_available(),
+        ),
+    )
+
+
+@app.route('/cosmere/pcs')
+def cosmere_pcs():
+    import systems.cosmere.build as _cb
+    import systems.cosmere.radiant as _rad
+    cards = []
+    for d in _list_cosmere_pcs():
+        b = _cb.CosmereBuild(d.get('build'))
+        o = _rad.order(b.radiant_order)
+        cards.append({
+            'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
+            'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
+            'deflect': b.deflect_value(), 'investiture': b.investiture_max(),
+            'is_radiant': b.is_radiant,
+            'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
+            'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
+            'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+        })
+    cards.sort(key=lambda c: c['name'].lower())
+    return render_template('cosmere_pcs.html', pcs=cards,
+                           is_gm=_is_gm(), active_cid=ACTIVE_CAMPAIGN_ID)
+
+
+@app.route('/cosmere/builder', methods=['GET', 'POST'])
+def cosmere_builder():
+    import systems.cosmere.build as _cb
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        build = _cb.CosmereBuild(data.get('build') or data)
+        issues = build.validate()
+        existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
+        if existing is not None:
+            owner = existing.get('owner_user_id')                  # preserve owner on edit / level-up
+        else:
+            # A GM building the party leaves PCs UNCLAIMED (assignable via a join
+            # link); a player building their own character owns it immediately.
+            owner = None if _is_gm() else session.get('user_id')
+        doc = {
+            'id': (existing or {}).get('id') or uuid.uuid4().hex,
+            'system': 'cosmere', 'name': build.name,
+            'owner_user_id': owner,
+            'build': build.to_dict(),
+        }
+        if existing and existing.get('campaign_id'):
+            doc['campaign_id'] = existing['campaign_id']
+        _save_cosmere_pc(doc)
+        return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
+                        'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
+    # GET — new build, or edit/level an existing one
+    existing = _load_cosmere_pc(request.args.get('pc')) if request.args.get('pc') else None
+    build = _cb.CosmereBuild((existing or {}).get('build')) if existing else _cb.CosmereBuild()
+    if request.args.get('levelup') and existing:
+        build.level += 1     # pre-bump for the leveler flow; the player allocates, then saves
+    ctx = _cosmere_builder_context(build)
+    return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), **ctx)
+
+
+@app.route('/cosmere/pc/<pid>')
+def cosmere_pc_sheet(pid):
+    import systems.cosmere.build as _cb
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    build = _cb.CosmereBuild(doc.get('build'))
+    actor = systems.cosmere.CosmereActor(build.to_actor_doc())
+    return render_template(
+        'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid,
+        actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
+        skill_names=systems.cosmere.SKILL_NAMES,
+        attr_names=systems.cosmere.ATTR_NAMES,
+        defense_names=systems.cosmere.DEFENSE_NAMES,
+        pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
+        warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
+        radiant=systems.cosmere.radiant.order(build.radiant_order),
+        first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
+        surge_names=systems.cosmere.radiant.SURGES,
+        singer_form=systems.cosmere.origins.singer_form(build.singer_form),
+    )
+
+
+def _cosmere_player_card(doc):
+    """A rich, at-a-glance hero card for the Cosmere player hub: the stat block
+    (defenses / deflect / health / focus / investiture), the six attributes, and
+    the Radiant summary (order / spren / ideals / surges). Mirrors the stat-block
+    cards used elsewhere; the full sheet carries skills + abilities."""
+    import systems.cosmere.build as _cb
+    import systems.cosmere.radiant as _rad
+    b = _cb.CosmereBuild(doc.get('build'))
+    o = _rad.order(b.radiant_order)
+    return {
+        'id': doc['id'], 'name': doc.get('name', 'Unknown'),
+        'ancestry': b.ancestry, 'culture': b.culture, 'path': b.path,
+        'level': b.level, 'tier': b.tier,
+        'attributes': b.eff_attributes(),
+        'defenses': b.defenses(), 'deflect': b.deflect_value(),
+        'health': b.health_max(), 'focus': b.focus_max(), 'investiture': b.investiture_max(),
+        'is_radiant': b.is_radiant,
+        'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
+        'ideals': b.ideals_sworn, 'first_ideal': b.first_ideal_sworn,
+        'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
+        'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+    }
+
+
+@app.route('/cosmere/player')
+def cosmere_player_hub():
+    """A Cosmere-native player landing: the player's own character(s) in the
+    active campaign, with quick links to the full sheet, level-up, live combat,
+    and notes. The global dice + Plot Die widget rides along from base.html. No
+    PF2e bleed -- this is the Cosmere sibling of /player."""
+    u = _auth.current_user() if _account_mode() else None
+    all_pcs = _list_cosmere_pcs()
+    mine = [d for d in all_pcs if u and d.get('owner_user_id') == u.get('id')] if u else []
+    # Fall back to the campaign membership's assigned character if ownership
+    # wasn't stamped (e.g. a GM-built PC handed off without a claim).
+    if u and not mine:
+        camp = _active_campaign_doc()
+        cid_char = None
+        for m in (camp or {}).get('members', []):
+            if m.get('user_id') == u.get('id'):
+                cid_char = m.get('character_id')
+                break
+        if cid_char:
+            mine = [d for d in all_pcs if d.get('id') == cid_char]
+    cards = [_cosmere_player_card(d) for d in mine]
+    return render_template(
+        'cosmere_player.html', cards=cards, has_pc=bool(cards),
+        roster_count=len(all_pcs), is_gm=_is_gm(),
+        attr_names=systems.cosmere.ATTR_NAMES, defense_names=systems.cosmere.DEFENSE_NAMES,
+    )
+
+
+# ── Session notes: a per-owner, per-campaign free-form scratchpad ──────────
+# System-agnostic: a place for any player (or the GM) to jot down whatever they
+# want during a session. Stored next to the campaign's journals.
+def _session_notes_dir():
+    return os.path.join(os.path.dirname(JOURNAL_DIR), 'session_notes')
+
+
+def _notes_owner():
+    """A safe storage key for the current player/GM."""
+    raw = session.get('user_id') or session.get('player_name') or 'gm'
+    return re.sub(r'[^A-Za-z0-9_-]', '_', str(raw))[:64] or 'gm'
+
+
+def _notes_path(owner):
+    return os.path.join(_session_notes_dir(), owner + '.json')
+
+
+def _load_notes_text(owner):
+    p = _notes_path(owner)
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding='utf-8') as f:
+                return json.load(f).get('text', '')
+        except Exception:
+            pass
+    return ''
+
+
+def _save_notes_text(owner, text):
+    os.makedirs(_session_notes_dir(), exist_ok=True)
+    _atomic_write_json(_notes_path(owner), {'text': (text or '')[:20000]}, indent=2)
+
+
+@app.route('/notes')
+def session_notes_page():
+    return render_template('notes.html', notes=_load_notes_text(_notes_owner()))
+
+
+@app.route('/api/notes', methods=['GET', 'POST'])
+def api_notes():
+    owner = _notes_owner()
+    if request.method == 'POST':
+        text = (request.get_json(silent=True) or {}).get('text', '')
+        _save_notes_text(owner, text if isinstance(text, str) else '')
+        return jsonify({'ok': True})
+    return jsonify({'text': _load_notes_text(owner)})
+
+
+@app.route('/cosmere/pc/<pid>/notes', methods=['POST'])
+def cosmere_pc_notes(pid):
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    text = (request.get_json(silent=True) or {}).get('text', '')
+    b = doc.get('build') or {}
+    b['notes'] = (text if isinstance(text, str) else '')[:20000]
+    doc['build'] = b
+    _save_cosmere_pc(doc)
+    return jsonify({'ok': True})
+
+
+@app.route('/cosmere/pc/<pid>/release', methods=['POST'])
+def cosmere_pc_release(pid):
+    """Hand a Cosmere character off to a player: clear its ownership so the
+    invites page mints a fresh join code for it. GM of the active campaign only
+    (the PC is implicitly scoped -- COSMERE_PC_DIR is the live campaign's store)."""
+    if not _is_gm():
+        return jsonify({'error': 'GM only'}), 403
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    doc['owner_user_id'] = None
+    _save_cosmere_pc(doc)
+    cid = ACTIVE_CAMPAIGN_ID or doc.get('campaign_id')
+    if request.is_json:
+        return jsonify({'ok': True})
+    return redirect('/campaign/%s/invites' % cid if cid else '/cosmere/pcs')
+
+
+@app.route('/api/plot_die', methods=['POST'])
+def api_plot_die():
+    """Roll the Cosmere Plot Die — a d6 side-channel when the stakes are raised."""
+    import systems.cosmere.combat as _cc
+    r = _cc.roll_plot_die_full()
+    who = session.get('player_name') or ('GM' if _is_gm() else 'Someone')
+    sev = 'critical' if r['type'] == 'complication' else 'success'
+    try:
+        _combat_log(f"{who} rolled the Plot Die — {r['label']}.", sev)
+    except Exception:
+        pass
+    return jsonify(r)
+
+
 @app.route('/api/add_combatant', methods=['POST'])
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
@@ -6079,6 +6905,11 @@ def add_combatant():
         new_c = copy.deepcopy(PARTY_LIBRARY[path])
         new_c.instance_id = str(uuid.uuid4())
         ACTIVE_ENCOUNTER.append(new_c)
+    elif c_type == 'cosmere' and path:
+        new_c = _cosmere_combatant(path)
+        if new_c is not None:
+            new_c.instance_id = str(uuid.uuid4())
+            ACTIVE_ENCOUNTER.append(new_c)
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -6141,22 +6972,8 @@ def toggle_combatant_visibility(instance_id):
         reveal_epithet = (getattr(target, 'epithet', '') or '').strip()
         reveal_level = getattr(target, 'level', None)
         did_reveal = (not prev_vis) and new_vis and (not target.is_pc) and bool(reveal_epithet)
-        # Sync the map token so moving a creature onto the map keeps the
-        # same visibility the GM set in the tracker. ACTIVE_MAP is the
-        # shared token dict used by the VTT — we mutate it in place under
-        # the ENCOUNTER_LOCK since callers expect the token visibility flip
-        # to land atomically with the combatant flip.
-        for token in ACTIVE_MAP.get('tokens', []):
-            if token.get('instance_id') == instance_id:
-                token['visible_to_players'] = new_vis
     _persist_encounter_state()
     _broadcast_encounter_state()
-    # Also broadcast map state so the player map view updates immediately
-    # when a token goes hidden/visible.
-    try:
-        _broadcast_map_state()
-    except Exception:
-        pass
     _combat_log(
         f"{target.name} is now {'visible to' if new_vis else 'hidden from'} players",
         'system'
@@ -6223,18 +7040,11 @@ def api_session_boss_reveal(instance_id):
             return jsonify({'success': False, 'error': 'Combatant not found'}), 404
         if not target.is_pc:
             target.visible_to_players = True
-            for token in ACTIVE_MAP.get('tokens', []):
-                if token.get('instance_id') == instance_id:
-                    token['visible_to_players'] = True
         reveal_name = target.name
         reveal_epithet = (getattr(target, 'epithet', '') or '').strip()
         reveal_level = getattr(target, 'level', None)
     _persist_encounter_state()
     _broadcast_encounter_state()
-    try:
-        _broadcast_map_state()
-    except Exception:
-        pass
     _broadcast_boss_reveal(reveal_name, reveal_epithet, reveal_level)
     return jsonify({'success': True, 'instance_id': instance_id})
 
@@ -6756,6 +7566,52 @@ PF2E_DAMAGE_TYPES = [
     'mental', 'poison', 'bleed',
 ]
 
+def _cosmere_adjust_hp(c, amount, action, damage_type):
+    """Damage/heal a Cosmere combatant via the Cosmere combat engine: Deflect
+    reduces impact/keen/energy only, and reaching 0 health triggers an injury
+    roll (the death-spiral, Ch.9) instead of the PF2e dying/wounded model."""
+    import systems.cosmere.combat as _cc
+    amount = max(0, int(amount or 0))
+    if getattr(c, 'conditions', None) is None:
+        c.conditions = {}
+    if action == 'heal':
+        c.current_hp = min(int(getattr(c, 'max_hp', c.current_hp) or c.current_hp), c.current_hp + amount)
+        if c.current_hp > 0:
+            c.conditions.pop('unconscious', None)
+        try:
+            _bump_campaign_stat('total_healing', amount)
+        except Exception:
+            pass
+        _combat_log(f"{c.name} recovers {amount} health.", 'success')
+        return
+    deflect = int((getattr(c, 'deflect', {}) or {}).get('value', 0) or 0)
+    dtype = (damage_type or 'impact').strip().lower()
+    at_zero_before = c.current_hp <= 0
+    new_hp, taken, hit_zero = _cc.apply_damage(c.current_hp, amount, dtype, deflect)
+    c.current_hp = new_hp
+    try:
+        _bump_campaign_stat('total_damage_dealt', taken)
+        _record_big_hit(c.name, taken, c.is_pc)
+    except Exception:
+        pass
+    note = f"{c.name} takes {taken} {dtype} damage"
+    if deflect and dtype in _cc.DEFLECTABLE:
+        note += f" (Deflect {deflect})"
+    # An injury occurs on being reduced to 0, or on taking damage while at 0 (Ch.9).
+    if hit_zero or (at_zero_before and taken > 0):
+        inj = int(getattr(c, 'injuries', 0) or 0)
+        roll = _cc.roll_injury(deflect=deflect, existing_injuries=inj)
+        c.injuries = inj + 1
+        c.conditions['unconscious'] = True
+        if roll['severity'] == 'death':
+            note += f" — Unconscious. INJURY ROLL {roll['total']}: DEATH"
+        else:
+            eff = roll.get('effect', '')
+            note += (f" — Unconscious, injury #{c.injuries} (roll {roll['total']} = "
+                     f"{roll['severity'].replace('_', ' ')}" + (f"; {eff})" if eff else ")"))
+    _combat_log(note, 'critical')
+
+
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
 def adjust_hp(instance_id):
     try:
@@ -6765,6 +7621,13 @@ def adjust_hp(instance_id):
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
                 old_hp = c.current_hp
+                # Cosmere combatants use the Cosmere combat engine (Deflect +
+                # injuries), not the PF2e W/R/I + dying/wounded path below.
+                if getattr(c, 'system', 'pf2e') == 'cosmere':
+                    _cosmere_adjust_hp(c, amount, action, damage_type)
+                    _persist_encounter_state()
+                    _broadcast_encounter_state()
+                    break
                 effective = amount
                 wri_notes = []
                 if action == 'damage':
@@ -7340,71 +8203,6 @@ def set_shield_stats(pc_name):
     _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
 
-# =============================================================================
-# MAP FLANKING DETECTION
-# =============================================================================
-@app.route('/api/map/flanking', methods=['GET'])
-def check_flanking():
-    """Check all token pairs for flanking geometry on the VTT map.
-    Two allied tokens flank an enemy when they are on opposite sides (within 45 degrees of a line through the enemy).
-    Returns list of enemy token IDs that are currently flanked."""
-    with MAP_LOCK:
-        tokens = ACTIVE_MAP.get('tokens', [])
-    
-    gs = ACTIVE_MAP.get('grid_size', 70)
-    flanked_ids = []
-    
-    # Separate PCs and NPCs
-    pcs = [t for t in tokens if t.get('is_pc')]
-    npcs = [t for t in tokens if not t.get('is_pc') and t.get('visible_to_players', True)]
-    
-    for npc in npcs:
-        npc_cx = npc['x'] + (npc.get('size', 1) / 2)
-        npc_cy = npc['y'] + (npc.get('size', 1) / 2)
-        
-        # Check all pairs of PCs
-        is_flanked = False
-        for i in range(len(pcs)):
-            if is_flanked: break
-            for j in range(i + 1, len(pcs)):
-                pc_a = pcs[i]
-                pc_b = pcs[j]
-                
-                ax = pc_a['x'] + (pc_a.get('size', 1) / 2)
-                ay = pc_a['y'] + (pc_a.get('size', 1) / 2)
-                bx = pc_b['x'] + (pc_b.get('size', 1) / 2)
-                by = pc_b['y'] + (pc_b.get('size', 1) / 2)
-                
-                # Both must be adjacent to the enemy (within 1.5 squares for reach/diagonals)
-                dist_a = max(abs(ax - npc_cx), abs(ay - npc_cy))
-                dist_b = max(abs(bx - npc_cx), abs(by - npc_cy))
-                if dist_a > 1.5 or dist_b > 1.5:
-                    continue
-                
-                # Check if PCs are on opposite sides: the line from A to B must pass through or near the enemy
-                # Vector from A to B
-                dx = bx - ax
-                dy = by - ay
-                line_len_sq = dx * dx + dy * dy
-                if line_len_sq < 0.01: continue
-                
-                # Project enemy onto line A→B
-                t = ((npc_cx - ax) * dx + (npc_cy - ay) * dy) / line_len_sq
-                
-                # Enemy should be between A and B (t between 0.1 and 0.9)
-                # and close to the line
-                if 0.1 <= t <= 0.9:
-                    proj_x = ax + t * dx
-                    proj_y = ay + t * dy
-                    perp_dist = math.hypot(npc_cx - proj_x, npc_cy - proj_y)
-                    if perp_dist <= 0.75:  # Within tolerance
-                        is_flanked = True
-                        break
-        
-        if is_flanked:
-            flanked_ids.append(npc['id'])
-    
-    return jsonify({"success": True, "flanked": flanked_ids})
 
 # NEW: FRONTEND CONDITION SYNC
 @app.route('/api/update_pc_condition/<pc_name>', methods=['POST'])
@@ -7760,6 +8558,23 @@ def roll_all_initiative():
 @app.route('/api/sort_initiative', methods=['POST'])
 def sort_initiative():
     _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
+    return redirect(url_for('tracker_view'))
+
+@app.route('/api/cosmere/speed/<instance_id>', methods=['POST'])
+def cosmere_speed_choice(instance_id):
+    """Set a Cosmere combatant's fast/slow election (2 vs 3 actions); re-sorts
+    the 4-phase queue."""
+    choice = (request.form.get('choice') or (request.get_json(silent=True) or {}).get('choice') or '').lower()
+    if choice not in ('fast', 'slow'):
+        return jsonify({'error': 'choice must be fast or slow'}), 400
+    for c in ACTIVE_ENCOUNTER:
+        if c.instance_id == instance_id and getattr(c, 'system', 'pf2e') == 'cosmere':
+            c.speed_choice = choice
+            c.max_actions = 2 if choice == 'fast' else 3
+            _sort_encounter()
+            _persist_encounter_state(); _broadcast_encounter_state()
+            break
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
@@ -8284,18 +9099,13 @@ def save_encounter():
                 'tactics': getattr(c, 'tactics', ''),
             }
             encounter_data['combatants'].append(entry)
-        # Snapshot the current map alongside the encounter so Load Encounter
-        # restores the world, not just initiative. Stored under 'map' to keep
-        # older saves (no map key) backward-compatible on load.
-        with MAP_LOCK:
-            encounter_data['map'] = copy.deepcopy(ACTIVE_MAP)
         with open(os.path.join(ENCOUNTER_DIR, f"{name}.json"), 'w', encoding='utf-8') as f:
             json.dump(encounter_data, f, indent=2)
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/load_encounter', methods=['POST'])
 def load_encounter():
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ACTIVE_MAP, ENCOUNTER_NOTES, SESSION_TIMER_START
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
     name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
     if not name:
         return jsonify({"success": False, "error": "encounter_name required"}), 400
@@ -8315,7 +9125,6 @@ def load_encounter():
         # Support both old format (list) and new format (dict with metadata)
         if isinstance(raw, list):
             combatants = raw
-            saved_map = None
         elif isinstance(raw, dict):
             combatants = raw.get('combatants', [])
             if not isinstance(combatants, list):
@@ -8324,10 +9133,8 @@ def load_encounter():
             TURN_INDEX = raw.get('turn_index', 0)
             ENCOUNTER_NOTES = raw.get('notes', '')
             SESSION_TIMER_START = raw.get('session_timer_start', None)
-            saved_map = raw.get('map')
         else:
             combatants = []
-            saved_map = None
 
         for item in combatants:
             new_c = None
@@ -8374,26 +9181,6 @@ def load_encounter():
 
         # Validate turn index
         if TURN_INDEX >= len(ACTIVE_ENCOUNTER): TURN_INDEX = 0
-
-        # Restore snapshotted map state if present. Older saves skip this.
-        if saved_map and isinstance(saved_map, dict):
-            # Merge the saved snapshot into a FULL schema so older saves
-            # (which pre-date drawings / audio_clips / fog / etc.) don't
-            # leave required keys missing — that previously KeyError'd
-            # the next /api/map/fog/reveal or similar mid-session.
-            merged = _fresh_map_state(saved_map)
-            with MAP_LOCK:
-                ACTIVE_MAP.clear()
-                ACTIVE_MAP.update(merged)
-            try:
-                _save_map_state()
-            except Exception:
-                pass
-            try:
-                _broadcast_map_state()
-                _broadcast_map_walls()
-            except Exception:
-                pass
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/list_encounters', methods=['GET'])
@@ -8856,8 +9643,7 @@ def api_generate(element_type):
     data = request.get_json()
     return jsonify({'html': getattr(pf2e_gen, f'get_{element_type}')(int(data.get('level', 1)), data.get('biome', 'City'))})
 
-# --- Pinned generators ---
-PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
+# --- Pinned generators --- (PINNED_GENERATORS_FILE bound in _bind_campaign_paths)
 
 def _load_pinned_generators():
     if os.path.exists(PINNED_GENERATORS_FILE):
@@ -12166,6 +12952,34 @@ def submit_levelup(pc_name):
             elif new_level < 15 and rank > 6: rank = 6
             build['proficiencies'][sk_lower] = rank
 
+    # --- FEAT PREREQUISITE VALIDATION ---
+    # Reject feats taken THIS level whose prerequisites aren't met (e.g.
+    # Battle Medicine without trained Medicine). Checked against the
+    # proficiency table AFTER this level's skill increases are applied, so
+    # a skill trained this level can satisfy a same-level skill feat (RAW).
+    # Only SKILL_FEAT_PREREQS-known feats are gated; unknown feats pass, so
+    # there are no false positives on class/ancestry/archetype feats. Gated
+    # behind force_save so homebrew/variant picks can override — mirroring
+    # the wizard's "Ignore Pre-Reqs" checkbox. Nothing is persisted until
+    # save_and_reload_character below, so returning here is side-effect free.
+    if not data.get('force_save'):
+        illegal = []
+        for ft in (build.get('feats') or []):
+            if not isinstance(ft, list) or len(ft) < 4:
+                continue
+            if ft[3] != new_level:
+                continue  # only validate feats added at THIS level
+            chk = check_feat_prereqs(ft[0], build['proficiencies'])
+            if chk and not chk.get('met', True):
+                illegal.append(f"{ft[0]} requires {chk.get('reason', 'an unmet prerequisite')}")
+        if illegal:
+            return jsonify({
+                "success": False,
+                "illegal": illegal,
+                "error": "Level-up has illegal picks: " + "; ".join(illegal)
+                         + ". Pass force_save=true to override.",
+            }), 400
+
     if 'spellCasters' in data:
         build['spellCasters'] = data['spellCasters']
 
@@ -12642,1328 +13456,10 @@ def create_custom_monster():
     except Exception as e:
         return jsonify({"success": True, "name": name, "warning": f"Saved but parse error: {e}"})
 
-# =============================================================================
-# VTT MAP SYSTEM
-# =============================================================================
-
-def _broadcast_map_state():
-    """Broadcast full map state to all connected clients.
-
-    Keep this payload in sync with the ACTIVE_MAP schema — the client does
-    `mapState = JSON.parse(e.data)` on this event, so any key missing here
-    is erased from the browser's view until the next page reload. That's
-    how Phase 2's lights/ambient and Phase 3's templates silently vanished
-    on every refresh before we caught it.
-    """
-    with MAP_LOCK:
-        state = {
-            'id': ACTIVE_MAP['id'],
-            'name': ACTIVE_MAP['name'],
-            'image': ACTIVE_MAP['image'],
-            'grid_size': ACTIVE_MAP['grid_size'],
-            'grid_offset_x': ACTIVE_MAP['grid_offset_x'],
-            'grid_offset_y': ACTIVE_MAP['grid_offset_y'],
-            'tokens': ACTIVE_MAP['tokens'],
-            'walls': ACTIVE_MAP.get('walls', []),
-            'explored': ACTIVE_MAP.get('explored', []),
-            'difficult_terrain': ACTIVE_MAP.get('difficult_terrain', []),
-            'spawn_point': ACTIVE_MAP.get('spawn_point'),
-            'player_control': ACTIVE_MAP['player_control'],
-            'ambient_light': ACTIVE_MAP.get('ambient_light', 'bright'),
-            'lights': ACTIVE_MAP.get('lights', []),
-            'gm_notes': ACTIVE_MAP.get('gm_notes', []),
-            'templates': ACTIVE_MAP.get('templates', []),
-            'drawings': ACTIVE_MAP.get('drawings', []),
-            'audio_clips': ACTIVE_MAP.get('audio_clips', []),
-            'tiles': ACTIVE_MAP.get('tiles', []),
-        }
-    sse_broadcast('map_state', state)
-
-def _broadcast_map_tokens():
-    """Broadcast just token positions."""
-    with MAP_LOCK:
-        tokens = ACTIVE_MAP['tokens']
-    sse_broadcast('map_tokens', {'tokens': tokens})
-
-def _broadcast_map_fog():
-    """Broadcast fog state (GM only sends, players receive filtered)."""
-    with MAP_LOCK:
-        fog = ACTIVE_MAP['fog']
-    sse_broadcast('map_fog', {'fog': fog})
-
-def _broadcast_event(event_type, data):
-    """Broadcast a generic event to all connected clients."""
-    sse_broadcast(event_type, data)
-
-def _save_map_state():
-    """Persist current map state to disk."""
-    with MAP_LOCK:
-        if not ACTIVE_MAP['id']:
-            return
-        state_path = os.path.join(MAP_DIR, f"{ACTIVE_MAP['id']}_state.json")
-        with open(state_path, 'w', encoding='utf-8') as f:
-            json.dump(ACTIVE_MAP, f, indent=2)
-
-def _load_map_state(map_id):
-    """Load map state from disk. Merges the on-disk snapshot into a
-    fresh full-schema copy so older state files (pre-dating drawings /
-    audio_clips / fog / etc.) don't leak stale keys from whatever
-    ACTIVE_MAP currently holds AND don't leave required fields missing
-    on the loaded shape."""
-    state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
-    if os.path.exists(state_path):
-        with open(state_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            fresh = _fresh_map_state(data)
-            with MAP_LOCK:
-                ACTIVE_MAP.clear()
-                ACTIVE_MAP.update(fresh)
-            return True
-    return False
-
-@app.route('/gm/map')
-@gm_required
-def gm_map_view():
-    """GM's full-control VTT map view."""
-    # Get list of available maps
-    maps = []
-    if os.path.exists(MAP_DIR):
-        for f in os.listdir(MAP_DIR):
-            if f.endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                maps.append({'id': f.rsplit('.', 1)[0], 'filename': f})
-    
-    with MAP_LOCK:
-        current_map = dict(ACTIVE_MAP)
-    
-    # Get party with full stats for token options
-    party = []
-    for pc in PARTY_LIBRARY.values():
-        party.append({
-            'name': pc.name,
-            'hp': pc.hp,
-            'max_hp': pc.hp,
-            'current_hp': pc.current_hp,
-            'ac': pc.ac,
-            'speed': getattr(pc, 'speed', 25),
-            'perception': pc.perception if hasattr(pc, 'perception') else 10,
-        })
-    
-    # Get encounter with full stats
-    encounter = []
-    for c in ACTIVE_ENCOUNTER:
-        encounter.append({
-            'id': c.instance_id,
-            'name': c.name,
-            'hp': c.hp,
-            'current_hp': c.current_hp,
-            'ac': c.ac if hasattr(c, 'ac') else 10,
-            'is_pc': c.is_pc,
-            'initiative': getattr(c, 'initiative', 0),
-            'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False} if hasattr(c, 'conditions') else {},
-        })
-    
-    return render_template('map_vtt.html',
-                           maps=maps,
-                           current_map=current_map,
-                           party=party,
-                           encounter=encounter,
-                           turn_index=TURN_INDEX,
-                           round_number=ROUND_NUMBER,
-                           enabled_modules=_enabled_module_files())
-
-def _apply_player_map_filter(state, player_name):
-    """Mutate a copy of ACTIVE_MAP to produce the view a non-GM player
-    should see. Consolidates the secret-door / hidden-token / gm-note /
-    token-vision filtering so /map bootstrap and /api/map/state never
-    drift apart.
-
-    Rules (applied in order):
-      1. Drop any token with visible_to_players == False (GM-hidden).
-      2. Mask secret doors → plain walls unless this player has discovered
-         them (via the Seek action — see seek_wall).
-      3. Drop GM notes entirely — pins are GM-only by definition.
-      4. If ambient_light != 'bright' and the player has an assigned token,
-         drop tokens that are NOT in line-of-sight + lit area of any of
-         the player's owned tokens. GM vision always wins.
-
-    Keeping this in one place matters: SSE broadcasts are fan-out, so the
-    /api/map/state refetch that player clients do on every SSE tick is
-    the ONLY scrubber between raw ACTIVE_MAP and the player's browser.
-    """
-    # Step 1 — hidden tokens
-    state['tokens'] = [t for t in state.get('tokens', []) if t.get('visible_to_players', True)]
-
-    # Step 2 — secret door masking
-    walls_out = []
-    for w in state.get('walls', []):
-        if w.get('secret') and w.get('type') == 'door':
-            discovered = w.get('discovered_by') or []
-            if player_name and player_name in discovered:
-                walls_out.append(w)
-            else:
-                masked = dict(w)
-                masked['type'] = 'normal'
-                masked['open'] = False
-                masked.pop('secret', None)
-                masked.pop('hidden_dc', None)
-                masked.pop('discovered_by', None)
-                walls_out.append(masked)
-        else:
-            walls_out.append(w)
-    state['walls'] = walls_out
-
-    # Step 3 — GM notes are GM-only EXCEPT for pins flagged share=True
-    # (journal pins). Those become readable handouts pinned on the map.
-    # We also strip the GM-only `text` field on shared pins so a private
-    # caption doesn't slip out alongside the public note_path.
-    shared = []
-    for n in state.get('gm_notes', []) or []:
-        if not n.get('share'):
-            continue
-        shared.append({
-            'id': n.get('id'),
-            'x': n.get('x'), 'y': n.get('y'),
-            'icon': n.get('icon') or '📖',
-            'color': n.get('color') or '#fbbf24',
-            'note_path': n.get('note_path'),
-            'share': True,
-        })
-    state['gm_notes'] = shared
-
-    # Step 4 — token vision filter. The bright-ambient case still
-    # filters when there are any non-ethereal walls on the map (a
-    # stealth roll behind a stone wall in daylight should hide the
-    # creature). With no vision-blocking walls AND bright ambient we
-    # skip the LOS pass — every PC can see every visible token, and
-    # the filter would just be cycles wasted.
-    ambient = state.get('ambient_light', 'bright')
-    vision_walls = [w for w in state.get('walls', []) if w.get('type') in ('normal', 'door')]
-    needs_los = (ambient != 'bright') or (vision_walls and player_name)
-    if needs_los and player_name:
-        owned = [t for t in state['tokens']
-                 if (t.get('assigned_player') == player_name
-                     or t.get('pc_name') == player_name)]
-        if owned:
-            visible_ids = _tokens_visible_to_owners(
-                state['tokens'], owned, state['walls'],
-                state.get('lights', []), ambient,
-                state.get('grid_size', 70),
-            )
-            # `is_pc` tokens stay visible to their party regardless of
-            # current LOS — the party-marching-around-corners case
-            # shouldn't ghost teammates from each other's screens.
-            kept = []
-            for t in state['tokens']:
-                if t.get('is_pc') or t['id'] in visible_ids:
-                    kept.append(t)
-            state['tokens'] = kept
-
-    return state
-
-
-def _tokens_visible_to_owners(all_tokens, owners, walls, lights, ambient, grid_size):
-    """Return the set of token ids a player should see, given the tokens
-    they control and the map's lighting state.
-
-    A token is visible if, from ANY owner token:
-      - it lies within light (attached lights on owner count as lights) AND
-      - the straight line between them isn't blocked by a vision-blocking wall.
-
-    'bright' ambient skips this path entirely (see caller).
-    'dim' ambient: everywhere counts as dim light — only darkvision needed for full vision.
-    'dark' ambient: only bright rings of lights illuminate. Owners with darkvision see out to their vision_radius as dim.
-    """
-    visible = set()
-    # Owners are always visible to themselves
-    for o in owners:
-        visible.add(o['id'])
-
-    # Light rings — attached lights move with their token
-    def _light_origin(light):
-        if light.get('attached_to'):
-            tok = next((t for t in all_tokens if t['id'] == light['attached_to']), None)
-            if tok:
-                return (tok['x'] * grid_size + grid_size/2, tok['y'] * grid_size + grid_size/2)
-            return None
-        return (light['x'], light['y'])
-
-    active_lights = []
-    for l in lights:
-        if not l.get('enabled', True):
-            continue
-        origin = _light_origin(l)
-        if origin is None:
-            continue
-        active_lights.append({
-            'x': origin[0], 'y': origin[1],
-            'bright_px': l['bright'] * grid_size,
-            'dim_px': (l['bright'] + l['dim']) * grid_size,
-        })
-
-    for target in all_tokens:
-        if target['id'] in visible:
-            continue
-        tx = target['x'] * grid_size + grid_size/2
-        ty = target['y'] * grid_size + grid_size/2
-
-        for owner in owners:
-            ox = owner['x'] * grid_size + grid_size/2
-            oy = owner['y'] * grid_size + grid_size/2
-            dist = ((tx - ox)**2 + (ty - oy)**2) ** 0.5
-            # LOS first — if walls block, no light matters
-            if _segment_blocked(ox, oy, tx, ty, walls):
-                continue
-            # Is target in any bright light?
-            in_bright = any(((tx - L['x'])**2 + (ty - L['y'])**2) ** 0.5 <= L['bright_px']
-                            for L in active_lights)
-            in_dim = any(((tx - L['x'])**2 + (ty - L['y'])**2) ** 0.5 <= L['dim_px']
-                         for L in active_lights)
-
-            owner_vision_px = (owner.get('vision_radius') or 0) * grid_size
-            in_owner_vision = dist <= owner_vision_px if owner_vision_px > 0 else False
-            has_dv = bool(owner.get('darkvision'))
-            has_ll = bool(owner.get('low_light_vision'))
-
-            if ambient == 'dim':
-                # Whole map is dim light. Everyone sees within vision_radius
-                # as dim; darkvision/lowlight upgrades but result is the same
-                # (we just track visible vs not).
-                if in_owner_vision or in_bright or in_dim:
-                    visible.add(target['id']); break
-            elif ambient == 'dark':
-                # Only lit areas are seen, except darkvision sees up to
-                # vision_radius even in darkness.
-                if in_bright:
-                    visible.add(target['id']); break
-                if in_dim and (has_dv or has_ll):
-                    visible.add(target['id']); break
-                if has_dv and in_owner_vision:
-                    visible.add(target['id']); break
-
-    return visible
-
-
-def _segment_blocked(x1, y1, x2, y2, walls):
-    """True if any LOS-blocking wall segment intersects the line from
-    (x1,y1) to (x2,y2). Doors that are open (open=True) don't block.
-    Invisible walls block movement only, never vision — used for map
-    borders and similar guard rails. Ethereal walls block neither."""
-    for w in walls:
-        wtype = w.get('type', 'normal')
-        if wtype == 'ethereal':
-            continue
-        if wtype == 'invisible':
-            continue
-        if wtype == 'door' and w.get('open'):
-            continue
-        pts = w.get('points') or []
-        for i in range(len(pts) - 1):
-            if _segments_cross(x1, y1, x2, y2, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]):
-                return True
-        if w.get('closed') and len(pts) >= 3:
-            if _segments_cross(x1, y1, x2, y2, pts[-1][0], pts[-1][1], pts[0][0], pts[0][1]):
-                return True
-    return False
-
-
-def _segments_cross(ax, ay, bx, by, cx, cy, dx, dy):
-    """Standard 2D segment intersection. Endpoint-touch doesn't count so a
-    wall touching an owner token doesn't block its own vision."""
-    d1x, d1y = bx - ax, by - ay
-    d2x, d2y = dx - cx, dy - cy
-    denom = d1x * d2y - d1y * d2x
-    if abs(denom) < 1e-9:
-        return False
-    s = ((cx - ax) * d2y - (cy - ay) * d2x) / denom
-    t = ((cx - ax) * d1y - (cy - ay) * d1x) / denom
-    return 0.001 < s < 0.999 and 0.001 < t < 0.999
-
-
-@app.route('/map')
-def player_map_view():
-    """Player's restricted map view."""
-    player_name = session.get('player_name')
-    with MAP_LOCK:
-        current_map = copy.deepcopy(ACTIVE_MAP)
-    _apply_player_map_filter(current_map, player_name)
-    return render_template('map_player.html', current_map=current_map)
-
-@app.route('/api/map/upload', methods=['POST'])
-@gm_required
-def upload_map():
-    """Upload a new map image."""
-    if 'map' not in request.files:
-        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
-    
-    file = request.files['map']
-    if file.filename == '':
-        return jsonify({'success': False, 'error': 'No file selected'}), 400
-    
-    # Validate file type
-    allowed = {'png', 'jpg', 'jpeg', 'webp'}
-    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
-    if ext not in allowed:
-        return jsonify({'success': False, 'error': f'Invalid file type. Allowed: {allowed}'}), 400
-    
-    # Generate unique ID and save
-    map_id = str(uuid.uuid4())[:8]
-    filename = f"{map_id}.{ext}"
-    filepath = os.path.join(MAP_DIR, filename)
-    file.save(filepath)
-    
-    # Get custom name or use filename
-    map_name = request.form.get('name', file.filename.rsplit('.', 1)[0])
-    
-    return jsonify({
-        'success': True,
-        'id': map_id,
-        'filename': filename,
-        'name': map_name
-    })
-
-@app.route('/api/maps/list')
-@gm_required
-def list_maps():
-    """Catalog every map image on disk + whether it has saved state.
-    Used by the GM's map switcher to render the library. Returns
-    `[{id, filename, name, has_state, modified, is_current}]`."""
-    out = []
-    if os.path.exists(MAP_DIR):
-        with MAP_LOCK:
-            current_id = ACTIVE_MAP.get('id')
-        for f in sorted(os.listdir(MAP_DIR)):
-            if not f.endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                continue
-            map_id = f.rsplit('.', 1)[0]
-            state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
-            saved = None
-            if os.path.exists(state_path):
-                try:
-                    with open(state_path, 'r', encoding='utf-8') as fh:
-                        saved = json.load(fh)
-                except (OSError, json.JSONDecodeError):
-                    saved = None
-            try:
-                mtime = os.stat(os.path.join(MAP_DIR, f)).st_mtime
-            except OSError:
-                mtime = 0
-            out.append({
-                'id': map_id,
-                'filename': f,
-                'name': (saved or {}).get('name') or map_id,
-                'has_state': saved is not None,
-                'token_count': len((saved or {}).get('tokens') or []),
-                'modified': mtime,
-                'is_current': map_id == current_id,
-            })
-    return jsonify({'maps': out})
-
-
-@app.route('/api/map/load', methods=['POST'])
-@gm_required
-def load_map():
-    """Load a map as the active map. Preserves the outgoing map's state
-    to disk before swap so the next switch back resumes where it left off
-    (tokens, walls, fog, drawings, lights, templates, GM notes — all
-    restored)."""
-    global ACTIVE_MAP
-    data = request.json or {}
-    filename = data.get('filename')
-
-    if not filename:
-        return jsonify({'success': False, 'error': 'No map specified'}), 400
-
-    filepath = os.path.join(MAP_DIR, filename)
-    if not os.path.exists(filepath):
-        return jsonify({'success': False, 'error': 'Map file not found'}), 404
-
-    # Derive the canonical map_id from the filename if the caller didn't
-    # send one. Older clients posted `{filename}` only; the per-map state
-    # files are keyed on `{id}_state.json` so we MUST resolve an id here
-    # or the new map will start blank every switch.
-    map_id = data.get('id') or filename.rsplit('.', 1)[0]
-
-    # Sanitize filename + id so a typo / hostile POST can't write a
-    # state file outside MAP_DIR. Filename already passed an existence
-    # check, but id is unsanitized.
-    if '/' in filename or '\\' in filename or filename.startswith('.'):
-        return jsonify({'success': False, 'error': 'invalid filename'}), 400
-    if '/' in map_id or '\\' in map_id or map_id.startswith('.') or '..' in map_id:
-        return jsonify({'success': False, 'error': 'invalid map id'}), 400
-
-    # Hold MAP_LOCK across the entire save→load→swap so a concurrent
-    # token-add / wall-draw / fog-reveal can't land on the OUTGOING map
-    # after its snapshot was written (lost) or on the INCOMING map's
-    # fresh dict (orphaned). Was previously open between three lock
-    # releases.
-    with MAP_LOCK:
-        # Snapshot the outgoing map's state under its own id before
-        # swapping — otherwise mutations written since the last save
-        # would be lost on switch.
-        if ACTIVE_MAP.get('id'):
-            try:
-                state_path = os.path.join(MAP_DIR, f"{ACTIVE_MAP['id']}_state.json")
-                with open(state_path, 'w', encoding='utf-8') as f:
-                    json.dump(ACTIVE_MAP, f, indent=2)
-            except OSError:
-                pass
-
-        # Try to load existing state; if there isn't one, start from a
-        # FULL fresh schema (every field the rest of the app expects)
-        # with only the map-identity fields overridden. Previously this
-        # branch built a partial dict missing drawings / audio_clips /
-        # gm_notes / lights / templates / ambient_light / explored /
-        # difficult_terrain / spawn_point — KeyError trap.
-        state_path = os.path.join(MAP_DIR, f"{map_id}_state.json")
-        loaded = False
-        if os.path.exists(state_path):
-            try:
-                with open(state_path, 'r', encoding='utf-8') as f:
-                    saved = json.load(f)
-                fresh = _fresh_map_state(saved)
-                ACTIVE_MAP.clear()
-                ACTIVE_MAP.update(fresh)
-                loaded = True
-            except (OSError, json.JSONDecodeError):
-                loaded = False
-        if not loaded:
-            try:
-                grid = int(data.get('grid_size', 70))
-            except (TypeError, ValueError):
-                grid = 70
-            fresh = _fresh_map_state({
-                'id': map_id,
-                'name': data.get('name', map_id),
-                'image': filename,
-                'grid_size': grid,
-            })
-            ACTIVE_MAP.clear()
-            ACTIVE_MAP.update(fresh)
-
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'map': ACTIVE_MAP})
-
-@app.route('/api/map/settings', methods=['POST'])
-@gm_required
-def update_map_settings():
-    """Update map settings (grid size, offset, etc.)."""
-    data = request.json or {}
-    with MAP_LOCK:
-        if 'grid_size' in data:
-            ACTIVE_MAP['grid_size'] = int(data['grid_size'])
-        if 'grid_offset_x' in data:
-            ACTIVE_MAP['grid_offset_x'] = int(data['grid_offset_x'])
-        if 'grid_offset_y' in data:
-            ACTIVE_MAP['grid_offset_y'] = int(data['grid_offset_y'])
-        if 'fog_enabled' in data:
-            ACTIVE_MAP['fog_enabled'] = bool(data['fog_enabled'])
-        if 'player_control' in data:
-            ACTIVE_MAP['player_control'] = bool(data['player_control'])
-        if 'vision_mode' in data:
-            ACTIVE_MAP['vision_mode'] = data['vision_mode']
-        if 'lighting' in data:
-            ACTIVE_MAP['lighting'] = data['lighting']  # bright, dim, darkness
-        if 'name' in data:
-            ACTIVE_MAP['name'] = data['name']
-    
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-@app.route('/api/map/image/<filename>')
-def serve_map_image(filename):
-    """Serve map image files."""
-    return send_from_directory(MAP_DIR, filename)
-
-# --- TOKEN MANAGEMENT ---
-
-@app.route('/api/map/token/add', methods=['POST'])
-@gm_required
-def add_map_token():
-    """Add a token to the map."""
-    data = request.json or {}
-    
-    # Default vision: 6 squares (30ft) for PCs, 0 for monsters (GM controls monster visibility)
-    default_vision = 6 if data.get('is_pc', False) else 0
-    
-    # Auto-detect senses + Hero Points + portrait from character data for PCs.
-    has_darkvision = data.get('darkvision', False)
-    has_low_light = data.get('low_light_vision', False)
-    default_hero_points = 1  # PF2e: PCs start each session with 1 HP, max 3
-    default_portrait = data.get('portrait') or ''
-    pc_name = data.get('pc_name') or data.get('name')
-    if data.get('is_pc') and pc_name:
-        for lib_name, pc in PARTY_LIBRARY.items():
-            if lib_name == pc_name or pc.name == pc_name:
-                senses = getattr(pc, 'senses', [])
-                if any('darkvision' in s.lower() for s in senses):
-                    has_darkvision = True
-                if any('low-light' in s.lower() for s in senses):
-                    has_low_light = True
-                # Pull current Hero Points from the PC sheet so the token
-                # reflects what the player is sitting on.
-                default_hero_points = max(0, min(3, getattr(pc, 'hero_points', 1)))
-                # Portrait file lives in party_data/portraits/<safe_name>.<ext>
-                # served via /portraits/<filename>. The Character class stores
-                # just the filename, so the same URL pattern works on the map.
-                if not default_portrait:
-                    default_portrait = getattr(pc, 'portrait', '') or ''
-                break
-
-    token = {
-        'id': str(uuid.uuid4())[:8],
-        'name': data.get('name', 'Token'),
-        'x': int(data.get('x', 0)),  # Grid coordinates
-        'y': int(data.get('y', 0)),
-        # Rotation in degrees (0–359). PF2e doesn't strictly track facing,
-        # but flanking arrows and "the orc is looking that way" cues are
-        # the kind of mid-fight cognitive load this offloads visually.
-        'rotation': max(0, min(359, int(data.get('rotation', 0) or 0))) % 360,
-        'size': int(data.get('size', 1)),  # 1 = medium, 2 = large, etc.
-        'color': data.get('color', '#3B82F6'),
-        'image': data.get('image'),  # Optional custom image
-        'pc_name': data.get('pc_name'),  # Link to party member
-        'instance_id': data.get('instance_id'),  # Link to encounter combatant
-        'is_pc': data.get('is_pc', False),
-        'hp': int(data.get('hp', 0)),
-        'max_hp': int(data.get('max_hp', 0)),
-        # Temp HP renders as a second bar above the main HP bar (the
-        # PF2e Bardic Inspiration / Lay on Hands / shield wave). Tracker
-        # broadcasts the value via /api/map/token/update; auto-imported
-        # from the PC sheet on token-add (handled below).
-        'temp_hp': max(0, int(data.get('temp_hp', 0) or 0)),
-        # Active effects — spell/feat/item modifiers from
-        # services.active_effects. Each entry is a per-instance
-        # record built by instantiate_effect (catalog-key or custom).
-        # Conditions live on `conditions`; this list is for
-        # everything else (Heroism, Bless, Mage Armor, etc.).
-        'active_effects': list(data.get('active_effects') or []),
-        'visible_to_players': data.get('visible_to_players', True),
-        'vision_radius': int(data.get('vision_radius', default_vision)),  # Squares of vision (0 = no vision)
-        'assigned_player': data.get('assigned_player'),  # Player name who can control this token
-        'darkvision': has_darkvision,
-        'low_light_vision': has_low_light,
-        # PF2e action-economy state (Week 3). Action pips reset to 3 on turn
-        # change (handled client-side via the encounter_update SSE listener).
-        # Hero Points only meaningful for PCs but the field exists on every
-        # token so updates have a uniform shape.
-        'hero_points': max(0, min(3, int(data.get('hero_points', default_hero_points)))) if data.get('is_pc') else 0,
-        'actions_used_this_turn': int(data.get('actions_used_this_turn', 0)),
-        'strikes_this_turn': int(data.get('strikes_this_turn', 0)),
-        # Portrait filename (served from /portraits/<name>). Empty string
-        # falls back to the colored-circle + initials renderer.
-        'portrait': default_portrait,
-    }
-    
-    with MAP_LOCK:
-        ACTIVE_MAP['tokens'].append(token)
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True, 'token': token})
-
-@app.route('/api/map/player/register', methods=['POST'])
-def register_player_name():
-    """Register a player name in the server session for token auth.
-
-    HARDENED: must match a real PC in PARTY_LIBRARY. Without this
-    check, a player joined as Kyle could POST {name:"Amadeus"} and
-    swap session.player_name to Amadeus — bypassing
-    @require_pc_self_or_gm on every sheet mutator (long_rest,
-    submit_levelup, adjust_party_hp, etc.). Same validation rule
-    as /api/join_campaign."""
-    data = request.json or {}
-    name = (data.get('name') or '').strip()[:80]
-    if not name:
-        return jsonify({'success': False, 'error': 'No name provided'}), 400
-    # GM can register as anyone (NPC label, debug). Players must pick
-    # a real party member name.
-    if not _is_gm() and name not in PARTY_LIBRARY:
-        return jsonify({'success': False, 'error': 'Unknown character'}), 404
-    session['player_name'] = name
-    return jsonify({'success': True, 'name': name})
-
-@app.route('/api/map/token/move', methods=['POST'])
-def move_map_token():
-    """Move a token on the map."""
-    data = request.json or {}
-    token_id = data.get('id')
-    new_x = int(data.get('x', 0))
-    new_y = int(data.get('y', 0))
-    
-    # Check if player is allowed to move tokens
-    is_gm = _is_gm()
-
-    with MAP_LOCK:
-        if not is_gm and not ACTIVE_MAP.get('player_control'):
-            return jsonify({'success': False, 'error': 'Player movement disabled'}), 403
-        
-        for token in ACTIVE_MAP['tokens']:
-            if token['id'] == token_id:
-                # If player, verify they are assigned to this token via server-side session
-                if not is_gm:
-                    player_name = session.get('player_name')
-                    if not player_name:
-                        return jsonify({'success': False, 'error': 'Register your player name first'}), 403
-                    if token.get('assigned_player') != player_name:
-                        return jsonify({'success': False, 'error': 'Not your token'}), 403
-                
-                token['x'] = new_x
-                token['y'] = new_y
-                break
-        else:
-            return jsonify({'success': False, 'error': 'Token not found'}), 404
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True})
-
-@app.route('/api/map/token/update', methods=['POST'])
-@gm_required
-def update_map_token():
-    """Update token properties."""
-    data = request.json or {}
-    token_id = data.get('id')
-    
-    with MAP_LOCK:
-        for token in ACTIVE_MAP['tokens']:
-            if token['id'] == token_id:
-                if 'name' in data: token['name'] = data['name']
-                if 'color' in data: token['color'] = data['color']
-                if 'size' in data: token['size'] = int(data['size'])
-                if 'hp' in data: token['hp'] = int(data['hp'])
-                if 'max_hp' in data: token['max_hp'] = int(data['max_hp'])
-                if 'temp_hp' in data:
-                    # Stays as int >= 0; PF2e doesn't have negative temp HP.
-                    token['temp_hp'] = max(0, int(data['temp_hp'] or 0))
-                if 'rotation' in data:
-                    # Normalize to 0–359 so the render path doesn't have
-                    # to handle wrap or negative input.
-                    try:
-                        r = int(data['rotation'] or 0)
-                    except (TypeError, ValueError):
-                        r = 0
-                    token['rotation'] = r % 360
-                if 'visible_to_players' in data: token['visible_to_players'] = bool(data['visible_to_players'])
-                if 'vision_radius' in data: token['vision_radius'] = int(data['vision_radius'])
-                if 'assigned_player' in data: token['assigned_player'] = data['assigned_player']
-                if 'initiative' in data: token['initiative'] = data['initiative']
-                if 'conditions' in data: token['conditions'] = data['conditions']  # Can be dict or list
-                if 'ac' in data: token['ac'] = int(data['ac'])
-                if 'speed' in data: token['speed'] = int(data['speed'])
-                if 'darkvision' in data: token['darkvision'] = bool(data['darkvision'])
-                if 'low_light_vision' in data: token['low_light_vision'] = bool(data['low_light_vision'])
-                # Week 3 fields: Hero Points clamp to PF2e's 0-3 range; action
-                # economy fields are reset to 0 by the client on turn change.
-                if 'hero_points' in data:
-                    token['hero_points'] = max(0, min(3, int(data['hero_points'])))
-                if 'actions_used_this_turn' in data:
-                    token['actions_used_this_turn'] = max(0, min(3, int(data['actions_used_this_turn'])))
-                if 'strikes_this_turn' in data:
-                    token['strikes_this_turn'] = max(0, int(data['strikes_this_turn']))
-                if 'portrait' in data:
-                    # Empty string clears, restoring the colored-circle
-                    # renderer for this token. No format check beyond
-                    # truthiness — the file may not exist yet (race) but
-                    # the canvas falls back gracefully on image load error.
-                    token['portrait'] = (data['portrait'] or '')
-                if 'emit_light' in data:
-                    # Per-token light emitter (a PC carrying a torch, a
-                    # glowing rune monster, etc.). Schema mirrors the
-                    # free-standing lights in ACTIVE_MAP['lights'] but
-                    # follows the token through tweens automatically.
-                    # Null/false clears; otherwise normalize + clamp +
-                    # validate animation (matches _build_light's
-                    # validation so token-attached and free lights
-                    # use the same schema).
-                    el = data['emit_light']
-                    if not el:
-                        token['emit_light'] = None
-                    else:
-                        anim = (el.get('animation') or 'none').lower() if isinstance(el.get('animation'), str) else 'none'
-                        if anim not in _LIGHT_ANIMATIONS:
-                            anim = 'none'
-                        try: br = int(el.get('bright', 0) or 0)
-                        except (TypeError, ValueError): br = 0
-                        try: dm = int(el.get('dim', 0) or 0)
-                        except (TypeError, ValueError): dm = 0
-                        token['emit_light'] = {
-                            'bright': max(0, min(_LIGHT_MAX_RADIUS_SQ, br)),
-                            'dim':    max(0, min(_LIGHT_MAX_RADIUS_SQ, dm)),
-                            'color': el.get('color', '#ff9c42'),
-                            'enabled': el.get('enabled') is not False,
-                            'animation': anim,
-                        }
-                break
-        else:
-            return jsonify({'success': False, 'error': 'Token not found'}), 404
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True})
-
-@app.route('/api/map/token/remove', methods=['POST'])
-@gm_required
-def remove_map_token():
-    """Remove a token from the map."""
-    data = request.json or {}
-    token_id = data.get('id')
-    
-    with MAP_LOCK:
-        ACTIVE_MAP['tokens'] = [t for t in ACTIVE_MAP['tokens'] if t['id'] != token_id]
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True})
-
-@app.route('/api/map/token/sync_encounter', methods=['POST'])
-@gm_required
-def sync_tokens_from_encounter():
-    """Sync tokens with the active encounter (add missing, update HP)."""
-    added = 0
-    updated = 0
-    
-    with MAP_LOCK:
-        existing_ids = {t.get('instance_id') for t in ACTIVE_MAP['tokens'] if t.get('instance_id')}
-        
-        for i, combatant in enumerate(ACTIVE_ENCOUNTER):
-            if combatant.instance_id in existing_ids:
-                # Update stats
-                for token in ACTIVE_MAP['tokens']:
-                    if token.get('instance_id') == combatant.instance_id:
-                        token['hp'] = combatant.current_hp
-                        token['max_hp'] = combatant.hp
-                        token['ac'] = combatant.ac if hasattr(combatant, 'ac') else 10
-                        token['conditions'] = [f"{k}:{v}" if isinstance(v, int) and v > 0 else k 
-                                               for k, v in combatant.conditions.items() 
-                                               if v and v != 0 and v is not False] if hasattr(combatant, 'conditions') else []
-                        token['initiative'] = getattr(combatant, 'initiative', 0)
-                        updated += 1
-                        break
-            else:
-                # Add new token
-                color = '#22C55E' if combatant.is_pc else '#EF4444'
-                # Get speed from party library if PC
-                speed = 25
-                if combatant.is_pc and combatant.name in PARTY_LIBRARY:
-                    pc = PARTY_LIBRARY[combatant.name]
-                    speed = getattr(pc, 'speed', 25)
-                
-                # Pull Hero Points from PARTY_LIBRARY for PCs so the token
-                # reflects current sheet state. Action-economy fields start
-                # at 0 (no actions spent yet this turn).
-                hp_count = 1
-                if combatant.is_pc and combatant.name in PARTY_LIBRARY:
-                    hp_count = max(0, min(3, getattr(PARTY_LIBRARY[combatant.name], 'hero_points', 1)))
-                token = {
-                    'id': str(uuid.uuid4())[:8],
-                    'name': combatant.name,
-                    'x': 5 + (i % 5),  # Spread out initially
-                    'y': 5 + (i // 5),
-                    'size': getattr(combatant, 'size', 1) if hasattr(combatant, 'size') else 1,
-                    'color': color,
-                    'instance_id': combatant.instance_id,
-                    'is_pc': combatant.is_pc,
-                    'hp': combatant.current_hp,
-                    'max_hp': combatant.hp,
-                    'ac': combatant.ac if hasattr(combatant, 'ac') else 10,
-                    'speed': speed,
-                    'conditions': [],
-                    'assigned_player': combatant.name if combatant.is_pc else None,
-                    'visible_to_players': True,
-                    'initiative': getattr(combatant, 'initiative', 0),
-                    'hero_points': hp_count if combatant.is_pc else 0,
-                    'actions_used_this_turn': 0,
-                    'strikes_this_turn': 0,
-                }
-                ACTIVE_MAP['tokens'].append(token)
-                added += 1
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True, 'added': added, 'updated': updated})
-
-@app.route('/api/map/token/damage', methods=['POST'])
-@gm_required
-def damage_map_token():
-    """Apply damage to a token and sync with encounter."""
-    data = request.json or {}
-    token_id = data.get('id')
-    amount = int(data.get('amount', 0))
-    
-    target_pc_name = None
-    target_instance_id = None
-    with MAP_LOCK:
-        for token in ACTIVE_MAP['tokens']:
-            if token['id'] == token_id:
-                token['hp'] = max(0, token['hp'] - amount)
-                target_instance_id = token.get('instance_id')
-
-                # Sync with encounter if linked
-                if target_instance_id:
-                    for c in ACTIVE_ENCOUNTER:
-                        if c.instance_id == target_instance_id:
-                            c.current_hp = token['hp']
-                            # Handle dying/wounded
-                            if c.current_hp <= 0 and hasattr(c, 'conditions'):
-                                if c.is_pc:
-                                    c.conditions['dying'] = 1 + c.conditions.get('wounded', 0)
-                            if c.is_pc:
-                                target_pc_name = c.name
-                            break
-                break
-
-    if amount > 0 and (target_pc_name or target_instance_id):
-        _emit_reaction_triggers(
-            pc_name=target_pc_name,
-            instance_id=target_instance_id,
-            event='on_damaged',
-            damage_amount=amount,
-        )
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True})
-
-@app.route('/api/map/token/heal', methods=['POST'])
-@gm_required
-def heal_map_token():
-    """Heal a token and sync with encounter."""
-    data = request.json or {}
-    token_id = data.get('id')
-    amount = int(data.get('amount', 0))
-    
-    with MAP_LOCK:
-        for token in ACTIVE_MAP['tokens']:
-            if token['id'] == token_id:
-                token['hp'] = min(token['max_hp'], token['hp'] + amount)
-                
-                # Sync with encounter if linked
-                if token.get('instance_id'):
-                    for c in ACTIVE_ENCOUNTER:
-                        if c.instance_id == token['instance_id']:
-                            c.current_hp = token['hp']
-                            # Clear dying if healed above 0
-                            if c.current_hp > 0 and hasattr(c, 'conditions'):
-                                if c.conditions.get('dying', 0) > 0:
-                                    c.conditions['dying'] = 0
-                                    c.conditions['wounded'] = c.conditions.get('wounded', 0) + 1
-                            break
-                break
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True})
-
-@app.route('/api/map/token/condition', methods=['POST'])
-@gm_required
-def toggle_map_token_condition():
-    """Toggle a condition on a token."""
-    data = request.json or {}
-    token_id = data.get('id')
-    condition = data.get('condition', '')
-    value = data.get('value')  # Optional value for valued conditions
-    
-    with MAP_LOCK:
-        for token in ACTIVE_MAP['tokens']:
-            if token['id'] == token_id:
-                conditions = token.get('conditions', [])
-                
-                # Check if condition exists
-                existing = None
-                for i, c in enumerate(conditions):
-                    if c.startswith(condition.lower()):
-                        existing = i
-                        break
-                
-                if existing is not None:
-                    # Remove condition
-                    conditions.pop(existing)
-                else:
-                    # Add condition
-                    if value is not None:
-                        conditions.append(f"{condition.lower()}:{value}")
-                    else:
-                        conditions.append(condition.lower())
-                
-                token['conditions'] = conditions
-                
-                # Sync with encounter
-                if token.get('instance_id'):
-                    for c in ACTIVE_ENCOUNTER:
-                        if c.instance_id == token['instance_id'] and hasattr(c, 'conditions'):
-                            cond_lower = condition.lower().replace('-', '_').replace(' ', '_')
-                            if cond_lower in c.conditions:
-                                if isinstance(c.conditions[cond_lower], bool):
-                                    c.conditions[cond_lower] = not c.conditions[cond_lower]
-                                elif isinstance(c.conditions[cond_lower], int):
-                                    if c.conditions[cond_lower] > 0:
-                                        c.conditions[cond_lower] = 0
-                                    else:
-                                        c.conditions[cond_lower] = value if value else 1
-                            break
-                break
-    
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True})
-
-@app.route('/api/map/terrain/toggle', methods=['POST'])
-@gm_required
-def toggle_difficult_terrain():
-    """Toggle difficult terrain on a grid cell."""
-    data = request.json or {}
-    x = int(data.get('x', 0))
-    y = int(data.get('y', 0))
-    
-    with MAP_LOCK:
-        terrain = ACTIVE_MAP.get('difficult_terrain', [])
-        cell = {'x': x, 'y': y}
-        
-        # Check if already marked
-        found = False
-        for i, t in enumerate(terrain):
-            if t['x'] == x and t['y'] == y:
-                terrain.pop(i)
-                found = True
-                break
-        
-        if not found:
-            terrain.append(cell)
-        
-        ACTIVE_MAP['difficult_terrain'] = terrain
-    
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-@app.route('/api/map/spawn', methods=['POST'])
-@gm_required
-def set_spawn_point():
-    """Set the party spawn point on the map."""
-    data = request.json or {}
-    x = int(data.get('x', 0))
-    y = int(data.get('y', 0))
-    
-    with MAP_LOCK:
-        ACTIVE_MAP['spawn_point'] = {'x': x, 'y': y}
-    
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-@app.route('/api/map/wall/toggle_door', methods=['POST'])
-@gm_required
-def toggle_door():
-    """Toggle a door open/closed. Locked doors refuse to open until
-    the GM unlocks them via /api/map/wall/lock_door."""
-    data = request.json or {}
-    wall_id = data.get('id')
-    locked_reject = False
-
-    with MAP_LOCK:
-        for wall in ACTIVE_MAP.get('walls', []):
-            if wall['id'] == wall_id and wall.get('type') == 'door':
-                if wall.get('locked') and not wall.get('open'):
-                    locked_reject = True
-                    break
-                wall['open'] = not wall.get('open', False)
-                break
-
-    if locked_reject:
-        return jsonify({'success': False, 'error': 'door is locked'}), 423
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/wall/lock_door', methods=['POST'])
-@gm_required
-def lock_door():
-    """Set / clear a door's locked state. Body: {id, locked: bool}.
-    Auto-closes the door when locking — a locked open door wouldn't
-    block anything."""
-    data = request.json or {}
-    wall_id = data.get('id')
-    locked = bool(data.get('locked', True))
-    with MAP_LOCK:
-        for wall in ACTIVE_MAP.get('walls', []):
-            if wall['id'] == wall_id and wall.get('type') == 'door':
-                wall['locked'] = locked
-                if locked and wall.get('open'):
-                    wall['open'] = False
-                break
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True})
-
-@app.route('/api/map/walls/clear', methods=['POST'])
-@gm_required
-def clear_all_walls():
-    """Clear all walls from the map."""
-    with MAP_LOCK:
-        ACTIVE_MAP['walls'] = []
-
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True})
-
-
-# --- DRAWINGS LAYER (annotations) ----------------------------------------
-# Visible-to-players sketches that the GM uses for "trap here", tactical
-# notes, room labels, etc. Decoupled from walls (which block sight) and
-# templates (which model AoEs). All endpoints are GM-only; players see
-# the result via the existing map state broadcast.
-
-def _broadcast_map_drawings():
-    with MAP_LOCK:
-        drawings = list(ACTIVE_MAP.get('drawings', []))
-    sse_broadcast('map_drawings', {'drawings': drawings})
-
-
-@app.route('/api/map/drawing/add', methods=['POST'])
-@gm_required
-def add_map_drawing():
-    """Persist a new annotation. Supports five primitives:
-
-      freehand: {type, points: [[x,y],...], color, width}
-      arrow:    {type, x, y, dx, dy, color, width}
-      rect:     {type, x, y, dx, dy, color, width, filled?}
-      circle:   {type, x, y, radius, color, width, filled?}
-      text:     {type, x, y, label, color, size}
-
-    Coordinates are map pixels so drawings stay locked to the map image
-    regardless of pan / zoom."""
-    data = request.json or {}
-    dtype = (data.get('type') or 'freehand').lower()
-    color = data.get('color', '#fbbf24')
-    width = max(1, min(20, int(data.get('width', 3))))
-    label = (data.get('label') or '').strip()[:120] or None
-    author = (data.get('author') or 'GM').strip()[:40]
-
-    drawing = {
-        'id': str(uuid.uuid4())[:8],
-        'type': dtype,
-        'color': color,
-        'width': width,
-        'label': label,
-        'author': author,
-    }
-
-    # Cap on freehand point count — a runaway draw or a crafted POST
-    # of 50k points becomes a multi-MB JSON that's persisted on every
-    # save. 4096 points is well above what a real stroke produces with
-    # the 6-px sample threshold.
-    _MAX_FREEHAND_POINTS = 4096
-
-    def _finite(v):
-        try:
-            f = float(v)
-        except (TypeError, ValueError):
-            return None
-        return f if math.isfinite(f) else None
-
-    if dtype == 'freehand':
-        pts = data.get('points') or []
-        if not isinstance(pts, list) or len(pts) < 2:
-            return jsonify({'success': False, 'error': 'freehand needs at least 2 points'}), 400
-        cleaned = []
-        for p in pts:
-            if not (isinstance(p, (list, tuple)) and len(p) >= 2):
-                continue
-            x, y = _finite(p[0]), _finite(p[1])
-            if x is None or y is None:
-                continue
-            cleaned.append([x, y])
-            if len(cleaned) >= _MAX_FREEHAND_POINTS:
-                break
-        if len(cleaned) < 2:
-            return jsonify({'success': False, 'error': 'need at least 2 finite points'}), 400
-        drawing['points'] = cleaned
-    elif dtype in ('arrow', 'rect'):
-        x  = _finite(data.get('x', 0));  y  = _finite(data.get('y', 0))
-        dx = _finite(data.get('dx', 0)); dy = _finite(data.get('dy', 0))
-        if None in (x, y, dx, dy):
-            return jsonify({'success': False, 'error': 'x/y/dx/dy must be finite numbers'}), 400
-        if abs(dx) < 2 and abs(dy) < 2:
-            return jsonify({'success': False, 'error': 'shape too small'}), 400
-        drawing['x'] = x; drawing['y'] = y; drawing['dx'] = dx; drawing['dy'] = dy
-        if dtype == 'rect':
-            drawing['filled'] = bool(data.get('filled', False))
-    elif dtype == 'circle':
-        x = _finite(data.get('x', 0))
-        y = _finite(data.get('y', 0))
-        r = _finite(data.get('radius', 20))
-        if None in (x, y, r):
-            return jsonify({'success': False, 'error': 'x/y/radius must be finite numbers'}), 400
-        drawing['x'] = x; drawing['y'] = y; drawing['radius'] = max(2.0, r)
-        drawing['filled'] = bool(data.get('filled', False))
-    elif dtype == 'text':
-        if not label:
-            return jsonify({'success': False, 'error': 'text needs a label'}), 400
-        x = _finite(data.get('x', 0)); y = _finite(data.get('y', 0))
-        if None in (x, y):
-            return jsonify({'success': False, 'error': 'x/y must be finite numbers'}), 400
-        drawing['x'] = x; drawing['y'] = y
-        drawing['size'] = max(8, min(96, int(data.get('size', 18))))
-    else:
-        return jsonify({'success': False, 'error': f'unknown drawing type {dtype!r}'}), 400
-
-    with MAP_LOCK:
-        ACTIVE_MAP.setdefault('drawings', []).append(drawing)
-    _save_map_state()
-    _broadcast_map_drawings()
-    return jsonify({'success': True, 'drawing': drawing})
-
-
-@app.route('/api/map/drawing/remove', methods=['POST'])
-@gm_required
-def remove_map_drawing():
-    """Delete a single annotation by id."""
-    data = request.json or {}
-    drawing_id = data.get('id')
-    if not drawing_id:
-        return jsonify({'success': False, 'error': 'id required'}), 400
-    with MAP_LOCK:
-        before = len(ACTIVE_MAP.get('drawings', []))
-        ACTIVE_MAP['drawings'] = [d for d in ACTIVE_MAP.get('drawings', []) if d.get('id') != drawing_id]
-        removed = before - len(ACTIVE_MAP['drawings'])
-    _save_map_state()
-    _broadcast_map_drawings()
-    return jsonify({'success': True, 'removed': removed})
-
-
-@app.route('/api/map/drawings/clear', methods=['POST'])
-@gm_required
-def clear_map_drawings():
-    """Wipe every annotation on the active map."""
-    with MAP_LOCK:
-        ACTIVE_MAP['drawings'] = []
-    _save_map_state()
-    _broadcast_map_drawings()
-    return jsonify({'success': True})
-
-
-# --- TILE LAYER --------------------------------------------------------
-# Decorative images placed above the map but below tokens. Set-dressing
-# for things that are visible but don't block sight, take a turn, or
-# carry game-state (banners, chandeliers, scattered debris).
-
-_TILE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
-_TILE_MAX_BYTES = 8 * 1024 * 1024
-
-def _broadcast_map_tiles():
-    with MAP_LOCK:
-        tiles = list(ACTIVE_MAP.get('tiles', []))
-    sse_broadcast('map_tiles', {'tiles': tiles})
-
-@app.route('/api/map/tile/upload', methods=['POST'])
-@gm_required
-def upload_map_tile():
-    """Upload a tile asset. Returns the filename; the GM then places
-    it via /api/map/tile/add."""
-    f = request.files.get('tile')
-    if not f or not f.filename:
-        return jsonify({'success': False, 'error': 'tile field required'}), 400
-    ext = (os.path.splitext(f.filename)[1] or '').lower().lstrip('.')
-    if ext not in _TILE_EXTENSIONS:
-        return jsonify({'success': False, 'error': f'unsupported format {ext!r}'}), 400
-    f.seek(0, os.SEEK_END); size = f.tell(); f.seek(0)
-    if size > _TILE_MAX_BYTES:
-        return jsonify({'success': False, 'error': f'tile too large ({size // (1024*1024)} MB; max 8)'}), 413
-    os.makedirs(TILES_DIR, exist_ok=True)
-    tile_id = str(uuid.uuid4())[:8]
-    filename = f"{tile_id}.{ext}"
-    f.save(os.path.join(TILES_DIR, filename))
-    return jsonify({'success': True, 'filename': filename})
-
-
-@app.route('/api/map/tiles/<filename>')
-def serve_map_tile(filename):
-    """Stream a tile asset. No auth — tiles are intentionally visible
-    to all viewers (set dressing)."""
-    return send_from_directory(TILES_DIR, filename, conditional=True)
-
-
-@app.route('/api/map/tile/add', methods=['POST'])
-@gm_required
-def add_map_tile():
-    """Place a tile on the map. Body: {filename, x, y, w?, h?,
-    rotation?, opacity?, z?}. The filename must exist in TILES_DIR."""
-    data = request.json or {}
-    filename = (data.get('filename') or '').strip()
-    if not filename or '/' in filename or '\\' in filename or filename.startswith('.'):
-        return jsonify({'success': False, 'error': 'valid filename required'}), 400
-    if not os.path.exists(os.path.join(TILES_DIR, filename)):
-        return jsonify({'success': False, 'error': 'tile asset not found'}), 404
-    try:
-        x = float(data.get('x', 0)); y = float(data.get('y', 0))
-        w = float(data.get('w', 140)); h = float(data.get('h', 140))
-        rot = float(data.get('rotation', 0)) % 360
-        opa = max(0.0, min(1.0, float(data.get('opacity', 1.0))))
-        z = int(data.get('z', 0))
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'numeric fields must parse'}), 400
-    if not all(math.isfinite(v) for v in (x, y, w, h, rot, opa)):
-        return jsonify({'success': False, 'error': 'numeric fields must be finite'}), 400
-    tile = {
-        'id': str(uuid.uuid4())[:8],
-        'filename': filename,
-        'x': x, 'y': y, 'w': max(8, w), 'h': max(8, h),
-        'rotation': rot, 'opacity': opa, 'z': z,
-    }
-    with MAP_LOCK:
-        ACTIVE_MAP.setdefault('tiles', []).append(tile)
-    _save_map_state()
-    _broadcast_map_tiles()
-    return jsonify({'success': True, 'tile': tile})
-
-
-@app.route('/api/map/tile/update', methods=['POST'])
-@gm_required
-def update_map_tile():
-    """Patch tile fields. Body: {id, ...overrides}."""
-    data = request.json or {}
-    tile_id = data.get('id')
-    mutable = {'x', 'y', 'w', 'h', 'rotation', 'opacity', 'z'}
-    with MAP_LOCK:
-        tile = next((t for t in ACTIVE_MAP.get('tiles', []) if t.get('id') == tile_id), None)
-        if not tile:
-            return jsonify({'success': False, 'error': 'tile not found'}), 404
-        for k in mutable:
-            if k not in data:
-                continue
-            try:
-                v = float(data[k])
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(v):
-                continue
-            if k == 'rotation': v = v % 360
-            elif k == 'opacity': v = max(0.0, min(1.0, v))
-            elif k in ('w', 'h'): v = max(8, v)
-            tile[k] = v
-    _save_map_state()
-    _broadcast_map_tiles()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/tile/remove', methods=['POST'])
-@gm_required
-def remove_map_tile():
-    data = request.json or {}
-    tile_id = data.get('id')
-    with MAP_LOCK:
-        ACTIVE_MAP['tiles'] = [t for t in ACTIVE_MAP.get('tiles', []) if t.get('id') != tile_id]
-    _save_map_state()
-    _broadcast_map_tiles()
-    return jsonify({'success': True})
-
-
 def _emit_reaction_triggers(*, pc_name=None, instance_id=None, event, damage_amount=None):
     """Surface available reactions to the affected player + GM. Called
     from damage paths after the HP delta lands. Pulls active effects
-    from sheet + token (whichever the target uses) and dispatches the
+    from the PC sheet and dispatches the
     engine's reaction matcher.
 
     A reaction hint is best-effort: if the engine throws, log and move
@@ -13976,17 +13472,6 @@ def _emit_reaction_triggers(*, pc_name=None, instance_id=None, event, damage_amo
             pc = PARTY_LIBRARY[pc_name]
             effects_list = list(getattr(pc, 'pc_active_effects', []) or [])
             target_name = pc_name
-        # Token-side reactions live on the map record. PCs may have
-        # BOTH sheet + token effects; dedupe by id when both contribute.
-        if instance_id:
-            tok_effects, tok = _token_active_effects(instance_id)
-            if tok_effects:
-                seen = {e.get('id') for e in effects_list}
-                for e in tok_effects:
-                    if e.get('id') not in seen:
-                        effects_list.append(e)
-                if tok and not target_name:
-                    target_name = tok.get('name')
         if not effects_list:
             return
         triggers = effects_service.find_reaction_triggers(effects_list, event=event)
@@ -14011,147 +13496,39 @@ def _emit_reaction_triggers(*, pc_name=None, instance_id=None, event, damage_amo
         print(f"[REACTION] emit failed for {pc_name or instance_id}: {_e}")
 
 
-def _token_active_effects(instance_id):
-    """Look up the active_effects list for a token by combatant
-    instance_id. Returns the list (mutable ref) + the token dict, or
-    (None, None) if the token isn't on the map. The encounter-side
-    Character object also stores conditions; map token stores the
-    spell/feat/item effects."""
-    if not instance_id:
-        return None, None
-    with MAP_LOCK:
-        for tok in ACTIVE_MAP.get('tokens', []):
-            if tok.get('instance_id') == instance_id:
-                return tok.setdefault('active_effects', []), tok
-    return None, None
+def _expire_token_effects_for_round():
+    """Walk every token's active_effects AND every PC's sheet-level
+    pc_active_effects and drop any whose round-based duration has fully
+    elapsed. Logs expiries to the combat log so the GM sees Bless /
+    Bane / Shield falling off automatically. Called from cycle_turn at
+    end-of-turn.
 
-
-@app.route('/api/effects/catalog')
-def api_effects_catalog():
-    """Public catalog of pre-built effects (Heroism, Bless, Mage Armor,
-    etc.). Players see the same list as the GM so they can request
-    'cast Bless on me' with the exact name."""
-    return jsonify({'effects': effects_service.catalog_list()})
-
-
-@app.route('/api/active_effects/<instance_id>')
-def api_active_effects(instance_id):
-    """Return the active-effect breakdown for a combatant — base stats
-    + each condition AND each per-token active effect's contribution
-    + the resulting effective stats. Powers the GM tooltip 'what's
-    modifying this creature' detail panel and the modules system's
-    effect inspection. Now also covers spell / feat / item effects,
-    not just conditions."""
-    target = None
+    Two storage locations to keep in sync — a sheet-applied Heroism
+    mirrors to the map token via add_pc_effect, but only the token side
+    used to expire. That left the player sheet showing "Heroism" minutes
+    after it should have ended, with no way to clear it but manually
+    clicking ×.
+    """
+    expired_log = []
+    # Sheet-side expiry — track which PCs changed so we broadcast only those.
+    changed_pcs = set()
     with ENCOUNTER_LOCK:
-        for c in ACTIVE_ENCOUNTER:
-            if getattr(c, 'instance_id', None) == instance_id:
-                target = c
-                break
-    if not target:
-        return jsonify({'success': False, 'error': 'combatant not found'}), 404
-    # Non-GM callers see only their own PC's effects.
-    if not _is_gm():
-        my_name = session.get('player_name')
-        if not target.is_pc or target.name != my_name:
-            return jsonify({'success': False, 'error': 'forbidden'}), 403
-    base = {
-        'ac':         int(getattr(target, 'ac', 10) or 10),
-        'fort':       int(getattr(target, 'fort', 0) or 0),
-        'ref':        int(getattr(target, 'ref', 0) or 0),
-        'will':       int(getattr(target, 'will', 0) or 0),
-        'attack':     0,  # delta only — base attack is per-strike
-        'damage':     0,
-        'perception': int(getattr(target, 'perception', 0) or 0),
-        'skills':     0,
-        'dc':         0,
-        'actions':    int(getattr(target, 'max_actions', 3) or 3),
-    }
-    conds = {k: v for k, v in (getattr(target, 'conditions', {}) or {}).items() if v}
-    # Per-token active effects live on the map token, keyed by
-    # instance_id; if the token isn't placed on the map, the only
-    # contributing source is conditions.
-    effects_list, _tok = _token_active_effects(instance_id)
-    result = effects_service.compute_token_stats(conds, effects_list or [], base)
-    return jsonify({
-        'success': True,
-        'instance_id': instance_id,
-        'name': target.name,
-        'base': base,
-        'effective': result['effective'],
-        'breakdown': result['breakdown'],
-        'effects': list(effects_list or []),  # full effect records, for the management UI
-        'conditions': conds,
-    })
-
-
-@app.route('/api/map/token/effect/add', methods=['POST'])
-@gm_required
-def add_token_effect():
-    """Apply an effect to a token. Body:
-        {instance_id, catalog_key, caster?, duration_override?,
-         custom_name?, custom_modifiers?, save_dc?}
-    Returns the instantiated effect record + any chained effects the
-    catalog declared. For chains targeted at 'self' / 'caster', the
-    chain is auto-attached to this same token (caster chains attach
-    to the caster token if one can be located by name)."""
-    data = request.json or {}
-    instance_id = data.get('instance_id')
-    catalog_key = data.get('catalog_key')
-    if not instance_id or not catalog_key:
-        return jsonify({'success': False, 'error': 'instance_id + catalog_key required'}), 400
-    effects_list, tok = _token_active_effects(instance_id)
-    if effects_list is None:
-        return jsonify({'success': False, 'error': 'token not found on map'}), 404
-    effect_id = str(uuid.uuid4())[:8]
-    eff = effects_service.instantiate_effect(
-        catalog_key,
-        effect_id=effect_id,
-        caster=(data.get('caster') or '').strip()[:40] or None,
-        current_round=int(ROUND_NUMBER or 1),
-        duration_override=data.get('duration_override'),
-        custom_modifiers=data.get('custom_modifiers'),
-        custom_name=data.get('custom_name'),
-        save_dc=data.get('save_dc'),
-    )
-    if not eff:
-        return jsonify({'success': False, 'error': f'unknown catalog key {catalog_key!r}'}), 400
-    chains = effects_service.materialize_chains(
-        eff, current_round=int(ROUND_NUMBER or 1), caster=eff.get('caster'))
-    chain_log: List[str] = []
-    with MAP_LOCK:
-        effects_list.append(eff)
-        # Auto-attach chains tagged 'self' to this token; 'caster'
-        # chains find the caster token by name. 'manual' chains
-        # return to the client; the UI prompts the GM to apply them.
-        for ch in chains:
-            kind = ch.get('target_kind')
-            chained_eff = ch.get('effect')
-            if not chained_eff:
+        for pc_name, pc in PARTY_LIBRARY.items():
+            effs = list(getattr(pc, 'pc_active_effects', []) or [])
+            if not effs:
                 continue
-            if kind == 'self':
-                effects_list.append(chained_eff)
-                chain_log.append(chained_eff.get('name', '—'))
-            elif kind == 'caster' and eff.get('caster'):
-                # Locate caster token by name (best-effort).
-                for caster_tok in ACTIVE_MAP.get('tokens', []):
-                    if caster_tok.get('name') == eff['caster']:
-                        caster_tok.setdefault('active_effects', []).append(chained_eff)
-                        chain_log.append(f"{chained_eff.get('name', '—')} on caster")
-                        break
-            # 'manual' chains are returned in the response body
-    _save_map_state()
-    _broadcast_map_tokens()
-    _combat_log(f"{tok.get('name', 'Token')}: gained {eff.get('name')}"
-                + (f" from {eff['caster']}" if eff.get('caster') else ''),
-                'condition')
-    for cl in chain_log:
-        _combat_log(f"  ↳ chained: {cl}", 'condition')
-    return jsonify({
-        'success': True,
-        'effect': eff,
-        'manual_chains': [ch['effect'] for ch in chains if ch.get('target_kind') == 'manual'],
-    })
+            kept, exp = effects_service.expire_round_effects(effs, ROUND_NUMBER)
+            if not exp:
+                continue
+            pc.pc_active_effects = kept
+            changed_pcs.add(pc_name)
+            for e in exp:
+                expired_log.append((pc_name, e.get('name', '—')))
+    for tname, ename in expired_log:
+        _combat_log(f"{tname}: {ename} expired", 'condition')
+    for pc_name in changed_pcs:
+        _persist_pc_combat_state(pc_name)
+        _broadcast_pc_state(pc_name)
 
 
 @app.route('/api/pc/<pc_name>/effect/add', methods=['POST'])
@@ -14184,17 +13561,6 @@ def add_pc_effect(pc_name):
     pc.pc_active_effects = list(getattr(pc, 'pc_active_effects', []) or []) + [eff]
     _persist_pc_combat_state(pc_name)
     _broadcast_pc_state(pc_name)
-    # Mirror to any token linked to this PC on the map so the token
-    # tooltip + breakdown stay in sync. Token-side effects coexist
-    # with sheet-side; doubling up here would over-apply, so we only
-    # mirror if no token effect already references this catalog key.
-    with MAP_LOCK:
-        for tok in ACTIVE_MAP.get('tokens', []):
-            if tok.get('pc_name') == pc_name:
-                existing = tok.setdefault('active_effects', [])
-                if not any(e.get('id') == eff['id'] for e in existing):
-                    existing.append(eff)
-    _broadcast_map_tokens()
     _combat_log(f"{pc_name}: gained {eff.get('name')}"
                 + (f" from {eff['caster']}" if eff.get('caster') else ''),
                 'condition')
@@ -14219,14 +13585,6 @@ def remove_pc_effect(pc_name):
         return jsonify({'success': False, 'error': 'effect not found'}), 404
     _persist_pc_combat_state(pc_name)
     _broadcast_pc_state(pc_name)
-    with MAP_LOCK:
-        for tok in ACTIVE_MAP.get('tokens', []):
-            if tok.get('pc_name') == pc_name:
-                tok['active_effects'] = [
-                    e for e in tok.get('active_effects') or []
-                    if e.get('id') != effect_id
-                ]
-    _broadcast_map_tokens()
     return jsonify({'success': True})
 
 
@@ -14248,1350 +13606,6 @@ def list_pc_effects(pc_name):
         'effective': eff['effective'],
         'breakdown': eff['breakdown'],
     })
-
-
-@app.route('/api/map/token/effect/save', methods=['POST'])
-@gm_required
-def resolve_token_effect_save():
-    """Resolve a save against a save-bearing effect. Body:
-        {instance_id, effect_id, roll_total}
-    Server applies the outcome (negate / reduce / apply / stronger)
-    and returns the save_result block for the combat log."""
-    data = request.json or {}
-    instance_id = data.get('instance_id')
-    effect_id = data.get('effect_id')
-    try:
-        roll_total = int(data.get('roll_total'))
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'roll_total must be an int'}), 400
-    effects_list, tok = _token_active_effects(instance_id)
-    if effects_list is None:
-        return jsonify({'success': False, 'error': 'token not found'}), 404
-    target_eff = None
-    with MAP_LOCK:
-        for e in effects_list:
-            if e.get('id') == effect_id:
-                target_eff = e
-                break
-        if not target_eff or not target_eff.get('save'):
-            return jsonify({'success': False, 'error': 'effect has no save block'}), 404
-        result = effects_service.resolve_save(target_eff, roll_total, current_round=int(ROUND_NUMBER or 1))
-    _save_map_state()
-    _broadcast_map_tokens()
-    _combat_log(
-        f"{tok.get('name', 'Token')}: {target_eff.get('name')} save"
-        f" → {result['degree']} (roll {result['roll']} vs DC {result['dc']})"
-        f" → {result['outcome']}",
-        'condition')
-    return jsonify({'success': True, 'save_result': result, 'effect': target_eff})
-
-
-@app.route('/api/map/token/effect/remove', methods=['POST'])
-@gm_required
-def remove_token_effect():
-    """Drop a single effect by id from a token's active_effects list."""
-    data = request.json or {}
-    instance_id = data.get('instance_id')
-    effect_id = data.get('effect_id')
-    if not (instance_id and effect_id):
-        return jsonify({'success': False, 'error': 'instance_id + effect_id required'}), 400
-    removed = None
-    with MAP_LOCK:
-        for tok in ACTIVE_MAP.get('tokens', []):
-            if tok.get('instance_id') != instance_id:
-                continue
-            remaining = []
-            for eff in tok.get('active_effects') or []:
-                if eff.get('id') == effect_id and not removed:
-                    removed = eff
-                    continue
-                remaining.append(eff)
-            tok['active_effects'] = remaining
-            break
-    if not removed:
-        return jsonify({'success': False, 'error': 'effect not found'}), 404
-    _save_map_state()
-    _broadcast_map_tokens()
-    return jsonify({'success': True, 'removed': removed})
-
-
-def _expire_token_effects_for_round():
-    """Walk every token's active_effects AND every PC's sheet-level
-    pc_active_effects and drop any whose round-based duration has fully
-    elapsed. Logs expiries to the combat log so the GM sees Bless /
-    Bane / Shield falling off automatically. Called from cycle_turn at
-    end-of-turn.
-
-    Two storage locations to keep in sync — a sheet-applied Heroism
-    mirrors to the map token via add_pc_effect, but only the token side
-    used to expire. That left the player sheet showing "Heroism" minutes
-    after it should have ended, with no way to clear it but manually
-    clicking ×.
-    """
-    expired_log = []
-    with MAP_LOCK:
-        for tok in ACTIVE_MAP.get('tokens', []):
-            effs = tok.get('active_effects') or []
-            if not effs:
-                continue
-            kept, exp = effects_service.expire_round_effects(effs, ROUND_NUMBER)
-            if exp:
-                tok['active_effects'] = kept
-                for e in exp:
-                    expired_log.append((tok.get('name', 'Token'), e.get('name', '—')))
-    # Sheet-side expiry — track which PCs changed so we broadcast only those.
-    changed_pcs = set()
-    with ENCOUNTER_LOCK:
-        for pc_name, pc in PARTY_LIBRARY.items():
-            effs = list(getattr(pc, 'pc_active_effects', []) or [])
-            if not effs:
-                continue
-            kept, exp = effects_service.expire_round_effects(effs, ROUND_NUMBER)
-            if not exp:
-                continue
-            pc.pc_active_effects = kept
-            changed_pcs.add(pc_name)
-            for e in exp:
-                expired_log.append((pc_name, e.get('name', '—')))
-    for tname, ename in expired_log:
-        _combat_log(f"{tname}: {ename} expired", 'condition')
-    for pc_name in changed_pcs:
-        _persist_pc_combat_state(pc_name)
-        _broadcast_pc_state(pc_name)
-
-
-# --- SOUNDBOARD ----------------------------------------------------------
-# GM uploads audio clips; the play / stop endpoints fan out over SSE so
-# every connected client hits play on the same `<audio>`. Files live under
-# MAP_DIR/audio/. Player viewers can't author clips — only listen.
-
-_AUDIO_EXT_MIME = {
-    'mp3':  'audio/mpeg',
-    'wav':  'audio/wav',
-    'ogg':  'audio/ogg',
-    'm4a':  'audio/mp4',
-    'webm': 'audio/webm',
-}
-_AUDIO_MAX_BYTES = 20 * 1024 * 1024  # 20 MB — ambient tracks comfortably fit
-
-
-@app.route('/api/map/audio/upload', methods=['POST'])
-@gm_required
-def upload_map_audio():
-    """Accept a single audio file and register it in ACTIVE_MAP.audio_clips.
-    Stored under MAP_DIR/audio/{id}.{ext}; served via /api/map/audio/<file>."""
-    f = request.files.get('audio')
-    if not f or not f.filename:
-        return jsonify({'success': False, 'error': 'audio field required'}), 400
-    ext = (os.path.splitext(f.filename)[1] or '').lower().lstrip('.')
-    if ext not in _AUDIO_EXT_MIME:
-        return jsonify({'success': False, 'error': f"unsupported audio format '{ext}'"}), 400
-    # Server-side size check (MAX_CONTENT_LENGTH catches the worst case
-    # at the WSGI layer; this is the per-endpoint refinement).
-    f.seek(0, os.SEEK_END)
-    size = f.tell()
-    f.seek(0)
-    if size > _AUDIO_MAX_BYTES:
-        return jsonify({'success': False, 'error': f'audio too large ({size // (1024*1024)} MB; max 20)'}), 413
-
-    os.makedirs(AUDIO_DIR, exist_ok=True)
-    audio_id = str(uuid.uuid4())[:8]
-    filename = f"{audio_id}.{ext}"
-    f.save(os.path.join(AUDIO_DIR, filename))
-
-    clip = {
-        'id': audio_id,
-        'name': (request.form.get('name') or os.path.splitext(f.filename)[0]).strip()[:80],
-        'filename': filename,
-        'ext': ext,
-        'mime': _AUDIO_EXT_MIME[ext],
-        'size': size,
-        'uploaded_at': time.time(),
-    }
-    with MAP_LOCK:
-        ACTIVE_MAP.setdefault('audio_clips', []).append(clip)
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'clip': clip})
-
-
-@app.route('/api/map/audio/<filename>')
-def serve_map_audio(filename):
-    """Stream a clip. No auth — players need to play the audio the GM
-    triggered, and the file path is opaque (uuid + ext)."""
-    return send_from_directory(AUDIO_DIR, filename, conditional=True)
-
-
-_LAST_AUDIO_PLAY_AT = {}  # clip_id → unix ts of last broadcast
-_AUDIO_PLAY_MIN_INTERVAL_SEC = 0.2
-
-@app.route('/api/map/audio/play', methods=['POST'])
-@gm_required
-def play_map_audio():
-    """Broadcast a play event. Body: {id, volume?, loop?}. The server
-    looks up the clip by id and includes the resolved URL in the SSE
-    payload so clients don't have to re-query. Per-clip rate-limited
-    so a misclicking GM (or a hostile-injected loop) can't fan out
-    100 plays/sec to every connected client."""
-    data = request.json or {}
-    clip_id = data.get('id')
-    now = time.time()
-    last = _LAST_AUDIO_PLAY_AT.get(clip_id, 0)
-    if now - last < _AUDIO_PLAY_MIN_INTERVAL_SEC:
-        return jsonify({'success': True, 'throttled': True})
-    _LAST_AUDIO_PLAY_AT[clip_id] = now
-    with MAP_LOCK:
-        clip = next((c for c in ACTIVE_MAP.get('audio_clips', []) if c.get('id') == clip_id), None)
-    if not clip:
-        return jsonify({'success': False, 'error': 'unknown clip id'}), 404
-    payload = {
-        'action': 'play',
-        'id': clip['id'],
-        'name': clip['name'],
-        'url': '/api/map/audio/' + clip['filename'],
-        'mime': clip.get('mime', ''),
-        'volume': max(0.0, min(1.0, float(data.get('volume', 0.8) or 0.8))),
-        'loop': bool(data.get('loop', False)),
-    }
-    _broadcast_event('audio', payload)
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/audio/stop', methods=['POST'])
-@gm_required
-def stop_map_audio():
-    """Stop a single clip (id provided) or every clip (id omitted)."""
-    data = request.json or {}
-    clip_id = data.get('id')
-    _broadcast_event('audio', {'action': 'stop', 'id': clip_id or None})
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/audio/remove', methods=['POST'])
-@gm_required
-def remove_map_audio():
-    """Delete a clip from the soundboard + erase the file."""
-    data = request.json or {}
-    clip_id = data.get('id')
-    removed = None
-    with MAP_LOCK:
-        remaining = []
-        for c in ACTIVE_MAP.get('audio_clips', []):
-            if c.get('id') == clip_id and not removed:
-                removed = c
-                continue
-            remaining.append(c)
-        ACTIVE_MAP['audio_clips'] = remaining
-    if removed and removed.get('filename'):
-        try:
-            os.remove(os.path.join(AUDIO_DIR, removed['filename']))
-        except OSError:
-            pass
-    _save_map_state()
-    _broadcast_map_state()
-    # Best-effort stop in case the clip is currently playing
-    _broadcast_event('audio', {'action': 'stop', 'id': clip_id})
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/drawing/move', methods=['POST'])
-@gm_required
-def move_map_drawing():
-    """Translate an existing annotation by (dx, dy) pixels. For freehand
-    strokes every sampled point shifts; shape primitives shift their
-    anchor + (for circle) leave the radius untouched.
-
-    Body: {id, dx, dy}. Returns the updated drawing record."""
-    data = request.json or {}
-    drawing_id = data.get('id')
-    try:
-        dx = float(data.get('dx', 0))
-        dy = float(data.get('dy', 0))
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'dx/dy must be numeric'}), 400
-    # NaN / Infinity propagates into stored coords and breaks canvas
-    # render for everyone — every subsequent paint short-circuits on
-    # NaN arithmetic. Reject early so a fat-fingered call doesn't
-    # corrupt the persisted state file.
-    if not (math.isfinite(dx) and math.isfinite(dy)):
-        return jsonify({'success': False, 'error': 'dx/dy must be finite'}), 400
-    if not drawing_id:
-        return jsonify({'success': False, 'error': 'id required'}), 400
-    if dx == 0 and dy == 0:
-        return jsonify({'success': True, 'noop': True})
-    moved = None
-    with MAP_LOCK:
-        for d in ACTIVE_MAP.get('drawings', []):
-            if d.get('id') != drawing_id:
-                continue
-            t = d.get('type')
-            if t == 'freehand':
-                d['points'] = [[p[0] + dx, p[1] + dy] for p in d.get('points', [])]
-            elif t in ('arrow', 'rect', 'circle', 'text'):
-                d['x'] = float(d.get('x', 0)) + dx
-                d['y'] = float(d.get('y', 0)) + dy
-            moved = d
-            break
-    if not moved:
-        return jsonify({'success': False, 'error': 'drawing not found'}), 404
-    _save_map_state()
-    _broadcast_map_drawings()
-    return jsonify({'success': True, 'drawing': moved})
-
-@app.route('/api/map/border', methods=['POST'])
-@gm_required
-def border_map():
-    """Create invisible walls around the entire map border."""
-    if not ACTIVE_MAP.get('image'):
-        return jsonify({'success': False, 'error': 'No map loaded'}), 400
-    
-    # Get map image dimensions
-    map_path = os.path.join(MAP_DIR, ACTIVE_MAP['image'])
-    if not os.path.exists(map_path):
-        return jsonify({'success': False, 'error': 'Map file not found'}), 400
-    
-    # Use PIL to get dimensions
-    try:
-        from PIL import Image
-        with Image.open(map_path) as img:
-            width, height = img.size
-    except:
-        # Fallback: estimate from grid
-        width = 2000
-        height = 2000
-    
-    # Create border walls (invisible type - blocks movement only)
-    border_wall = {
-        'id': 'border-' + str(uuid.uuid4())[:8],
-        'points': [
-            [0, 0],
-            [width, 0],
-            [width, height],
-            [0, height]
-        ],
-        'type': 'invisible',
-        'closed': True,
-        'open': False,
-    }
-    
-    with MAP_LOCK:
-        # Remove any existing border walls
-        ACTIVE_MAP['walls'] = [w for w in ACTIVE_MAP.get('walls', []) if not w['id'].startswith('border-')]
-        ACTIVE_MAP['walls'].append(border_wall)
-    
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True, 'width': width, 'height': height})
-
-# --- EXPLORED FOG (Grid-based) ---
-
-@app.route('/api/map/explored', methods=['POST'])
-def update_explored():
-    """Update explored grid cells.
-
-    Player-facing: player clients auto-accumulate cells their token has seen
-    and POST them here. We UNION into the existing set rather than replacing,
-    so two players walking around in parallel don't clobber each other's
-    memory. GM can replace wholesale by passing `replace: true`.
-    """
-    data = request.json or {}
-    # Accept 'cells' (new player contract) and 'explored' (legacy GM contract)
-    cells = data.get('cells') or data.get('explored') or []
-    replace = bool(data.get('replace', False)) and session.get('gm_authenticated', False)
-
-    with MAP_LOCK:
-        if replace:
-            ACTIVE_MAP['explored'] = list(cells)
-        else:
-            current = set(ACTIVE_MAP.get('explored') or [])
-            current.update(cells)
-            ACTIVE_MAP['explored'] = list(current)
-
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'total': len(ACTIVE_MAP['explored'])})
-
-@app.route('/api/map/explored/clear', methods=['POST'])
-@gm_required
-def clear_explored():
-    """Clear all explored areas (reset fog)."""
-    with MAP_LOCK:
-        ACTIVE_MAP['explored'] = []
-    
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-# --- PING ---
-
-@app.route('/api/map/ping', methods=['POST'])
-def map_ping():
-    """Broadcast a ping to all players. `player` field derived
-    server-side — body's player is ignored to block identity spoofing."""
-    data = request.json or {}
-    try:
-        x = float(data.get('x', 0))
-        y = float(data.get('y', 0))
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
-    if not (math.isfinite(x) and math.isfinite(y)):
-        return jsonify({'success': False, 'error': 'x/y must be finite'}), 400
-    _broadcast_event('ping', {'x': x, 'y': y, 'player': _caller_label()})
-    return jsonify({'success': True})
-
-
-# Per-player throttle for the live cursor broadcast so a flaky network
-# can't flood the SSE channel. ~10 updates/sec/player is plenty for
-# Foundry-style cursor following.
-_LAST_CURSOR_AT = {}
-_CURSOR_MIN_INTERVAL_SEC = 0.08
-
-def _caller_label():
-    """Server-derived speaker label for broadcast endpoints. Players
-    can't influence this; the body field is ignored. Stops spoofing
-    where a player POSTs {player:'GM'} and their cursor / ruler /
-    ping / roll renders to the table with the GM's identity."""
-    if _is_gm():
-        return 'GM'
-    return (session.get('player_name') or 'Player')[:40]
-
-
-@app.route('/api/map/cursor', methods=['POST'])
-def map_cursor():
-    """Broadcast a live cursor position. Unlike `/api/map/ping` this fires
-    continuously while the mouse moves and decays on the client; nothing
-    is persisted server-side. Each viewer renders every OTHER viewer's
-    cursor as a small named dot (Foundry-style cursor following).
-
-    Body: {x, y} — x/y in map coords (so zoom-independent). The
-    `player` identity is derived server-side from session — body's
-    player field is ignored to block spoofing.
-    Server-throttled per player to one update every ~80 ms; clients also
-    throttle on their side so a wandering mouse doesn't push 1 kHz."""
-    data = request.json or {}
-    player = _caller_label()
-    now = time.time()
-    last = _LAST_CURSOR_AT.get(player, 0)
-    if now - last < _CURSOR_MIN_INTERVAL_SEC:
-        return jsonify({'success': True, 'throttled': True})
-    _LAST_CURSOR_AT[player] = now
-    # Drop dict entries we haven't heard from in 5 minutes so the
-    # throttle bookkeeping doesn't grow forever on a long-running app.
-    if len(_LAST_CURSOR_AT) > 64:
-        cutoff = now - 300
-        for k in [k for k, t in _LAST_CURSOR_AT.items() if t < cutoff]:
-            _LAST_CURSOR_AT.pop(k, None)
-    try:
-        x = float(data.get('x', 0))
-        y = float(data.get('y', 0))
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'x/y must be numeric'}), 400
-    if not (math.isfinite(x) and math.isfinite(y)):
-        return jsonify({'success': False, 'error': 'x/y must be finite'}), 400
-    _broadcast_event('cursor', {'x': x, 'y': y, 'player': player, 't': now})
-    return jsonify({'success': True})
-
-
-# Same throttle bucket as cursor — a ruler drag is mousemove-driven and
-# could be even chattier on a long measurement. Keep the broadcast to
-# ~10 Hz so the SSE channel stays cheap.
-_LAST_RULER_AT = {}
-_RULER_MIN_INTERVAL_SEC = 0.08
-
-@app.route('/api/map/ruler', methods=['POST'])
-def map_ruler():
-    """Broadcast a live ruler line. Used during a measurement drag so the
-    rest of the table sees the same "the dragon is 35 ft away" line the
-    GM is looking at. Pass `clear: True` (or omit x2/y2) to retract the
-    line when the GM releases the mouse.
-
-    Body: {x1, y1, x2, y2, clear?}. The `player` field is derived
-    server-side from session — body's player field is ignored."""
-    data = request.json or {}
-    player = _caller_label()
-    now = time.time()
-    # `clear` always broadcasts (mouse-up shouldn't be throttled — we
-    # want the retract to land immediately so the line vanishes).
-    is_clear = bool(data.get('clear'))
-    if not is_clear:
-        last = _LAST_RULER_AT.get(player, 0)
-        if now - last < _RULER_MIN_INTERVAL_SEC:
-            return jsonify({'success': True, 'throttled': True})
-        _LAST_RULER_AT[player] = now
-        if len(_LAST_RULER_AT) > 64:
-            cutoff = now - 300
-            for k in [k for k, t in _LAST_RULER_AT.items() if t < cutoff]:
-                _LAST_RULER_AT.pop(k, None)
-    payload = {'player': player, 't': now, 'clear': is_clear}
-    if not is_clear:
-        try:
-            x1 = float(data.get('x1', 0)); y1 = float(data.get('y1', 0))
-            x2 = float(data.get('x2', 0)); y2 = float(data.get('y2', 0))
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'ruler coords must be numeric'}), 400
-        if not all(math.isfinite(v) for v in (x1, y1, x2, y2)):
-            return jsonify({'success': False, 'error': 'ruler coords must be finite'}), 400
-        payload.update({'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2})
-        payload['feet'] = max(0, int(data.get('feet', 0) or 0))
-    _broadcast_event('ruler', payload)
-    return jsonify({'success': True})
-
-@app.route('/api/map/roll', methods=['POST'])
-def broadcast_roll():
-    """Broadcast a dice roll to all clients (especially GM). The
-    `player` field is server-derived from session — a player can't
-    POST {player:'GM'} and have a fake roll attributed to the GM."""
-    data = request.json or {}
-
-    roll_data = {
-        'player': _caller_label(),
-        'dice': data.get('dice', 'd20'),
-        'result': data.get('result') or data.get('roll'),
-        'total': data.get('total'),
-        'bonus': data.get('bonus'),
-        'attack': data.get('attack'),
-        'damage': data.get('damage'),
-        'crit': data.get('crit', False),
-        'fumble': data.get('fumble', False),
-        'time': time.strftime('%H:%M:%S')
-    }
-
-    sse_broadcast('dice_roll', roll_data)
-    return jsonify({'success': True})
-
-# --- CHARACTER API ---
-
-@app.route('/api/character/<name>')
-def get_character_api(name):
-    """Get character data by name."""
-    # Check party library
-    for pc in PARTY_LIBRARY.values():
-        if pc.name.lower() == name.lower():
-            return jsonify({
-                'success': True,
-                'character': {
-                    'name': pc.name,
-                    'hp': pc.hp,
-                    'current_hp': pc.current_hp,
-                    'ac': pc.ac,
-                    'speed': getattr(pc, 'speed', 25),
-                    'perception': pc.perception if hasattr(pc, 'perception') else 10,
-                    'level': pc.level if hasattr(pc, 'level') else 1,
-                }
-            })
-    
-    return jsonify({'success': False, 'error': 'Character not found'})
-
-@app.route('/api/creature/<name>')
-def get_creature_api(name):
-    """Get full creature data by name (from encounter or monster library)."""
-    # Check active encounter
-    for c in ACTIVE_ENCOUNTER:
-        if c.name.lower() == name.lower() or (hasattr(c, 'instance_id') and c.instance_id == name):
-            return jsonify({
-                'success': True,
-                'creature': {
-                    'name': c.name,
-                    'level': getattr(c, 'level', 0),
-                    'hp': c.hp,
-                    'current_hp': c.current_hp,
-                    'ac': c.ac if hasattr(c, 'ac') else 10,
-                    'speed': getattr(c, 'speed', 25),
-                    'perception': c.base_perception if hasattr(c, 'base_perception') else 0,
-                    'fort': c.base_fort if hasattr(c, 'base_fort') else 0,
-                    'ref': c.base_ref if hasattr(c, 'base_ref') else 0,
-                    'will': c.base_will if hasattr(c, 'base_will') else 0,
-                    'strikes': getattr(c, 'strikes', []),
-                    'actions': getattr(c, 'actions', []),
-                    'immunities': getattr(c, 'immunities', []),
-                    'resistances': getattr(c, 'resistances', []),
-                    'weaknesses': getattr(c, 'weaknesses', []),
-                    'traits': getattr(c, 'traits', []),
-                    'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False} if hasattr(c, 'conditions') else {},
-                    'is_pc': getattr(c, 'is_pc', False),
-                }
-            })
-    
-    # Check party library
-    for pc in PARTY_LIBRARY.values():
-        if pc.name.lower() == name.lower():
-            # Project the PC's computed `attacks` (from class_matrix +
-            # PB import + ABP + rule_modifiers) into the same {name,
-            # bonus, damage} contract the map's rollStrike() expects.
-            # Each entry also carries the full MAP cascade (no MAP / -5
-            # / -10) so the sheet can offer the second/third strike
-            # buttons without doing the math client-side.
-            pc_strikes = []
-            try:
-                for atk in (pc.attacks or []):
-                    strikes_arr = atk.get('strikes') or []
-                    first = strikes_arr[0] if strikes_arr else {}
-                    pc_strikes.append({
-                        'name': atk.get('name', ''),
-                        'bonus': first.get('mod', 0),
-                        'damage': atk.get('damage', ''),
-                        'traits': atk.get('traits', []),
-                        'map_strikes': [
-                            {'mod': s.get('mod', 0), 'label': s.get('label', ''),
-                             'map_label': s.get('map_label', '')}
-                            for s in strikes_arr
-                        ],
-                    })
-            except Exception as e:
-                print(f"[creature_api] PC strike projection failed for {pc.name}: {e}")
-
-            # Project feats into the same {name, description} shape the map
-            # sheet's "abilities" section expects. PCs don't have monster-
-            # style action blocks, but feats are the closest analog and
-            # players want to see what they can do.
-            pc_actions = []
-            try:
-                for f in (pc.feats or [])[:25]:  # cap to avoid 100+ feat sheets
-                    pc_actions.append({
-                        'name': f.get('name', ''),
-                        'description': f.get('desc', ''),
-                    })
-            except Exception:
-                pass
-
-            return jsonify({
-                'success': True,
-                'creature': {
-                    'name': pc.name,
-                    'level': pc.level if hasattr(pc, 'level') else 1,
-                    'hp': pc.hp,
-                    'current_hp': pc.current_hp,
-                    'ac': pc.ac,
-                    'speed': getattr(pc, 'speed', 25),
-                    'perception': pc.perception if hasattr(pc, 'perception') else 10,
-                    'fort': pc.fort if hasattr(pc, 'fort') else 0,
-                    'ref': pc.ref if hasattr(pc, 'ref') else 0,
-                    'will': pc.will if hasattr(pc, 'will') else 0,
-                    'strikes': pc_strikes,
-                    'actions': pc_actions,
-                    'immunities': [],
-                    'resistances': [],
-                    'weaknesses': [],
-                    'traits': [],
-                    'conditions': {},
-                    'is_pc': True,
-                }
-            })
-    
-    return jsonify({'success': False, 'error': 'Creature not found'})
-
-# --- FOG OF WAR (Legacy) ---
-
-@app.route('/api/map/fog/reveal', methods=['POST'])
-@gm_required
-def reveal_fog():
-    """Reveal an area of the map (add to revealed regions)."""
-    data = request.json or {}
-    region = {
-        'id': str(uuid.uuid4())[:8],
-        'type': data.get('type', 'rect'),  # rect, circle, polygon
-        'x': int(data.get('x', 0)),
-        'y': int(data.get('y', 0)),
-        'w': int(data.get('w', 1)),
-        'h': int(data.get('h', 1)),
-        'r': int(data.get('r', 0)),  # For circles
-        'points': data.get('points', []),  # For polygons
-        'revealed': True,
-    }
-    
-    with MAP_LOCK:
-        ACTIVE_MAP['fog'].append(region)
-    
-    _save_map_state()
-    _broadcast_map_fog()
-    return jsonify({'success': True, 'region': region})
-
-@app.route('/api/map/fog/hide', methods=['POST'])
-@gm_required
-def hide_fog():
-    """Hide an area (remove from revealed regions or add hidden region)."""
-    data = request.json or {}
-    region_id = data.get('id')
-    
-    if region_id:
-        # Remove specific region
-        with MAP_LOCK:
-            ACTIVE_MAP['fog'] = [r for r in ACTIVE_MAP['fog'] if r['id'] != region_id]
-    else:
-        # Add a hidden region
-        region = {
-            'id': str(uuid.uuid4())[:8],
-            'type': data.get('type', 'rect'),
-            'x': int(data.get('x', 0)),
-            'y': int(data.get('y', 0)),
-            'w': int(data.get('w', 1)),
-            'h': int(data.get('h', 1)),
-            'revealed': False,
-        }
-        with MAP_LOCK:
-            ACTIVE_MAP['fog'].append(region)
-    
-    _save_map_state()
-    _broadcast_map_fog()
-    return jsonify({'success': True})
-
-@app.route('/api/map/fog/reset', methods=['POST'])
-@gm_required
-def reset_fog():
-    """Reset all fog (either reveal all or hide all)."""
-    data = request.json or {}
-    mode = data.get('mode', 'hide_all')  # 'hide_all' or 'reveal_all'
-    
-    with MAP_LOCK:
-        if mode == 'reveal_all':
-            ACTIVE_MAP['fog'] = [{'id': 'all', 'type': 'all', 'revealed': True}]
-        else:
-            ACTIVE_MAP['fog'] = []
-    
-    _save_map_state()
-    _broadcast_map_fog()
-    return jsonify({'success': True})
-
-# --- WALL MANAGEMENT ---
-
-def _broadcast_map_walls():
-    """Broadcast wall state to all clients."""
-    with MAP_LOCK:
-        walls = ACTIVE_MAP.get('walls', [])
-    sse_broadcast('map_walls', {'walls': walls})
-
-@app.route('/api/map/wall/add', methods=['POST'])
-@gm_required
-def add_wall():
-    """Add a wall segment to the map."""
-    data = request.json or {}
-    points = data.get('points', [])
-    
-    if len(points) < 2:
-        return jsonify({'success': False, 'error': 'Wall needs at least 2 points'}), 400
-    
-    wall = {
-        'id': str(uuid.uuid4())[:8],
-        'points': points,  # [[x1,y1], [x2,y2], ...] in pixel coordinates
-        'type': data.get('type', 'normal'),  # 'normal', 'terrain', 'invisible', 'ethereal', 'door'
-        'open': False,  # For doors
-        'closed': data.get('closed', False),  # Whether the wall forms a closed shape
-        # Door locked state. A locked door behaves visually like a
-        # closed door but refuses click-to-open from non-GM. GM-only
-        # toggle. Only meaningful when type == 'door'.
-        'locked': bool(data.get('locked', False)) and data.get('type') == 'door',
-        # Secret door fields — if secret=True, the door masquerades as a normal
-        # wall to any player not listed in discovered_by. GM always sees it with
-        # the secret styling so they can plan around it.
-        'secret': bool(data.get('secret', False)) and data.get('type') == 'door',
-        'hidden_dc': int(data.get('hidden_dc', 0) or 0),
-        'discovered_by': [],
-    }
-
-    with MAP_LOCK:
-        if 'walls' not in ACTIVE_MAP:
-            ACTIVE_MAP['walls'] = []
-        ACTIVE_MAP['walls'].append(wall)
-
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True, 'wall': wall})
-
-@app.route('/api/map/wall/remove', methods=['POST'])
-@gm_required
-def remove_wall():
-    """Remove a wall from the map."""
-    data = request.json or {}
-    wall_id = data.get('id')
-    
-    with MAP_LOCK:
-        ACTIVE_MAP['walls'] = [w for w in ACTIVE_MAP.get('walls', []) if w['id'] != wall_id]
-    
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True})
-
-@app.route('/api/map/wall/hidden_side', methods=['POST'])
-@gm_required
-def set_wall_hidden_side():
-    """Set which side of a wall is hidden from players."""
-    data = request.json or {}
-    wall_id = data.get('id')
-    hidden_side = data.get('hidden_side', 'none')  # 'none', 'left', 'right'
-    
-    with MAP_LOCK:
-        for wall in ACTIVE_MAP.get('walls', []):
-            if wall['id'] == wall_id:
-                wall['hidden_side'] = hidden_side
-                break
-    
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True})
-
-@app.route('/api/map/wall/clear', methods=['POST'])
-@gm_required
-def clear_walls():
-    """Clear all walls from the map."""
-    with MAP_LOCK:
-        ACTIVE_MAP['walls'] = []
-
-    _save_map_state()
-    _broadcast_map_walls()
-    return jsonify({'success': True})
-
-@app.route('/api/map/wall/set_secret', methods=['POST'])
-@gm_required
-def set_wall_secret():
-    """GM-only: toggle secret flag and hidden DC on a door wall.
-
-    Doors flipped to secret vanish for any player not in discovered_by — they
-    still block vision, but the player sees only what looks like a normal
-    wall until somebody Seeks and passes the DC.
-    """
-    data = request.json or {}
-    wall_id = data.get('id')
-    secret = bool(data.get('secret', False))
-    hidden_dc = int(data.get('hidden_dc', 0) or 0)
-
-    with MAP_LOCK:
-        for wall in ACTIVE_MAP.get('walls', []):
-            if wall['id'] == wall_id and wall.get('type') == 'door':
-                wall['secret'] = secret
-                wall['hidden_dc'] = hidden_dc
-                # Clear discovered list on any change — re-reveal required
-                wall['discovered_by'] = [] if secret else wall.get('discovered_by', [])
-                break
-
-    _save_map_state()
-    _broadcast_map_walls()
-    # Player views depend on filtered state, so broadcast full state
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/wall/seek', methods=['POST'])
-def seek_wall():
-    """Roll a token's Perception vs a secret door's hidden DC.
-
-    Called when the GM clicks a secret door and picks which PC is seeking,
-    or (future) when a player-side Seek action targets an adjacency. On
-    success the seeking player is added to discovered_by and the door
-    becomes visible to them.
-    """
-    data = request.json or {}
-    wall_id = data.get('id')
-    token_id = data.get('token_id')
-
-    if not wall_id or not token_id:
-        return jsonify({'success': False, 'error': 'wall id and token id required'}), 400
-
-    with MAP_LOCK:
-        wall = next((w for w in ACTIVE_MAP.get('walls', []) if w['id'] == wall_id), None)
-        token = next((t for t in ACTIVE_MAP.get('tokens', []) if t['id'] == token_id), None)
-
-        if not wall:
-            return jsonify({'success': False, 'error': 'wall not found'}), 404
-        if not token:
-            return jsonify({'success': False, 'error': 'token not found'}), 404
-        if not wall.get('secret'):
-            return jsonify({'success': False, 'error': 'not a secret door'}), 400
-
-        # Perception modifier lives on the PC character, not the token; pull
-        # from the live party library so we read the real sheet (with buffs
-        # applied) rather than the map's cached token.
-        pc_name = token.get('pc_name') or token.get('assigned_player') or token.get('name')
-        perception_mod = 0
-        if pc_name:
-            for lib_name, pc in PARTY_LIBRARY.items():
-                if lib_name == pc_name or pc.name == pc_name:
-                    perception_mod = int(getattr(pc, 'perception', 0) or 0)
-                    break
-        # Fallback — use token-level perception if no PC sheet
-        if perception_mod == 0 and isinstance(token.get('perception'), (int, float)):
-            perception_mod = int(token['perception'])
-
-        roll = random.randint(1, 20)
-        total = roll + perception_mod
-        dc = int(wall.get('hidden_dc') or 0)
-
-        # PF2e degrees of success — nat 20 bumps up, nat 1 bumps down
-        diff = total - dc
-        if diff >= 10:
-            degree = 'critical success'
-        elif diff >= 0:
-            degree = 'success'
-        elif diff > -10:
-            degree = 'failure'
-        else:
-            degree = 'critical failure'
-        if roll == 20:
-            degree = {'critical failure': 'failure', 'failure': 'success', 'success': 'critical success'}.get(degree, 'critical success')
-        elif roll == 1:
-            degree = {'critical success': 'success', 'success': 'failure', 'failure': 'critical failure'}.get(degree, 'critical failure')
-
-        revealed = degree in ('success', 'critical success')
-        discoverer = pc_name or token.get('name') or 'someone'
-
-        if revealed:
-            discovered = wall.get('discovered_by') or []
-            if discoverer not in discovered:
-                discovered.append(discoverer)
-            wall['discovered_by'] = discovered
-
-    _combat_log(f"{discoverer} Seeks a hidden door: 1d20 ({roll}) + {perception_mod} = {total} vs DC {dc} — {degree}",
-                log_type='action')
-
-    if revealed:
-        _save_map_state()
-        _broadcast_map_walls()
-        _broadcast_map_state()
-
-    return jsonify({
-        'success': True,
-        'revealed': revealed,
-        'roll': roll,
-        'modifier': perception_mod,
-        'total': total,
-        'dc': dc,
-        'degree': degree,
-        'discoverer': discoverer,
-    })
-
-
-# --- LIGHTING -------------------------------------------------------------
-# Light sources illuminate the map for PC tokens. Each light has a bright
-# radius (full illumination) and a dim radius (extends beyond bright —
-# darkvision treats dim as bright; low-light vision treats dim as bright too
-# but adds half the bright radius). Lights can be attached to a token so
-# they follow it (torch in a backpack). Radii are in squares for sanity —
-# the client multiplies by grid_size when raycasting.
-
-LIGHT_PRESETS = {
-    # Each preset can opt into an animation — flicker for naked flame,
-    # pulse for steady magical glow, none for the rest. The GM can
-    # override per-light via the flyout / update endpoint.
-    'candle':     {'bright': 1,  'dim': 1,  'color': '#ffd27a', 'animation': 'flicker'},
-    'torch':      {'bright': 4,  'dim': 4,  'color': '#ff9c42', 'animation': 'flicker'},
-    'lantern':    {'bright': 6,  'dim': 6,  'color': '#ffb866', 'animation': 'flicker'},
-    'bullseye':   {'bright': 12, 'dim': 2,  'color': '#fff1c0', 'animation': 'none'},
-    'daylight':   {'bright': 12, 'dim': 12, 'color': '#fff8e0', 'animation': 'pulse'},
-}
-
-_LIGHT_ANIMATIONS = {'none', 'flicker', 'pulse'}
-
-# PF2e tops out at 120-ft (24-square) bright vision for typical light
-# spells. 50-square (250-ft) cap leaves room for daylight + a margin
-# while preventing a typo'd 100000-square radius from freezing
-# visibility recomputation.
-_LIGHT_MAX_RADIUS_SQ = 50
-
-def _build_light(data):
-    """Normalize a light payload — preset picks defaults, data overrides.
-    All numeric fields are validated for finite + bounded so a bad
-    POST can't corrupt the persisted state file."""
-    preset_key = (data.get('preset') or '').lower()
-    preset = LIGHT_PRESETS.get(preset_key, {})
-    animation = (data.get('animation') or preset.get('animation') or 'none').lower()
-    if animation not in _LIGHT_ANIMATIONS:
-        animation = 'none'
-    try:
-        x = float(data.get('x', 0)); y = float(data.get('y', 0))
-    except (TypeError, ValueError):
-        x = y = 0.0
-    if not (math.isfinite(x) and math.isfinite(y)):
-        x = y = 0.0
-    try:
-        bright = int(data.get('bright', preset.get('bright', 4)))
-    except (TypeError, ValueError):
-        bright = preset.get('bright', 4)
-    try:
-        dim = int(data.get('dim', preset.get('dim', 4)))
-    except (TypeError, ValueError):
-        dim = preset.get('dim', 4)
-    return {
-        'id': str(uuid.uuid4())[:8],
-        'x': x,                                         # pixel coords
-        'y': y,
-        'bright': max(0, min(_LIGHT_MAX_RADIUS_SQ, bright)),
-        'dim':    max(0, min(_LIGHT_MAX_RADIUS_SQ, dim)),
-        'color': data.get('color', preset.get('color', '#ff9c42')),
-        'enabled': bool(data.get('enabled', True)),
-        'attached_to': data.get('attached_to'),         # token id or None
-        'name': data.get('name', preset_key or 'Light'),
-        'preset': preset_key or None,
-        # Per-frame visual animation. 'flicker' jitters the radius like
-        # a torch; 'pulse' smoothly waxes/wanes like a magical sphere.
-        # Purely cosmetic — fog reveal still uses the static radius so
-        # cells don't flicker in and out.
-        'animation': animation,
-    }
-
-
-@app.route('/api/map/light/add', methods=['POST'])
-@gm_required
-def add_light():
-    """Place a new light source."""
-    data = request.json or {}
-    light = _build_light(data)
-
-    with MAP_LOCK:
-        ACTIVE_MAP.setdefault('lights', []).append(light)
-
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'light': light})
-
-
-@app.route('/api/map/light/update', methods=['POST'])
-@gm_required
-def update_light():
-    """Patch an existing light — pass only the fields you want to change."""
-    data = request.json or {}
-    light_id = data.get('id')
-    if not light_id:
-        return jsonify({'success': False, 'error': 'light id required'}), 400
-
-    mutable = {'x', 'y', 'bright', 'dim', 'color', 'enabled', 'attached_to', 'name', 'animation'}
-    with MAP_LOCK:
-        light = next((l for l in ACTIVE_MAP.get('lights', []) if l['id'] == light_id), None)
-        if not light:
-            return jsonify({'success': False, 'error': 'light not found'}), 404
-        for k, v in data.items():
-            if k == 'animation':
-                val = (v or 'none').lower() if isinstance(v, str) else 'none'
-                light['animation'] = val if val in _LIGHT_ANIMATIONS else 'none'
-                continue
-            if k in mutable:
-                if k in ('bright', 'dim'):
-                    light[k] = int(v)
-                elif k in ('x', 'y'):
-                    light[k] = float(v)
-                elif k == 'enabled':
-                    light[k] = bool(v)
-                else:
-                    light[k] = v
-
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'light': light})
-
-
-@app.route('/api/map/light/remove', methods=['POST'])
-@gm_required
-def remove_light():
-    data = request.json or {}
-    light_id = data.get('id')
-    with MAP_LOCK:
-        ACTIVE_MAP['lights'] = [l for l in ACTIVE_MAP.get('lights', []) if l['id'] != light_id]
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/light/clear', methods=['POST'])
-@gm_required
-def clear_lights():
-    with MAP_LOCK:
-        ACTIVE_MAP['lights'] = []
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/ambient', methods=['POST'])
-@gm_required
-def set_ambient_light():
-    """Switch the map between bright/dim/dark ambient lighting.
-
-    Named `/api/map/ambient` rather than `/api/map/vision_mode` because
-    `vision_mode` already exists on ACTIVE_MAP with different semantics
-    (fog reveal policy, e.g. 'explored'). Keeping the names distinct
-    prevents the two from being confused on the wire.
-    """
-    data = request.json or {}
-    mode = data.get('mode', 'bright')
-    if mode not in ('bright', 'dim', 'dark'):
-        return jsonify({'success': False, 'error': 'invalid mode'}), 400
-    with MAP_LOCK:
-        ACTIVE_MAP['ambient_light'] = mode
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'mode': mode})
-
-
-@app.route('/api/map/light/presets')
-def light_presets():
-    """Advertised presets for the GM's light-placement dropdown."""
-    return jsonify({'presets': LIGHT_PRESETS})
-
-
-# --- TEMPLATES (AOE) ------------------------------------------------------
-# Templates represent spell/ability areas of effect. The client is
-# authoritative about rendering — the server just stores pixel coords,
-# dimensions (in squares), and metadata. Players can create templates too
-# (ability → template flow), but only the creator or a GM can remove them.
-
-TEMPLATE_COLORS = {
-    'fire':     '#ef4444',
-    'cold':     '#60a5fa',
-    'acid':     '#84cc16',
-    'electric': '#fde047',
-    'sonic':    '#c4b5fd',
-    'positive': '#fef3c7',
-    'negative': '#8b5cf6',
-    'force':    '#a78bfa',
-    'generic':  '#8ED4D4',
-}
-
-def _build_template(data):
-    """Normalize a template payload. Fills defaults based on type."""
-    ttype = data.get('type', 'burst')
-    if ttype not in ('burst', 'emanation', 'cone', 'line'):
-        ttype = 'burst'
-    color = data.get('color') or TEMPLATE_COLORS.get(data.get('damage_type', 'generic'), '#8ED4D4')
-    return {
-        'id': str(uuid.uuid4())[:8],
-        'type': ttype,
-        'x': float(data.get('x', 0)),
-        'y': float(data.get('y', 0)),
-        'attached_to': data.get('attached_to'),
-        'radius': int(data.get('radius', 2)),       # squares — burst/emanation
-        'length': int(data.get('length', 4)),       # squares — cone/line
-        'width': int(data.get('width', 1)),         # squares — line (thickness)
-        'direction': float(data.get('direction', 0)),  # deg; 0=east, 90=south
-        'angle': float(data.get('angle', 90)),      # deg; PF2e cones default 90
-        'color': color,
-        'name': data.get('name', ''),
-        'owner': data.get('owner', ''),             # player or 'GM'
-        'source': data.get('source', ''),           # e.g. 'Fireball'
-        'temporary': bool(data.get('temporary', False)),
-        'created_round': ROUND_NUMBER,
-    }
-
-
-@app.route('/api/map/template/add', methods=['POST'])
-def add_template():
-    """Create an AOE template. GM or player (players own their templates).
-
-    HARDENED: `owner` is server-derived; a client-supplied owner in
-    the body is ignored. Without this, a player could POST
-    {owner:'GM'} (or another player's name) and the misattributed
-    template would be editable/removable by the wrong account."""
-    data = request.json or {}
-    is_gm = _is_gm()
-    player_name = session.get('player_name')
-    if not is_gm and not player_name:
-        return jsonify({'success': False, 'error': 'login required'}), 401
-    data['owner'] = 'GM' if is_gm else player_name
-    tmpl = _build_template(data)
-    with MAP_LOCK:
-        ACTIVE_MAP.setdefault('templates', []).append(tmpl)
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'template': tmpl})
-
-
-@app.route('/api/map/template/update', methods=['POST'])
-def update_template():
-    """Patch a template. GM or the owning player only."""
-    data = request.json or {}
-    tid = data.get('id')
-    if not tid:
-        return jsonify({'success': False, 'error': 'template id required'}), 400
-    is_gm = _is_gm()
-    player_name = session.get('player_name')
-    mutable = {'x', 'y', 'attached_to', 'radius', 'length', 'width',
-               'direction', 'angle', 'color', 'name', 'source', 'temporary'}
-    with MAP_LOCK:
-        tmpl = next((t for t in ACTIVE_MAP.get('templates', []) if t['id'] == tid), None)
-        if not tmpl:
-            return jsonify({'success': False, 'error': 'template not found'}), 404
-        if not is_gm and tmpl.get('owner') != player_name:
-            return jsonify({'success': False, 'error': 'not owner'}), 403
-        for k, v in data.items():
-            if k not in mutable:
-                continue
-            if k in ('radius', 'length', 'width'):
-                tmpl[k] = int(v)
-            elif k in ('x', 'y', 'direction', 'angle'):
-                tmpl[k] = float(v)
-            elif k == 'temporary':
-                tmpl[k] = bool(v)
-            else:
-                tmpl[k] = v
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True, 'template': tmpl})
-
-
-@app.route('/api/map/template/remove', methods=['POST'])
-def remove_template():
-    """Remove a template. GM or owner only."""
-    data = request.json or {}
-    tid = data.get('id')
-    is_gm = _is_gm()
-    player_name = session.get('player_name')
-    with MAP_LOCK:
-        tmpl = next((t for t in ACTIVE_MAP.get('templates', []) if t['id'] == tid), None)
-        if not tmpl:
-            return jsonify({'success': True})
-        if not is_gm and tmpl.get('owner') != player_name:
-            return jsonify({'success': False, 'error': 'not owner'}), 403
-        ACTIVE_MAP['templates'] = [t for t in ACTIVE_MAP.get('templates', []) if t['id'] != tid]
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/template/clear', methods=['POST'])
-@gm_required
-def clear_templates():
-    with MAP_LOCK:
-        ACTIVE_MAP['templates'] = []
-    _save_map_state()
-    _broadcast_map_state()
-    return jsonify({'success': True})
-
-
-# --- GM-ONLY PINS / NOTES LAYER -------------------------------------------
-# Notes live in ACTIVE_MAP['gm_notes']. They never leave get_map_state() for
-# non-GM viewers. Kept separate from walls/tokens so rendering order is simple.
-
-def _broadcast_gm_notes_to_all():
-    """GM gets the full pin set; players get only the ones with share=True
-    (those are journal pins — readable handouts pinned on the map).
-    The full payload + the filtered payload go on two SSE events so the
-    GM client and the player client don't have to filter on receive."""
-    with MAP_LOCK:
-        notes = list(ACTIVE_MAP.get('gm_notes', []))
-    try:
-        # Internal helpers don't have a player_filter mechanism for
-        # SSE broadcasts that need DIFFERENT bodies per receiver.
-        # Trick: the GM event carries the full list; the player event
-        # carries the shared subset under the same event name. The
-        # client SSE listeners decide which they care about based on
-        # `share` field presence — both views read `map_notes` but
-        # player view ignores entries missing share/note_path.
-        sse_broadcast('map_notes', {'notes': notes})
-    except Exception:
-        pass
-
-
-@app.route('/api/map/note/add', methods=['POST'])
-@gm_required
-def add_gm_note():
-    data = request.json or {}
-    try:
-        x = int(data.get('x', 0))
-        y = int(data.get('y', 0))
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'invalid coords'}), 400
-    note = {
-        'id': str(uuid.uuid4())[:8],
-        'x': x,
-        'y': y,
-        'text': str(data.get('text', '') or '')[:500],
-        'color': str(data.get('color', '#fbbf24'))[:16],
-        'icon': str(data.get('icon', '📌'))[:4],
-        # Optional vault note link — pin opens this note when clicked.
-        'note_path': str(data.get('note_path') or '')[:300] or None,
-        # When True, players see the pin too and can click it to read
-        # the linked note. Default False keeps existing behavior.
-        'share': bool(data.get('share', False)),
-    }
-    with MAP_LOCK:
-        ACTIVE_MAP.setdefault('gm_notes', []).append(note)
-    _save_map_state()
-    _broadcast_gm_notes_to_all()
-    return jsonify({'success': True, 'note': note})
-
-
-@app.route('/api/map/note/update', methods=['POST'])
-@gm_required
-def update_gm_note():
-    data = request.json or {}
-    note_id = data.get('id')
-    with MAP_LOCK:
-        for n in ACTIVE_MAP.get('gm_notes', []):
-            if n['id'] == note_id:
-                if 'text' in data: n['text'] = str(data['text'] or '')[:500]
-                if 'color' in data: n['color'] = str(data['color'])[:16]
-                if 'icon' in data: n['icon'] = str(data['icon'])[:4]
-                if 'note_path' in data:
-                    n['note_path'] = str(data['note_path'] or '')[:300] or None
-                if 'share' in data:
-                    n['share'] = bool(data['share'])
-                if 'x' in data:
-                    try: n['x'] = int(data['x'])
-                    except (TypeError, ValueError): pass
-                if 'y' in data:
-                    try: n['y'] = int(data['y'])
-                    except (TypeError, ValueError): pass
-                break
-    _save_map_state()
-    _broadcast_gm_notes_to_all()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/note/remove', methods=['POST'])
-@gm_required
-def remove_gm_note():
-    data = request.json or {}
-    note_id = data.get('id')
-    with MAP_LOCK:
-        ACTIVE_MAP['gm_notes'] = [n for n in ACTIVE_MAP.get('gm_notes', []) if n['id'] != note_id]
-    _save_map_state()
-    _broadcast_gm_notes_to_all()
-    return jsonify({'success': True})
-
-
-@app.route('/api/map/state')
-def get_map_state():
-    """Get current map state (filtered for players).
-
-    Player clients refetch this on every SSE tick, so it's the scrubber
-    between raw ACTIVE_MAP and the wire. Keep all player-side filtering in
-    _apply_player_map_filter so /map bootstrap and this refetch can't drift.
-
-    GM-only `?as_player=NAME` runs the same filter the named player
-    would see — powers the GM's "preview as player" toggle so the GM
-    can verify what each PC actually sees before a session.
-    """
-    is_gm = _is_gm()
-    player_name = session.get('player_name')
-    as_player = (request.args.get('as_player') or '').strip()
-
-    with MAP_LOCK:
-        if is_gm and as_player and as_player in PARTY_LIBRARY:
-            # Preview mode: return the state a real player named
-            # `as_player` would see. GM-only — a non-GM caller
-            # asking for as_player is ignored.
-            state = copy.deepcopy(ACTIVE_MAP)
-            _apply_player_map_filter(state, as_player)
-        elif is_gm:
-            state = dict(ACTIVE_MAP)
-        else:
-            # deepcopy so the filter can mutate freely without touching the shared ref
-            state = copy.deepcopy(ACTIVE_MAP)
-            _apply_player_map_filter(state, player_name)
-
-    return jsonify(state)
-
-@app.route('/api/map/clear', methods=['POST'])
-@gm_required
-def clear_map():
-    """Clear the current map. Uses _fresh_map_state so the schema stays
-    aligned with the module-level default — previously this branch
-    drifted behind as new fields were added (drawings, audio_clips,
-    fog, fog_enabled, vision_mode) and the next /api/map/fog/reveal
-    would KeyError because the field had vanished."""
-    with MAP_LOCK:
-        fresh = _fresh_map_state()
-        ACTIVE_MAP.clear()
-        ACTIVE_MAP.update(fresh)
-    _broadcast_map_state()
-    return jsonify({'success': True})
 
 
 # =====================================================================
@@ -15832,7 +13846,7 @@ def api_journal_delete():
 # =====================================================================
 
 # -- In-Game Calendar (Golarion) --------------------------------------
-CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
+# CALENDAR_FILE bound to the active campaign in _bind_campaign_paths().
 GOLARION_MONTHS = [
     {'name': 'Abadius',   'days': 31},
     {'name': 'Calistril', 'days': 28},

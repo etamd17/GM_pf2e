@@ -6232,7 +6232,6 @@
                         ${heightenedHTML}
                     </div>
                     <div class="spell-card-footer">
-                        ${(meta.area || meta.range) ? `<button onclick="placeSpellTemplate('${spellName.replace(/'/g,"\\'")}', ${JSON.stringify(meta).replace(/"/g,'&quot;')}); this.closest('.spell-card-overlay').remove();" class="px-4 py-2 rounded text-sm font-bold transition-colors" style="background:rgba(142,212,212,0.15); border:1px solid rgba(142,212,212,0.3); color:#8ED4D4;" title="Drop this on the map">Place on Map</button>` : ''}
                         <button onclick="rollSpell('${spellName.replace(/'/g,"\\'")}', event); this.closest('.spell-card-overlay').remove();" class="px-4 py-2 rounded text-sm font-bold transition-colors" style="background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.3); color:var(--color-spell);">Cast ${spellName}</button>
                     </div>
                 </div>
@@ -6241,86 +6240,6 @@
             document.body.appendChild(overlay);
         }
 
-        // Parse meta.area like "30-ft burst" / "60-ft cone" / "20-ft line" and
-        // convert into a template payload. Ranges live in feet; the map stores
-        // them in squares, so feet/5 → squares.
-        function _parseAreaShape(area) {
-            if (!area) return null;
-            const m = area.match(/(\d+)[- ]*ft\s*(burst|cone|emanation|line|radius)/i);
-            if (!m) return null;
-            const size = Math.max(1, Math.round(parseInt(m[1], 10) / 5));  // squares
-            const kind = m[2].toLowerCase();
-            if (kind === 'burst') return { type: 'burst', radius: size };
-            if (kind === 'radius') return { type: 'burst', radius: size };
-            if (kind === 'emanation') return { type: 'emanation', radius: size };
-            if (kind === 'cone') return { type: 'cone', length: size, angle: 90 };
-            if (kind === 'line') return { type: 'line', length: size, width: 1 };
-            return null;
-        }
-
-        // Ability → template cross-tab flow. This POSTs the template to the
-        // shared /api/map/template/add; the map's SSE broadcast pushes it to
-        // both GM and player views immediately. We pick an anchor heuristic:
-        // emanations attach to the player's own token (if we know its id),
-        // otherwise we place at the token's current position with a prompt.
-        async function placeSpellTemplate(spellName, meta) {
-            const shape = _parseAreaShape(meta.area);
-            if (!shape) {
-                alert(`Couldn't parse area "${meta.area}" — place it manually on the map.`);
-                return;
-            }
-            // Find the player's own token so emanations can attach.
-            let myTokenId = null;
-            let myX = 0, myY = 0;
-            try {
-                const s = await fetch('/api/map/state').then(r => r.json());
-                const playerName = '{{ pc.name }}';
-                const tok = (s.tokens || []).find(t =>
-                    t.assigned_player === playerName || t.pc_name === playerName || t.name === playerName
-                );
-                if (tok) {
-                    myTokenId = tok.id;
-                    const gs = s.grid_size || 70;
-                    const ox = s.grid_offset_x || 0;
-                    const oy = s.grid_offset_y || 0;
-                    const size = tok.size || 1;
-                    myX = tok.x * gs + ox + (gs * size) / 2;
-                    myY = tok.y * gs + oy + (gs * size) / 2;
-                }
-            } catch(_) {}
-
-            const payload = {
-                type: shape.type,
-                source: spellName,
-                x: myX, y: myY,
-                radius: shape.radius || 2,
-                length: shape.length || 4,
-                width: shape.width || 1,
-                angle: shape.angle || 90,
-                color: '#a78bfa',   // spell purple — matches the Cast button
-                temporary: true,
-            };
-            if (shape.type === 'emanation' && myTokenId) {
-                payload.attached_to = myTokenId;
-            }
-            try {
-                const r = await fetch('/api/map/template/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (r.ok) {
-                    // Friendly toast using the existing roll toast helper
-                    if (typeof showRollToast === 'function') {
-                        showRollToast(`${spellName} area placed`, '', `Open the map to aim it.`, false, false);
-                    }
-                } else {
-                    alert(`Couldn't place ${spellName}: ${r.status}`);
-                }
-            } catch(e) {
-                alert(`Network error placing ${spellName}`);
-            }
-        }
         
         function buildActionPips(actionStr) {
             const s = (actionStr || '').trim().toLowerCase();
