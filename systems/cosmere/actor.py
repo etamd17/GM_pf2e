@@ -177,7 +177,8 @@ class CosmereActor:
         self.reaction_used = False
         self.actions_used = 0
         self.injuries = 0             # Cosmere death-spiral counter (Ch.9)
-        self.max_actions = 3          # Cosmere: elect fast(2)/slow(3); default to slow
+        self.speed_choice = 'slow'    # Cosmere: elect fast(2 actions, early) / slow(3, late) each round
+        self.max_actions = 3          # reflects speed_choice (slow=3 / fast=2)
         self.conditions = {}          # Cosmere conditions {name: value|bool}
         self.condition_expiry = {}
         # Health drives the tracker HP bar. Expose PF2e-shaped aliases so the
@@ -247,6 +248,9 @@ class CosmereActor:
             'investiture_max': self.investiture_max,
             'attributes': dict(self.attributes),
             'injuries': int(getattr(self, 'injuries', 0) or 0),
+            'speed_choice': getattr(self, 'speed_choice', 'slow'),
+            'phase': '%s_%s' % ('fast' if getattr(self, 'speed_choice', 'slow') == 'fast' else 'slow',
+                                'pc' if self.is_pc else 'npc'),
             'tier': self.tier, 'role': self.role, 'size': self.size,
         }
 

@@ -1676,13 +1676,32 @@ def require_combatant(instance_id):
             return c, i, None
     return None, None, (jsonify({'success': False, 'error': 'Combatant not found in encounter'}), 404)
 
+def _sort_cosmere_phases():
+    """Order a Cosmere encounter into the 4-phase queue (Ch.10): fast_pc ->
+    fast_npc -> slow_pc -> slow_npc; within a phase, higher Speed first, then
+    the initiative d20."""
+    import systems.cosmere.combat as _cc
+    items = [{
+        '_c': c, 'is_pc': bool(getattr(c, 'is_pc', False)),
+        'choice': getattr(c, 'speed_choice', 'slow'),
+        'speed': int((getattr(c, 'attributes', {}) or {}).get('spd', 0) or 0),
+        'tiebreak': int(getattr(c, 'initiative', 0) or 0),
+    } for c in ACTIVE_ENCOUNTER]
+    ACTIVE_ENCOUNTER[:] = [it['_c'] for it in _cc.order_combatants(items)]
+
+
 def _sort_encounter():
     global ACTIVE_ENCOUNTER, TURN_INDEX
     active_id = None
     if ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER):
         active_id = ACTIVE_ENCOUNTER[TURN_INDEX].instance_id
-        
-    ACTIVE_ENCOUNTER.sort(key=lambda x: x.initiative, reverse=True)
+
+    # A pure-Cosmere encounter resolves in the 4-phase fast/slow queue;
+    # any PF2e (or mixed) encounter keeps the initiative sort.
+    if ACTIVE_ENCOUNTER and all(getattr(c, 'system', 'pf2e') == 'cosmere' for c in ACTIVE_ENCOUNTER):
+        _sort_cosmere_phases()
+    else:
+        ACTIVE_ENCOUNTER.sort(key=lambda x: x.initiative, reverse=True)
     if active_id:
         for i, c in enumerate(ACTIVE_ENCOUNTER):
             if c.instance_id == active_id:
@@ -8330,6 +8349,23 @@ def roll_all_initiative():
 @app.route('/api/sort_initiative', methods=['POST'])
 def sort_initiative():
     _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
+    return redirect(url_for('tracker_view'))
+
+@app.route('/api/cosmere/speed/<instance_id>', methods=['POST'])
+def cosmere_speed_choice(instance_id):
+    """Set a Cosmere combatant's fast/slow election (2 vs 3 actions); re-sorts
+    the 4-phase queue."""
+    choice = (request.form.get('choice') or (request.get_json(silent=True) or {}).get('choice') or '').lower()
+    if choice not in ('fast', 'slow'):
+        return jsonify({'error': 'choice must be fast or slow'}), 400
+    for c in ACTIVE_ENCOUNTER:
+        if c.instance_id == instance_id and getattr(c, 'system', 'pf2e') == 'cosmere':
+            c.speed_choice = choice
+            c.max_actions = 2 if choice == 'fast' else 3
+            _sort_encounter()
+            _persist_encounter_state(); _broadcast_encounter_state()
+            break
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 

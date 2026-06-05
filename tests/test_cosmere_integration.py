@@ -98,6 +98,36 @@ def test_cosmere_damage_deflect_and_injury_spiral():
     assert a.current_hp == 4 and 'unconscious' not in a.conditions
 
 
+def test_cosmere_4phase_turn_queue_sort():
+    """A pure-Cosmere encounter sorts into the 4-phase queue (fast_pc ->
+    fast_npc -> slow_pc -> slow_npc; Speed then d20 tiebreak)."""
+    from systems.cosmere.actor import CosmereActor
+
+    def mk(name, is_pc, choice, spd, tb):
+        a = CosmereActor({'name': name, 'type': 'character' if is_pc else 'adversary',
+                          'system': {'attributes': {'spd': {'value': spd}}}})
+        a.instance_id = name
+        a.speed_choice = choice
+        a.initiative = tb
+        return a
+
+    saved, idx = list(app.ACTIVE_ENCOUNTER), app.TURN_INDEX
+    try:
+        app.ACTIVE_ENCOUNTER[:] = [
+            mk('SlowNPC', False, 'slow', 3, 10), mk('FastPCLo', True, 'fast', 1, 5),
+            mk('FastPCHi', True, 'fast', 4, 5), mk('FastNPC', False, 'fast', 5, 1),
+            mk('SlowPC', True, 'slow', 2, 1),
+        ]
+        app.TURN_INDEX = 0
+        app._sort_encounter()
+        assert [c.name for c in app.ACTIVE_ENCOUNTER] == \
+            ['FastPCHi', 'FastPCLo', 'FastNPC', 'SlowPC', 'SlowNPC']
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = saved
+        app.TURN_INDEX = idx
+        app._invalidate_tracker_cache()
+
+
 def test_plot_die_route():
     r = app.app.test_client().post('/api/plot_die')
     assert r.status_code == 200
