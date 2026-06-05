@@ -170,6 +170,22 @@ def _cosmere_player_char_name():
     return ''
 
 
+def _active_system_ui():
+    """The active system's UI descriptor -- its GM/player hub routes, nav brand,
+    and nav link sets. Single source the redirects + nav read from, so there's no
+    per-system branching in the app and a new system can't skip either hub."""
+    try:
+        return systems.get(_active_system()).ui
+    except Exception:
+        return systems.get(systems.DEFAULT_SYSTEM).ui
+
+
+def _system_home(gm: bool) -> str:
+    """The active system's GM-side or player-side landing route."""
+    ui = _active_system_ui()
+    return ui.gm_home if gm else ui.player_home
+
+
 def gm_required(f):
     """Decorator: GM of the active campaign (account mode) or the GM password
     (legacy). _is_gm() encodes both modes."""
@@ -5590,12 +5606,13 @@ def index():
     full picker. The GM gets an Enter button that drops them straight into
     /gm.
 
-    System-aware: a Cosmere campaign lands on the Cosmere hubs instead of the
-    PF2e party lobby (PARTY_LIBRARY is PF2e-only), so the whole app presents one
-    system with no bleed -- the GM on the roster, a player on their character.
+    System-aware: a non-default system lands on its own hubs (registry-driven --
+    GM side vs player side) instead of the PF2e party lobby (PARTY_LIBRARY is
+    PF2e-only), so the whole app presents one system with no bleed. The default
+    system (PF2e) owns this root lobby.
     """
-    if _active_system() == 'cosmere':
-        return redirect('/cosmere/pcs' if _is_gm() else '/cosmere/player')
+    if _active_system() != systems.DEFAULT_SYSTEM:
+        return redirect(_system_home(_is_gm()))
     _sync_party_from_disk()
     is_gm = _is_gm()
     state = {}  # vault removed; the campaign-intro state row is config-driven now
@@ -5782,11 +5799,10 @@ def activate_campaign(cid):
     if gm:
         _storage.set_live_campaign_id(cid)
         load_campaign(cid)
-    # System-aware landing: a Cosmere campaign goes to the Cosmere hubs (the PF2e
-    # GM/Player hubs are PF2e-only) so the whole app switches systems with no bleed.
-    if (camp.get('system') or 'pf2e') == 'cosmere':
-        return redirect('/cosmere/pcs' if gm else '/cosmere/player')
-    return redirect('/gm' if gm else '/player')
+    # System-aware landing, registry-driven: every system declares a GM home and
+    # a player home, so this works for any system with no per-system branching.
+    ui = systems.get(camp.get('system') or systems.DEFAULT_SYSTEM).ui
+    return redirect(ui.gm_home if gm else ui.player_home)
 
 
 @app.route('/campaign/<cid>/invites')
@@ -5912,6 +5928,7 @@ def _inject_account_ctx():
         'active_campaign': (_active_campaign_doc() if u else None),
         'active_system': _active_system(),
         'cosmere_player_char': _cosmere_player_char_name(),
+        'system_ui': _active_system_ui(),
     }
 
 
@@ -5981,12 +5998,14 @@ def gm_hub():
     available — turns the hub into a real session-prep dashboard rather
     than just a navigation index.
 
-    System-aware: the GM hub is a PF2e command center; a Cosmere campaign is
-    sent to the Cosmere hub so there's no cross-system bleed (campaign settings /
-    invites live on /me + /campaign/<id>/invites for both systems).
+    System-aware: this PF2e command center is PF2e's GM home; any system whose GM
+    home is elsewhere is redirected there (registry-driven), so there's no
+    cross-system bleed (campaign settings / invites live on /me +
+    /campaign/<id>/invites for both systems).
     """
-    if _active_system() == 'cosmere':
-        return redirect('/cosmere/pcs')
+    gm_home = _active_system_ui().gm_home
+    if gm_home != '/gm':
+        return redirect(gm_home)
     now_playing = None  # vault removed; manual session summary wired in separately
     return render_template(
         'gm_hub.html',

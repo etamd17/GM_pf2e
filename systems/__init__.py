@@ -13,7 +13,7 @@ the concrete actor class (app.Character) at startup via
 from __future__ import annotations
 
 from systems.base import (  # noqa: F401  (re-exported for callers)
-    GameSystem, CombatProfile, Condition, DEFAULT_SYSTEM,
+    GameSystem, CombatProfile, Condition, DEFAULT_SYSTEM, SystemUI, NavLink,
 )
 
 

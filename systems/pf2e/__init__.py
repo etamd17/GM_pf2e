@@ -7,7 +7,7 @@ here mirror ``app.CONDITION_REFERENCE`` and are drift-guarded by
 """
 from __future__ import annotations
 
-from systems.base import GameSystem, CombatProfile, Condition
+from systems.base import GameSystem, CombatProfile, Condition, SystemUI, NavLink
 
 # Conditions that carry a numeric value in PF2e (e.g. frightened 2). Every other
 # entry in the catalog is an on/off state.
@@ -44,4 +44,27 @@ _COMBAT = CombatProfile(
     conditions=tuple(Condition(k, k in _VALUED) for k in _CONDITION_KEYS),
 )
 
-SYSTEM = GameSystem(key='pf2e', label='Pathfinder 2e', combat=_COMBAT)
+# The GM side + player side every system must declare. PF2e: the GM Hub and the
+# Player Hub, with the long-standing nav link sets.
+_UI = SystemUI(
+    gm_home='/gm',
+    player_home='/player',
+    brand='PF2E',
+    gm_nav=(
+        NavLink('GM Hub', '/gm', accent=True),
+        NavLink('Party', '/party'),
+        NavLink('Tracker', '/tracker'),
+        NavLink('Threads', '/gm/threads'),
+        NavLink('GM Screen', '/gmscreen'),
+        NavLink('Generators', '/generator'),
+        NavLink('Loot', '/gm/loot'),
+        NavLink('Status', '/status'),
+        NavLink('Notes', '/notes', title='Session notes scratchpad'),
+    ),
+    player_nav=(
+        NavLink('Player Hub', '/player'),
+        NavLink('Notes', '/notes', title='Session notes scratchpad'),
+    ),
+)
+
+SYSTEM = GameSystem(key='pf2e', label='Pathfinder 2e', combat=_COMBAT, ui=_UI)

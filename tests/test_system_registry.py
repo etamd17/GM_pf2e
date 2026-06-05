@@ -11,7 +11,10 @@ from __future__ import annotations
 import pytest
 
 import systems
-from systems.base import GameSystem, CombatProfile, Condition
+from systems.base import GameSystem, CombatProfile, Condition, SystemUI, NavLink
+
+# A minimal valid UI (both hubs) for constructing throwaway systems in tests.
+_UI = SystemUI(gm_home='/gm', player_home='/player', brand='TMP')
 
 
 def test_pf2e_registered_with_expected_identity():
@@ -76,9 +79,34 @@ def test_actor_factory_dispatch_roundtrips():
 
 
 def test_make_actor_without_factory_raises():
-    sys_ = GameSystem(key='tmp', label='Tmp', combat=systems.get('pf2e').combat)
+    sys_ = GameSystem(key='tmp', label='Tmp', combat=systems.get('pf2e').combat, ui=_UI)
     with pytest.raises(RuntimeError):
         sys_.make_actor({})
+
+
+def test_every_system_must_declare_both_hubs():
+    """The GM-side / player-side invariant is STRUCTURAL: a system cannot be
+    constructed (hence cannot be registered) without BOTH a gm_home and a
+    player_home. This is the guard that keeps the rule true as systems are added."""
+    cp = systems.get('pf2e').combat
+    # missing the whole UI -> rejected
+    with pytest.raises(TypeError):
+        GameSystem(key='x', label='X', combat=cp)
+    # a UI missing either hub -> rejected
+    with pytest.raises(ValueError):
+        GameSystem(key='x', label='X', combat=cp,
+                   ui=SystemUI(gm_home='/gm', player_home='', brand='X'))
+    with pytest.raises(ValueError):
+        GameSystem(key='x', label='X', combat=cp,
+                   ui=SystemUI(gm_home='', player_home='/player', brand='X'))
+
+
+def test_registered_systems_expose_both_hubs():
+    """Every system actually registered in the app declares both hubs + nav."""
+    for key in ('pf2e', 'cosmere'):
+        ui = systems.get(key).ui
+        assert ui.gm_home and ui.player_home and ui.brand
+        assert ui.gm_nav and ui.player_nav        # both roles get a nav
 
 
 def test_combat_profile_describes_pf2e():

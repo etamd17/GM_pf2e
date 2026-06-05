@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 
-from systems.base import GameSystem, CombatProfile, Condition
+from systems.base import GameSystem, CombatProfile, Condition, SystemUI, NavLink
 from systems.cosmere.actor import CosmereActor, cosmere_max_health, tier_of  # noqa: F401
 
 # Cosmere conditions (confirmed from cosmere-rpg v2.0.5 runtime config). The
@@ -49,7 +49,31 @@ _COMBAT = CombatProfile(
     conditions=tuple(Condition(k, k in _VALUED) for k in _CONDITION_KEYS),
 )
 
-SYSTEM = GameSystem(key='cosmere', label='Cosmere RPG', combat=_COMBAT)
+# The GM side + player side for Cosmere: the GM works from the character roster
+# (Builder / Bestiary / Tracker / Invites hang off it); a player lands on their
+# own character hub.
+_UI = SystemUI(
+    gm_home='/cosmere/pcs',
+    player_home='/cosmere/player',
+    brand='COSMERE',
+    gm_nav=(
+        NavLink('Characters', '/cosmere/pcs', title='Cosmere characters'),
+        NavLink('Builder', '/cosmere/builder'),
+        NavLink('Bestiary', '/cosmere/bestiary'),
+        NavLink('Tracker', '/tracker'),
+        NavLink('Threads', '/gm/threads'),
+        NavLink('Status', '/status'),
+        NavLink('Notes', '/notes', title='Session notes scratchpad'),
+    ),
+    player_nav=(
+        NavLink('My Character', '/cosmere/player', title='My character'),
+        NavLink('Party', '/cosmere/pcs', title='The party'),
+        NavLink('Combat', '/tracker', title='Live combat'),
+        NavLink('Notes', '/notes', title='Session notes scratchpad'),
+    ),
+)
+
+SYSTEM = GameSystem(key='cosmere', label='Cosmere RPG', combat=_COMBAT, ui=_UI)
 SYSTEM.bind_actor_factory(CosmereActor)
 
 

@@ -68,10 +68,35 @@ class CombatProfile:
         return False
 
 
+@dataclass(frozen=True)
+class NavLink:
+    """One entry in a system's nav bar. `accent` flags the primary (hub) link."""
+    label: str
+    url: str
+    title: str = ''
+    accent: bool = False
+
+
+@dataclass(frozen=True)
+class SystemUI:
+    """The host-app surfaces every system MUST provide. The invariant this
+    encodes: a system always has BOTH a GM side and a player side -- `gm_home`
+    and `player_home` are the landing routes the home / activate redirects send a
+    GM vs a player to, and `gm_nav` / `player_nav` are their nav-bar link sets.
+    Plain data (route strings + labels), so the registry stays Flask-free; the
+    host app just reads it to drive redirects + the nav with no per-system
+    branching, and adding a new system can't skip either hub."""
+    gm_home: str
+    player_home: str
+    brand: str                 # short nav-bar wordmark (e.g. 'PF2E')
+    gm_nav: tuple = ()         # tuple[NavLink]
+    player_nav: tuple = ()     # tuple[NavLink]
+
+
 @dataclass
 class GameSystem:
-    """A registered game system: identity + combat profile + a bound actor
-    factory.
+    """A registered game system: identity + combat profile + UI hubs + a bound
+    actor factory.
 
     The actor factory is bound at runtime by the host app (`bind_actor_factory`)
     once the concrete actor class is defined, so this package never has to
@@ -80,7 +105,20 @@ class GameSystem:
     key: str
     label: str
     combat: CombatProfile
+    ui: SystemUI
     _actor_factory: object = None
+
+    def __post_init__(self):
+        # Structural guarantee of the GM-side / player-side invariant: a system
+        # cannot be constructed (hence cannot be registered) without BOTH hubs.
+        if not isinstance(self.ui, SystemUI):
+            raise TypeError(
+                f"system {self.key!r} must declare a SystemUI (gm_home + player_home)"
+            )
+        if not self.ui.gm_home or not self.ui.player_home:
+            raise ValueError(
+                f"system {self.key!r} must provide BOTH a gm_home and a player_home"
+            )
 
     def bind_actor_factory(self, factory) -> 'GameSystem':
         """Bind `factory(doc, file_path='') -> actor`. Returns self for chaining."""
