@@ -14,7 +14,7 @@
       <div class="meta">{{ c.system|upper }}{% if c.id == active_campaign_id %} &middot; <span class="badge">active</span>{% endif %}</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
-      {% if c.id in gm_campaign_ids %}<a href="/campaign/{{ c.id }}/invites" style="font-size:12px;">Invites</a>{% endif %}
+      {% if c.id in gm_campaign_ids %}<a href="/campaign/{{ c.id }}/invites" style="font-size:12px;">Manage</a>{% endif %}
       <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">Open</button></form>
     </div>
   </li>

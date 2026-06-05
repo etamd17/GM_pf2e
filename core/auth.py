@@ -222,6 +222,25 @@ def active_invite_for_character(campaign_id, character_id):
     return None
 
 
+def list_active_invites(campaign_id):
+    """All still-valid invites for a campaign (for the manage page's open-codes
+    list -- generic player + co-GM invites that aren't tied to a character)."""
+    now = time.time()
+    return [inv for inv in _load_invites()['invites'].values()
+            if inv.get('campaign_id') == campaign_id and inv['uses_left'] > 0
+            and (not inv.get('expires_at') or now <= inv['expires_at'])]
+
+
+def revoke_invite(code):
+    """Delete an invite outright (a GM cancelling an open code)."""
+    data = _load_invites()
+    if (code or '').strip().upper() in data['invites']:
+        del data['invites'][(code or '').strip().upper()]
+        _save_invites(data)
+        return True
+    return False
+
+
 # --------------------------------------------------------------------------
 # CSRF (per-session token; checked on state-changing requests)
 # --------------------------------------------------------------------------

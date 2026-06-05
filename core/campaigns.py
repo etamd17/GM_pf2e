@@ -74,6 +74,40 @@ def add_member(cid, user_id, role, character_id=None):
     return save_campaign(doc)
 
 
+def gm_count(campaign):
+    return sum(1 for m in (campaign or {}).get('members', []) if m.get('role') == 'gm')
+
+
+def remove_member(cid, user_id):
+    """Remove a member from a campaign. Refuses to remove the last GM (a campaign
+    must always keep a GM). Returns the updated doc, or None if not removed."""
+    doc = get_campaign(cid)
+    if not doc:
+        raise ValueError('no such campaign')
+    target = next((m for m in doc.get('members', []) if m.get('user_id') == user_id), None)
+    if not target:
+        return None
+    if target.get('role') == 'gm' and gm_count(doc) <= 1:
+        return None   # never strand a campaign without a GM
+    doc['members'] = [m for m in doc['members'] if m.get('user_id') != user_id]
+    return save_campaign(doc)
+
+
+def set_member_role(cid, user_id, role):
+    """Change a member's role (gm/player). Refuses to demote the last GM."""
+    assert role in ('gm', 'player'), role
+    doc = get_campaign(cid)
+    if not doc:
+        raise ValueError('no such campaign')
+    target = next((m for m in doc.get('members', []) if m.get('user_id') == user_id), None)
+    if not target:
+        return None
+    if target.get('role') == 'gm' and role == 'player' and gm_count(doc) <= 1:
+        return None   # don't demote the only GM
+    target['role'] = role
+    return save_campaign(doc)
+
+
 def campaigns_for_user(user_id):
     """Campaigns where the user is a member (GM or player) -- for 'My Campaigns'."""
     return [c for c in list_campaigns() if user_role(c, user_id)]
