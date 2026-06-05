@@ -5927,7 +5927,13 @@ def gm_hub():
     Also renders an excerpt of `Now Playing.md` from the Obsidian vault if
     available — turns the hub into a real session-prep dashboard rather
     than just a navigation index.
+
+    System-aware: the GM hub is a PF2e command center; a Cosmere campaign is
+    sent to the Cosmere hub so there's no cross-system bleed (campaign settings /
+    invites live on /me + /campaign/<id>/invites for both systems).
     """
+    if _active_system() == 'cosmere':
+        return redirect('/cosmere/pcs')
     now_playing = None  # vault removed; manual session summary wired in separately
     return render_template(
         'gm_hub.html',

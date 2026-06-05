@@ -66,7 +66,7 @@
     <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-12">
-                <a href="/gm" class="flex items-center gap-2" title="GM Hub" style="text-decoration:none;">
+                <a href="{{ '/cosmere/pcs' if active_system == 'cosmere' else '/gm' }}" class="flex items-center gap-2" title="{{ 'Cosmere' if active_system == 'cosmere' else 'GM Hub' }}" style="text-decoration:none;">
                     {% if nav_crest %}<img src="{{ nav_crest }}" alt="" class="nav-crest">{% endif %}
                     <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">{{ 'COSMERE' if active_system == 'cosmere' else 'PF2E' }}</span>
                 </a>
@@ -75,10 +75,7 @@
                     <a href="/me" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Switch campaign / my characters">{% if active_campaign %}{{ active_campaign.name }}{% else %}My Table{% endif %} &#9662;</a>
                     {% endif %}
                     {% if active_system == 'cosmere' %}
-                    {# ── Cosmere campaign nav (no PF2e bleed: Characters/Builder/Bestiary, system-aware Tracker) ── #}
-                    {% if is_gm %}
-                    <a href="/gm" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors whitespace-nowrap">GM Hub</a>
-                    {% endif %}
+                    {# ── Cosmere campaign nav (no PF2e bleed: Characters/Builder/Bestiary, system-aware Tracker; campaign management lives on the /me switcher chip) ── #}
                     <a href="/cosmere/pcs" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Cosmere characters">Characters</a>
                     {% if is_gm %}
                     <a href="/cosmere/builder" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap">Builder</a>

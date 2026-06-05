@@ -57,6 +57,10 @@ def test_cosmere_campaign_binding_end_to_end():
         assert home.status_code == 302 and home.headers['Location'].endswith('/cosmere/pcs')
         pcs = c.get('/cosmere/pcs')
         assert pcs.status_code == 200 and b'COSMERE' in pcs.data    # nav brand flipped
+        assert b'GM Hub' not in pcs.data and b'Generators' not in pcs.data   # no PF2e bleed in the nav
+        # the PF2e GM command center redirects out in Cosmere mode
+        gm = c.get('/gm')
+        assert gm.status_code == 302 and gm.headers['Location'].endswith('/cosmere/pcs')
 
         # build a Cosmere PC -> lands UNDER the campaign, stamped campaign + owner
         br = c.post('/cosmere/builder', json={'build': {'name': 'Kaladin'}})
@@ -81,6 +85,7 @@ def test_cosmere_campaign_binding_end_to_end():
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(pf_cid)
         ph = c.get('/')
         assert ph.status_code == 200 and b'PF2E' in ph.data       # lobby, brand PF2E
+        assert c.get('/gm').status_code == 200                    # PF2e GM hub renders normally
         assert b'Kaladin' not in c.get('/cosmere/pcs').data        # Cosmere store scoped per-campaign
 
         print('COSMERE_BINDING_OK')
