@@ -176,6 +176,7 @@ class CosmereActor:
         self.elite_weak = 0
         self.reaction_used = False
         self.actions_used = 0
+        self.injuries = 0             # Cosmere death-spiral counter (Ch.9)
         self.max_actions = 3          # Cosmere: elect fast(2)/slow(3); default to slow
         self.conditions = {}          # Cosmere conditions {name: value|bool}
         self.condition_expiry = {}
@@ -245,6 +246,7 @@ class CosmereActor:
             'focus_max': self.focus_max,
             'investiture_max': self.investiture_max,
             'attributes': dict(self.attributes),
+            'injuries': int(getattr(self, 'injuries', 0) or 0),
             'tier': self.tier, 'role': self.role, 'size': self.size,
         }
 

@@ -2265,7 +2265,7 @@ function renderInitList() {
                 <div class="nm-wrap">
                     <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
                     <div class="nm-sub">${subText}</div>
-                    ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}</div>` : ''}
+                    ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect + injury count">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}${c.cosmere.injuries ? ` · <span style="color:#f87171">Injuries ${c.cosmere.injuries}</span>` : ''}</div>` : ''}
                     ${(!c.is_pc && !c.is_hazard) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
                 </div>
             </div>

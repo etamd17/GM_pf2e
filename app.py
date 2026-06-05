@@ -7324,6 +7324,52 @@ PF2E_DAMAGE_TYPES = [
     'mental', 'poison', 'bleed',
 ]
 
+def _cosmere_adjust_hp(c, amount, action, damage_type):
+    """Damage/heal a Cosmere combatant via the Cosmere combat engine: Deflect
+    reduces impact/keen/energy only, and reaching 0 health triggers an injury
+    roll (the death-spiral, Ch.9) instead of the PF2e dying/wounded model."""
+    import systems.cosmere.combat as _cc
+    amount = max(0, int(amount or 0))
+    if getattr(c, 'conditions', None) is None:
+        c.conditions = {}
+    if action == 'heal':
+        c.current_hp = min(int(getattr(c, 'max_hp', c.current_hp) or c.current_hp), c.current_hp + amount)
+        if c.current_hp > 0:
+            c.conditions.pop('unconscious', None)
+        try:
+            _bump_campaign_stat('total_healing', amount)
+        except Exception:
+            pass
+        _combat_log(f"{c.name} recovers {amount} health.", 'success')
+        return
+    deflect = int((getattr(c, 'deflect', {}) or {}).get('value', 0) or 0)
+    dtype = (damage_type or 'impact').strip().lower()
+    at_zero_before = c.current_hp <= 0
+    new_hp, taken, hit_zero = _cc.apply_damage(c.current_hp, amount, dtype, deflect)
+    c.current_hp = new_hp
+    try:
+        _bump_campaign_stat('total_damage_dealt', taken)
+        _record_big_hit(c.name, taken, c.is_pc)
+    except Exception:
+        pass
+    note = f"{c.name} takes {taken} {dtype} damage"
+    if deflect and dtype in _cc.DEFLECTABLE:
+        note += f" (Deflect {deflect})"
+    # An injury occurs on being reduced to 0, or on taking damage while at 0 (Ch.9).
+    if hit_zero or (at_zero_before and taken > 0):
+        inj = int(getattr(c, 'injuries', 0) or 0)
+        roll = _cc.roll_injury(deflect=deflect, existing_injuries=inj)
+        c.injuries = inj + 1
+        c.conditions['unconscious'] = True
+        if roll['severity'] == 'death':
+            note += f" — Unconscious. INJURY ROLL {roll['total']}: DEATH"
+        else:
+            eff = roll.get('effect', '')
+            note += (f" — Unconscious, injury #{c.injuries} (roll {roll['total']} = "
+                     f"{roll['severity'].replace('_', ' ')}" + (f"; {eff})" if eff else ")"))
+    _combat_log(note, 'critical')
+
+
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
 def adjust_hp(instance_id):
     try:
@@ -7333,6 +7379,13 @@ def adjust_hp(instance_id):
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
                 old_hp = c.current_hp
+                # Cosmere combatants use the Cosmere combat engine (Deflect +
+                # injuries), not the PF2e W/R/I + dying/wounded path below.
+                if getattr(c, 'system', 'pf2e') == 'cosmere':
+                    _cosmere_adjust_hp(c, amount, action, damage_type)
+                    _persist_encounter_state()
+                    _broadcast_encounter_state()
+                    break
                 effective = amount
                 wri_notes = []
                 if action == 'damage':

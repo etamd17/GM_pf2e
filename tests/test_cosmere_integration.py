@@ -76,6 +76,28 @@ def test_cosmere_combatant_in_tracker_state():
         app._invalidate_tracker_cache()
 
 
+def test_cosmere_damage_deflect_and_injury_spiral():
+    """The Cosmere damage path: Deflect on impact/keen/energy, bypass on
+    spirit/vital, and the injury death-spiral at 0 health (Ch.9)."""
+    a = app._cosmere_combatant(_adv_id('Archer'))      # deflect 1, health 12
+    a.instance_id = 'cos-dmg-1'
+    # impact damage: Deflect 1 applies -> 5 - 1 = 4 taken
+    app._cosmere_adjust_hp(a, 5, 'damage', 'impact')
+    assert a.current_hp == 8
+    # spirit bypasses Deflect -> full 3
+    app._cosmere_adjust_hp(a, 3, 'damage', 'spirit')
+    assert a.current_hp == 5
+    # reduced to 0 -> first injury + Unconscious
+    app._cosmere_adjust_hp(a, 50, 'damage', 'impact')
+    assert a.current_hp == 0 and a.injuries == 1 and a.conditions.get('unconscious') is True
+    # damage while at 0 -> another injury (death-spiral)
+    app._cosmere_adjust_hp(a, 5, 'damage', 'impact')
+    assert a.injuries == 2
+    # healing above 0 clears Unconscious
+    app._cosmere_adjust_hp(a, 4, 'heal', '')
+    assert a.current_hp == 4 and 'unconscious' not in a.conditions
+
+
 def test_cosmere_combatant_broadcast_does_not_crash():
     actor = app._cosmere_combatant(_adv_id('Archer'))
     actor.instance_id = 'cos-test-2'
