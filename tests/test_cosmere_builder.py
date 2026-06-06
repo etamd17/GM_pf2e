@@ -84,5 +84,14 @@ def test_leveler_prebumps_level():
         _cleanup(pid)
 
 
+def test_builder_preview_returns_engine_stats():
+    """The walkthrough's live 'character so far' panel is fed by the engine."""
+    p = _client().post('/cosmere/builder/preview', json={'build': _VALID}).get_json()
+    assert p['defenses']['phy'] == 15          # 10 + STR 2 + SPD 3
+    assert p['health'] == 12                    # 10 + STR 2 at L1
+    assert p['budgets']['attr'] == [12, 12]     # on budget
+    assert p['issues'] == []                    # _VALID is a clean build
+
+
 def test_unknown_pc_sheet_is_404():
     assert _client().get('/cosmere/pc/deadbeef').status_code == 404

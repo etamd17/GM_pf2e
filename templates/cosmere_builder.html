@@ -4,8 +4,9 @@
   .bld { --ac:var(--accent); --ac2:var(--accent); color:#e8eef5; max-width:1100px; }
   .bld h2 { font-family:var(--font-display,serif); font-size:1.5rem; color:var(--ac2); }
   .bld .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3);
-                margin:1.4rem 0 .55rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem;
+                margin:0 0 .55rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem;
                 display:flex; justify-content:space-between; align-items:baseline; }
+  .bld .sec-h + .sec-h, .step .sec-h:not(:first-child) { margin-top:1.4rem; }
   .bld .budget { font-family:'JetBrains Mono',monospace; font-size:12px; }
   .bld .budget.over { color:#f87171; }
   .bld .budget.ok { color:var(--ac2); }
@@ -27,6 +28,7 @@
   .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
   .btn:hover { background:rgba(95,168,224,.26); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
   .chip-row { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.5rem; }
   .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:rgba(95,168,224,.10); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
   .chip b { color:var(--ac2); } .chip .x { cursor:pointer; color:#f87171; font-weight:700; }
@@ -35,11 +37,43 @@
   .inv-row { display:flex; align-items:center; gap:.6rem; padding:.35rem .5rem; border-bottom:1px solid var(--border-card); font-size:13px; }
   .inv-row .gname { flex:1; }
   .muted { color:var(--text-on-dark-3); font-size:11.5px; }
+
+  /* ── walkthrough wizard chrome ── */
+  .wiz-rail { display:flex; gap:.4rem; flex-wrap:wrap; margin:1rem 0 1.2rem; }
+  .wiz-tab { font-size:11.5px; padding:.38rem .7rem; border-radius:999px; background:var(--bg-sunken,#131922);
+             border:1px solid var(--border-card); color:var(--text-on-dark-3); cursor:pointer; white-space:nowrap;
+             display:inline-flex; gap:.4rem; align-items:center; }
+  .wiz-tab .n { font-family:'JetBrains Mono',monospace; opacity:.55; }
+  .wiz-tab:hover { color:#e8eef5; }
+  .wiz-tab.active { border-color:var(--ac2); color:var(--ac2); background:rgba(95,168,224,.12); }
+  .wiz-body { display:grid; grid-template-columns:1fr 290px; gap:1.4rem; align-items:start; }
+  @media (max-width:840px){ .wiz-body { grid-template-columns:1fr; } .wiz-side { position:static !important; } }
+  .step { display:none; }
+  .step.active { display:block; animation:stepIn .18s ease; }
+  @keyframes stepIn { from { opacity:.3; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  .step-lead { font-size:13px; color:var(--text-on-dark-2); margin:0 0 1rem; line-height:1.5; }
+  .wiz-nav { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-card); }
+  .wiz-nav .count { font-size:12px; color:var(--text-on-dark-3); }
+  .wiz-side { position:sticky; top:62px; background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.9rem 1rem; }
+  .wiz-side h3 { font-family:var(--font-display,serif); font-size:13px; letter-spacing:.05em; text-transform:uppercase; color:var(--ac2); margin:0 0 .1rem; }
+  .wiz-side .who { font-size:12px; color:var(--text-on-dark-3); margin-bottom:.6rem; }
+  .cs-defs { display:flex; gap:.4rem; margin:.5rem 0; }
+  .cs-def { flex:1; text-align:center; background:rgba(255,255,255,.03); border-radius:7px; padding:.35rem 0; }
+  .cs-def .l { font-size:8.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-on-dark-3); }
+  .cs-def .v { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; color:#e8eef5; }
+  .cs-res { display:flex; flex-wrap:wrap; gap:.3rem .9rem; font-size:12px; margin:.5rem 0; }
+  .cs-res b { color:#e8eef5; font-family:'JetBrains Mono',monospace; }
+  .cs-bud { margin-top:.6rem; border-top:1px solid var(--border-card); padding-top:.5rem; font-size:11.5px; color:var(--text-on-dark-3); }
+  .cs-bud div { display:flex; justify-content:space-between; padding:1px 0; }
+  .cs-bud .v { font-family:'JetBrains Mono',monospace; }
+  .cs-bud .over { color:#f87171; }
+  .cs-tal { margin-top:.6rem; }
+  .warn-box { margin:0 0 1rem; padding:.55rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px; }
 {% endblock %}
 {% block content %}
-<div class="bld">
+<div class="bld wiz">
   <div class="topbar">
-    <div><label>Character Name</label><input id="f-name" value="{{ build.name }}" style="width:230px;"></div>
+    <div><label>Character Name</label><input id="f-name" value="{{ build.name }}" oninput="refreshPreview()" style="width:230px;"></div>
     <div><label>Level</label>
       <div class="stepper"><button type="button" onclick="bumpLevel(-1)">&minus;</button>
         <input id="f-level" type="number" min="1" max="30" value="{{ build.level }}" onchange="onLevel()">
@@ -47,126 +81,189 @@
     </div>
     <div style="flex:1;"></div>
     <div id="validity" class="muted"></div>
-    <button class="btn primary" onclick="save()">Save Character</button>
+    <button class="btn primary" onclick="save()">Save</button>
   </div>
 
   <h2 style="margin-top:1rem;">{{ 'Edit' if pid else 'New' }} Cosmere Character</h2>
-  <p class="muted">Rules are guided by the rulebook — over-budget choices are flagged but never blocked (your GM can override).</p>
+  <p class="muted">A guided, step-by-step build &mdash; rules are guided, never blocked (your GM can override). Your character updates live on the right.</p>
 
-  <div class="sec-h">Identity</div>
-  <div class="row">
-    <div><label>Ancestry</label><select id="f-ancestry" onchange="onAncestry()">
-      {% for anc in ['Human','Singer'] %}<option {{ 'selected' if build.ancestry==anc }}>{{ anc }}</option>{% endfor %}</select></div>
-    <div><label>Culture (a cultural expertise)</label><select id="f-culture" onchange="onCulture()"><option value="">—</option>
-      {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
-    <div><label>Heroic Path</label><select id="f-path" onchange="onPath()"><option value="">—</option>
-      {% for p in paths %}<option value="{{ p }}" {{ 'selected' if build.path==p }}>{{ p|capitalize }}</option>{% endfor %}</select></div>
-  </div>
-  <div id="path-info" class="muted" style="margin-top:.35rem;"></div>
-  <div id="singer-section" style="display:none; margin-top:.55rem;">
-    <div class="row">
-      <div style="min-width:210px;"><label>Singer Starting Form</label>
-        <select id="f-singer-form" onchange="onForm()"><option value="">— Dullform (no form) —</option>
-          {% for key, f in singer_forms.items() if key != 'dullform' %}<option value="{{ key }}" {{ 'selected' if build.singer_form==key }}>{{ f.name }} ({{ f.group }})</option>{% endfor %}</select></div>
-      <div style="flex:1;" id="form-info" class="muted"></div>
-    </div>
-    <p class="muted" style="margin-top:.3rem;">Singers gain <b>Change Form</b> (key talent) at level 1 and begin in a chosen form; a form's bonuses apply to your stats while assumed.</p>
-  </div>
+  <div class="wiz-rail" id="wiz-rail"></div>
 
-  <div class="sec-h">Radiant Path — Surgebinding <span class="muted" style="text-transform:none; letter-spacing:0;">(optional; a First Ideal requires level 2+)</span></div>
-  <div class="row">
-    <div style="min-width:210px;"><label>Radiant Order</label>
-      <select id="f-order" onchange="onOrder()"><option value="">&mdash; Not Radiant &mdash;</option>
-        {% for key, o in radiant_orders.items() %}<option value="{{ key }}" {{ 'selected' if build.radiant_order==key }}>{{ o.name }}</option>{% endfor %}</select></div>
-    <div style="flex:1;" id="order-info" class="muted"></div>
-  </div>
-  <div id="radiant-detail" style="display:none; margin-top:.6rem;">
-    <div class="row">
-      <div style="min-width:210px;"><label>Spren name (optional)</label><input id="f-spren" value="{{ build.spren_name }}"></div>
-      <div><label>Ideals sworn (of 5)</label>
-        <div class="stepper"><button type="button" onclick="bumpIdeals(-1)">&minus;</button>
-          <input id="f-ideals" type="number" min="0" max="5" value="{{ build.ideals_sworn }}" readonly style="background:var(--bg-sunken); width:48px;">
-          <button type="button" onclick="bumpIdeals(1)">+</button></div></div>
-      <div style="flex:1;" id="ideal-info" class="muted"></div>
-    </div>
-    <div class="row" style="margin-top:.5rem;">
-      <div style="flex:1;"><label>Add a Radiant talent (spren-bond tree + your surges)</label>
-        <select id="radiant-talent-pick"><option value="">&mdash; choose an order &mdash;</option></select></div>
-      <button class="btn" type="button" onclick="addRadiantTalent()">Add Talent</button>
-    </div>
-  </div>
+  <div class="wiz-body">
+    <div class="wiz-main">
 
-  <div class="sec-h">Attributes <span id="b-attr" class="budget"></span></div>
-  <div class="grid g-attrs">
-    {% for k in ['str','spd','int','wil','awa','pre'] %}
-    <div class="card"><label>{{ attr_names[k] }}</label>
-      <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()"></div>
-    {% endfor %}
-  </div>
-  <p class="muted">12 points at creation, max 3 per attribute (hard cap 5; +1 every 3rd level).</p>
+      <section class="step" data-step="0">
+        <div class="sec-h">Identity</div>
+        <p class="step-lead">Who are you? Your ancestry and the culture you were raised in. (Name and level live in the bar above.)</p>
+        <div class="row">
+          <div><label>Ancestry</label><select id="f-ancestry" onchange="onAncestry()">
+            {% for anc in ['Human','Singer'] %}<option {{ 'selected' if build.ancestry==anc }}>{{ anc }}</option>{% endfor %}</select></div>
+          <div><label>Culture (a cultural expertise)</label><select id="f-culture" onchange="onCulture()"><option value="">&mdash;</option>
+            {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
+        </div>
+        <div id="singer-section" style="display:none; margin-top:.7rem;">
+          <div class="row">
+            <div style="min-width:210px;"><label>Singer Starting Form</label>
+              <select id="f-singer-form" onchange="onForm()"><option value="">&mdash; Dullform (no form) &mdash;</option>
+                {% for key, f in singer_forms.items() if key != 'dullform' %}<option value="{{ key }}" {{ 'selected' if build.singer_form==key }}>{{ f.name }} ({{ f.group }})</option>{% endfor %}</select></div>
+            <div style="flex:1;" id="form-info" class="muted"></div>
+          </div>
+          <p class="muted" style="margin-top:.3rem;">Singers gain <b>Change Form</b> (key talent) at level 1 and begin in a chosen form; a form&rsquo;s bonuses apply while assumed.</p>
+        </div>
+      </section>
 
-  <div class="sec-h">Skills <span id="b-skill" class="budget"></span></div>
-  <div class="grid g-skills" id="basic-skills">
-    {% for code, name in skill_names.items() if code not in surge_skills %}
-    <div class="card skill">
-      <div class="nm">{{ name }} <small>{{ skill_attr[code] }}</small></div>
-      <div class="stepper">
-        <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
-        <input class="skill-rank" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
-        <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+      <section class="step" data-step="1">
+        <div class="sec-h">Attributes <span id="b-attr" class="budget"></span></div>
+        <p class="step-lead">Spend your attribute points. 12 at creation, max 3 per attribute (hard cap 5; +1 every 3rd level). Defenses, health, and focus all flow from these.</p>
+        <div class="grid g-attrs">
+          {% for k in ['str','spd','int','wil','awa','pre'] %}
+          <div class="card"><label>{{ attr_names[k] }}</label>
+            <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()"></div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="step" data-step="2">
+        <div class="sec-h">Skills <span id="b-skill" class="budget"></span></div>
+        <p class="step-lead">Distribute skill ranks. A skill&rsquo;s modifier is its ranks plus its governing attribute.</p>
+        <div class="grid g-skills" id="basic-skills">
+          {% for code, name in skill_names.items() if code not in surge_skills %}
+          <div class="card skill">
+            <div class="nm">{{ name }} <small>{{ skill_attr[code] }}</small></div>
+            <div class="stepper">
+              <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
+              <input class="skill-rank" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
+              <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+            </div>
+            <div class="mod" id="mod-{{ code }}">+0</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="sec-h">Expertises <span id="b-exp" class="budget"></span></div>
+        <p class="step-lead" style="margin-bottom:.4rem;">Two cultural expertises plus your Intellect. One per line.</p>
+        <textarea id="f-expertises" placeholder="One per line" oninput="recompute()">{{ build.expertises|join('\n') }}</textarea>
+      </section>
+
+      <section class="step" data-step="3">
+        <div class="sec-h">Heroic Path <span id="b-tal" class="budget"></span></div>
+        <p class="step-lead">Choose your heroic path. It grants a key talent and a free rank in its starting skill; then pick talents from its trees.</p>
+        <div class="row">
+          <div style="min-width:210px;"><label>Heroic Path</label><select id="f-path" onchange="onPath()"><option value="">&mdash;</option>
+            {% for p in paths %}<option value="{{ p }}" {{ 'selected' if build.path==p }}>{{ p|capitalize }}</option>{% endfor %}</select></div>
+          <div style="flex:1;" id="path-info" class="muted"></div>
+        </div>
+        <div class="row" style="margin-top:.7rem;">
+          <div style="flex:1;"><label>Add a talent from your path</label>
+            <select id="talent-pick"><option value="">&mdash; choose path first &mdash;</option></select></div>
+          <button class="btn" type="button" onclick="addTalent()">Add Talent</button>
+        </div>
+      </section>
+
+      <section class="step" data-step="4">
+        <div class="sec-h">Radiant Path &mdash; Surgebinding <span class="muted" style="text-transform:none; letter-spacing:0;">(optional; a First Ideal requires level 2+)</span></div>
+        <p class="step-lead">Are you a Knight Radiant? Choosing an order grants Investiture; swearing the First Ideal unlocks your two surges.</p>
+        <div class="row">
+          <div style="min-width:210px;"><label>Radiant Order</label>
+            <select id="f-order" onchange="onOrder()"><option value="">&mdash; Not Radiant &mdash;</option>
+              {% for key, o in radiant_orders.items() %}<option value="{{ key }}" {{ 'selected' if build.radiant_order==key }}>{{ o.name }}</option>{% endfor %}</select></div>
+          <div style="flex:1;" id="order-info" class="muted"></div>
+        </div>
+        <div id="radiant-detail" style="display:none; margin-top:.7rem;">
+          <div class="row">
+            <div style="min-width:210px;"><label>Spren name (optional)</label><input id="f-spren" value="{{ build.spren_name }}"></div>
+            <div><label>Ideals sworn (of 5)</label>
+              <div class="stepper"><button type="button" onclick="bumpIdeals(-1)">&minus;</button>
+                <input id="f-ideals" type="number" min="0" max="5" value="{{ build.ideals_sworn }}" readonly style="background:var(--bg-sunken); width:48px;">
+                <button type="button" onclick="bumpIdeals(1)">+</button></div></div>
+            <div style="flex:1;" id="ideal-info" class="muted"></div>
+          </div>
+          <div id="surge-skills" class="grid g-skills" style="margin-top:.7rem; display:none;">
+            {% for code, name in skill_names.items() if code in surge_skills %}
+            <div class="card skill">
+              <div class="nm">{{ name }} <small>surge &middot; {{ skill_attr[code] }}</small></div>
+              <div class="stepper">
+                <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
+                <input class="skill-rank surge" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
+                <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+              </div>
+              <div class="mod" id="mod-{{ code }}">+0</div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="row" style="margin-top:.7rem;">
+            <div style="flex:1;"><label>Add a Radiant talent (spren-bond tree + your surges)</label>
+              <select id="radiant-talent-pick"><option value="">&mdash; choose an order &mdash;</option></select></div>
+            <button class="btn" type="button" onclick="addRadiantTalent()">Add Talent</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" data-step="5">
+        <div class="sec-h">Gear</div>
+        <p class="step-lead">Equip a starting kit and add weapons, armor, and equipment. Worn armor sets your Deflect; held weapons become Strikes.</p>
+        <div class="row">
+          <div style="flex:1;"><label>Starting kit (adds gear)</label>
+            <select id="kit-pick" onchange="onKit()"><option value="">&mdash; none &mdash;</option>
+              {% for k in starting_kits %}<option value="{{ k.key }}">{{ k.name }} Kit</option>{% endfor %}</select></div>
+        </div>
+        <div id="kit-info" class="muted" style="margin:.3rem 0 .6rem;"></div>
+        <div class="row">
+          <div style="flex:1;"><label>Add an item</label>
+            <select id="item-pick">
+              <option value="">&mdash;</option>
+              {% for it in catalog %}<option value="{{ it.id }}">{{ it.name }} ({{ it.kind }}{% if it.damage %} &middot; {{ it.damage.formula }} {{ it.damage.type }}{% elif it.deflect %} &middot; deflect {{ it.deflect }}{% endif %})</option>{% endfor %}
+            </select></div>
+          <button class="btn" type="button" onclick="addItem()">Add Item</button>
+        </div>
+        <div id="inv-list" style="margin-top:.6rem;"></div>
+      </section>
+
+      <section class="step" data-step="6">
+        <div class="sec-h">Story</div>
+        <p class="step-lead">The heart of your character &mdash; optional, but it&rsquo;s what the table remembers.</p>
+        <div class="grid" style="grid-template-columns:1fr 1fr;">
+          <div><label>Purpose</label><textarea id="f-purpose">{{ build.purpose }}</textarea></div>
+          <div><label>Obstacle</label><textarea id="f-obstacle">{{ build.obstacle }}</textarea></div>
+          <div><label>Goals</label><textarea id="f-goals">{{ build.goals }}</textarea></div>
+          <div><label>Appearance / Notes</label><textarea id="f-appearance">{{ build.appearance }}</textarea></div>
+        </div>
+      </section>
+
+      <section class="step" data-step="7">
+        <div class="sec-h">Review &amp; Save</div>
+        <p class="step-lead">Here&rsquo;s your character. Anything flagged below is guidance, not a blocker &mdash; save whenever you&rsquo;re ready.</p>
+        <div id="review-warnings"></div>
+        <div id="review-summary" class="muted"></div>
+        <button class="btn primary" style="margin-top:1rem; padding:.7rem 1.6rem; font-size:14px;" onclick="save()">Save Character</button>
+      </section>
+
+      <div class="wiz-nav">
+        <button class="btn" id="wiz-back" type="button" onclick="goStep(STEP-1)">&larr; Back</button>
+        <span class="count" id="wiz-count"></span>
+        <button class="btn primary" id="wiz-next" type="button" onclick="goStep(STEP+1)">Next &rarr;</button>
       </div>
-      <div class="mod" id="mod-{{ code }}">+0</div>
     </div>
-    {% endfor %}
-  </div>
-  <div id="surge-skills" class="grid g-skills" style="margin-top:.6rem; display:none;">
-    {% for code, name in skill_names.items() if code in surge_skills %}
-    <div class="card skill">
-      <div class="nm">{{ name }} <small>surge · {{ skill_attr[code] }}</small></div>
-      <div class="stepper">
-        <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
-        <input class="skill-rank surge" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
-        <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+
+    <aside class="wiz-side">
+      <h3 id="cs-name">New Hero</h3>
+      <div class="who" id="cs-who">Cosmere character</div>
+      <div class="cs-defs">
+        <div class="cs-def"><div class="l">Phy</div><div class="v" id="cs-phy">10</div></div>
+        <div class="cs-def"><div class="l">Cog</div><div class="v" id="cs-cog">10</div></div>
+        <div class="cs-def"><div class="l">Spi</div><div class="v" id="cs-spi">10</div></div>
       </div>
-      <div class="mod" id="mod-{{ code }}">+0</div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <div class="sec-h">Expertises <span id="b-exp" class="budget"></span></div>
-  <textarea id="f-expertises" placeholder="One per line" oninput="recompute()">{{ build.expertises|join('\n') }}</textarea>
-
-  <div class="sec-h">Talents <span id="b-tal" class="budget"></span></div>
-  <div class="row">
-    <div style="flex:1;"><label>Add a talent from your path</label>
-      <select id="talent-pick"><option value="">— choose path first —</option></select></div>
-    <button class="btn" type="button" onclick="addTalent()">Add Talent</button>
-  </div>
-  <div class="chip-row" id="talent-list"></div>
-
-  <div class="sec-h">Inventory</div>
-  <div class="row">
-    <div style="flex:1;"><label>Starting kit (adds gear)</label>
-      <select id="kit-pick" onchange="onKit()"><option value="">&mdash; none &mdash;</option>
-        {% for k in starting_kits %}<option value="{{ k.key }}">{{ k.name }} Kit</option>{% endfor %}</select></div>
-  </div>
-  <div id="kit-info" class="muted" style="margin:.3rem 0 .55rem;"></div>
-  <div class="row">
-    <div style="flex:1;"><label>Add an item</label>
-      <select id="item-pick">
-        <option value="">—</option>
-        {% for it in catalog %}<option value="{{ it.id }}">{{ it.name }} ({{ it.kind }}{% if it.damage %} · {{ it.damage.formula }} {{ it.damage.type }}{% elif it.deflect %} · deflect {{ it.deflect }}{% endif %})</option>{% endfor %}
-      </select></div>
-    <button class="btn" type="button" onclick="addItem()">Add Item</button>
-  </div>
-  <div id="inv-list" style="margin-top:.5rem;"></div>
-
-  <div class="sec-h">Story</div>
-  <div class="grid" style="grid-template-columns:1fr 1fr;">
-    <div><label>Purpose</label><textarea id="f-purpose">{{ build.purpose }}</textarea></div>
-    <div><label>Obstacle</label><textarea id="f-obstacle">{{ build.obstacle }}</textarea></div>
-    <div><label>Goals</label><textarea id="f-goals">{{ build.goals }}</textarea></div>
-    <div><label>Appearance / Notes</label><textarea id="f-appearance">{{ build.appearance }}</textarea></div>
+      <div class="cs-res">
+        <span>&#9829; Health <b id="cs-health">&mdash;</b></span>
+        <span>Focus <b id="cs-focus">&mdash;</b></span>
+        <span>Deflect <b id="cs-deflect">&mdash;</b></span>
+        <span id="cs-inv-wrap" style="display:none;">&#9889; Inv <b id="cs-inv">&mdash;</b></span>
+      </div>
+      <div class="cs-bud" id="cs-bud"></div>
+      <div class="cs-tal">
+        <label style="margin-bottom:4px;">Talents</label>
+        <div class="chip-row" id="talent-list"></div>
+      </div>
+    </aside>
   </div>
 </div>
 
@@ -210,12 +307,11 @@ function onPath(){
   const info=PATH_INFO[p], box=document.getElementById('path-info');
   if(info){
     box.innerHTML=`Grants key talent <b style="color:var(--accent)">${info.key_talent}</b> and a free rank in <b>${SKILL_NAMES[info.start_skill]}</b> (starting skill).`;
-    // auto-grant the key talent (swap out any other path's key talent)
     const otherKeys=Object.values(PATH_INFO).map(x=>x.key_talent_id);
     TALENTS=TALENTS.filter(t=>!otherKeys.includes(t.id) || t.id===info.key_talent_id);
     if(!TALENTS.some(t=>t.id===info.key_talent_id)) TALENTS.unshift({id:info.key_talent_id, name:info.key_talent, key:true});
     renderTalents();
-    const si=document.querySelector(`.skill-rank[data-code="${info.start_skill}"]`);   // ensure the +1 starting rank
+    const si=document.querySelector(`.skill-rank[data-code="${info.start_skill}"]`);
     if(si && (+si.value||0)<1) si.value=1;
   } else { box.innerHTML=''; }
   recompute();
@@ -224,12 +320,12 @@ function onCulture(){
   const c=v('f-culture'); if(!c) return;
   const ta=document.getElementById('f-expertises');
   const lines=ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(!lines.includes(c)){ lines.unshift(c); ta.value=lines.join('\n'); recompute(); }   // pre-fill the cultural expertise
+  if(!lines.includes(c)){ lines.unshift(c); ta.value=lines.join('\n'); recompute(); }
 }
 function onAncestry(){
   const isSinger = v('f-ancestry')==='Singer';
   document.getElementById('singer-section').style.display = isSinger?'block':'none';
-  TALENTS = TALENTS.filter(t=>t.id!==SINGER_CHANGE_FORM.id);            // swap Change Form in/out
+  TALENTS = TALENTS.filter(t=>t.id!==SINGER_CHANGE_FORM.id);
   if(isSinger) TALENTS.unshift({id:SINGER_CHANGE_FORM.id, name:SINGER_CHANGE_FORM.name, key:true});
   renderTalents(); onForm(); recompute();
 }
@@ -253,7 +349,7 @@ function onOrder(){
   document.getElementById('radiant-detail').style.display=o?'block':'none';
   const info=document.getElementById('order-info');
   info.innerHTML = o ? `<b style="color:var(--accent)">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
-  const sel=document.getElementById('radiant-talent-pick');   // spren-bond tree + the order's two surge trees
+  const sel=document.getElementById('radiant-talent-pick');
   if(o){
     let list=(RADIANT_ORDER_TALENTS[k]||[]).map(t=>({name:t.name,prereq:t.prereq,group:'Bond'}));
     o.surges.forEach(s=>(RADIANT_SURGE_TALENTS[s]||[]).forEach(t=>list.push({name:t.name,prereq:t.prereq,group:SURGE_INFO[s].name})));
@@ -285,7 +381,7 @@ function updateSurges(){
     const inp=card.querySelector('.skill-rank'), code=inp.dataset.code;
     const on=show && o.surges.includes(code);
     card.style.display = on?'flex':'none';
-    if(on && (+inp.value||0)<1) inp.value=1;       // free rank from swearing the First Ideal
+    if(on && (+inp.value||0)<1) inp.value=1;
   });
 }
 
@@ -301,9 +397,9 @@ function addTalent(){
 function renderTalents(){
   document.getElementById('talent-list').innerHTML = TALENTS.map((t,i)=>
     t.key
-      ? `<span class="chip" title="Path key talent (granted)"><b style="color:var(--accent)">★ ${t.name||t.id}</b></span>`
+      ? `<span class="chip" title="Key talent (granted)"><b style="color:var(--accent)">★ ${t.name||t.id}</b></span>`
       : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
-  ).join('') || '<span class="muted">None selected</span>';
+  ).join('') || '<span class="muted">None yet</span>';
 }
 function onKit(){
   const k=STARTING_KITS.find(x=>x.key===v('kit-pick')), box=document.getElementById('kit-info');
@@ -311,11 +407,12 @@ function onKit(){
   k.items.forEach(it=>{ if(!INV.some(e=>e.id===it.id)) INV.push({id:it.id, qty:1, equipped:true}); });
   renderInv();
   box.innerHTML=`<b>${k.name} Kit</b> — ${k.equipment} <b>Marks:</b> ${k.marks}.`+(k.bonus?` <i>${k.bonus}</i>`:'');
+  recompute();
 }
 function addItem(){
   const id=document.getElementById('item-pick').value; if(!id)return;
   const ex=INV.find(e=>e.id===id); if(ex){ex.qty=(ex.qty||1)+1;} else {INV.push({id,qty:1,equipped:false});}
-  renderInv();
+  renderInv(); recompute();
 }
 function renderInv(){
   document.getElementById('inv-list').innerHTML = INV.map((e,i)=>{
@@ -333,35 +430,89 @@ function renderInv(){
 
 function setBudget(id,spent,avail){
   const e=document.getElementById(id);
-  e.textContent=`${spent} / ${avail}`;
-  e.className='budget '+(spent>avail?'over':'ok');
+  if(e){ e.textContent=`${spent} / ${avail}`; e.className='budget '+(spent>avail?'over':'ok'); }
   return spent<=avail;
 }
 function recompute(){
   const L=lvl();
-  // attributes
   let aSum=0, aCapBad=false; const atL1=L===1;
   ATTR_KEYS.forEach(k=>{const x=+v('attr-'+k)||0; aSum+=x; if(x>5||(atL1&&x>3))aCapBad=true;});
   const okA=setBudget('b-attr',aSum,attrPoints(L)) && !aCapBad;
-  // skills + mods
   let sSum=0, rankBad=false; const cap=maxRank(L);
   document.querySelectorAll('.skill-rank').forEach(inp=>{
     const r=+inp.value||0, code=inp.dataset.code, attr=inp.dataset.attr;
     sSum+=r; if(r>cap)rankBad=true;
     const mod=r+(+v('attr-'+attr)||0);
-    document.getElementById('mod-'+code).textContent=(mod>=0?'+':'')+mod;
+    const me=document.getElementById('mod-'+code); if(me) me.textContent=(mod>=0?'+':'')+mod;
   });
-  const sworn = v('f-order') && (+v('f-ideals')||0)>=1;   // First Ideal grants 2 free surge ranks
+  const sworn = v('f-order') && (+v('f-ideals')||0)>=1;
   const okS=setBudget('b-skill',sSum,skillBudget(L)+(sworn?2:0)) && !rankBad;
-  // expertises
   const exp=v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean).length;
   const okE=setBudget('b-exp',exp,2+Math.max(0,+v('attr-int')||0));
-  // talents
   const okT=setBudget('b-tal',TALENTS.length,talentBudget(L));
   document.getElementById('validity').textContent =
-    (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L)+' · max skill rank '+cap
-                         : 'Over budget (allowed — will be flagged)';
+    (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L) : 'Over budget (allowed)';
+  refreshPreview();
 }
+
+// ── walkthrough: steps + the engine-backed "character so far" panel ──
+const STEPS = ['Identity','Attributes','Skills','Heroic Path','Radiant','Gear','Story','Review'];
+let STEP = 0;
+function buildRail(){
+  document.getElementById('wiz-rail').innerHTML = STEPS.map((s,i)=>
+    `<span class="wiz-tab" data-i="${i}" onclick="goStep(${i})"><span class="n">${i+1}</span>${s}</span>`).join('');
+}
+function goStep(i){
+  STEP = Math.max(0, Math.min(STEPS.length-1, i));
+  document.querySelectorAll('.step').forEach(s=>s.classList.toggle('active', +s.dataset.step===STEP));
+  document.querySelectorAll('.wiz-tab').forEach(t=>t.classList.toggle('active', +t.dataset.i===STEP));
+  document.getElementById('wiz-back').disabled = STEP===0;
+  document.getElementById('wiz-next').style.visibility = STEP===STEPS.length-1 ? 'hidden' : 'visible';
+  document.getElementById('wiz-count').textContent = `Step ${STEP+1} of ${STEPS.length} · ${STEPS[STEP]}`;
+  if(STEP===STEPS.length-1) renderReview();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+let _pvTimer=null;
+function refreshPreview(){ clearTimeout(_pvTimer); _pvTimer=setTimeout(doPreview, 250); }
+function doPreview(){
+  fetch('/cosmere/builder/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({build:collect()})})
+  .then(r=>r.json()).then(p=>{ LAST_PREVIEW=p; paintPreview(p); }).catch(()=>{});
+}
+let LAST_PREVIEW=null;
+function paintPreview(p){
+  document.getElementById('cs-name').textContent = v('f-name') || 'New Hero';
+  const order = ORDERS[v('f-order')];
+  const sub = order ? order.name : (v('f-path') ? v('f-path').charAt(0).toUpperCase()+v('f-path').slice(1) : 'Cosmere');
+  document.getElementById('cs-who').textContent = `Level ${p.level} · Tier ${p.tier} · ${sub}`;
+  document.getElementById('cs-phy').textContent = p.defenses.phy;
+  document.getElementById('cs-cog').textContent = p.defenses.cog;
+  document.getElementById('cs-spi').textContent = p.defenses.spi;
+  document.getElementById('cs-health').textContent = p.health;
+  document.getElementById('cs-focus').textContent = p.focus;
+  document.getElementById('cs-deflect').textContent = p.deflect;
+  document.getElementById('cs-inv-wrap').style.display = p.is_radiant ? '' : 'none';
+  document.getElementById('cs-inv').textContent = p.investiture;
+  const b=p.budgets, line=(lbl,a)=>`<div><span>${lbl}</span><span class="v ${a[0]>a[1]?'over':''}">${a[0]}/${a[1]}</span></div>`;
+  document.getElementById('cs-bud').innerHTML =
+    line('Attributes',b.attr)+line('Skill ranks',b.skills)+line('Talents',b.talents)+line('Expertises',b.expertises);
+}
+function renderReview(){
+  const p=LAST_PREVIEW;
+  const wb=document.getElementById('review-warnings');
+  wb.innerHTML = (p && p.issues && p.issues.length)
+    ? '<div class="warn-box"><b>Guidance:</b><ul style="margin:.3rem 0 0 1rem;">'+p.issues.map(i=>`<li>${i}</li>`).join('')+'</ul></div>'
+    : '<div class="muted" style="margin-bottom:1rem;">No rules flags — your build is on budget.</div>';
+  const order=ORDERS[v('f-order')];
+  document.getElementById('review-summary').innerHTML =
+    `<b style="color:#e8eef5;">${v('f-name')||'New Hero'}</b> — Level ${lvl()} ${v('f-ancestry')}`
+    + (v('f-culture')?` of ${v('f-culture')}`:'')
+    + (v('f-path')?`, ${v('f-path')}`:'')
+    + (order?` · ${order.name} (${(+v('f-ideals')||0)}/5 Ideals)`:'')
+    + `.<br>${TALENTS.length} talent${TALENTS.length===1?'':'s'} · ${INV.length} item${INV.length===1?'':'s'}.`;
+}
+
 function collect(){
   const attrs={}; ATTR_KEYS.forEach(k=>attrs[k]=+v('attr-'+k)||0);
   const skills={}; document.querySelectorAll('.skill-rank').forEach(inp=>{const r=+inp.value||0; if(r>0)skills[inp.dataset.code]=r;});
@@ -381,6 +532,8 @@ function save(){
   .catch(()=>alert('Save failed'));
 }
 // init
+buildRail();
 onPath(); onAncestry(); onOrder(); renderTalents(); renderInv(); recompute();
+goStep(0);
 </script>
 {% endblock %}
