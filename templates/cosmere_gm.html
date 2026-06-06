@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}GM Hub - {{ campaign_name }}{% endblock %}
+{% block content %}
+
+<header class="text-center" style="margin-bottom: var(--sp-7);">
+    <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Game Master</div>
+    <h1 class="font-display cos-hero" style="font-size:28px; letter-spacing:0.04em; margin:0 0 var(--sp-1);">{{ campaign_name }}</h1>
+    <p class="font-flavor" style="font-size:12px; font-style:italic; color:var(--text-on-dark-3); margin:0 0 var(--sp-3);">
+        {% if char_count == 0 %}Build your party with &ldquo;+ New Character&rdquo; to begin.{% else %}Stormlight Command &amp; Tools{% endif %}
+    </p>
+    <div class="flex flex-wrap justify-center" style="gap: var(--sp-2);">
+        <span class="pill accent">Characters <span class="v">{{ char_count }}</span></span>
+        <span class="pill">Bestiary <span class="v">{{ adv_count }}</span></span>
+        {% if encounter_count > 0 %}
+        <span class="pill live">Combat <span class="v">{{ encounter_count }} active</span></span>
+        {% endif %}
+    </div>
+</header>
+
+{# ── Tool grid ── #}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
+
+    <a href="/cosmere/pcs" class="tile">
+        <div class="tile__glyph">&#9823;</div>
+        <h2 class="tile__title">Characters</h2>
+        <p class="tile__desc">The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.</p>
+        <span class="pill {% if char_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ char_count }} character{{ '' if char_count == 1 else 's' }}</span>
+    </a>
+
+    <a href="/cosmere/builder" class="tile">
+        <div class="tile__glyph">&#10010;</div>
+        <h2 class="tile__title">Builder</h2>
+        <p class="tile__desc">Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">+ New Character</span>
+    </a>
+
+    <a href="/cosmere/bestiary" class="tile">
+        <div class="tile__glyph">B</div>
+        <h2 class="tile__title">Bestiary</h2>
+        <p class="tile__desc">The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">{{ adv_count }} adversaries</span>
+    </a>
+
+    <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
+        <div class="tile__glyph">&#9876;</div>
+        <h2 class="tile__title">Encounter Tracker</h2>
+        <p class="tile__desc">The combat surface &mdash; 4-phase fast/slow turns, deflect-aware damage, the injury spiral, Plot Die.</p>
+        <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
+            {% if encounter_count > 0 %}{{ encounter_count }} in combat{% else %}no active combat{% endif %}
+        </span>
+    </a>
+
+    <a href="/gm/threads" class="tile">
+        <div class="tile__glyph">&#10070;</div>
+        <h2 class="tile__title">Story Threads</h2>
+        <p class="tile__desc">Branching map of plot beats &mdash; open vs. resolved, who and where, at a glance.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">read-only</span>
+    </a>
+
+    <a href="/status" class="tile">
+        <div class="tile__glyph">&#9737;</div>
+        <h2 class="tile__title">Campaign Status</h2>
+        <p class="tile__desc">The live table state &mdash; who&rsquo;s connected and what&rsquo;s on every screen right now.</p>
+    </a>
+
+    <a href="/notes" class="tile">
+        <div class="tile__glyph">&#8801;</div>
+        <h2 class="tile__title">Session Notes</h2>
+        <p class="tile__desc">A quick scratchpad for prep and at-the-table notes, saved as you type.</p>
+    </a>
+
+    {% if active_cid %}
+    <a href="/campaign/{{ active_cid }}/invites" class="tile">
+        <div class="tile__glyph">&#10022;</div>
+        <h2 class="tile__title">Invites &amp; Roster</h2>
+        <p class="tile__desc">Player join links, the member roster, and handing a built character off to its player.</p>
+    </a>
+    {% endif %}
+
+    {# ── Roadmap: the next Cosmere GM tools (built in upcoming passes) ── #}
+    <div class="tile is-soon" aria-disabled="true">
+        <div class="tile__glyph">&#9776;</div>
+        <h2 class="tile__title">GM Screen</h2>
+        <p class="tile__desc">Cosmere rules at a glance &mdash; Plot Die, the injury table, deflect &amp; damage types, conditions, surges.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">coming soon</span>
+    </div>
+
+    <div class="tile is-soon" aria-disabled="true">
+        <div class="tile__glyph">&#9881;</div>
+        <h2 class="tile__title">Generators</h2>
+        <p class="tile__desc">Rosharan names, highstorm weather, NPCs, and spheres &mdash; scaled to the moment.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">coming soon</span>
+    </div>
+
+</div>
+{% endblock %}

@@ -2,15 +2,14 @@
 {% block title %}{{ a.name }} — Cosmere{% endblock %}
 
 {% block extra_head %}
-<style>
-  .cs-wrap { --cs-accent:#38bdf8; --cs-accent-2:#5eead4; --cs-glow:rgba(56,189,248,.18); color:var(--text-on-dark-1, #e8eef5); }
+  .cs-wrap { --cs-accent:var(--accent); --cs-accent-2:var(--accent); --cs-glow:rgba(95,168,224,.18); color:var(--text-on-dark-1, #e8eef5); }
   .cs-head { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap;
              border-bottom:1px solid var(--border-card); padding-bottom:.85rem; margin-bottom:1.1rem; }
   .cs-name { font-family:var(--font-display, serif); font-size:2rem; font-weight:700; letter-spacing:.01em;
              color:var(--cs-accent-2); text-shadow:0 0 18px var(--cs-glow); line-height:1.1; }
   .cs-sub { margin-top:.3rem; display:flex; gap:.4rem; flex-wrap:wrap; }
   .cs-tag { font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:2px 9px; border-radius:999px;
-            background:rgba(56,189,248,.10); border:1px solid rgba(56,189,248,.35); color:var(--cs-accent); }
+            background:rgba(95,168,224,.10); border:1px solid rgba(95,168,224,.35); color:var(--cs-accent); }
   .cs-back { font-size:12px; color:var(--text-on-dark-3); text-decoration:none; }
   .cs-back:hover { color:var(--cs-accent); }
   .cs-grid { display:grid; gap:.7rem; }
@@ -21,9 +20,9 @@
   .cs-card .v { font-family:'JetBrains Mono',monospace; font-size:1.7rem; font-weight:700; color:var(--cs-accent-2); }
   .cs-card .v.sm { font-size:1.15rem; }
   .cs-card .x { font-size:11px; color:var(--text-on-dark-3); }
-  .cs-def { border-color:rgba(56,189,248,.35); box-shadow:0 0 0 1px rgba(56,189,248,.05) inset; }
+  .cs-def { border-color:rgba(95,168,224,.35); box-shadow:0 0 0 1px rgba(95,168,224,.05) inset; }
   .cs-hpbar { height:7px; border-radius:4px; background:rgba(255,255,255,.08); margin-top:.35rem; overflow:hidden; }
-  .cs-hpfill { height:100%; background:linear-gradient(90deg,#34d399,#5eead4); }
+  .cs-hpfill { height:100%; background:linear-gradient(90deg,#34d399,var(--accent)); }
   .cs-section-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3);
                   margin:1.3rem 0 .6rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem; }
   .cs-attrs { grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); }
@@ -38,14 +37,13 @@
   .cs-chips { display:flex; gap:.35rem; flex-wrap:wrap; }
   .cs-chip { font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,.05);
              border:1px solid var(--border-card); }
-  .cs-chip.df { color:var(--cs-accent); border-color:rgba(56,189,248,.4); }
+  .cs-chip.df { color:var(--cs-accent); border-color:rgba(95,168,224,.4); }
   .cs-ability { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px;
                 padding:.6rem .75rem; margin-bottom:.5rem; }
   .cs-ability .an { font-weight:600; color:var(--cs-accent-2); font-size:14px; }
   .cs-ability .ad { font-size:12.5px; color:var(--text-on-dark-2,#aeb8c4); margin-top:.2rem; line-height:1.45; }
   .cs-2col { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; }
   @media (max-width:720px){ .cs-2col{ grid-template-columns:1fr; } }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -70,7 +68,7 @@
     </div>
     <div style="display:flex; gap:.6rem; align-items:center;">
       {% if pc %}
-        <a class="cs-back" href="{{ edit_url }}" style="color:#5eead4;">Edit / Level Up</a>
+        <a class="cs-back" href="{{ edit_url }}" style="color:var(--accent);">Edit / Level Up</a>
         <a class="cs-back" href="/cosmere/pcs">&larr; Characters</a>
       {% else %}
         <a class="cs-back" href="/cosmere/bestiary">&larr; Bestiary</a>
@@ -114,9 +112,9 @@
   {# --- Radiant (Surgebinding) --- #}
   {% if pc and radiant %}
   <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}</div>
-  <div class="cs-card" style="text-align:left; border-color:rgba(56,189,248,.4);">
+  <div class="cs-card" style="text-align:left; border-color:rgba(95,168,224,.4);">
     <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:#5eead4;">{{ build.spren_name or radiant.spren }}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--accent);">{{ build.spren_name or radiant.spren }}</b></div>
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}{{ surge_names[s].name }}{% if not loop.last %} + {% endif %}{% endfor %}</b></div>
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
     </div>
@@ -189,7 +187,7 @@
   {% if inventory %}
   <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
     {% for it in inventory %}
-    <div class="cs-ability" style="margin-bottom:0;{% if it.equipped %} border-color:rgba(56,189,248,.5);{% endif %}">
+    <div class="cs-ability" style="margin-bottom:0;{% if it.equipped %} border-color:rgba(95,168,224,.5);{% endif %}">
       <div class="an" style="{% if not it.equipped %}color:#e8eef5;{% endif %}">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</div>
       <div class="ad">
         {{ it.kind|capitalize }}{% if it.damage %} &middot; {{ it.damage.formula }} {{ it.damage.type }}{% endif %}{% if it.deflect %} &middot; Deflect {{ it.deflect }}{% endif %}

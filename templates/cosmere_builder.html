@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Cosmere Character Builder{% endblock %}
 {% block extra_head %}
-<style>
-  .bld { --ac:#38bdf8; --ac2:#5eead4; color:#e8eef5; max-width:1100px; }
+  .bld { --ac:var(--accent); --ac2:var(--accent); color:#e8eef5; max-width:1100px; }
   .bld h2 { font-family:var(--font-display,serif); font-size:1.5rem; color:var(--ac2); }
   .bld .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3);
                 margin:1.4rem 0 .55rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem;
@@ -25,18 +24,17 @@
   .skill .mod { font-family:'JetBrains Mono',monospace; color:var(--ac2); font-weight:700; min-width:28px; text-align:right; }
   .stepper { display:flex; align-items:center; gap:4px; }
   .stepper button { background:var(--bg-page); border:1px solid var(--border-card); color:#e8eef5; border-radius:6px; width:24px; height:24px; cursor:pointer; }
-  .btn { background:rgba(56,189,248,.16); border:1px solid rgba(56,189,248,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
-  .btn:hover { background:rgba(56,189,248,.26); }
+  .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
+  .btn:hover { background:rgba(95,168,224,.26); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
   .chip-row { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.5rem; }
-  .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:rgba(56,189,248,.10); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
+  .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:rgba(95,168,224,.10); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
   .chip b { color:var(--ac2); } .chip .x { cursor:pointer; color:#f87171; font-weight:700; }
   .topbar { position:sticky; top:0; z-index:5; background:var(--bg-page,#0d1117); padding:.7rem 0; border-bottom:1px solid var(--border-card);
             display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; }
   .inv-row { display:flex; align-items:center; gap:.6rem; padding:.35rem .5rem; border-bottom:1px solid var(--border-card); font-size:13px; }
   .inv-row .gname { flex:1; }
   .muted { color:var(--text-on-dark-3); font-size:11.5px; }
-</style>
 {% endblock %}
 {% block content %}
 <div class="bld">
@@ -211,7 +209,7 @@ function onPath(){
     + list.map(t=>`<option value="${t.id}">${t.key?'★ ':''}${t.name}${t.prereq?' — needs '+t.prereq:''}</option>`).join('');
   const info=PATH_INFO[p], box=document.getElementById('path-info');
   if(info){
-    box.innerHTML=`Grants key talent <b style="color:#5eead4">${info.key_talent}</b> and a free rank in <b>${SKILL_NAMES[info.start_skill]}</b> (starting skill).`;
+    box.innerHTML=`Grants key talent <b style="color:var(--accent)">${info.key_talent}</b> and a free rank in <b>${SKILL_NAMES[info.start_skill]}</b> (starting skill).`;
     // auto-grant the key talent (swap out any other path's key talent)
     const otherKeys=Object.values(PATH_INFO).map(x=>x.key_talent_id);
     TALENTS=TALENTS.filter(t=>!otherKeys.includes(t.id) || t.id===info.key_talent_id);
@@ -240,7 +238,7 @@ function onForm(){
   if(!box) return;
   if(f){ const d=Object.entries(f.attrs||{}).map(([k,x])=>k.toUpperCase()+' +'+x);
     if(f.deflect) d.push('Deflect +'+f.deflect); if(f.focus) d.push('Focus +'+f.focus);
-    box.innerHTML=`<b style="color:#5eead4">${f.name}</b> — ${d.join(', ')||'no stat change'}<br>${f.note}`; }
+    box.innerHTML=`<b style="color:var(--accent)">${f.name}</b> — ${d.join(', ')||'no stat change'}<br>${f.note}`; }
   else box.innerHTML='';
 }
 function prereqLabel(p){
@@ -254,7 +252,7 @@ function onOrder(){
   const k=v('f-order'), o=ORDERS[k];
   document.getElementById('radiant-detail').style.display=o?'block':'none';
   const info=document.getElementById('order-info');
-  info.innerHTML = o ? `<b style="color:#5eead4">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
+  info.innerHTML = o ? `<b style="color:var(--accent)">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
   const sel=document.getElementById('radiant-talent-pick');   // spren-bond tree + the order's two surge trees
   if(o){
     let list=(RADIANT_ORDER_TALENTS[k]||[]).map(t=>({name:t.name,prereq:t.prereq,group:'Bond'}));
@@ -303,7 +301,7 @@ function addTalent(){
 function renderTalents(){
   document.getElementById('talent-list').innerHTML = TALENTS.map((t,i)=>
     t.key
-      ? `<span class="chip" title="Path key talent (granted)"><b style="color:#5eead4">★ ${t.name||t.id}</b></span>`
+      ? `<span class="chip" title="Path key talent (granted)"><b style="color:var(--accent)">★ ${t.name||t.id}</b></span>`
       : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
   ).join('') || '<span class="muted">None selected</span>';
 }

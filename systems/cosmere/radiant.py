@@ -76,7 +76,7 @@ ORDER_COLORS = {
     'willshapers': '#fb923c',    # freedom orange
     'stonewards': '#d6a86a',     # peak stone
 }
-DEFAULT_ACCENT = '#5eead4'       # neutral Cosmere cyan (non-Radiant)
+DEFAULT_ACCENT = '#5fa8e0'       # Stormlight blue (non-Radiant); matches --storm-300
 
 
 def order_color(key) -> str:

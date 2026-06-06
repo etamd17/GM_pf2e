@@ -61,7 +61,7 @@
          strict typography roles. New code consumes classes from here. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="min-h-screen flex flex-col{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
+<body class="min-h-screen flex flex-col system-{{ active_system }}{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
 
     <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

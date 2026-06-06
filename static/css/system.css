@@ -4441,4 +4441,53 @@ body.mobile-combat .condition-pill {
     to   { transform: translateY(0); opacity: 1; }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   COSMERE (Stormlight) THEME OVERLAY
+   ────────────────────────────────────────────────────────────────────
+   Scoped to body.system-cosmere so the PF2e side is byte-for-byte
+   unchanged. Gives a Cosmere campaign its own luminous Stormlight-blue
+   identity on the same deep-ink surface, replacing the ad-hoc cyan from
+   the build phase. The Cosmere pages read their accent from
+   --accent / var(--accent, ...), so re-pointing it here re-themes the
+   whole side; per-Radiant-order accents (radiant.ORDER_COLORS) still
+   apply per character on top.
+   ════════════════════════════════════════════════════════════════════ */
+body.system-cosmere {
+    --storm-50:  #eef7ff;
+    --storm-100: #d3ecfb;   /* luminous near-white blue — hero titles */
+    --storm-200: #9fd2f2;   /* bright accent / hover */
+    --storm-300: #5fa8e0;   /* primary Stormlight accent (maps to --accent) */
+    --storm-400: #3d83bf;
+    --storm-500: #2a608f;
+
+    --accent:        var(--storm-300);
+    --accent-hover:  var(--storm-200);
+
+    /* Cool the warm gilt hairlines so cards read as blue-ink, not gold. */
+    --border-card:   rgba(95, 168, 224, 0.16);
+    --border-rule:   rgba(95, 168, 224, 0.30);
+}
+
+/* The brand + accent nav links (and dice widget) carry baked hex from the
+   Tailwind config; a more-specific selector re-tints those accent utilities
+   to Stormlight blue in Cosmere mode (specificity beats the single-class
+   utility regardless of stylesheet order). */
+body.system-cosmere .text-accent-300 { color: var(--storm-300); }
+body.system-cosmere .hover\:text-accent-200:hover { color: var(--storm-200); }
+body.system-cosmere .hover\:text-accent-300:hover { color: var(--storm-300); }
+
+/* Shared hub components (tile titles + accent pills) read gilt directly;
+   storm-tint them in Cosmere mode so the dashboard reads coherently
+   Stormlight rather than gold. The glyph + accent bar already use --accent. */
+body.system-cosmere .tile__title { color: var(--storm-100); }
+body.system-cosmere .pill.accent { border-color: rgba(95, 168, 224, 0.34); }
+body.system-cosmere .pill.accent .v { color: var(--storm-200); }
+
+/* Cosmere GM dashboard (cosmere_gm.html): the luminous hero title + the
+   inert "coming soon" tiles. Lives here (not the page's extra_head) so the
+   cascade is clean. */
+body.system-cosmere .cos-hero { color: var(--storm-100); }
+body.system-cosmere .tile.is-soon { opacity: .5; cursor: default; pointer-events: none; }
+body.system-cosmere .tile.is-soon:hover { transform: none; box-shadow: none; }
+
 /* End of system.css */

@@ -1,21 +1,20 @@
 {% extends "base.html" %}
 {% block title %}My Character{% endblock %}
 {% block extra_head %}
-<style>
   .ph-head { display:flex; align-items:center; justify-content:space-between; gap:.7rem;
              border-bottom:1px solid var(--border-card); padding-bottom:.7rem; margin-bottom:1.1rem; }
-  .ph-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:#5eead4; }
+  .ph-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--accent); }
   .ph-roster { text-decoration:none; font-size:13px; padding:.45rem .9rem; border-radius:8px;
                background:rgba(255,255,255,.05); border:1px solid var(--border-card); color:var(--text-on-dark-2); }
   .ph-roster:hover { background:rgba(255,255,255,.09); }
 
   .hero { background:var(--bg-sunken,#131922); border:1px solid var(--border-card);
-          border-left:5px solid var(--accent,#5eead4); border-radius:14px;
+          border-left:5px solid var(--accent); border-radius:14px;
           padding:1.1rem 1.25rem; margin-bottom:1.2rem; }
   .hero-top { display:flex; align-items:baseline; justify-content:space-between; gap:.7rem; flex-wrap:wrap; }
   .hero-name { font-size:1.5rem; font-weight:800; color:#e8eef5; font-family:var(--font-display,serif); }
   .hero-meta { font-size:12px; color:var(--text-on-dark-3); font-family:'JetBrains Mono',monospace; white-space:nowrap; }
-  .hero-sub { margin-top:.1rem; font-size:13px; color:var(--accent,#5eead4); font-weight:600; }
+  .hero-sub { margin-top:.1rem; font-size:13px; color:var(--accent); font-weight:600; }
   .hero-sub .dim { color:var(--text-on-dark-3); font-weight:400; }
 
   .stat-row { display:flex; gap:.6rem; margin-top:1rem; flex-wrap:wrap; }
@@ -23,7 +22,7 @@
           border:1px solid var(--border-card); border-radius:9px; padding:.5rem .2rem; }
   .stat .l { font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); }
   .stat .v { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:20px; color:#e8eef5; line-height:1.25; }
-  .stat.accent .v { color:var(--accent,#5eead4); }
+  .stat.accent .v { color:var(--accent); }
 
   .attr-row { display:grid; grid-template-columns:repeat(6, 1fr); gap:.4rem; margin-top:.7rem; }
   @media (max-width:560px) { .attr-row { grid-template-columns:repeat(3, 1fr); } }
@@ -32,24 +31,23 @@
   .attr .v { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; color:#cdd6e0; }
 
   .radiant { margin-top:.9rem; padding-top:.8rem; border-top:1px solid var(--border-card); font-size:12.5px; color:#aeb8c4; }
-  .radiant b { color:var(--accent,#5eead4); }
+  .radiant b { color:var(--accent); }
   .ideal-pips { display:inline-flex; gap:3px; vertical-align:middle; }
   .ideal-pips i { width:9px; height:9px; border-radius:50%; display:inline-block;
                   background:rgba(255,255,255,.12); border:1px solid var(--border-card); }
-  .ideal-pips i.on { background:var(--accent,#5eead4); border-color:var(--accent,#5eead4); }
+  .ideal-pips i.on { background:var(--accent); border-color:var(--accent); }
 
   .actions { display:flex; gap:.5rem; margin-top:1.1rem; flex-wrap:wrap; }
   .act { text-decoration:none; font-size:13px; font-weight:600; padding:.55rem 1rem; border-radius:9px;
          border:1px solid var(--border-card); color:#e8eef5; background:rgba(255,255,255,.04); }
   .act:hover { background:rgba(255,255,255,.09); }
-  .act.primary { background:rgba(56,189,248,.16); border-color:rgba(56,189,248,.5); color:#38bdf8; }
-  .act.primary:hover { background:rgba(56,189,248,.26); }
+  .act.primary { background:rgba(95,168,224,.16); border-color:rgba(95,168,224,.5); color:var(--accent); }
+  .act.primary:hover { background:rgba(95,168,224,.26); }
 
   .ph-empty { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:14px;
               padding:1.6rem; text-align:center; color:var(--text-on-dark-2); }
   .ph-empty h2 { font-size:1.15rem; color:#e8eef5; margin-bottom:.4rem; }
   .ph-empty p { font-size:13px; color:var(--text-on-dark-3); margin-bottom:1rem; }
-</style>
 {% endblock %}
 {% block content %}
 <div class="ph-head">
