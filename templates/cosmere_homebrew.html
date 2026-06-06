@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Homebrew - Cosmere{% endblock %}
+{% block extra_head %}
+  /* Cosmere homebrew shelf. Raw CSS -- base.html already wraps extra_head in
+     <style>; never nest a <style> here (the CSS parser eats the first rule). */
+  .hb-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-rule); padding-bottom:.7rem; margin-bottom:1.1rem; }
+  .hb-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
+  .hb-sub { font-size:12px; color:var(--text-on-dark-3); max-width:60ch; }
+  .hb-wrap { display:grid; gap:1.3rem; grid-template-columns:minmax(260px,340px) 1fr; align-items:start; }
+  @media (max-width:780px){ .hb-wrap { grid-template-columns:1fr; } }
+  .hb-list { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.8rem .9rem; }
+  .hb-group-h { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); margin:.7rem 0 .35rem; }
+  .hb-item { display:flex; align-items:center; gap:.5rem; padding:.4rem .5rem; border:1px solid var(--border-card); border-radius:8px; margin-bottom:.35rem; background:var(--bg-card); }
+  .hb-item .nm { flex:1; font-size:13px; color:#e8eef5; cursor:pointer; }
+  .hb-item .fx { font-size:11px; color:var(--text-on-dark-3); }
+  .hb-item .x { cursor:pointer; color:#f87171; font-weight:700; }
+  .hb-empty { font-size:12px; color:var(--text-on-dark-3); padding:.5rem; }
+  .hb-edit { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:1rem 1.1rem; }
+  .hb-edit label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-on-dark-3); margin:.7rem 0 .25rem; }
+  .hb-edit input, .hb-edit select, .hb-edit textarea { background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.45rem .55rem; font-size:13px; width:100%; color:#e8eef5; }
+  .hb-row { display:flex; gap:.7rem; flex-wrap:wrap; }
+  .hb-row > div { flex:1; min-width:150px; }
+  .fx-row { display:flex; gap:.5rem; align-items:center; margin-bottom:.4rem; }
+  .fx-row select { flex:2; } .fx-row input { flex:1; max-width:90px; }
+  .fx-row .x { cursor:pointer; color:#f87171; font-weight:700; padding:0 .3rem; }
+  .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--accent); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
+  .btn.primary { background:var(--accent); color:#06242b; font-weight:700; border-color:var(--accent); }
+  .btn.ghost { background:transparent; }
+  .hb-actions { display:flex; gap:.6rem; margin-top:1rem; border-top:1px solid var(--border-card); padding-top:.9rem; }
+  .hb-badge { font-size:10px; padding:1px 6px; border-radius:6px; background:rgba(95,168,224,.16); border:1px solid var(--accent); color:var(--accent); }
+  .hint { font-size:11.5px; color:var(--text-on-dark-3); margin:.2rem 0 0; }
+{% endblock %}
+{% block content %}
+<div class="hb-head">
+  <div>
+    <div class="hb-title">Homebrew</div>
+    <p class="hb-sub">Author custom content in the same shape as canon. Structured bonuses are applied automatically by the engine; everything shows in the builder pickers with a <span class="hb-badge">Homebrew</span> badge.</p>
+  </div>
+  <a class="btn" href="{{ url_for('cosmere_builder') }}">Open builder &rarr;</a>
+</div>
+
+<div class="hb-wrap">
+  <div class="hb-list" id="hb-list"></div>
+
+  <div class="hb-edit">
+    <input type="hidden" id="e-id">
+    <div class="hb-row">
+      <div><label>Type</label>
+        <select id="e-type" onchange="onType()">
+          {% for t in types %}<option value="{{ t }}">{{ type_labels[t] }}</option>{% endfor %}
+        </select></div>
+      <div><label>Name</label><input id="e-name" placeholder="e.g. Stoneward's Resolve"></div>
+    </div>
+
+    <!-- type-specific fields -->
+    <div class="hb-row tf tf-talent">
+      <div><label>Belongs to (path / order / surge)</label>
+        <select id="e-path">
+          <option value="any">Any path</option>
+          <optgroup label="Heroic paths">{% for p in paths %}<option value="{{ p }}">{{ p|capitalize }}</option>{% endfor %}</optgroup>
+          <optgroup label="Radiant orders">{% for k in order_keys %}<option value="{{ k }}">{{ k|capitalize }}</option>{% endfor %}</optgroup>
+          <optgroup label="Surges">{% for c, s in surge_names.items() %}<option value="{{ c }}">{{ s.name }}</option>{% endfor %}</optgroup>
+        </select></div>
+      <div><label>Prerequisite (text, optional)</label><input id="e-prereq" placeholder="e.g. Discipline rank 1"></div>
+    </div>
+    <div class="hb-row tf tf-item">
+      <div><label>Kind</label><select id="e-kind"><option>equipment</option><option>weapon</option><option>armor</option></select></div>
+      <div><label>Damage (weapon)</label><input id="e-damage" placeholder="e.g. 1d6 impact"></div>
+      <div><label>Deflect (armor)</label><input id="e-deflect" type="number" min="0" placeholder="0"></div>
+    </div>
+    <div class="hb-row tf tf-culture">
+      <div><label>Cultural expertises (one per line)</label><textarea id="e-expertises" rows="2" placeholder="Alethi&#10;Military"></textarea></div>
+    </div>
+    <div class="hb-row tf tf-heroic_path">
+      <div><label>Key talent name</label><input id="e-key_talent" placeholder="e.g. Resolute Stance"></div>
+      <div><label>Starting skill</label><select id="e-start_skill"><option value="">&mdash;</option>{% for c, n in skill_names.items() if c in skill_attr %}<option value="{{ c }}">{{ n }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="hb-row tf tf-radiant_path">
+      <div><label>Spren</label><input id="e-spren" placeholder="e.g. Sandspren"></div>
+      <div><label>Surge 1</label><select id="e-surge1"><option value="">&mdash;</option>{% for c, s in surge_names.items() %}<option value="{{ c }}">{{ s.name }}</option>{% endfor %}</select></div>
+      <div><label>Surge 2</label><select id="e-surge2"><option value="">&mdash;</option>{% for c, s in surge_names.items() %}<option value="{{ c }}">{{ s.name }}</option>{% endfor %}</select></div>
+      <div style="flex-basis:100%"><label>Philosophy</label><input id="e-philosophy" placeholder="e.g. Endure, and let others rest."></div>
+    </div>
+    <div class="hb-row tf tf-surge">
+      <div><label>Surge code (3 letters)</label><input id="e-code" maxlength="4" placeholder="e.g. snd"></div>
+      <div><label>Description</label><input id="e-desc" placeholder="What the surge does"></div>
+    </div>
+
+    <label>Stat bonuses <span class="hint">(applied automatically when a character has this)</span></label>
+    <div id="fx-list"></div>
+    <button class="btn ghost" type="button" onclick="addFx()" style="font-size:12px;padding:.35rem .7rem;">+ Add a bonus</button>
+
+    <label style="margin-top:.9rem;">Notes <span class="hint">(free text -- rules the engine can't model; shown, not applied)</span></label>
+    <textarea id="e-notes" rows="3" placeholder="Any extra rules text..."></textarea>
+
+    <div class="hb-actions">
+      <button class="btn primary" type="button" onclick="save()">Save entry</button>
+      <button class="btn ghost" type="button" onclick="resetForm()">New / clear</button>
+      <span id="hb-status" class="hint" style="align-self:center;"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORE = {{ store|tojson }};
+const TARGETS = {{ targets|tojson }};
+const TYPES = {{ types|tojson }};
+const TYPE_LABELS = {{ type_labels|tojson }};
+const TF = ['talent','item','culture','heroic_path','radiant_path','surge'];
+const gv = id => (document.getElementById(id)||{}).value;
+
+function targetLabel(key){ const t=TARGETS.find(x=>x.key===key); return t?t.label:key; }
+function fxSummary(e){ return (e.effects||[]).map(f=>`${targetLabel(f.target)} ${f.value>0?'+':''}${f.value}`).join(', '); }
+
+function renderList(){
+  const box=document.getElementById('hb-list'); let html='';
+  let total=0;
+  TYPES.forEach(t=>{
+    const items=STORE[t]||[]; total+=items.length;
+    if(!items.length) return;
+    html += `<div class="hb-group-h">${TYPE_LABELS[t]} (${items.length})</div>`;
+    items.forEach(e=>{
+      const fx=fxSummary(e);
+      html += `<div class="hb-item"><span class="nm" onclick="editEntry('${t}','${e.id}')">${e.name}`
+        + (fx?` <span class="fx">— ${fx}</span>`:'')+`</span>`
+        + `<span class="x" title="Delete" onclick="del('${e.id}')">&times;</span></div>`;
+    });
+  });
+  if(!total) html='<div class="hb-empty">No homebrew yet. Author your first entry on the right &rarr;</div>';
+  box.innerHTML=html;
+}
+
+function onType(){
+  const t=gv('e-type');
+  document.querySelectorAll('.tf').forEach(el=>{ el.style.display='none'; });
+  document.querySelectorAll('.tf-'+t).forEach(el=>{ el.style.display='flex'; });
+}
+
+function addFx(target, value){
+  const row=document.createElement('div'); row.className='fx-row';
+  const opts = TARGETS.map(t=>`<option value="${t.key}" ${t.key===target?'selected':''}>${t.group}: ${t.label}</option>`).join('');
+  row.innerHTML = `<select>${opts}</select><input type="number" value="${value!=null?value:1}" step="1"><span class="x" onclick="this.parentNode.remove()">&times;</span>`;
+  document.getElementById('fx-list').appendChild(row);
+}
+
+function collectFx(){
+  return [...document.querySelectorAll('#fx-list .fx-row')].map(r=>({
+    target: r.querySelector('select').value, value: parseInt(r.querySelector('input').value||'0',10)||0
+  })).filter(f=>f.value);
+}
+
+function resetForm(){
+  document.getElementById('e-id').value='';
+  ['e-name','e-prereq','e-damage','e-deflect','e-key_talent','e-spren','e-philosophy','e-code','e-desc','e-expertises','e-notes'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  document.getElementById('e-path').value='any';
+  document.getElementById('e-kind').value='equipment';
+  document.getElementById('fx-list').innerHTML='';
+  document.getElementById('hb-status').textContent='';
+  onType();
+}
+
+function editEntry(type, id){
+  const e=(STORE[type]||[]).find(x=>x.id===id); if(!e) return;
+  resetForm();
+  document.getElementById('e-type').value=type; onType();
+  document.getElementById('e-id').value=e.id;
+  document.getElementById('e-name').value=e.name||'';
+  document.getElementById('e-notes').value=e.notes||'';
+  if(type==='talent'){ document.getElementById('e-path').value=e.path||'any'; document.getElementById('e-prereq').value=e.prereq||''; }
+  if(type==='item'){ document.getElementById('e-kind').value=e.kind||'equipment'; document.getElementById('e-damage').value=e.damage||''; document.getElementById('e-deflect').value=e.deflect||''; }
+  if(type==='culture'){ document.getElementById('e-expertises').value=(e.expertises||[]).join('\n'); }
+  if(type==='heroic_path'){ document.getElementById('e-key_talent').value=e.key_talent||''; document.getElementById('e-start_skill').value=e.start_skill||''; }
+  if(type==='radiant_path'){ document.getElementById('e-spren').value=e.spren||''; document.getElementById('e-surge1').value=(e.surges||[])[0]||''; document.getElementById('e-surge2').value=(e.surges||[])[1]||''; document.getElementById('e-philosophy').value=e.philosophy||''; }
+  if(type==='surge'){ document.getElementById('e-code').value=e.code||''; document.getElementById('e-desc').value=e.desc||''; }
+  (e.effects||[]).forEach(f=>addFx(f.target, f.value));
+  document.getElementById('hb-status').textContent='Editing '+e.name;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function collect(){
+  const t=gv('e-type');
+  const e={id:gv('e-id')||undefined, type:t, name:gv('e-name'), effects:collectFx(), notes:gv('e-notes')};
+  if(t==='talent'){ e.path=gv('e-path'); e.prereq=gv('e-prereq'); }
+  if(t==='item'){ e.kind=gv('e-kind'); e.damage=gv('e-damage'); e.deflect=parseInt(gv('e-deflect')||'0',10)||0; }
+  if(t==='culture'){ e.expertises=gv('e-expertises').split('\n').map(s=>s.trim()).filter(Boolean); }
+  if(t==='heroic_path'){ e.key_talent=gv('e-key_talent'); e.start_skill=gv('e-start_skill'); }
+  if(t==='radiant_path'){ e.spren=gv('e-spren'); e.surges=[gv('e-surge1'),gv('e-surge2')].filter(Boolean); e.philosophy=gv('e-philosophy'); }
+  if(t==='surge'){ e.code=gv('e-code'); e.desc=gv('e-desc'); }
+  return e;
+}
+
+function save(){
+  const entry=collect();
+  if(!entry.name.trim()){ document.getElementById('hb-status').textContent='Name is required.'; return; }
+  fetch('/cosmere/homebrew/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entry})})
+    .then(r=>r.json()).then(d=>{
+      if(!d||!d.ok){ document.getElementById('hb-status').textContent='Save failed.'; return; }
+      const t=d.entry.type;
+      STORE[t]=(STORE[t]||[]).filter(x=>x.id!==d.entry.id); STORE[t].push(d.entry);
+      renderList(); resetForm();
+      document.getElementById('hb-status').textContent='Saved.';
+    }).catch(()=>document.getElementById('hb-status').textContent='Save failed.');
+}
+
+function del(id){
+  if(!confirm('Delete this homebrew entry?')) return;
+  fetch('/cosmere/homebrew/'+id+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+    .then(r=>r.json()).then(()=>{ TYPES.forEach(t=>{ STORE[t]=(STORE[t]||[]).filter(x=>x.id!==id); }); renderList(); });
+}
+
+renderList(); onType();
+</script>
+{% endblock %}

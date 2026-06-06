@@ -60,6 +60,7 @@ _UI = SystemUI(
         NavLink('GM Hub', '/cosmere/gm', accent=True),
         NavLink('Characters', '/cosmere/pcs', title='Cosmere characters'),
         NavLink('Builder', '/cosmere/builder'),
+        NavLink('Homebrew', '/cosmere/homebrew', title='Author custom content'),
         NavLink('Bestiary', '/cosmere/bestiary'),
         NavLink('Tracker', '/tracker'),
         NavLink('GM Screen', '/cosmere/gmscreen', title='Cosmere rules reference'),

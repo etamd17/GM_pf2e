@@ -87,6 +87,7 @@ def story_threads_file(cid):       return os.path.join(campaign_dir(cid), 'story
 def pinned_generators_file(cid):   return os.path.join(campaign_dir(cid), 'pinned_generators.json')
 def calendar_file(cid):            return os.path.join(campaign_dir(cid), 'calendar.json')
 def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
+def homebrew_file(cid):            return os.path.join(campaign_dir(cid), 'homebrew.json')
 
 
 def delete_campaign_dir(cid):
