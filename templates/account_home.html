@@ -2,28 +2,34 @@
 {% block title %}My table{% endblock %}
 {% block content %}
 <h1>Welcome, {{ user.display_name }}</h1>
-<p class="sub">Your campaigns and characters.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
+<p class="sub">Pick a table to enter &mdash; a game you run, or one your character is part of.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
 
-<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">My Campaigns <a href="/campaigns/new" style="font-size:12px;font-weight:400;">+ New</a></div>
+<div class="section-title">Your Campaigns <a href="/campaigns/new" style="font-size:12px;font-weight:500;letter-spacing:0;">+ New campaign</a></div>
 {% if campaigns %}
 <ul class="list">
   {% for c in campaigns %}
   <li class="row">
     <div>
       <strong>{{ c.name }}</strong>
-      <div class="meta">{{ c.system|upper }}{% if c.id == active_campaign_id %} &middot; <span class="badge">active</span>{% endif %}</div>
+      <div class="meta">
+        {{ c.system|upper }}
+        &middot; {% if c.id in gm_campaign_ids %}you GM{% else %}player{% endif %}
+        {% if c.id == active_campaign_id %} &middot; <span class="badge">active</span>{% endif %}
+      </div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
       {% if c.id in gm_campaign_ids %}<a href="/campaign/{{ c.id }}/invites" style="font-size:12px;">Manage</a>{% endif %}
-      <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">Open</button></form>
+      <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
     </div>
   </li>
   {% endfor %}
 </ul>
-{% else %}<p class="muted">No campaigns yet.</p>{% endif %}
+{% else %}
+<p class="muted">No campaigns yet. <a href="/campaigns/new">Create one</a> to run a game, or join one with an invite link from a GM.</p>
+{% endif %}
 
-<div class="section-title">My Characters</div>
 {% if characters %}
+<div class="section-title">Your Characters</div>
 <ul class="list">
   {% for ch in characters %}
   <li class="row">
@@ -31,11 +37,11 @@
       <strong>{{ ch.name }}</strong>
       <div class="meta">{{ ch.system|upper }} &middot; {{ ch.campaign_name }}</div>
     </div>
-    <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Open</button></form>
+    <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Play</button></form>
   </li>
   {% endfor %}
 </ul>
-{% else %}<p class="muted">No characters yet.</p>{% endif %}
+{% endif %}
 
 <div class="section-title">Account</div>
 {% if pw_msg %}<div class="err" style="background:rgba(58,120,120,0.15);border-color:rgba(125,196,196,0.4);color:#A8DEDE;">{{ pw_msg }}</div>{% endif %}

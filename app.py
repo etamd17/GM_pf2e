@@ -5617,20 +5617,18 @@ def api_session_roll_initiative():
 
 @app.route('/')
 def index():
-    """Campaign intro / 'join session' lobby.
+    """The public front door.
 
-    Players land here, see campaign metadata + the party roster, and pick the
-    PC they're playing this session — that sets session.player_name (used for
-    map-token assignment + combat-log filtering) and bounces them into the
-    player hub. Already-joined players see a 'continue' tile instead of the
-    full picker. The GM gets an Enter button that drops them straight into
-    /gm.
-
-    System-aware: a non-default system lands on its own hubs (registry-driven --
-    GM side vs player side) instead of the PF2e party lobby (PARTY_LIBRARY is
-    PF2e-only), so the whole app presents one system with no bleed. The default
-    system (PF2e) owns this root lobby.
+    Account mode (production): a logged-out visitor gets the TTRPG splash
+    (Enter World -> login); a logged-in user goes to /me, where they pick from
+    the campaigns they run or have a character in. Legacy mode (no accounts yet)
+    keeps the old single-campaign intro lobby.
     """
+    if _account_mode():
+        if _auth.current_user():
+            return redirect('/me')
+        return render_template('splash.html')
+    # ── Legacy single-campaign mode (pre-accounts) ──
     if _active_system() != systems.DEFAULT_SYSTEM:
         return redirect(_system_home(_is_gm()))
     _sync_party_from_disk()

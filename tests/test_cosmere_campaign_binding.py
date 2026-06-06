@@ -52,9 +52,10 @@ def test_cosmere_campaign_binding_end_to_end():
         assert A.ACTIVE_CAMPAIGN_ID == cos_cid
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(cos_cid)   # store follows the live campaign
 
-        # home + nav are now Cosmere
+        # the front door sends a logged-in user to /me (the chooser); the
+        # system-aware landing happens on activate (asserted above). The nav is Cosmere.
         home = c.get('/')
-        assert home.status_code == 302 and home.headers['Location'].endswith('/cosmere/pcs')
+        assert home.status_code == 302 and home.headers['Location'].endswith('/me')
         pcs = c.get('/cosmere/pcs')
         assert pcs.status_code == 200 and b'COSMERE' in pcs.data    # nav brand flipped
         assert b'GM Hub' not in pcs.data and b'Generators' not in pcs.data   # no PF2e bleed in the nav
@@ -78,12 +79,12 @@ def test_cosmere_campaign_binding_end_to_end():
         assert not any(m['name'] == 'Kaladin' for m in campaigns.characters_for_user(gm_id))
         assert b'Kaladin' in c.get('/cosmere/pcs').data
 
-        # switch to the PF2e campaign -> home is the PF2e lobby (no Cosmere bleed)
+        # switch to the PF2e campaign -> activate lands on /gm, no Cosmere bleed
         pr = c.post('/campaign/' + pf_cid + '/activate')
         assert pr.status_code == 302 and pr.headers['Location'].endswith('/gm')
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(pf_cid)
         ph = c.get('/')
-        assert ph.status_code == 200 and b'PF2E' in ph.data       # lobby, brand PF2E
+        assert ph.status_code == 302 and ph.headers['Location'].endswith('/me')   # front door -> /me
         assert c.get('/gm').status_code == 200                    # PF2e GM hub renders normally
         assert b'Kaladin' not in c.get('/cosmere/pcs').data        # Cosmere store scoped per-campaign
 
