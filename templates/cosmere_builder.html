@@ -190,6 +190,10 @@
             </div>
             {% endfor %}
           </div>
+          <div id="surge-powers" style="display:none; margin-top:.7rem;">
+            <label>Surge powers</label>
+            <div id="surge-powers-list" class="grid" style="grid-template-columns:1fr 1fr; gap:.5rem;"></div>
+          </div>
           <div class="row" style="margin-top:.7rem;">
             <div style="flex:1;"><label>Add a Radiant talent (spren-bond tree + your surges)</label>
               <select id="radiant-talent-pick"><option value="">&mdash; choose an order &mdash;</option></select></div>
@@ -282,6 +286,10 @@ const SINGER_CHANGE_FORM = {{ singer_change_form|tojson }};
 const STARTING_KITS = {{ starting_kits|tojson }};
 const RADIANT_SURGE_TALENTS = {{ radiant_surge_talents|tojson }};
 const RADIANT_ORDER_TALENTS = {{ radiant_order_talents|tojson }};
+const RADIANT_SURGE_POWERS = {{ radiant_surge_powers|tojson }};
+const HOMEBREW = {{ homebrew|tojson }};
+const BUILD_SEL = {ancestry: {{ build.ancestry|tojson }}, culture: {{ build.culture|tojson }},
+                   path: {{ build.path|tojson }}, order: {{ build.radiant_order|tojson }}};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -303,7 +311,7 @@ function onPath(){
   const p=v('f-path'); const sel=document.getElementById('talent-pick');
   const list=(PATH_TALENTS[p]||[]);
   sel.innerHTML='<option value="">'+(list.length?'— select a talent —':'(choose a path first)')+'</option>'
-    + list.map(t=>`<option value="${t.id}">${t.key?'★ ':''}${t.name}${t.prereq?' — needs '+t.prereq:''}</option>`).join('');
+    + list.map(t=>`<option value="${t.id}">${t.key?'★ ':''}${t.name}${t.prereq?' — needs '+t.prereq:''}${t.homebrew?' · HB':''}</option>`).join('');
   const info=PATH_INFO[p], box=document.getElementById('path-info');
   if(info){
     box.innerHTML=`Grants key talent <b style="color:var(--accent)">${info.key_talent}</b> and a free rank in <b>${SKILL_NAMES[info.start_skill]}</b> (starting skill).`;
@@ -351,9 +359,10 @@ function onOrder(){
   info.innerHTML = o ? `<b style="color:var(--accent)">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
   const sel=document.getElementById('radiant-talent-pick');
   if(o){
-    let list=(RADIANT_ORDER_TALENTS[k]||[]).map(t=>({name:t.name,prereq:t.prereq,group:'Bond'}));
-    o.surges.forEach(s=>(RADIANT_SURGE_TALENTS[s]||[]).forEach(t=>list.push({name:t.name,prereq:t.prereq,group:SURGE_INFO[s].name})));
-    sel.innerHTML='<option value="">— select a Radiant talent —</option>'+list.map((t,i)=>`<option value="${i}">[${t.group}] ${t.name}${prereqLabel(t.prereq)}</option>`).join('');
+    let list=(RADIANT_ORDER_TALENTS[k]||[]).map(t=>({name:t.name,prereq:t.prereq,effect:t.effect,group:'Bond',homebrew:t.homebrew}));
+    o.surges.forEach(s=>(RADIANT_SURGE_TALENTS[s]||[]).forEach(t=>list.push({name:t.name,prereq:t.prereq,effect:t.effect,group:(SURGE_INFO[s]||{}).name||s,homebrew:t.homebrew})));
+    const esc=s=>(s||'').replace(/"/g,'&quot;');
+    sel.innerHTML='<option value="">— select a Radiant talent —</option>'+list.map((t,i)=>`<option value="${i}" title="${esc(t.effect)}">[${t.group}] ${t.name}${prereqLabel(t.prereq)}${t.homebrew?' · HB':''}</option>`).join('');
     sel._list=list;
   } else { sel.innerHTML='<option value="">— choose an order —</option>'; sel._list=[]; }
   onIdeals();
@@ -383,6 +392,15 @@ function updateSurges(){
     card.style.display = on?'flex':'none';
     if(on && (+inp.value||0)<1) inp.value=1;
   });
+  const pwrap=document.getElementById('surge-powers'), plist=document.getElementById('surge-powers-list');
+  if(pwrap){
+    pwrap.style.display = show?'block':'none';
+    if(show) plist.innerHTML = o.surges.map(s=>{
+      const p=RADIANT_SURGE_POWERS[s]; if(!p) return '';
+      const meta=[p.cost!=null?`${p.cost} action${p.cost>1?'s':''}`:'', p.investiture!=null?`${p.investiture} Investiture`:''].filter(Boolean).join(' · ');
+      return `<div class="card"><div class="nm">${p.name}${meta?` <small>${meta}</small>`:''}</div><div class="muted" style="font-size:12px; margin-top:.25rem;">${p.effect||''}</div></div>`;
+    }).join('');
+  }
 }
 
 function bumpSkill(code,d){
@@ -391,7 +409,8 @@ function bumpSkill(code,d){
 }
 function addTalent(){
   const sel=document.getElementById('talent-pick'); const id=sel.value; if(!id)return;
-  const name=sel.options[sel.selectedIndex].text;
+  // Store the clean talent name (drop the " — needs ..." prereq hint and " · HB" badge).
+  const name=sel.options[sel.selectedIndex].text.split(' — ')[0].replace(/ · HB$/,'').trim();
   if(!TALENTS.some(t=>t.id===id)){TALENTS.push({id,name}); renderTalents(); recompute();}
 }
 function renderTalents(){
@@ -531,8 +550,48 @@ function save(){
   .then(r=>r.json()).then(d=>{ if(d&&d.ok){ window.location.href=d.url; } else { alert('Save failed'); } })
   .catch(()=>alert('Save failed'));
 }
+// Merge per-campaign homebrew into every picker so the builder treats it like
+// canon (its structured stat bonuses are applied by the engine server-side).
+function mergeHomebrew(){
+  const HB = HOMEBREW || {};
+  const opt = (sel, val, label) => { const s=document.getElementById(sel); if(!s) return;
+    if([...s.options].some(o=>o.value===val)) return;
+    const o=document.createElement('option'); o.value=val; o.textContent=label; s.appendChild(o); };
+  // Surges (so a homebrew order's surge code resolves a name)
+  (HB.surge||[]).forEach(h=>{ if(h.code && !SURGE_INFO[h.code]) SURGE_INFO[h.code]={name:h.name,desc:h.desc||''}; });
+  // Heroic paths: PATH_INFO (logic) + an empty talent list + a select option
+  (HB.heroic_path||[]).forEach(h=>{ PATH_INFO[h.slug]={key_talent:h.key_talent||'',
+      key_talent_id:'hb:'+h.slug+'-key', start_skill:h.start_skill||'', homebrew:true};
+    if(!PATH_TALENTS[h.slug]) PATH_TALENTS[h.slug]=[];
+    opt('f-path', h.slug, h.name+' · Homebrew'); });
+  // Radiant orders: ORDERS (logic) + a select option
+  (HB.radiant_path||[]).forEach(h=>{ ORDERS[h.slug]={name:h.name,spren:h.spren||'',
+      surges:(h.surges||[]).slice(0,2),philosophy:h.philosophy||'',homebrew:true};
+    opt('f-order', h.slug, h.name+' · Homebrew'); });
+  // Talents routed by their `path` (heroic slug / order key / surge code / 'any')
+  (HB.talent||[]).forEach(h=>{ const p=h.path||'any';
+    const heroic = {id:h.id,name:h.name,key:false,prereq:h.prereq||'',homebrew:true};
+    const radiant = {name:h.name,prereq:h.prereq?{text:h.prereq}:{ideal:0},effect:h.notes||'',homebrew:true};
+    if(p in PATH_TALENTS) PATH_TALENTS[p].push(heroic);
+    else if(p in ORDERS) (RADIANT_ORDER_TALENTS[p]=RADIANT_ORDER_TALENTS[p]||[]).push(radiant);
+    else if(p in SURGE_INFO) (RADIANT_SURGE_TALENTS[p]=RADIANT_SURGE_TALENTS[p]||[]).push(radiant);
+    else Object.keys(PATH_TALENTS).forEach(k=>PATH_TALENTS[k].push(heroic)); });
+  // Items: catalog index + the gear select
+  (HB.item||[]).forEach(h=>{ const dm=(h.damage||'').trim().split(/\s+/);
+    ITEM_INDEX[h.id]={id:h.id,name:h.name,kind:h.kind||'equipment',homebrew:true,
+      damage: dm[0]?{formula:dm[0],type:dm.slice(1).join(' ')}:null, deflect:h.deflect||null};
+    opt('item-pick', h.id, h.name+' ('+(h.kind||'equipment')+' · Homebrew)'); });
+  // Ancestry / culture select options (selected by name)
+  (HB.ancestry||[]).forEach(h=>opt('f-ancestry', h.name, h.name+' · Homebrew'));
+  (HB.culture||[]).forEach(h=>opt('f-culture', h.name, h.name+' · Homebrew'));
+  // Restore the saved selection now that homebrew options exist (edit/level-up).
+  [['f-ancestry',BUILD_SEL.ancestry],['f-culture',BUILD_SEL.culture],
+   ['f-path',BUILD_SEL.path],['f-order',BUILD_SEL.order]].forEach(([id,val])=>{
+     const s=document.getElementById(id); if(s&&val&&[...s.options].some(o=>o.value===val)) s.value=val; });
+}
 // init
 buildRail();
+mergeHomebrew();
 onPath(); onAncestry(); onOrder(); renderTalents(); renderInv(); recompute();
 goStep(0);
 </script>

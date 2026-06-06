@@ -24,6 +24,7 @@ from systems.cosmere import SKILL_ATTR, SKILL_NAMES, SURGE_SKILLS, PATHS
 from systems.cosmere import radiant as _radiant
 from systems.cosmere import origins as _origins
 from systems.cosmere import talents as _talents
+from systems.cosmere import homebrew as _homebrew
 from systems.cosmere.actor import cosmere_max_health, tier_of
 from systems.cosmere.items import Inventory
 
@@ -102,8 +103,11 @@ def level_grants(level: int, strength: int = 0) -> dict:
 class CosmereBuild:
     """An editable Cosmere character build (creation + leveling)."""
 
-    def __init__(self, data=None):
+    def __init__(self, data=None, homebrew=None):
         d = dict(data or {})
+        # Per-campaign homebrew store ({type: [entry]}); its structured stat
+        # bonuses are applied to derived stats and its paths/orders are honored.
+        self._homebrew = homebrew or {}
         self.name = d.get('name') or 'New Hero'
         self.level = max(1, int(d.get('level', 1) or 1))
         self.ancestry = d.get('ancestry') or 'Human'
@@ -130,6 +134,9 @@ class CosmereBuild:
         self.obstacle = d.get('obstacle', '')
         self.appearance = d.get('appearance', '')
         self.notes = d.get('notes', '')
+        # Structured stat bonuses from the homebrew this character has selected.
+        self.homebrew_bonuses, self.homebrew_sources, self.homebrew_dangling = \
+            _homebrew.resolve_bonuses(d, self._homebrew)
 
     # -- budgets ------------------------------------------------------------
     @property
@@ -163,8 +170,12 @@ class CosmereBuild:
     def first_ideal_sworn(self) -> bool:
         return self.ideals_sworn >= 1
 
+    def _hb(self, key) -> int:
+        """A homebrew structured bonus for a derived-stat target (0 if none)."""
+        return int(self.homebrew_bonuses.get(key, 0) or 0)
+
     def order(self):
-        return _radiant.order(self.radiant_order)
+        return _radiant.order(self.radiant_order) or _homebrew.radiant_order(self._homebrew, self.radiant_order)
 
     def surge_codes(self) -> tuple:
         o = self.order()
@@ -176,10 +187,20 @@ class CosmereBuild:
 
     # -- heroic path grants (key talent + starting skill) ------------------
     def path_start_skill(self):
-        return _origins.path_start_skill(self.path)
+        s = _origins.path_start_skill(self.path)
+        if s:
+            return s
+        hb = _homebrew.heroic_path(self._homebrew, self.path)
+        return (hb.get('start_skill') or None) if hb else None
 
     def path_key_talent(self):
-        return _origins.path_key_talent(self.path)
+        kt = _origins.path_key_talent(self.path)
+        if kt:
+            return kt
+        hb = _homebrew.heroic_path(self._homebrew, self.path)
+        if hb and hb.get('key_talent'):
+            return {'id': 'hb:%s-key' % hb['slug'], 'name': hb['key_talent']}
+        return None
 
     def has_key_talent(self) -> bool:
         kt = self.path_key_talent()
@@ -204,39 +225,43 @@ class CosmereBuild:
 
     def eff_attributes(self) -> dict:
         """Attributes including the active Singer form's bonuses (a form may
-        raise stats above the normal maximum)."""
+        raise stats above the normal maximum) and any homebrew attribute bonuses
+        (which then cascade into defenses / health / skills, like a real boost)."""
         a = dict(self.attributes)
         f = self.form()
         if f:
             for k, v in (f.get('attrs') or {}).items():
                 a[k] = a.get(k, 0) + v
+        for k in ATTR_KEYS:
+            a[k] = a.get(k, 0) + self._hb('attr:%s' % k)
         return a
 
     # -- derived statistics (rulebook formulas; use in-form attributes) -----
     def defenses(self) -> dict:
         a = self.eff_attributes()
-        return {'phy': 10 + a['str'] + a['spd'],
-                'cog': 10 + a['int'] + a['wil'],
-                'spi': 10 + a['awa'] + a['pre']}
+        return {'phy': 10 + a['str'] + a['spd'] + self._hb('def:phy'),
+                'cog': 10 + a['int'] + a['wil'] + self._hb('def:cog'),
+                'spi': 10 + a['awa'] + a['pre'] + self._hb('def:spi')}
 
     def health_max(self) -> int:
-        return cosmere_max_health(self.level, self.eff_attributes()['str'])
+        return cosmere_max_health(self.level, self.eff_attributes()['str']) + self._hb('health')
 
     def focus_max(self) -> int:
         f = self.form()
-        return 2 + self.eff_attributes()['wil'] + (f['focus'] if f else 0)
+        return 2 + self.eff_attributes()['wil'] + (f['focus'] if f else 0) + self._hb('focus')
 
     def investiture_max(self) -> int:
         a = self.eff_attributes()
-        return (2 + max(a['awa'], a['pre'])) if self.is_radiant else 0
+        base = (2 + max(a['awa'], a['pre'])) if self.is_radiant else 0
+        return base + self._hb('investiture')
 
     def skill_mods(self) -> dict:
         a = self.eff_attributes()
-        return {c: self.skills.get(c, 0) + a[SKILL_ATTR[c]] for c in SKILL_ATTR}
+        return {c: self.skills.get(c, 0) + a[SKILL_ATTR[c]] + self._hb('skill:%s' % c) for c in SKILL_ATTR}
 
     def deflect_value(self) -> int:
         f = self.form()
-        return self.inventory.deflect_value() + (f['deflect'] if f else 0)
+        return self.inventory.deflect_value() + (f['deflect'] if f else 0) + self._hb('deflect')
 
     def _deflect_block(self) -> dict:
         v = self.deflect_value()
@@ -338,7 +363,8 @@ class CosmereBuild:
             skills[c] = {
                 'attribute': attr,
                 'rank': self.skills.get(c, 0),
-                'mod': {'override': None, 'useOverride': False, 'bonus': 0},
+                # Homebrew skill bonuses ride the Foundry mod.bonus that CosmereActor adds.
+                'mod': {'override': None, 'useOverride': False, 'bonus': self._hb('skill:%s' % c)},
                 'unlocked': (c not in SURGE_SKILLS) or (c in unlocked_surges),
             }
         inv_max = ({'override': self.investiture_max(), 'useOverride': True, 'bonus': 0}
@@ -348,12 +374,15 @@ class CosmereBuild:
             'tier': self.tier,
             'role': 'hero',
             'size': 'medium',
+            # Attribute homebrew is already folded into `a` (eff_attributes); the
+            # direct stat bonuses ride the Foundry bonus/override fields below so
+            # CosmereActor reproduces the same numbers as this engine.
             'attributes': {k: {'value': a[k], 'bonus': 0} for k in ATTR_KEYS},
-            'defenses': {d: {'bonus': 0, 'override': None, 'useOverride': False}
+            'defenses': {d: {'bonus': self._hb('def:%s' % d), 'override': None, 'useOverride': False}
                          for d in ('phy', 'cog', 'spi')},
             'resources': {
-                'hea': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': 0}},
-                'foc': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': form_focus}},
+                'hea': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': self._hb('health')}},
+                'foc': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': form_focus + self._hb('focus')}},
                 'inv': {'value': None, 'max': inv_max},
             },
             'skills': skills,

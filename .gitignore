@@ -55,5 +55,8 @@ uploads/
 # kept out of the PF2e party_data. Never committed.
 cosmere_pcs/
 
+# Per-campaign Cosmere homebrew shelf — runtime store on the volume (DATA_DIR).
+homebrew.json
+
 # Per-player session-notes scratchpads — runtime state on the volume.
 session_notes/

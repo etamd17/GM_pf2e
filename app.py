@@ -431,7 +431,7 @@ def _bind_campaign_paths(cid):
     global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
     global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
     global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
-    global COSMERE_PC_DIR
+    global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE
     ACTIVE_CAMPAIGN_ID = cid
     if cid:
         PARTY_DIR = _storage.party_dir(cid)
@@ -449,6 +449,7 @@ def _bind_campaign_paths(cid):
         CALENDAR_FILE = _storage.calendar_file(cid)
         STORY_THREADS_FILE = _storage.story_threads_file(cid)
         COSMERE_PC_DIR = _storage.cosmere_pc_dir(cid)
+        COSMERE_HOMEBREW_FILE = _storage.homebrew_file(cid)
         _storage.ensure_campaign_dirs(cid)
     else:
         PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
@@ -466,6 +467,7 @@ def _bind_campaign_paths(cid):
         CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
         STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
         COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
+        COSMERE_HOMEBREW_FILE = os.path.join(DATA_DIR, 'homebrew.json')
 
 
 def load_campaign(cid):
@@ -6043,7 +6045,7 @@ def _me_characters(user_id):
                 import systems.cosmere.build as _cb
                 import systems.cosmere.radiant as _rad
                 doc = _storage.load_json(os.path.join(_storage.cosmere_pc_dir(cid), ch['file']))
-                b = _cb.CosmereBuild((doc or {}).get('build') or {})
+                b = _cb.CosmereBuild((doc or {}).get('build') or {}, homebrew=_cosmere_homebrew_store(cid))
                 o = _rad.order(b.radiant_order)
                 d = b.defenses()
                 card.update(
@@ -6657,7 +6659,8 @@ def _cosmere_combatant(actor_id):
     pc = _load_cosmere_pc(actor_id)
     if pc:
         import systems.cosmere.build as _cb
-        actor = systems.cosmere.CosmereActor(_cb.CosmereBuild(pc.get('build') or {}).to_actor_doc())
+        actor = systems.cosmere.CosmereActor(
+            _cb.CosmereBuild(pc.get('build') or {}, homebrew=_cosmere_homebrew_store()).to_actor_doc())
         actor.name = pc.get('name') or actor.name
         return actor
     return None
@@ -6763,6 +6766,30 @@ def _save_cosmere_pc(doc):
     return pid
 
 
+# --- Cosmere homebrew (per-campaign content shelf) ------------------------
+def _load_homebrew_raw(cid=None):
+    """The raw homebrew store ({type: [entry]}) for `cid` (active campaign if
+    None); empty dict when absent."""
+    path = _storage.homebrew_file(cid) if cid else COSMERE_HOMEBREW_FILE
+    if path and os.path.isfile(path):
+        try:
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _cosmere_homebrew_store(cid=None):
+    """Normalized homebrew store for the build engine + builder pickers."""
+    import systems.cosmere.homebrew as _hb
+    return _hb.normalize_store(_load_homebrew_raw(cid))
+
+
+def _save_homebrew_raw(store):
+    _atomic_write_json(COSMERE_HOMEBREW_FILE, store, indent=2)
+
+
 def _cosmere_cultures():
     """All cultures for the builder -- base system + the ingested handbook
     (Iriali, Kharbranthian, Listener, Natan, Reshi, Shin, Wayfarer, ...)."""
@@ -6852,10 +6879,12 @@ def _cosmere_starting_kits():
     return out
 
 
-def _cosmere_builder_context(build):
+def _cosmere_builder_context(build, hb_store=None):
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
     import systems.cosmere.radiant_talents as _rt
+    if hb_store is None:
+        hb_store = _cosmere_homebrew_store()
     return dict(
         build=build.to_dict(),
         catalog=systems.cosmere.items.catalog(),
@@ -6870,6 +6899,8 @@ def _cosmere_builder_context(build):
         singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
         starting_kits=_cosmere_starting_kits(),
         radiant_surge_talents=_rt.SURGE_TALENTS, radiant_order_talents=_rt.ORDER_TALENTS,
+        radiant_surge_powers=_rt.SURGE_POWERS,
+        homebrew=hb_store,            # {type: [entry]} -- merged into the pickers client-side
         budgets=dict(
             attr_points=build.attr_points_available(),
             skill_ranks=build.skill_ranks_available(),
@@ -6985,9 +7016,10 @@ def cosmere_pcs():
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
     cards = []
+    _hb_store = _cosmere_homebrew_store()
     for d in _list_cosmere_pcs():
-        b = _cb.CosmereBuild(d.get('build'))
-        o = _rad.order(b.radiant_order)
+        b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
+        o = b.order()
         cards.append({
             'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
             'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
@@ -7005,9 +7037,10 @@ def cosmere_pcs():
 @app.route('/cosmere/builder', methods=['GET', 'POST'])
 def cosmere_builder():
     import systems.cosmere.build as _cb
+    _hb_store = _cosmere_homebrew_store()
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
-        build = _cb.CosmereBuild(data.get('build') or data)
+        build = _cb.CosmereBuild(data.get('build') or data, homebrew=_hb_store)
         issues = build.validate()
         existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
         if existing is not None:
@@ -7029,10 +7062,11 @@ def cosmere_builder():
                         'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
     # GET — new build, or edit/level an existing one
     existing = _load_cosmere_pc(request.args.get('pc')) if request.args.get('pc') else None
-    build = _cb.CosmereBuild((existing or {}).get('build')) if existing else _cb.CosmereBuild()
+    build = (_cb.CosmereBuild((existing or {}).get('build'), homebrew=_hb_store)
+             if existing else _cb.CosmereBuild(homebrew=_hb_store))
     if request.args.get('levelup') and existing:
         build.level += 1     # pre-bump for the leveler flow; the player allocates, then saves
-    ctx = _cosmere_builder_context(build)
+    ctx = _cosmere_builder_context(build, _hb_store)
     return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), **ctx)
 
 
@@ -7043,7 +7077,7 @@ def cosmere_builder_preview():
     never drifts from the rules. Read-only."""
     import systems.cosmere.build as _cb
     data = request.get_json(silent=True) or {}
-    b = _cb.CosmereBuild(data.get('build') or data)
+    b = _cb.CosmereBuild(data.get('build') or data, homebrew=_cosmere_homebrew_store())
     return jsonify({
         'defenses': b.defenses(),
         'health': b.health_max(), 'focus': b.focus_max(),
@@ -7056,7 +7090,72 @@ def cosmere_builder_preview():
             'expertises': [len(b.expertises), b.expertises_available()],
         },
         'issues': b.validate(),
+        'homebrew': sorted(set(b.homebrew_sources)),
+        'homebrew_dangling': b.homebrew_dangling,
     })
+
+
+@app.route('/cosmere/homebrew')
+@gm_required
+def cosmere_homebrew():
+    """Per-campaign homebrew shelf: author custom talents / items / ancestries /
+    cultures / heroic + Radiant paths / surges in the SAME schema as canon. Each
+    entry carries structured stat bonuses (applied by the engine) plus free-form
+    notes, and shows in the builder pickers with a 'Homebrew' badge. GM-only,
+    Cosmere mode (redirects out otherwise, like the dashboard / GM screen)."""
+    if _active_system() != 'cosmere':
+        return redirect(_active_system_ui().gm_home)
+    import systems.cosmere.homebrew as _hb
+    import systems.cosmere.radiant as _rad
+    store = _cosmere_homebrew_store()
+    return render_template(
+        'cosmere_homebrew.html',
+        store=store, types=list(_hb.TYPES), type_labels=_hb.TYPE_LABELS,
+        targets=_hb.effect_targets(),
+        counts={t: len(store.get(t, [])) for t in _hb.TYPES},
+        skill_names=systems.cosmere.SKILL_NAMES, skill_attr=systems.cosmere.SKILL_ATTR,
+        paths=list(systems.cosmere.PATHS),
+        surge_names=_rad.SURGES,
+        order_keys=list(_rad.RADIANT_ORDERS),
+        active_cid=ACTIVE_CAMPAIGN_ID,
+    )
+
+
+@app.route('/cosmere/homebrew/save', methods=['POST'])
+@gm_required
+def cosmere_homebrew_save():
+    """Upsert a homebrew entry into the active campaign's shelf (by id)."""
+    if _active_system() != 'cosmere':
+        return jsonify({'ok': False, 'error': 'not a Cosmere campaign'}), 400
+    import systems.cosmere.homebrew as _hb
+    data = request.get_json(silent=True) or {}
+    entry = _hb.normalize(data.get('entry') or data)
+    t = entry['type']
+    raw = _load_homebrew_raw()
+    bucket = [e for e in (raw.get(t) or []) if isinstance(e, dict) and e.get('id') != entry['id']]
+    bucket.append(entry)
+    raw[t] = bucket
+    _save_homebrew_raw(raw)
+    return jsonify({'ok': True, 'id': entry['id'], 'entry': entry})
+
+
+@app.route('/cosmere/homebrew/<eid>/delete', methods=['POST'])
+@gm_required
+def cosmere_homebrew_delete(eid):
+    """Remove a homebrew entry by id (searches every type bucket)."""
+    if _active_system() != 'cosmere':
+        return jsonify({'ok': False}), 400
+    import systems.cosmere.homebrew as _hb
+    raw = _load_homebrew_raw()
+    removed = False
+    for t in _hb.TYPES:
+        b = raw.get(t)
+        if isinstance(b, list):
+            nb = [e for e in b if not (isinstance(e, dict) and e.get('id') == eid)]
+            removed = removed or len(nb) != len(b)
+            raw[t] = nb
+    _save_homebrew_raw(raw)
+    return jsonify({'ok': removed})
 
 
 @app.route('/cosmere/pc/<pid>')
@@ -7065,7 +7164,7 @@ def cosmere_pc_sheet(pid):
     doc = _load_cosmere_pc(pid)
     if not doc:
         return ('Unknown Cosmere character', 404)
-    build = _cb.CosmereBuild(doc.get('build'))
+    build = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
     actor = systems.cosmere.CosmereActor(build.to_actor_doc())
     _u = _auth.current_user()
     can_delete = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
@@ -7091,8 +7190,8 @@ def _cosmere_player_card(doc):
     cards used elsewhere; the full sheet carries skills + abilities."""
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
-    b = _cb.CosmereBuild(doc.get('build'))
-    o = _rad.order(b.radiant_order)
+    b = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
+    o = b.order()
     return {
         'id': doc['id'], 'name': doc.get('name', 'Unknown'),
         'ancestry': b.ancestry, 'culture': b.culture, 'path': b.path,
