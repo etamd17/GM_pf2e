@@ -1,30 +1,58 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>{% block title %}Account{% endblock %} &middot; PF2E GM</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
+<title>{% block title %}Account{% endblock %} &middot; Table View</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0d0d12;--card:#24242e;--ink:#e8e8f0;--muted:#8080a0;--accent:#7DC4C4;--btn:#3A7878;--btn-ink:#A8DEDE;--line:rgba(255,255,255,0.08);}
+:root{
+  --bg:#0c0a07; --card:#1c1813; --card-2:#28221a; --ink:#f0ead7; --ink-2:#c9bfa3;
+  --muted:#8e8369; --gilt:#e0b65a; --gilt-soft:#c9a34e; --line:rgba(201,163,78,0.16);
+  --line-strong:rgba(201,163,78,0.30);
+}
 *{box-sizing:border-box;}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:32px;max-width:440px;width:100%;}
-h1{font-family:'Cinzel',serif;color:var(--accent);font-size:20px;margin:0 0 6px;}
-.sub{color:var(--muted);font-size:13px;margin:0 0 18px;}
-label{display:block;font-size:12px;color:var(--muted);margin:14px 0 4px;}
-input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:14px;font-family:inherit;}
-input:focus{outline:none;border-color:rgba(125,196,196,0.4);}
-button{width:100%;margin-top:20px;padding:11px;border-radius:6px;border:none;background:var(--btn);color:var(--btn-ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;}
-button:hover{background:#4A9696;}
-.err{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;padding:9px 12px;border-radius:6px;font-size:13px;margin-bottom:8px;}
-a{color:var(--accent);text-decoration:none;}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);margin:0;min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px 40px;
+  background:
+    radial-gradient(110% 70% at 50% 115%, rgba(224,182,90,0.12), transparent 55%),
+    radial-gradient(90% 60% at 50% -10%, rgba(120,90,40,0.10), transparent 55%),
+    var(--bg);}
+.brand{font-family:'Cinzel',serif;font-weight:700;letter-spacing:.26em;text-transform:uppercase;
+  font-size:13px;color:var(--gilt);text-decoration:none;margin-bottom:20px;opacity:.92;
+  display:inline-flex;align-items:center;gap:8px;}
+.brand svg{width:16px;height:16px;}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:30px 32px;
+  max-width:460px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.03);}
+h1{font-family:'Cinzel',serif;color:var(--gilt);font-size:22px;margin:0 0 6px;letter-spacing:.01em;}
+.sub{color:var(--muted);font-size:13.5px;line-height:1.45;margin:0 0 18px;}
+label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:15px 0 5px;}
+input,select{width:100%;padding:11px 13px;border-radius:8px;border:1px solid var(--line);background:#14110c;color:var(--ink);font-size:14px;font-family:inherit;}
+input:focus,select:focus{outline:none;border-color:var(--line-strong);box-shadow:0 0 0 3px rgba(224,182,90,.08);}
+button{margin-top:22px;padding:12px;border-radius:8px;border:1px solid rgba(247,231,184,.5);
+  background:linear-gradient(180deg,#f0d88a,#e0b65a 55%,#c9a34e);color:#1a1407;
+  font-family:'Cinzel',serif;font-size:13.5px;font-weight:700;letter-spacing:.04em;cursor:pointer;
+  box-shadow:0 6px 18px rgba(224,182,90,.18), inset 0 1px 0 rgba(255,255,255,.4);transition:filter .15s, transform .15s;}
+button:hover{filter:brightness(1.05);transform:translateY(-1px);}
+form:not(.row form) > button{width:100%;}
+.err{background:rgba(180,60,40,0.14);border:1px solid rgba(220,120,90,0.34);color:#f3b9a3;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:10px;}
+a{color:var(--gilt);text-decoration:none;}
+a:hover{color:#f0d88a;}
 .muted{color:var(--muted);font-size:12px;}
 .list{margin:0;padding:0;list-style:none;}
-.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--bg);}
-.row .meta{font-size:12px;color:var(--muted);margin-top:3px;}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:9px;background:#14110c;transition:border-color .15s;}
+.row:hover{border-color:var(--line-strong);}
+.row strong{font-size:14.5px;}
+.row .meta{font-size:12px;color:var(--muted);margin-top:4px;}
 .row form{margin:0;width:auto;}
-.row button{margin:0;width:auto;padding:7px 16px;font-size:12px;}
-.badge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--btn-ink);background:rgba(58,120,120,0.25);padding:2px 7px;border-radius:4px;}
-.section-title{font-family:'Cinzel',serif;color:var(--ink);font-size:14px;margin:22px 0 10px;}
-.foot{margin-top:20px;text-align:center;}
-</style></head><body><div class="box">
+.row button{margin:0;width:auto;padding:8px 16px;font-size:12px;}
+.badge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#1a1407;background:rgba(224,182,90,.85);padding:2px 8px;border-radius:5px;font-weight:600;}
+.section-title{font-family:'Cinzel',serif;color:var(--ink);font-size:15px;margin:24px 0 11px;display:flex;justify-content:space-between;align-items:center;}
+.foot{margin-top:22px;text-align:center;}
+code{font-family:ui-monospace,'SF Mono',monospace;font-size:12px;color:var(--ink-2);}
+</style></head><body>
+<a class="brand" href="/">
+  <svg viewBox="0 0 100 100" fill="none" stroke="#e0b65a" stroke-width="5" stroke-linejoin="round"><polygon points="50,8 86,30 86,70 50,92 14,70 14,30"/><circle cx="50" cy="50" r="9" fill="#e0b65a" stroke="none"/></svg>
+  Table View
+</a>
+<div class="box">
 {% block content %}{% endblock %}
 </div></body></html>
