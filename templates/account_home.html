@@ -1,60 +1,143 @@
 {% extends "_account_base.html" %}
 {% block title %}My table{% endblock %}
-{% block content %}
-<h1>Welcome, {{ user.display_name }}</h1>
-<p class="sub">Pick a table to enter &mdash; a game you run, or one your character is part of.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
+{% block bodyclass %}wide{% endblock %}
+{% block head %}
+<style>
+  .dash{max-width:1060px;width:100%;text-align:left;}
+  .dash-hd h1{font-family:'Cinzel',serif;color:var(--gilt);font-size:26px;margin:0;letter-spacing:.01em;}
+  .dash-hd .sub{color:var(--muted);font-size:13.5px;margin:6px 0 0;}
+  .sect{font-family:'Cinzel',serif;color:var(--ink);font-size:15px;letter-spacing:.02em;margin:30px 0 13px;display:flex;align-items:center;gap:12px;}
+  .sect::after{content:'';flex:1;height:1px;background:var(--line);}
+  .sect a.add{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;letter-spacing:0;color:var(--gilt);}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));}
 
-<div class="section-title">Your Campaigns <a href="/campaigns/new" style="font-size:12px;font-weight:500;letter-spacing:0;">+ New campaign</a></div>
-{% if campaigns %}
-<ul class="list">
-  {% for c in campaigns %}
-  <li class="row">
-    <div>
-      <strong>{{ c.name }}</strong>
-      <div class="meta">
-        {{ c.system|upper }}
-        &middot; {% if c.id in gm_campaign_ids %}you GM{% else %}player{% endif %}
-        {% if c.id == active_campaign_id %} &middot; <span class="badge">active</span>{% endif %}
+  /* Campaign cards */
+  .cc{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s,box-shadow .15s;}
+  .cc:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 14px 34px rgba(0,0,0,.4);}
+  .cc-cover{height:60px;position:relative;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--line);}
+  .cc-cover .sys{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;}
+  .cc-cover .crest{position:absolute;right:12px;top:50%;transform:translateY(-50%);}
+  .cc.pf2e .cc-cover{background:linear-gradient(120deg,rgba(224,182,90,.22),rgba(124,90,40,.10));}
+  .cc.pf2e .sys{color:#f0d88a;}
+  .cc.cosmere .cc-cover{background:linear-gradient(120deg,rgba(95,168,224,.26),rgba(40,70,110,.10));}
+  .cc.cosmere .sys{color:#9fd2f2;}
+  .cc-body{padding:13px 16px 15px;flex:1;display:flex;flex-direction:column;}
+  .cc-name{font-family:'Cinzel',serif;font-size:16px;color:var(--ink);margin:0 0 4px;}
+  .cc-meta{font-size:12px;color:var(--muted);margin-bottom:14px;}
+  .cc-meta .active{color:#1a1407;background:rgba(224,182,90,.85);padding:1px 7px;border-radius:5px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-left:4px;}
+  .cc-actions{margin-top:auto;display:flex;gap:12px;align-items:center;}
+  .cc-actions form{margin:0;}
+  .cc-actions button{margin:0;width:auto;padding:9px 18px;font-size:12px;}
+  .cc-actions a.manage{font-size:12px;}
+
+  /* Character cards */
+  .ch{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--ac,#e0b65a);border-radius:11px;padding:14px 15px;display:flex;flex-direction:column;transition:border-color .15s,transform .15s;}
+  .ch:hover{transform:translateY(-2px);border-color:var(--line-strong);}
+  .ch-top{display:flex;align-items:center;gap:11px;margin-bottom:10px;}
+  .ch-mono{width:38px;height:38px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-weight:700;font-size:17px;color:var(--ac,#e0b65a);background:rgba(255,255,255,.04);border:1px solid var(--line);}
+  .ch-name{font-family:'Cinzel',serif;font-size:15.5px;color:var(--ink);margin:0;line-height:1.15;}
+  .ch-sub{font-size:11.5px;color:var(--ac,#e0b65a);font-weight:600;margin-top:3px;}
+  .ch-stats{display:flex;gap:7px;margin:0 0 12px;}
+  .ch-stat{flex:1;text-align:center;background:rgba(255,255,255,.03);border-radius:7px;padding:5px 0;}
+  .ch-stat .l{font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+  .ch-stat .v{font-family:ui-monospace,monospace;font-weight:700;font-size:15px;color:var(--ink);}
+  .ch-foot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .ch-camp{font-size:11px;color:var(--muted);}
+  .ch-foot form{margin:0;}
+  .ch-foot button{margin:0;width:auto;padding:8px 16px;font-size:12px;}
+
+  .empty{color:var(--muted);font-size:13.5px;background:var(--card);border:1px dashed var(--line);border-radius:11px;padding:18px 16px;}
+  .acct{margin-top:36px;border-top:1px solid var(--line);padding-top:16px;}
+  .acct summary{cursor:pointer;font-family:'Cinzel',serif;color:var(--ink-2);font-size:13px;list-style:none;}
+  .acct summary::-webkit-details-marker{display:none;}
+  .acct summary::before{content:'\25B8';color:var(--muted);margin-right:8px;font-size:11px;}
+  .acct[open] summary{color:var(--gilt);}
+  .acct[open] summary::before{content:'\25BE';}
+  .acct .inner{max-width:380px;margin-top:12px;}
+  .acct .links{margin-top:14px;font-size:12px;color:var(--muted);}
+</style>
+{% endblock %}
+{% block shell %}
+<div class="dash">
+  <div class="dash-hd">
+    <h1>Welcome, {{ user.display_name }}</h1>
+    <p class="sub">Choose a table to enter &mdash; a game you run, or one your character is part of.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
+  </div>
+
+  <div class="sect">Your Campaigns <a class="add" href="/campaigns/new">+ New campaign</a></div>
+  {% if campaigns %}
+  <div class="grid">
+    {% for c in campaigns %}
+    {% set is_gm = c.id in gm_campaign_ids %}
+    <div class="cc {{ c.system }}">
+      <div class="cc-cover">
+        <span class="sys">{{ c.system|upper }}</span>
+        <svg class="crest" width="32" height="32" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3" style="color:{{ '#9fd2f2' if c.system == 'cosmere' else '#f0d88a' }};opacity:.4;"><polygon points="50,8 86,30 86,70 50,92 14,70 14,30"/></svg>
+      </div>
+      <div class="cc-body">
+        <div class="cc-name">{{ c.name }}</div>
+        <div class="cc-meta">
+          {% if is_gm %}You GM{% else %}Player{% endif %}
+          &middot; {{ c.members|length }} member{{ '' if c.members|length == 1 else 's' }}
+          {% if c.id == active_campaign_id %}<span class="active">active</span>{% endif %}
+        </div>
+        <div class="cc-actions">
+          <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
+          {% if is_gm %}<a class="manage" href="/campaign/{{ c.id }}/invites">Manage</a>{% endif %}
+        </div>
       </div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;">
-      {% if c.id in gm_campaign_ids %}<a href="/campaign/{{ c.id }}/invites" style="font-size:12px;">Manage</a>{% endif %}
-      <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
-    </div>
-  </li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="muted">No campaigns yet. <a href="/campaigns/new">Create one</a> to run a game, or join one with an invite link from a GM.</p>
-{% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">No campaigns yet. <a href="/campaigns/new">Create one</a> to run a game, or join one with an invite link from a GM.</div>
+  {% endif %}
 
-{% if characters %}
-<div class="section-title">Your Characters</div>
-<ul class="list">
-  {% for ch in characters %}
-  <li class="row">
-    <div>
-      <strong>{{ ch.name }}</strong>
-      <div class="meta">{{ ch.system|upper }} &middot; {{ ch.campaign_name }}</div>
+  <div class="sect">Your Characters</div>
+  {% if characters %}
+  <div class="grid">
+    {% for ch in characters %}
+    <div class="ch" style="--ac:{{ ch.accent }};">
+      <div class="ch-top">
+        <div class="ch-mono">{{ ch.name[:1]|upper }}</div>
+        <div>
+          <div class="ch-name">{{ ch.name }}</div>
+          <div class="ch-sub">{{ ch.subtitle }}</div>
+        </div>
+      </div>
+      {% if ch.stats %}
+      <div class="ch-stats">
+        {% for label, val in ch.stats %}<div class="ch-stat"><div class="l">{{ label }}</div><div class="v">{{ val }}</div></div>{% endfor %}
+      </div>
+      {% endif %}
+      <div class="ch-foot">
+        <span class="ch-camp">{{ ch.campaign_name }} &middot; {{ ch.system|upper }}</span>
+        <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Play</button></form>
+      </div>
     </div>
-    <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Play</button></form>
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">No characters yet. Enter a campaign to build one, or claim a character with a GM&rsquo;s invite link.</div>
+  {% endif %}
 
-<div class="section-title">Account</div>
-{% if pw_msg %}<div class="err" style="background:rgba(58,120,120,0.15);border-color:rgba(125,196,196,0.4);color:#A8DEDE;">{{ pw_msg }}</div>{% endif %}
-{% if pw_error %}<div class="err">{{ pw_error }}</div>{% endif %}
-<form method="POST" action="/me/password">
-  <label>Change password &mdash; current</label>
-  <input name="current_password" type="password" required>
-  <label>New password</label>
-  <input name="new_password" type="password" required placeholder="at least 6 characters">
-  <button type="submit">Update password</button>
-</form>
-<p class="foot muted">
-  {% if user.is_admin %}<a href="/admin/users">Manage users</a> &middot; {% endif %}
-  <a href="/logout">Sign out</a>
-</p>
+  <details class="acct"{% if pw_msg or pw_error %} open{% endif %}>
+    <summary>Account settings</summary>
+    <div class="inner">
+      {% if pw_msg %}<div class="err" style="background:rgba(74,124,42,0.16);border-color:rgba(155,192,111,0.4);color:#b8d68f;">{{ pw_msg }}</div>{% endif %}
+      {% if pw_error %}<div class="err">{{ pw_error }}</div>{% endif %}
+      <form method="POST" action="/me/password">
+        <label>Change password &mdash; current</label>
+        <input name="current_password" type="password" required>
+        <label>New password</label>
+        <input name="new_password" type="password" required placeholder="at least 6 characters">
+        <button type="submit">Update password</button>
+      </form>
+      <p class="links">
+        {% if user.is_admin %}<a href="/admin/users">Manage users</a> &middot; {% endif %}
+        <a href="/logout">Sign out</a>
+      </p>
+    </div>
+  </details>
+</div>
 {% endblock %}
