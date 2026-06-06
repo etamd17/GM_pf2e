@@ -6855,6 +6855,31 @@ def cosmere_gmscreen():
     )
 
 
+@app.route('/cosmere/generator')
+@gm_required
+def cosmere_generator():
+    """Cosmere GM generators -- Rosharan names, NPCs, highstorms/weather, spheres,
+    loot & fabrials, locations, plot hooks, rumors, and scene dressing. Mirrors
+    the PF2e /generator page (initial cards + per-card reroll via the API below).
+    System-aware: redirects out in non-Cosmere mode, like the dashboard."""
+    if _active_system() != 'cosmere':
+        return redirect(_active_system_ui().gm_home)
+    import systems.cosmere.generator as _gen
+    cards = [{'type': t, 'label': lbl, 'html': fn()}
+             for t, (lbl, fn) in _gen.GENERATORS.items()]
+    return render_template('cosmere_generator.html', cards=cards)
+
+
+@app.route('/api/cosmere/generate/<gtype>', methods=['POST'])
+@gm_required
+def api_cosmere_generate(gtype):
+    """Reroll a single Cosmere generator card -> {html}."""
+    import systems.cosmere.generator as _gen
+    if gtype not in _gen.GENERATORS:
+        return jsonify({'error': 'unknown generator'}), 400
+    return jsonify({'html': _gen.generate(gtype)})
+
+
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
     import systems.cosmere.build as _cb

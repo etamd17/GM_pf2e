@@ -63,6 +63,7 @@ _UI = SystemUI(
         NavLink('Bestiary', '/cosmere/bestiary'),
         NavLink('Tracker', '/tracker'),
         NavLink('GM Screen', '/cosmere/gmscreen', title='Cosmere rules reference'),
+        NavLink('Generators', '/cosmere/generator', title='Rosharan names, NPCs, weather, loot'),
         NavLink('Threads', '/gm/threads'),
         NavLink('Status', '/status'),
         NavLink('Notes', '/notes', title='Session notes scratchpad'),

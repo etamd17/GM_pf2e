@@ -56,6 +56,10 @@ def test_cosmere_campaign_binding_end_to_end():
         # the Cosmere GM Screen (rules reference) renders
         gmscr = c.get('/cosmere/gmscreen')
         assert gmscr.status_code == 200 and b'Plot Die' in gmscr.data and b'Conditions' in gmscr.data
+        # the Cosmere generators page renders + a card rerolls via the API
+        genp = c.get('/cosmere/generator')
+        assert genp.status_code == 200 and b'Cosmere Generators' in genp.data
+        assert c.post('/api/cosmere/generate/name').get_json()['html']
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(cos_cid)   # store follows the live campaign
 
         # the front door sends a logged-in user to /me (the chooser); the
@@ -90,6 +94,7 @@ def test_cosmere_campaign_binding_end_to_end():
         assert pr.status_code == 302 and pr.headers['Location'].endswith('/gm')
         assert c.get('/cosmere/gm').status_code == 302     # Cosmere dashboard redirects out in PF2e mode
         assert c.get('/cosmere/gmscreen').status_code == 302   # GM Screen redirects out in PF2e mode too
+        assert c.get('/cosmere/generator').status_code == 302   # generators redirect out in PF2e mode too
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(pf_cid)
         ph = c.get('/')
         assert ph.status_code == 302 and ph.headers['Location'].endswith('/me')   # front door -> /me
