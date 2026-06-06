@@ -6011,12 +6011,46 @@ def join():
     return render_template('join.html', error=None, code=code, invite=inv, logged_in=bool(_auth.current_user()))
 
 
+def _me_characters(user_id):
+    """Enriched 'My Characters' cards for /me -- level + class/order + a couple
+    stats + a per-system accent, so the dashboard reads like a launcher rather
+    than a flat list. Falls back gracefully if a doc can't be parsed."""
+    cards = []
+    for ch in _campaigns.characters_for_user(user_id):
+        card = dict(ch)
+        cid = ch.get('campaign_id')
+        try:
+            if ch.get('system') == 'cosmere':
+                import systems.cosmere.build as _cb
+                import systems.cosmere.radiant as _rad
+                doc = _storage.load_json(os.path.join(_storage.cosmere_pc_dir(cid), ch['file']))
+                b = _cb.CosmereBuild((doc or {}).get('build') or {})
+                o = _rad.order(b.radiant_order)
+                d = b.defenses()
+                card.update(
+                    subtitle='Level %d · %s' % (b.level, o['name'] if o else (b.path or 'Cosmere').title()),
+                    accent=_rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+                    stats=[('Phy', d['phy']), ('Cog', d['cog']), ('Spi', d['spi'])],
+                )
+            else:
+                doc = _storage.load_json(os.path.join(_storage.party_dir(cid), ch['file']))
+                b = (doc or {}).get('build') or {}
+                sub = 'Level %s %s %s' % (b.get('level') or 1, b.get('ancestry') or '', b.get('class') or '')
+                card.update(subtitle=' '.join(sub.split()) or 'Pathfinder 2e', accent='#e0b65a', stats=[])
+        except Exception:
+            card.setdefault('subtitle', (ch.get('system') or 'pf2e').upper())
+            card.setdefault('accent', '#e0b65a')
+            card.setdefault('stats', [])
+        cards.append(card)
+    return cards
+
+
 def _me_render(**extra):
     u = _auth.current_user()
     camps = _campaigns.campaigns_for_user(u['id'])
     gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
     ctx = dict(user=u, campaigns=camps, gm_campaign_ids=gm_ids,
-               characters=_campaigns.characters_for_user(u['id']),
+               characters=_me_characters(u['id']),
                active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
     ctx.update(extra)
     return render_template('account_home.html', **ctx)
