@@ -6779,6 +6779,33 @@ def _cosmere_builder_context(build):
     )
 
 
+@app.route('/cosmere/gm')
+@gm_required
+def cosmere_gm_hub():
+    """Cosmere GM dashboard -- the command center for a Stormlight campaign.
+
+    The Cosmere sibling of the PF2e /gm hub: a header (campaign + live counts)
+    over a tile grid of the Cosmere GM tools (roster, builder, bestiary, the
+    deflect/injury/Plot-Die tracker, story threads, session tools). System-aware
+    and registry-driven -- it redirects out if the active campaign isn't Cosmere,
+    mirroring how /gm redirects a Cosmere GM here, so there's no cross-system
+    bleed.
+    """
+    if _active_system() != 'cosmere':
+        return redirect(_active_system_ui().gm_home)
+    adv_count = sum(1 for d in systems.cosmere.load_pack('companions-and-adversaries')
+                    if d.get('type') == 'adversary')
+    camp = _active_campaign_doc() or {}
+    return render_template(
+        'cosmere_gm.html',
+        campaign_name=camp.get('name') or 'Cosmere Campaign',
+        char_count=len(_list_cosmere_pcs()),
+        adv_count=adv_count,
+        encounter_count=len(ACTIVE_ENCOUNTER),
+        active_cid=ACTIVE_CAMPAIGN_ID,
+    )
+
+
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
     import systems.cosmere.build as _cb

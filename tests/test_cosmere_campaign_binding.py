@@ -48,8 +48,11 @@ def test_cosmere_campaign_binding_end_to_end():
         # activate the Cosmere campaign -> GM takes the live slot, paths re-bind,
         # and the landing is the Cosmere hub (no PF2e GM-hub bleed)
         ar = c.post('/campaign/' + cos_cid + '/activate')
-        assert ar.status_code == 302 and ar.headers['Location'].endswith('/cosmere/pcs'), ar.headers.get('Location')
+        assert ar.status_code == 302 and ar.headers['Location'].endswith('/cosmere/gm'), ar.headers.get('Location')
         assert A.ACTIVE_CAMPAIGN_ID == cos_cid
+        # the Cosmere GM dashboard renders as the command center
+        gmhub = c.get('/cosmere/gm')
+        assert gmhub.status_code == 200 and b'Encounter Tracker' in gmhub.data and b'Bestiary' in gmhub.data
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(cos_cid)   # store follows the live campaign
 
         # the front door sends a logged-in user to /me (the chooser); the
@@ -58,10 +61,10 @@ def test_cosmere_campaign_binding_end_to_end():
         assert home.status_code == 302 and home.headers['Location'].endswith('/me')
         pcs = c.get('/cosmere/pcs')
         assert pcs.status_code == 200 and b'COSMERE' in pcs.data    # nav brand flipped
-        assert b'GM Hub' not in pcs.data and b'Generators' not in pcs.data   # no PF2e bleed in the nav
-        # the PF2e GM command center redirects out in Cosmere mode
+        assert b'Generators' not in pcs.data and b'GM Screen' not in pcs.data   # no PF2e GM-nav bleed (Cosmere has its own GM Hub)
+        # the PF2e GM command center redirects to the Cosmere GM hub in Cosmere mode
         gm = c.get('/gm')
-        assert gm.status_code == 302 and gm.headers['Location'].endswith('/cosmere/pcs')
+        assert gm.status_code == 302 and gm.headers['Location'].endswith('/cosmere/gm')
 
         # build a Cosmere PC -> lands UNDER the campaign, stamped campaign + owner
         br = c.post('/cosmere/builder', json={'build': {'name': 'Kaladin'}})
@@ -82,6 +85,7 @@ def test_cosmere_campaign_binding_end_to_end():
         # switch to the PF2e campaign -> activate lands on /gm, no Cosmere bleed
         pr = c.post('/campaign/' + pf_cid + '/activate')
         assert pr.status_code == 302 and pr.headers['Location'].endswith('/gm')
+        assert c.get('/cosmere/gm').status_code == 302     # Cosmere dashboard redirects out in PF2e mode
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(pf_cid)
         ph = c.get('/')
         assert ph.status_code == 302 and ph.headers['Location'].endswith('/me')   # front door -> /me

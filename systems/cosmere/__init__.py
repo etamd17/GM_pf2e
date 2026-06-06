@@ -49,14 +49,15 @@ _COMBAT = CombatProfile(
     conditions=tuple(Condition(k, k in _VALUED) for k in _CONDITION_KEYS),
 )
 
-# The GM side + player side for Cosmere: the GM works from the character roster
-# (Builder / Bestiary / Tracker / Invites hang off it); a player lands on their
-# own character hub.
+# The GM side + player side for Cosmere: the GM works from a command-center hub
+# (the dashboard) with the roster / Builder / Bestiary / Tracker / session tools
+# hanging off it; a player lands on their own character hub.
 _UI = SystemUI(
-    gm_home='/cosmere/pcs',
+    gm_home='/cosmere/gm',
     player_home='/cosmere/player',
     brand='COSMERE',
     gm_nav=(
+        NavLink('GM Hub', '/cosmere/gm', accent=True),
         NavLink('Characters', '/cosmere/pcs', title='Cosmere characters'),
         NavLink('Builder', '/cosmere/builder'),
         NavLink('Bestiary', '/cosmere/bestiary'),
