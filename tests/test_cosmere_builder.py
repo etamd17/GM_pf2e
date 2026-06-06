@@ -93,5 +93,19 @@ def test_builder_preview_returns_engine_stats():
     assert p['issues'] == []                    # _VALID is a clean build
 
 
+def test_handbook_content_wired_into_builder():
+    """Stage 2: the ingested handbook content feeds the builder's pickers --
+    more cultures + items + heroic talents, with the path key talent still
+    correctly singled out (handbook tree roots are prereq-less, so 'no
+    prerequisite' is not the key-talent discriminator)."""
+    cultures = app._cosmere_cultures()
+    assert len(cultures) >= 13 and 'Reshi' in cultures            # handbook-only culture
+    import systems.cosmere.items as it
+    assert len(it.catalog()) >= 150                                # base + handbook items
+    warrior = app._cosmere_path_talents()['warrior']
+    assert len(warrior) >= 20                                      # enriched talent trees
+    assert [t['name'] for t in warrior if t['key']] == ['Vigilant Stance']
+
+
 def test_unknown_pc_sheet_is_404():
     assert _client().get('/cosmere/pc/deadbeef').status_code == 404

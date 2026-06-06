@@ -6764,7 +6764,11 @@ def _save_cosmere_pc(doc):
 
 
 def _cosmere_cultures():
-    return sorted({d.get('name', '') for d in systems.cosmere.load_pack('cultures') if d.get('name')})
+    """All cultures for the builder -- base system + the ingested handbook
+    (Iriali, Kharbranthian, Listener, Natan, Reshi, Shin, Wayfarer, ...)."""
+    names = {d.get('name', '') for pack in ('cultures', 'handbook-cultures')
+             for d in systems.cosmere.load_pack(pack) if d.get('name')}
+    return sorted(n for n in names if n)
 
 
 def _talent_prereq_summary(pr):
@@ -6794,19 +6798,34 @@ def _talent_prereq_summary(pr):
 def _cosmere_path_talents():
     """{path_id: [{id, name, key, prereq}]} for the builder's talent picker
     (key talents first; each carries a prerequisite summary)."""
-    out = {}
-    for d in systems.cosmere.load_pack('heroic-paths'):
-        if d.get('type') != 'talent':
-            continue
-        s = d.get('system', {})
-        p = (s.get('path') or '').lower()
-        if not p:
-            continue
-        pr = s.get('prerequisites') or {}
-        out.setdefault(p, []).append({
-            'id': d.get('_id'), 'name': d.get('name', ''),
-            'key': pr == {}, 'prereq': _talent_prereq_summary(pr),
-        })
+    import systems.cosmere.origins as _o
+    # The real key talent per path is the one named in PATH_INFO (handbook trees
+    # have many prereq-less roots, so "no prerequisite" is NOT the discriminator).
+    key_names = {p: (info.get('key_talent') or '').strip().lower()
+                 for p, info in _o.PATH_INFO.items()}
+    out, seen = {}, set()
+    # Base system talents first, then the fuller handbook trees; a name clash
+    # per path keeps the BASE talent (so origins.PATH_INFO key-talent ids +
+    # talents.py prereqs still match), and the handbook adds the rest.
+    for pack in ('heroic-paths', 'handbook-heroic-paths'):
+        for d in systems.cosmere.load_pack(pack):
+            if d.get('type') != 'talent':
+                continue
+            s = d.get('system', {})
+            p = (s.get('path') or '').lower()
+            if not p:
+                continue
+            name = d.get('name', '')
+            dkey = (p, name.strip().lower())
+            if not name or dkey in seen:
+                continue
+            seen.add(dkey)
+            pr = s.get('prerequisites') or {}
+            out.setdefault(p, []).append({
+                'id': d.get('_id'), 'name': name,
+                'key': name.strip().lower() == key_names.get(p, '\x00'),
+                'prereq': _talent_prereq_summary(pr),
+            })
     for p in out:
         out[p].sort(key=lambda t: (not t['key'], t['name'].lower()))   # key talents first
     return out
