@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}GM Screen - Cosmere{% endblock %}
+{% block extra_head %}
+  /* Cosmere GM Screen. Raw CSS -- base.html already wraps extra_head in <style>;
+     a nested <style> would get the first rule eaten by the CSS parser. */
+  .gms-head { display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-rule); padding-bottom:.7rem; margin-bottom:1rem; }
+  .gms-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
+  .gms-sub { font-size:12px; color:var(--text-on-dark-3); }
+  .gms-nav { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1.3rem; }
+  .gms-nav a { font-size:11px; text-decoration:none; color:var(--text-on-dark-2); background:var(--bg-card-2); border:1px solid var(--border-card); border-radius:999px; padding:.3rem .75rem; transition:color .12s, border-color .12s; }
+  .gms-nav a:hover { color:var(--accent); border-color:var(--accent); }
+  .gms-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); align-items:start; }
+  .gms-panel { background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:1rem 1.1rem; scroll-margin-top:64px; }
+  .gms-panel.wide { grid-column:1 / -1; }
+  .gms-panel h2 { font-family:var(--font-display, serif); font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin:0 0 .7rem; }
+  .gms-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .gms-tbl th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); font-weight:700; padding:.25rem .5rem; border-bottom:1px solid var(--border-card); }
+  .gms-tbl td { padding:.35rem .5rem; border-bottom:1px solid rgba(255,255,255,.045); color:var(--text-on-dark-2); vertical-align:top; }
+  .gms-tbl tr:last-child td { border-bottom:none; }
+  .gms-tbl td .k, .gms-tbl td b { color:var(--text-on-dark); }
+  .gms-formula { text-align:center; font-family:var(--font-mono, monospace); font-size:13px; color:var(--storm-100, var(--accent)); background:var(--bg-sunken); border:1px solid var(--border-card); border-radius:6px; padding:.5rem; margin:.2rem 0 .7rem; }
+  .gms-def { font-size:12.5px; color:var(--text-on-dark-2); line-height:1.5; margin:0 0 .6rem; }
+  .gms-def b { color:var(--text-on-dark); }
+  .gms-cond { font-size:12.5px; color:var(--text-on-dark-2); line-height:1.45; margin:0 0 .55rem; break-inside:avoid; }
+  .gms-cond b { color:var(--text-on-dark); }
+  .gms-chip { display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:0 6px; border-radius:999px; border:1px solid var(--accent); color:var(--accent); margin-left:.35rem; vertical-align:middle; }
+  .gms-cols { column-width:300px; column-gap:1.6rem; }
+  .gms-list { margin:.2rem 0 .2rem; padding-left:1.1rem; font-size:12.5px; color:var(--text-on-dark-2); line-height:1.55; }
+  .gms-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:.45rem; vertical-align:middle; }
+{% endblock %}
+{% block content %}
+<div class="gms-head">
+  <span class="gms-title">Cosmere GM Screen</span>
+  <span class="gms-sub">Stormlight rules at a glance &mdash; sourced from the live engine.</span>
+</div>
+
+<nav class="gms-nav">
+  <a href="#turns">Turn Order</a>
+  <a href="#damage">Damage &amp; Deflect</a>
+  <a href="#injuries">Injuries</a>
+  <a href="#plot">Plot Die</a>
+  <a href="#conditions">Conditions</a>
+  <a href="#surges">Surges</a>
+  <a href="#orders">Radiant Orders</a>
+  <a href="#rest">Rest</a>
+  <a href="#skills">Skills</a>
+  <a href="#quickref">Quick Ref</a>
+</nav>
+
+<div class="gms-grid">
+
+  <section id="turns" class="gms-panel">
+    <h2>Turn Order &amp; Actions</h2>
+    <p class="gms-def">Each round resolves in <b>four phases</b>. Within a phase, higher <b>Speed</b> acts first, then a d20 tiebreak.</p>
+    <p class="gms-def">On your turn, elect <b>Fast</b> (2 actions, act early) or <b>Slow</b> (3 actions, act late). Either way you also get <b>1 reaction</b>.</p>
+    <table class="gms-tbl">
+      <tr><th>Phase</th><th>Who acts</th></tr>
+      <tr><td><span class="k">1 &middot; Fast PC</span></td><td>PCs who chose fast (2 actions)</td></tr>
+      <tr><td><span class="k">2 &middot; Fast NPC</span></td><td>NPCs who chose fast</td></tr>
+      <tr><td><span class="k">3 &middot; Slow PC</span></td><td>PCs who chose slow (3 actions)</td></tr>
+      <tr><td><span class="k">4 &middot; Slow NPC</span></td><td>NPCs who chose slow</td></tr>
+    </table>
+  </section>
+
+  <section id="damage" class="gms-panel">
+    <h2>Damage &amp; Deflect</h2>
+    <p class="gms-def">Damage = the weapon or effect's dice <b>+ your skill modifier</b> on a hit. <b>Deflect</b> (from armor) is subtracted from impact, keen, and energy only. There is no &ldquo;healing&rdquo; damage type.</p>
+    <table class="gms-tbl">
+      <tr><th>Damage type</th><th>vs. Deflect</th></tr>
+      {% for d in damage_types %}
+      <tr><td><span class="k">{{ d.type|capitalize }}</span></td><td>{% if d.deflectable %}reduced by Deflect{% else %}<b>bypasses Deflect</b>{% endif %}</td></tr>
+      {% endfor %}
+    </table>
+    <p class="gms-def" style="margin-top:.7rem;"><b>Critical hit:</b> maximize the damage dice (spend an Opportunity). <b>Graze:</b> deal dice only, no skill mod (costs 1 focus).</p>
+  </section>
+
+  <section id="plot" class="gms-panel">
+    <h2>The Plot Die</h2>
+    <p class="gms-def">Roll a <b>d6</b> with the d20 when the stakes are raised (once per test): <b>2 blank</b>, <b>2 Opportunity</b>, <b>2 Complication</b>. A Complication face also adds <b>+2 or +4</b> to the d20 &mdash; but triggers a complication. A natural 20 also grants an Opportunity; a natural 1, a Complication.</p>
+    <p class="gms-def"><b style="color:var(--accent);">Opportunity</b> &mdash; the player may spend on:</p>
+    <ul class="gms-list">{% for s in plot_spend.opportunity %}<li>{{ s }}</li>{% endfor %}</ul>
+    <p class="gms-def" style="margin-top:.5rem;"><b style="color:var(--danger);">Complication</b> &mdash; the GM may spend on:</p>
+    <ul class="gms-list">{% for s in plot_spend.complication %}<li>{{ s }}</li>{% endfor %}</ul>
+    <p class="gms-def" style="margin-top:.5rem; color:var(--text-on-dark-3);">Roll it from the dice widget, bottom-right.</p>
+  </section>
+
+  <section id="injuries" class="gms-panel wide">
+    <h2>Injuries &amp; the Death Spiral</h2>
+    <p class="gms-def">At <b>0 health</b> you fall Unconscious and take an injury. Each hit while at 0 forces another <b>Injury Roll</b> (the total can be negative):</p>
+    <div class="gms-formula">1d20 + Deflect + mods &minus; 5 &times; (existing injuries)</div>
+    <div style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(280px,1fr));">
+      <table class="gms-tbl">
+        <tr><th>Roll total</th><th>Severity</th><th>Duration</th></tr>
+        {% for total, sev, dur in injury_rows %}
+        <tr><td><span class="k">{{ total }}</span></td><td><b>{{ sev }}</b></td><td>{{ dur }}</td></tr>
+        {% endfor %}
+      </table>
+      <table class="gms-tbl">
+        <tr><th>1d8</th><th>Injury effect</th></tr>
+        {% for n, eff in injury_d8 %}
+        <tr><td><span class="k">{{ n }}</span></td><td>{{ eff }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </section>
+
+  <section id="conditions" class="gms-panel wide">
+    <h2>Conditions</h2>
+    <div class="gms-cols">
+      {% for c in conditions %}
+      <p class="gms-cond"><b>{{ c.name }}</b>{% if c.stacks %}<span class="gms-chip">stacks</span>{% endif %} &mdash; {{ c.desc }}</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section id="surges" class="gms-panel">
+    <h2>Surges &amp; Stormlight</h2>
+    <table class="gms-tbl">
+      <tr><th>Surge</th><th>Effect</th></tr>
+      {% for s in surges %}
+      <tr><td><span class="k">{{ s.name }}</span></td><td>{{ s.desc }}</td></tr>
+      {% endfor %}
+    </table>
+    <p class="gms-def" style="margin-top:.7rem;"><b>Surge scaling by rank</b></p>
+    <table class="gms-tbl">
+      <tr><th>Rank</th><th>Die / max size</th></tr>
+      {% for rank, scale in surge_scaling %}<tr><td><span class="k">{{ rank }}</span></td><td>{{ scale }}</td></tr>{% endfor %}
+    </table>
+    <p class="gms-def" style="margin-top:.7rem;"><b>Stormlight actions</b> (granted by a First Ideal)</p>
+    {% for a in stormlight %}<p class="gms-cond"><b>{{ a.name }}</b> &mdash; {{ a.description }}</p>{% endfor %}
+    <p class="gms-def" style="margin-top:.4rem;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></p>
+  </section>
+
+  <section id="rest" class="gms-panel">
+    <h2>Rest &amp; Recovery</h2>
+    <p class="gms-def"><b>Short rest</b> &mdash; spend a recovery die to restore health or focus.</p>
+    <p class="gms-def"><b>Long rest</b> &mdash; recover all health &amp; focus, and reduce your Exhausted penalty by 1.</p>
+    <p class="gms-def"><b>Recover</b> (2 actions, once per scene) &mdash; spend a recovery die during combat.</p>
+    <p class="gms-def" style="color:var(--text-on-dark-3);">Investiture (Stormlight) is regained only from infused spheres, not by resting.</p>
+    <p class="gms-def" style="margin-top:.6rem;"><b>Recovery die by Willpower</b></p>
+    <table class="gms-tbl">
+      <tr><th>Willpower</th><th>Recovery die</th></tr>
+      <tr><td><span class="k">0</span></td><td>d4</td></tr>
+      <tr><td><span class="k">1&ndash;2</span></td><td>d6</td></tr>
+      <tr><td><span class="k">3&ndash;4</span></td><td>d8</td></tr>
+      <tr><td><span class="k">5&ndash;6</span></td><td>d10</td></tr>
+      <tr><td><span class="k">7&ndash;8</span></td><td>d12</td></tr>
+      <tr><td><span class="k">9+</span></td><td>d20</td></tr>
+    </table>
+  </section>
+
+  <section id="quickref" class="gms-panel">
+    <h2>Quick Reference</h2>
+    <p class="gms-def"><b>Defenses</b> = 10 + the two governing attributes:</p>
+    <ul class="gms-list">
+      <li><b>Physical</b> = 10 + Strength + Speed</li>
+      <li><b>Cognitive</b> = 10 + Intellect + Willpower</li>
+      <li><b>Spiritual</b> = 10 + Awareness + Presence</li>
+    </ul>
+    <p class="gms-def" style="margin-top:.6rem;"><b>Derived maximums:</b></p>
+    <ul class="gms-list">
+      <li><b>Health</b> = 10 + Strength at L1, growing by tier</li>
+      <li><b>Focus</b> = 2 + Willpower</li>
+      <li><b>Investiture</b> = 2 + the higher of Awareness / Presence (0 until Radiant)</li>
+    </ul>
+    <p class="gms-def" style="margin-top:.6rem;"><b>Tiers &amp; max skill rank:</b> levels map to tiers 1&ndash;5 (T1 = L1&ndash;5 &hellip; T5 = L21+); max skill rank by tier = <b>{{ skill_rank_by_tier|join('/') }}</b>.</p>
+  </section>
+
+  <section id="skills" class="gms-panel wide">
+    <h2>Skills &amp; Governing Attribute</h2>
+    <div class="gms-cols" style="column-width:210px;">
+      {% for s in skills %}<p class="gms-cond" style="margin-bottom:.3rem;"><b>{{ s.name }}</b> <span style="color:var(--text-on-dark-3);">&middot; {{ s.attr }}</span></p>{% endfor %}
+    </div>
+    <p class="gms-def" style="margin-top:.5rem; color:var(--text-on-dark-3);">Skill modifier = ranks + the governing attribute's score. These are the 18 basic skills; the 10 Surge skills unlock for Radiants.</p>
+  </section>
+
+  <section id="orders" class="gms-panel wide">
+    <h2>Radiant Orders</h2>
+    <table class="gms-tbl">
+      <tr><th>Order</th><th>Spren</th><th>Surges</th><th>Ideal / philosophy</th></tr>
+      {% for o in orders %}
+      <tr>
+        <td><span class="gms-dot" style="background:{{ o.color }};"></span><b>{{ o.name }}</b></td>
+        <td>{{ o.spren }}</td>
+        <td>{{ o.surge_names|join(' + ') }}</td>
+        <td>{{ o.philosophy }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+
+</div>
+{% endblock %}
