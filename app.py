@@ -6460,7 +6460,20 @@ def tracker_view():
     encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
     diff_label, diff_color = get_difficulty_label(encounter_xp)
     initial_state = _get_tracker_state()
-    return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS)
+    # In Cosmere mode, feed the tool strip Cosmere adversaries + party so a GM
+    # can build a Stormlight encounter from the tracker (the PF2e monster search
+    # + party picker are gated off in the template). PF2e mode is unchanged.
+    cosmere_adversaries, cosmere_pcs = [], []
+    if _active_system() == 'cosmere':
+        for d in systems.cosmere.load_pack('companions-and-adversaries'):
+            if d.get('type') != 'adversary':
+                continue
+            s = d.get('system', {})
+            cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
+                                        'tier': s.get('tier'), 'role': s.get('role')})
+        cosmere_adversaries.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
+        cosmere_pcs = [{'id': d['id'], 'name': d.get('name', '?')} for d in _list_cosmere_pcs()]
+    return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS, cosmere_adversaries=cosmere_adversaries, cosmere_pcs=cosmere_pcs)
 
 def _is_ajax():
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json or request.content_type == 'application/json'
@@ -6617,9 +6630,19 @@ def _cosmere_doc_by_id(actor_id):
 
 
 def _cosmere_combatant(actor_id):
-    """A fresh CosmereActor for the tracker (independent mutable combat state)."""
+    """A fresh CosmereActor for the tracker (independent mutable combat state) --
+    a bestiary adversary by Foundry _id, or a campaign Cosmere PC by id. A PC's
+    actor doc carries type='character' so is_pc (the fast/slow PC phase) is set."""
     doc = _cosmere_doc_by_id(actor_id)
-    return systems.cosmere.CosmereActor(doc) if doc else None
+    if doc:
+        return systems.cosmere.CosmereActor(doc)
+    pc = _load_cosmere_pc(actor_id)
+    if pc:
+        import systems.cosmere.build as _cb
+        actor = systems.cosmere.CosmereActor(_cb.CosmereBuild(pc.get('build') or {}).to_actor_doc())
+        actor.name = pc.get('name') or actor.name
+        return actor
+    return None
 
 
 @app.route('/cosmere/bestiary')
@@ -7166,6 +7189,19 @@ def add_party():
         new_c = copy.deepcopy(pc_data)
         new_c.instance_id = str(uuid.uuid4())
         ACTIVE_ENCOUNTER.append(new_c)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax(): return _tracker_json_response()
+    return redirect(url_for('tracker_view'))
+
+@app.route('/api/cosmere/add_party', methods=['POST'])
+def add_cosmere_party():
+    """Add every Cosmere PC in the active campaign to the encounter."""
+    for d in _list_cosmere_pcs():
+        new_c = _cosmere_combatant(d.get('id'))
+        if new_c is not None:
+            new_c.instance_id = str(uuid.uuid4())
+            ACTIVE_ENCOUNTER.append(new_c)
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
