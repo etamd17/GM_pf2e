@@ -70,6 +70,12 @@
       {% if pc %}
         <a class="cs-back" href="{{ edit_url }}" style="color:var(--accent);">Edit / Level Up</a>
         <a class="cs-back" href="/cosmere/pcs">&larr; Characters</a>
+        {% if can_delete %}
+        <form method="POST" action="/cosmere/pc/{{ actor_id }}/delete" style="margin:0;"
+              onsubmit="return confirm('Delete {{ a.name }} permanently? This cannot be undone.');">
+          <button type="submit" class="cs-back" style="background:none; border:1px solid rgba(168,58,58,.45); color:#d36e6e; cursor:pointer;">Delete</button>
+        </form>
+        {% endif %}
       {% else %}
         <a class="cs-back" href="/cosmere/bestiary">&larr; Bestiary</a>
       {% endif %}

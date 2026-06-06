@@ -71,5 +71,15 @@
 </ul>
 {% endif %}
 
+<div class="section-title" style="color:#d36e6e; border-top:1px solid rgba(168,58,58,.25); margin-top:30px; padding-top:18px;">Danger zone</div>
+{% if request.args.get('delete_error') %}<div class="err">The name didn&rsquo;t match &mdash; the campaign was not deleted.</div>{% endif %}
+<p class="muted" style="margin-bottom:12px;">Deleting <strong>{{ campaign.name }}</strong> permanently removes the campaign and all its characters, encounters, and data. This cannot be undone.</p>
+<form method="POST" action="/campaign/{{ campaign.id }}/delete"
+      onsubmit="return confirm('Permanently delete {{ campaign.name }} and all of its data? This cannot be undone.');">
+  <label>Type the campaign name to confirm</label>
+  <input name="confirm_name" autocomplete="off" placeholder="{{ campaign.name }}">
+  <button type="submit" style="background:linear-gradient(180deg,#d36e6e,#a83a3a); border-color:rgba(211,110,110,.6); color:#fff;">Delete campaign</button>
+</form>
+
 <p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
 {% endblock %}

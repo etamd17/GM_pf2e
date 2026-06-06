@@ -42,6 +42,14 @@ def create_campaign(name, system, created_by):
     return save_campaign(doc)
 
 
+def delete_campaign(cid):
+    """Permanently delete a campaign and all its data. Frees the live slot if
+    this campaign held it (so the platform falls back to no live campaign)."""
+    if storage.get_live_campaign_id() == cid:
+        storage.set_live_campaign_id(None)
+    storage.delete_campaign_dir(cid)
+
+
 # --------------------------------------------------------------------------
 # Membership / roles
 # --------------------------------------------------------------------------
