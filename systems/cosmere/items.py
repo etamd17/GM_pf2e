@@ -73,12 +73,20 @@ def _build():
     if _CATALOG is not None:
         return
     _CATALOG, _RAW = {}, {}
-    for doc in load_pack('items'):
-        iid = doc.get('_id')
-        if not iid:
-            continue
-        _RAW[iid] = doc
-        _CATALOG[iid] = _normalize(doc)
+    seen_names = set()
+    # Base system items first, then the ingested Stormlight Handbook items; a
+    # name clash keeps the base item (stable ids for existing builds + kits).
+    for pack in ('items', 'handbook-items'):
+        for doc in load_pack(pack):
+            iid = doc.get('_id')
+            if not iid:
+                continue
+            nm = (doc.get('name') or '').strip().lower()
+            if nm in seen_names:
+                continue
+            seen_names.add(nm)
+            _RAW[iid] = doc
+            _CATALOG[iid] = _normalize(doc)
 
 
 def catalog() -> list:
