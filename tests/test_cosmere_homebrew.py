@@ -153,3 +153,46 @@ def test_homebrew_surfaces_in_builder(cosmere_mode):
     body = app.app.test_client().get('/cosmere/builder').data.decode()
     assert 'Forgemark' in body                # homebrew reached the builder's JS data
     assert 'mergeHomebrew' in body            # the picker-merge bootstrap is wired
+
+
+# --- weapons -> Strikes + surges -> real skill slots -----------------------
+def test_homebrew_weapon_becomes_a_strike():
+    store = {'item': [{'type': 'item', 'name': 'Sand Saber', 'id': 'hb:saber',
+                       'kind': 'weapon', 'damage': '1d8 keen'}]}
+    # equipped -> a Strike on the actor doc (CosmereActor parses it)
+    b = CosmereBuild({'inventory': [{'id': 'hb:saber', 'equipped': True}]}, homebrew=store)
+    a = CosmereActor({'system_data': b.to_actor_doc(), 'name': 'X', 'system': 'cosmere'})
+    assert {'name': 'Sand Saber', 'damage': '1d8', 'type': 'keen'} in a.strikes
+    # NOT equipped -> no strike
+    b2 = CosmereBuild({'inventory': [{'id': 'hb:saber', 'equipped': False}]}, homebrew=store)
+    a2 = CosmereActor({'system_data': b2.to_actor_doc(), 'name': 'X', 'system': 'cosmere'})
+    assert not any(s['name'] == 'Sand Saber' for s in a2.strikes)
+
+
+def test_homebrew_surge_is_a_real_skill():
+    store = {
+        'surge': [{'type': 'surge', 'name': 'Sandmastery', 'code': 'snd', 'attribute': 'wil'}],
+        'radiant_path': [{'type': 'radiant_path', 'name': 'Sandbearer', 'slug': 'sandbearer',
+                          'spren': 'Sandspren', 'surges': ['snd', 'grv'], 'philosophy': 'Endure.'}],
+    }
+    # the surge is a real skill: governed by its attribute, named, and a Surge skill
+    b = CosmereBuild({'level': 3, 'radiant_order': 'sandbearer', 'ideals_sworn': 1,
+                      'attributes': {'wil': 2}, 'skills': {'snd': 1}}, homebrew=store)
+    assert b.eff_skill_attr()['snd'] == 'wil'
+    assert b.eff_skill_names()['snd'] == 'Sandmastery'
+    assert 'snd' in b.eff_surge_skills()
+    assert b.skills.get('snd') == 1                       # the rank is retained
+    assert b.skill_mods()['snd'] == 1 + 2                 # rank + WIL
+    assert set(b.surges_unlocked()) == {'snd', 'grv'}     # unlocks via the homebrew order
+    # it reaches the actor doc as an unlocked skill
+    a = CosmereActor({'system_data': b.to_actor_doc(), 'name': 'X', 'system': 'cosmere'})
+    assert a.skills['snd'] == {'rank': 1, 'attribute': 'wil', 'mod': 3, 'unlocked': True}
+    # before the First Ideal, a rank in it is a stray-surge warning (guided)
+    locked = CosmereBuild({'level': 3, 'radiant_order': 'sandbearer', 'ideals_sworn': 0,
+                           'skills': {'snd': 1}}, homebrew=store)
+    assert any('First Ideal' in w for w in locked.validate())
+
+
+def test_homebrew_surge_has_governing_attribute_in_editor(cosmere_mode):
+    body = app.app.test_client().get('/cosmere/homebrew').data.decode()
+    assert 'e-attribute' in body and 'Governing attribute' in body

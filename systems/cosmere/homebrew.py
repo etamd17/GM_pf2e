@@ -24,6 +24,8 @@ import re
 
 from systems.cosmere import SKILL_NAMES, SKILL_ATTR
 
+_ATTR_CODES = ('str', 'spd', 'int', 'wil', 'awa', 'pre')
+
 TYPES = ('talent', 'item', 'ancestry', 'culture', 'heroic_path', 'radiant_path', 'surge')
 
 TYPE_LABELS = {
@@ -106,6 +108,8 @@ def normalize(entry, type=None) -> dict:
         out['philosophy'] = (e.get('philosophy') or '').strip()
     elif t == 'surge':
         out['code'] = (e.get('code') or slugify(name)[:3])
+        # A governing attribute makes the surge a REAL skill (mod = ranks + attr).
+        out['attribute'] = e.get('attribute') if e.get('attribute') in _ATTR_CODES else 'wil'
         out['desc'] = (e.get('desc') or '').strip()
     return out
 
@@ -139,6 +143,46 @@ def heroic_path(store, slug) -> dict | None:
         if e['slug'] == slug or slugify(e['name']) == slug:
             return e
     return None
+
+
+def surge_skills(store) -> dict:
+    """{code: {'name', 'attribute'}} for homebrew surges usable as REAL skills
+    (a governing attribute => skill mod = ranks + that attribute, like canon
+    surge skills). Unlocked, like the canon surges, by a Radiant order that
+    lists the code and has sworn its First Ideal."""
+    out = {}
+    for e in normalize_store(store).get('surge', []):
+        code, attr = e.get('code'), e.get('attribute')
+        if code and attr:
+            out[code] = {'name': e['name'], 'attribute': attr}
+    return out
+
+
+def _parse_damage(s) -> dict | None:
+    """'1d6 impact' -> {formula, type, skill}. Formula is the first token, the
+    damage type the rest (the builder enters it free-form)."""
+    parts = (s or '').strip().split()
+    if not parts:
+        return None
+    return {'formula': parts[0], 'type': ' '.join(parts[1:]).lower(), 'skill': ''}
+
+
+def weapon_docs(build, store) -> list:
+    """Foundry-shaped weapon item docs for the EQUIPPED homebrew weapons a build
+    carries, so CosmereActor parses them into Strikes (canon weapons already flow
+    through the Inventory; homebrew items are invisible to it)."""
+    store = normalize_store(store)
+    by_id = {e['id']: e for e in store['item']}
+    out = []
+    for ent in (build.get('inventory') or []):
+        if not (isinstance(ent, dict) and ent.get('equipped')):
+            continue
+        e = by_id.get(ent.get('id'))
+        if e and e.get('kind') == 'weapon':
+            dmg = _parse_damage(e.get('damage'))
+            if dmg:
+                out.append({'type': 'weapon', 'name': e['name'], 'system': {'damage': dmg}})
+    return out
 
 
 def resolve_bonuses(build, store):
