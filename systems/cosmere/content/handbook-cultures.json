@@ -1,0 +1,653 @@
+[
+ {
+  "_id": "oWJSlmauhHG57LrO",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/alethi-t.webp",
+  "name": "Alethi",
+  "system": {
+   "description": {
+    "short": "<p>Alethkar is ruled by a monarch and ten highprinces, and the nation is driven by war and conquest. The Vorin religion is practiced by proxy, with ardents acting as religious servants of the noble class. Gender roles are strictly enforced in Alethi society: women are expected to engage in scholarly and domestic pursuits, and men in warfare and physical labor. However, ardents have more flexibility to exist outside of the harsh gender binary imposed by Vorinism. The lightness of one’s eyes determines their social caste, with the privileged dahn system designated for lighteyes and persecuted nahn for darkeyes. Singers and some darkeyed humans suffer enslavement at the hands of the upper class.</p><p>Most Alethi people are tall and have tan skin and dark hair. Men typically wear uniforms or work clothes. Women either wear silk dresses called havahs that cover their left hands for propriety, or less ornate work clothes with gloves to conceal their left hands. Due to Vorin custom, few men are literate, though most have a rudimentary understanding of glyphs.</p>",
+    "value": "<p>Alethkar is ruled by a monarch and ten highprinces, and the nation is driven by war and conquest. The Vorin religion is practiced by proxy, with ardents acting as religious servants of the noble class. Gender roles are strictly enforced in Alethi society: women are expected to engage in scholarly and domestic pursuits, and men in warfare and physical labor. However, ardents have more flexibility to exist outside of the harsh gender binary imposed by Vorinism. The lightness of one’s eyes determines their social caste, with the privileged dahn system designated for lighteyes and persecuted nahn for darkeyes. Singers and some darkeyed humans suffer enslavement at the hands of the upper class.</p><p>Most Alethi people are tall and have tan skin and dark hair. Men typically wear uniforms or work clothes. Women either wear silk dresses called havahs that cover their left hands for propriety, or less ornate work clothes with gloves to conceal their left hands. Due to Vorin custom, few men are literate, though most have a rudimentary understanding of glyphs.</p><p></p><p><span class=\"fontstyle3\"><strong>Alethi Names</strong></span></p><p>Adelar, Arin, Dannic, Elhamir, Ersha, Hilar, Janar, Kalith, Lanerin, Marith, Nar, Ravir, Rilin, Selith, Taren, Tel, Valerin, Varda, Yaladir, Zalith.</p><p></p><p><span class=\"fontstyle3\"><strong>Alethi Expertise</strong></span></p><p>As a character with the Alethi expertise, you know the names, locations, and highprinces of each princedom. Choose a princedom your character has lived in. You can replicate its regional dialect, and you know how to find vendors, public organizations, and noteworthy landmarks there. Choose how proficient you are in spoken Alethi, and reading and writing glyphs, as well as your literacy in women’s script (depending on your gender and regard for gender norms). Regardless of your religious beliefs, you’re familiar with the basic tenets of Vorinism, the Almighty, and the Heralds.</p>"
+   },
+   "events": {
+    "2gUJP0BttoZ3YOqC": {
+     "description": "Grant Expertise",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:alethi": {
+        "id": "alethi",
+        "label": "Alethi",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "2gUJP0BttoZ3YOqC"
+    },
+    "uH0klBWGxmHQ4cR5": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:alethi": {
+        "id": "alethi",
+        "label": "Alethi",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "uH0klBWGxmHQ4cR5"
+    }
+   },
+   "id": "alethi"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "PbkgODW2av4tBPdW",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/azish-t.webp",
+  "name": "Azish",
+  "system": {
+   "description": {
+    "short": "<p>The Prime Aqasix and a class of elite government scribes called viziers lead the bureaucratic nation of Azir and influence the Azish Empire’s member states. While independent thought is encouraged in friendly and official debates, most Azish look down on those who fail to uphold procedure. Following said procedure is made difficult by Azish legislature’s expansiveness.</p><p>Most Azish people have very dark brown skin and black hair. They tend to be slightly shorter than people in Eastern Roshar. Large hats are a fixture of Azish uniforms and civilian fashion. Wraps and robes are worn by all genders, with vibrant colors and symbolic patterns indicating a person’s status. Azish is the official language and is spoken, signed, and written by most citizens. It is typically spoken in pleasant, agreeable tones.</p>",
+    "value": "<p>The Prime Aqasix and a class of elite government scribes called viziers lead the bureaucratic nation of Azir and influence the Azish Empire’s member states. While independent thought is encouraged in friendly and official debates, most Azish look down on those who fail to uphold procedure. Following said procedure is made difficult by Azish legislature’s expansiveness.</p><p>Most Azish people have very dark brown skin and black hair. They tend to be slightly shorter than people in Eastern Roshar. Large hats are a fixture of Azish uniforms and civilian fashion. Wraps and robes are worn by all genders, with vibrant colors and symbolic patterns indicating a person’s status. Azish is the official language and is spoken, signed, and written by most citizens. It is typically spoken in pleasant, agreeable tones.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Azish Names</strong></span></p><p>Adebazik, Arnok, Baxtol, Chivik, Dalwa, Etosha, Falkir, Ganxir, Hauzir, Jirana, Koxi, Kunde, Maliq, Nineka, Raukir, Sigwir, Tama, Tigzir, Uju, Wolu, Yemzil.</p><p></p><p><span class=\"fontstyle0\"><strong>Azish Expertise</strong></span></p><p><span class=\"fontstyle2\">As a character with the Azish expertise, you know about the bureaucracy, Bronze Palace, Prime Aqasix, and the viziers. You can recall basic facts about each member state in the Azish Empire. Choose how proficient you are in Azish sign language, as well as in spoken and written Azish. You can easily navigate civic buildings to review current laws, request the help of a constable for law enforcement, file a complaint, or take the vizier exam. Regardless of your religious beliefs, you’re familiar with the Kadasixes and scions.</span></p></div>"
+   },
+   "events": {
+    "OXsgoXPlMv5eZYDL": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:azish": {
+        "id": "azish",
+        "label": "Azish",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "OXsgoXPlMv5eZYDL"
+    },
+    "jS9KmzZc29rM9fhK": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:azish": {
+        "id": "azish",
+        "label": "Azish",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "jS9KmzZc29rM9fhK"
+    }
+   },
+   "id": "azish"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "nIOHtV8KoTdKH4FQ",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/herdazian-t.webp",
+  "name": "Herdazian",
+  "system": {
+   "description": {
+    "short": "<p>Herdaz is a verdant nation ruled by a monarch. Most of its territory is taken up by its two hundred and three hog ranches, for which Herdaz is famous. There are also large diasporas of Herdazians in neighboring nations, as nearly half of their population has left their ancestral land seeking opportunities or refuge from a long history of foreign occupation. It’s common for fellow Herdazians in foreign lands to warmly greet each other as cousins.</p><p>Vorinism is popular in Herdaz, but the nation has fewer ardents, and people of any status and occupation can practice it personally. Most Herdazian Vorins care deeply about their individual connections to the Almighty and the Heralds, and they place little importance on what they consider outward posturing.</p><p>Singer ancestry in their ancient history has bestowed nearly all Herdazians with crystalline fingernails that can function like flint when struck with a steel tool called a sparkflicker. They are also more resistant to poisons native to Roshar. Most Herdazians have medium brown skin tones and brown hair.</p>",
+    "value": "<p>Herdaz is a verdant nation ruled by a monarch. Most of its territory is taken up by its two hundred and three hog ranches, for which Herdaz is famous. There are also large diasporas of Herdazians in neighboring nations, as nearly half of their population has left their ancestral land seeking opportunities or refuge from a long history of foreign occupation. It’s common for fellow Herdazians in foreign lands to warmly greet each other as cousins.</p><p>Vorinism is popular in Herdaz, but the nation has fewer ardents, and people of any status and occupation can practice it personally. Most Herdazian Vorins care deeply about their individual connections to the Almighty and the Heralds, and they place little importance on what they consider outward posturing.</p><p>Singer ancestry in their ancient history has bestowed nearly all Herdazians with crystalline fingernails that can function like flint when struck with a steel tool called a sparkflicker. They are also more resistant to poisons native to Roshar. Most Herdazians have medium brown skin tones and brown hair.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Herdazian Names</strong></span></p><p>Aloro, Dunal, Duro, Erona, Hanol, Jonio, Kunor, Lurio, Luron, Palor, Pinola, Polino, Relio, Sulio, Torona, Yorino.</p><p></p><p><span class=\"fontstyle2\"><strong>Herdazian Expertise</strong></span></p><p>As a character with the Herdazian expertise, you know of the king and prominent ranching families. You know how to navigate between expansive ranches, including how to avoid the coastal areas inhabited by vicious greatshells. Choose how proficient you are in spoken and written Herdazian, along with reading and writing glyphs. You know about basic tools for ranching, including sparkflickers. Regardless of your religious beliefs, you’re familiar with the basic tenets of Herdazian Vorinism.</p></div>"
+   },
+   "events": {
+    "a3xadCYOROdAVHS5": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:herdazian": {
+        "id": "herdazian",
+        "label": "Herdazian",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "a3xadCYOROdAVHS5"
+    },
+    "bKxXJjDPBuJnyKVf": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:herdazian": {
+        "id": "herdazian",
+        "label": "Herdazian",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "bKxXJjDPBuJnyKVf"
+    }
+   },
+   "id": "herdazian"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "fqZdjVSXJxh1aeRp",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/iriali-t.webp",
+  "name": "Iriali",
+  "system": {
+   "description": {
+    "short": "<p>Iri is ruled by three monarchs. The Iriali descended long ago from offworlders, and most follow the religion of the One. They believe their mission in life is to obtain a vast diversity of experiences so they can eventually merge their consciousnesses together at the end of the Long Trail and become one being of extensive knowledge and understanding. Their destined journey is said to consist of seven worlds, of which they consider Roshar the fourth. It is unknown when they must leave for the fifth, so they remain ever vigilant and prepared.</p><p>Ethnic Iriali have golden skin and golden hair, which many foreigners consider auspicious. Ornamental body paint adds contrast to their metallic features. Iriali fashion favors pastel colors and flowy fabrics, and people of all genders and ages commonly wear wraps. Many Iriali forgo shirts altogether or wear just a simple bandeau. Due to their religious emphasis on journeying, items like practical shoes are considered indicators of personal preparedness and faith. </p>",
+    "value": "<p>Iri is ruled by three monarchs. The Iriali descended long ago from offworlders, and most follow the religion of the One. They believe their mission in life is to obtain a vast diversity of experiences so they can eventually merge their consciousnesses together at the end of the Long Trail and become one being of extensive knowledge and understanding. Their destined journey is said to consist of seven worlds, of which they consider Roshar the fourth. It is unknown when they must leave for the fifth, so they remain ever vigilant and prepared.</p><p>Ethnic Iriali have golden skin and golden hair, which many foreigners consider auspicious. Ornamental body paint adds contrast to their metallic features. Iriali fashion favors pastel colors and flowy fabrics, and people of all genders and ages commonly wear wraps. Many Iriali forgo shirts altogether or wear just a simple bandeau. Due to their religious emphasis on journeying, items like practical shoes are considered indicators of personal preparedness and faith.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle0\"><strong>Iriali Names</strong></span></p><p><span class=\"fontstyle2\">Byrle, Drin, Ilori, Imral, Jyste, Lalys, Lyre, Lysna, Myi, Rallin, Rellis, Ryli, Syderim, Palir, Ynne.</span></p><p></p><p><span class=\"fontstyle0\"><strong>Iriali Expertise</strong></span></p><p><span class=\"fontstyle2\">As a character with the Iriali expertise, you know of the Iriali Triumvirate—the two kings and queen who rule together. Choose a city or rural area your character has lived in; you know how to find vendors, public organizations, and noteworthy landmarks there. Choose how proficient you are in spoken and written Iri. Regardless of your religious beliefs, you’re familiar with the basic tenets of the One and the Long Trail. You also know basic strategies for travel and journeys, such as management of supplies.</span></p></div>"
+   },
+   "events": {
+    "5Y57ns6LeOQIonMV": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:iriali": {
+        "id": "iriali",
+        "label": "Iriali",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "5Y57ns6LeOQIonMV"
+    },
+    "m4dwly81GzRjonYJ": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:iriali": {
+        "id": "iriali",
+        "label": "Iriali",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "m4dwly81GzRjonYJ"
+    }
+   },
+   "id": "iriali"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "N01PGDQSmjOJHQTq",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/kharbranthian-t.webp",
+  "name": "Kharbranthian",
+  "system": {
+   "description": {
+    "short": "<p>Kharbranth, the City of Bells, is an independent citystate that largely practices Vorinism. The mountain that borders the city largely absorbs the initial impact of highstorms, making them milder than in neighboring regions. Once a pirate town, Kharbranth has become a center of academic and medical achievement, supported by robust trade. Healthcare is free to all, including lower castes and foreigners. Prospective surgeons from all over Roshar compete for expensive educations at the Great Concourse of Kharbranth. Scholars of other subjects flock to the Palanaeum, the largest library in Roshar. Innovations like a plumbing system enhanced by heating fabrials earn the city a reputation of luxury.</p><p>Ethnically similar to the Veden and Alethi, most Kharbranthians have tan skin and dark hair. Although human slavery is banned in Kharbranth, this basic right doesn’t extend to singers.</p>",
+    "value": "<p>Kharbranth, the City of Bells, is an independent citystate that largely practices Vorinism. The mountain that borders the city largely absorbs the initial impact of highstorms, making them milder than in neighboring regions. Once a pirate town, Kharbranth has become a center of academic and medical achievement, supported by robust trade. Healthcare is free to all, including lower castes and foreigners. Prospective surgeons from all over Roshar compete for expensive educations at the Great Concourse of Kharbranth. Scholars of other subjects flock to the Palanaeum, the largest library in Roshar. Innovations like a plumbing system enhanced by heating fabrials earn the city a reputation of luxury.</p><p>Ethnically similar to the Veden and Alethi, most Kharbranthians have tan skin and dark hair. Although human slavery is banned in Kharbranth, this basic right doesn’t extend to singers.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Kharbranthian Names</strong></span></p><p>Arivian, Baranam, Dorval, Harnith, Kintar, Korventh, Larnish, Lervian, Lorvis, Navil, Ovelgian, Sartal, Sarvena, Telvar, Trilam, Zorlinth.</p><p></p><p><span class=\"fontstyle2\"><strong>Kharbranthian Expertise</strong></span></p><p>As a character with the Kharbranthian expertise, you’re familiar with the city’s major education systems and their designations. Even if you don’t know how to use common medicines, you know their names and functions, as well as basic hygiene measures to ward off rotspren. Choose how proficient you are in speaking Kharbranthian and reading and writing glyphs, as well as in women’s script (depending on your gender and regard for gender norms). Regardless of your religious beliefs, you’re familiar with the basic tenets of Vorinism, the Almighty, and the Heralds.</p></div>"
+   },
+   "events": {
+    "Nw2cW90mjAI7mNP0": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:kharbranthian": {
+        "id": "kharbranthian",
+        "label": "Kharbranthian",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "Nw2cW90mjAI7mNP0"
+    },
+    "fiKwqhNz77ejTn63": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:kharbranthian": {
+        "id": "kharbranthian",
+        "label": "Kharbranthian",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "fiKwqhNz77ejTn63"
+    }
+   },
+   "id": "kharbranthian"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "3rxmAGEJxCrCZOL8",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/singer-culture-t.webp",
+  "name": "Listener",
+  "system": {
+   "description": {
+    "short": "<p>The listeners are a group of singers who defied Odium long ago and settled near the Shattered Plains. Through oral tradition, they retained their sense of identity during “the long sleep,” a time when they lost access to nearly all of their forms.</p><p>When they learned King Gavilar of Alethkar intended to bring back the listener “gods”—the beings who could take away their agency—the listeners had him assassinated in an effort to retain their autonomy and freedom from Odium’s influence. The Alethi, who called the listeners “Parshendi,” waged the War of Reckoning as vengeance for the death of their king. Narak became the listeners’ home, and they slowly recovered more forms to fight the humans.</p><p>The Song of Listing includes upward of ninetyone forms, but only five were recovered before the Everstorm: dullform, mateform, nimbleform, warform, and workform. Similar to other singers, the listeners are humanoid and typically have red and white or red and black marbled skin, along with red carapace, red or black hair strands, and dark gray eyes.</p>",
+    "value": "<p>The listeners are a group of singers who defied Odium long ago and settled near the Shattered Plains. Through oral tradition, they retained their sense of identity during “the long sleep,” a time when they lost access to nearly all of their forms.</p><p>When they learned King Gavilar of Alethkar intended to bring back the listener “gods”—the beings who could take away their agency—the listeners had him assassinated in an effort to retain their autonomy and freedom from Odium’s influence. The Alethi, who called the listeners “Parshendi,” waged the War of Reckoning as vengeance for the death of their king. Narak became the listeners’ home, and they slowly recovered more forms to fight the humans.</p><p>The Song of Listing includes upward of ninetyone forms, but only five were recovered before the Everstorm: dullform, mateform, nimbleform, warform, and workform. Similar to other singers, the listeners are humanoid and typically have red and white or red and black marbled skin, along with red carapace, red or black hair strands, and dark gray eyes.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Listener Names</strong></span></p><p>Bredol, Eldir, Fenral, Gromil, Istarin, Jarnak, Kethan, Koriel, Lurin, Nalim, Nirith, Orlan, Rishai, Saren, Tirith, Urlan, Varem, Welten.</p><p></p><p><span class=\"fontstyle2\"><strong>Listener Expertise</strong></span></p><p>The Listener expertise is generally only available to singer characters. If you’re a human who has lived or worked closely with the listener people, your GM can give you permission to choose this expertise.</p><p>As a character with the Listener expertise, you’re aware of dullform, mateform, nimbleform, warform and workform (even if you’re human and can’t assume them yourself), and you’re familiar with the listener council known as the Five. Depending on your interests, you might know some of the songs of the listeners. You know basic facts about Shattered Plains ecology. Choose how proficient you are in the listener language and how familiar you are with the rhythms (though any singer instinctively knows all the rhythms). You know about the War of Reckoning and the Alethi armies that fight for gemhearts on the plateaus.</p></div>"
+   },
+   "events": {
+    "5TsfsueBeBJHFyTr": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:listener": {
+        "id": "listener",
+        "label": "Listener",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "5TsfsueBeBJHFyTr"
+    },
+    "KCzAFcCXnaS6qDrY": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:listener": {
+        "id": "listener",
+        "label": "Listener",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "KCzAFcCXnaS6qDrY"
+    }
+   },
+   "id": "listener"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "iBQ7CWuJoIshNmJe",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/natan-t.webp",
+  "name": "Natan",
+  "system": {
+   "description": {
+    "short": "<p>The Vorin city-state of New Natanan is located near the Ocean of Origins. This meager landholding is a remnant of a much larger empire that was destroyed long ago. The ruins of its capital, once called Stormseat, were reclaimed by the listeners and called Narak. Today, some Natans live as nomads that travel the desolate lands previously contained in their empire.</p><p>Ethnic Natans have pale blue skin and white hair. They mostly exist in isolation, either as nomads or as citizens confined to New Natanan by vigorous highstorms that make sea travel exceptionally perilous. Their sense of loss over their empire, particularly Stormseat and its Oathgate, persists.</p>",
+    "value": "<p>The Vorin city-state of New Natanan is located near the Ocean of Origins. This meager landholding is a remnant of a much larger empire that was destroyed long ago. The ruins of its capital, once called Stormseat, were reclaimed by the listeners and called Narak. Today, some Natans live as nomads that travel the desolate lands previously contained in their empire.</p><p>Ethnic Natans have pale blue skin and white hair. They mostly exist in isolation, either as nomads or as citizens confined to New Natanan by vigorous highstorms that make sea travel exceptionally perilous. Their sense of loss over their empire, particularly Stormseat and its Oathgate, persists.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Natan Names</strong></span></p><p>Atarel, Balar, Cetsa, Farlar, Gerem, Linarat, Lortan, Nalina, Nathural, Oranat, Talinan, Tsalar, Tsorem, Valisha, Valten, Xaltor.</p><p></p><p><span class=\"fontstyle0\"><strong>Natan Expertise</strong></span></p><p><span class=\"fontstyle2\">As a character with the Natan expertise, you’ve heard tales of the lands the Natan people lost and what they were like during their full glory. You know what highstorms are like at full potency, as well as defensive measures you can take to protect yourself and your property. Choose how proficient you are in Natan or another Vorin language. Regardless of your religious beliefs, you’re familiar with the basic tenets of Vorinism, as well as with the common Natan reverence for the moons.</span></p></div>"
+   },
+   "events": {
+    "WmgObaANQ8Qlt76t": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:natan": {
+        "id": "natan",
+        "label": "Natan",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "WmgObaANQ8Qlt76t"
+    },
+    "iRrjiFHTCTI0F3Sm": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:natan": {
+        "id": "natan",
+        "label": "Natan",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "iRrjiFHTCTI0F3Sm"
+    }
+   },
+   "id": "natan"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "qNVRXjOBG1iTabmI",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/reshi-t.webp",
+  "name": "Reshi",
+  "system": {
+   "description": {
+    "short": "<p>The Reshi Isles are a series of misty islands and inhabitable Tai-na greatshell carapaces, each ruled by a monarch. The Tai-na islands roam the Reshi Sea, occasionally colliding in brief conflicts. Reshi people worship these greatshell islands as their gods. Tourism is common on the stationary islands.</p><p>Most Reshi have brown skin, black hair, and round faces. Unfamiliar with the horrors of devastating wars, they tend to fight fiercely with words but resolve disagreements quickly. The intonation of their language is sharp and spoken in quick bursts, making it difficult for foreigners to learn. </p>",
+    "value": "<p>The Reshi Isles are a series of misty islands and inhabitable Tai-na greatshell carapaces, each ruled by a monarch. The Tai-na islands roam the Reshi Sea, occasionally colliding in brief conflicts. Reshi people worship these greatshell islands as their gods. Tourism is common on the stationary islands.</p><p>Most Reshi have brown skin, black hair, and round faces. Unfamiliar with the horrors of devastating wars, they tend to fight fiercely with words but resolve disagreements quickly. The intonation of their language is sharp and spoken in quick bursts, making it difficult for foreigners to learn.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle0\"><strong>Reshi Names</strong></span></p><p><span class=\"fontstyle2\">Ashi, Avand, Calsi, Fashan, Hailor, Ilesh, Isna, Jersa, Lish, Naila, Neshor, Rifta, Sha, Tana, Trin, Vara, Wesh.</span></p><p></p><p><span class=\"fontstyle0\"><strong>Reshi Expertise</strong></span></p><p><span class=\"fontstyle2\">As a character with the Reshi expertise, you know about the existence of Tai-na greatshells, spren deities, and tales of islands going to war. You’re familiar with the basic ecology of the Reshi Sea and the locations of major stationary islands. Choose how proficient you are in speaking and writing Reshi. You know which resources are unavailable in the Reshi Isles and which nations they are typically sourced from. Regardless of whether you choose to engage with the tradition yourself, you’re familiar with the Reshi inclination toward fierce but quickly resolved social conflicts.</span></p></div>"
+   },
+   "events": {
+    "3NvCEInAp7m9HQuu": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:reshi": {
+        "id": "reshi",
+        "label": "Reshi",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "3NvCEInAp7m9HQuu"
+    },
+    "jWWyeOphEVhNXM4e": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:reshi": {
+        "id": "reshi",
+        "label": "Reshi",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "jWWyeOphEVhNXM4e"
+    }
+   },
+   "id": "reshi"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "bqrS8WAm3QwkfP3f",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/shin-t.webp",
+  "name": "Shin",
+  "system": {
+   "description": {
+    "short": "<p>The isolated nation of Shinovar is governed by Stone Shamans who believe that stone is sacred and that it shouldn’t be broken or walked on by commoners. A mountain range offers Shinovar significant protection from highstorms, which are already lighter so far west. Non-native crops and animals flourish here, even those that wouldn’t survive anywhere else on Roshar.</p><p>Farmers are highly esteemed, while warriors are seen as lowly and destructive. Those people who commit especially grievous offenses are named Truthless. They must take a symbolic Oathstone and hand it over to a master who claims authority to command them and pass ownership as they please.</p><p>Shin skin tones vary widely, including pale pink tones that are rarely seen outside Shinovar. Unlike most human ethnic groups on Roshar, their eyes don’t have epicanthic folds. Clothing customs assign vibrant colors to people who add to society (such as farmers), and duller colors to people who detract from it.</p><p>Naming conventions include a given name followed by “son,” “daughter,” or “child,” and the name of a parent. If a child disgraces their parent, the child must add a degree of separation by repeating the middle part of their name and replacing the last with a grandparent’s name instead of their parent’s.</p>",
+    "value": "<p>The isolated nation of Shinovar is governed by Stone Shamans who believe that stone is sacred and that it shouldn’t be broken or walked on by commoners. A mountain range offers Shinovar significant protection from highstorms, which are already lighter so far west. Non-native crops and animals flourish here, even those that wouldn’t survive anywhere else on Roshar.</p><p>Farmers are highly esteemed, while warriors are seen as lowly and destructive. Those people who commit especially grievous offenses are named Truthless. They must take a symbolic Oathstone and hand it over to a master who claims authority to command them and pass ownership as they please.</p><p>Shin skin tones vary widely, including pale pink tones that are rarely seen outside Shinovar. Unlike most human ethnic groups on Roshar, their eyes don’t have epicanthic folds. Clothing customs assign vibrant colors to people who add to society (such as farmers), and duller colors to people who detract from it.</p><p>Naming conventions include a given name followed by “son,” “daughter,” or “child,” and the name of a parent. If a child disgraces their parent, the child must add a degree of separation by repeating the middle part of their name and replacing the last with a grandparent’s name instead of their parent’s.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle0\"><strong>Shin Names</strong></span></p><p><span class=\"fontstyle2\">Allo-daughter-Zethar, Ethsono-son-Alvo, Gesh-son-Nar, Lanethen-child-Gemth, Lorseth-son-son-Thalor, Nama-son-Elhlan, Shal-daughter-Xin, Szam-child-Lorn.</span></p><p></p><p><span class=\"fontstyle0\"><strong>Shin Expertise</strong></span></p><p><span class=\"fontstyle2\">As a character with the Shin expertise, you’re familiar with the mild highstorms that reach the isolated western lands of Shinovar, as well as the ecology and architecture they support. You know how to barter by diminishing the perceived value of your offerings. Choose how proficient you are in speaking and writing Shin. Regardless of your religious beliefs, you’re familiar with the basic tenets of Stone Shamanism</span>.</p></div>"
+   },
+   "events": {
+    "O1oiWRBs8mEOkcRW": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:shin": {
+        "id": "shin",
+        "label": "Shin",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "O1oiWRBs8mEOkcRW"
+    },
+    "mqnL14cvsbIe68iS": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:shin": {
+        "id": "shin",
+        "label": "Shin",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "mqnL14cvsbIe68iS"
+    }
+   },
+   "id": "shin"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "yuZdO7YSfydUAdhu",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/thaylen-t.webp",
+  "name": "Thaylen",
+  "system": {
+   "description": {
+    "short": "<p>The island nation of Thaylenah is ruled by a monarch who is elected by merchant councils and naval officers. The nation thrives on international trade by land and sea, and it rewards particularly industrious merchants with increased social status. Although the nation is Vorin, Thaylens are more flexible with their faith and tend to ignore or relax customs rigidly upheld in Jah Keved and Alethkar.</p><p>Ethnic Thaylens have tan skin and long white eyebrows that can be creatively styled as dictated by fashion trends and personal preferences. Their hair is usually brown or black, but some Thaylens dye their hair in bold colors. They favor tight vests with loose pants and skirts.</p>",
+    "value": "<p>The island nation of Thaylenah is ruled by a monarch who is elected by merchant councils and naval officers. The nation thrives on international trade by land and sea, and it rewards particularly industrious merchants with increased social status. Although the nation is Vorin, Thaylens are more flexible with their faith and tend to ignore or relax customs rigidly upheld in Jah Keved and Alethkar.</p><p>Ethnic Thaylens have tan skin and long white eyebrows that can be creatively styled as dictated by fashion trends and personal preferences. Their hair is usually brown or black, but some Thaylens dye their hair in bold colors. They favor tight vests with loose pants and skirts.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Thaylen Names</strong></span></p><p><span class=\"fontstyle0\">Alstrym, Bnlath, Brekmynv, Bryndal, Calkl, Cazmerk, Creyn, Dvalnm, Elcryn, Klazmn, Mralt, Pradlvk, Tlkry, Uvlost, Ylbedr.</span></p><p></p><p><span class=\"fontstyle2\"><strong>Thaylen Expertise</strong></span></p><p><span class=\"fontstyle0\">As a character with the Thaylen expertise, you’re familiar with the elective monarchy and the merchant councils. You know the names and reputations of major artifabrian guilds, and you’ve likely experienced fabrials as a part of everyday life. You know tips to mitigate sea sickness and arrange travel between the three islands and outer islets. Choose how proficient you are in speaking and writing Thaylen. Regardless of your religious beliefs, you’re familiar with the basic tenets of Vorinism, as well as the Passions.</span></p></div>"
+   },
+   "events": {
+    "DJ1l6bqEo3quVega": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:thaylen": {
+        "id": "thaylen",
+        "label": "Thaylen",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "DJ1l6bqEo3quVega"
+    },
+    "XlCKdrbHOQqPTWfS": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:thaylen": {
+        "id": "thaylen",
+        "label": "Thaylen",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "XlCKdrbHOQqPTWfS"
+    }
+   },
+   "id": "thaylen"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "RDD4CJzcnb2mjXXC",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/unkalaki-t.webp",
+  "name": "Unkalaki",
+  "system": {
+   "description": {
+    "short": "<p>The Horneater Peaks are each ruled by a patriarch called a nuatoma. Atop these steep and inhospitably icy mountains, warm crater lakes form cozy microclimates where crops flourish in balmy humidity. Unkalaki people refer to these lakes as oceans. Traditional family structures dictate each son’s occupation according to their birth order; the first two sons are assigned as hunters or farmers, the third as a craftsman, and the fourth as a warrior. Occupations for other genders tend to be more individualized and diverse.</p><p>Ethnic Unkalaki get their nickname of Horneaters from their abnormally strong teeth that can crush cremling shells, a feature they receive through their ancient singer ancestry. They tend to be tall with red hair, and their skin ranges from pale to tan. A rare few Unkalaki can see spren that most humans can’t, earning the title of Sighted.</p><p>In the Unkalaki tradition, a person’s full name is a poem. In less formal situations, they go by a single word or phrase from their name.</p>",
+    "value": "<p>The Horneater Peaks are each ruled by a patriarch called a nuatoma. Atop these steep and inhospitably icy mountains, warm crater lakes form cozy microclimates where crops flourish in balmy humidity. Unkalaki people refer to these lakes as oceans. Traditional family structures dictate each son’s occupation according to their birth order; the first two sons are assigned as hunters or farmers, the third as a craftsman, and the fourth as a warrior. Occupations for other genders tend to be more individualized and diverse.</p><p>Ethnic Unkalaki get their nickname of Horneaters from their abnormally strong teeth that can crush cremling shells, a feature they receive through their ancient singer ancestry. They tend to be tall with red hair, and their skin ranges from pale to tan. A rare few Unkalaki can see spren that most humans can’t, earning the title of Sighted.</p><p>In the Unkalaki tradition, a person’s full name is a poem. In less formal situations, they go by a single word or phrase from their name.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Unkalaki Names</strong></span></p><p>Arluno’ratha’tu, Harlun’thaoka, Ina’larataka’noom, Kalorunel’ith, Luau’nun’iel, Tha’enithmonal’toko, Unla’biki’ai’karath, Yamloho’tamai’sinak</p><p></p><p><span class=\"fontstyle0\"><strong>Unkalaki Expertise</strong></span></p><p><span class=\"fontstyle2\">As a character with the Unkalaki expertise, you know about the leadership, ecology, and myths of the oceans atop the peaks. Due to your lineage or lived experience, your body is familiar with breathing thin air, allowing you to keep your wits about you. Choose how proficient you are in speaking and writing Unkalaki. Regardless of your religious beliefs, you know of the gods of the waters, mountains, and trees, along with the practice of worshiping spren as gods. You also know of the phenomenon of strange offworld visitors emerging from the oceans.</span></p></div>"
+   },
+   "events": {
+    "6vG6KEESqKsLlc03": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:unkalaki": {
+        "id": "unkalaki",
+        "label": "Unkalaki",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "6vG6KEESqKsLlc03"
+    },
+    "AoM1aXvHipbSHQlZ": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:unkalaki": {
+        "id": "unkalaki",
+        "label": "Unkalaki",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "AoM1aXvHipbSHQlZ"
+    }
+   },
+   "id": "unkalaki"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "ZVXjqw4l30mNjAdq",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/cultures/veden-t.webp",
+  "name": "Veden",
+  "system": {
+   "description": {
+    "short": "<p>Jah Keved is ruled by a king and highprinces. Social orders for lighteyes and darkeyes are maintained and endorsed by Vorinism, the primary religion of Vedens. The Holy Enclave in the city of Valath is the center of the faith. Despite border disputes with Alethkar, the two nations remain cordial. There are four major ethnic groups within the borders of Jah Keved: Bav, Siln, Veden, and Unkalaki, with Veden as the majority. Vedens comprise the majority; they share many physical traits with the Alethi, though they most commonly have black or red hair. Their language is close enough to Alethi to be mutually intelligible. Fashion trends are also closely tied between the two nations.</p><p>In Jah Keved, sons are given a first name that indicates their birth order; the first four sons are named Nan, Tet, Asha, and Van. Second names are chosen by parents. Surnames are passed down from the parent of the highest dahn or nahn social order.</p>",
+    "value": "<p>Jah Keved is ruled by a king and highprinces. Social orders for lighteyes and darkeyes are maintained and endorsed by Vorinism, the primary religion of Vedens. The Holy Enclave in the city of Valath is the center of the faith. Despite border disputes with Alethkar, the two nations remain cordial. There are four major ethnic groups within the borders of Jah Keved: Bav, Siln, Veden, and Unkalaki. Vedens, who comprise the majority, share many physical traits with the Alethi, though they most commonly have black or red hair. Their language is close enough to Alethi to be mutually intelligible. Fashion trends are also closely tied between the two nations.</p><p>In Jah Keved, sons are given a first name that indicates their birth order; the first four sons are named Nan, Tet, Asha, and Van. Second names are chosen by parents. Surnames are passed down from the parent of the highest dahn or nahn social order.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Veden Names</strong></span></p><p><span class=\"fontstyle0\">Nan Amallan, Bervash, Asha Cemdon, Dorlivana, Van Elnaha, Lerinda, Nan Qish, Tet Ridvish, Shulla, Varli, Tet Zashu.</span></p><p></p><p><span class=\"fontstyle2\"><strong>Veden Expertise</strong></span></p><p><span class=\"fontstyle0\">As a character with the Veden expertise, you’re familiar with the king, the princedoms, and the four major ethnic groups in Jah Keved. Choose how proficient you are in speaking Veden and reading and writing glyphs, as well as your literacy in women’s script (depending on your gender and regard for gender norms). If relevant to your backstory, also choose how proficient you are in the Alethi, Bav, or Siln languages. Regardless of your religious beliefs, you’re familiar with the basic tenets of Vorinism and current events relevant to the church.</span></p></div>"
+   },
+   "events": {
+    "TupJEvlvGwdgSnTk": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:veden": {
+        "id": "veden",
+        "label": "Veden",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "TupJEvlvGwdgSnTk"
+    },
+    "dS0fH5K47hZoWfwx": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:veden": {
+        "id": "veden",
+        "label": "Veden",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "dS0fH5K47hZoWfwx"
+    }
+   },
+   "id": "veden"
+  },
+  "type": "culture"
+ },
+ {
+  "_id": "XWhTJzR0Fi2hjje6",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/creatures/birds/birds-flock-fly-yellow.webp",
+  "name": "Wayfarer",
+  "system": {
+   "description": {
+    "chat": "",
+    "short": "<p>Occupation, exile, or tourism may lead a person to live a life of traveling from one place to the next. You could be a traveling surgeon reluctant to return home to Jah Keved, a mercenary from Steen, or an Iriali tidereader sent to gain insights from the shores of faraway lands. Whatever the reason, the lifestyle of a perpetual traveler involves learning land and sea routes between major cities, remaining aware of bandit and pirate risks, and maintaining familiarity with mobile storm shelters, map-reading, and modes of long-distance transportation.</p>",
+    "value": "<p>Occupation, exile, or tourism may lead a person to live a life of traveling from one place to the next. You could be a traveling surgeon reluctant to return home to Jah Keved, a mercenary from Steen, or an Iriali tidereader sent to gain insights from the shores of faraway lands. Whatever the reason, the lifestyle of a perpetual traveler involves learning land and sea routes between major cities, remaining aware of bandit and pirate risks, and maintaining familiarity with mobile storm shelters, map-reading, and modes of long-distance transportation.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle2\"><strong>Wayfarer Expertise</strong></span></p><p>As a character with the Wayfarer expertise, you know how to read international map keys. You can find trustworthy currency exchange hubs in major cities, which can be used to switch out dun spheres for infused ones. From your travels, you’ve learned basic greetings and a few cultural touchstones from various nations.</p></div>"
+   },
+   "events": {
+    "dGdEMymI7WfY1wBh": {
+     "description": "Grant Expertises",
+     "event": "add-to-actor",
+     "handler": {
+      "expertises": {
+       "cultural:wayfarer": {
+        "id": "wayfarer",
+        "label": "Wayfarer",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "grant-expertises"
+     },
+     "id": "dGdEMymI7WfY1wBh"
+    },
+    "shaloGUHdmmlOpwe": {
+     "description": "Remove Expertises",
+     "event": "remove-from-actor",
+     "handler": {
+      "expertises": {
+       "cultural:wayfarer": {
+        "id": "wayfarer",
+        "label": "Wayfarer",
+        "locked": false,
+        "type": "cultural"
+       }
+      },
+      "type": "remove-expertises"
+     },
+     "id": "shaloGUHdmmlOpwe"
+    }
+   },
+   "id": "none"
+  },
+  "type": "culture"
+ }
+]
