@@ -159,10 +159,25 @@ def load_pack(pack: str) -> list:
         return json.load(f)
 
 
+def adversary_docs() -> list:
+    """Every bestiary adversary DOCUMENT -- the base ``cosmere-rpg`` system pack
+    plus the ingested Foundry modules (Worldguide, Chasmfiend, Stonewalkers,
+    animal companions), deduped by name (the base system wins a name clash).
+    The single source for the bestiary, the tracker's adversary picker, and the
+    by-id lookup used when adding a Cosmere combatant."""
+    out, seen = [], set()
+    for pack in ('companions-and-adversaries', 'module-adversaries'):
+        for doc in load_pack(pack):
+            if doc.get('type') != 'adversary':
+                continue
+            key = (doc.get('name') or '').strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(doc)
+    return out
+
+
 def load_adversaries() -> list:
-    """Every adversary in the bestiary as a CosmereActor."""
-    return [
-        CosmereActor(doc)
-        for doc in load_pack('companions-and-adversaries')
-        if doc.get('type') == 'adversary'
-    ]
+    """Every adversary in the bestiary (base system + modules) as a CosmereActor."""
+    return [CosmereActor(doc) for doc in adversary_docs()]

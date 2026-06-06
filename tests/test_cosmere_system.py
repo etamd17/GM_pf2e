@@ -10,8 +10,34 @@ override) path.
 from __future__ import annotations
 
 import systems
-from systems.cosmere import load_adversaries, load_pack
+from systems.cosmere import load_adversaries, load_pack, adversary_docs
 from systems.cosmere.actor import CosmereActor, cosmere_max_health, tier_of
+
+
+def test_module_bestiary_fill():
+    """The ingested Foundry modules fill the bestiary far beyond the base 20,
+    deduped by name, every doc a real adversary with an id (tracker-resolvable)."""
+    docs = adversary_docs()
+    assert len(docs) >= 100, len(docs)
+    names = [(d.get('name') or '').lower() for d in docs]
+    assert len(names) == len(set(names)), 'adversaries must be deduped by name'
+    assert 'archer' in names                                   # base adversary kept
+    assert all(d.get('type') == 'adversary' and d.get('_id') for d in docs)
+    # every adversary constructs as a CosmereActor (tracker/bestiary contract)
+    for d in docs:
+        CosmereActor(d).to_summary()
+
+
+def test_handbook_content_ingested():
+    """The Stormlight Handbook canon content is ingested + loadable -- the real
+    Radiant paths/talents, cultures, and surge powers for the walkthrough builder
+    (replacing the earlier PDF-mined approximations)."""
+    radiant = load_pack('handbook-radiant-paths')
+    assert sum(1 for d in radiant if d.get('type') == 'path') >= 9        # Radiant orders
+    assert sum(1 for d in radiant if d.get('type') == 'talent') >= 50
+    assert len([d for d in load_pack('handbook-cultures') if d.get('type') == 'culture']) >= 10
+    assert len([d for d in load_pack('handbook-surges') if d.get('type') == 'power']) >= 5
+    assert load_pack('handbook-heroic-paths') and load_pack('handbook-ancestries')
 
 
 # -- registration -----------------------------------------------------------

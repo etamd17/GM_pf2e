@@ -6465,9 +6465,7 @@ def tracker_view():
     # + party picker are gated off in the template). PF2e mode is unchanged.
     cosmere_adversaries, cosmere_pcs = [], []
     if _active_system() == 'cosmere':
-        for d in systems.cosmere.load_pack('companions-and-adversaries'):
-            if d.get('type') != 'adversary':
-                continue
+        for d in systems.cosmere.adversary_docs():
             s = d.get('system', {})
             cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
                                         'tier': s.get('tier'), 'role': s.get('role')})
@@ -6622,9 +6620,10 @@ def api_tracker_state():
 
 # ── Cosmere RPG (Phase 3): bestiary browsing, sheet view, tracker add ──────
 def _cosmere_doc_by_id(actor_id):
-    """An ingested Cosmere adversary doc by its Foundry _id (or None)."""
-    for d in systems.cosmere.load_pack('companions-and-adversaries'):
-        if d.get('_id') == actor_id and d.get('type') == 'adversary':
+    """An ingested Cosmere adversary doc by its Foundry _id (or None) -- across
+    the base system bestiary AND the ingested modules."""
+    for d in systems.cosmere.adversary_docs():
+        if d.get('_id') == actor_id:
             return d
     return None
 
@@ -6649,9 +6648,7 @@ def _cosmere_combatant(actor_id):
 def cosmere_bestiary():
     """Browse the ingested Cosmere adversaries (read-only reference)."""
     advs = []
-    for d in systems.cosmere.load_pack('companions-and-adversaries'):
-        if d.get('type') != 'adversary':
-            continue
+    for d in systems.cosmere.adversary_docs():
         s = d.get('system', {})
         advs.append({
             'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
@@ -6850,8 +6847,7 @@ def cosmere_gm_hub():
     """
     if _active_system() != 'cosmere':
         return redirect(_active_system_ui().gm_home)
-    adv_count = sum(1 for d in systems.cosmere.load_pack('companions-and-adversaries')
-                    if d.get('type') == 'adversary')
+    adv_count = len(systems.cosmere.adversary_docs())
     camp = _active_campaign_doc() or {}
     return render_template(
         'cosmere_gm.html',
