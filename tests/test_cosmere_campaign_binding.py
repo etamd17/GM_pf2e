@@ -89,12 +89,24 @@ def test_cosmere_campaign_binding_end_to_end():
         assert not any(m['name'] == 'Kaladin' for m in campaigns.characters_for_user(gm_id))
         assert b'Kaladin' in c.get('/cosmere/pcs').data
 
+        # the tracker is Cosmere-aware: the add UI shows the adversary/PC pickers
+        # (not the PF2e monster search), and Cosmere combatants add + carry is_pc.
+        tr = c.get('/tracker')
+        assert tr.status_code == 200 and b'cos-adv-select' in tr.data and b'Type to search monsters' not in tr.data
+        assert c.post('/api/add_combatant', json={'type': 'cosmere', 'path': pid}).status_code == 200
+        assert c.post('/api/cosmere/add_party', json={}).status_code == 200
+        cstate = c.get('/api/tracker_state').get_json()
+        assert cstate['combatants'] and all(cb['system'] == 'cosmere' for cb in cstate['combatants'])
+        assert any(cb['name'] == 'Kaladin' and cb['is_pc'] for cb in cstate['combatants'])
+        c.post('/api/clear_encounter', json={})
+
         # switch to the PF2e campaign -> activate lands on /gm, no Cosmere bleed
         pr = c.post('/campaign/' + pf_cid + '/activate')
         assert pr.status_code == 302 and pr.headers['Location'].endswith('/gm')
         assert c.get('/cosmere/gm').status_code == 302     # Cosmere dashboard redirects out in PF2e mode
         assert c.get('/cosmere/gmscreen').status_code == 302   # GM Screen redirects out in PF2e mode too
         assert c.get('/cosmere/generator').status_code == 302   # generators redirect out in PF2e mode too
+        assert b'Type to search monsters' in c.get('/tracker').data   # PF2e tracker keeps its monster search (no Cosmere bleed)
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(pf_cid)
         ph = c.get('/')
         assert ph.status_code == 302 and ph.headers['Location'].endswith('/me')   # front door -> /me

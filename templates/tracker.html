@@ -1340,7 +1340,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
        once the encounter is empty. #}
     <div class="hb-left">
         <span id="trk-wordmark" class="name">Encounter Tracker</span>
-        <span id="trk-wordmark-meta" class="meta">PF2e</span>
+        <span id="trk-wordmark-meta" class="meta">{{ 'Cosmere' if active_system == 'cosmere' else 'PF2e' }}</span>
         <span id="sync-indicator" class="sync-dot" title="Player sheets are in sync. Pulses gold when a tracker change broadcasts.">
             <span class="sync-dot-glyph"></span>
             <span class="sync-dot-label">Synced</span>
@@ -1390,6 +1390,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     </div>
 </div>
 
+{# The XP / encounter-budget bar is PF2e-specific (Trivial..Extreme); omit it in
+   Cosmere mode (the JS below guards the now-absent element). #}
+{% if active_system != 'cosmere' %}
 <div id="xp-bar-wrap" class="xp-bar-wrap {% if encounter_xp <= 0 %}hidden{% endif %}">
     <div class="xp-bar-header">
         <span class="xp-meta">Party Lvl <strong id="xp-party-level">{{ party_level }}</strong> &middot; <span id="xp-value">{{ encounter_xp }}</span> XP</span>
@@ -1402,9 +1405,27 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <span>Trivial</span><span>Low</span><span>Moderate</span><span>Severe</span><span>Extreme</span>
     </div>
 </div>
+{% endif %}
 
 {# ═══════════════════ TOOL STRIP ═══════════════════ #}
 <div class="tool-strip">
+    {% if active_system == 'cosmere' %}
+    {# Cosmere encounter building: pick an adversary or a party PC. Both add via
+       /api/add_combatant type=cosmere (PCs carry type=character -> is_pc). #}
+    <select id="cos-adv-select" class="ts-select" style="min-width:200px;">
+        {% if cosmere_adversaries %}
+            {% for a in cosmere_adversaries %}<option value="{{ a.id }}">{{ a.name }}{% if a.tier %} &middot; T{{ a.tier }}{% if a.role %} {{ a.role }}{% endif %}{% endif %}</option>{% endfor %}
+        {% else %}<option value="" disabled selected>No adversaries</option>{% endif %}
+    </select>
+    <button class="ts-btn" onclick="addCosmere('cos-adv-select')">+ Adversary</button>
+    <select id="cos-pc-select" class="ts-select" style="min-width:140px;">
+        {% if cosmere_pcs %}
+            {% for p in cosmere_pcs %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        {% else %}<option value="" disabled selected>No PCs</option>{% endif %}
+    </select>
+    <button class="ts-btn" onclick="addCosmere('cos-pc-select')">+ PC</button>
+    <button class="ts-btn primary" onclick="apiPost('/api/cosmere/add_party')">+ Party</button>
+    {% else %}
     <div class="ts-search" id="monster-search-wrap">
         {# API-backed search: the previous version inlined 4,797 <div>
            options (~1.5 MB of HTML) straight into the page template. The
@@ -1431,6 +1452,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     <button class="ts-btn" onclick="addPC()">+ PC</button>
     <button class="ts-btn primary" onclick="apiPost('/api/add_party')">+ Party</button>
     <button class="ts-btn" onclick="toggleCustomForm()">+ Custom</button>
+    {% endif %}
 
     <div class="ts-divider"></div>
     <button class="ts-btn" onclick="toggleSaveLoadPanel()" title="Save & Load Encounters">💾 Encounters</button>
@@ -1697,7 +1719,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             </div>
 
             <div id="empty-state" class="empty-state hidden">
-                No combatants yet. Search for monsters or add your party above.
+                No combatants yet. {% if active_system == 'cosmere' %}Add adversaries or your party above.{% else %}Search for monsters or add your party above.{% endif %}
             </div>
         </div>
 
@@ -2782,7 +2804,7 @@ function renderMeta() {
 
     // XP bar
     const xpWrap = document.getElementById('xp-bar-wrap');
-    if (STATE.encounter_xp > 0) {
+    if (xpWrap && STATE.encounter_xp > 0) {
         xpWrap.classList.remove('hidden');
         document.getElementById('xp-party-level').textContent = STATE.party_level;
         document.getElementById('xp-value').textContent = STATE.encounter_xp;
@@ -2823,6 +2845,13 @@ function addPC() {
     const sel = document.getElementById('pc-select');
     if (!sel.value) return;
     apiPost('/api/add_combatant', {type:'pc', path: sel.value});
+}
+
+// Cosmere: add the selected adversary or PC (both resolve server-side by id).
+function addCosmere(selId) {
+    const sel = document.getElementById(selId);
+    if (!sel || !sel.value) return;
+    apiPost('/api/add_combatant', {type:'cosmere', path: sel.value});
 }
 
 async function adjustHP(id, action) {
