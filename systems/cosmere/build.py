@@ -108,6 +108,8 @@ class CosmereBuild:
         # Per-campaign homebrew store ({type: [entry]}); its structured stat
         # bonuses are applied to derived stats and its paths/orders are honored.
         self._homebrew = homebrew or {}
+        # Homebrew surges that are real skills ({code: {name, attribute}}).
+        self._hb_surges = _homebrew.surge_skills(self._homebrew)
         self.name = d.get('name') or 'New Hero'
         self.level = max(1, int(d.get('level', 1) or 1))
         self.ancestry = d.get('ancestry') or 'Human'
@@ -116,7 +118,7 @@ class CosmereBuild:
         self.singer_form = (d.get('singer_form') or '').lower()   # Singer ancestry only
         self.attributes = {k: int((d.get('attributes') or {}).get(k, 0) or 0) for k in ATTR_KEYS}
         self.skills = {c: int(v) for c, v in (d.get('skills') or {}).items()
-                       if c in SKILL_ATTR and int(v or 0) > 0}
+                       if c in self.eff_skill_attr() and int(v or 0) > 0}
         self.path_skill = d.get('path_skill')
         self.expertises = [e for e in (d.get('expertises') or []) if e]
         self.talents = [t for t in (d.get('talents') or []) if t]   # [{id, name}]
@@ -184,6 +186,24 @@ class CosmereBuild:
     def surges_unlocked(self) -> tuple:
         """The order's two surge skills — available once the First Ideal is sworn."""
         return self.surge_codes() if (self.radiant_order and self.first_ideal_sworn) else ()
+
+    # -- effective skill tables (canon + homebrew surge skills) -------------
+    def eff_skill_attr(self) -> dict:
+        """skill code -> governing attribute, INCLUDING homebrew surge skills."""
+        return {**SKILL_ATTR, **{c: s['attribute'] for c, s in self._hb_surges.items()}}
+
+    def eff_skill_names(self) -> dict:
+        return {**SKILL_NAMES, **{c: s['name'] for c, s in self._hb_surges.items()}}
+
+    def eff_surge_skills(self) -> set:
+        """The Surge skills (locked until the order's First Ideal) — canon + homebrew."""
+        return set(SURGE_SKILLS) | set(self._hb_surges)
+
+    def eff_surge_names(self) -> dict:
+        """{code: {'name'}} for surge display — canon SURGES + homebrew surges."""
+        out = {c: {'name': v['name']} for c, v in _radiant.SURGES.items()}
+        out.update({c: {'name': s['name']} for c, s in self._hb_surges.items()})
+        return out
 
     # -- heroic path grants (key talent + starting skill) ------------------
     def path_start_skill(self):
@@ -257,7 +277,8 @@ class CosmereBuild:
 
     def skill_mods(self) -> dict:
         a = self.eff_attributes()
-        return {c: self.skills.get(c, 0) + a[SKILL_ATTR[c]] + self._hb('skill:%s' % c) for c in SKILL_ATTR}
+        return {c: self.skills.get(c, 0) + a[attr] + self._hb('skill:%s' % c)
+                for c, attr in self.eff_skill_attr().items()}
 
     def deflect_value(self) -> int:
         f = self.form()
@@ -290,7 +311,7 @@ class CosmereBuild:
         if ssp > ssa:
             issues.append(f"Skills: {ssp} of {ssa} ranks spent.")
         unlocked = set(self.surges_unlocked())
-        stray_surge = [c for c in self.skills if c in SURGE_SKILLS and c not in unlocked]
+        stray_surge = [c for c in self.skills if c in self.eff_surge_skills() and c not in unlocked]
         if stray_surge:
             issues.append("Surge skills require swearing your order's First Ideal: "
                           + ', '.join(_radiant.surge_name(c) for c in sorted(stray_surge)) + '.')
@@ -358,14 +379,15 @@ class CosmereBuild:
         a = self.eff_attributes()                    # in-form attributes (Singer)
         form_focus = (self.form() or {}).get('focus', 0)
         unlocked_surges = set(self.surges_unlocked())
+        surge_set = self.eff_surge_skills()
         skills = {}
-        for c, attr in SKILL_ATTR.items():
+        for c, attr in self.eff_skill_attr().items():     # canon + homebrew surge skills
             skills[c] = {
                 'attribute': attr,
                 'rank': self.skills.get(c, 0),
                 # Homebrew skill bonuses ride the Foundry mod.bonus that CosmereActor adds.
                 'mod': {'override': None, 'useOverride': False, 'bonus': self._hb('skill:%s' % c)},
-                'unlocked': (c not in SURGE_SKILLS) or (c in unlocked_surges),
+                'unlocked': (c not in surge_set) or (c in unlocked_surges),
             }
         inv_max = ({'override': self.investiture_max(), 'useOverride': True, 'bonus': 0}
                    if self.is_radiant else {'override': None, 'useOverride': False, 'bonus': 0})
@@ -395,6 +417,9 @@ class CosmereBuild:
             'cosmere_build': self.to_dict(),     # stashed so the build can be re-edited / leveled
         }
         items = self.inventory.foundry_weapon_items()
+        # Equipped homebrew weapons -> Strikes (canon weapons already flow through
+        # the Inventory; homebrew items are invisible to it).
+        items += _homebrew.weapon_docs(self.to_dict(), self._homebrew)
         if self.is_radiant:
             # A First Ideal talent grants the three Stormlight actions (Ch.5).
             for act in _radiant.STORMLIGHT_ACTIONS:

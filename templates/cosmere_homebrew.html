@@ -83,7 +83,13 @@
     </div>
     <div class="hb-row tf tf-surge">
       <div><label>Surge code (3 letters)</label><input id="e-code" maxlength="4" placeholder="e.g. snd"></div>
-      <div><label>Description</label><input id="e-desc" placeholder="What the surge does"></div>
+      <div><label>Governing attribute (makes it a skill)</label>
+        <select id="e-attribute">
+          <option value="str">Strength</option><option value="spd">Speed</option>
+          <option value="int">Intellect</option><option value="wil" selected>Willpower</option>
+          <option value="awa">Awareness</option><option value="pre">Presence</option>
+        </select></div>
+      <div style="flex-basis:100%"><label>Description</label><input id="e-desc" placeholder="What the surge does"></div>
     </div>
 
     <label>Stat bonuses <span class="hint">(applied automatically when a character has this)</span></label>
@@ -154,6 +160,7 @@ function resetForm(){
   ['e-name','e-prereq','e-damage','e-deflect','e-key_talent','e-spren','e-philosophy','e-code','e-desc','e-expertises','e-notes'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('e-path').value='any';
   document.getElementById('e-kind').value='equipment';
+  document.getElementById('e-attribute').value='wil';
   document.getElementById('fx-list').innerHTML='';
   document.getElementById('hb-status').textContent='';
   onType();
@@ -171,7 +178,7 @@ function editEntry(type, id){
   if(type==='culture'){ document.getElementById('e-expertises').value=(e.expertises||[]).join('\n'); }
   if(type==='heroic_path'){ document.getElementById('e-key_talent').value=e.key_talent||''; document.getElementById('e-start_skill').value=e.start_skill||''; }
   if(type==='radiant_path'){ document.getElementById('e-spren').value=e.spren||''; document.getElementById('e-surge1').value=(e.surges||[])[0]||''; document.getElementById('e-surge2').value=(e.surges||[])[1]||''; document.getElementById('e-philosophy').value=e.philosophy||''; }
-  if(type==='surge'){ document.getElementById('e-code').value=e.code||''; document.getElementById('e-desc').value=e.desc||''; }
+  if(type==='surge'){ document.getElementById('e-code').value=e.code||''; document.getElementById('e-attribute').value=e.attribute||'wil'; document.getElementById('e-desc').value=e.desc||''; }
   (e.effects||[]).forEach(f=>addFx(f.target, f.value));
   document.getElementById('hb-status').textContent='Editing '+e.name;
   window.scrollTo({top:0, behavior:'smooth'});
@@ -185,7 +192,7 @@ function collect(){
   if(t==='culture'){ e.expertises=gv('e-expertises').split('\n').map(s=>s.trim()).filter(Boolean); }
   if(t==='heroic_path'){ e.key_talent=gv('e-key_talent'); e.start_skill=gv('e-start_skill'); }
   if(t==='radiant_path'){ e.spren=gv('e-spren'); e.surges=[gv('e-surge1'),gv('e-surge2')].filter(Boolean); e.philosophy=gv('e-philosophy'); }
-  if(t==='surge'){ e.code=gv('e-code'); e.desc=gv('e-desc'); }
+  if(t==='surge'){ e.code=gv('e-code'); e.attribute=gv('e-attribute'); e.desc=gv('e-desc'); }
   return e;
 }
 

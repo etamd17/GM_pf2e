@@ -6888,8 +6888,8 @@ def _cosmere_builder_context(build, hb_store=None):
     return dict(
         build=build.to_dict(),
         catalog=systems.cosmere.items.catalog(),
-        skill_names=systems.cosmere.SKILL_NAMES, skill_attr=systems.cosmere.SKILL_ATTR,
-        surge_skills=list(systems.cosmere.SURGE_SKILLS),
+        skill_names=build.eff_skill_names(), skill_attr=build.eff_skill_attr(),
+        surge_skills=list(build.eff_surge_skills()),
         attr_names=systems.cosmere.ATTR_NAMES,
         paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
         path_talents=_cosmere_path_talents(),
@@ -7171,14 +7171,14 @@ def cosmere_pc_sheet(pid):
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
         actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
-        skill_names=systems.cosmere.SKILL_NAMES,
+        skill_names=build.eff_skill_names(),
         attr_names=systems.cosmere.ATTR_NAMES,
         defense_names=systems.cosmere.DEFENSE_NAMES,
         pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
         warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
-        radiant=systems.cosmere.radiant.order(build.radiant_order),
+        radiant=build.order(),                       # canon OR homebrew order
         first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
-        surge_names=systems.cosmere.radiant.SURGES,
+        surge_names=build.eff_surge_names(),          # canon + homebrew surge names
         singer_form=systems.cosmere.origins.singer_form(build.singer_form),
     )
 
