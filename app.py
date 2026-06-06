@@ -7017,6 +7017,29 @@ def cosmere_builder():
     return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), **ctx)
 
 
+@app.route('/cosmere/builder/preview', methods=['POST'])
+def cosmere_builder_preview():
+    """Live 'character so far' for the walkthrough builder: the ENGINE's derived
+    stats + budgets + guided validation for a partial build, so the wizard panel
+    never drifts from the rules. Read-only."""
+    import systems.cosmere.build as _cb
+    data = request.get_json(silent=True) or {}
+    b = _cb.CosmereBuild(data.get('build') or data)
+    return jsonify({
+        'defenses': b.defenses(),
+        'health': b.health_max(), 'focus': b.focus_max(),
+        'investiture': b.investiture_max(), 'deflect': b.deflect_value(),
+        'tier': b.tier, 'level': b.level, 'is_radiant': b.is_radiant,
+        'budgets': {
+            'attr': [b.attr_points_spent(), b.attr_points_available()],
+            'skills': [b.skill_ranks_spent(), b.skill_ranks_available()],
+            'talents': [len(b.talents), b.talents_available()],
+            'expertises': [len(b.expertises), b.expertises_available()],
+        },
+        'issues': b.validate(),
+    })
+
+
 @app.route('/cosmere/pc/<pid>')
 def cosmere_pc_sheet(pid):
     import systems.cosmere.build as _cb
