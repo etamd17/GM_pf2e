@@ -27,6 +27,7 @@ import os
 import re
 import json
 import uuid
+import shutil
 import tempfile
 
 # Mirror app.py's roots. BASE_DIR is the repo (this file lives in core/, so go up
@@ -86,6 +87,14 @@ def story_threads_file(cid):       return os.path.join(campaign_dir(cid), 'story
 def pinned_generators_file(cid):   return os.path.join(campaign_dir(cid), 'pinned_generators.json')
 def calendar_file(cid):            return os.path.join(campaign_dir(cid), 'calendar.json')
 def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
+
+
+def delete_campaign_dir(cid):
+    """Permanently remove a campaign's entire data directory. `cid` is validated
+    (no traversal) by campaign_dir(); a no-op if the directory is already gone."""
+    d = campaign_dir(cid)
+    if os.path.isdir(d):
+        shutil.rmtree(d)
 
 
 # The per-campaign subdirectories created for every campaign.

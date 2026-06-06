@@ -5962,6 +5962,25 @@ def campaign_set_role(cid, uid):
     return redirect('/campaign/%s/invites' % cid)
 
 
+@app.route('/campaign/<cid>/delete', methods=['POST'])
+@_auth.login_required
+def campaign_delete(cid):
+    """Permanently delete a campaign and ALL its data. GM/owner or site admin,
+    guarded by typing the campaign name back as confirmation."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    if (request.form.get('confirm_name') or '').strip() != (camp.get('name') or '').strip():
+        return redirect('/campaign/%s/invites?delete_error=1' % cid)
+    _campaigns.delete_campaign(cid)
+    if session.get('active_campaign_id') == cid:
+        session.pop('active_campaign_id', None)
+    # The active/live campaign may have just been removed -> rebind the globals
+    # (load_campaign(None) falls back to the legacy flat layout).
+    load_campaign(_storage.get_live_campaign_id())
+    return redirect('/me')
+
+
 def _claim_by_id(cid, character_id, user_id):
     pdir = _storage.party_dir(cid)
     for fn in (os.listdir(pdir) if os.path.isdir(pdir) else []):
@@ -6701,6 +6720,15 @@ def _load_cosmere_pc(pid):
         return None
 
 
+def _delete_cosmere_pc(pid):
+    """Remove a Cosmere PC file from the active campaign's store (no-op if gone)."""
+    p = _cosmere_pc_path(pid)
+    if p and os.path.isfile(p):
+        os.remove(p)
+        return True
+    return False
+
+
 def _list_cosmere_pcs():
     out = []
     if os.path.isdir(COSMERE_PC_DIR):
@@ -6997,8 +7025,10 @@ def cosmere_pc_sheet(pid):
         return ('Unknown Cosmere character', 404)
     build = _cb.CosmereBuild(doc.get('build'))
     actor = systems.cosmere.CosmereActor(build.to_actor_doc())
+    _u = _auth.current_user()
+    can_delete = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
     return render_template(
-        'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid,
+        'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
         actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
         skill_names=systems.cosmere.SKILL_NAMES,
         attr_names=systems.cosmere.ATTR_NAMES,
@@ -7141,6 +7171,22 @@ def cosmere_pc_release(pid):
     if request.is_json:
         return jsonify({'ok': True})
     return redirect('/campaign/%s/invites' % cid if cid else '/cosmere/pcs')
+
+
+@app.route('/cosmere/pc/<pid>/delete', methods=['POST'])
+def cosmere_pc_delete(pid):
+    """Delete a Cosmere character -- its owner, or the active campaign's GM/admin."""
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return ('Unknown Cosmere character', 404)
+    u = _auth.current_user()
+    owner = bool(u) and doc.get('owner_user_id') == u.get('id')
+    if not (owner or _is_gm()):
+        return jsonify({'error': 'not allowed'}), 403
+    _delete_cosmere_pc(pid)
+    if request.is_json:
+        return jsonify({'ok': True})
+    return redirect('/cosmere/pcs')
 
 
 @app.route('/api/plot_die', methods=['POST'])
