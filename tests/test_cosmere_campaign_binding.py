@@ -53,6 +53,9 @@ def test_cosmere_campaign_binding_end_to_end():
         # the Cosmere GM dashboard renders as the command center
         gmhub = c.get('/cosmere/gm')
         assert gmhub.status_code == 200 and b'Encounter Tracker' in gmhub.data and b'Bestiary' in gmhub.data
+        # the Cosmere GM Screen (rules reference) renders
+        gmscr = c.get('/cosmere/gmscreen')
+        assert gmscr.status_code == 200 and b'Plot Die' in gmscr.data and b'Conditions' in gmscr.data
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(cos_cid)   # store follows the live campaign
 
         # the front door sends a logged-in user to /me (the chooser); the
@@ -61,7 +64,7 @@ def test_cosmere_campaign_binding_end_to_end():
         assert home.status_code == 302 and home.headers['Location'].endswith('/me')
         pcs = c.get('/cosmere/pcs')
         assert pcs.status_code == 200 and b'COSMERE' in pcs.data    # nav brand flipped
-        assert b'Generators' not in pcs.data and b'GM Screen' not in pcs.data   # no PF2e GM-nav bleed (Cosmere has its own GM Hub)
+        assert b'href="/party"' not in pcs.data and b'href="/generator"' not in pcs.data   # no PF2e GM-nav bleed (Cosmere has its own nav)
         # the PF2e GM command center redirects to the Cosmere GM hub in Cosmere mode
         gm = c.get('/gm')
         assert gm.status_code == 302 and gm.headers['Location'].endswith('/cosmere/gm')
@@ -86,6 +89,7 @@ def test_cosmere_campaign_binding_end_to_end():
         pr = c.post('/campaign/' + pf_cid + '/activate')
         assert pr.status_code == 302 and pr.headers['Location'].endswith('/gm')
         assert c.get('/cosmere/gm').status_code == 302     # Cosmere dashboard redirects out in PF2e mode
+        assert c.get('/cosmere/gmscreen').status_code == 302   # GM Screen redirects out in PF2e mode too
         assert A.COSMERE_PC_DIR == storage.cosmere_pc_dir(pf_cid)
         ph = c.get('/')
         assert ph.status_code == 302 and ph.headers['Location'].endswith('/me')   # front door -> /me

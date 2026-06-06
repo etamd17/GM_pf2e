@@ -6806,6 +6806,55 @@ def cosmere_gm_hub():
     )
 
 
+@app.route('/cosmere/gmscreen')
+@gm_required
+def cosmere_gmscreen():
+    """Cosmere GM Screen -- the rules reference at a glance (Stormlight Ch.9/10/13):
+    turn order, damage & Deflect, the injury death-spiral, conditions, the Plot
+    Die, surges & Stormlight, the Radiant orders, rest, and the stat math. Every
+    table is sourced from the Cosmere engine modules (combat / radiant / build)
+    so it can't drift from the rules the app actually runs. System-aware:
+    redirects out in non-Cosmere mode, like the dashboard.
+    """
+    if _active_system() != 'cosmere':
+        return redirect(_active_system_ui().gm_home)
+    import systems.cosmere as _cos
+    import systems.cosmere.combat as _cmb
+    import systems.cosmere.radiant as _rad
+    import systems.cosmere.build as _cb
+
+    conditions = [
+        {'key': k, 'name': k.capitalize(), 'desc': _cos.CONDITION_INFO.get(k, ''),
+         'stacks': k in _cos._VALUED}
+        for k in _cos._CONDITION_KEYS
+    ]
+    damage_types = [{'type': t, 'deflectable': t in _cmb.DEFLECTABLE}
+                    for t in _cmb.DAMAGE_TYPES]
+    injury_rows = [
+        ('16 or higher', 'Flesh Wound', _cmb.INJURY_DURATION['flesh_wound']),
+        ('6 to 15',      'Shallow',     _cmb.INJURY_DURATION['shallow']),
+        ('1 to 5',       'Vicious',     _cmb.INJURY_DURATION['vicious']),
+        ('-5 to 0',      'Permanent',   _cmb.INJURY_DURATION['permanent']),
+        ('-6 or lower',  'Death',       _cmb.INJURY_DURATION['death']),
+    ]
+    surges = [dict(code=c, **v) for c, v in _rad.SURGES.items()]
+    orders = [dict(key=k, color=_rad.order_color(k),
+                   surge_names=[_rad.surge_name(s) for s in v['surges']], **v)
+              for k, v in _rad.RADIANT_ORDERS.items()]
+    skills = [{'name': _cos.SKILL_NAMES[c], 'attr': _cos.ATTR_NAMES[_cos.SKILL_ATTR[c]]}
+              for c in sorted(_cos.BASIC_SKILLS, key=lambda c: _cos.SKILL_NAMES[c])]
+    return render_template(
+        'cosmere_gmscreen.html',
+        conditions=conditions, damage_types=damage_types,
+        injury_rows=injury_rows, injury_d8=sorted(_cmb.INJURY_EFFECTS_D8.items()),
+        plot_spend=_cmb.PLOT_DIE_SPEND,
+        surges=surges, surge_scaling=sorted(_rad.SURGE_SCALING.items()),
+        stormlight=_rad.STORMLIGHT_ACTIONS, first_ideal=_rad.FIRST_IDEAL,
+        orders=orders, skills=skills,
+        skill_rank_by_tier=[_cb.max_skill_rank(lv) for lv in (1, 6, 11, 16, 21)],
+    )
+
+
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
     import systems.cosmere.build as _cb

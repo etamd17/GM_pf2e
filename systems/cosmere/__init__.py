@@ -62,6 +62,7 @@ _UI = SystemUI(
         NavLink('Builder', '/cosmere/builder'),
         NavLink('Bestiary', '/cosmere/bestiary'),
         NavLink('Tracker', '/tracker'),
+        NavLink('GM Screen', '/cosmere/gmscreen', title='Cosmere rules reference'),
         NavLink('Threads', '/gm/threads'),
         NavLink('Status', '/status'),
         NavLink('Notes', '/notes', title='Session notes scratchpad'),
@@ -112,6 +113,26 @@ SKILL_ATTR = {
 SURGE_SKILLS = ('abr', 'adh', 'chs', 'dvs', 'grv', 'ill', 'prg', 'trp', 'trs', 'tsn')
 BASIC_SKILLS = tuple(c for c in SKILL_ATTR if c not in SURGE_SKILLS)
 PATHS = ('agent', 'envoy', 'hunter', 'leader', 'scholar', 'warrior')
+
+# Concise, rulebook-faithful one-line summaries of the conditions (Ch.9), for
+# the GM Screen and condition tooltips. Keyed by _CONDITION_KEYS; the three in
+# _VALUED carry a bracketed value and stack cumulatively.
+CONDITION_INFO = {
+    'afflicted':   'Take the bracketed damage at the end of each of your turns (every 10 seconds out of combat). Multiple Afflicted effects resolve separately.',
+    'determined':  'When you fail a test you may add an Opportunity to the result, then remove Determined.',
+    'disoriented': 'No reactions; your senses always count as obscured; Perception and other sense-based tests have disadvantage.',
+    'empowered':   'On swearing an Ideal: advantage on all tests and your Investiture refills to maximum at the start of each turn. Ends at the end of the scene.',
+    'enhanced':    'The bracketed attribute gains its bonus to tests, talents, and movement (not to defenses or maximums). Cumulative; several attributes can be Enhanced at once.',
+    'exhausted':   'Subtract the bracketed penalty from every test result. Reduce by 1 per long rest (removed at 0). Cumulative; reaching -10 or lower kills you.',
+    'focused':     'Abilities that cost focus cost 1 less.',
+    'immobilized': 'Your movement rate becomes 0; you cannot move or be moved.',
+    'prone':       'Lying down: you are also Slowed and melee attacks against you gain advantage. Standing (1 action) ends it; your movement is then reduced by 5 until your next turn.',
+    'restrained':  'Your movement rate becomes 0 and you have disadvantage on all tests except those to escape.',
+    'slowed':      'Your movement rate is halved (halve remaining movement if you are mid-move).',
+    'stunned':     'Lose your reactions; on your turn you gain two fewer actions and no reaction.',
+    'surprised':   'Lose reactions; you cannot take a fast turn and gain one fewer action. Removed after your next turn.',
+    'unconscious': 'Movement 0; you fall Prone, drop held items, and can act only via Breathe Stormlight / Regenerate (if Radiant). You always go slow. A PC may wake at the end of any turn or on being healed to 1+ health (recovering 1 health if at 0).',
+}
 
 
 # --- ingested content ------------------------------------------------------
