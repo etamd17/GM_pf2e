@@ -1744,6 +1744,16 @@ def require_combatant(instance_id):
             return c, i, None
     return None, None, (jsonify({'success': False, 'error': 'Combatant not found in encounter'}), 404)
 
+def _cosmere_initiative_mode():
+    """The active campaign's Cosmere initiative house-rule: 'phases' (rulebook
+    fast/slow, default) or 'traditional' (rolled d20+Speed order)."""
+    try:
+        m = _load_campaign_config().get('cosmere_initiative', 'phases')
+        return 'traditional' if m == 'traditional' else 'phases'
+    except Exception:
+        return 'phases'
+
+
 def _sort_cosmere_phases():
     """Order a Cosmere encounter into the 4-phase queue (Ch.10): fast_pc ->
     fast_npc -> slow_pc -> slow_npc; within a phase, higher Speed first, then
@@ -1764,9 +1774,11 @@ def _sort_encounter():
     if ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER):
         active_id = ACTIVE_ENCOUNTER[TURN_INDEX].instance_id
 
-    # A pure-Cosmere encounter resolves in the 4-phase fast/slow queue;
-    # any PF2e (or mixed) encounter keeps the initiative sort.
-    if ACTIVE_ENCOUNTER and all(getattr(c, 'system', 'pf2e') == 'cosmere' for c in ACTIVE_ENCOUNTER):
+    # A pure-Cosmere encounter resolves in the 4-phase fast/slow queue -- UNLESS
+    # the campaign house-rule is 'traditional' (a rolled d20+Speed initiative
+    # order). Any PF2e (or mixed) encounter always keeps the initiative sort.
+    pure_cosmere = bool(ACTIVE_ENCOUNTER) and all(getattr(c, 'system', 'pf2e') == 'cosmere' for c in ACTIVE_ENCOUNTER)
+    if pure_cosmere and _cosmere_initiative_mode() == 'phases':
         _sort_cosmere_phases()
     else:
         ACTIVE_ENCOUNTER.sort(key=lambda x: x.initiative, reverse=True)
@@ -4784,6 +4796,10 @@ CAMPAIGN_DEFAULT = {
     # static/js/modules.js for the host-side hook registry, and
     # static/js/modules/README.md for the drop-in conventions.
     'modules_enabled': [],
+    # Cosmere combat initiative house-rule: 'phases' = the rulebook 4-phase
+    # fast/slow queue (default); 'traditional' = a rolled d20+Speed initiative
+    # order, for tables that don't run fast/slow turns.
+    'cosmere_initiative': 'phases',
 }
 
 MODULES_DIR = os.path.join(BASE_DIR, 'static', 'js', 'modules')
@@ -6501,7 +6517,8 @@ def tracker_view():
                                         'tier': s.get('tier'), 'role': s.get('role')})
         cosmere_adversaries.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
         cosmere_pcs = [{'id': d['id'], 'name': d.get('name', '?')} for d in _list_cosmere_pcs()]
-    return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS, cosmere_adversaries=cosmere_adversaries, cosmere_pcs=cosmere_pcs)
+    return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS, cosmere_adversaries=cosmere_adversaries, cosmere_pcs=cosmere_pcs,
+        cosmere_initiative=_cosmere_initiative_mode())
 
 def _is_ajax():
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json or request.content_type == 'application/json'
@@ -9058,10 +9075,21 @@ def update_initiative(instance_id):
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
+def _cosmere_init_bonus(c):
+    """A Cosmere combatant's initiative bonus = the Speed attribute (the Dex
+    analog) for the 'traditional' rolled-initiative house-rule."""
+    return int((getattr(c, 'attributes', {}) or {}).get('spd', 0) or 0)
+
+
 @app.route('/api/roll_npc_initiative', methods=['POST'])
 def roll_npc_initiative():
     for c in ACTIVE_ENCOUNTER:
-        if not c.is_pc: c.initiative = random.randint(1, 20) + getattr(c, 'perception', 0)
+        if c.is_pc:
+            continue
+        if getattr(c, 'system', 'pf2e') == 'cosmere':
+            c.initiative = random.randint(1, 20) + _cosmere_init_bonus(c)
+        else:
+            c.initiative = random.randint(1, 20) + getattr(c, 'perception', 0)
     _sort_encounter(); _persist_encounter_state(); _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
@@ -9077,9 +9105,18 @@ def roll_all_initiative():
     
     for c in ACTIVE_ENCOUNTER:
         override_skill = skill_overrides.get(c.instance_id, '').lower()
-        
+
         d20 = random.randint(1, 20)
-        
+
+        # Cosmere combatants roll d20 + Speed (the traditional-initiative house-rule).
+        if getattr(c, 'system', 'pf2e') == 'cosmere':
+            spd = _cosmere_init_bonus(c)
+            c.initiative = d20 + spd
+            if not (secret_roll and c.is_pc):
+                _combat_log(f"{c.name} rolled Initiative (Speed): {d20} + {spd} = {c.initiative}", 'action')
+            results.append({'name': c.name, 'initiative': c.initiative})
+            continue
+
         if c.is_pc:
             # PC initiative: perception by default, or use skill override
             if override_skill and override_skill != 'perception':
@@ -9141,6 +9178,20 @@ def cosmere_speed_choice(instance_id):
             break
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
+
+@app.route('/api/cosmere/initiative_mode', methods=['POST'])
+@gm_required
+def api_cosmere_initiative_mode():
+    """Switch the Cosmere initiative house-rule for this campaign: 'phases'
+    (rulebook fast/slow) <-> 'traditional' (rolled d20+Speed order). Re-sorts the
+    active encounter under the new rule and broadcasts it."""
+    mode = (request.get_json(silent=True) or request.form or {}).get('mode')
+    mode = 'traditional' if mode == 'traditional' else 'phases'
+    _save_campaign_config({'cosmere_initiative': mode})
+    _sort_encounter()
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'ok': True, 'mode': mode})
 
 @app.route('/api/reorder_initiative', methods=['POST'])
 def reorder_initiative():
