@@ -1838,6 +1838,9 @@ const AJAX_HEADERS = {'X-Requested-With': 'XMLHttpRequest'};
 const JSON_HEADERS = {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
 const CONDITIONS_LIST = ['frightened','sickened','enfeebled','clumsy','drained','stupefied','stunned','slowed','off_guard','prone','dying','wounded','doomed','concealed','hidden','undetected'];
 const VALUED_CONDITIONS = ['frightened','sickened','dying','wounded','doomed','stunned','slowed','enfeebled','clumsy','drained','stupefied'];
+// Cosmere's 14 conditions (all boolean) — used when the open combatant is a
+// Cosmere actor. Applying one to a player's PC pushes it to their live sheet.
+const COSMERE_CONDITIONS = ['afflicted','determined','disoriented','empowered','enhanced','exhausted','focused','immobilized','prone','restrained','slowed','stunned','surprised','unconscious'];
 const DEADLY_CONDS = new Set(['dying','wounded','doomed']);
 const DAMAGE_TYPES = ['untyped','bludgeoning','piercing','slashing','fire','cold','electricity','acid','sonic','vitality','void','force','spirit','mental','poison','bleed'];
 
@@ -2540,6 +2543,7 @@ function renderActivePanel() {
     }
 
     // Conditions
+    const isCos = c.system === 'cosmere';
     const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false) : [];
     html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click x to remove</span>' : ''}</div>`;
     if (activeConds.length) {
@@ -2558,7 +2562,8 @@ function renderActivePanel() {
                 html += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
                 html += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
             } else {
-                html += `<button onclick="condAction('${c.instance_id}','${k}','toggle')" title="Remove">×</button>`;
+                const rm = isCos ? `cosmereCondition('${c.instance_id}','${k}','remove')` : `condAction('${c.instance_id}','${k}','toggle')`;
+                html += `<button onclick="${rm}" title="Remove">×</button>`;
             }
             html += `</span>`;
         });
@@ -2566,14 +2571,22 @@ function renderActivePanel() {
     } else {
         html += `<div style="font-size:11px;color:var(--t-t3);font-style:italic;margin-bottom:4px;">No active conditions.</div>`;
     }
-    // Quick-add condition. The optional rounds input sets a GM-defined
-    // auto-expiry timer (decremented at end of this combatant's turn,
-    // condition cleared when it hits 0). Leave blank for indefinite.
-    html += `<div class="cp-add" style="margin-top:5px;">
-        <select id="cond-sel-ap-${c.instance_id}">${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}</select>
-        <input type="number" id="cond-rounds-ap-${c.instance_id}" placeholder="rounds" min="1" max="9" style="width:54px;" title="Optional: clear automatically after N end-of-turns">
-        <button onclick="addConditionAP('${c.instance_id}')">+ Add</button>
-    </div>`;
+    // Quick-add condition. Cosmere uses its own 14-condition list and pushes
+    // straight to the player's sheet (no PF2e auto-expiry timer). PF2e keeps the
+    // optional rounds input that sets a GM-defined auto-expiry (decremented at
+    // end of this combatant's turn, cleared when it hits 0).
+    if (isCos) {
+        html += `<div class="cp-add" style="margin-top:5px;">
+            <select id="cos-cond-sel-${c.instance_id}">${COSMERE_CONDITIONS.map(co => `<option value="${co}">${co.charAt(0).toUpperCase()+co.slice(1)}</option>`).join('')}</select>
+            <button onclick="cosmereConditionAdd('${c.instance_id}')" title="${c.is_pc ? 'Apply to this hero — shows on their sheet live' : 'Apply to this adversary'}">+ Add</button>
+        </div>`;
+    } else {
+        html += `<div class="cp-add" style="margin-top:5px;">
+            <select id="cond-sel-ap-${c.instance_id}">${CONDITIONS_LIST.map(co => `<option value="${co}">${co.replace(/_/g,'-')}</option>`).join('')}</select>
+            <input type="number" id="cond-rounds-ap-${c.instance_id}" placeholder="rounds" min="1" max="9" style="width:54px;" title="Optional: clear automatically after N end-of-turns">
+            <button onclick="addConditionAP('${c.instance_id}')">+ Add</button>
+        </div>`;
+    }
 
     // Persistent damage. PCs use structured list[dict]; monsters keep the
     // legacy free-text string. For PCs the GM gets per-entry roll/remove
@@ -2946,6 +2959,24 @@ async function addConditionAP(id) {
     }
     try { sel.selectedIndex = 0; } catch(_) {}
     if (roundsEl) roundsEl.value = '';
+}
+
+// Cosmere conditions: apply/remove on a tracker combatant. For a player's PC the
+// server writes it through to their saved play_state and pushes it to their open
+// sheet (the cosmere_player_state listener), so it appears live on their sheet.
+// The JSON response carries the tracker state, so apiPost re-renders for us.
+async function cosmereCondition(id, name, action) {
+    const d = await apiPost('/api/cosmere/combatant/' + id + '/condition', {condition: name, action: action}, 'json');
+    if (d) {
+        const label = name.charAt(0).toUpperCase() + name.slice(1);
+        window.pf2eToast(label + (action === 'remove' ? ' removed' : ' applied'), action === 'remove' ? 'info' : 'danger');
+    }
+}
+function cosmereConditionAdd(id) {
+    const sel = document.getElementById('cos-cond-sel-' + id);
+    if (!sel) return;
+    cosmereCondition(id, sel.value, 'add');
+    try { sel.selectedIndex = 0; } catch(_) {}
 }
 
 // Persistent-damage validation. PF2e RAW format is "<dice> <type>"

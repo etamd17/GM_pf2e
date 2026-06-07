@@ -87,7 +87,7 @@ def _static_cache_bust(endpoint, values):
         pass
 
 
-def _atomic_write_json(path, obj, indent=2):
+def _atomic_write_json(path, obj, indent=2, fsync=True):
     """Write JSON to a temp file then atomically os.replace() it into place.
 
     A plain open(path, 'w') truncates immediately, so if the process is killed
@@ -96,6 +96,15 @@ def _atomic_write_json(path, obj, indent=2):
     and you only find out next session. os.replace() is atomic on POSIX, so a
     reader (or a crash) never sees a partial file. The temp file shares the
     target's directory so the replace stays on one filesystem.
+
+    fsync=True (default) forces the write to disk before the replace -- correct
+    for durable saves (a built character you can't afford to lose). Pass
+    fsync=False for high-frequency, low-stakes writes (live HP/condition ticks):
+    os.fsync is a BLOCKING syscall that gevent can't yield around, so on the
+    single gevent worker every fsync stalls *all* greenlets (and thus every
+    player's SSE) for the disk-flush duration. os.replace stays atomic without
+    it; we only trade durability against a hard power-loss, which for a
+    re-derivable HP value is the right trade.
     """
     directory = os.path.dirname(path) or '.'
     fd, tmp = tempfile.mkstemp(dir=directory, suffix='.tmp')
@@ -103,7 +112,8 @@ def _atomic_write_json(path, obj, indent=2):
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump(obj, f, indent=indent)
             f.flush()
-            os.fsync(f.fileno())
+            if fsync:
+                os.fsync(f.fileno())
         os.replace(tmp, path)
     except Exception:
         try:
@@ -6769,7 +6779,7 @@ def _list_cosmere_pcs():
     return out
 
 
-def _save_cosmere_pc(doc):
+def _save_cosmere_pc(doc, fsync=True):
     os.makedirs(COSMERE_PC_DIR, exist_ok=True)
     pid = doc.get('id') or uuid.uuid4().hex
     doc['id'] = pid
@@ -6788,7 +6798,7 @@ def _save_cosmere_pc(doc):
                 doc['owner_user_id'] = u['id']
     except Exception:
         pass
-    _atomic_write_json(_cosmere_pc_path(pid), doc, indent=2)
+    _atomic_write_json(_cosmere_pc_path(pid), doc, indent=2, fsync=fsync)
     return pid
 
 
@@ -7357,11 +7367,35 @@ def _cosmere_can_act_on(doc):
     return _is_gm() or (bool(u) and doc.get('owner_user_id') == u.get('id'))
 
 
+def _sync_cosmere_combatant_state(name, ps):
+    """Mirror a Cosmere PC's saved play_state onto its LIVE tracker combatant so
+    the GM screen reflects player-side changes. The combatant in ACTIVE_ENCOUNTER
+    is a separate object from the saved doc (loaded when added to the encounter),
+    so without this the GM tracker shows stale HP/injuries/conditions. Matches by
+    name (PC names are unique in a party). Returns True if a combatant was hit."""
+    if not name:
+        return False
+    hit = False
+    for c in ACTIVE_ENCOUNTER:
+        if getattr(c, 'system', 'pf2e') == 'cosmere' and getattr(c, 'is_pc', False) and c.name == name:
+            if 'health' in ps:
+                try: c.current_hp = max(0, int(ps['health']))
+                except (TypeError, ValueError): pass
+            if 'injuries' in ps:
+                try: c.injuries = max(0, int(ps['injuries']))
+                except (TypeError, ValueError): pass
+            if isinstance(ps.get('conditions'), dict):
+                c.conditions = {k: v for k, v in ps['conditions'].items() if v}
+            hit = True
+    return hit
+
+
 @app.route('/cosmere/pc/<pid>/state', methods=['POST'])
 def cosmere_pc_state(pid):
     """Persist a Cosmere PC's live resource state (current health / focus /
-    investiture / injuries) from the player's own sheet, and broadcast it so the
-    GM (and the tracker) see the change. Owner or GM only."""
+    investiture / injuries / conditions) from the player's own sheet, mirror it
+    onto the live tracker combatant, and broadcast so the GM sees it instantly.
+    Owner or GM only."""
     doc = _load_cosmere_pc(pid)
     if not doc:
         return jsonify({'ok': False, 'error': 'unknown character'}), 404
@@ -7380,7 +7414,12 @@ def cosmere_pc_state(pid):
     if isinstance(data.get('conditions'), dict):
         ps['conditions'] = data['conditions']
     doc['play_state'] = ps
-    _save_cosmere_pc(doc)
+    # Update the live combatant + broadcast the encounter FIRST (in-memory, instant)
+    # so the GM tracker repaints immediately, regardless of disk latency. Then
+    # persist without fsync -- the value is re-derivable; we don't stall the worker.
+    if _sync_cosmere_combatant_state(doc.get('name'), ps):
+        _broadcast_encounter_state()
+    _save_cosmere_pc(doc, fsync=False)
     try:
         sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
     except Exception:
@@ -7500,6 +7539,55 @@ def api_cosmere_my_initiative():
     _persist_encounter_state()
     _broadcast_encounter_state()
     return jsonify({'ok': True, 'initiative': c.initiative, 'detail': f'd20({d20}) + {spd}'})
+
+
+@app.route('/api/cosmere/combatant/<instance_id>/condition', methods=['POST'])
+@gm_required
+def api_cosmere_combatant_condition(instance_id):
+    """GM applies / removes a Cosmere condition on a tracker combatant. For a
+    player's PC it also writes the condition through to their saved play_state and
+    pushes it to their open sheet (the `cosmere_player_state` listener), so a
+    GM-applied condition shows up live on the player's character sheet."""
+    data = request.get_json(silent=True) or {}
+    cond = (data.get('condition') or '').strip().lower()
+    action = (data.get('action') or 'toggle').lower()
+    if cond not in systems.cosmere.CONDITION_INFO:
+        return jsonify({'ok': False, 'error': 'unknown condition'}), 400
+    target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id
+                   and getattr(c, 'system', 'pf2e') == 'cosmere'), None)
+    if target is None:
+        return jsonify({'ok': False, 'error': 'not a Cosmere combatant'}), 404
+    if not isinstance(getattr(target, 'conditions', None), dict):
+        target.conditions = {}
+    on = bool(target.conditions.get(cond))
+    on = True if action == 'add' else (False if action == 'remove' else not on)
+    if on:
+        target.conditions[cond] = True
+    else:
+        target.conditions.pop(cond, None)
+    _combat_log(f"{target.name} {'gained' if on else 'lost'} {cond.capitalize()}", 'condition')
+    if on:
+        try: _bump_campaign_stat('conditions_applied')
+        except Exception: pass
+    # If the combatant is a player's PC, persist the new set + push to their sheet.
+    if getattr(target, 'is_pc', False):
+        for d in _list_cosmere_pcs():
+            if d.get('name') == target.name:
+                ps = dict(d.get('play_state') or {})
+                ps['conditions'] = dict(target.conditions)
+                d['play_state'] = ps
+                _save_cosmere_pc(d, fsync=False)
+                try:
+                    sse_broadcast('cosmere_player_state',
+                                  {'pid': d.get('id'), 'name': d.get('name'), 'play_state': ps})
+                except Exception:
+                    pass
+                break
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax():
+        return _tracker_json_response()
+    return jsonify({'ok': True, 'conditions': dict(target.conditions)})
 
 
 @app.route('/cosmere/pc/<pid>/release', methods=['POST'])
