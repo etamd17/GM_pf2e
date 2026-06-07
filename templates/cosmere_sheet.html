@@ -45,11 +45,26 @@
   .cs-2col { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; }
   @media (max-width:720px){ .cs-2col{ grid-template-columns:1fr; } }
   /* --- interactive (owner/GM) --- */
-  .cs-step { display:flex; gap:.3rem; justify-content:center; margin-top:.4rem; }
-  .cs-step button { width:26px; height:24px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:700;
-    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; line-height:1; }
-  .cs-step button:hover { border-color:var(--accent); color:var(--accent); }
-  .cs-step .breathe { width:auto; padding:0 .5rem; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  /* Resource controls: a typed amount + clearly-labelled action buttons
+     (Damage/Heal, Spend/Gain) instead of tiny +/- arrows. */
+  .cs-amt { margin-top:.5rem; display:flex; gap:.3rem; flex-wrap:wrap; justify-content:center; align-items:stretch; }
+  .cs-amt-in { width:44px; text-align:center; border-radius:7px; padding:.3rem 0; font-size:14px; font-weight:600;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; -moz-appearance:textfield; }
+  .cs-amt-in::-webkit-outer-spin-button, .cs-amt-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .cs-amt-btn { flex:1 1 auto; min-width:52px; padding:.34rem .5rem; border-radius:7px; cursor:pointer; font-size:10px;
+    font-weight:700; text-transform:uppercase; letter-spacing:.04em; line-height:1.2;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:var(--text-on-dark-2); }
+  .cs-amt-btn:active { transform:translateY(1px); }
+  .cs-amt-btn.dmg:hover { border-color:#d36e6e; color:#f0a3a3; background:rgba(211,110,110,.10); }
+  .cs-amt-btn.heal:hover { border-color:#34d399; color:#34d399; background:rgba(52,211,153,.10); }
+  .cs-amt-btn.spend:hover { border-color:var(--accent); color:var(--accent); background:rgba(95,168,224,.10); }
+  .cs-amt-btn.gain:hover { border-color:#34d399; color:#34d399; background:rgba(52,211,153,.10); }
+  .cs-amt-btn.breathe:hover { border-color:var(--accent); color:var(--accent); background:rgba(95,168,224,.10); }
+  /* Injuries: a clean inline stepper (no tiny arrows). */
+  .cs-inj { display:inline-flex; gap:.3rem; align-items:center; }
+  .cs-inj button { width:22px; height:22px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; line-height:1;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; }
+  .cs-inj button:hover { border-color:#d36e6e; color:#f0a3a3; }
   .cs-skill.roll { cursor:pointer; transition:border-color .12s, background .12s; }
   .cs-skill.roll:hover { border-color:var(--accent); background:rgba(95,168,224,.08); }
   .cs-skill.roll:active { transform:translateY(1px); }
@@ -158,16 +173,16 @@
       <div class="l">Health</div>
       <div class="v" id="rv-health">{{ cur.health }}<span class="x">/{{ a.health.max }}</span></div>
       <div class="cs-hpbar"><div class="cs-hpfill" id="rb-health" style="width:{{ (100 * cur.health / a.health.max)|round|int if a.health.max else 0 }}%"></div></div>
-      {% if cur.injuries or interactive %}<div style="font-size:10px; color:#d36e6e; margin-top:.3rem;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span>{% if interactive %} <a href="#" onclick="cosAdjust('injuries',1);return false;" style="color:#d36e6e;">+</a> <a href="#" onclick="cosAdjust('injuries',-1);return false;" style="color:var(--text-on-dark-3);">&minus;</a>{% endif %}</div>{% endif %}
-      {% if interactive %}<div class="cs-step"><button onclick="cosAdjust('health',-1)" title="Take 1 damage">&minus;</button><button onclick="cosAdjust('health',1)" title="Recover 1">+</button></div>{% endif %}
+      {% if cur.injuries or interactive %}<div style="font-size:10px; color:#d36e6e; margin-top:.4rem; display:flex; align-items:center; justify-content:center; gap:.4rem;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span>{% if interactive %}<span class="cs-inj"><button onclick="cosAdjust('injuries',-1)" title="Remove an injury">&minus;</button><button onclick="cosAdjust('injuries',1)" title="Take an injury">+</button></span>{% endif %}</div>{% endif %}
+      {% if interactive %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Health amount"><button class="cs-amt-btn dmg" onclick="cosApply('health',-1,this)" title="Take this much damage">Damage</button><button class="cs-amt-btn heal" onclick="cosApply('health',1,this)" title="Recover this much health">Heal</button></div>{% endif %}
     </div>
     <div class="cs-card">
       <div class="l">Focus</div><div class="v sm" id="rv-focus">{{ cur.focus }}<span class="x">/{{ a.focus_max }}</span></div>
-      {% if interactive %}<div class="cs-step"><button onclick="cosAdjust('focus',-1)" title="Spend focus (react / graze / off-hand)">&minus;</button><button onclick="cosAdjust('focus',1)" title="Collect Yourself">+</button></div>{% endif %}
+      {% if interactive %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Focus amount"><button class="cs-amt-btn spend" onclick="cosApply('focus',-1,this)" title="Spend focus (react / graze / off-hand)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('focus',1,this)" title="Collect Yourself">Gain</button></div>{% endif %}
     </div>
     <div class="cs-card">
       <div class="l">Investiture</div><div class="v sm" id="rv-investiture">{{ cur.investiture }}<span class="x">/{{ a.investiture_max }}</span></div>
-      {% if interactive and a.investiture_max %}<div class="cs-step"><button onclick="cosAdjust('investiture',-1)" title="Spend Investiture (power a surge)">&minus;</button><button onclick="cosAdjust('investiture',1)">+</button><button class="breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe</button></div>{% endif %}
+      {% if interactive and a.investiture_max %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Investiture amount"><button class="cs-amt-btn spend" onclick="cosApply('investiture',-1,this)" title="Spend Investiture (power a surge)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('investiture',1,this)" title="Gain Investiture">Gain</button><button class="cs-amt-btn breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe</button></div>{% endif %}
     </div>
     <div class="cs-card">
       <div class="l">Deflect</div><div class="v sm">{{ a.deflect.value }}</div>
@@ -387,6 +402,14 @@
       const max = key==='injuries' ? 99 : (MAX[key]||0);
       cur[key]=Math.max(0, Math.min(max, (cur[key]||0)+delta));
       paint(); pending[key]=cur[key]; clearTimeout(saveT); saveT=setTimeout(flush, 250);
+    };
+    // Apply the typed amount in this control's input (sign -1 = Damage/Spend, +1 = Heal/Gain).
+    window.cosApply = function(key, sign, btn){
+      const wrap = btn && btn.closest('.cs-amt');
+      const inp = wrap && wrap.querySelector('.cs-amt-in');
+      let amt = inp ? parseInt(inp.value, 10) : 1;
+      if(!Number.isFinite(amt) || amt < 1) amt = 1;
+      cosAdjust(key, sign * amt);
     };
     window.cosBreathe = function(){ cur.investiture=MAX.investiture; paint(); pending.investiture=cur.investiture; flush();
       res('<span class="opp">Breathe Stormlight</span> — Investiture restored to '+MAX.investiture); };
