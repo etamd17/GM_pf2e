@@ -467,9 +467,27 @@
           refreshCombat();
         }).catch(()=>{});
     };
+    // --- GM -> player: apply state the GM pushed (e.g. a condition) live ---
+    function paintConds(conds){
+      conds = conds || {};
+      document.querySelectorAll('#cos-conditions .cs-cond').forEach(x=>{
+        x.classList.toggle('on', !!conds[x.getAttribute('data-cond')]);
+      });
+    }
+    function applyRemoteState(ps){
+      if(!ps) return;
+      if(Object.keys(pending).length) return;   // a local edit is in flight -- ours wins
+      ['health','focus','investiture','injuries'].forEach(k=>{ if(k in ps) cur[k]=ps[k]; });
+      if('enhanced' in ps){ cur.enhanced=!!ps.enhanced; paintEnhance(); }
+      paint();
+      if('conditions' in ps) paintConds(ps.conditions);
+    }
     try {
       const _csbSse = new EventSource('/api/events');
       _csbSse.addEventListener('encounter_update', function(){ refreshCombat(); });
+      _csbSse.addEventListener('cosmere_player_state', function(e){
+        try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}
+      });
     } catch(e) {}
     refreshCombat();
 
