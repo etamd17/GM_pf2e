@@ -7179,9 +7179,25 @@ def cosmere_pc_sheet(pid):
     build = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
     actor = systems.cosmere.CosmereActor(build.to_actor_doc())
     _u = _auth.current_user()
-    can_delete = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
+    # The owner (or the GM) gets the INTERACTIVE sheet: tap-to-roll skills/strikes
+    # + live Health/Focus/Investiture steppers. Everyone else sees it read-only.
+    interactive = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
+    can_delete = interactive
+    ps = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
+    def _ps(key, default):
+        try:
+            return int(ps[key])
+        except (KeyError, TypeError, ValueError):
+            return int(default)
+    cur = {
+        'health': _ps('health', actor.health_max),
+        'focus': _ps('focus', actor.focus_max),
+        'investiture': _ps('investiture', actor.investiture_max),
+        'injuries': _ps('injuries', 0),
+    }
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
+        interactive=interactive, cur=cur,
         actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
         skill_names=build.eff_skill_names(),
         attr_names=systems.cosmere.ATTR_NAMES,
@@ -7305,6 +7321,78 @@ def cosmere_pc_notes(pid):
     b['notes'] = (text if isinstance(text, str) else '')[:20000]
     doc['build'] = b
     _save_cosmere_pc(doc)
+    return jsonify({'ok': True})
+
+
+def _cosmere_can_act_on(doc):
+    """The PC's owner, or the GM, may roll/spend on it."""
+    u = _auth.current_user()
+    return _is_gm() or (bool(u) and doc.get('owner_user_id') == u.get('id'))
+
+
+@app.route('/cosmere/pc/<pid>/state', methods=['POST'])
+def cosmere_pc_state(pid):
+    """Persist a Cosmere PC's live resource state (current health / focus /
+    investiture / injuries) from the player's own sheet, and broadcast it so the
+    GM (and the tracker) see the change. Owner or GM only."""
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return jsonify({'ok': False, 'error': 'unknown character'}), 404
+    if not _cosmere_can_act_on(doc):
+        return jsonify({'ok': False, 'error': 'not your character'}), 403
+    data = request.get_json(silent=True) or {}
+    ps = dict(doc.get('play_state') or {})
+    for k in ('health', 'focus', 'investiture', 'injuries'):
+        if k in data:
+            try:
+                ps[k] = max(0, int(data[k]))
+            except (TypeError, ValueError):
+                pass
+    if isinstance(data.get('conditions'), dict):
+        ps['conditions'] = data['conditions']
+    doc['play_state'] = ps
+    _save_cosmere_pc(doc)
+    try:
+        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
+    except Exception:
+        pass
+    return jsonify({'ok': True, 'play_state': ps})
+
+
+@app.route('/api/cosmere/roll', methods=['POST'])
+def api_cosmere_roll():
+    """Log a roll made from a Cosmere player sheet (skill test / strike) and
+    broadcast it to the GM + table via the shared combat log + SSE. The dice are
+    rolled client-side (d20 + mod, optional advantage + plot die); the server
+    attributes the roll to the OWNED character so a player can't spoof another."""
+    data = request.get_json(silent=True) or {}
+    doc = _load_cosmere_pc(data.get('pid'))
+    if not doc:
+        return jsonify({'ok': False, 'error': 'unknown character'}), 404
+    if not _cosmere_can_act_on(doc):
+        return jsonify({'ok': False, 'error': 'not your character'}), 403
+    from datetime import datetime
+    entry = {
+        'id': str(uuid.uuid4()),
+        'name': doc.get('name') or 'Cosmere Hero',
+        'action': str(data.get('action', 'Test'))[:80],
+        'result': str(data.get('result', ''))[:48],
+        'detail': str(data.get('detail', ''))[:200],
+        'degree': None,                       # Cosmere is meet-or-beat: no PF2e degree banner
+        'time': datetime.now().strftime('%H:%M:%S'),
+        'round': ROUND_NUMBER,
+    }
+    COMBAT_LOGS.append(entry)
+    if len(COMBAT_LOGS) > 200:
+        COMBAT_LOGS.pop(0)
+    try:
+        _bump_campaign_stat('total_rolls')
+    except Exception:
+        pass
+    try:
+        sse_broadcast('player_roll', {k: entry[k] for k in ('name', 'action', 'result', 'detail', 'degree', 'time')})
+    except Exception:
+        pass
     return jsonify({'ok': True})
 
 

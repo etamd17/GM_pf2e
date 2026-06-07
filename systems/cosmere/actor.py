@@ -163,7 +163,10 @@ class CosmereActor:
                 self.actions.append({'name': iname, 'description': _text(isys.get('description'))})
             elif itype == 'weapon':
                 dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
-                self.strikes.append({'name': iname, 'damage': dmg.get('formula', ''), 'type': dmg.get('type', '')})
+                skill = dmg.get('skill')
+                # attack mod = the weapon-skill's mod (hwp/lwp); damage = dice + that mod on a hit
+                self.strikes.append({'name': iname, 'damage': dmg.get('formula', ''), 'type': dmg.get('type', ''),
+                                     'skill': skill, 'mod': self.skills.get(skill, {}).get('mod', 0) if skill else 0})
             elif itype == 'trait':
                 self.traits.append(iname)
 
