@@ -691,7 +691,7 @@
     {# Cosmere player bottom nav -- the Cosmere sibling, for joined Cosmere
        players (no player_name session; system-driven). No PF2e bleed. #}
     {% if not is_gm and active_system == 'cosmere' %}
-    {% set active_player_tab = 'party' if request.path.startswith('/cosmere/pcs') else ('combat' if request.path.startswith('/tracker') else ('notes' if request.path.startswith('/notes') else 'sheet')) %}
+    {% set active_player_tab = 'party' if request.path.startswith('/cosmere/pcs') else ('combat' if request.path.startswith('/cosmere/combat') else ('notes' if request.path.startswith('/notes') else 'sheet')) %}
     {% include "_cosmere_player_nav.html" %}
     {% endif %}
 

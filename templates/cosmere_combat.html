@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Combat — Cosmere{% endblock %}
+
+{% block extra_head %}
+  .cc-wrap { color:var(--text-on-dark-1,#e8eef5); max-width:760px; margin:0 auto; }
+  .cc-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+             border-bottom:1px solid var(--border-card); padding-bottom:.7rem; margin-bottom:1rem; }
+  .cc-title { font-family:var(--font-display,serif); font-size:1.7rem; font-weight:700; color:var(--accent); }
+  .cc-meta { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  .cc-round { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); }
+  .cc-mode { font-size:11px; padding:2px 9px; border-radius:999px; background:rgba(95,168,224,.10);
+             border:1px solid rgba(95,168,224,.35); color:var(--accent); }
+  .cc-banner { margin-bottom:1rem; padding:.6rem .9rem; border-radius:10px; font-weight:600; font-size:14px;
+               background:var(--bg-sunken,#131922); border:1px solid var(--border-card); }
+  .cc-banner.myturn { border-color:#34d399; color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.35), 0 0 20px rgba(52,211,153,.16); }
+  .cc-list { display:flex; flex-direction:column; gap:.5rem; }
+  .cc-row { display:flex; align-items:center; gap:.75rem; padding:.6rem .8rem; border-radius:10px;
+            background:var(--bg-sunken,#131922); border:1px solid var(--border-card); transition:border-color .15s, box-shadow .15s; }
+  .cc-row.active { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.35), 0 0 18px rgba(52,211,153,.14); }
+  .cc-row.me { border-left:4px solid var(--accent); }
+  .cc-row.hidden { opacity:.6; font-style:italic; }
+  .cc-pos { font-size:13px; font-weight:700; color:var(--text-on-dark-3); width:1.5rem; text-align:center; flex:none; }
+  .cc-row.active .cc-pos { color:#34d399; }
+  .cc-main { flex:1; min-width:0; }
+  .cc-nm { font-size:15px; font-weight:600; display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+  .cc-you { font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:1px 7px; border-radius:999px;
+            background:var(--accent); color:#06242b; font-weight:700; }
+  .cc-kind { font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:1px 7px; border-radius:999px;
+             background:rgba(255,255,255,.06); border:1px solid var(--border-card); color:var(--text-on-dark-3); }
+  .cc-kind.adv { background:rgba(211,110,110,.12); border-color:rgba(211,110,110,.4); color:#f0a3a3; }
+  .cc-sub { margin-top:.3rem; display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
+  .cc-cond { font-size:10px; padding:1px 7px; border-radius:6px; background:rgba(245,158,11,.16);
+             border:1px solid #f59e0b; color:#fbbf24; }
+  .cc-injury { font-size:10px; padding:1px 7px; border-radius:6px; background:rgba(211,110,110,.14);
+               border:1px solid rgba(211,110,110,.45); color:#f0a3a3; }
+  .cc-hpbar { width:90px; height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; flex:none; }
+  .cc-hpfill { height:100%; background:linear-gradient(90deg,#34d399,#a3e635); }
+  .cc-init { flex:none; text-align:right; min-width:64px; }
+  .cc-init b { font-size:18px; color:#e8eef5; }
+  .cc-init small { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-on-dark-3); }
+  .cc-phase { font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; letter-spacing:.03em; }
+  .cc-phase.fast { background:rgba(56,189,248,.14); border:1px solid rgba(56,189,248,.45); color:#5eead4; }
+  .cc-phase.slow { background:rgba(148,163,184,.12); border:1px solid rgba(148,163,184,.35); color:#cbd5e1; }
+  .cc-empty { text-align:center; padding:3rem 1rem; color:var(--text-on-dark-3); }
+  .cc-empty .big { font-size:1.1rem; color:var(--text-on-dark-2); margin-bottom:.3rem; }
+{% endblock %}
+
+{% block content %}
+<div class="cc-wrap">
+  <div class="cc-head">
+    <div class="cc-title">Combat</div>
+    <div class="cc-meta">
+      <span class="cc-round" id="cc-round"></span>
+      <span class="cc-mode" id="cc-mode" title="Your GM's initiative house-rule"></span>
+    </div>
+  </div>
+
+  <div class="cc-banner" id="cc-banner" style="display:none;"></div>
+  <div class="cc-list" id="cc-list"></div>
+  <div class="cc-empty" id="cc-empty" style="display:none;">
+    <div class="big">No active encounter</div>
+    <div>When your GM starts combat, the turn order shows up here.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const MY = {{ my_name|tojson }};
+  const listEl = document.getElementById('cc-list');
+  const emptyEl = document.getElementById('cc-empty');
+  const roundEl = document.getElementById('cc-round');
+  const modeEl = document.getElementById('cc-mode');
+  const bannerEl = document.getElementById('cc-banner');
+  const cap = s => s ? s.charAt(0).toUpperCase()+s.slice(1) : s;
+  const esc = s => String(s==null?'':s).replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+  function rowHTML(c, i, mode){
+    if(c.hidden){
+      return `<div class="cc-row hidden${c.is_active?' active':''}"><div class="cc-pos">${i+1}</div>`
+        + `<div class="cc-main"><div class="cc-nm">??? <span class="cc-kind adv">Adversary</span></div></div>`
+        + `<div class="cc-init">${c.is_active?'<span class="cc-phase slow">UP</span>':''}</div></div>`;
+    }
+    const isMe = c.is_pc && MY && c.name === MY;
+    const kind = c.is_pc ? '<span class="cc-kind">Hero</span>'
+      : `<span class="cc-kind adv">${esc(c.role||'Adversary')}${c.tier?(' · T'+c.tier):''}</span>`;
+    const you = isMe ? '<span class="cc-you">You</span>' : '';
+    // sub-line: conditions + injuries (+ a PC hp bar)
+    let sub = '';
+    (c.conditions||[]).forEach(k => sub += `<span class="cc-cond">${esc(cap(k))}</span>`);
+    if(c.injuries) sub += `<span class="cc-injury">Injuries ${c.injuries}</span>`;
+    let hp = '';
+    if(c.is_pc && c.health && c.health.max){
+      const pct = Math.max(0, Math.min(100, Math.round(100*c.health.value/c.health.max)));
+      hp = `<div class="cc-hpbar" title="${c.health.value} / ${c.health.max}"><div class="cc-hpfill" style="width:${pct}%"></div></div>`;
+    }
+    // right side: traditional initiative number, or fast/slow phase badge
+    let right;
+    if(mode === 'traditional'){
+      right = `<b>${c.initiative||0}</b><small>Initiative</small>`;
+    } else {
+      const f = c.speed_choice === 'fast';
+      right = `<span class="cc-phase ${f?'fast':'slow'}">${f?'FAST':'SLOW'}</span><small>${c.max_actions||3} actions</small>`;
+    }
+    return `<div class="cc-row${c.is_active?' active':''}${isMe?' me':''}">`
+      + `<div class="cc-pos">${i+1}</div>`
+      + `<div class="cc-main"><div class="cc-nm">${esc(c.name)} ${you}${kind}</div>`
+      + (sub?`<div class="cc-sub">${sub}</div>`:'') + `</div>`
+      + hp + `<div class="cc-init">${right}</div></div>`;
+  }
+
+  function render(st){
+    if(!st || !st.ok || !st.in_encounter){
+      listEl.innerHTML=''; emptyEl.style.display=''; bannerEl.style.display='none';
+      roundEl.textContent=''; modeEl.textContent=''; return;
+    }
+    emptyEl.style.display='none';
+    roundEl.textContent = 'Round ' + st.round;
+    modeEl.textContent = st.mode === 'traditional' ? 'Rolled initiative' : 'Fast / Slow phases';
+    const meActive = st.order.some(c => c.is_active && c.is_pc && MY && c.name === MY);
+    bannerEl.style.display='';
+    bannerEl.classList.toggle('myturn', meActive);
+    bannerEl.textContent = meActive ? 'YOUR TURN' : ('Acting: ' + (st.active_name || '—'));
+    listEl.innerHTML = st.order.map((c,i)=>rowHTML(c,i,st.mode)).join('');
+  }
+
+  function load(){
+    fetch('/api/cosmere/combat_state').then(r=>r.json()).then(render).catch(()=>{});
+  }
+  try {
+    const sse = new EventSource('/api/events');
+    sse.addEventListener('encounter_update', load);
+  } catch(e) {}
+  load();
+})();
+</script>
+{% endblock %}
