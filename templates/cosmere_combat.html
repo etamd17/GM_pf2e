@@ -127,7 +127,8 @@
     fetch('/api/cosmere/combat_state').then(r=>r.json()).then(render).catch(()=>{});
   }
   try {
-    const sse = new EventSource('/api/events');
+    // Shared SSE hub (base.html <head>) — one socket per tab.
+    const sse = { addEventListener: function(n, h) { window.appSSE(n, h); } };
     sse.addEventListener('encounter_update', load);
   } catch(e) {}
   load();

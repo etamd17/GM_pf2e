@@ -1394,10 +1394,11 @@
     let _sseLastMsg = 0;
     function _sseAlive() { _sseLastMsg = Date.now(); }
     function connectSSE() {
-        if (evtSource) { try { evtSource.close(); } catch(e) {} }
-        evtSource = new EventSource('/api/events');
-        evtSource.onopen = _sseAlive;
-        evtSource.addEventListener('connected', _sseAlive);
+        // Shared SSE hub (base.html <head>) — one socket per tab, hub owns
+        // reconnect. The evtSource alias keeps the pc_update handler unchanged;
+        // liveness rides 'connected' + each pc_update for the poll fallback.
+        evtSource = { addEventListener: function(name, fn) { window.appSSE(name, fn); } };
+        window.appSSE('connected', _sseAlive);
 
         evtSource.addEventListener('pc_update', function(e) {
             _sseAlive();
@@ -1418,10 +1419,8 @@
             } catch(err) {}
         });
 
-        evtSource.onerror = function() {
-            evtSource.close();
-            setTimeout(connectSSE, 5000);
-        };
+        // No onerror — the shared hub owns reconnect; the 30s-stale poll
+        // fallback below stays as the safety net.
     }
     connectSSE();
 

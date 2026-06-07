@@ -94,9 +94,9 @@
 </div>
 
 <script>
-// Live updates via SSE
+// Live updates via the shared SSE hub (base.html <head>) — one socket per tab.
 try {
-    var src = new EventSource('/api/events');
+    var src = { addEventListener: function(n, h) { window.appSSE(n, h); } };
     src.addEventListener('pc_update', function(e) {
         var data = JSON.parse(e.data);
         var name = data.name;

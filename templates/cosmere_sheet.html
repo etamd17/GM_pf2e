@@ -506,7 +506,8 @@
       if('conditions' in ps) paintConds(ps.conditions);
     }
     try {
-      const _csbSse = new EventSource('/api/events');
+      // Shared SSE hub (base.html <head>) — one socket per tab.
+      const _csbSse = { addEventListener: function(n, h) { window.appSSE(n, h); } };
       _csbSse.addEventListener('encounter_update', function(){ refreshCombat(); });
       _csbSse.addEventListener('cosmere_player_state', function(e){
         try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}

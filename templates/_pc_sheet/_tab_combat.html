@@ -55,18 +55,18 @@
                             {% for cond in ['Frightened', 'Sickened', 'Enfeebled', 'Clumsy', 'Drained', 'Stupefied'] %}
                             {% set c_lower = cond|lower %}
                             {% set c_val = pc.conditions.get(c_lower, 0) %}
-                            <div class="cond-numeric bg-gray-900 px-3 py-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group {{ 'is-on' if c_val > 0 else '' }}" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
+                            <div data-cm-num="{{ c_lower }}" class="cond-numeric bg-gray-900 px-3 py-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group {{ 'is-on' if c_val > 0 else '' }}" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
                                 <div class="cond-row">
                                     <span class="cond-name text-[10px] font-bold uppercase {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
                                     <div class="cond-ctrl">
-                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val - 1 }})" class="cond-step text-gray-300 hover:text-white" aria-label="Decrease {{ cond }}">−</button>
+                                        {# Delta-based so the onclick is static — the painter only refreshes
+                                           the displayed value/styling, never the handler (server clamps 0–4). #}
+                                        <button onclick="adjustCondition('{{ c_lower }}', -1)" class="cond-step text-gray-300 hover:text-white" aria-label="Decrease {{ cond }}">−</button>
                                         <span class="cond-val {{ 'text-red-400' if c_val > 0 else 'text-gray-500' }}">{{ c_val }}</span>
-                                        <button onclick="updateCondition('{{ c_lower }}', {{ c_val + 1 }})" class="cond-step text-gray-300 hover:text-white" aria-label="Increase {{ cond }}">+</button>
+                                        <button onclick="adjustCondition('{{ c_lower }}', 1)" class="cond-step text-gray-300 hover:text-white" aria-label="Increase {{ cond }}">+</button>
                                     </div>
                                 </div>
-                                {% if c_val > 0 %}
-                                <div class="text-[10px] text-red-300/80 mt-1 leading-tight">{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}</div>
-                                {% endif %}
+                                <div data-cm-desc class="text-[10px] text-red-300/80 mt-1 leading-tight"{% if not c_val or c_val <= 0 %} style="display:none;"{% endif %}>{% if c_val > 0 %}{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}{% endif %}</div>
                             </div>
                             {% endfor %}
                         </div>
@@ -84,13 +84,11 @@
                             {% set c_lower = cond|lower %}
                             {% set c_val = pc.conditions.get(c_lower, False) %}
                             <div class="flex flex-col">
-                                <button onclick="updateCondition('{{ c_lower }}', {{ 'false' if c_val else 'true' }})" class="cond-toggle rounded-lg border flex justify-between items-center shadow-inner transition-colors {{ 'border-red-900/50 bg-red-900/20' if c_val else 'bg-gray-900 border-gray-700 hover:border-gray-500' }}" title="{{ toggle_tips.get(c_lower, '') }}">
-                                    <span class="text-[11px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val else 'text-gray-400' }}">{{ cond|replace('_', ' ') }}</span>
-                                    <span class="text-[10px] font-bold {{ 'text-red-400' if c_val else 'text-gray-600' }}">{% if c_val %}ON{% else %}OFF{% endif %}</span>
+                                <button data-cm-bool="{{ c_lower }}" onclick="adjustCondition('{{ c_lower }}', 'toggle')" class="cond-toggle rounded-lg border flex justify-between items-center shadow-inner transition-colors {{ 'border-red-900/50 bg-red-900/20' if c_val else 'bg-gray-900 border-gray-700 hover:border-gray-500' }}" title="{{ toggle_tips.get(c_lower, '') }}">
+                                    <span class="cm-bool-name text-[11px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val else 'text-gray-400' }}">{{ cond|replace('_', ' ') }}</span>
+                                    <span class="cm-bool-state text-[10px] font-bold {{ 'text-red-400' if c_val else 'text-gray-600' }}">{% if c_val %}ON{% else %}OFF{% endif %}</span>
                                 </button>
-                                {% if c_val %}
-                                <div class="text-[10px] text-red-300/80 mt-1 px-1 leading-tight">{{ toggle_tips.get(c_lower, '') }}</div>
-                                {% endif %}
+                                <div data-cm-bool-desc class="text-[10px] text-red-300/80 mt-1 px-1 leading-tight"{% if not c_val %} style="display:none;"{% endif %}>{{ toggle_tips.get(c_lower, '') }}</div>
                             </div>
                             {% endfor %}
                         </div>
@@ -189,13 +187,13 @@
                         {% if pc.attacks %}
                             <div class="space-y-3">
                             {% for attack in pc.attacks %}
-                                <div class="ds-surface-sunken p-4 group" style="border-radius:var(--radius-md);">
+                                <div class="ds-surface-sunken p-4 group" style="border-radius:var(--radius-md);" data-weapon-card data-attack-name="{{ attack.name }}">
                                 <div class="flex justify-between items-start mb-2">
                                     <div class="flex items-center gap-2">
                                         <span class="action-cost" data-cost="1" title="One Action — Strike">&#9670;</span>
                                         <span class="font-header font-bold block leading-none" style="font-size:17px; letter-spacing:0.02em; color:var(--gilt);">{{ attack.name }}</span>
                                         {% if attack.has_two_hand %}
-                                        <button onclick="toggleTwoHand('{{ attack.name|replace("'", "\\'") }}')" class="px-2 py-0.5 rounded font-bold uppercase tracking-wider border transition-colors {% if attack.is_two_handed %}bg-amber-600 text-white border-amber-500{% else %}text-gray-400 border-gray-600 hover:text-white{% endif %}" style="font-size:var(--text-2xs); background:{% if not attack.is_two_handed %}var(--surface-overlay){% endif %};">
+                                        <button data-twohand-btn onclick="toggleTwoHand('{{ attack.name|replace("'", "\\'") }}')" class="px-2 py-0.5 rounded font-bold uppercase tracking-wider border transition-colors {% if attack.is_two_handed %}bg-amber-600 text-white border-amber-500{% else %}text-gray-400 border-gray-600 hover:text-white{% endif %}" style="font-size:var(--text-2xs); background:{% if not attack.is_two_handed %}var(--surface-overlay){% endif %};">
                                             2H
                                         </button>
                                         {% endif %}
@@ -206,8 +204,8 @@
                                 </div>
                                 {# Paizo-style compact summary line. Primary hit bonus + damage expression read as a single statline, separating "what are my numbers" from the interactive 1st/2nd/3rd MAP buttons below. #}
                                 <div class="weapon-statline" style="font-family:var(--font-flavor); font-size:13px; color:var(--text-secondary); margin-bottom:8px; line-height:1.4;">
-                                    {% if attack.strikes and attack.strikes[0] %}<span style="font-family:var(--font-display); color:var(--text-primary); font-variant-numeric:lining-nums tabular-nums; font-weight:700;">{{ attack.strikes[0].label }}</span> to hit<span style="color:var(--t4);"> &middot; </span>{% endif %}
-                                    <span style="font-family:var(--font-display); font-variant-numeric:lining-nums tabular-nums;">{{ attack.damage }}</span>
+                                    {% if attack.strikes and attack.strikes[0] %}<span data-tohit-label style="font-family:var(--font-display); color:var(--text-primary); font-variant-numeric:lining-nums tabular-nums; font-weight:700;">{{ attack.strikes[0].label }}</span> to hit<span style="color:var(--t4);"> &middot; </span>{% endif %}
+                                    <span data-damage-label style="font-family:var(--font-display); font-variant-numeric:lining-nums tabular-nums;">{{ attack.damage }}</span>
                                     {% if attack.damage_type %} {{ attack.damage_type }}{% endif %}
                                 </div>
                                 {% if attack.traits %}
@@ -222,7 +220,7 @@
                                     <div class="flex flex-col md:flex-row gap-3 w-full">
                                         <div class="flex flex-1 gap-1">
                                             {% for strike in attack.strikes %}
-                                            <button onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')"
+                                            <button data-strike-btn="{{ loop.index0 }}" onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')"
                                                     class="flex-1 text-white py-2 rounded text-sm transition-all hover:scale-105 transform"
                                                     style="background:var(--surface-overlay); border:1px solid var(--border-default); border-left:3px solid {% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};"
                                                     aria-label="{{ attack.name }} strike {{ loop.index }} at {{ strike.label }}"
@@ -230,7 +228,7 @@
                                                 <span class="block font-bold uppercase tracking-widest mb-1" style="font-size:var(--text-2xs); color:{% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};">
                                                     {% if loop.index0 == 0 %}1st{% elif loop.index0 == 1 %}2nd{% else %}3rd{% endif %}
                                                 </span>
-                                                <span class="block text-lg font-bold leading-none">{{ strike.label }}</span>
+                                                <span data-strike-label class="block text-lg font-bold leading-none">{{ strike.label }}</span>
                                                 {# MAP delta — show on all three buttons so 1st reads as parallel to 2nd/3rd.
                                                    1st: "MAP +0" (no penalty); 2nd/3rd show the actual −5/−10 or agile −4/−8. #}
                                                 <span class="block text-[9px] mt-0.5 opacity-85" style="color:{% if loop.index0 == 0 %}var(--text-muted){% else %}var(--color-danger){% endif %}; font-weight:700;">
@@ -239,9 +237,9 @@
                                             </button>
                                             {% endfor %}
                                         </div>
-                                        <button onclick="rollDamage('{{ attack.name|replace("'", "\\'") }}', '{{ attack.damage }}')" class="md:w-40 px-3 py-2 rounded transition-colors flex flex-col justify-center items-center relative overflow-hidden" style="background:rgba(107,21,37,0.2); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">
+                                        <button data-damage-btn onclick="rollDamage('{{ attack.name|replace("'", "\\'") }}', '{{ attack.damage }}')" class="md:w-40 px-3 py-2 rounded transition-colors flex flex-col justify-center items-center relative overflow-hidden" style="background:rgba(107,21,37,0.2); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">
                                             <span class="font-bold uppercase tracking-wider" style="font-size:var(--text-2xs); color:var(--color-danger);">Damage</span>
-                                            <span class="text-sm font-bold">{{ attack.damage }}</span>
+                                            <span data-damage-text class="text-sm font-bold">{{ attack.damage }}</span>
                                             {% if attack.crit_effects %}
                                             <div class="absolute bottom-0 w-full py-0.5 text-center" style="background:rgba(107,21,37,0.3); border-top:1px solid rgba(251,113,133,0.15);">
                                                 <span class="font-bold uppercase tracking-widest" style="font-size:var(--text-2xs); color:var(--accent-gold);">{{ attack.crit_effects }}</span>

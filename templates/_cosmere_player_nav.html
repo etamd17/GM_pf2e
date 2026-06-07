@@ -50,12 +50,11 @@
     function _onEncounter(data) {
         try { _setActive(data && data.active_name === CHAR); } catch (e) {}
     }
-    // Reuse a page-level SSE if one exists; otherwise open our own.
+    // Subscribe via the shared SSE hub (base.html <head>) — one socket per tab.
     if (window._navMarkSseAttached) window._navMarkSseAttached();
     window._navHandleEncounterUpdate = _onEncounter;
     try {
-        var src = new EventSource('/api/events');
-        src.addEventListener('encounter_update', function(e) {
+        window.appSSE('encounter_update', function(e) {
             try { _onEncounter(JSON.parse(e.data)); } catch (ex) {}
         });
     } catch (e) {}
