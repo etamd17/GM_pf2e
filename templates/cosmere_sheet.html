@@ -69,6 +69,15 @@
   .cs-rad-btn:hover { background:rgba(95,168,224,.22); }
   .cs-rad-btn:active { transform:translateY(1px); }
   .cs-rad-btn.on { background:var(--accent); color:#06242b; }
+  .cs-cond { font-size:11px; padding:3px 9px; border-radius:7px; cursor:pointer; opacity:.45;
+    background:rgba(255,255,255,.05); border:1px solid var(--border-card); color:#e8eef5; user-select:none; }
+  .cs-cond.on { opacity:1; background:rgba(245,158,11,.16); border-color:#f59e0b; color:#fbbf24; }
+  .cs-cond:hover { opacity:.85; }
+  .cs-combat { margin-bottom:1rem; padding:.55rem .85rem; border-radius:10px; background:var(--bg-sunken,#131922); border:1px solid var(--accent); }
+  .cs-combat.myturn { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 22px rgba(52,211,153,.18); }
+  .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
+    border:1px solid var(--accent); color:var(--accent); font-weight:600; }
+  .cs-cbtn.on { background:var(--accent); color:#06242b; }
 {% endblock %}
 
 {% block content %}
@@ -111,6 +120,28 @@
   {% if pc and warnings %}
   <div style="margin-bottom:1rem; padding:.55rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px;">
     <b>Build notes:</b> {{ warnings|join(' · ') }}
+  </div>
+  {% endif %}
+
+  {% if interactive %}
+  {# --- Live combat strip (shown when this character is in the active encounter) --- #}
+  <div id="cos-combat" class="cs-combat" style="display:none;">
+    <div style="display:flex; align-items:center; gap:.7rem; flex-wrap:wrap;">
+      <span id="cc-round" style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3);"></span>
+      <span id="cc-turn" style="font-size:14px; font-weight:700;"></span>
+      <span style="flex:1;"></span>
+      <span id="cc-controls" style="display:flex; gap:.4rem; align-items:center; flex-wrap:wrap;"></span>
+    </div>
+  </div>
+
+  {# --- Conditions (self-manage) --- #}
+  <div style="margin-bottom:1rem;">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions <span style="text-transform:none; letter-spacing:0;">(tap to toggle)</span></div>
+    <div class="cs-chips" id="cos-conditions">
+      {% for code, info in conditions.items() %}
+      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" onclick="cosCond({{ code|tojson }})" title="{{ info }}">{{ code|capitalize }}</span>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 
@@ -386,6 +417,62 @@
       post('uses '+name, invCost?('−'+invCost+' Inv'):'surge', effect);
       paint(); if(invCost) flush();
     };
+
+    // --- Conditions (self-managed): toggle a chip, persist the whole set ---
+    window.cosCond = function(code){
+      const el=document.querySelector('#cos-conditions .cs-cond[data-cond="'+code+'"]'); if(!el) return;
+      el.classList.toggle('on');
+      const conds={};
+      document.querySelectorAll('#cos-conditions .cs-cond.on').forEach(x=>{ conds[x.getAttribute('data-cond')]=true; });
+      pending.conditions=conds; clearTimeout(saveT); saveT=setTimeout(flush, 250);
+    };
+
+    // --- Live combat strip: drive your own turn from the sheet ---
+    function renderControls(st){
+      const c=document.getElementById('cc-controls'); if(!c) return;
+      if(st.mode==='traditional'){
+        const has = st.initiative>0;
+        c.innerHTML = '<span style="font-size:12px;color:var(--text-on-dark-3)">Initiative '
+          + (has ? ('<b style="color:#e8eef5">'+st.initiative+'</b>') : '<i>unrolled</i>') + '</span>'
+          + '<button class="cs-cbtn" onclick="cosInit()" title="Roll d20 + Speed for turn order">Roll d20+Speed</button>';
+      } else {
+        const f=st.speed_choice==='fast', s=!f;
+        c.innerHTML = '<span style="font-size:11px;color:var(--text-on-dark-3)">Turn:</span>'
+          + '<button class="cs-cbtn'+(f?' on':'')+'" onclick="cosSpeed(\'fast\')" title="2 actions, act earlier">Fast</button>'
+          + '<button class="cs-cbtn'+(s?' on':'')+'" onclick="cosSpeed(\'slow\')" title="3 actions, act later">Slow</button>'
+          + '<span style="font-size:11px;color:var(--text-on-dark-3)">'+(st.max_actions||3)+' actions</span>';
+      }
+    }
+    function refreshCombat(){
+      fetch('/api/cosmere/my_combat?pid='+encodeURIComponent(PID)).then(r=>r.json()).then(st=>{
+        const box=document.getElementById('cos-combat'); if(!box) return;
+        if(!st || !st.ok || !st.in_encounter){ box.style.display='none'; return; }
+        box.style.display='';
+        box.classList.toggle('myturn', !!st.is_my_turn);
+        document.getElementById('cc-round').textContent='Round '+st.round;
+        const turn=document.getElementById('cc-turn');
+        turn.textContent = st.is_my_turn ? 'YOUR TURN' : ('Acting: '+(st.active_name||'—'));
+        turn.style.color = st.is_my_turn ? '#34d399' : '#e8eef5';
+        renderControls(st);
+      }).catch(()=>{});
+    }
+    window.cosSpeed = function(choice){
+      fetch('/api/cosmere/my_speed',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pid:PID, choice})}).then(r=>r.json()).then(()=>refreshCombat()).catch(()=>{});
+    };
+    window.cosInit = function(){
+      fetch('/api/cosmere/my_initiative',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pid:PID})}).then(r=>r.json()).then(dt=>{
+          if(dt && dt.ok) res('<span class="opp">Initiative</span> '+dt.detail+' = <b>'+dt.initiative+'</b>');
+          refreshCombat();
+        }).catch(()=>{});
+    };
+    try {
+      const _csbSse = new EventSource('/api/events');
+      _csbSse.addEventListener('encounter_update', function(){ refreshCombat(); });
+    } catch(e) {}
+    refreshCombat();
+
     paintEnhance();
   })();
   </script>
