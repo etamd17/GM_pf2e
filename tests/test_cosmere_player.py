@@ -40,6 +40,14 @@ def test_owner_sheet_is_interactive(pc):
     assert 'Raise the stakes' in body              # the Plot Die toggle (toolbar markup)
 
 
+def test_sheet_uses_typed_resource_controls(pc):
+    # the tiny +/- arrows are replaced by a typed amount + labelled action buttons
+    body = app.app.test_client().get('/cosmere/pc/' + pc).data.decode()
+    assert 'cs-amt' in body and 'cosApply(' in body
+    assert '>Damage</button>' in body and '>Heal</button>' in body
+    assert 'cs-step' not in body                    # old micro-stepper class fully gone
+
+
 def test_adversary_sheet_stays_readonly(pc):
     """An adversary sheet (bestiary) doesn't pass cur/interactive -> no rollers."""
     advs = __import__('systems.cosmere', fromlist=['adversary_docs']).adversary_docs()
