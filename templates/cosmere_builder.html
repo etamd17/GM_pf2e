@@ -52,6 +52,10 @@
   .step.active { display:block; animation:stepIn .18s ease; }
   @keyframes stepIn { from { opacity:.3; transform:translateY(4px); } to { opacity:1; transform:none; } }
   .step-lead { font-size:13px; color:var(--text-on-dark-2); margin:0 0 1rem; line-height:1.5; }
+  .hint { font-size:11px; color:var(--text-on-dark-3); margin-top:.35rem; line-height:1.35; }
+  .field-hint { font-size:11.5px; color:var(--text-on-dark-3); margin:.15rem 0 0; line-height:1.4; }
+  .info-line { font-size:12px; color:var(--text-on-dark-2); }
+  .info-line b { color:var(--accent); }
   .wiz-nav { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-card); }
   .wiz-nav .count { font-size:12px; color:var(--text-on-dark-3); }
   .wiz-side { position:sticky; top:62px; background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.9rem 1rem; }
@@ -102,13 +106,15 @@
 
       <section class="step" data-step="0">
         <div class="sec-h">Identity</div>
-        <p class="step-lead">Who are you? Your ancestry and the culture you were raised in. (Name and level live in the bar above.)</p>
+        <p class="step-lead">Who are you? Your <b>ancestry</b> grants bonus talents as you level; the <b>culture</b> you were raised in gives you its cultural Expertise. (Name and level live in the bar above.)</p>
         <div class="row">
           <div><label>Ancestry</label><select id="f-ancestry" onchange="onAncestry()">
             {% for anc in ['Human','Singer'] %}<option {{ 'selected' if build.ancestry==anc }}>{{ anc }}</option>{% endfor %}</select></div>
-          <div><label>Culture (a cultural expertise)</label><select id="f-culture" onchange="onCulture()"><option value="">&mdash;</option>
+          <div><label>Culture <span class="muted" style="font-weight:400;">(grants an Expertise)</span></label><select id="f-culture" onchange="onCulture()"><option value="">&mdash;</option>
             {% for c in cultures %}<option {{ 'selected' if build.culture==c }}>{{ c }}</option>{% endfor %}</select></div>
         </div>
+        <div id="ancestry-info" class="field-hint" style="margin-top:.5rem;"></div>
+        <div id="culture-info" class="field-hint"></div>
         <div id="singer-section" style="display:none; margin-top:.7rem;">
           <div class="row">
             <div style="min-width:210px;"><label>Singer Starting Form</label>
@@ -126,7 +132,8 @@
         <div class="grid g-attrs">
           {% for k in ['str','spd','int','wil','awa','pre'] %}
           <div class="card"><label>{{ attr_names[k] }}</label>
-            <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()"></div>
+            <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()" title="{{ attr_desc[k] }}">
+            <div class="hint">{{ attr_desc[k] }}</div></div>
           {% endfor %}
         </div>
       </section>
@@ -136,8 +143,9 @@
         <p class="step-lead">Distribute skill ranks. A skill&rsquo;s modifier is its ranks plus its governing attribute.</p>
         <div class="grid g-skills" id="basic-skills">
           {% for code, name in skill_names.items() if code not in surge_skills %}
-          <div class="card skill">
+          <div class="card skill" title="{{ skill_desc.get(code, '') }}">
             <div class="nm">{{ name }} <small>{{ skill_attr[code] }}</small></div>
+            <div class="hint">{{ skill_desc.get(code, '') }}</div>
             <div class="stepper">
               <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
               <input class="skill-rank" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
@@ -148,7 +156,7 @@
           {% endfor %}
         </div>
         <div class="sec-h">Expertises <span id="b-exp" class="budget"></span></div>
-        <p class="step-lead" style="margin-bottom:.4rem;">Two cultural expertises plus your Intellect. One per line.</p>
+        <p class="step-lead" style="margin-bottom:.4rem;">An <b>Expertise</b> is a field you know deeply &mdash; a language, a craft, a culture, a place &mdash; that lets you attempt related tasks others can&rsquo;t and gives an edge on tests about it. You get <b>2 + your Intellect</b> (your culture&rsquo;s Expertise is added for you). One per line.</p>
         <textarea id="f-expertises" placeholder="One per line" oninput="recompute()">{{ build.expertises|join('\n') }}</textarea>
       </section>
 
@@ -187,8 +195,9 @@
           </div>
           <div id="surge-skills" class="grid g-skills" style="margin-top:.7rem; display:none;">
             {% for code, name in skill_names.items() if code in surge_skills %}
-            <div class="card skill">
+            <div class="card skill" title="{{ skill_desc.get(code, '') }}">
               <div class="nm">{{ name }} <small>surge &middot; {{ skill_attr[code] }}</small></div>
+              <div class="hint">{{ skill_desc.get(code, '') }}</div>
               <div class="stepper">
                 <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
                 <input class="skill-rank surge" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
@@ -234,10 +243,14 @@
         <div class="sec-h">Story</div>
         <p class="step-lead">The heart of your character &mdash; optional, but it&rsquo;s what the table remembers.</p>
         <div class="grid" style="grid-template-columns:1fr 1fr;">
-          <div><label>Purpose</label><textarea id="f-purpose">{{ build.purpose }}</textarea></div>
-          <div><label>Obstacle</label><textarea id="f-obstacle">{{ build.obstacle }}</textarea></div>
-          <div><label>Goals</label><textarea id="f-goals">{{ build.goals }}</textarea></div>
-          <div><label>Appearance / Notes</label><textarea id="f-appearance">{{ build.appearance }}</textarea></div>
+          <div><label>Purpose</label><textarea id="f-purpose">{{ build.purpose }}</textarea>
+            <p class="field-hint">Why do you adventure? The drive that gets you out the door.</p></div>
+          <div><label>Obstacle</label><textarea id="f-obstacle">{{ build.obstacle }}</textarea>
+            <p class="field-hint">A flaw, fear, or wound that complicates your path.</p></div>
+          <div><label>Goals</label><textarea id="f-goals">{{ build.goals }}</textarea>
+            <p class="field-hint">Concrete things you&rsquo;re working toward &mdash; some talents list a goal as a prerequisite.</p></div>
+          <div><label>Appearance / Notes</label><textarea id="f-appearance">{{ build.appearance }}</textarea>
+            <p class="field-hint">How you look and carry yourself, plus anything else worth noting.</p></div>
         </div>
       </section>
 
@@ -283,6 +296,8 @@
 <script>
 const PID = {{ pid|tojson }};
 const SKILL_ATTR = {{ skill_attr|tojson }};
+const ANCESTRY_INFO = {{ ancestry_info|tojson }};
+const CULTURE_INFO = {{ culture_info|tojson }};
 const SURGE = {{ surge_skills|tojson }};
 const PATH_TALENTS = {{ path_talents|tojson }};
 const ORDERS = {{ radiant_orders|tojson }};
@@ -333,15 +348,22 @@ function onPath(){
   } else { box.innerHTML=''; }
   recompute();
 }
+function paintCultureInfo(){
+  const c=v('f-culture'), box=document.getElementById('culture-info');
+  if(box) box.innerHTML = c ? `<span class="info-line"><b>${c}:</b> ${CULTURE_INFO[c]||''} Grants the ${c} cultural Expertise.</span>` : '';
+}
 function onCulture(){
+  paintCultureInfo();
   const c=v('f-culture'); if(!c) return;
   const ta=document.getElementById('f-expertises');
   const lines=ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
   if(!lines.includes(c)){ lines.unshift(c); ta.value=lines.join('\n'); recompute(); }
 }
 function onAncestry(){
-  const isSinger = v('f-ancestry')==='Singer';
+  const anc = v('f-ancestry'), isSinger = anc==='Singer';
   document.getElementById('singer-section').style.display = isSinger?'block':'none';
+  const ab=document.getElementById('ancestry-info');
+  if(ab) ab.innerHTML = (anc && ANCESTRY_INFO[anc]) ? `<span class="info-line"><b>${anc}:</b> ${ANCESTRY_INFO[anc].bonus}</span>` : '';
   TALENTS = TALENTS.filter(t=>t.id!==SINGER_CHANGE_FORM.id);
   if(isSinger) TALENTS.unshift({id:SINGER_CHANGE_FORM.id, name:SINGER_CHANGE_FORM.name, key:true});
   renderTalents(); onForm(); recompute();
@@ -634,7 +656,7 @@ function mergeHomebrew(){
 // init
 buildRail();
 mergeHomebrew();
-onPath(); onAncestry(); onOrder(); renderTalents(); renderInv(); recompute();
+onPath(); onAncestry(); paintCultureInfo(); onOrder(); renderTalents(); renderInv(); recompute();
 goStep(0);
 </script>
 {% endblock %}

@@ -91,3 +91,12 @@ def test_builder_page_wires_enforcement(store):
     body = app.app.test_client().get('/cosmere/builder').data.decode()
     assert 'updateSaveGate' in body and 'GM_OVERRIDE' in body
     assert 'btn-save-top' in body and 'btn-save-review' in body
+
+
+def test_builder_page_explains_choices(store):
+    # the builder now surfaces what each choice means
+    body = app.app.test_client().get('/cosmere/builder').data.decode()
+    assert 'Feeds Physical Defense' in body                     # attribute description
+    assert 'Climbing, jumping' in body                          # skill description (Athletics)
+    assert 'ANCESTRY_INFO' in body and 'CULTURE_INFO' in body   # info-line data
+    assert 'is a field you know deeply' in body                 # expertise explanation
