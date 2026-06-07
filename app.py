@@ -7300,6 +7300,64 @@ def cosmere_player_hub():
     )
 
 
+@app.route('/cosmere/combat')
+def cosmere_combat_view():
+    """A player-facing combat view: the whole turn order, the round, and who's
+    up -- the Cosmere sibling of /player's encounter view. Live via the
+    encounter_update SSE; data comes from /api/cosmere/combat_state (which masks
+    hidden adversaries for players). The nav's 'Combat' tab points here."""
+    u = _auth.current_user() if _account_mode() else None
+    my_name = ''
+    if u:
+        for d in _list_cosmere_pcs():
+            if d.get('owner_user_id') == u.get('id'):
+                my_name = d.get('name') or ''
+                break
+    return render_template('cosmere_combat.html', my_name=my_name,
+                           cond_info=systems.cosmere.CONDITION_INFO)
+
+
+@app.route('/api/cosmere/combat_state')
+def api_cosmere_combat_state():
+    """Player-safe snapshot of the encounter order for the Cosmere combat view.
+    Hidden adversaries are masked for non-GM viewers (name '???', no stats); the
+    active banner is scrubbed when the active combatant is hidden. PC health is
+    shown (the party already sees each other); adversary exact HP is withheld --
+    players get tier/role + conditions, not a number to meta-game against."""
+    gm = _is_gm()
+    with ENCOUNTER_LOCK:
+        active_c = ACTIVE_ENCOUNTER[TURN_INDEX] if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+        active_visible = getattr(active_c, 'visible_to_players', True) if active_c else True
+        order = []
+        for i, c in enumerate(ACTIVE_ENCOUNTER):
+            if not (gm or getattr(c, 'visible_to_players', True)):
+                order.append({'name': '???', 'is_pc': False, 'is_active': (i == TURN_INDEX), 'hidden': True})
+                continue
+            is_pc = bool(getattr(c, 'is_pc', False))
+            cb = c.tracker_block() if (getattr(c, 'system', 'pf2e') == 'cosmere' and hasattr(c, 'tracker_block')) else None
+            order.append({
+                'name': c.name,
+                'is_pc': is_pc,
+                'is_active': (i == TURN_INDEX),
+                'initiative': int(getattr(c, 'initiative', 0) or 0),
+                'speed_choice': getattr(c, 'speed_choice', 'slow'),
+                'max_actions': int(getattr(c, 'max_actions', 3) or 3),
+                'injuries': int(getattr(c, 'injuries', 0) or 0),
+                'conditions': [k for k, v in (getattr(c, 'conditions', {}) or {}).items() if v],
+                'health': (cb['health'] if (cb and is_pc) else None),   # PCs only
+                'tier': getattr(c, 'tier', None),
+                'role': getattr(c, 'role', None),
+            })
+    return jsonify({
+        'ok': True,
+        'in_encounter': bool(order),
+        'round': ROUND_NUMBER,
+        'mode': _cosmere_initiative_mode(),
+        'active_name': (active_c.name if active_c else '') if (gm or active_visible) else '???',
+        'order': order,
+    })
+
+
 # ── Session notes: a per-owner, per-campaign free-form scratchpad ──────────
 # System-agnostic: a place for any player (or the GM) to jot down whatever they
 # want during a session. Stored next to the campaign's journals.
