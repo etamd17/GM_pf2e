@@ -97,4 +97,48 @@
     </a>
 
 </div>
+
+{# ── Session ritual: the opening curtain + "Previously on…" recap ── #}
+<div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-5); margin-bottom:var(--sp-7);">
+    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap; margin-bottom:var(--sp-3);">
+        <div>
+            <h2 class="font-display" style="font-size:16px; letter-spacing:0.04em; color:var(--accent); margin:0;">Begin the Session</h2>
+            <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Drops the opening curtain on every connected screen &mdash; crest, campaign title, and the &ldquo;Previously on&hellip;&rdquo; recap. Click <b>Enter the Session</b> on the curtain to part it for the whole table.</p>
+        </div>
+        <span class="pill">Session <span class="v">{{ session_number }}</span></span>
+    </div>
+
+    <label for="cos-recap" style="display:block; font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:6px;">&ldquo;Previously on&hellip;&rdquo; recap</label>
+    <textarea id="cos-recap" rows="4" placeholder="What happened last time? This shows on the opening curtain and the splash."
+        style="width:100%; font-size:13px; font-family:var(--font-flavor,serif); background:var(--bg-page,var(--bg-base)); border:1px solid var(--border-card); color:#e8eef5; border-radius:8px; padding:10px; resize:vertical;">{{ last_recap }}</textarea>
+
+    <div style="display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap; margin-top:var(--sp-3);">
+        <button type="button" onclick="cosBeginSession()" id="cos-begin-btn"
+            style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#06242b; background:var(--accent); border:1px solid var(--accent); padding:11px 24px; border-radius:8px; cursor:pointer;">Begin Session</button>
+        <button type="button" onclick="cosSaveRecap()" id="cos-recap-btn"
+            style="font-size:12px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:8px; cursor:pointer;">Save recap</button>
+        <span id="cos-ritual-status" style="font-size:11px; color:var(--text-on-dark-3);"></span>
+    </div>
+</div>
+
+<script>
+function _cosRitualStatus(msg){ var el=document.getElementById('cos-ritual-status'); if(el) el.textContent=msg||''; }
+function cosSaveRecap(){
+    var text=document.getElementById('cos-recap').value;
+    _cosRitualStatus('Saving…');
+    fetch('/api/session/recap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recap:text})})
+        .then(function(r){return r.json();}).then(function(){ _cosRitualStatus('Recap saved.'); })
+        .catch(function(){ _cosRitualStatus('Save failed.'); });
+}
+function cosBeginSession(){
+    // Save the latest recap first so the curtain shows it, then drop the curtain
+    // on every screen (the shared curtain overlay catches the session_start SSE).
+    var text=document.getElementById('cos-recap').value;
+    _cosRitualStatus('Raising the curtain…');
+    fetch('/api/session/recap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recap:text})})
+        .then(function(){ return fetch('/api/session/begin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bump_session:true})}); })
+        .then(function(r){return r.json();}).then(function(){ _cosRitualStatus('Curtain up on every screen.'); })
+        .catch(function(){ _cosRitualStatus('Failed to begin.'); });
+}
+</script>
 {% endblock %}
