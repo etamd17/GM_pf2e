@@ -676,14 +676,19 @@
         // at line ~315 only fires on GM pages (guarded by pathname check).
         // Open a player-specific SSE for encounter_update + player_roll.
         if (window._navMarkSseAttached) window._navMarkSseAttached();
-        var src = new EventSource('/api/events');
-        src.addEventListener('encounter_update', function(e) {
-            try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
-        });
-        src.addEventListener('player_roll', function(e) {
-            try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
-        });
-        src.onerror = function() { src.close(); setTimeout(function() { location.reload(); }, 8000); };
+        (function hookNavSSE() {
+            var src = new EventSource('/api/events');
+            src.addEventListener('encounter_update', function(e) {
+                try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+            });
+            src.addEventListener('player_roll', function(e) {
+                try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+            });
+            // Reconnect with backoff instead of reloading the whole sheet on a
+            // transient SSE drop -- in-person WiFi blips were forcing a jarring
+            // full page reload 8s later.
+            src.onerror = function() { src.close(); setTimeout(hookNavSSE, 5000); };
+        })();
     })();
     </script>
     {% endif %}

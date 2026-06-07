@@ -3382,10 +3382,31 @@
         // ==========================================
         // PERSISTENT DAMAGE (Phase 5 — player-driven, no auto-roll)
         // ==========================================
-        // We reload on structural changes (add/remove/flat-check-success)
-        // because the inline rendering is Jinja-driven; the SSE pc_update
-        // handler will drop a fresh snapshot too, but full reload keeps the
-        // index numbering consistent with the server list.
+        // Re-render the strip in place from the server's list (returned by every
+        // add/remove/flat-check route and broadcast on pc_update) so structural
+        // changes never trigger a full page reload. Indices come straight from
+        // the array, so numbering stays consistent with the server.
+        function renderPersistentDamage(arr) {
+            if (!Array.isArray(arr)) return;
+            const list = document.getElementById('pd-list');
+            if (!list) return;
+            const strip = document.getElementById('pd-strip');
+            const addbar = document.getElementById('pd-addbar');
+            const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+            list.innerHTML = arr.map((e, idx) => `
+                                <div class="pd-entry" data-pd-idx="${idx}" style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); font-size:11px;">
+                                    <strong style="color:#fca5a5;">${esc(e.damage)}${e.type ? ' ' + esc(e.type) : ''}</strong>
+                                    ${e.source ? `<span style="color:var(--t3); font-size:10px;">(${esc(e.source)})</span>` : ''}
+                                    <input type="number" class="pd-take-input" placeholder="dmg" min="0" style="width:48px; padding:2px 4px; font-size:10px; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1);">
+                                    <button onclick="pdTakeDamage(${idx})" title="Apply the rolled damage to your HP" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-weight:700;">Take</button>
+                                    <button onclick="pdFlatCheck(${idx})" title="Roll DC 15 flat check — success ends the effect" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; font-weight:700;">DC 15</button>
+                                    <button onclick="pdRemove(${idx})" title="Remove (treated / immunity / ended)" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">×</button>
+                                </div>
+                            `).join('');
+            const has = arr.length > 0;
+            if (strip)  strip.style.display  = has ? '' : 'none';
+            if (addbar) addbar.style.display = has ? 'none' : '';
+        }
         async function pdAddPrompt() {
             const dmg = prompt('Persistent damage dice (e.g. "1d6", "2d4+1"):');
             if (!dmg || !dmg.trim()) return;
@@ -3397,7 +3418,7 @@
                     body: JSON.stringify({damage: dmg.trim(), type: type.trim(), source: source.trim()})
                 });
                 const data = await res.json();
-                if (data.success) window.location.reload();
+                if (data.success) renderPersistentDamage(data.persistent_damage);
                 else alert(data.error || 'Failed to add.');
             } catch(e) { console.error('pdAdd:', e); }
         }
@@ -3406,7 +3427,7 @@
             try {
                 const res = await fetch(`/api/persistent_damage/${pcNameEncoded}/remove/${idx}`, { method: 'POST' });
                 const data = await res.json();
-                if (data.success) window.location.reload();
+                if (data.success) renderPersistentDamage(data.persistent_damage);
             } catch(e) { console.error('pdRemove:', e); }
         }
         async function pdFlatCheck(idx) {
@@ -3427,7 +3448,7 @@
                         ? `Flat check ${data.roll} vs DC ${data.dc} — SUCCESS, persistent damage ends!`
                         : `Flat check ${data.roll} vs DC ${data.dc} — persists.`);
                 }
-                if (data.passed) window.location.reload();
+                if (data.passed) renderPersistentDamage(data.persistent_damage);
             } catch(e) { console.error('pdFlatCheck:', e); }
         }
         async function pdTakeDamage(idx) {
@@ -5484,24 +5505,11 @@
                     // drop typed input, scroll position, and any open modal.
                     if (Array.isArray(data.persistent_damage)) {
                         const list = document.getElementById('pd-list');
-                        const strip = document.getElementById('pd-strip');
-                        const addbar = document.getElementById('pd-addbar');
                         const curEntries = list ? list.querySelectorAll('.pd-entry').length : 0;
+                        // Only repaint when the count changed, so a remote pc_update
+                        // doesn't clobber a damage value the player is mid-typing.
                         if (list && curEntries !== data.persistent_damage.length) {
-                            const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-                            list.innerHTML = data.persistent_damage.map((e, idx) => `
-                                <div class="pd-entry" data-pd-idx="${idx}" style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); font-size:11px;">
-                                    <strong style="color:#fca5a5;">${esc(e.damage)}${e.type ? ' ' + esc(e.type) : ''}</strong>
-                                    ${e.source ? `<span style="color:var(--t3); font-size:10px;">(${esc(e.source)})</span>` : ''}
-                                    <input type="number" class="pd-take-input" placeholder="dmg" min="0" style="width:48px; padding:2px 4px; font-size:10px; border-radius:3px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1);">
-                                    <button onclick="pdTakeDamage(${idx})" title="Apply the rolled damage to your HP" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-weight:700;">Take</button>
-                                    <button onclick="pdFlatCheck(${idx})" title="Roll DC 15 flat check — success ends the effect" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:rgba(90,142,232,0.12); border:1px solid rgba(90,142,232,0.35); color:#93C5FD; font-weight:700;">DC 15</button>
-                                    <button onclick="pdRemove(${idx})" title="Remove (treated / immunity / ended)" style="padding:2px 6px; font-size:10px; border-radius:3px; cursor:pointer; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t3);">×</button>
-                                </div>
-                            `).join('');
-                            const has = data.persistent_damage.length > 0;
-                            if (strip)  strip.style.display  = has ? '' : 'none';
-                            if (addbar) addbar.style.display = has ? 'none' : '';
+                            renderPersistentDamage(data.persistent_damage);
                         }
                     }
                     // Update focus pips
