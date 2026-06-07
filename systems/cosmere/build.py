@@ -357,6 +357,40 @@ class CosmereBuild:
     def is_valid(self) -> bool:
         return not self.validate()
 
+    def hard_violations(self) -> list:
+        """The subset of validate() that represents OVER-application of the rules:
+        more attribute points / skill ranks / talents / expertises than the build
+        is entitled to, a value above its hard cap, or a negative score. These are
+        the "you literally can't have this much" breaks -- they BLOCK a player's
+        save (a GM may override). Under-spending, a missing key talent, unmet
+        prerequisites, and other "incomplete" guidance are NOT included: those are
+        warnings, not illegal characters."""
+        hard = []
+        sp, av = self.attr_points_spent(), self.attr_points_available()
+        if sp > av:
+            hard.append(f"Attributes: {sp} of {av} points spent (over budget by {sp - av}).")
+        if self.level == 1 and any(v > CREATION_ATTR_MAX for v in self.attributes.values()):
+            hard.append(f"Attributes: the max is {CREATION_ATTR_MAX} per attribute at character creation.")
+        if any(v > ATTR_HARD_CAP for v in self.attributes.values()):
+            hard.append(f"Attributes: the hard cap is {ATTR_HARD_CAP}.")
+        if any(v < 0 for v in self.attributes.values()):
+            hard.append("Attributes cannot be negative.")
+        msr = max_skill_rank(self.level)
+        over = [c for c, v in self.skills.items() if v > msr]
+        if over:
+            names = ', '.join(SKILL_NAMES.get(c, c) for c in sorted(over))
+            hard.append(f"Skills above your tier-{self.tier} max rank of {msr}: {names}.")
+        ssp, ssa = self.skill_ranks_spent(), self.skill_ranks_available()
+        if ssp > ssa:
+            hard.append(f"Skills: {ssp} of {ssa} ranks spent (over budget by {ssp - ssa}).")
+        exp_av = self.expertises_available()
+        if len(self.expertises) > exp_av:
+            hard.append(f"Expertises: {len(self.expertises)} chosen of {exp_av} available.")
+        t_av = self.talents_available()
+        if len(self.talents) > t_av:
+            hard.append(f"Talents: {len(self.talents)} chosen of {t_av} available.")
+        return hard
+
     # -- serialization ------------------------------------------------------
     def to_dict(self) -> dict:
         return {

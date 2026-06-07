@@ -69,6 +69,12 @@
   .cs-bud .over { color:#f87171; }
   .cs-tal { margin-top:.6rem; }
   .warn-box { margin:0 0 1rem; padding:.55rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px; }
+  .save-gate { margin:0 0 1rem; }
+  .block-box { padding:.6rem .85rem; border-radius:8px; background:rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.5); color:#fca5a5; font-size:12.5px; }
+  .block-box ul { margin:.3rem 0 0 1rem; }
+  .block-box .gm-override { display:flex; gap:.4rem; align-items:center; margin-top:.55rem; color:#e8eef5; font-size:12px; }
+  .block-box .gm-override input { width:auto; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
 {% endblock %}
 {% block content %}
 <div class="bld wiz">
@@ -81,11 +87,13 @@
     </div>
     <div style="flex:1;"></div>
     <div id="validity" class="muted"></div>
-    <button class="btn primary" onclick="save()">Save</button>
+    <button class="btn primary" id="btn-save-top" onclick="save()">Save</button>
   </div>
 
   <h2 style="margin-top:1rem;">{{ 'Edit' if pid else 'New' }} Cosmere Character</h2>
-  <p class="muted">A guided, step-by-step build &mdash; rules are guided, never blocked (your GM can override). Your character updates live on the right.</p>
+  <p class="muted">A guided, step-by-step build. Caps and budgets are enforced &mdash; you can't exceed a per-attribute cap, a skill's tier max, or any point budget (your GM can override). Your character updates live on the right.</p>
+
+  <div id="save-gate" class="save-gate" style="display:none;"></div>
 
   <div class="wiz-rail" id="wiz-rail"></div>
 
@@ -235,10 +243,11 @@
 
       <section class="step" data-step="7">
         <div class="sec-h">Review &amp; Save</div>
-        <p class="step-lead">Here&rsquo;s your character. Anything flagged below is guidance, not a blocker &mdash; save whenever you&rsquo;re ready.</p>
+        <p class="step-lead">Here&rsquo;s your character. Anything in <i>Guidance</i> is advice you can save past; anything in red is over the rules and must be fixed first (your GM can override).</p>
+        <div id="review-gate"></div>
         <div id="review-warnings"></div>
         <div id="review-summary" class="muted"></div>
-        <button class="btn primary" style="margin-top:1rem; padding:.7rem 1.6rem; font-size:14px;" onclick="save()">Save Character</button>
+        <button class="btn primary" id="btn-save-review" style="margin-top:1rem; padding:.7rem 1.6rem; font-size:14px;" onclick="save()">Save Character</button>
       </section>
 
       <div class="wiz-nav">
@@ -405,7 +414,7 @@ function updateSurges(){
 
 function bumpSkill(code,d){
   const inp=document.querySelector(`.skill-rank[data-code="${code}"]`);
-  inp.value=Math.max(0,(+inp.value||0)+d); recompute();
+  inp.value=Math.max(0, Math.min(maxRank(lvl()), (+inp.value||0)+d)); recompute();   // never past the tier max rank
 }
 function addTalent(){
   const sel=document.getElementById('talent-pick'); const id=sel.value; if(!id)return;
@@ -454,23 +463,28 @@ function setBudget(id,spent,avail){
 }
 function recompute(){
   const L=lvl();
-  let aSum=0, aCapBad=false; const atL1=L===1;
-  ATTR_KEYS.forEach(k=>{const x=+v('attr-'+k)||0; aSum+=x; if(x>5||(atL1&&x>3))aCapBad=true;});
-  const okA=setBudget('b-attr',aSum,attrPoints(L)) && !aCapBad;
-  let sSum=0, rankBad=false; const cap=maxRank(L);
+  let aSum=0; const atL1=L===1, aCap=atL1?3:5;
+  // clamp each attribute to its per-field cap (3 at creation, 5 hard cap) so you
+  // physically can't over-apply a single attribute -- budget over-spend is caught
+  // by the save gate below.
+  ATTR_KEYS.forEach(k=>{const el=document.getElementById('attr-'+k); let x=+el.value||0;
+    if(x>aCap){x=aCap; el.value=aCap;} if(x<0){x=0; el.value=0;} aSum+=x;});
+  const okA=setBudget('b-attr',aSum,attrPoints(L));
+  let sSum=0; const cap=maxRank(L);
   document.querySelectorAll('.skill-rank').forEach(inp=>{
-    const r=+inp.value||0, code=inp.dataset.code, attr=inp.dataset.attr;
-    sSum+=r; if(r>cap)rankBad=true;
+    let r=+inp.value||0; const code=inp.dataset.code, attr=inp.dataset.attr;
+    if(r>cap){r=cap; inp.value=cap;} if(r<0){r=0; inp.value=0;}   // clamp to the tier max rank
+    sSum+=r;
     const mod=r+(+v('attr-'+attr)||0);
     const me=document.getElementById('mod-'+code); if(me) me.textContent=(mod>=0?'+':'')+mod;
   });
   const sworn = v('f-order') && (+v('f-ideals')||0)>=1;
-  const okS=setBudget('b-skill',sSum,skillBudget(L)+(sworn?2:0)) && !rankBad;
+  const okS=setBudget('b-skill',sSum,skillBudget(L)+(sworn?2:0));
   const exp=v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean).length;
   const okE=setBudget('b-exp',exp,2+Math.max(0,+v('attr-int')||0));
   const okT=setBudget('b-tal',TALENTS.length,talentBudget(L));
   document.getElementById('validity').textContent =
-    (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L) : 'Over budget (allowed)';
+    (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L) : 'Over budget — reduce to save';
   refreshPreview();
 }
 
@@ -516,6 +530,29 @@ function paintPreview(p){
   const b=p.budgets, line=(lbl,a)=>`<div><span>${lbl}</span><span class="v ${a[0]>a[1]?'over':''}">${a[0]}/${a[1]}</span></div>`;
   document.getElementById('cs-bud').innerHTML =
     line('Attributes',b.attr)+line('Skill ranks',b.skills)+line('Talents',b.talents)+line('Expertises',b.expertises);
+  updateSaveGate(p);
+}
+
+// ── rules gate: a build that OVER-applies the rules can't be saved by a player
+// (the GM gets an override toggle). p.hard is the authoritative server check. ──
+let GM_OVERRIDE = false;
+function gateHTML(hard, isGm){
+  let h = '<div class="block-box"><b>Over the rules &mdash; fix to save:</b><ul>'
+        + hard.map(x=>`<li>${x}</li>`).join('') + '</ul>';
+  if(isGm) h += `<label class="gm-override"><input type="checkbox" ${GM_OVERRIDE?'checked':''}`
+        + ` onchange="GM_OVERRIDE=this.checked;updateSaveGate(LAST_PREVIEW)"> GM override &mdash; save this character anyway</label>`;
+  return h + '</div>';
+}
+function updateSaveGate(p){
+  const hard = (p && p.hard) || [];
+  const isGm = !!(p && p.is_gm);
+  const blocked = hard.length > 0 && !(isGm && GM_OVERRIDE);
+  ['btn-save-top','btn-save-review'].forEach(id=>{ const b=document.getElementById(id);
+    if(b){ b.disabled = blocked; b.title = blocked ? 'Fix the flagged limits to save' : ''; } });
+  const top = document.getElementById('save-gate');
+  if(top){ top.style.display = hard.length ? '' : 'none'; top.innerHTML = hard.length ? gateHTML(hard,isGm) : ''; }
+  const rev = document.getElementById('review-gate');
+  if(rev){ rev.innerHTML = hard.length ? gateHTML(hard,isGm) : ''; }
 }
 function renderReview(){
   const p=LAST_PREVIEW;
@@ -546,8 +583,13 @@ function collect(){
 }
 function save(){
   fetch('/cosmere/builder',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id:PID, build:collect()})})
-  .then(r=>r.json()).then(d=>{ if(d&&d.ok){ window.location.href=d.url; } else { alert('Save failed'); } })
+    body:JSON.stringify({id:PID, build:collect(), force:GM_OVERRIDE})})
+  .then(r=>r.json()).then(d=>{
+    if(d&&d.ok){ window.location.href=d.url; }
+    else if(d&&d.blocked){ goStep(STEPS.length-1); updateSaveGate({hard:d.hard||[], is_gm:LAST_PREVIEW&&LAST_PREVIEW.is_gm});
+      alert('This build is over the rules:\n\n' + (d.hard||[]).join('\n')); }
+    else { alert((d&&d.error) || 'Save failed'); }
+  })
   .catch(()=>alert('Save failed'));
 }
 // Merge per-campaign homebrew into every picker so the builder treats it like

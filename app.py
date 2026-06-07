@@ -7081,6 +7081,14 @@ def cosmere_builder():
         data = request.get_json(silent=True) or {}
         build = _cb.CosmereBuild(data.get('build') or data, homebrew=_hb_store)
         issues = build.validate()
+        # Rules enforcement: a build that OVER-applies the rules (over a cap or
+        # budget) cannot be saved by a player. The GM may override with force=true
+        # (their builder shows the toggle). Soft guidance (under-spend, missing
+        # key talent, unmet prereqs) never blocks -- only hard_violations() do.
+        hard = build.hard_violations()
+        if hard and not (bool(data.get('force')) and _is_gm()):
+            return jsonify({'ok': False, 'blocked': True, 'hard': hard, 'issues': issues,
+                            'error': 'This build exceeds the rules. Fix the flagged limits to save.'}), 400
         existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
         if existing is not None:
             owner = existing.get('owner_user_id')                  # preserve owner on edit / level-up
@@ -7129,6 +7137,8 @@ def cosmere_builder_preview():
             'expertises': [len(b.expertises), b.expertises_available()],
         },
         'issues': b.validate(),
+        'hard': b.hard_violations(),          # over-cap / over-budget breaks that block a player's save
+        'is_gm': _is_gm(),                     # the GM's builder may override the block
         'homebrew': sorted(set(b.homebrew_sources)),
         'homebrew_dangling': b.homebrew_dangling,
     })
