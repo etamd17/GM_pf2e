@@ -7212,6 +7212,7 @@ def cosmere_pc_sheet(pid):
         'investiture': _ps('investiture', actor.investiture_max),
         'injuries': _ps('injuries', 0),
         'enhanced': bool(ps.get('enhanced')),         # the Stormlight Enhance toggle
+        'conditions': ps.get('conditions') if isinstance(ps.get('conditions'), dict) else {},
     }
     # Radiant (Phase 2): the 3 Stormlight actions + the order's castable surge powers.
     import systems.cosmere.radiant_talents as _rt
@@ -7223,6 +7224,7 @@ def cosmere_pc_sheet(pid):
         interactive=interactive, cur=cur, tier=actor.tier,
         stormlight_actions=systems.cosmere.radiant.STORMLIGHT_ACTIONS,
         radiant_powers=radiant_powers,
+        conditions=systems.cosmere.CONDITION_INFO,
         actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
         skill_names=build.eff_skill_names(),
         attr_names=systems.cosmere.ATTR_NAMES,
@@ -7421,6 +7423,83 @@ def api_cosmere_roll():
     except Exception:
         pass
     return jsonify({'ok': True})
+
+
+def _my_cosmere_combatant(pid):
+    """(combatant, pc_doc) for the player's OWN Cosmere PC in the active encounter
+    -- the combatant is matched by name (PC names are unique in a party). Returns
+    (None, doc) if not in combat, (None, None) if the PC is unknown / not theirs."""
+    doc = _load_cosmere_pc(pid)
+    if not doc or not _cosmere_can_act_on(doc):
+        return None, None
+    name = doc.get('name')
+    for c in ACTIVE_ENCOUNTER:
+        if getattr(c, 'system', 'pf2e') == 'cosmere' and getattr(c, 'is_pc', False) and c.name == name:
+            return c, doc
+    return None, doc
+
+
+@app.route('/api/cosmere/my_combat')
+def api_cosmere_my_combat():
+    """The player's own-character combat state for the sheet's combat strip:
+    whether they're in the encounter, the round, whose turn it is, and their
+    fast/slow election + initiative under the active house-rule."""
+    c, doc = _my_cosmere_combatant(request.args.get('pid'))
+    if doc is None:
+        return jsonify({'ok': False}), 403
+    if not c:
+        return jsonify({'ok': True, 'in_encounter': False})
+    active = ACTIVE_ENCOUNTER[TURN_INDEX] if (ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)) else None
+    return jsonify({
+        'ok': True, 'in_encounter': True, 'round': ROUND_NUMBER,
+        'mode': _cosmere_initiative_mode(),
+        'active_name': active.name if active else '',
+        'is_my_turn': bool(active and active.instance_id == c.instance_id),
+        'speed_choice': getattr(c, 'speed_choice', 'slow'),
+        'max_actions': getattr(c, 'max_actions', 3),
+        'initiative': int(getattr(c, 'initiative', 0) or 0),
+    })
+
+
+@app.route('/api/cosmere/my_speed', methods=['POST'])
+def api_cosmere_my_speed():
+    """A player elects Fast (2 actions, acts early) or Slow (3 actions, acts late)
+    for their OWN character (phases mode). Re-sorts + broadcasts."""
+    data = request.get_json(silent=True) or {}
+    c, doc = _my_cosmere_combatant(data.get('pid'))
+    if doc is None:
+        return jsonify({'ok': False}), 403
+    if not c:
+        return jsonify({'ok': False, 'error': 'not in combat'}), 400
+    choice = (data.get('choice') or '').lower()
+    if choice not in ('fast', 'slow'):
+        return jsonify({'ok': False, 'error': 'choice must be fast or slow'}), 400
+    c.speed_choice = choice
+    c.max_actions = 2 if choice == 'fast' else 3
+    _sort_encounter()
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'ok': True, 'speed_choice': choice, 'max_actions': c.max_actions})
+
+
+@app.route('/api/cosmere/my_initiative', methods=['POST'])
+def api_cosmere_my_initiative():
+    """A player rolls their OWN initiative (d20+Speed) for the traditional
+    house-rule. Re-sorts + broadcasts + logs."""
+    data = request.get_json(silent=True) or {}
+    c, doc = _my_cosmere_combatant(data.get('pid'))
+    if doc is None:
+        return jsonify({'ok': False}), 403
+    if not c:
+        return jsonify({'ok': False, 'error': 'not in combat'}), 400
+    d20 = random.randint(1, 20)
+    spd = _cosmere_init_bonus(c)
+    c.initiative = d20 + spd
+    _combat_log(f"{c.name} rolled Initiative (Speed): {d20} + {spd} = {c.initiative}", 'action')
+    _sort_encounter()
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'ok': True, 'initiative': c.initiative, 'detail': f'd20({d20}) + {spd}'})
 
 
 @app.route('/cosmere/pc/<pid>/release', methods=['POST'])
