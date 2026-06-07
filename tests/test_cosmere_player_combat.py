@@ -108,15 +108,15 @@ def test_my_speed_rejects_non_owner(pc, monkeypatch):
 
 
 # --- my_initiative: roll d20+Speed for the traditional house-rule -----------
-def test_my_initiative_rolls(pc):
+def test_my_initiative_rolls(pc, monkeypatch):
     app._save_campaign_config({'cosmere_initiative': 'traditional'})
+    monkeypatch.setattr(app.random, 'randint', lambda lo, hi: 15)   # deterministic d20
     r = app.app.test_client().post('/api/cosmere/my_initiative', json={'pid': pc}).get_json()
     assert r['ok']
-    assert 21 >= r['initiative'] >= 4                   # d20(1..20) + Speed(3)
+    assert r['initiative'] == 18                        # d20(15) + Speed(3)
+    assert r['detail'] == 'd20(15) + 3'
     me = next(x for x in app.ACTIVE_ENCOUNTER if x.name == 'Kaladin')
-    assert me.initiative == r['initiative']
-    assert any('Initiative' in e.get('action', '') or 'Initiative' in str(e.get('detail', ''))
-               or 'rolled Initiative' in str(e) for e in app.COMBAT_LOGS) or me.initiative > 0
+    assert me.initiative == 18                          # the combatant was updated + re-sorted
 
 
 def test_my_initiative_rejects_non_owner(pc, monkeypatch):
