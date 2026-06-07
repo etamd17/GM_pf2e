@@ -148,6 +148,28 @@
         .session-curtain .sc-crest, .session-curtain .sc-crest-fallback { animation: none; }
         .session-curtain .sc-content { transition: opacity 0.3s ease; }
     }
+
+    /* Cosmere campaigns get a Stormlight-blue curtain (PF2e stays gilt). */
+    body.system-cosmere .session-curtain .sc-half {
+        background:
+            radial-gradient(circle at 50% 30%, rgba(40,90,160,0.20), transparent 60%),
+            linear-gradient(180deg, #0c0a07 0%, #0d1622 55%, #0a0d12 100%);
+    }
+    body.system-cosmere .session-curtain .sc-title {
+        color: #bfe0ff;
+        text-shadow: 0 0 30px rgba(60,130,210,0.40), 0 0 64px rgba(0,0,0,0.6), 0 4px 24px rgba(0,0,0,0.7);
+    }
+    body.system-cosmere .session-curtain .sc-crest { filter: drop-shadow(0 0 26px rgba(60,130,210,0.40)) drop-shadow(0 6px 18px rgba(0,0,0,0.7)); }
+    body.system-cosmere .session-curtain .sc-crest-fallback { color: #5fa8e0; text-shadow: 0 0 30px rgba(60,130,210,0.45), 0 4px 16px rgba(0,0,0,0.7); }
+    body.system-cosmere .session-curtain .sc-rule { background: linear-gradient(90deg, transparent, rgba(95,168,224,0.6), transparent); }
+    body.system-cosmere .session-curtain .sc-rule span { background: #5fa8e0; box-shadow: 0 0 8px rgba(95,168,224,0.7); }
+    body.system-cosmere .session-curtain .sc-recap-label { color: rgba(95,168,224,0.75); }
+    body.system-cosmere .session-curtain .sc-enter {
+        background: linear-gradient(180deg, #7ec0f0, #3f7fbf); color: #06242b;
+        border-color: rgba(150,200,240,0.6);
+        box-shadow: 0 6px 24px rgba(60,130,210,0.30), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    body.system-cosmere .session-curtain .sc-await { color: rgba(95,168,224,0.65); }
 </style>
 
 <script>

@@ -4822,22 +4822,31 @@ def _load_campaign_config():
     return cfg
 
 def _save_campaign_config(updates):
-    """Merge updates into the stored campaign config and persist. Returns the merged dict."""
-    cfg = _load_campaign_config()
+    """Merge `updates` (CAMPAIGN_DEFAULT config keys) into campaign.json and persist.
+
+    Reads and rewrites the FULL existing file so the multi-campaign doc's own
+    keys -- id / slug / system / members / system_config -- survive a config
+    write (campaign.json is the same file the campaign doc lives in). Returns
+    the merged config view."""
+    full = {}
+    if os.path.exists(CAMPAIGN_FILE):
+        data, _err = safe_load_json_file(CAMPAIGN_FILE)
+        if isinstance(data, dict):
+            full = data
     for k in CAMPAIGN_DEFAULT:
         if k in updates and updates[k] is not None:
-            cfg[k] = updates[k]
-    if 'session_number' in cfg:
+            full[k] = updates[k]
+    if 'session_number' in full:
         try:
-            cfg['session_number'] = max(1, int(cfg['session_number']))
+            full['session_number'] = max(1, int(full['session_number']))
         except (TypeError, ValueError):
-            cfg['session_number'] = 1
+            full['session_number'] = 1
     try:
         with open(CAMPAIGN_FILE, 'w', encoding='utf-8') as fp:
-            json.dump(cfg, fp, indent=2, ensure_ascii=False)
+            json.dump(full, fp, indent=2, ensure_ascii=False)
     except OSError as e:
         print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
-    return cfg
+    return _load_campaign_config()
 
 
 _VALID_MOODS = ('calm', 'mystery', 'tension', 'combat', 'dread')
@@ -6927,6 +6936,7 @@ def cosmere_gm_hub():
         return redirect(_active_system_ui().gm_home)
     adv_count = len(systems.cosmere.adversary_docs())
     camp = _active_campaign_doc() or {}
+    cfg = _load_campaign_config()
     return render_template(
         'cosmere_gm.html',
         campaign_name=camp.get('name') or 'Cosmere Campaign',
@@ -6934,6 +6944,8 @@ def cosmere_gm_hub():
         adv_count=adv_count,
         encounter_count=len(ACTIVE_ENCOUNTER),
         active_cid=ACTIVE_CAMPAIGN_ID,
+        last_recap=cfg.get('last_recap', ''),
+        session_number=cfg.get('session_number', 1),
     )
 
 
