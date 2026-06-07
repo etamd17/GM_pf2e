@@ -64,6 +64,11 @@
   .cs-result b { font-family:'JetBrains Mono',monospace; font-size:17px; color:var(--cs-accent-2); }
   .cs-result .opp { color:#34d399; } .cs-result .comp { color:#f59e0b; }
   .cs-hint { font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .6rem; }
+  .cs-rad-btn { font-size:12px; padding:.45rem .8rem; border-radius:8px; cursor:pointer;
+    background:rgba(95,168,224,.12); border:1px solid var(--accent); color:var(--accent); font-weight:600; }
+  .cs-rad-btn:hover { background:rgba(95,168,224,.22); }
+  .cs-rad-btn:active { transform:translateY(1px); }
+  .cs-rad-btn.on { background:var(--accent); color:#06242b; }
 {% endblock %}
 
 {% block content %}
@@ -153,6 +158,30 @@
     <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
     {% if build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
   </div>
+
+  {% if interactive and a.investiture_max %}
+  <div class="cs-card" style="text-align:left; margin-top:.6rem; border-color:rgba(95,168,224,.4);">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:.5rem;">Stormlight Actions</div>
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
+      <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
+      <button class="cs-rad-btn" id="btn-enhance" onclick="cosEnhance()" title="Spend 1 Investiture: Enhanced [Strength +1] and [Speed +1] until the end of your next turn. Tap again to drop it.">Enhance <span style="opacity:.7;">(1 Inv)</span></button>
+      <button class="cs-rad-btn" onclick="cosRegenerate()" title="Spend 1 Investiture: recover health equal to 1d6 + your tier ({{ tier }}).">Regenerate <span style="opacity:.7;">(1 Inv)</span></button>
+      <span id="enh-chip" class="cs-chip df" style="display:{{ '' if cur.enhanced else 'none' }};">Enhanced &middot; STR +1 / SPD +1</span>
+    </div>
+    {% if radiant_powers and build.ideals_sworn >= 1 %}
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin:.85rem 0 .4rem;">Surge Powers <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(tap to spend Investiture &amp; log)</span></div>
+    <div class="cs-grid" style="grid-template-columns:1fr 1fr; gap:.5rem;">
+      {% for p in radiant_powers %}
+      <div class="cs-ability roll" style="margin-bottom:0;"
+           onclick="cosSurge({{ p.name|tojson }}, {{ p.investiture or 0 }}, {{ p.effect|tojson }})">
+        <div class="an">{{ p.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">{{ p.cost }} action{{ '' if p.cost == 1 else 's' }}{% if p.investiture %} &middot; {{ p.investiture }} Investiture{% endif %}</span></div>
+        <div class="ad">{{ p.effect }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
   {% endif %}
 
   {# --- Attributes --- #}
@@ -181,7 +210,7 @@
     {% for code, label in skill_names.items() if code in a.skills %}
     {% set sk = a.skills[code] %}
     <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}{% if interactive and sk.unlocked %} roll{% endif %}"
-         {% if interactive and sk.unlocked %}onclick="cosRoll({{ label|tojson }}, {{ sk.mod }})"{% endif %}>
+         {% if interactive and sk.unlocked %}onclick="cosRoll({{ label|tojson }}, {{ sk.mod }}, {{ sk.attribute|tojson }})"{% endif %}>
       <div class="nm">{{ label }} <small>{{ sk.attribute }}</small>{% if sk.rank %} <span class="rk">R{{ sk.rank }}</span>{% endif %}</div>
       <div class="mod">{{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}</div>
     </div>
@@ -263,7 +292,8 @@
   (function(){
     const PID = {{ actor_id|tojson }};
     const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
-    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}};
+    const TIER = {{ tier|default(1) }};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}};
     let mods = {adv:false, dis:false, plot:false};
     const d = n => 1 + Math.floor(Math.random()*n);
     const res = h => { const el=document.getElementById('cs-result'); if(el) el.innerHTML=h; };
@@ -297,18 +327,19 @@
       document.getElementById('t-dis').classList.toggle('on',mods.dis);
       document.getElementById('t-plot').classList.toggle('on',mods.plot);
     };
-    window.cosRoll = function(name, mod){
-      const roll=rollD20(), f=flair(roll), sign=mod>=0?'+':'';
-      const total=roll.v+mod+f.bonus;
-      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+mod+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra);
-      post(name+' test', total, roll.note+' '+sign+mod+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:''));
+    const enhBonus = attr => (cur.enhanced && (attr==='str'||attr==='spd')) ? 1 : 0;  // Enhance: +1 to physical
+    window.cosRoll = function(name, mod, attr){
+      const e=enhBonus(attr), m=mod+e, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';
+      const total=roll.v+m+f.bonus, enh = e ? ' <span class="opp">Enhanced +1</span>' : '';
+      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+enh);
+      post(name+' test', total, roll.note+' '+sign+m+(e?' (Enhanced)':'')+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:''));
     };
     window.cosStrike = function(name, mod, dmgFormula, dtype){
-      const roll=rollD20(), f=flair(roll), sign=mod>=0?'+':'';
-      const atk=roll.v+mod+f.bonus, dmg=rollFormula(dmgFormula)+mod;
-      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra);
+      const e=cur.enhanced?1:0, m=mod+e, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';   // weapons are physical
+      const atk=roll.v+m+f.bonus, dmg=rollFormula(dmgFormula)+m, enh = e ? ' <span class="opp">Enhanced +1</span>' : '';
+      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+enh);
       post(name+' strike', 'atk '+atk+' / dmg '+dmg,
-        roll.note+' '+sign+mod+' → hit '+atk+'; '+dmgFormula+sign+mod+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:''));
+        roll.note+' '+sign+m+(e?' (Enhanced)':'')+' → hit '+atk+'; '+dmgFormula+sign+m+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:''));
     };
 
     function paint(){
@@ -328,6 +359,34 @@
     };
     window.cosBreathe = function(){ cur.investiture=MAX.investiture; paint(); pending.investiture=cur.investiture; flush();
       res('<span class="opp">Breathe Stormlight</span> — Investiture restored to '+MAX.investiture); };
+
+    // --- Stormlight actions (Radiant) ---
+    function paintEnhance(){ const c=document.getElementById('enh-chip'); if(c) c.style.display=cur.enhanced?'':'none';
+      const b=document.getElementById('btn-enhance'); if(b) b.classList.toggle('on', cur.enhanced); }
+    window.cosEnhance = function(){
+      if(!cur.enhanced){
+        if(cur.investiture < 1){ res('<span class="comp">Not enough Investiture</span> to Enhance.'); return; }
+        cur.investiture -= 1; cur.enhanced = true; pending.investiture=cur.investiture; pending.enhanced=true;
+        res('<span class="opp">Enhance</span> — Enhanced [STR +1 / SPD +1] until end of your next turn. (−1 Investiture)');
+      } else { cur.enhanced = false; pending.enhanced=false; res('Enhance dropped.'); }
+      paint(); paintEnhance(); flush();
+    };
+    window.cosRegenerate = function(){
+      if(cur.investiture < 1){ res('<span class="comp">Not enough Investiture</span> to Regenerate.'); return; }
+      cur.investiture -= 1; const heal = d(6) + TIER;
+      cur.health = Math.min(MAX.health, cur.health + heal);
+      res('<span class="opp">Regenerate</span> — healed <b>'+heal+'</b> (1d6 + tier '+TIER+'). (−1 Investiture)');
+      post('Regenerate', '+'+heal+' health', '1d6 + tier '+TIER+' = '+heal);
+      paint(); pending.investiture=cur.investiture; pending.health=cur.health; flush();
+    };
+    window.cosSurge = function(name, invCost, effect){
+      if(invCost && cur.investiture < invCost){ res('<span class="comp">Not enough Investiture</span> for '+name+'.'); return; }
+      if(invCost){ cur.investiture -= invCost; pending.investiture=cur.investiture; }
+      res('<span class="opp">'+name+'</span>'+(invCost?' (−'+invCost+' Investiture)':'')+' — '+(effect||'').slice(0,80));
+      post('uses '+name, invCost?('−'+invCost+' Inv'):'surge', effect);
+      paint(); if(invCost) flush();
+    };
+    paintEnhance();
   })();
   </script>
   {% endif %}
