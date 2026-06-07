@@ -11,6 +11,10 @@
             try { localStorage.removeItem('pf2e_theme_v1'); } catch(_) {}
         })();
     </script>
+    {# Shared SSE hub — defines window.appSSE before any body script / partial
+       runs. Standalone pages (player sheet/view, mobile combat) include this
+       same partial in their own <head>. #}
+    {% include "_sse_hub.html" %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PF2E Dashboard{% endblock %}</title>
@@ -330,7 +334,8 @@
                 setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, ttl);
             }
             try {
-                const _toastSSE = new EventSource('/api/events');
+                // Shared SSE hub (see <head>): register on the one socket.
+                const _toastSSE = { addEventListener: function(n, h) { window.appSSE(n, h); } };
                 _toastSSE.addEventListener('player_roll', function(e) {
                     let log = null;
                     try { log = JSON.parse(e.data); } catch(_) {}
@@ -677,17 +682,15 @@
         // Open a player-specific SSE for encounter_update + player_roll.
         if (window._navMarkSseAttached) window._navMarkSseAttached();
         (function hookNavSSE() {
-            var src = new EventSource('/api/events');
+            // Shared SSE hub (see <head>) — one socket per tab, hub owns the
+            // reconnect-with-backoff that PR #28 added here.
+            var src = { addEventListener: function(n, h) { window.appSSE(n, h); } };
             src.addEventListener('encounter_update', function(e) {
                 try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
             });
             src.addEventListener('player_roll', function(e) {
                 try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
             });
-            // Reconnect with backoff instead of reloading the whole sheet on a
-            // transient SSE drop -- in-person WiFi blips were forcing a jarring
-            // full page reload 8s later.
-            src.onerror = function() { src.close(); setTimeout(hookNavSSE, 5000); };
         })();
     })();
     </script>
@@ -1200,11 +1203,10 @@
             }).catch(function(){});
         };
 
-        // Listen for chat_message SSE events
+        // Listen for chat_message via the shared SSE hub (see <head>).
         function hookSSE() {
             try {
-                var src = new EventSource('/api/events');
-                src.addEventListener('chat_message', function(e) {
+                window.appSSE('chat_message', function(e) {
                     try {
                         var m = JSON.parse(e.data);
                         appendMsg(m);
@@ -1214,14 +1216,9 @@
                         }
                     } catch(ex) {}
                 });
-                src.onerror = function() {
-                    src.close();
-                    setTimeout(hookSSE, 5000);
-                };
             } catch(ex) {}
         }
-        // Delay to let page-level SSE connect first
-        setTimeout(hookSSE, 3000);
+        hookSSE();
 
         function _esc(s) {
             if (s == null) return '';
@@ -1408,10 +1405,10 @@
             toggle: function() { window.pf2eSFX.setEnabled(!sfxEnabled); return sfxEnabled; }
         };
 
-        // Hook into SSE events for SFX triggers
+        // Hook SFX triggers onto the shared SSE hub (see <head>).
         function hookSFXtoSSE() {
             try {
-                var src = new EventSource('/api/events');
+                var src = { addEventListener: function(n, h) { window.appSSE(n, h); } };
                 src.addEventListener('player_roll', function(e) {
                     if (!sfxEnabled) return;
                     try {
@@ -1437,13 +1434,9 @@
                         else if (d.hp_delta && d.hp_delta > 0) sfxHeal();
                     } catch(ex) {}
                 });
-                src.onerror = function() {
-                    src.close();
-                    setTimeout(hookSFXtoSSE, 5000);
-                };
             } catch(ex) {}
         }
-        setTimeout(hookSFXtoSSE, 3500);
+        hookSFXtoSSE();
     })();
     </script>
 

@@ -1044,6 +1044,39 @@ def _do_broadcast_pc_state(pc_name):
             print(f"[BROADCAST] {pc_name}: effects compute failed: {_e}")
             payload['effective'] = {}
             payload['effects_breakdown'] = []
+        # Derived combat numbers the player sheet repaints IN PLACE when a
+        # condition / feature toggle / two-hand swap ripples through them.
+        # These mirror exactly what the Jinja sheet renders (pc.fort, pc.skills,
+        # pc.attacks, …) — NOT the post-active-effect `effective` values — so a
+        # live painter and a hard reload agree to the digit. (Active-effect
+        # buffs surface in the Active Effects breakdown, same as the server
+        # render; folding them into saves here would diverge from a reload.)
+        try:
+            payload['derived'] = {
+                'fort':       int(pc.fort or 0),
+                'ref':        int(pc.ref or 0),
+                'will':       int(pc.will or 0),
+                'perception': int(pc.perception or 0),
+                'skills': [
+                    {'name': s.get('name', ''),
+                     'total': s.get('total', '+0'),
+                     'penalty': int(s.get('penalty', 0) or 0)}
+                    for s in (pc.skills or [])
+                ],
+                'attacks': [
+                    {'name': a.get('name', ''),
+                     'damage': a.get('damage', ''),
+                     'is_two_handed': bool(a.get('is_two_handed', False)),
+                     'strikes': [
+                         {'label': st.get('label', ''), 'mod': int(st.get('mod', 0) or 0)}
+                         for st in (a.get('strikes') or [])
+                     ]}
+                    for a in (pc.attacks or [])
+                ],
+            }
+        except Exception as _e:
+            print(f"[BROADCAST] {pc_name}: derived compute failed: {_e}")
+            payload['derived'] = {}
     sse_broadcast('pc_update', payload)
 
 def _flush_enc_broadcast():
@@ -1647,6 +1680,21 @@ def _do_persist_pc_combat_state(pc_name):
         _atomic_write_json(file_path, pc_json, indent=2)
     except Exception as e:
         print(f"[PERSIST ERROR] {pc_name}: {e}")
+
+def _flush_pc_dirty(pc_name):
+    """Synchronously flush any debounced combat-state writes for this PC
+    before a read-modify-write of its file. The debounced persistence thread
+    holds HP / conditions / shield / persistent_damage / active_effects in
+    memory; a route that reads the file, mutates the *build*, writes it back,
+    and reload_single_character()s would otherwise resurrect the last-persisted
+    combat state and clobber the live values. Mirrors the guard that has long
+    lived inline in update_pc_condition."""
+    try:
+        if pc_name in _PC_PERSIST_DIRTY:
+            _do_persist_pc_combat_state(pc_name)
+            _PC_PERSIST_DIRTY.discard(pc_name)
+    except Exception:
+        pass
 
 # ---- UNIFIED PC STATE MUTATION ----
 # Historically every endpoint hand-rolled the four-step dance:
@@ -9050,11 +9098,7 @@ def update_pc_condition(pc_name):
         # reaction_used, exploration_activity, current_hp). Without this the
         # read-modify-write cycle here reverts changes that haven't made it
         # through the debounced persistence thread yet.
-        try:
-            if pc_name in _PC_PERSIST_DIRTY:
-                _do_persist_pc_combat_state(pc_name)
-                _PC_PERSIST_DIRTY.discard(pc_name)
-        except Exception: pass
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
         if 'conditions' not in build: build['conditions'] = {}
@@ -9093,7 +9137,12 @@ def update_pc_condition(pc_name):
                         break
         except Exception: pass
         _broadcast_pc_state(pc_name)
-        return jsonify({"success": True})
+        # Echo the canonical (filtered) condition map back so the caller can
+        # paint the Conditions Matrix / Quick-Conditions rail immediately,
+        # without waiting on the coalesced pc_update frame.
+        return jsonify({"success": True,
+                        "conditions": {k: v for k, v in build['conditions'].items()
+                                       if v and v != 0 and v is not False}})
     return jsonify({"success": False})
 
 @app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
@@ -12080,17 +12129,21 @@ def add_weapon(pc_name):
 def toggle_two_hand(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
-    
+
     w_name = data.get('name', '')
     if 'weapons' in build and isinstance(build['weapons'], list):
         for w in build['weapons']:
             if w.get('name') == w_name:
                 w['is_two_handed'] = not w.get('is_two_handed', False)
                 break
-                
+
     save_and_reload_character(pc_name, pc_json, file_path)
+    # Two-handed grip changes the weapon's damage die; broadcast so the strike
+    # cards repaint their damage (and the 2H pill) in place, no reload.
+    _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
 
 @app.route('/api/delete_weapon/<pc_name>', methods=['POST'])
@@ -12143,11 +12196,14 @@ def toggle_feature(pc_name, feature_name):
     file_path = get_pc_file_path(pc_name)
     if not file_path:
         return jsonify({"error": "File not found"}), 404
-    
+
+    # Persist any in-flight combat state before the read-modify-write so the
+    # reload below doesn't revert live HP / conditions / shield.
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
-    
+
     toggles = build.get('active_toggles') or []
     if feature_name in toggles:
         toggles.remove(feature_name)
@@ -12158,10 +12214,14 @@ def toggle_feature(pc_name, feature_name):
     
     build['active_toggles'] = toggles
     save_and_reload_character(pc_name, pc_json, file_path)
-    
+
     pc = PARTY_LIBRARY[pc_name]
     effects = pc.toggle_effects_summary
-    
+    # Broadcast so the sheet repaints AC / strike damage in place — the toggle
+    # (Rage, Arcane Cascade, …) ripples into derived numbers the player sheet
+    # now paints from the pc_update `derived` block instead of hard-reloading.
+    _broadcast_pc_state(pc_name)
+
     return jsonify({"success": True, "active": active, "feature": feature_name, "effects": effects})
 
 @app.route('/api/set_reaction/<pc_name>', methods=['POST'])

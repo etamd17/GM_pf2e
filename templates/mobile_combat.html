@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>{{ pc.name }} - Combat</title>
+    {# Shared SSE hub — standalone page; defines window.appSSE before the
+       combat SSE + included _player_nav partial run. #}
+    {% include "_sse_hub.html" %}
     <script>
         (function() {
             try { document.documentElement.setAttribute('data-theme', 'dark'); } catch(_) {}
@@ -242,8 +245,8 @@
             broadcastToGM(saveName, '' + total, detail);
         };
 
-        // ---- SSE for live updates ----
-        var src = new EventSource('/api/events');
+        // ---- SSE for live updates (shared hub, see <head>) ----
+        var src = { addEventListener: function(n, h) { window.appSSE(n, h); } };
 
         src.addEventListener('encounter_update', function(e) {
             try { window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}

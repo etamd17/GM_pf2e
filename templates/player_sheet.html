@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>{{ pc.name }} - Player Sheet</title>
+    {# Shared SSE hub — this is a standalone page (does not extend base.html),
+       so it defines window.appSSE itself before connectSSE / loot / nav run. #}
+    {% include "_sse_hub.html" %}
     <script>
         // Single design system — clear any stale legacy theme value so
         // wave-2 "parchment" / "hi-contrast" can't beat the new tokens.
@@ -3543,7 +3546,15 @@
             try {
                 const res = await fetch(`/api/toggle_feature/${pcNameEncoded}/${encodeURIComponent(featureName)}`, { method: 'POST' });
                 const data = await res.json();
-                if (data.success) window.location.reload();
+                if (data.success) {
+                    // Flip the switch/badge/pills locally; the derived combat
+                    // numbers (AC, strike damage) repaint from the pc_update
+                    // broadcast the route now fires. No page reload.
+                    _paintFeatureToggle(featureName, !!data.active);
+                    if (window.pf2eToast) window.pf2eToast(`${featureName} ${data.active ? 'on' : 'off'}`, data.active ? 'info' : 'success');
+                } else if (data.error) {
+                    if (window.pf2eToast) window.pf2eToast(data.error, 'danger');
+                }
             } catch(e) { console.error('Toggle error:', e); }
         }
 
@@ -3642,7 +3653,7 @@
 
         async function adjustCondition(cond, delta) {
             // Mark fired — see updateCondition for the delegated backstop pattern.
-            window._lastCondCall = Date.now();
+            window._lastCondCall = (window._lastCondCall || 0) + 1;  // monotonic "inline fired" token
             // 'toggle' for boolean conditions goes through the dedicated
             // endpoint shape ({toggle: true}); numeric deltas use {delta: N}.
             const body = (delta === 'toggle') ? { condition: cond, toggle: true } : { condition: cond, delta: delta };
@@ -3661,6 +3672,7 @@
                 if (data.success) {
                     _refreshConditionStrip();
                     _paintMetaQuickConds(data.conditions || {});
+                    _paintConditionsMatrix(data.conditions || {});
                     var _v = (data.conditions || {})[cond];
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
                     if (typeof _v === 'number' && _v > 0) window.pf2eToast(_label + ' ' + _v, 'danger');
@@ -4138,12 +4150,13 @@
         }
         
         // ==========================================
-        // SSE: shared listeners attached to the single EventSource
-        // opened by connectSSE() further down. We expose handler-attach
-        // functions; connectSSE wires them onto its own socket so the
-        // page only ever holds ONE /api/events connection.
+        // SSE: shared listeners registered on the page-wide SSE hub
+        // (window.appSSE, defined in base.html <head>). The whole tab holds
+        // ONE /api/events socket; the evtSource alias below routes the legacy
+        // addEventListener(...) registrations onto the hub unchanged.
         // ==========================================
-        function _attachSharedSseListeners(evtSource) {
+        function _attachSharedSseListeners() {
+            const evtSource = { addEventListener: (name, fn) => window.appSSE(name, fn) };
             evtSource.addEventListener('player_roll', (e) => {
                 try {
                     const roll = JSON.parse(e.data);
@@ -4490,7 +4503,7 @@
             // Mark that the inline (or delegated) handler did fire. Used by the
             // backstop delegation below to avoid re-firing the action when the
             // inline onclick is working normally.
-            window._lastCondCall = Date.now();
+            window._lastCondCall = (window._lastCondCall || 0) + 1;  // monotonic "inline fired" token
             if (typeof val === 'number' && (val < 0 || val > 4)) return;
             try {
                 const res = await fetch(`/api/update_pc_condition/${pcNameEncoded}`, {
@@ -4507,7 +4520,14 @@
                     } else {
                         window.pf2eToast(_label + ' removed', 'success');
                     }
-                    window.location.reload();
+                    // Paint conditions in place from the server-echoed map; the
+                    // derived numbers (saves/skills/strikes) ride the pc_update
+                    // broadcast the route fires. No reload. (The Conditions
+                    // Matrix is delta-driven via adjustCondition now; this
+                    // absolute-set path is kept reload-free for any other caller.)
+                    _refreshConditionStrip();
+                    _paintMetaQuickConds(data.conditions || {});
+                    _paintConditionsMatrix(data.conditions || {});
                 } else if (typeof showRollToast === 'function') {
                     showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond}=${val})`, false, true);
                 }
@@ -4527,17 +4547,24 @@
            catches the click and dispatches the action. Inline onclick is
            left in place so behavior is unchanged when it works; this is
            strictly a backstop. Covers four widgets:
-             • Matrix numeric +/-  → updateCondition(cond, integer)
-             • Matrix toggle       → updateCondition(cond, true|false)
+             • Matrix numeric +/-  → adjustCondition(cond, ±1)
+             • Matrix toggle       → adjustCondition(cond, 'toggle')
              • Quick Conditions    → adjustCondition(cond, delta|'toggle')
              • Strip pills         → adjustCondition / toggleBoolCondition
         */
         /* The backstop is only useful when the INLINE onclick fails silently.
-           If the inline ran, updateCondition / adjustCondition will set
-           window._lastCondCall to the current timestamp. We capture the
-           click time, then in a microtask check whether the marker was
-           bumped. If it was, the inline did its job — bail. If not, fire
-           the parsed call as a fallback. */
+           adjustCondition / updateCondition bump window._lastCondCall (a
+           monotonic token) the instant they run. This listener is registered
+           in the CAPTURE phase so it runs BEFORE the element's own inline
+           onclick: it snapshots the token first, then in a microtask checks
+           whether the inline moved it. Moved → inline did its job, bail.
+           Unchanged → inline was swallowed, fire the parsed call as a fallback.
+           Capture phase + monotonic token is deliberate: the matrix steppers
+           now call delta-based adjustCondition, where a spurious second fire
+           would DOUBLE the increment. The previous bubble-phase + timestamp
+           compare ran after the inline and mis-fired on a sub-ms boundary —
+           harmless under the old absolute updateCondition, a real double-step
+           under delta. */
         document.addEventListener('click', (e) => {
             const target = e.target;
             if (!target || !target.closest) return;
@@ -4546,15 +4573,15 @@
             const numBtn = target.closest('.cond-numeric button.cond-step');
             if (numBtn) {
                 const oc = numBtn.getAttribute('onclick') || '';
-                const m = oc.match(/updateCondition\(\s*['"]([^'"]+)['"]\s*,\s*(-?\d+)\s*\)/);
-                if (m) match = { fn: 'updateCondition', args: [m[1], parseInt(m[2], 10)] };
+                const m = oc.match(/adjustCondition\(\s*['"]([^'"]+)['"]\s*,\s*(-?\d+)\s*\)/);
+                if (m) match = { fn: 'adjustCondition', args: [m[1], parseInt(m[2], 10)] };
             }
             if (!match) {
                 const togBtn = target.closest('button.cond-toggle');
                 if (togBtn) {
                     const oc = togBtn.getAttribute('onclick') || '';
-                    const m = oc.match(/updateCondition\(\s*['"]([^'"]+)['"]\s*,\s*(true|false)\s*\)/);
-                    if (m) match = { fn: 'updateCondition', args: [m[1], m[2] === 'true'] };
+                    const m = oc.match(/adjustCondition\(\s*['"]([^'"]+)['"]\s*,\s*['"]toggle['"]\s*\)/);
+                    if (m) match = { fn: 'adjustCondition', args: [m[1], 'toggle'] };
                 }
             }
             if (!match) {
@@ -4575,18 +4602,18 @@
             }
             if (!match) return;
 
-            const t0 = Date.now();
-            // Defer past the click event so the inline onclick has had its
-            // synchronous shot at running. If it did, _lastCondCall will be
-            // >= t0 and we skip the fallback.
+            // Snapshot BEFORE the inline runs (we're in the capture phase).
+            const before = window._lastCondCall || 0;
+            // Defer past the click so the inline onclick (target phase, after
+            // this capture listener) has had its synchronous shot. If it ran,
+            // the token moved past our snapshot and we skip the fallback.
             setTimeout(() => {
-                const lastCall = window._lastCondCall || 0;
-                if (lastCall >= t0) return; // inline handled it
+                if ((window._lastCondCall || 0) > before) return; // inline handled it
                 console.warn('[cond delegation] inline onclick did not fire; using backstop', match);
                 const fn = window[match.fn];
                 if (typeof fn === 'function') fn(...match.args);
             }, 0);
-        });
+        }, true);
 
         function escapeHtml(str) {
             if(!str) return '';
@@ -5446,19 +5473,216 @@
             }
         }
         
+        // ══════════════════════════════════════════════════════════════
+        // DERIVED-STAT PAINTERS
+        // Repaint the numbers a condition / feature toggle / two-hand swap
+        // ripples into — strike to-hit + damage, save totals, skill totals,
+        // the Conditions Matrix — IN PLACE from the pc_update `derived` block.
+        // The server builds `derived` from the very same pc.fort/pc.skills/
+        // pc.attacks the Jinja sheet renders, so a live paint and a hard
+        // reload agree to the digit. This is what lets updateCondition /
+        // toggleFeature / toggleTwoHand drop their window.location.reload().
+        // Every painter is a no-op when its DOM isn't present, so they're
+        // safe to fire on every frame (incl. HP-only pc_updates).
+        // ══════════════════════════════════════════════════════════════
+        function _fmtMod(n) { n = parseInt(n, 10) || 0; return (n >= 0 ? '+' : '') + n; }
+
+        // Saves + Perception: .ss-block elements in the under-name strip keyed
+        // by data-roll-name. Update the visible value, data-roll-mod (favorites
+        // + right-click context menu read it) and the left-click onclick.
+        function _paintSaveStat(rollName, mod) {
+            const el = document.querySelector(`.ss-block[data-roll-name="${rollName}"]`);
+            if (!el) return;
+            mod = parseInt(mod, 10) || 0;
+            el.dataset.rollMod = mod;
+            el.setAttribute('onclick', `rollSkill(${JSON.stringify(rollName)}, ${mod})`);
+            const val = el.querySelector('.ss-val');
+            if (val) val.textContent = _fmtMod(mod);
+            el.setAttribute('aria-label', `Roll ${rollName} ${_fmtMod(mod)}`);
+        }
+        function _paintSavesBlock(d) {
+            if (!d) return;
+            if (typeof d.fort === 'number')       _paintSaveStat('Fortitude Save', d.fort);
+            if (typeof d.ref === 'number')        _paintSaveStat('Reflex Save', d.ref);
+            if (typeof d.will === 'number')       _paintSaveStat('Will Save', d.will);
+            if (typeof d.perception === 'number') _paintSaveStat('Perception', d.perception);
+        }
+
+        // Skill rows (Core tab) keyed by data-roll-name. Update data-roll-mod,
+        // the roll button's text (+ penalty tag), aria, and left-click onclick.
+        function _paintSkills(skills) {
+            if (!Array.isArray(skills)) return;
+            const byName = {};
+            skills.forEach(s => { if (s && s.name) byName[s.name] = s; });
+            document.querySelectorAll('.skill-row[data-roll-name]').forEach(row => {
+                const s = byName[row.getAttribute('data-roll-name')];
+                if (!s) return;
+                const intMod = parseInt(s.total, 10) || 0;
+                row.dataset.rollMod = intMod;
+                const btn = row.querySelector('button[onclick^="rollSkill"]');
+                if (btn) {
+                    let html = _escHtml(s.total);
+                    if (s.penalty) html += `<span class="penalty-tag">−${parseInt(s.penalty, 10) || 0}</span>`;
+                    btn.innerHTML = html;
+                    btn.setAttribute('onclick', `rollSkill(${JSON.stringify(s.name)}, ${intMod})`);
+                    btn.setAttribute('aria-label', `Roll ${s.name} ${s.total}`);
+                }
+            });
+        }
+
+        // Two-handed pill: mirror the Jinja active/inactive class+style split.
+        function _paintTwoHandBtn(btn, on) {
+            btn.classList.remove('bg-amber-600', 'text-white', 'border-amber-500',
+                                 'text-gray-400', 'border-gray-600', 'hover:text-white');
+            if (on) {
+                btn.classList.add('bg-amber-600', 'text-white', 'border-amber-500');
+                btn.style.background = '';
+            } else {
+                btn.classList.add('text-gray-400', 'border-gray-600', 'hover:text-white');
+                btn.style.background = 'var(--surface-overlay)';
+            }
+        }
+        // Strike cards (Combat tab) keyed by data-attack-name. Repaint each
+        // strike's to-hit (label + onclick mod), the statline + damage-button
+        // damage string, and the two-handed pill. Names/damage are injected via
+        // JSON.stringify so the rebuilt onclick is quote-safe.
+        function _paintAttacks(attacks) {
+            if (!Array.isArray(attacks)) return;
+            const byName = {};
+            attacks.forEach(a => { if (a && a.name != null) byName[a.name] = a; });
+            document.querySelectorAll('[data-weapon-card]').forEach(card => {
+                const a = byName[card.getAttribute('data-attack-name')];
+                if (!a) return;
+                const strikes = Array.isArray(a.strikes) ? a.strikes : [];
+                const dmg = a.damage || '';
+                const tohit = card.querySelector('[data-tohit-label]');
+                if (tohit && strikes[0]) tohit.textContent = strikes[0].label;
+                card.querySelectorAll('[data-damage-label],[data-damage-text]').forEach(el => { el.textContent = dmg; });
+                card.querySelectorAll('[data-strike-btn]').forEach(btn => {
+                    const idx = parseInt(btn.getAttribute('data-strike-btn'), 10);
+                    const s = strikes[idx];
+                    if (!s) return;
+                    const lbl = btn.querySelector('[data-strike-label]');
+                    if (lbl) lbl.textContent = s.label;
+                    btn.setAttribute('onclick', `rollAttack(${JSON.stringify(a.name)}, ${parseInt(s.mod, 10) || 0}, ${JSON.stringify(dmg)})`);
+                });
+                const dbtn = card.querySelector('[data-damage-btn]');
+                if (dbtn) dbtn.setAttribute('onclick', `rollDamage(${JSON.stringify(a.name)}, ${JSON.stringify(dmg)})`);
+                if (typeof a.is_two_handed === 'boolean') {
+                    const t = card.querySelector('[data-twohand-btn]');
+                    if (t) _paintTwoHandBtn(t, a.is_two_handed);
+                }
+            });
+        }
+
+        // Conditions Matrix (Combat tab). Tips mirror the Jinja `condition_tips`
+        // map so the "−X to …" helper line stays correct as the value changes.
+        const _CM_NUM_TIPS = {
+            frightened: '−X to all checks, DCs, saves, and attack rolls',
+            sickened:   '−X to all checks, DCs, saves, and attack rolls. Must retch (Fort DC) to reduce.',
+            enfeebled:  '−X to Str-based attacks, damage, and Athletics checks',
+            clumsy:     '−X to Dex-based checks, AC, and Reflex saves',
+            drained:    '−X to Con-based checks and max HP reduced by X × level',
+            stupefied:  '−X to Int/Wis/Cha-based checks and spell DCs. Flat check X to cast spells.'
+        };
+        function _paintConditionsMatrix(conds) {
+            conds = conds || {};
+            document.querySelectorAll('[data-cm-num]').forEach(block => {
+                const key = block.getAttribute('data-cm-num');
+                const v = parseInt(conds[key] || 0, 10) || 0;
+                const on = v > 0;
+                block.classList.toggle('is-on', on);
+                const tip = (_CM_NUM_TIPS[key] || '').replace(/X/g, v);
+                block.setAttribute('title', tip);
+                const nameEl = block.querySelector('.cond-name');
+                if (nameEl) { nameEl.classList.toggle('text-red-400', on); nameEl.classList.toggle('text-gray-400', !on); }
+                const valEl = block.querySelector('.cond-val');
+                if (valEl) { valEl.textContent = v; valEl.classList.toggle('text-red-400', on); valEl.classList.toggle('text-gray-500', !on); }
+                const desc = block.querySelector('[data-cm-desc]');
+                if (desc) { desc.textContent = on ? tip : ''; desc.style.display = on ? '' : 'none'; }
+            });
+            document.querySelectorAll('[data-cm-bool]').forEach(btn => {
+                const key = btn.getAttribute('data-cm-bool');
+                const on = !!conds[key];
+                btn.classList.toggle('border-red-900/50', on);
+                btn.classList.toggle('bg-red-900/20', on);
+                btn.classList.toggle('bg-gray-900', !on);
+                btn.classList.toggle('border-gray-700', !on);
+                btn.classList.toggle('hover:border-gray-500', !on);
+                const nameEl = btn.querySelector('.cm-bool-name');
+                if (nameEl) { nameEl.classList.toggle('text-red-400', on); nameEl.classList.toggle('text-gray-400', !on); }
+                const stateEl = btn.querySelector('.cm-bool-state');
+                if (stateEl) { stateEl.textContent = on ? 'ON' : 'OFF'; stateEl.classList.toggle('text-red-400', on); stateEl.classList.toggle('text-gray-600', !on); }
+                const desc = btn.parentElement ? btn.parentElement.querySelector('[data-cm-bool-desc]') : null;
+                if (desc) desc.style.display = on ? '' : 'none';
+            });
+        }
+
+        // Feats tab — flip a class-feature toggle's switch + ACTIVE badge +
+        // effect pills in place. The combat numbers it changes (AC, strike
+        // damage) ride the pc_update painters above; this is the local-only
+        // affordance that the reload used to refresh.
+        function _paintFeatureToggle(name, active) {
+            const id = (name + '').replace(/ /g, '-');
+            const btn = document.getElementById('toggle-btn-' + id);
+            if (btn) {
+                btn.style.background = active ? 'rgba(167,139,250,0.2)' : 'var(--bg-raised)';
+                btn.style.border = active ? '1px solid rgba(167,139,250,0.4)' : '1px solid var(--border-strong)';
+                const slider = btn.querySelector('span');
+                if (slider) {
+                    slider.style.left = active ? '22px' : '2px';
+                    slider.style.background = active ? 'var(--color-spell)' : 'var(--text-faint)';
+                }
+            }
+            const card = document.getElementById('feature-' + id);
+            if (card) {
+                const h4 = card.querySelector('h4');
+                if (h4) {
+                    h4.style.color = active ? 'var(--color-spell)' : 'var(--text-primary)';
+                    let badge = h4.querySelector('[data-active-badge]');
+                    if (active && !badge) {
+                        badge = document.createElement('span');
+                        badge.setAttribute('data-active-badge', '');
+                        badge.className = 'text-xs ml-2 px-2 py-0.5 rounded';
+                        badge.style.cssText = 'background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.25); color: var(--color-spell);';
+                        badge.textContent = 'ACTIVE';
+                        h4.appendChild(badge);
+                    } else if (!active && badge) {
+                        badge.remove();
+                    }
+                }
+                card.querySelectorAll('[data-toggle-pill]').forEach(pill => {
+                    pill.style.cssText = active
+                        ? 'background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); color: var(--color-spell);'
+                        : 'background: var(--border-subtle); border: 1px solid var(--border-subtle); color: var(--text-faint);';
+                });
+            }
+        }
+
+        // Apply the whole pc_update `derived` block (saves / skills / attacks).
+        function _paintDerived(derived) {
+            if (!derived) return;
+            try { _paintSavesBlock(derived); } catch(_) {}
+            try { _paintSkills(derived.skills); } catch(_) {}
+            try { _paintAttacks(derived.attacks); } catch(_) {}
+        }
+
         // SSE connection with auto-reconnect + liveness tracking so the
         // poll below can stay quiet while the live stream is healthy.
         let _sheetSseLastMsg = 0;
         function _sheetMarkSseAlive() { _sheetSseLastMsg = Date.now(); }
 
         function connectSSE() {
-            const evtSource = new EventSource('/api/events');
-            evtSource.onopen = _sheetMarkSseAlive;
-            evtSource.addEventListener('connected', _sheetMarkSseAlive);
-            evtSource.addEventListener('keepalive', _sheetMarkSseAlive);
+            // Register the sheet's handlers on the shared SSE hub (window.appSSE,
+            // base.html <head>). The hub owns the single /api/events socket and
+            // its reconnect; the evtSource alias keeps the registrations below
+            // unchanged.
+            const evtSource = { addEventListener: (name, fn) => window.appSSE(name, fn) };
+            window.appSSE('connected', _sheetMarkSseAlive);
+            window.appSSE('keepalive', _sheetMarkSseAlive);
 
-            // Roll-feed + handout + turn-banner listeners share this socket.
-            try { _attachSharedSseListeners(evtSource); } catch(_){}
+            // Roll-feed + handout + turn-banner listeners share the hub.
+            try { _attachSharedSseListeners(); } catch(_){}
 
             evtSource.addEventListener('pc_update', (e) => {
                 _sheetMarkSseAlive();
@@ -5468,6 +5692,12 @@
                     applyHpUpdate(data.current_hp);
                     applyConditionUpdate(data.conditions || {});
                     _paintMetaQuickConds(data.conditions || {});
+                    // Repaint the derived numbers a condition / toggle / two-hand
+                    // change ripples into (saves, skills, strikes, conditions
+                    // matrix) so updateCondition / toggleFeature / toggleTwoHand
+                    // never need a full page reload.
+                    _paintConditionsMatrix(data.conditions || {});
+                    _paintDerived(data.derived);
                     // Temp HP + shield gauge: mirror server truth so the
                     // Shield-Block confirm + +TMP button always see fresh state.
                     if (typeof data.temp_hp === 'number') {
@@ -5584,10 +5814,11 @@
                 } catch(err) { console.error('SSE encounter_update error:', err); }
             });
 
-            evtSource.onerror = () => {
-                evtSource.close();
-                setTimeout(connectSSE, 5000); // Reconnect after 5s
-            };
+            // No per-socket onerror/reconnect here — the shared hub
+            // (window.appSSE) owns reconnect-with-backoff and re-attaches every
+            // handler to the fresh socket. _sheetMarkSseAlive still fires on the
+            // hub's 'connected'/'keepalive' + each pc_update/encounter_update,
+            // so the adaptive poll below keeps its liveness signal.
         }
         connectSSE();
 
@@ -6935,7 +7166,11 @@
                     body: JSON.stringify({ name: weaponName })
                 });
                 const data = await res.json();
-                if (data.success) window.location.reload();
+                if (data.success) {
+                    // Damage die + 2H pill repaint from the pc_update broadcast
+                    // the route now fires (_paintAttacks). No page reload.
+                    if (window.pf2eToast) window.pf2eToast('Grip changed', 'info');
+                }
             } catch(e) { console.error("Toggle error:", e); }
         }
 
@@ -8903,12 +9138,10 @@
             // Defer to ensure the existing connectSSE is up first.
         });
         (function listenForLoot() {
-            // Hook into the existing EventSource by polling for the
-            // global window.EventSource we'd need to reach. Instead, use
-            // a separate EventSource just for this — cheap, the server
-            // already supports it.
+            // Register loot + check-request handlers on the shared SSE hub
+            // (window.appSSE, base.html <head>) — no separate socket.
             try {
-                const es = new EventSource('/api/events');
+                const es = { addEventListener: (name, fn) => window.appSSE(name, fn) };
                 es.addEventListener('loot_received', (e) => {
                     let data;
                     try { data = JSON.parse(e.data); } catch(_) { return; }

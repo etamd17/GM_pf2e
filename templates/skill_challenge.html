@@ -235,9 +235,9 @@ async function endChallenge() {
     renderChallenge();
 }
 
-// SSE updates
+// SSE updates via the shared hub (base.html <head>) — one socket per tab.
 try {
-    var src = new EventSource('/api/events');
+    var src = { addEventListener: function(n, h) { window.appSSE(n, h); } };
     src.addEventListener('skill_challenge', function(e) {
         var data = JSON.parse(e.data);
         if (data.status === 'ended') {

@@ -56,7 +56,7 @@
                             <h4 class="font-header text-base" style="color: {% if feat.type == 'toggle' and feat.name in pc.active_toggles %}var(--color-spell){% else %}var(--text-primary){% endif %};">
                                 {{ feat.name }}
                                 {% if feat.type == 'toggle' and feat.name in pc.active_toggles %}
-                                <span class="text-xs ml-2 px-2 py-0.5 rounded" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.25); color: var(--color-spell);">ACTIVE</span>
+                                <span data-active-badge class="text-xs ml-2 px-2 py-0.5 rounded" style="background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.25); color: var(--color-spell);">ACTIVE</span>
                                 {% endif %}
                             </h4>
                             <span class="text-[10px] font-header uppercase tracking-wider" style="color: var(--text-faint);">{{ feat.type|title }} · Level {{ feat.level }}</span>
@@ -68,7 +68,7 @@
                     {% if feat.get('toggle_effects') and feat.type == 'toggle' %}
                     <div class="mt-3 pt-2 flex flex-wrap gap-2" style="border-top: 1px solid var(--border-subtle);">
                         {% for effect_key, effect_val in feat.toggle_effects.items() %}
-                        <span class="font-header text-[10px] tracking-wider px-2 py-1 rounded" 
+                        <span data-toggle-pill class="font-header text-[10px] tracking-wider px-2 py-1 rounded"
                               style="{% if feat.name in pc.active_toggles %}background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); color: var(--color-spell);{% else %}background: var(--border-subtle); border: 1px solid var(--border-subtle); color: var(--text-faint);{% endif %}">
                             {{ effect_key|replace('_', ' ')|title }}: {% if effect_val is number %}{% if effect_val > 0 %}+{% endif %}{{ effect_val }}{% else %}{{ effect_val }}{% endif %}
                         </span>

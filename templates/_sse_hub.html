@@ -1,0 +1,74 @@
+<script>
+    // ───────────────────────── SHARED SSE HUB ─────────────────────────
+    // ONE EventSource('/api/events') per tab. Every feature (GM toast,
+    // player nav, chat, SFX, player sheet, loot, Cosmere nav, tracker,
+    // party view, …) registers through window.appSSE(eventName, handler)
+    // instead of opening its own socket. On the single gunicorn gevent worker
+    // each broadcast otherwise fanned out to up to ~6 sockets per tab; this
+    // collapses it to one, with a single capped-backoff reconnect that
+    // re-attaches every handler to the fresh socket.
+    //
+    // Included in the <head> of every page that uses appSSE — base.html (and
+    // all pages that extend it) plus the standalone full pages (player sheet,
+    // player view, mobile combat). Guarded so a double-include is a no-op.
+    //
+    // LAZY: the socket opens on the FIRST appSSE() call. Each caller keeps its
+    // existing gate (GM-only, player-only, …) around its subscribe, so a page
+    // that subscribes to nothing opens no connection — as before consolidation.
+    if (!window.appSSE) (function () {
+        var handlers = Object.create(null);   // eventName -> [fn, ...]
+        var es = null;
+        var reconnectTimer = null;
+        var backoff = 2000;
+        var BACKOFF_MAX = 30000;
+
+        function attachAll() {
+            if (!es) return;
+            for (var name in handlers) {
+                for (var i = 0; i < handlers[name].length; i++) {
+                    try { es.addEventListener(name, handlers[name][i]); } catch (e) {}
+                }
+            }
+        }
+        function scheduleReconnect() {
+            if (reconnectTimer) return;
+            var delay = backoff;
+            backoff = Math.min(backoff * 2, BACKOFF_MAX);
+            reconnectTimer = setTimeout(function () { reconnectTimer = null; connect(); }, delay);
+        }
+        function connect() {
+            if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+            try { es = new EventSource('/api/events'); }
+            catch (e) { es = null; scheduleReconnect(); return; }
+            es.onopen = function () { backoff = 2000; };
+            es.addEventListener('connected', function () { backoff = 2000; });
+            es.onerror = function () {
+                // Transient drop (WiFi blip, worker recycle). Close and
+                // reconnect on our own schedule rather than letting the
+                // browser's native retry race the handler re-attach.
+                try { es.close(); } catch (e) {}
+                es = null;
+                scheduleReconnect();
+            };
+            attachAll();
+        }
+
+        window.appSSE = function (eventName, handler) {
+            if (typeof handler !== 'function') return function () {};
+            (handlers[eventName] || (handlers[eventName] = [])).push(handler);
+            if (es) { try { es.addEventListener(eventName, handler); } catch (e) {} }
+            else if (!reconnectTimer) connect();   // first subscriber opens the socket
+            // else: mid-reconnect — attachAll() drains the registry on connect
+            return function unsubscribe() {
+                var arr = handlers[eventName]; if (!arr) return;
+                var ix = arr.indexOf(handler); if (ix >= 0) arr.splice(ix, 1);
+                if (es) { try { es.removeEventListener(eventName, handler); } catch (e) {} }
+            };
+        };
+        // Escape hatch for diagnostics / a forced reconnect.
+        window.__appSSE = {
+            isConnected: function () { return !!es; },
+            reconnectNow: function () { try { if (es) es.close(); } catch (e) {} es = null; backoff = 2000; connect(); }
+        };
+    })();
+</script>

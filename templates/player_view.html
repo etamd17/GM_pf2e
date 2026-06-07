@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ campaign.name }} · Roster · PF2E</title>
+    {# Shared SSE hub — standalone page; defines window.appSSE before the
+       roster SSE + included _player_nav / _session_curtain partials run. #}
+    {% include "_sse_hub.html" %}
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { colors: {
@@ -363,9 +366,9 @@
 
     function connectSSE() {
         try {
-            if (evtSrc) { try { evtSrc.close(); } catch(_){} }
-            evtSrc = new EventSource('/api/events');
-            evtSrc.addEventListener('connected', () => { _sseReconnectTries = 0; });
+            // Shared SSE hub (see <head>) — one socket per tab, hub owns reconnect.
+            // The evtSrc alias keeps the handler registrations below unchanged.
+            evtSrc = { addEventListener: (name, fn) => window.appSSE(name, fn) };
             evtSrc.addEventListener('handout', e => {
                 try {
                     const h = JSON.parse(e.data);
@@ -407,15 +410,8 @@
             evtSrc.addEventListener('player_roll', e => {
                 try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(_) {}
             });
-            evtSrc.onerror = () => {
-                try { evtSrc.close(); } catch(_){}
-                _sseReconnectTries += 1;
-                if (_sseReconnectTries <= 4) {
-                    const backoff = Math.min(1000 * Math.pow(2, _sseReconnectTries - 1), 8000);
-                    setTimeout(connectSSE, backoff);
-                }
-            };
-        } catch (e) { /* browser without EventSource */ }
+            // No onerror — the shared hub owns reconnect-with-backoff.
+        } catch (e) { /* no appSSE / browser without EventSource */ }
     }
     connectSSE();
 

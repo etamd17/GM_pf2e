@@ -252,14 +252,12 @@
         });
     }
 
-    // Dedicated SSE connection for curtain events (cheap, long-lived).
+    // Curtain events ride the shared SSE hub (base.html <head>) — no own socket.
     try {
-        var es = new EventSource('/api/events');
-        es.addEventListener('session_start', function(e) {
+        window.appSSE('session_start', function(e) {
             try { open(JSON.parse(e.data)); } catch (_) { open({}); }
         });
-        es.addEventListener('session_dismiss', function() { part(); });
-        window.__pf2eCurtainSSE = es;
+        window.appSSE('session_dismiss', function() { part(); });
     } catch (_) {}
 })();
 </script>

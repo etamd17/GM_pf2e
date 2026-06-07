@@ -4013,11 +4013,13 @@ let evtSource = null;
 let _trackerSseLastMsg = 0;
 function _trackerMarkSseAlive() { _trackerSseLastMsg = Date.now(); }
 function connectSSE() {
-    if (evtSource) { try { evtSource.close(); } catch(e){} }
-    evtSource = new EventSource('/api/events');
-    evtSource.onopen = _trackerMarkSseAlive;
-    evtSource.addEventListener('connected', _trackerMarkSseAlive);
-    evtSource.addEventListener('keepalive', _trackerMarkSseAlive);
+    // Register on the shared SSE hub (base.html <head>) — one socket per tab,
+    // hub owns reconnect. The evtSource alias keeps the handler bodies below
+    // unchanged; liveness rides 'connected'/'keepalive' + each event so the
+    // 30s-stale poll fallback still has its signal.
+    evtSource = { addEventListener: function(name, fn) { window.appSSE(name, fn); } };
+    window.appSSE('connected', _trackerMarkSseAlive);
+    window.appSSE('keepalive', _trackerMarkSseAlive);
     evtSource.addEventListener('encounter_update', function(e) {
         _trackerMarkSseAlive();
         // The SSE payload already carries everything that mutates at combat
@@ -4079,9 +4081,8 @@ function connectSSE() {
             renderSessionTimer();
         } catch(_) {}
     });
-    evtSource.onerror = function() {
-        // Will auto-reconnect after a delay
-    };
+    // No onerror — the shared hub owns reconnect; the 30s-stale poll below
+    // remains the safety net if the stream goes quiet.
 }
 connectSSE();
 
@@ -4605,10 +4606,10 @@ async function sendCheckRequest() {
     fab.dataset.unread = '0';
     repaintFab();
 
-    // Subscribe to SSE — tracker already has a connection elsewhere; we
-    // open a parallel one for inbox events. Cheap: SSE is multiplexed.
+    // Inbox events ride the shared SSE hub (base.html <head>) — same socket
+    // as the encounter stream above, not a parallel connection.
     try {
-        const es = new EventSource('/api/events');
+        const es = { addEventListener: (name, fn) => window.appSSE(name, fn) };
         es.addEventListener('whisper', (e) => {
             try {
                 const d = JSON.parse(e.data || '{}');
