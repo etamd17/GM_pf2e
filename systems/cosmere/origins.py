@@ -25,6 +25,17 @@ PATH_INFO = {
 # The six Rosharan cultures (each grants its eponymous cultural expertise).
 CULTURES = ('Alethi', 'Azish', 'Herdazian', 'Thaylen', 'Unkalaki', 'Veden')
 
+# A short, builder-facing note per culture. Each culture grants its own cultural
+# Expertise (the homeland's language + customs); the flavor helps a player pick.
+CULTURE_INFO = {
+    'Alethi':    "Roshar's dominant warrior society — rigid dahn/nahn ranks and a martial tradition.",
+    'Azish':     'A vast bureaucratic empire that prizes law, scribing, and earned office.',
+    'Herdazian': 'Scrappy and resourceful — chull-drovers and crem-stone craftspeople.',
+    'Thaylen':   'Master merchants and sailors, marked by their long white eyebrows.',
+    'Unkalaki':  'The Horneater peaks folk — proud cooks, climbers, and keepers of old lore.',
+    'Veden':     'Vorin rivals of Alethkar, known for fierce pride and red-tinged hair.',
+}
+
 # Ancestry bonus-talent rules (rulebook Ch.1/2; not in the Foundry data).
 ANCESTRY_INFO = {
     'Human':  {'bonus': 'A bonus heroic-path talent at the start of each tier (levels 1, 6, 11, 16, 21).'},

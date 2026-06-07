@@ -86,6 +86,17 @@ ATTR_NAMES = {
     'str': 'Strength', 'spd': 'Speed', 'int': 'Intellect',
     'wil': 'Willpower', 'awa': 'Awareness', 'pre': 'Presence',
 }
+# What each attribute drives, in plain terms — surfaced in the builder so a
+# player sees the consequence of every point (defenses are attribute PAIRS:
+# Physical = Str+Spd, Cognitive = Int+Wil, Spiritual = Awa+Pre).
+ATTR_DESC = {
+    'str': 'Raw physical power. Feeds Physical Defense and your maximum Health.',
+    'spd': 'Quickness and reflexes. Feeds Physical Defense and your rolled initiative.',
+    'int': 'Reasoning and learning. Feeds Cognitive Defense and how many Expertises you know (2 + Intellect).',
+    'wil': 'Resolve and composure. Feeds Cognitive Defense and your maximum Focus (2 + Willpower).',
+    'awa': 'Instinct and perceptiveness. Feeds Spiritual Defense and, once Invested, your Investiture.',
+    'pre': 'Force of personality. Feeds Spiritual Defense and, once Invested, your Investiture.',
+}
 DEFENSE_NAMES = {'phy': 'Physical', 'cog': 'Cognitive', 'spi': 'Spiritual'}
 SKILL_NAMES = {
     # 18 basic skills
@@ -98,6 +109,40 @@ SKILL_NAMES = {
     'abr': 'Abrasion', 'adh': 'Adhesion', 'chs': 'Cohesion', 'dvs': 'Division',
     'grv': 'Gravitation', 'ill': 'Illumination', 'prg': 'Progression',
     'trp': 'Transportation', 'trs': 'Transformation', 'tsn': 'Tension',
+}
+
+# One-line "what this skill does" — shown as a tooltip + on the Skills step so a
+# player knows what they're buying ranks in.
+SKILL_DESC = {
+    'agi': 'Acrobatics, balance, and nimble movement.',
+    'ath': 'Climbing, jumping, swimming, and raw physical feats.',
+    'cra': 'Making, repairing, and identifying objects.',
+    'dec': 'Lying, disguise, and misdirection.',
+    'ded': 'Reasoning out clues, puzzles, and hidden connections.',
+    'dis': 'Resisting fear, pain, and mental influence.',
+    'hwp': 'Attacking with two-handed and heavy weapons.',
+    'inm': 'Coercing others through threats and force.',
+    'ins': "Reading people's intentions and emotions.",
+    'lea': 'Inspiring, commanding, and coordinating allies.',
+    'lor': 'Knowledge of history, religion, and the wider world.',
+    'lwp': 'Attacking with one-handed, light, and thrown weapons.',
+    'med': 'Treating wounds, illness, and conditions.',
+    'prc': 'Noticing details, danger, and hidden things.',
+    'prs': 'Convincing others through reason and charm.',
+    'stl': 'Moving unseen and unheard.',
+    'sur': 'Navigating the wilds, foraging, and weathering highstorms.',
+    'thv': 'Sleight of hand, locks, and disarming devices.',
+    # Surges (Radiant only)
+    'abr': 'Surge of friction — slickness and grip.',
+    'adh': 'Surge of pressure and vacuum — binding things together.',
+    'chs': 'Surge of strong axial interaction — reshaping solid matter.',
+    'dvs': 'Surge of destruction — burning and breaking things down.',
+    'grv': "Surge of gravitation — changing which way is 'down'.",
+    'ill': 'Surge of light and sound — illusions.',
+    'prg': 'Surge of growth and healing — regrowth.',
+    'trp': 'Surge of transportation — Shardplate and travel to Shadesmar.',
+    'trs': 'Surge of transformation — Soulcasting one substance into another.',
+    'tsn': 'Surge of soft axial interaction — stiffening flexible materials.',
 }
 
 # Governing attribute per skill code (authoritative — matches the Foundry actor
