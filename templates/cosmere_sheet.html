@@ -44,9 +44,31 @@
   .cs-ability .ad { font-size:12.5px; color:var(--text-on-dark-2,#aeb8c4); margin-top:.2rem; line-height:1.45; }
   .cs-2col { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; }
   @media (max-width:720px){ .cs-2col{ grid-template-columns:1fr; } }
+  /* --- interactive (owner/GM) --- */
+  .cs-step { display:flex; gap:.3rem; justify-content:center; margin-top:.4rem; }
+  .cs-step button { width:26px; height:24px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:700;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; line-height:1; }
+  .cs-step button:hover { border-color:var(--accent); color:var(--accent); }
+  .cs-step .breathe { width:auto; padding:0 .5rem; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .cs-skill.roll { cursor:pointer; transition:border-color .12s, background .12s; }
+  .cs-skill.roll:hover { border-color:var(--accent); background:rgba(95,168,224,.08); }
+  .cs-skill.roll:active { transform:translateY(1px); }
+  .cs-ability.roll { cursor:pointer; }
+  .cs-ability.roll:hover { border-color:var(--accent); }
+  .cs-rolltools { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin:.2rem 0 .7rem;
+    background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px; padding:.5rem .7rem; }
+  .cs-toggle { font-size:11px; padding:.3rem .6rem; border-radius:7px; cursor:pointer; user-select:none;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:var(--text-on-dark-2); }
+  .cs-toggle.on { border-color:var(--accent); color:var(--accent); background:rgba(95,168,224,.12); }
+  .cs-result { flex:1; min-width:140px; text-align:right; font-size:13px; color:var(--text-on-dark-2); }
+  .cs-result b { font-family:'JetBrains Mono',monospace; font-size:17px; color:var(--cs-accent-2); }
+  .cs-result .opp { color:#34d399; } .cs-result .comp { color:#f59e0b; }
+  .cs-hint { font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .6rem; }
 {% endblock %}
 
 {% block content %}
+{# Adversary sheets (bestiary) don't pass cur/interactive -> default to read-only. #}
+{% set cur = cur | default({'health': a.health.value, 'focus': a.focus_max, 'investiture': a.investiture_max, 'injuries': 0}) %}
 <div class="cs-wrap">
   <div class="cs-head">
     <div>
@@ -98,14 +120,18 @@
     {% endfor %}
     <div class="cs-card">
       <div class="l">Health</div>
-      <div class="v">{{ a.health.value }}<span class="x">/{{ a.health.max }}</span></div>
-      <div class="cs-hpbar"><div class="cs-hpfill" style="width:{{ (100 * a.health.value / a.health.max)|round|int if a.health.max else 0 }}%"></div></div>
+      <div class="v" id="rv-health">{{ cur.health }}<span class="x">/{{ a.health.max }}</span></div>
+      <div class="cs-hpbar"><div class="cs-hpfill" id="rb-health" style="width:{{ (100 * cur.health / a.health.max)|round|int if a.health.max else 0 }}%"></div></div>
+      {% if cur.injuries or interactive %}<div style="font-size:10px; color:#d36e6e; margin-top:.3rem;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span>{% if interactive %} <a href="#" onclick="cosAdjust('injuries',1);return false;" style="color:#d36e6e;">+</a> <a href="#" onclick="cosAdjust('injuries',-1);return false;" style="color:var(--text-on-dark-3);">&minus;</a>{% endif %}</div>{% endif %}
+      {% if interactive %}<div class="cs-step"><button onclick="cosAdjust('health',-1)" title="Take 1 damage">&minus;</button><button onclick="cosAdjust('health',1)" title="Recover 1">+</button></div>{% endif %}
     </div>
     <div class="cs-card">
-      <div class="l">Focus</div><div class="v sm">{{ a.focus_max }}</div>
+      <div class="l">Focus</div><div class="v sm" id="rv-focus">{{ cur.focus }}<span class="x">/{{ a.focus_max }}</span></div>
+      {% if interactive %}<div class="cs-step"><button onclick="cosAdjust('focus',-1)" title="Spend focus (react / graze / off-hand)">&minus;</button><button onclick="cosAdjust('focus',1)" title="Collect Yourself">+</button></div>{% endif %}
     </div>
     <div class="cs-card">
-      <div class="l">Investiture</div><div class="v sm">{{ a.investiture_max }}</div>
+      <div class="l">Investiture</div><div class="v sm" id="rv-investiture">{{ cur.investiture }}<span class="x">/{{ a.investiture_max }}</span></div>
+      {% if interactive and a.investiture_max %}<div class="cs-step"><button onclick="cosAdjust('investiture',-1)" title="Spend Investiture (power a surge)">&minus;</button><button onclick="cosAdjust('investiture',1)">+</button><button class="breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe</button></div>{% endif %}
     </div>
     <div class="cs-card">
       <div class="l">Deflect</div><div class="v sm">{{ a.deflect.value }}</div>
@@ -142,10 +168,20 @@
 
   {# --- Skills --- #}
   <div class="cs-section-h">Skills <span style="text-transform:none;letter-spacing:0;">(Surge skills dimmed until a Radiant unlocks them)</span></div>
+  {% if interactive %}
+  <div class="cs-rolltools">
+    <span class="cs-toggle" id="t-adv" onclick="cosTog('adv')" title="Roll an extra d20, keep the best">Advantage</span>
+    <span class="cs-toggle" id="t-dis" onclick="cosTog('dis')" title="Roll an extra d20, keep the worst">Disadvantage</span>
+    <span class="cs-toggle" id="t-plot" onclick="cosTog('plot')" title="Roll the Plot Die with this test">Raise the stakes</span>
+    <span class="cs-result" id="cs-result">Tap a skill or strike to roll <b>d20+mod</b></span>
+  </div>
+  <div class="cs-hint">Meet-or-beat: <b>d20 + modifier</b> vs the GM&rsquo;s difficulty (Easy 10 / Standard 15 / Hard 20 / Very Hard 25). Every roll posts to the GM&rsquo;s feed.</div>
+  {% endif %}
   <div class="cs-grid cs-skills">
     {% for code, label in skill_names.items() if code in a.skills %}
     {% set sk = a.skills[code] %}
-    <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}">
+    <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}{% if interactive and sk.unlocked %} roll{% endif %}"
+         {% if interactive and sk.unlocked %}onclick="cosRoll({{ label|tojson }}, {{ sk.mod }})"{% endif %}>
       <div class="nm">{{ label }} <small>{{ sk.attribute }}</small>{% if sk.rank %} <span class="rk">R{{ sk.rank }}</span>{% endif %}</div>
       <div class="mod">{{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}</div>
     </div>
@@ -158,8 +194,10 @@
       {% if strikes %}
       <div class="cs-section-h">Strikes</div>
       {% for s in strikes %}
-      <div class="cs-ability"><div class="an">{{ s.name }}</div>
-        <div class="ad">{{ s.damage }}{% if s.type %} <span class="cs-chip">{{ s.type }}</span>{% endif %}</div></div>
+      <div class="cs-ability{% if interactive %} roll{% endif %}"
+           {% if interactive %}onclick="cosStrike({{ s.name|tojson }}, {{ s.mod|default(0) }}, {{ s.damage|tojson }}, {{ (s.type or '')|tojson }})"{% endif %}>
+        <div class="an">{{ s.name }}{% if interactive %} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if s.mod|default(0) >= 0 else '' }}{{ s.mod|default(0) }}</span>{% endif %}</div>
+        <div class="ad">{{ s.damage }}{% if s.type %} <span class="cs-chip">{{ s.type }}</span>{% endif %}{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
       {% endfor %}
       {% endif %}
       {% if traits %}
@@ -219,6 +257,80 @@
     window.addEventListener('beforeunload',()=>{ if(a.value!==last && navigator.sendBeacon) navigator.sendBeacon('/cosmere/pc/{{ actor_id }}/notes', new Blob([JSON.stringify({text:a.value})],{type:'application/json'})); });
   })();
   </script>
+
+  {% if interactive %}
+  <script>
+  (function(){
+    const PID = {{ actor_id|tojson }};
+    const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}};
+    let mods = {adv:false, dis:false, plot:false};
+    const d = n => 1 + Math.floor(Math.random()*n);
+    const res = h => { const el=document.getElementById('cs-result'); if(el) el.innerHTML=h; };
+
+    function rollD20(){
+      let a=d(20), nat=a, note='d20('+a+')';
+      if(mods.adv||mods.dis){ const b=d(20); nat=mods.adv?Math.max(a,b):Math.min(a,b); note='d20('+a+','+b+'→'+nat+')'; }
+      return {v:nat, note, nat};
+    }
+    function plot(){ const p=d(6); if(p<=2) return {l:'',b:0}; if(p<=4) return {l:'Opportunity',b:0,c:'opp'};
+      return p===5 ? {l:'Complication +2',b:2,c:'comp'} : {l:'Complication +4',b:4,c:'comp'}; }
+    function flair(roll){ let extra='', label='', bonus=0;
+      if(mods.plot){ const pd=plot(); bonus+=pd.b; if(pd.l){ extra+=' <span class="'+(pd.c||'')+'">'+pd.l+'</span>'; label=pd.l; } }
+      if(roll.nat===20){ extra+=' <span class="opp">Opportunity! (nat 20)</span>'; label=(label?label+' · ':'')+'Opportunity (20)'; }
+      if(roll.nat===1){ extra+=' <span class="comp">Complication (nat 1)</span>'; label=(label?label+' · ':'')+'Complication (1)'; }
+      return {extra, label, bonus};
+    }
+    function post(action, result, detail){
+      fetch('/api/cosmere/roll',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pid:PID, action, result:String(result), detail})}).catch(()=>{});
+    }
+    function rollFormula(f){ let total=0; (String(f||'').match(/\d+d\d+/g)||[]).forEach(t=>{
+        const p=t.split('d'); const n=+p[0], s=+p[1]; for(let i=0;i<n;i++) total+=d(s); });
+      const flat=String(f||'').match(/d\d+\s*\+\s*(\d+)/); if(flat) total+=+flat[1]; return total; }
+
+    window.cosTog = function(k){
+      if(k==='adv'){ mods.adv=!mods.adv; if(mods.adv) mods.dis=false; }
+      else if(k==='dis'){ mods.dis=!mods.dis; if(mods.dis) mods.adv=false; }
+      else mods.plot=!mods.plot;
+      document.getElementById('t-adv').classList.toggle('on',mods.adv);
+      document.getElementById('t-dis').classList.toggle('on',mods.dis);
+      document.getElementById('t-plot').classList.toggle('on',mods.plot);
+    };
+    window.cosRoll = function(name, mod){
+      const roll=rollD20(), f=flair(roll), sign=mod>=0?'+':'';
+      const total=roll.v+mod+f.bonus;
+      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+mod+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra);
+      post(name+' test', total, roll.note+' '+sign+mod+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:''));
+    };
+    window.cosStrike = function(name, mod, dmgFormula, dtype){
+      const roll=rollD20(), f=flair(roll), sign=mod>=0?'+':'';
+      const atk=roll.v+mod+f.bonus, dmg=rollFormula(dmgFormula)+mod;
+      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra);
+      post(name+' strike', 'atk '+atk+' / dmg '+dmg,
+        roll.note+' '+sign+mod+' → hit '+atk+'; '+dmgFormula+sign+mod+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:''));
+    };
+
+    function paint(){
+      document.getElementById('rv-health').innerHTML=cur.health+'<span class="x">/'+MAX.health+'</span>';
+      const bar=document.getElementById('rb-health'); if(bar) bar.style.width=(MAX.health?Math.round(100*cur.health/MAX.health):0)+'%';
+      document.getElementById('rv-focus').innerHTML=cur.focus+'<span class="x">/'+MAX.focus+'</span>';
+      const inv=document.getElementById('rv-investiture'); if(inv) inv.innerHTML=cur.investiture+'<span class="x">/'+MAX.investiture+'</span>';
+      const ij=document.getElementById('rv-injuries'); if(ij) ij.textContent=cur.injuries;
+    }
+    let saveT=null, pending={};
+    function flush(){ const body=Object.assign({}, pending); pending={};
+      fetch('/cosmere/pc/'+PID+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(()=>{}); }
+    window.cosAdjust = function(key, delta){
+      const max = key==='injuries' ? 99 : (MAX[key]||0);
+      cur[key]=Math.max(0, Math.min(max, (cur[key]||0)+delta));
+      paint(); pending[key]=cur[key]; clearTimeout(saveT); saveT=setTimeout(flush, 250);
+    };
+    window.cosBreathe = function(){ cur.investiture=MAX.investiture; paint(); pending.investiture=cur.investiture; flush();
+      res('<span class="opp">Breathe Stormlight</span> — Investiture restored to '+MAX.investiture); };
+  })();
+  </script>
+  {% endif %}
   {% endif %}
 </div>
 {% endblock %}

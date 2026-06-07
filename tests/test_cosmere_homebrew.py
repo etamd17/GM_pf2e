@@ -162,7 +162,8 @@ def test_homebrew_weapon_becomes_a_strike():
     # equipped -> a Strike on the actor doc (CosmereActor parses it)
     b = CosmereBuild({'inventory': [{'id': 'hb:saber', 'equipped': True}]}, homebrew=store)
     a = CosmereActor({'system_data': b.to_actor_doc(), 'name': 'X', 'system': 'cosmere'})
-    assert {'name': 'Sand Saber', 'damage': '1d8', 'type': 'keen'} in a.strikes
+    saber = next((s for s in a.strikes if s['name'] == 'Sand Saber'), None)
+    assert saber and saber['damage'] == '1d8' and saber['type'] == 'keen'
     # NOT equipped -> no strike
     b2 = CosmereBuild({'inventory': [{'id': 'hb:saber', 'equipped': False}]}, homebrew=store)
     a2 = CosmereActor({'system_data': b2.to_actor_doc(), 'name': 'X', 'system': 'cosmere'})
