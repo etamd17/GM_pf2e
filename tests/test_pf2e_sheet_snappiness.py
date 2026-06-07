@@ -13,6 +13,7 @@ import app as app_module
 from app import Character
 
 _FIX = pathlib.Path(__file__).parent / 'fixtures' / 'kyle_l10.json'
+_TEMPLATES = pathlib.Path(__file__).parent.parent / 'templates'
 
 
 @pytest.fixture
@@ -42,3 +43,121 @@ def test_persistent_damage_handlers_dropped_the_reload(kyle):
     pd_block = body[start:end]
     assert pd_block.count('renderPersistentDamage(data.persistent_damage)') == 3
     assert 'location.reload' not in pd_block
+
+
+# ── Derived-stat payload + in-place toggle painters (PR #29) ──────────────
+# A condition / feature / two-hand change ripples into strike mods, save totals,
+# skill totals, AC and the Conditions Matrix. The sheet repaints those in place
+# from the pc_update `derived` block instead of a full-page reload. These guard
+# the data contract between the server payload and the client painters so a
+# future shape change to pc.fort/pc.skills/pc.attacks can't silently break them.
+
+def test_pc_update_derived_payload_matches_pc(kyle, monkeypatch):
+    pc = app_module.PARTY_LIBRARY['Kyle']
+    captured = {}
+    monkeypatch.setattr(app_module, 'sse_broadcast',
+                        lambda ev, pl: captured.__setitem__(ev, pl))
+    app_module._do_broadcast_pc_state('Kyle')
+    payload = captured.get('pc_update')
+    assert payload is not None, 'no pc_update broadcast captured'
+    d = payload.get('derived')
+    assert isinstance(d, dict) and d, 'derived block missing or empty'
+
+    # saves + perception: ints, equal to the @property the Jinja sheet renders
+    # (derived deliberately mirrors pc.fort etc., NOT the post-active-effect
+    # `effective` values, so a live paint and a hard reload agree to the digit).
+    for k in ('fort', 'ref', 'will', 'perception'):
+        assert isinstance(d[k], int), f'{k} is not an int'
+        assert d[k] == int(getattr(pc, k)), f'derived.{k} drifted from pc.{k}'
+
+    # skills: one row per pc.skills, carrying the display total + an int penalty
+    assert isinstance(d['skills'], list) and len(d['skills']) == len(pc.skills)
+    by_name = {s['name']: s for s in d['skills']}
+    for s in pc.skills:
+        row = by_name[s['name']]
+        assert row['total'] == s['total']
+        assert isinstance(row['penalty'], int)
+
+    # attacks: one card per pc.attacks; each strike carries a label + int mod
+    assert isinstance(d['attacks'], list) and len(d['attacks']) == len(pc.attacks)
+    for src, a in zip(pc.attacks, d['attacks']):
+        assert a['name'] == src['name']
+        assert a['damage'] == src['damage']
+        assert isinstance(a['is_two_handed'], bool)
+        assert len(a['strikes']) == len(src['strikes'])
+        for st_src, st in zip(src['strikes'], a['strikes']):
+            assert st['label'] == st_src['label']
+            assert isinstance(st['mod'], int) and st['mod'] == st_src['mod']
+
+    # the frame is emitted over SSE as JSON — it must serialize cleanly
+    json.dumps(payload)
+
+
+def _fn_block(body, decl, end_anchor):
+    """Slice a JS function body out of the rendered sheet, decl → end_anchor."""
+    i = body.index(decl)
+    j = body.index(end_anchor, i + len(decl))
+    return body[i:j]
+
+
+def test_combat_hot_toggles_paint_in_place(kyle):
+    body = app_module.app.test_client().get('/player/sheet/Kyle').data.decode()
+    # painters are defined
+    for fn in ('_paintDerived', '_paintConditionsMatrix', '_paintFeatureToggle',
+               '_paintSavesBlock', '_paintSkills', '_paintAttacks'):
+        assert f'function {fn}' in body, f'{fn} painter missing'
+    # the pc_update handler applies the derived block + conditions matrix in place
+    assert '_paintDerived(data.derived)' in body
+    assert '_paintConditionsMatrix(data.conditions' in body
+
+    # the three combat-hot handlers dropped the reload and paint instead
+    upd = _fn_block(body, 'async function updateCondition',
+                    'window.updateCondition = updateCondition')
+    assert 'location.reload' not in upd
+    assert '_paintConditionsMatrix(data.conditions' in upd
+
+    feat = _fn_block(body, 'async function toggleFeature', 'function openConditionAdder')
+    assert 'location.reload' not in feat
+    assert '_paintFeatureToggle(featureName' in feat
+
+    grip = _fn_block(body, 'async function toggleTwoHand', 'function initDailyPrep')
+    assert 'location.reload' not in grip
+
+
+# ── One shared SSE socket per tab (PR #29) ───────────────────────────────
+# Every feature subscribes through window.appSSE (the hub in _sse_hub.html)
+# instead of opening its own EventSource. These guard against a page
+# re-fragmenting back into a second socket, or a standalone page (which can't
+# inherit base.html's hub) forgetting to include the hub itself.
+
+def test_only_the_hub_opens_a_raw_sse_socket():
+    offenders = []
+    for p in sorted(_TEMPLATES.rglob('*.html')):
+        if p.name == '_sse_hub.html':
+            continue
+        if "new EventSource('/api/events')" in p.read_text(encoding='utf-8'):
+            offenders.append(p.name)
+    assert not offenders, (
+        f'raw /api/events sockets outside the shared hub: {offenders} '
+        '(subscribe via window.appSSE instead)')
+
+
+# Partials that call window.appSSE — a standalone page that includes one still
+# needs the hub (it can't inherit base.html's).
+_APPSSE_PARTIALS = ('_player_nav.html', '_session_curtain.html', '_cosmere_player_nav.html')
+
+
+def test_standalone_pages_that_use_appsse_define_the_hub():
+    missing = []
+    for p in sorted(_TEMPLATES.rglob('*.html')):
+        txt = p.read_text(encoding='utf-8')
+        is_full_page = '<html' in txt and '{% extends' not in txt   # not a base-extending child
+        if not is_full_page:
+            continue
+        needs_hub = 'appSSE' in txt or any(part in txt for part in _APPSSE_PARTIALS)
+        defines_hub = '_sse_hub.html' in txt or 'window.appSSE = function' in txt
+        if needs_hub and not defines_hub:
+            missing.append(p.name)
+    assert not missing, (
+        f'standalone pages need the SSE hub but never define it: {missing} '
+        '(add {% include "_sse_hub.html" %} in <head>)')
