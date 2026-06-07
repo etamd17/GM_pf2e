@@ -7211,10 +7211,18 @@ def cosmere_pc_sheet(pid):
         'focus': _ps('focus', actor.focus_max),
         'investiture': _ps('investiture', actor.investiture_max),
         'injuries': _ps('injuries', 0),
+        'enhanced': bool(ps.get('enhanced')),         # the Stormlight Enhance toggle
     }
+    # Radiant (Phase 2): the 3 Stormlight actions + the order's castable surge powers.
+    import systems.cosmere.radiant_talents as _rt
+    _order = build.order()
+    radiant_powers = [dict(_rt.SURGE_POWERS[c], code=c)
+                      for c in (_order['surges'] if _order else ()) if c in _rt.SURGE_POWERS]
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
-        interactive=interactive, cur=cur,
+        interactive=interactive, cur=cur, tier=actor.tier,
+        stormlight_actions=systems.cosmere.radiant.STORMLIGHT_ACTIONS,
+        radiant_powers=radiant_powers,
         actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
         skill_names=build.eff_skill_names(),
         attr_names=systems.cosmere.ATTR_NAMES,
@@ -7365,6 +7373,8 @@ def cosmere_pc_state(pid):
                 ps[k] = max(0, int(data[k]))
             except (TypeError, ValueError):
                 pass
+    if 'enhanced' in data:
+        ps['enhanced'] = bool(data['enhanced'])
     if isinstance(data.get('conditions'), dict):
         ps['conditions'] = data['conditions']
     doc['play_state'] = ps

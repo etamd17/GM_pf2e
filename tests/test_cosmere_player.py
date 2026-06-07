@@ -96,3 +96,44 @@ def test_state_clamps_and_rejects_non_owner(pc, monkeypatch):
     monkeypatch.setattr(app, '_is_gm', lambda: False)
     monkeypatch.setattr(app._auth, 'current_user', lambda: {'id': 'intruder'})
     assert c.post('/cosmere/pc/' + pc + '/state', json={'health': 99}).status_code == 403
+
+
+# --- Phase 2: Radiant Stormlight actions + surge powers --------------------
+@pytest.fixture
+def radiant_pc(tmp_path, monkeypatch):
+    d = tmp_path / 'pcs'
+    d.mkdir()
+    monkeypatch.setattr(app, 'COSMERE_PC_DIR', str(d))
+    pid = 'ef' * 16
+    doc = {'id': pid, 'system': 'cosmere', 'name': 'Kaladin', 'owner_user_id': 'u1',
+           'build': {'name': 'Kaladin', 'level': 4, 'path': 'warrior',
+                     'radiant_order': 'windrunners', 'ideals_sworn': 2, 'spren_name': 'Syl',
+                     'attributes': {'str': 3, 'spd': 3, 'wil': 2, 'awa': 1, 'pre': 1},
+                     'skills': {'hwp': 2, 'adh': 1, 'grv': 1}}}
+    app._atomic_write_json(app._cosmere_pc_path(pid), doc, indent=2)
+    return pid
+
+
+def test_radiant_pc_has_stormlight_actions(radiant_pc):
+    body = app.app.test_client().get('/cosmere/pc/' + radiant_pc).data.decode()
+    assert 'Stormlight Actions' in body
+    assert 'cosBreathe()' in body and 'cosEnhance()' in body and 'cosRegenerate()' in body
+    # the order's castable surge powers (Adhesion / Gravitation for Windrunners)
+    assert 'Surge Powers' in body and 'cosSurge(' in body
+    assert 'Adhesion' in body and 'Full Lashing' in body
+
+
+def test_non_radiant_pc_has_no_radiant_panel(pc):
+    body = app.app.test_client().get('/cosmere/pc/' + pc).data.decode()
+    assert 'Stormlight Actions' not in body and 'cosEnhance()' not in body
+
+
+def test_enhanced_toggle_persists(radiant_pc):
+    c = app.app.test_client()
+    r = c.post('/cosmere/pc/' + radiant_pc + '/state', json={'enhanced': True, 'investiture': 3})
+    assert r.get_json()['play_state']['enhanced'] is True
+    body = c.get('/cosmere/pc/' + radiant_pc).data.decode()
+    assert 'enhanced:true' in body                # the JS state reflects it on reload
+    # clears
+    assert c.post('/cosmere/pc/' + radiant_pc + '/state',
+                  json={'enhanced': False}).get_json()['play_state']['enhanced'] is False
