@@ -1425,6 +1425,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     </select>
     <button class="ts-btn" onclick="addCosmere('cos-pc-select')">+ PC</button>
     <button class="ts-btn primary" onclick="apiPost('/api/cosmere/add_party')">+ Party</button>
+    <button class="ts-btn" id="cos-init-toggle" onclick="toggleCosmereInit()"
+            title="Cosmere initiative house-rule: rulebook Fast/Slow phases, or a traditional rolled d20+Speed order">
+        Initiative: <b id="cos-init-mode">{{ 'Traditional (d20+Speed)' if cosmere_initiative == 'traditional' else 'Fast / Slow phases' }}</b>
+    </button>
     {% else %}
     <div class="ts-search" id="monster-search-wrap">
         {# API-backed search: the previous version inlined 4,797 <div>
@@ -2288,7 +2292,7 @@ function renderInitList() {
                     <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
                     <div class="nm-sub">${subText}</div>
                     ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect + injury count">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}${c.cosmere.injuries ? ` · <span style="color:#f87171">Injuries ${c.cosmere.injuries}</span>` : ''}</div>` : ''}
-                    ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
+                    ${(c.system === 'cosmere' && c.cosmere && COSMERE_INIT_MODE === 'phases') ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
                     ${(!c.is_pc && !c.is_hazard) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
                 </div>
             </div>
@@ -3218,6 +3222,23 @@ function _showRecoveryToast(j) {
 
 function removeCombatant(id) {
     apiPost('/api/remove_combatant/' + id);
+}
+
+let COSMERE_INIT_MODE = {{ cosmere_initiative|tojson }};
+function toggleCosmereInit() {
+    // Flip the campaign's Cosmere initiative house-rule (Fast/Slow phases <->
+    // traditional d20+Speed). The server re-sorts + broadcasts; we update the
+    // label + the per-row toggle visibility immediately.
+    const next = COSMERE_INIT_MODE === 'traditional' ? 'phases' : 'traditional';
+    fetch('/api/cosmere/initiative_mode', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: next }) })
+        .then(r => r.json()).then(d => {
+            if (!d || !d.ok) return;
+            COSMERE_INIT_MODE = d.mode;
+            const el = document.getElementById('cos-init-mode');
+            if (el) el.textContent = d.mode === 'traditional' ? 'Traditional (d20+Speed)' : 'Fast / Slow phases';
+            try { if (typeof render === 'function') render(); } catch (_) {}
+        }).catch(() => {});
 }
 
 function cosmereSpeed(id, choice) {
