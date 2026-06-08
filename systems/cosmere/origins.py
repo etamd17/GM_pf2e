@@ -50,6 +50,7 @@ ANCESTRY_INFO = {
 SINGER_CHANGE_FORM = {'id': 'singer-change-form', 'name': 'Change Form (Singer Key)'}
 SINGER_FORMS = {
     'dullform':      {'name': 'Dullform',      'group': 'Base',        'attrs': {},                 'deflect': 0, 'focus': 0, 'note': 'The default, unremarkable form.'},
+    'mateform':      {'name': 'Mateform',      'group': 'Base',        'attrs': {},                 'deflect': 0, 'focus': 0, 'note': 'Bonded to a lifespren; specialized for reproduction (no combat benefit). Granted alongside dullform by Change Form.'},
     'artform':       {'name': 'Artform',       'group': 'Finesse',     'attrs': {'awa': 1},         'deflect': 0, 'focus': 0, 'note': 'Painting & Music expertises; advantage on Crafting and entertaining.'},
     'nimbleform':    {'name': 'Nimbleform',    'group': 'Finesse',     'attrs': {'spd': 1},         'deflect': 0, 'focus': 2, 'note': 'Agile and focused.'},
     'mediationform': {'name': 'Mediationform', 'group': 'Wisdom',      'attrs': {'pre': 1},         'deflect': 0, 'focus': 0, 'note': 'Aid without spending focus.'},

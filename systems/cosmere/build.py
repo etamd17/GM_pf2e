@@ -25,6 +25,7 @@ from systems.cosmere import radiant as _radiant
 from systems.cosmere import origins as _origins
 from systems.cosmere import talents as _talents
 from systems.cosmere import homebrew as _homebrew
+from systems.cosmere import infected as _infected
 from systems.cosmere.actor import cosmere_max_health, tier_of
 from systems.cosmere.items import Inventory
 
@@ -139,6 +140,12 @@ class CosmereBuild:
         # Structured stat bonuses from the homebrew this character has selected.
         self.homebrew_bonuses, self.homebrew_sources, self.homebrew_dangling = \
             _homebrew.resolve_bonuses(d, self._homebrew)
+        # Infected Arts (a homebrew Invested-disease system): a selection of art
+        # ids whose disease COSTS apply as structured stat effects -- ``_inf_add``
+        # sums into derived stats via _hb(), ``_inf_set`` overrides them (e.g.
+        # STR->9, max Focus->0). The granted abilities ride on to_actor_doc.
+        self.infected_arts = [a for a in (d.get('infected_arts') or []) if a]
+        self._inf_add, self._inf_set, self._inf_records = _infected.resolve(self.infected_arts)
 
     # -- budgets ------------------------------------------------------------
     @property
@@ -173,8 +180,9 @@ class CosmereBuild:
         return self.ideals_sworn >= 1
 
     def _hb(self, key) -> int:
-        """A homebrew structured bonus for a derived-stat target (0 if none)."""
-        return int(self.homebrew_bonuses.get(key, 0) or 0)
+        """An additive structured bonus for a derived-stat target (0 if none) --
+        from selected homebrew AND the additive effects of Infected Arts."""
+        return int(self.homebrew_bonuses.get(key, 0) or 0) + int(self._inf_add.get(key, 0) or 0)
 
     def order(self):
         return _radiant.order(self.radiant_order) or _homebrew.radiant_order(self._homebrew, self.radiant_order)
@@ -230,7 +238,12 @@ class CosmereBuild:
                    for t in self.talents)
 
     def talents_available(self) -> int:
-        return total_talents(self.level, self.epic_talent_choices)
+        # Singers gain an EXTRA talent at creation: their ancestry grants Change
+        # Form PLUS one connected starting-forms talent (Ch.1 "Choose an Ancestry
+        # Talent", SL:1620-1622) -- two L1 ancestry talents where every other
+        # ancestry gets one. That extra talent persists, so the budget is +1 at
+        # every level for a Singer.
+        return total_talents(self.level, self.epic_talent_choices) + (1 if self.is_singer else 0)
 
     def expertises_available(self) -> int:
         return expertises_total(self.attributes['int'])
@@ -253,7 +266,12 @@ class CosmereBuild:
             for k, v in (f.get('attrs') or {}).items():
                 a[k] = a.get(k, 0) + v
         for k in ATTR_KEYS:
-            a[k] = a.get(k, 0) + self._hb('attr:%s' % k)
+            a[k] = a.get(k, 0) + self._hb('attr:%s' % k)   # form + homebrew + Infected adds
+        # Infected Arts may OVERRIDE an attribute outright (superhuman, above the
+        # normal cap) -- e.g. Hypercoagulable sets STR 9, Coagulopathy sets SPD 9.
+        for k in ATTR_KEYS:
+            if ('attr:%s' % k) in self._inf_set:
+                a[k] = self._inf_set['attr:%s' % k]
         return a
 
     # -- derived statistics (rulebook formulas; use in-form attributes) -----
@@ -268,7 +286,11 @@ class CosmereBuild:
 
     def focus_max(self) -> int:
         f = self.form()
-        return 2 + self.eff_attributes()['wil'] + (f['focus'] if f else 0) + self._hb('focus')
+        # An Infected Art may zero out Focus (Chronic Pain) -- a 'set' override
+        # wins over the computed pool; never below 0.
+        if 'focus' in self._inf_set:
+            return max(0, self._inf_set['focus'])
+        return max(0, 2 + self.eff_attributes()['wil'] + (f['focus'] if f else 0) + self._hb('focus'))
 
     def investiture_max(self) -> int:
         a = self.eff_attributes()
@@ -402,9 +424,14 @@ class CosmereBuild:
             'radiant_order': self.radiant_order, 'ideals_sworn': self.ideals_sworn,
             'spren_name': self.spren_name, 'ideal_words': list(self.ideal_words),
             'inventory': self.inventory.to_list(), 'epic_choices': list(self.epic_choices),
+            'infected_arts': list(self.infected_arts),
             'goals': self.goals, 'purpose': self.purpose, 'obstacle': self.obstacle,
             'appearance': self.appearance, 'notes': self.notes,
         }
+
+    def infected_records(self) -> list:
+        """The selected Infected Art records (disease cost + granted abilities)."""
+        return list(self._inf_records)
 
     def to_actor_doc(self) -> dict:
         """A Foundry-shaped character doc that CosmereActor renders (the bridge
@@ -425,6 +452,11 @@ class CosmereBuild:
             }
         inv_max = ({'override': self.investiture_max(), 'useOverride': True, 'bonus': 0}
                    if self.is_radiant else {'override': None, 'useOverride': False, 'bonus': 0})
+        # An Infected Art that ZEROES Focus (Chronic Pain) overrides the pool;
+        # otherwise Focus is the form + additive bonuses CosmereActor sums.
+        foc_max = ({'override': max(0, self._inf_set['focus']), 'useOverride': True, 'bonus': 0}
+                   if 'focus' in self._inf_set
+                   else {'override': None, 'useOverride': False, 'bonus': form_focus + self._hb('focus')})
         system = {
             'level': {'value': self.level},
             'tier': self.tier,
@@ -438,7 +470,7 @@ class CosmereBuild:
                          for d in ('phy', 'cog', 'spi')},
             'resources': {
                 'hea': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': self._hb('health')}},
-                'foc': {'value': None, 'max': {'override': None, 'useOverride': False, 'bonus': form_focus + self._hb('focus')}},
+                'foc': {'value': None, 'max': foc_max},
                 'inv': {'value': None, 'max': inv_max},
             },
             'skills': skills,
@@ -448,9 +480,14 @@ class CosmereBuild:
             'singer_form': self.singer_form,
             'radiant_order': self.radiant_order, 'spren': self.spren_name,
             'ideals_sworn': self.ideals_sworn,
+            'infected_arts': self._inf_records,  # disease cost + granted abilities, for the sheet
             'cosmere_build': self.to_dict(),     # stashed so the build can be re-edited / leveled
         }
         items = self.inventory.foundry_weapon_items()
+        # Infected Art abilities are surfaced in their own grouped sheet panel
+        # (driven by ``system.infected_arts`` / build.infected_records()), so they
+        # are NOT also pushed into the generic action list -- that would duplicate
+        # them. Their disease COSTS already apply to the stats above.
         # Equipped homebrew weapons -> Strikes (canon weapons already flow through
         # the Inventory; homebrew items are invisible to it).
         items += _homebrew.weapon_docs(self.to_dict(), self._homebrew)

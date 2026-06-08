@@ -1,5 +1,720 @@
 [
  {
+  "_id": "FIREARMRIFLE001",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/weapons/guns/gun-rifle-brown.webp",
+  "name": "Rifle",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "hwp",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 800,
+     "unit": "ft",
+     "value": 200
+    },
+    "type": "ranged"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "4d4",
+    "skill": "hwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> 4d4 + [Heavy Weaponry] keen; <strong>Range</strong> 200/800 ft; <strong>Traits</strong> Two-Handed, Deadly, Pierce, Loaded [1], Point Blank; <strong>Cost</strong> 300 mk.</p><p>A long-barreled firearm. <em>Point Blank:</em> no penalty for attacking a target within the weapon\u2019s first range increment while adjacent. <em>Loaded [1]:</em> spend 1 action to reload after firing.</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "rifle",
+   "price": {
+    "currency": "mark",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "mark",
+    "value": 300
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": true
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": true,
+     "defaultValue": 1
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": true
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": true
+    },
+    "unique": {
+     "defaultActive": false
+    }
+   },
+   "type": "heavy_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "FIREARMPISTOL01",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/weapons/guns/gun-pistol-flintlock-metal.webp",
+  "name": "Pistol",
+  "system": {
+   "activation": {
+    "attribute": "spd",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "lwp",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 120,
+     "unit": "ft",
+     "value": 60
+    },
+    "type": "ranged"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "2d4",
+    "skill": "lwp",
+    "type": "keen"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> 2d4 + [Light Weaponry] keen; <strong>Range</strong> 60/120 ft; <strong>Traits</strong> Offhand, Deadly, Pierce, Loaded [1], Discreet, Point Blank; <strong>Cost</strong> 150 mk.</p><p>A compact sidearm. <em>Point Blank:</em> no penalty within the first range increment while adjacent. <em>Loaded [1]:</em> 1 action to reload.</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "pistol",
+   "price": {
+    "currency": "mark",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "mark",
+    "value": 150
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": true
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": true
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": true,
+     "defaultValue": 1
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": true
+    },
+    "pierce": {
+     "defaultActive": true
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": false
+    },
+    "unique": {
+     "defaultActive": false
+    }
+   },
+   "type": "light_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "FIREARMGAUNTLT1",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/equipment/hand/gauntlet-armored-steel.webp",
+  "name": "Soravar\u2019s Electric Gauntlet",
+  "system": {
+   "activation": {
+    "attribute": "int",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "cra",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "1d8",
+    "skill": "cra",
+    "type": "energy"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> 1d8 + [Crafting] energy; <strong>Range</strong> Melee; <strong>Activation</strong> 2 Actions; <strong>Traits</strong> Offhand, Defensive, Unique; <strong>Tier</strong> 2.</p><p><em>Special:</em> On an attack (to-hit) roll above 20 (including your modifier), you may spend 1 Focus to Stun the target for 1 turn.</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "soravars-electric-gauntlet",
+   "price": {
+    "currency": "mark",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "mark",
+    "value": 0
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": true
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": true
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": false
+    },
+    "unique": {
+     "defaultActive": true
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "FIREARMBOMBLNC1",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/weapons/artifacts/cannon-engraved-bronze.webp",
+  "name": "Soravar\u2019s Bomb Launcher",
+  "system": {
+   "activation": {
+    "attribute": "int",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "cra",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 100,
+     "unit": "ft",
+     "value": 50
+    },
+    "type": "ranged"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "skill": "cra",
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> Determined by the bomb loaded; <strong>Range</strong> 50/100 ft; <strong>Activation</strong> 2 Actions total (1 to load, 1 to fire); <strong>Traits</strong> Two-Handed, Dangerous, Loaded [1], Unique; <strong>Tier</strong> 2.</p><p><em>Special:</em> Soravar\u2019s Electric Gauntlet does not need to be removed to use this two-handed item (the only item that interacts with the Gauntlet this way).</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "soravars-bomb-launcher",
+   "price": {
+    "currency": "mark",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "mark",
+    "value": 0
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": true
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": true,
+     "defaultValue": 1
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": true
+    },
+    "unique": {
+     "defaultActive": true
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "FIREARMFIREBMB1",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/weapons/thrown/bomb-fuse-blue.webp",
+  "name": "Fire Bomb",
+  "system": {
+   "activation": {
+    "attribute": "int",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "cra",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": {
+     "long": 60,
+     "unit": "ft",
+     "value": 30
+    },
+    "type": "ranged"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "2d6",
+    "skill": "cra",
+    "type": "energy"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> 2d6 + [Crafting] energy in a 30 ft sphere; <strong>Range</strong> 30/60 ft (thrown); <strong>Activation</strong> 1 Action (thrown) / 2 Actions (timed); <strong>Traits</strong> Dangerous, Thrown; <strong>Cost</strong> 30 mk.</p><p><em>Consumed on use.</em> Can be thrown (explodes on impact), set as a trap (fuse up to 1 minute / 6 rounds), or fired from a Bomb Launcher. On a miss (fails to beat the target\u2019s defense) it deals half damage. The modifier is the <em>Crafting of the creator</em>, not the user.</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "fire-bomb",
+   "price": {
+    "currency": "mark",
+    "denomination": {
+     "primary": "mark",
+     "secondary": "none"
+    },
+    "unit": "mark",
+    "value": 30
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": true
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "momentum": {
+     "defaultActive": false
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": true
+    },
+    "two_handed": {
+     "defaultActive": false
+    },
+    "unique": {
+     "defaultActive": false
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
+  "_id": "UNARMEDATK000001",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/skills/melee/unarmed-punch-fist.webp",
+  "name": "Unarmed Attack",
+  "system": {
+   "activation": {
+    "attribute": "str",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "ath",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": false,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": "str",
+    "formula": "1d4",
+    "skill": "ath",
+    "type": "impact"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Damage</strong> impact, scaled by Strength (Unarmed Damage table); <strong>Range</strong> \u2014; <strong>Traits</strong> Always Available, Strength Training; <strong>Expert Traits</strong> Momentum, Weightless;</p><p><strong>Type</strong> Special Weapon; <strong>Weapons Skill</strong> Athletics; <strong>Price</strong> \u2014; <strong>Weight</strong> \u2014;</p><p>Punches, kicks, thrown elbows, headbutts, and bites are examples of unarmed attacks, made using Athletics. Unarmed attacks don\u2019t count as weapon attacks and can\u2019t be disarmed, and you can attack even with both hands full.</p><p><strong>Strength Training.</strong> An unarmed attack\u2019s damage die is based on your Strength score: 0\u20132 deals 1 impact (no die roll); 3\u20134 deals 1d4; 5\u20136 deals 1d8; 7\u20138 deals 2d6; 9+ deals 2d10.</p><p><strong>Expertise.</strong> Unlike other entries on the Special Weapons table, you can choose Unarmed Attacks as a weapon expertise.</p>"
+   },
+   "equip": {
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "unarmed-attack",
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 0
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "dangerous": {
+     "defaultActive": false
+    },
+    "deadly": {
+     "defaultActive": false
+    },
+    "defensive": {
+     "defaultActive": false
+    },
+    "discreet": {
+     "defaultActive": false
+    },
+    "fragile": {
+     "defaultActive": false
+    },
+    "indirect": {
+     "defaultActive": false
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0
+    },
+    "momentum": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": true
+     }
+    },
+    "offhand": {
+     "defaultActive": false
+    },
+    "pierce": {
+     "defaultActive": false
+    },
+    "quickdraw": {
+     "defaultActive": false
+    },
+    "reach": {
+     "defaultActive": false
+    },
+    "thrown": {
+     "defaultActive": false
+    },
+    "two_handed": {
+     "defaultActive": false
+    },
+    "unique": {
+     "defaultActive": true
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ },
+ {
   "_id": "TIgbgwcilBiHWeD3",
   "flags": {},
   "folder": null,

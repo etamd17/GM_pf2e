@@ -65,6 +65,36 @@ def test_order_talents_have_no_cross_order_bleed():
                 assert other == own or other not in others, (plural, t['name'], other)
 
 
+def test_prereq_reducer_accepts_list_shaped_talents():
+    """A talent doc carries ``prerequisites[*].talents`` as a LIST, whereas a
+    talent-tree node keys them by slug (a DICT). _prereq_from_node must read
+    either -- the doc-level fallback in _build_order_talents depends on it."""
+    list_shaped = {'prerequisites': {
+        'g0': {'type': 'talent', 'talents': [{'label': 'Invested'}]}}}
+    dict_shaped = {'prerequisites': {
+        'g0': {'type': 'talent', 'talents': {'invested': {'label': 'Invested'}}}}}
+    assert RT._prereq_from_node(list_shaped) == {'talent': 'Invested'}
+    assert RT._prereq_from_node(dict_shaped) == {'talent': 'Invested'}
+
+
+def test_bond_talents_keep_talent_prereqs_for_all_orders():
+    """The generic Radiant bond talent Wound Regeneration requires the Invested
+    talent in EVERY order. The Lightweaver (Cryptic) and Windrunner (Honorspren)
+    bond trees omit the wound-regeneration node, so for those two the prereq has
+    to come from the talent doc's own ``system.prerequisites`` -- they used to
+    collapse to a no-prereq {'ideal': 1} entry, the bug this guards against."""
+    for plural in RADIANT_ORDERS:
+        wr = next((t for t in RT.ORDER_TALENTS[plural]
+                   if t['name'] == 'Wound Regeneration'), None)
+        assert wr is not None, plural
+        assert wr['prereq'] == {'talent': 'Invested'}, (plural, wr['prereq'])
+    # the two regression cases, named explicitly (no tree node -> doc fallback).
+    assert {t['name']: t['prereq'] for t in RT.ORDER_TALENTS['lightweavers']}.get(
+        'Wound Regeneration') == {'talent': 'Invested'}
+    assert {t['name']: t['prereq'] for t in RT.ORDER_TALENTS['windrunners']}.get(
+        'Wound Regeneration') == {'talent': 'Invested'}
+
+
 def test_surge_powers_are_the_ten_real_powers():
     assert set(RT.SURGE_POWERS) == set(cos.SURGE_SKILLS)
     adh = RT.SURGE_POWERS['adh']

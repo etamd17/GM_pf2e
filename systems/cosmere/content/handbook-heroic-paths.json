@@ -1210,6 +1210,30 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "0ryqMxqAxespEi8g": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "seek-quarry",
+       "label": "Seek Quarry",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.3nfGn0BOeLq5qgEr"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    },
+    "U0YXJIZ4b9CDAlK5": {
+     "attribute": "str",
+     "description": "Have an animal companion",
+     "rank": 1,
+     "talents": [],
+     "type": "connection",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -3456,6 +3480,30 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "U4uSJ9aiWmiPam1a": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "seek-quarry",
+       "label": "Seek Quarry",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.3nfGn0BOeLq5qgEr"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    },
+    "bpPZpJo5Jyl4HHO2": {
+     "attribute": "str",
+     "rank": 1,
+     "skill": "sur",
+     "talents": [],
+     "type": "skill",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -4307,6 +4355,30 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "TmUVQOZYFR2v1FzX": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "deadly-trap",
+       "label": "Deadly Trap",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.RP0jSccFs6ngFXNo"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    },
+    "vvwSBq4QJbr38Sbi": {
+     "attribute": "str",
+     "rank": 2,
+     "skill": "prc",
+     "talents": [],
+     "type": "skill",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -4721,6 +4793,30 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "peKXdLFMUvW8AdyU": {
+     "attribute": "str",
+     "rank": 2,
+     "skill": "sur",
+     "talents": [],
+     "type": "skill",
+     "value": 1
+    },
+    "zOpxlU5fDGuv1E1K": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "protective-bond",
+       "label": "Protective Bond",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.LS6b7Siqem0JDPSr"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -6087,6 +6183,30 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "etMQsFTJKijmQ5d1": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "experienced-trapper",
+       "label": "Experienced Trapper",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.pJ9HqsTAX4dFO9MT"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    },
+    "kDUdGRBkysZIlTpe": {
+     "attribute": "str",
+     "rank": 3,
+     "skill": "sur",
+     "talents": [],
+     "type": "skill",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -7573,6 +7693,30 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "VTvD9xfv7dzNLEkY": {
+     "attribute": "str",
+     "rank": 3,
+     "skill": "prc",
+     "talents": [],
+     "type": "skill",
+     "value": 1
+    },
+    "kabPTOoe66SFhTik": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "protective-bond",
+       "label": "Protective Bond",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.LS6b7Siqem0JDPSr"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -8132,6 +8276,22 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "RixWz3s0zY1oZGGZ": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "animal-bond",
+       "label": "Animal Bond",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.y6LxtnGsc7MvjRnu"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },
@@ -10524,6 +10684,22 @@
    "modality": null,
    "path": "hunter",
    "power": null,
+   "prerequisites": {
+    "Nl9tWSXUxWSy6NZv": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "experienced-trapper",
+       "label": "Experienced Trapper",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.pJ9HqsTAX4dFO9MT"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
    "specialty": "tracker",
    "type": "path"
   },

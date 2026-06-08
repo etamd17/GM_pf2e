@@ -6910,6 +6910,7 @@ def _cosmere_path_talents():
     """{path_id: [{id, name, key, prereq}]} for the builder's talent picker
     (key talents first; each carries a prerequisite summary)."""
     import systems.cosmere.origins as _o
+    import systems.cosmere.talents as _ct
     # The real key talent per path is the one named in PATH_INFO (handbook trees
     # have many prereq-less roots, so "no prerequisite" is NOT the discriminator).
     key_names = {p: (info.get('key_talent') or '').strip().lower()
@@ -6923,7 +6924,7 @@ def _cosmere_path_talents():
             if d.get('type') != 'talent':
                 continue
             s = d.get('system', {})
-            p = (s.get('path') or '').lower()
+            p = _ct.norm_path(s.get('path'))     # champion (a Leader specialty) -> leader
             if not p:
                 continue
             name = d.get('name', '')
@@ -6931,11 +6932,12 @@ def _cosmere_path_talents():
             if not name or dkey in seen:
                 continue
             seen.add(dkey)
-            pr = s.get('prerequisites') or {}
+            # Resolve prereqs from the talent-tree graph (authoritative); this
+            # corrects the null / swapped / stale-label item-level prerequisites.
             out.setdefault(p, []).append({
                 'id': d.get('_id'), 'name': name,
                 'key': name.strip().lower() == key_names.get(p, '\x00'),
-                'prereq': _talent_prereq_summary(pr),
+                'prereq': _talent_prereq_summary(_ct.resolved_prereqs(d.get('_id'))),
             })
     for p in out:
         out[p].sort(key=lambda t: (not t['key'], t['name'].lower()))   # key talents first
@@ -6967,10 +6969,12 @@ def _cosmere_builder_context(build, hb_store=None):
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
     import systems.cosmere.radiant_talents as _rt
+    import systems.cosmere.infected as _inf
     if hb_store is None:
         hb_store = _cosmere_homebrew_store()
     return dict(
         build=build.to_dict(),
+        infected_arts=_inf.load_arts(),     # the Infected Arts catalog (disease cost + abilities)
         catalog=systems.cosmere.items.catalog(),
         skill_names=build.eff_skill_names(), skill_attr=build.eff_skill_attr(),
         surge_skills=list(build.eff_surge_skills()),
@@ -7192,6 +7196,7 @@ def cosmere_builder_preview():
         'is_gm': _is_gm(),                     # the GM's builder may override the block
         'homebrew': sorted(set(b.homebrew_sources)),
         'homebrew_dangling': b.homebrew_dangling,
+        'infected': [a.get('name') for a in b.infected_records()],
     })
 
 
@@ -7301,6 +7306,7 @@ def cosmere_pc_sheet(pid):
         attr_names=systems.cosmere.ATTR_NAMES,
         defense_names=systems.cosmere.DEFENSE_NAMES,
         pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
+        infected=build.infected_records(),           # selected Infected Arts (cost + abilities)
         warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
         radiant=build.order(),                       # canon OR homebrew order
         first_ideal=systems.cosmere.radiant.FIRST_IDEAL,

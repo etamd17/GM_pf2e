@@ -302,6 +302,19 @@
   <div class="cs-chips">{% for t in build.talents %}<span class="cs-chip df">{{ t.name if t.name is defined else t }}</span>{% endfor %}</div>
   {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">None selected</div>{% endif %}
 
+  {% if infected %}
+  <div class="cs-section-h">Infected Arts</div>
+  {% for art in infected %}
+  <div class="cs-ability" style="border-color:rgba(205,81,191,.5);">
+    <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
+    <div class="ad"><b style="color:#f0a9a9;">Disease cost:</b> {{ art.cost }}</div>
+    {% if art.abilities %}<ul style="margin:.45rem 0 0 1.1rem; line-height:1.5;">
+      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;"><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
+    </ul>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
   <div class="cs-section-h">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
   {% if inventory %}
   <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">

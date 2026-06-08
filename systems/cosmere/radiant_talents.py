@@ -61,7 +61,11 @@ def _prereq_from_node(node) -> dict:
             continue
         t = g.get('type')
         if t == 'talent':
-            labels = [x.get('label', '?') for x in (g.get('talents') or {}).values()]
+            # Tree nodes key ``talents`` by slug (a dict); a talent doc's own
+            # ``system.prerequisites`` carries them as a list. Accept either.
+            raw_talents = g.get('talents') or {}
+            tvals = raw_talents.values() if isinstance(raw_talents, dict) else raw_talents
+            labels = [x.get('label', '?') for x in tvals]
             # A "First Ideal (...)" prerequisite means "once you swear the First
             # Ideal" -- the builder models that as an ideal entry, not a talent.
             non_ideal = [l for l in labels if not l.lower().startswith('first ideal')]
@@ -83,6 +87,17 @@ def _prereq_from_node(node) -> dict:
     return {'text': ', '.join(parts)}
 
 
+# Rulebook corrections where the handbook source data ITSELF disagrees with the
+# Stormlight core rulebook (both the talent doc and its tree node are wrong), so
+# resolution alone can't fix it. Keyed by talent slug -> the corrected prereq.
+_SURGE_PREREQ_FIX = {
+    # Unleashed Entropy (Division): the handbook ships "Inescapable Spark or Gout
+    # of Flame"; the rulebook (SL:15816) requires "Spark Sending talent or Gout
+    # of Flame talent" -- Spark Sending is the shallower, intended gate.
+    'unleashed-entropy': {'talent': 'Spark Sending or Gout of Flame'},
+}
+
+
 def _build_surge_talents() -> dict:
     """{surge code -> [{name, prereq, effect}]} from the 10 surge talent trees."""
     name_to_code = {v['name'].lower(): code for code, v in SURGES.items()}
@@ -95,11 +110,13 @@ def _build_surge_talents() -> dict:
             continue
         lst, seen = [], set()
         for node in tree.get('system', {}).get('nodes', {}).values():
-            tal = by_slug.get(node.get('talentId'))
+            slug = node.get('talentId')
+            tal = by_slug.get(slug)
             if not tal or tal.get('name') in seen:
                 continue
             seen.add(tal['name'])
-            lst.append({'name': tal['name'], 'prereq': _prereq_from_node(node),
+            prereq = _SURGE_PREREQ_FIX.get(slug) or _prereq_from_node(node)
+            lst.append({'name': tal['name'], 'prereq': prereq,
                         'effect': _effect(tal.get('system', {}).get('description'))})
         out[code] = lst
     return out
@@ -142,9 +159,19 @@ def _build_order_talents() -> dict:
             if d['system'].get('path') != singular or d.get('name') in seen:
                 continue
             seen.add(d['name'])
+            # Prefer this order's own tree-node prereq. When no owning tree node
+            # claims the talent -- the generic bond talents (Invested / Deepened
+            # Bond / Wound Regeneration) can live only in a cross-order tree this
+            # order doesn't own, e.g. Lightweaver/Windrunner Wound Regeneration --
+            # fall back to the talent doc's own (path-specific) prerequisites
+            # before defaulting to an ideal entry. _prereq_from_node reads
+            # ``prerequisites`` off whichever it's handed and yields {'ideal': 1}
+            # when empty, preserving the old default. (Verified against the
+            # rulebook: e.g. Lightweaver Invested IS a First-Ideal entry talent,
+            # SL:11568, so its {'ideal': 1} is correct -- not a doc-prereq.)
             node = local.get(d['system'].get('id'))
             lst.append({'name': d['name'],
-                        'prereq': _prereq_from_node(node) if node else {'ideal': 1},
+                        'prereq': _prereq_from_node(node or d.get('system')),
                         'effect': _effect(d.get('system', {}).get('description'))})
         out[plural] = lst
     return out

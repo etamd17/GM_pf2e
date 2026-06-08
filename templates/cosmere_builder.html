@@ -220,6 +220,19 @@
       </section>
 
       <section class="step" data-step="5">
+        <div class="sec-h">Infected Arts</div>
+        <p class="step-lead"><b>Optional homebrew.</b> An Invested disease grants powerful Arts at a permanent cost. Each Art&rsquo;s stat penalties (and boosts) apply to your character automatically &mdash; watch the card on the right &mdash; and its abilities appear on your sheet. Most characters have none; add one only with your GM.</p>
+        <div class="row">
+          <div style="flex:1;"><label>Add an Infected Art</label>
+            <select id="infected-pick"><option value="">&mdash; none &mdash;</option>
+              {% for a in infected_arts %}<option value="{{ a.id }}" title="{{ a.cost }}">{{ a.disease }} &rarr; {{ a.art }}</option>{% endfor %}
+            </select></div>
+          <button class="btn" type="button" onclick="addInfected()">Add</button>
+        </div>
+        <div id="infected-list" style="margin-top:.6rem;"></div>
+      </section>
+
+      <section class="step" data-step="6">
         <div class="sec-h">Gear</div>
         <p class="step-lead">Equip a starting kit and add weapons, armor, and equipment. Worn armor sets your Deflect; held weapons become Strikes.</p>
         <div class="row">
@@ -239,7 +252,7 @@
         <div id="inv-list" style="margin-top:.6rem;"></div>
       </section>
 
-      <section class="step" data-step="6">
+      <section class="step" data-step="7">
         <div class="sec-h">Story</div>
         <p class="step-lead">The heart of your character &mdash; optional, but it&rsquo;s what the table remembers.</p>
         <div class="grid" style="grid-template-columns:1fr 1fr;">
@@ -254,7 +267,7 @@
         </div>
       </section>
 
-      <section class="step" data-step="7">
+      <section class="step" data-step="8">
         <div class="sec-h">Review &amp; Save</div>
         <p class="step-lead">Here&rsquo;s your character. Anything in <i>Guidance</i> is advice you can save past; anything in red is over the rules and must be fixed first (your GM can override).</p>
         <div id="review-gate"></div>
@@ -317,6 +330,9 @@ const BUILD_SEL = {ancestry: {{ build.ancestry|tojson }}, culture: {{ build.cult
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
+const INFECTED_ARTS = {{ infected_arts|tojson }};
+const INFECTED_BY_ID = {}; INFECTED_ARTS.forEach(a=>INFECTED_BY_ID[a.id]=a);
+let INFECTED = {{ build.infected_arts|tojson }};
 
 const ATTR_KEYS=['str','spd','int','wil','awa','pre'];
 const ATTR_INC=[3,6,9,12,15,18], TIER_START=[1,6,11,16,21], MR={1:2,2:3,3:4,4:5,5:5};
@@ -477,6 +493,24 @@ function renderInv(){
     </div>`;
   }).join('') || '<span class="muted">Empty</span>';
 }
+function addInfected(){
+  const id=document.getElementById('infected-pick').value; if(!id) return;
+  if(!INFECTED.includes(id)){ INFECTED.push(id); renderInfected(); recompute(); }
+  document.getElementById('infected-pick').value='';
+}
+function renderInfected(){
+  const box=document.getElementById('infected-list'); if(!box) return;
+  box.innerHTML = INFECTED.map((id,i)=>{
+    const a=INFECTED_BY_ID[id]; if(!a) return '';
+    const ab=(a.abilities||[]).map(x=>`<li><b>${x.name}</b>${x.cost?` <span class="muted">(${x.cost})</span>`:''} &mdash; ${x.desc}</li>`).join('');
+    return `<div style="border:1px solid #2a3340; border-radius:8px; padding:.55rem .7rem; margin-bottom:.5rem; background:rgba(255,255,255,.02);">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span><b>${a.disease}</b> &rarr; <b style="color:var(--accent)">${a.art}</b></span>
+        <span style="cursor:pointer; color:#f87171; font-weight:700;" onclick="INFECTED.splice(${i},1);renderInfected();recompute()">&times;</span></div>
+      <div style="font-size:12px; color:#f0a9a9; margin:.35rem 0;"><b>Disease cost:</b> ${a.cost}</div>
+      <ul style="margin:.2rem 0 0 1.1rem; font-size:12px; color:#cbd5e1; line-height:1.45;">${ab}</ul></div>`;
+  }).join('') || '<span class="muted">None &mdash; this character has no Infected Arts.</span>';
+}
 
 function setBudget(id,spent,avail){
   const e=document.getElementById(id);
@@ -511,7 +545,7 @@ function recompute(){
 }
 
 // ── walkthrough: steps + the engine-backed "character so far" panel ──
-const STEPS = ['Identity','Attributes','Skills','Heroic Path','Radiant','Gear','Story','Review'];
+const STEPS = ['Identity','Attributes','Skills','Heroic Path','Radiant','Infected','Gear','Story','Review'];
 let STEP = 0;
 function buildRail(){
   document.getElementById('wiz-rail').innerHTML = STEPS.map((s,i)=>
@@ -598,7 +632,7 @@ function collect(){
     name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
     path:v('f-path'), singer_form:v('f-singer-form'),
     radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, spren_name:v('f-spren'),
-    attributes:attrs, skills, talents:TALENTS, inventory:INV,
+    attributes:attrs, skills, talents:TALENTS, inventory:INV, infected_arts:INFECTED,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
     purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'),
   };
@@ -656,7 +690,7 @@ function mergeHomebrew(){
 // init
 buildRail();
 mergeHomebrew();
-onPath(); onAncestry(); paintCultureInfo(); onOrder(); renderTalents(); renderInv(); recompute();
+onPath(); onAncestry(); paintCultureInfo(); onOrder(); renderTalents(); renderInv(); renderInfected(); recompute();
 goStep(0);
 </script>
 {% endblock %}

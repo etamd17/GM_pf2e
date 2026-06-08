@@ -1338,8 +1338,8 @@
      "mode": "any-of",
      "talents": [
       {
-       "id": "incendiary-blast",
-       "label": "Incendiary Blast",
+       "id": "gout-of-flame",
+       "label": "Gout of Flame",
        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.surges.Item.IpxVuVemkw1sViSe"
       }
      ],
@@ -5899,13 +5899,13 @@
      "mode": "any-of",
      "talents": [
       {
-       "id": "bombarding-division",
-       "label": "Bombarding Division",
+       "id": "inescapable-spark",
+       "label": "Inescapable Spark",
        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.surges.Item.Zt9XSGzkKUVeaC6Q"
       },
       {
-       "id": "incendiary-blast",
-       "label": "Incendiary Blast",
+       "id": "gout-of-flame",
+       "label": "Gout of Flame",
        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.surges.Item.IpxVuVemkw1sViSe"
       }
      ],

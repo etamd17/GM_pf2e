@@ -1,0 +1,252 @@
+[
+ {
+  "id": "infected-deafness",
+  "name": "Deafness — Gravity Manipulation",
+  "disease": "Deafness",
+  "art": "Gravity Manipulation",
+  "tier": null,
+  "cost": "Permanently lose the sense of Hearing.",
+  "effects": [],
+  "conditions": ["Deaf (no Hearing)"],
+  "abilities": [
+   {"name": "Manipulate Gravity", "cost": "1A", "desc": "Manipulate gravity in any of the basic ways granted by the Surge of Gravitation (not talent-granted uses, e.g. Windrunner talents)."}
+  ]
+ },
+ {
+  "id": "infected-blindness",
+  "name": "Blindness — Telepathy",
+  "disease": "Blindness",
+  "art": "Telepathy",
+  "tier": null,
+  "cost": "Permanently lose the sense of Sight.",
+  "effects": [],
+  "conditions": ["Blind (no Sight)"],
+  "abilities": [
+   {"name": "Psychic Relay", "cost": "FA", "desc": "Mentally communicate instantly with any Connected individual; they may reply but cannot initiate without consent. One exchange is a free action; >2 back-and-forth counts as a single action."},
+   {"name": "Detect Thoughts", "cost": "1A", "desc": "Sense all sentient creatures within 60 ft (location only). Spend an extra action each turn to track them in real time; broken concentration (0 focus or a failed Cognitive-defense test) drops the connection."},
+   {"name": "Read Thoughts", "cost": "1A", "desc": "d20 + Intellect vs the target's Cognitive defense. Success: extract one piece of info but they're alerted. Crit: same, undetected. Failure: nothing, detected. Crit fail: nothing, and they learn something about you."}
+  ]
+ },
+ {
+  "id": "infected-chronic-pain",
+  "name": "Chronic Pain — Hot / Cold Manipulation",
+  "disease": "Chronic Pain",
+  "art": "Hot / Cold Manipulation",
+  "tier": null,
+  "cost": "You are chronically in agony. Reduce your Cognitive and Spiritual defenses by 4 each, and permanently lose all your focus points (maximum Focus 0).",
+  "effects": [
+   {"target": "def:cog", "value": -4, "mode": "add"},
+   {"target": "def:spi", "value": -4, "mode": "add"},
+   {"target": "focus", "value": 0, "mode": "set"}
+  ],
+  "conditions": [],
+  "abilities": [
+   {"name": "Heat Object", "cost": "1A2A3A", "desc": "Heat an object/person up to 200°F for one turn. Range/AOE by actions: 1A touch, 2A 30 ft line, 3A 30 ft cone. At max temp, creatures take 3d6 + your Constitution modifier Thermal damage; reverts to room temp after one turn."},
+   {"name": "Cool Object", "cost": "1A2A3A", "desc": "Cool an object/person down to -50°F for one turn (1A touch / 2A 30 ft line / 3A 30 ft cone). At min temp, creatures take 2d6 + Constitution Thermal damage and are Slowed for one turn."}
+  ]
+ },
+ {
+  "id": "infected-frailty",
+  "name": "Frailty — Investiture Farming",
+  "disease": "Frailty",
+  "art": "Investiture Farming",
+  "tier": null,
+  "cost": "Permanently gain the Frail condition: immediately make an injury roll on acquiring this status, and each time you recover from an injury you immediately gain (and roll for) a new one.",
+  "effects": [],
+  "conditions": ["Frail"],
+  "abilities": [
+   {"name": "Farm Investiture", "cost": "2A", "desc": "Infuse a person or suitable receptacle (empty spheres, an unkeyed nicrosilmind) with Investiture up to its maximum. You need a way to convert this to unkeyed Investiture for another to use it."},
+   {"name": "Invested Entity", "cost": "Permanent", "desc": "You have limitless access to raw Investiture to fuel any other Invested arts you have (e.g. Surgebinding)."}
+  ]
+ },
+ {
+  "id": "infected-depression",
+  "name": "Depression — Transformation",
+  "disease": "Depression",
+  "art": "Transformation",
+  "tier": null,
+  "cost": "Permanently gain the Depressed condition. Once per day roll a d4 for an effect lasting the whole day (replaces the prior day's): 1 Exhausted [-3]; 2 Stunned; 3 Disoriented; 4 no effect.",
+  "effects": [],
+  "conditions": ["Depressed"],
+  "abilities": [
+   {"name": "Transform object/person", "cost": "2A3A", "desc": "2A to transform an object as with the Surge of Transformation (Soulcasting), or 3A to soulcast a living target as in the Living Soulcasting talent."}
+  ]
+ },
+ {
+  "id": "infected-psychosis",
+  "name": "Psychosis — Intelligence",
+  "disease": "Psychosis",
+  "art": "Intelligence",
+  "tier": null,
+  "cost": "Using Brilliance triggers the Psychosis table (roll d4): alongside the correct answer/solution you also receive nonsensical, untrue, or harmful ones — for Deduction/Lore/Recall you get 1d4-1 false answers; for Crafting a 1-2 re-rolls and 3-4 fails for 1d8/Tier self damage; for Medicine a 1-2 succeeds and 3-4 fails for 1d8/Tier damage to the target.",
+  "effects": [],
+  "conditions": [],
+  "abilities": [
+   {"name": "Brilliance", "cost": "FA", "desc": "When you fail a Deduction, Lore, Recall Knowledge, Medicine, or Crafting check, invoke this to instead succeed — you decide what counts as a failure on a continuum. Activating deems your roll a failure (you can't go back to partial info) and triggers the Psychosis table above."}
+  ]
+ },
+ {
+  "id": "infected-fatigue-inattention",
+  "name": "Fatigue / Inattention — Fortune Farming",
+  "disease": "Fatigue / Inattention",
+  "art": "Fortune Farming",
+  "tier": null,
+  "cost": "Permanently gain the Unfocused condition (always at least Unfocused [1]). Using these abilities raises your Unfocused level; a long rest lowers it by 1 (min 1). Additive: [1] focus-cost actions cost +1; [2] -1 maximum Focus; [3] non-focus actions (besides movement/Skills) cost 1 FP.",
+  "effects": [],
+  "conditions": ["Unfocused [1]"],
+  "abilities": [
+   {"name": "Right Place, Right Time", "cost": "FA", "desc": "Once per long rest, learn of a location or person you'd benefit from visiting and a rough time to do so — nothing else. Does not increase Unfocused."},
+   {"name": "Soldier of Fortune", "cost": "2A", "desc": "Anticipate an enemy's next action: if you Dodge this turn the attacker auto-fails (1 focus, as usual); if you attack, it auto-hits. After your turn, +1 Unfocused."},
+   {"name": "Future Sight", "cost": "FA", "desc": "Once per day, receive (4 − your Exhaustion level) visions of the mid/long-term future of yourself or a party member; only one is guaranteed true (and may be vague). Cannot pre-empt Soldier of Fortune. +1 Exhaustion after use."}
+  ]
+ },
+ {
+  "id": "infected-borderline-personality",
+  "name": "Borderline Personality — Emotional Manipulation",
+  "disease": "Borderline Personality",
+  "art": "Emotional Manipulation",
+  "tier": null,
+  "cost": "Establishing Emotional Connections risks Emotional Feedback: roll d20 minus the number of Connections made; if it meets or exceeds your Spiritual Defense you fail and are overcome by foreign emotions (GM-determined erratic behavior) until the social fallout resolves or 24 hours pass.",
+  "effects": [],
+  "conditions": [],
+  "abilities": [
+   {"name": "Emotional Connection", "cost": "1A2A3A", "desc": "Connect with creatures in a 30 ft radius. 1A: sense one creature's most prominent emotion(s) (up to 3, strongest first). 2A: affect any number of creatures in range. Connections augment a following Soothe/Intensify roll (+1 per Connection)."},
+   {"name": "Soothe / Intensify Emotions", "cost": "1A", "desc": "Soothe or intensify existing emotions of any Connected creatures in 30 ft (uniform choice). d20 + Emotional Connection points vs a GM DC (avg 10, max 20); focus points add +1 each (declared first, not refunded on failure). Cannot create wholly new emotions."}
+  ]
+ },
+ {
+  "id": "infected-hypercoagulable",
+  "name": "Hypercoagulable State — Physical Strength",
+  "disease": "Hypercoagulable State",
+  "art": "Physical Strength",
+  "tier": null,
+  "cost": "Permanently gain the Hypercoagulable condition: once per long rest AND once per turn in combat, roll a d20; on a natural 1 you suffer a life-threatening clot — become Unconscious until healed or 1 hour, and take a Permanent Injury from the disease's own table (stroke, arterial thrombosis, MI, or PE).",
+  "effects": [
+   {"target": "attr:str", "value": 9, "mode": "set"}
+  ],
+  "conditions": ["Hypercoagulable"],
+  "abilities": [
+   {"name": "Unnatural Strength", "cost": "Permanent", "desc": "Your Strength and Heavy Weaponry permanently increase to +9."},
+   {"name": "Unnatural Shove", "cost": "Permanent", "desc": "When you Shove, you can shove the target up to 15 ft through the air, rendering them Prone."},
+   {"name": "Unnatural Grapple", "cost": "Permanent", "desc": "When a Grappled foe (or their ally) tries to Shove free, add half your Strength modifier to your Physical Defense vs their roll. You can maintain a Grapple one-handed and make one-handed attacks/reactive strikes without ending it."}
+  ]
+ },
+ {
+  "id": "infected-coagulopathy",
+  "name": "Coagulopathy — Speed",
+  "disease": "Coagulopathy",
+  "art": "Speed",
+  "tier": null,
+  "cost": "Permanently gain the Coagulopathic condition: whenever you take Impact or Keen damage you become Afflicted [1d4 Vital], escalating one die size per episode (1d4→1d6→1d8…). A Medicine check stops the bleeding (removes Afflicted) but restores no health; Invested healing stops bleeding and heals.",
+  "effects": [
+   {"target": "attr:spd", "value": 9, "mode": "set"}
+  ],
+  "conditions": ["Coagulopathic"],
+  "abilities": [
+   {"name": "Unnatural Speed", "cost": "Permanent", "desc": "Your Speed permanently becomes 9. Gain a 4th action and a 2nd reaction per turn. Foes who trigger your Reactive Strike must roll a natural 20 to succeed (still spending focus)."},
+   {"name": "Unnatural Dodge", "cost": "Reaction", "desc": "When you Dodge and the attacker still succeeds, you take half damage."},
+   {"name": "Unnatural Reactive Strike", "cost": "Permanent", "desc": "Your Reactive Strike range is 10 ft instead of 5 ft."},
+   {"name": "Dextrous Grapple", "cost": "Permanent", "desc": "Your Grapple range is 10 ft (with an implement to tie/trip), and you use your Speed modifier instead of Athletics to Grapple."}
+  ]
+ },
+ {
+  "id": "infected-recurrent-syncope",
+  "name": "Recurrent Syncope — Telekinesis",
+  "disease": "Recurrent Syncope",
+  "art": "Telekinesis",
+  "tier": null,
+  "cost": "Permanently gain the Syncopal condition: certain triggers (sight of blood, temperature extremes, large crowds, once per combat, once per Telekinesis use) force a d8 — on a 1 you pass out (Unconscious, 6 seconds), on a 2 you may spend a focus point to stay conscious. Passing out mid-action can cause fall/dangerous-action consequences.",
+  "effects": [],
+  "conditions": ["Syncopal"],
+  "abilities": [
+   {"name": "Base Telekinesis", "cost": "varies", "desc": "Move a person/object (incl. yourself) within 60 ft with your mind, like Gravitation, with two exceptions: you must see the object to initiate, and beyond 30 ft without line of sight costs 1 focus per further 30 ft. Max TK speed equals your movement; the object can't be heavier than you."},
+   {"name": "Throw Object", "cost": "1A", "desc": "Launch a Medium-or-smaller object at a foe: 1d8 damage, +1 per 20 lbs."},
+   {"name": "Enhanced Shot", "cost": "1A", "desc": "Enhance a ranged attack: +1d8 per tier + Willpower to damage. May curve the projectile (attack at disadvantage if the endpoint is obscured). Adds to the attack's action cost."},
+   {"name": "Enhanced Swing", "cost": "1A", "desc": "Speed up a melee swing for you or an ally: +1d8 per tier + Willpower to the damage."},
+   {"name": "TK Grapple", "cost": "3A", "desc": "Grapple a foe within 60 ft (3A to sustain). Escaping is their Strength + d20 vs your Willpower + d20."},
+   {"name": "TK Disarm", "cost": "2A", "desc": "Attempt to disarm a foe (resisted by Cognitive defense)."},
+   {"name": "TK Shove", "cost": "2A", "desc": "Shove a foe (range 60 ft) up to 10 ft, or break a Grapple."}
+  ]
+ },
+ {
+  "id": "infected-daytime-somnolence",
+  "name": "Daytime Somnolence and Insomnia — Physical Constitution",
+  "disease": "Daytime Somnolence and Insomnia",
+  "art": "Physical Constitution",
+  "tier": null,
+  "cost": "You are permanently Exhausted [-3] and have -10 ft movement speed (min 5 ft). Whenever you rest, roll a d4 — on a 1-2 you cannot rest and gain none of its recovery.",
+  "effects": [],
+  "conditions": ["Exhausted [-3]"],
+  "abilities": [
+   {"name": "Unnatural Constitution", "cost": "Permanent", "desc": "Your maximum health increases by 1d10 × your level (roll once). You are immune to other sources of Exhausted, plus Afflicted, Disoriented, Slowed, and Stunned. When you choose to regain consciousness after dropping, you recover 1d10 health instead of 1."}
+  ]
+ },
+ {
+  "id": "infected-asthma",
+  "name": "Asthma — Physical Healing",
+  "disease": "Asthma",
+  "art": "Physical Healing",
+  "tier": null,
+  "cost": "Permanently gain the Asthmatic condition: you are permanently Slowed, but may use Bronchodilation to remove it for one turn.",
+  "effects": [],
+  "conditions": ["Asthmatic (Slowed)"],
+  "abilities": [
+   {"name": "Heal", "cost": "2A", "desc": "Heal a willing creature you touch 1d6 (2d6 at L3, 3d6 at L8, 4d6 at L13, 5d6 at L18). Restores health, not injuries."},
+   {"name": "Heal Injury", "cost": "3A", "desc": "Heal any injury in a creature you touch. Once per long rest."},
+   {"name": "Heal Ailment", "cost": "2A", "desc": "Heal any condition in a creature you touch. If caused by a 'permanent' Invested Disease, it's removed only for one round."},
+   {"name": "Bronchodilation", "cost": "1A", "desc": "Touch a willing creature: if Asthmatic, remove Slowed this turn; otherwise grant +5 ft movement."},
+   {"name": "Cerebral Perfusion", "cost": "1A", "desc": "Touch a willing creature: they regain one focus point."},
+   {"name": "Inotropy", "cost": "1A", "desc": "Touch a willing creature: +2 Strength and Speed for the rest of their turn."}
+  ]
+ },
+ {
+  "id": "infected-mutism",
+  "name": "Mutism — Intent Ascertainment / Concealment",
+  "disease": "Mutism",
+  "art": "Intent Ascertainment / Concealment",
+  "tier": null,
+  "cost": "You are permanently mute and cannot communicate verbally.",
+  "effects": [],
+  "conditions": ["Mute"],
+  "abilities": [
+   {"name": "Ascertain Intent", "cost": "Passive", "desc": "You have advantage on all Insight checks."},
+   {"name": "Conceal Intent", "cost": "1A", "desc": "Choose a willing creature within 30 ft: Insight checks against them are made at disadvantage for 1 hour."}
+  ]
+ },
+ {
+  "id": "infected-amnesia",
+  "name": "Amnesia — Manipulate Identity",
+  "disease": "Amnesia",
+  "art": "Manipulate Identity",
+  "tier": null,
+  "cost": "Each time you use an identity-manipulating ability, roll a d6 — on a 1 you suffer global amnesia and identity contamination: you forget who you are and take on someone else's persona for 4 hours, then regain your Identity.",
+  "effects": [],
+  "conditions": [],
+  "abilities": [
+   {"name": "Suppress Object Identity", "cost": "2A", "desc": "Suppress an object's Identity within 30 ft: Soulcasting/Transformation skills on it gain advantage for 1 hour."},
+   {"name": "Suppress Personal Identity", "cost": "2A", "desc": "Suppress a creature's Identity within 30 ft: they can use Investiture sources their Identity would normally block, but gain disadvantage vs Identity-altering arts (Living Soulcasting, Soul Forgery)."},
+   {"name": "Unkey Investiture", "cost": "3A", "desc": "Once per day, unkey up to 20 points of Investiture so anyone can use it."},
+   {"name": "Unkey Invested Art", "cost": "3A", "desc": "Once per day, unkey an item tied to an Invested Art (e.g. a metalmind)."},
+   {"name": "Identity Lock", "cost": "FA", "desc": "Once per long rest, permanently lock an object's use to your Identity (except those under Suppress Personal Identity or similar)."}
+  ]
+ },
+ {
+  "id": "infected-zombification",
+  "name": "Zombification — Connection Farming (Hivemind)",
+  "disease": "Zombification",
+  "art": "Connection Farming (Hivemind)",
+  "tier": null,
+  "cost": "You gain Connection with every creature infected with this disease (Fiends) and join the Hivemind, losing individual thought unless you suppress your Connection (e.g. filling a Duralumin mind). A suppressed Connection still lets you manipulate other Fiends through the hive.",
+  "effects": [
+   {"target": "attr:str", "value": 2, "mode": "add"},
+   {"target": "attr:spd", "value": 2, "mode": "add"}
+  ],
+  "conditions": ["Hivemind"],
+  "abilities": [
+   {"name": "Fiend Physiology", "cost": "Permanent", "desc": "Permanently gain +2 Speed and +2 Strength, +15 ft movement, and the ability to jump up to half your movement (1A). You take no fall damage from falls up to 100 ft."},
+   {"name": "Hivemind Coordination", "cost": "Passive", "desc": "When accompanied by one or more Fiends in combat: attacking a creature within 5 ft of another Fiend gives you advantage."},
+   {"name": "Hivemind Coordination — Defense", "cost": "Reaction", "desc": "When attacked while another Fiend is within 5 ft of your attacker, take the Dodge action to impose disadvantage without spending Focus."},
+   {"name": "Infectious Bite", "cost": "2A", "desc": "Bite a creature in melee (unarmed attack): 1d6 on a hit. If it is Unconscious or below 3 HP, it gains Zombie Incubation; if not healed within 72 hours it becomes a Fiend."}
+  ]
+ }
+]
