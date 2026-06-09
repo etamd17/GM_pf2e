@@ -5253,11 +5253,41 @@ def _party_level():
         return 1
 
 
+def _active_party_names():
+    """The player-character roster for the active campaign's system -- PF2e's
+    PARTY_LIBRARY or the Cosmere PC store. The session scrapbook's highlights,
+    MVP poll, and per-PC cards follow whichever system is live, so the same
+    capture hooks + assembly work for both."""
+    if _active_system() == 'cosmere':
+        names = []
+        for d in _list_cosmere_pcs():
+            nm = d.get('name') or (d.get('build') or {}).get('name')
+            if nm:
+                names.append(nm)
+        return names
+    return list(PARTY_LIBRARY.keys())
+
+
+def _scrapbook_party_level(system=None, roster=None):
+    """Average party level for the scrapbook header, per active system."""
+    system = system or _active_system()
+    if system == 'cosmere':
+        levels = []
+        for d in _list_cosmere_pcs():
+            try:
+                levels.append(int((d.get('build') or {}).get('level', 1)))
+            except (TypeError, ValueError):
+                pass
+        return round(sum(levels) / len(levels)) if levels else 1
+    return _party_level()
+
+
 def _record_crit_fumble(name, action, detail, degree):
-    """Hook from /api/log_roll. Records a crit / nat-1 for a PARTY PC only —
-    NPC and GM rolls are ignored. Trusts the degree when present; otherwise
-    sniffs the marker text the sheets stamp on the roll detail."""
-    if not name or name not in PARTY_LIBRARY:
+    """Hook from /api/log_roll (PF2e) + /api/cosmere/roll (Cosmere nat-20/nat-1).
+    Records a crit / nat-1 for a PARTY PC only — NPC and GM rolls are ignored.
+    Trusts the degree when present; otherwise sniffs the marker text the sheets
+    stamp on the roll detail."""
+    if not name or name not in _active_party_names():
         return
     blob = (str(detail or '') + ' ' + str(degree or '')).upper()
     is_crit = (degree == 'crit_success') or ('[CRIT 20]' in blob) or ('NAT 20' in blob) or ('CRIT SUCCESS' in blob)
@@ -5348,25 +5378,33 @@ def _generate_scrapbook_narrative():
 
 
 def _assemble_scrapbook():
-    """Build the full scrapbook payload: party-wide totals + per-PC cards."""
+    """Build the full scrapbook payload: party-wide totals + per-PC cards.
+    System-aware: the roster is the active system's party and loot totals are
+    spheres (Cosmere) or coins (PF2e)."""
     with SESSION_HIGHLIGHTS_LOCK:
         h = copy.deepcopy(SESSION_HIGHLIGHTS)
     cfg = _load_campaign_config()
+    system = _active_system()
+    roster = _active_party_names()
     biggest = max(h['big_hits'], key=lambda x: x['amount']) if h['big_hits'] else None
     total_coins = {'pp': 0, 'gp': 0, 'sp': 0, 'cp': 0}
+    total_spheres = {'chip': 0, 'mark': 0, 'broam': 0}
     for l in h['loot']:
         for k in total_coins:
             total_coins[k] += int((l.get('coins') or {}).get(k, 0) or 0)
+        for k in total_spheres:
+            total_spheres[k] += int((l.get('spheres') or {}).get(k, 0) or 0)
     party = {
         'crit_count': len(h['crits']),
         'fumble_count': len(h['fumbles']),
         'biggest_hit': biggest,
         'total_coins': total_coins,
+        'total_spheres': total_spheres,
         'loot_count': sum(len(l.get('items', [])) for l in h['loot']),
         'rp_moments': [m['text'] for m in h['rp_moments'] if m.get('scope') == 'party'],
     }
     players = {}
-    for pc in PARTY_LIBRARY.keys():
+    for pc in roster:
         players[pc] = {
             'crits':   [c for c in h['crits'] if c['pc'] == pc],
             'fumbles': [f for f in h['fumbles'] if f['pc'] == pc],
@@ -5384,12 +5422,13 @@ def _assemble_scrapbook():
         'crest_image': cfg.get('crest_image', ''),
         'narrative': h.get('narrative', ''),
         'started_at': h.get('started_at', ''),
-        'party_level': _party_level(),
+        'party_level': _scrapbook_party_level(system, roster),
         'mvp_winner': h.get('mvp_winner', ''),
+        'system': system,
         'party': party,
         'players': players,
         'mvp': {'tally': mvp_counts, 'total': sum(mvp_counts.values()),
-                'candidates': list(PARTY_LIBRARY.keys())},
+                'candidates': roster},
     }
 
 
@@ -5401,7 +5440,7 @@ def api_scrapbook_draft():
     with SESSION_HIGHLIGHTS_LOCK:
         rps = list(SESSION_HIGHLIGHTS['rp_moments'])
     return jsonify({'success': True, 'scrapbook': _assemble_scrapbook(),
-                    'rp_moments': rps, 'party_members': list(PARTY_LIBRARY.keys())})
+                    'rp_moments': rps, 'party_members': _active_party_names()})
 
 
 @app.route('/api/session/scrapbook/vote', methods=['POST'])
@@ -5412,7 +5451,7 @@ def api_scrapbook_vote():
     voted for whom. One vote per voter (re-voting overwrites)."""
     data = request.get_json(silent=True) or {}
     choice = str(data.get('choice', '') or '').strip()
-    if choice not in PARTY_LIBRARY:
+    if choice not in _active_party_names():
         return jsonify({'success': False, 'error': 'unknown choice'}), 400
     if _is_gm():
         voter = (str(data.get('voter') or '').strip() or 'GM')
@@ -5431,22 +5470,27 @@ def api_scrapbook_vote():
 @app.route('/api/session/scrapbook/grant_hero/<pc_name>', methods=['POST'])
 @gm_required
 def api_scrapbook_grant_hero(pc_name):
-    """GM grants the session MVP (or anyone) a Hero Point. Caps at 3 (PF2e).
-    apply_pc_delta persists + broadcasts pc_update, so the winner's sheet
-    lights up immediately."""
-    if pc_name not in PARTY_LIBRARY:
+    """GM names the session MVP. PF2e also grants a Hero Point (caps at 3, via
+    apply_pc_delta which persists + broadcasts pc_update so the winner's sheet
+    lights up); Cosmere has no Hero Points, so it just crowns the winner in the
+    session record."""
+    if pc_name not in _active_party_names():
         return jsonify({'success': False, 'error': 'unknown PC'}), 404
-
-    def _mut(pc):
-        before = int(getattr(pc, 'hero_points', 0) or 0)
-        if before < 3:
-            pc.hero_points = before + 1
-        return True
-    try:
-        _, pc = apply_pc_delta(pc_name, _mut)
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    _combat_log(f"{pc_name} named session MVP — +1 Hero Point (now {pc.hero_points})", 'system')
+    hero_points = None
+    if _active_system() != 'cosmere':
+        def _mut(pc):
+            before = int(getattr(pc, 'hero_points', 0) or 0)
+            if before < 3:
+                pc.hero_points = before + 1
+            return True
+        try:
+            _, pc = apply_pc_delta(pc_name, _mut)
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+        hero_points = pc.hero_points
+        _combat_log(f"{pc_name} named session MVP — +1 Hero Point (now {hero_points})", 'system')
+    else:
+        _combat_log(f"{pc_name} named session MVP", 'system')
     # Crown the MVP in the session record so the campaign timeline shows it.
     with SESSION_HIGHLIGHTS_LOCK:
         SESSION_HIGHLIGHTS['mvp_winner'] = pc_name
@@ -5455,7 +5499,7 @@ def api_scrapbook_grant_hero(pc_name):
         _save_scrapbook_record(_assemble_scrapbook())
     except Exception:
         pass
-    return jsonify({'success': True, 'pc': pc_name, 'hero_points': pc.hero_points})
+    return jsonify({'success': True, 'pc': pc_name, 'hero_points': hero_points})
 
 
 @app.route('/api/session/scrapbook/rp_moment', methods=['POST'])
@@ -5468,7 +5512,7 @@ def api_scrapbook_add_rp():
     scope = str(data.get('scope', 'party') or 'party').strip()
     if not text:
         return jsonify({'success': False, 'error': 'empty moment'}), 400
-    if scope != 'party' and scope not in PARTY_LIBRARY:
+    if scope != 'party' and scope not in _active_party_names():
         scope = 'party'
     with SESSION_HIGHLIGHTS_LOCK:
         SESSION_HIGHLIGHTS['rp_moments'].append({'text': text, 'scope': scope})
@@ -6514,19 +6558,30 @@ def api_cosmere_loot_add():
     items = data.get('items') or []
     spheres = data.get('spheres') or {}
     gem = data.get('gem') if data.get('gem') in _COSMERE_GEMS else 'diamond'
+    norm_items = [{'name': str(it.get('name', '')).strip()[:80], 'qty': int(it.get('qty', 1) or 1)}
+                  for it in items if isinstance(it, dict) and (it.get('name') or '').strip()]
+    norm_spheres = {k: int(spheres.get(k, 0) or 0) for k in ('chip', 'mark', 'broam')}
     from datetime import datetime as _dt_loot
     ledger = _load_loot_ledger()
     ledger['entries'].append({
         'id': str(uuid.uuid4()),
         'timestamp': _dt_loot.now().isoformat(),
         'recipient': recipient[:60],
-        'items': [{'name': str(it.get('name', '')).strip()[:80], 'qty': int(it.get('qty', 1) or 1)}
-                  for it in items if isinstance(it, dict) and (it.get('name') or '').strip()],
-        'spheres': {k: int(spheres.get(k, 0) or 0) for k in ('chip', 'mark', 'broam')},
+        'items': norm_items,
+        'spheres': norm_spheres,
         'gem': gem,
         'note': (data.get('note') or '').strip()[:280],
     })
     _save_loot_ledger(ledger)
+    # Also feed the session scrapbook's loot highlights -- the ledger is the
+    # permanent wealth record; this is tonight's haul for the Session Complete recap.
+    try:
+        with SESSION_HIGHLIGHTS_LOCK:
+            SESSION_HIGHLIGHTS['loot'].append({'pc': recipient[:60], 'items': norm_items, 'spheres': norm_spheres})
+            SESSION_HIGHLIGHTS['loot'] = SESSION_HIGHLIGHTS['loot'][-120:]
+        _persist_session_highlights()
+    except Exception:
+        pass
     return jsonify({'success': True})
 
 
@@ -7751,6 +7806,13 @@ def api_cosmere_roll():
         pass
     try:
         sse_broadcast('player_roll', {k: entry[k] for k in ('name', 'action', 'result', 'detail', 'degree', 'time')})
+    except Exception:
+        pass
+    # Feed the session scrapbook: a nat-20 (Opportunity) / nat-1 (Complication)
+    # is Cosmere's crit / fumble. The sheet stamps "(nat 20)" / "(nat 1)" into the
+    # detail, which _record_crit_fumble sniffs (gated to the active party roster).
+    try:
+        _record_crit_fumble(entry['name'], entry['action'], entry['detail'], None)
     except Exception:
         pass
     return jsonify({'ok': True})

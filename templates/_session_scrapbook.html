@@ -156,6 +156,27 @@
     .scrapbook .sb-grant[disabled] { opacity: 0.5; cursor: default; filter: none; }
 
     @media (prefers-reduced-motion: reduce) { .scrapbook.show { animation: none; } }
+
+    /* Cosmere mode: re-skin the gilt/red session scroll to Stormlight blue. The
+       overlay lives inside base.html's body, so body.system-cosmere reaches it. */
+    body.system-cosmere .scrapbook {
+        background:
+            radial-gradient(ellipse 90% 60% at 50% 0%, rgba(61,131,191,0.28), transparent 70%),
+            linear-gradient(180deg, #0a0e14 0%, #0c131c 60%, #080b10 100%);
+    }
+    body.system-cosmere .scrapbook .sb-kicker { color: rgba(159,210,242,0.85); }
+    body.system-cosmere .scrapbook .sb-campaign { color: var(--storm-100, #d3ecfb); text-shadow: 0 0 30px rgba(95,168,224,0.4), 0 4px 22px rgba(0,0,0,0.7); }
+    body.system-cosmere .scrapbook .sb-rule { background: linear-gradient(90deg, transparent, rgba(95,168,224,0.6), transparent); }
+    body.system-cosmere .scrapbook .sb-rule span { background: var(--storm-200, #9fd2f2); box-shadow: 0 0 8px rgba(159,210,242,0.7); }
+    body.system-cosmere .scrapbook .sb-section-title { color: var(--storm-200, #9fd2f2); border-bottom-color: rgba(95,168,224,0.22); }
+    body.system-cosmere .scrapbook .sb-tile, body.system-cosmere .scrapbook .sb-card { border-color: rgba(95,168,224,0.2); }
+    body.system-cosmere .scrapbook .sb-tile-v, body.system-cosmere .scrapbook .sb-card-name, body.system-cosmere .scrapbook .sb-card-row .gold { color: var(--storm-100, #d3ecfb); }
+    body.system-cosmere .scrapbook .sb-close, body.system-cosmere .scrapbook .sb-grant {
+        background: linear-gradient(180deg, #5fa8e0, #2a608f); border-color: rgba(159,210,242,0.6); color: #06121c;
+        box-shadow: 0 6px 22px rgba(42,96,143,0.3), inset 0 1px 0 rgba(255,255,255,0.25);
+    }
+    body.system-cosmere .scrapbook .sb-vote.mine { border-color: var(--storm-200, #9fd2f2); background: rgba(95,168,224,0.16); color: #e7f3ff; box-shadow: 0 0 16px rgba(61,131,191,0.25); }
+    body.system-cosmere .scrapbook .sb-vote .sb-vote-count, body.system-cosmere .scrapbook .sb-vote.leader::after { color: var(--storm-100, #d3ecfb); }
 </style>
 
 <script>
@@ -165,20 +186,26 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+    // System flag set per-showing by pf2eScrapbook(): 'pf2e' (coins) | 'cosmere' (spheres).
+    var _SB_SYS = 'pf2e';
+    var _MONEY = { pf2e: ['pp', 'gp', 'sp', 'cp'], cosmere: ['broam', 'mark', 'chip'] };
     function coins(c) {
         c = c || {};
         var parts = [];
-        ['pp', 'gp', 'sp', 'cp'].forEach(function(k) { if (c[k]) parts.push(c[k] + ' ' + k); });
+        _MONEY[_SB_SYS].forEach(function(k) {
+            if (c[k]) parts.push(c[k] + ' ' + k + (_SB_SYS === 'cosmere' ? (c[k] === 1 ? '' : 's') : ''));
+        });
         return parts.join(', ');
     }
     function lootLine(lootArr) {
-        // Flatten a PC's loot records into "Item ×2, 50 gp" style text.
-        var items = [], coinTotals = { pp: 0, gp: 0, sp: 0, cp: 0 };
+        // Flatten a PC's loot records into "Item ×2, 50 gp" / "Item, 2 broams" text.
+        var items = [], keys = _MONEY[_SB_SYS], field = (_SB_SYS === 'cosmere') ? 'spheres' : 'coins';
+        var totals = {}; keys.forEach(function(k) { totals[k] = 0; });
         (lootArr || []).forEach(function(l) {
             (l.items || []).forEach(function(it) { items.push(esc(it.name) + (it.qty > 1 ? ' ×' + it.qty : '')); });
-            ['pp', 'gp', 'sp', 'cp'].forEach(function(k) { coinTotals[k] += (l.coins && l.coins[k]) || 0; });
+            keys.forEach(function(k) { totals[k] += (l[field] && l[field][k]) || 0; });
         });
-        var cstr = coins(coinTotals);
+        var cstr = coins(totals);
         if (cstr) items.push(cstr);
         return items.join(', ');
     }
@@ -190,11 +217,13 @@
         var bh = p.biggest_hit ? (p.biggest_hit.amount + ' <span style="font-size:13px;color:#b9b1a0;">→ ' + esc(p.biggest_hit.target) + '</span>') : '—';
         var lootBits = [];
         if (p.loot_count) lootBits.push(p.loot_count + (p.loot_count === 1 ? ' item' : ' items'));
-        var cstr = coins(p.total_coins);
+        var cstr = coins(_SB_SYS === 'cosmere' ? p.total_spheres : p.total_coins);
         if (cstr) lootBits.push(cstr);
+        var critLbl = (_SB_SYS === 'cosmere') ? 'Opportunities' : 'Crits';
+        var fumbleLbl = (_SB_SYS === 'cosmere') ? 'Complications' : 'Nat 1s';
         var html = '<div class="sb-tiles">';
-        html += tile(p.crit_count || 0, 'Crits', 'crit');
-        html += tile(p.fumble_count || 0, 'Nat 1s', 'fumble');
+        html += tile(p.crit_count || 0, critLbl, 'crit');
+        html += tile(p.fumble_count || 0, fumbleLbl, 'fumble');
         html += tile(bh, 'Biggest Hit', '');
         html += tile(lootBits.length ? lootBits.join('<br>') : '—', 'Loot', '');
         html += '</div>';
@@ -209,8 +238,10 @@
         c = c || {};
         var html = '<div class="sb-card"><div class="sb-card-name">' + esc(pc) + '</div>';
         var any = false;
-        if (c.crits && c.crits.length) { any = true; html += '<div class="sb-card-row"><span class="lbl">Crits</span><span class="crit">' + c.crits.length + '</span> &mdash; ' + esc(c.crits.map(function(x){return x.action;}).filter(Boolean).join(', ')) + '</div>'; }
-        if (c.fumbles && c.fumbles.length) { any = true; html += '<div class="sb-card-row"><span class="lbl">Nat 1s</span><span class="fumble">' + c.fumbles.length + '</span></div>'; }
+        var critLbl = (_SB_SYS === 'cosmere') ? 'Opportunities' : 'Crits';
+        var fumbleLbl = (_SB_SYS === 'cosmere') ? 'Complications' : 'Nat 1s';
+        if (c.crits && c.crits.length) { any = true; html += '<div class="sb-card-row"><span class="lbl">' + critLbl + '</span><span class="crit">' + c.crits.length + '</span> &mdash; ' + esc(c.crits.map(function(x){return x.action;}).filter(Boolean).join(', ')) + '</div>'; }
+        if (c.fumbles && c.fumbles.length) { any = true; html += '<div class="sb-card-row"><span class="lbl">' + fumbleLbl + '</span><span class="fumble">' + c.fumbles.length + '</span></div>'; }
         var loot = lootLine(c.loot);
         if (loot) { any = true; html += '<div class="sb-card-row"><span class="lbl">Loot</span><span class="gold">' + loot + '</span></div>'; }
         if (c.rp_moments && c.rp_moments.length) {
@@ -249,7 +280,9 @@
         _mvpCandidates.forEach(function(pc) { var v = _mvpTally[pc] || 0; if (v > max) max = v; });
         var isGM = !_mvpViewer;
         if (isGM) {
-            sub.textContent = (max > 0) ? 'Live tally — grant the winner a Hero Point.' : 'Waiting for the party to vote…';
+            sub.textContent = (max > 0)
+                ? ((_SB_SYS === 'cosmere') ? 'Live tally — crown tonight’s MVP.' : 'Live tally — grant the winner a Hero Point.')
+                : 'Waiting for the party to vote…';
         } else {
             sub.textContent = _myVote ? ('You voted for ' + _myVote + ' — tap to change.') : 'Vote for tonight’s MVP.';
         }
@@ -260,7 +293,7 @@
             html += '<div style="display:flex; flex-direction:column; gap:6px; align-items:center;">';
             if (isGM) {
                 html += '<div class="sb-vote' + leaderCls + '" style="cursor:default;">' + esc(pc) + '<span class="sb-vote-count">' + count + '</span></div>';
-                html += '<button class="sb-grant" data-grant="' + esc(pc) + '">+ Hero Point</button>';
+                html += '<button class="sb-grant" data-grant="' + esc(pc) + '">' + ((_SB_SYS === 'cosmere') ? 'Name MVP' : '+ Hero Point') + '</button>';
             } else {
                 var mineCls = (_myVote === pc) ? ' mine' : '';
                 html += '<button class="sb-vote' + mineCls + leaderCls + '" data-vote="' + esc(pc) + '">' + esc(pc) + '<span class="sb-vote-count">' + (count || '') + '</span></button>';
@@ -284,7 +317,9 @@
             method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
         }).then(function(r) { return r.json(); }).then(function(j) {
             var sub = document.getElementById('sb-mvp-sub');
-            if (j && j.success && sub) sub.textContent = pc + ' awarded a Hero Point (now ' + j.hero_points + ').';
+            if (j && j.success && sub) sub.textContent = (j.hero_points == null)
+                ? (pc + ' named tonight’s MVP.')
+                : (pc + ' awarded a Hero Point (now ' + j.hero_points + ').');
             else if (sub) sub.textContent = (j && j.error) ? j.error : 'Could not grant.';
         }).catch(function() {});
     }
@@ -296,6 +331,7 @@
 
     window.pf2eScrapbook = function(data, viewerPc) {
         data = data || {};
+        _SB_SYS = data.system || 'pf2e';
         var el = document.getElementById('scrapbook');
         if (!el) return;
         var byId = function(id) { return document.getElementById(id); };
