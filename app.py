@@ -240,6 +240,20 @@ def _system_home(gm: bool) -> str:
     return ui.gm_home if gm else ui.player_home
 
 
+@app.template_global()
+def qr_svg(data, scale=4):
+    """Inline SVG QR code for a join link, so players can SCAN it off the GM's
+    screen instead of hand-typing a long URL on a phone. Inline SVG = no network
+    and no data-URI, so it renders offline at the table. Returns '' if segno
+    isn't installed (the page still shows the link + copy button)."""
+    try:
+        import segno
+        return segno.make(str(data), error='m').svg_inline(scale=scale, border=2,
+                                                            dark='#12100b', light='#f5efe0')
+    except Exception:
+        return ''
+
+
 def gm_required(f):
     """Decorator: GM of the active campaign (account mode) or the GM password
     (legacy). _is_gm() encodes both modes."""
@@ -6176,6 +6190,7 @@ def join():
     """Invite-code claim: create/sign-in an account, join the campaign, claim a PC."""
     code = (request.values.get('code') or '').strip()
     inv = _auth.get_invite(code) if code else None
+    camp_name = (_campaigns.get_campaign(inv['campaign_id']) or {}).get('name') if inv else None
     if request.method == 'POST':
         if not inv:
             return render_template('join.html', error='Invalid or expired invite code.', code=code,
@@ -6186,7 +6201,8 @@ def join():
                 u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
                                       display_name=request.form.get('display_name'))
             except ValueError as e:
-                return render_template('join.html', error=str(e), code=code, invite=inv, logged_in=False), 400
+                return render_template('join.html', error=str(e), code=code, invite=inv,
+                                       campaign_name=camp_name, logged_in=False), 400
             _auth.login_user(u, remember=True)
         _auth.consume_invite(code)
         _campaigns.add_member(inv['campaign_id'], u['id'], inv['role'], character_id=inv.get('character_id'))
@@ -6194,7 +6210,8 @@ def join():
             _claim_by_id(inv['campaign_id'], inv['character_id'], u['id'])
         _set_active_campaign(inv['campaign_id'])
         return redirect('/me')
-    return render_template('join.html', error=None, code=code, invite=inv, logged_in=bool(_auth.current_user()))
+    return render_template('join.html', error=None, code=code, invite=inv,
+                           campaign_name=camp_name, logged_in=bool(_auth.current_user()))
 
 
 def _me_characters(user_id):
@@ -7737,6 +7754,34 @@ def _sync_cosmere_combatant_state(name, ps):
     return hit
 
 
+def _sync_cosmere_pc_from_combatant(c):
+    """Reverse of _sync_cosmere_combatant_state: write a live Cosmere PC
+    combatant's health / injuries / conditions back to its saved doc's play_state
+    and broadcast cosmere_player_state, so the player's OWN sheet repaints in place
+    when the GM changes them from the tracker (e.g. dealing damage). No-op for
+    non-PC or non-Cosmere combatants. Matches by name (unique in a party)."""
+    if not getattr(c, 'is_pc', False) or getattr(c, 'system', 'pf2e') != 'cosmere':
+        return
+    name = getattr(c, 'name', None)
+    if not name:
+        return
+    for d in _list_cosmere_pcs():
+        if (d.get('name') or (d.get('build') or {}).get('name')) == name:
+            ps = dict(d.get('play_state') or {})
+            ps['health'] = max(0, int(getattr(c, 'current_hp', ps.get('health', 0)) or 0))
+            ps['injuries'] = max(0, int(getattr(c, 'injuries', ps.get('injuries', 0)) or 0))
+            conds = getattr(c, 'conditions', None)
+            if isinstance(conds, dict):
+                ps['conditions'] = {k: v for k, v in conds.items() if v}
+            d['play_state'] = ps
+            _save_cosmere_pc(d, fsync=False)
+            try:
+                sse_broadcast('cosmere_player_state', {'pid': d.get('id'), 'name': name, 'play_state': ps})
+            except Exception:
+                pass
+            break
+
+
 @app.route('/cosmere/pc/<pid>/state', methods=['POST'])
 def cosmere_pc_state(pid):
     """Persist a Cosmere PC's live resource state (current health / focus /
@@ -8739,6 +8784,10 @@ def adjust_hp(instance_id):
                     _cosmere_adjust_hp(c, amount, action, damage_type)
                     _persist_encounter_state()
                     _broadcast_encounter_state()
+                    # Reflect the new HP/injuries onto the player's own Cosmere
+                    # sheet (it repaints from cosmere_player_state) so the tracker
+                    # and the sheet stay in sync, not just the GM's tracker view.
+                    _sync_cosmere_pc_from_combatant(c)
                     break
                 effective = amount
                 wri_notes = []

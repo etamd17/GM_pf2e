@@ -21,6 +21,7 @@
         var reconnectTimer = null;
         var backoff = 2000;
         var BACKOFF_MAX = 30000;
+        var lastConnectAt = 0;
 
         function attachAll() {
             if (!es) return;
@@ -38,6 +39,7 @@
         }
         function connect() {
             if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+            lastConnectAt = Date.now();
             try { es = new EventSource('/api/events'); }
             catch (e) { es = null; scheduleReconnect(); return; }
             es.onopen = function () { backoff = 2000; };
@@ -70,5 +72,25 @@
             isConnected: function () { return !!es; },
             reconnectNow: function () { try { if (es) es.close(); } catch (e) {} es = null; backoff = 2000; connect(); }
         };
+
+        // Wake / online recovery. A slept phone or a dropped Wi-Fi can leave a
+        // silently-dead socket that NEVER fires onerror, so the page stops
+        // receiving updates with no sign. When the tab becomes visible again,
+        // comes back online, or is restored from the bfcache, force a fresh
+        // stream — debounced (>10s since last connect) so rapid tab-flips don't
+        // thrash. The server re-sends its 'connected' event on the new stream,
+        // which the live pages (tracker, sheets) already listen on to refetch.
+        function wake() {
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+            if (!es || (Date.now() - lastConnectAt) > 10000) {
+                try { if (es) es.close(); } catch (e) {}
+                es = null; backoff = 2000; connect();
+            }
+        }
+        if (typeof document !== 'undefined') document.addEventListener('visibilitychange', wake);
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', wake);
+            window.addEventListener('pageshow', wake);
+        }
     })();
 </script>

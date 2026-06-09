@@ -104,6 +104,21 @@ def test_gm_condition_requires_gm(pc, monkeypatch):
     assert r.status_code == 403
 
 
+# --- GM -> player: tracker damage writes HP/injuries back to the PC doc -------
+def test_gm_tracker_damage_syncs_to_pc_doc(pc):
+    """The GM dealing damage from the tracker must reach the player's saved
+    play_state, so their own sheet repaints in place (it reads cosmere_player_state)
+    -- not just the GM's tracker view."""
+    me = next(x for x in app.ACTIVE_ENCOUNTER if x.name == 'Kaladin')
+    me.current_hp = 20
+    me.deflect = {'value': 0}
+    r = app.app.test_client().post('/api/adjust_hp/' + me.instance_id,
+                                   data={'amount': '5', 'action': 'damage', 'damage_type': 'impact'})
+    assert r.status_code in (200, 302)                    # form-POST redirects back to /tracker
+    assert me.current_hp == 15                            # deflect 0 -> 5 impact taken
+    assert app._load_cosmere_pc(pc)['play_state']['health'] == 15   # written back to the sheet's source
+
+
 # --- the sheet wires up the GM->player live listener -------------------------
 def test_sheet_listens_for_pushed_state(pc):
     body = app.app.test_client().get('/cosmere/pc/' + pc).data.decode()

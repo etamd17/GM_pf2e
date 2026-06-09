@@ -4018,7 +4018,13 @@ function connectSSE() {
     // unchanged; liveness rides 'connected'/'keepalive' + each event so the
     // 30s-stale poll fallback still has its signal.
     evtSource = { addEventListener: function(name, fn) { window.appSSE(name, fn); } };
-    window.appSSE('connected', _trackerMarkSseAlive);
+    // On (re)connect — including the hub's wake/online force-reconnect — refetch
+    // the authoritative state so any events missed while the socket was dead
+    // (phone asleep, Wi-Fi blip) are reconciled, not just silently dropped.
+    window.appSSE('connected', function () {
+        _trackerMarkSseAlive();
+        apiGet('/api/tracker_state').then(data => applyState(data)).catch(() => {});
+    });
     window.appSSE('keepalive', _trackerMarkSseAlive);
     evtSource.addEventListener('encounter_update', function(e) {
         _trackerMarkSseAlive();
