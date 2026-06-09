@@ -6270,6 +6270,52 @@ def admin_reset_password(uid):
     return redirect('/admin/users')
 
 
+@app.route('/admin/campaigns')
+@_auth.login_required
+def admin_campaigns():
+    """Admin: see every campaign's stored game system (and which holds the live
+    slot), and repair a mis-stamped one. A campaign saved as 'cosmere' routes the
+    whole app to the Cosmere side; this is where you flip it back to Pathfinder."""
+    if not _auth.current_user().get('is_admin'):
+        return jsonify({'error': 'admin only'}), 403
+    live = _storage.get_live_campaign_id()
+    rows = []
+    for c in _campaigns.list_campaigns():
+        owner = _auth.get_user(c.get('created_by'))
+        rows.append({
+            'id': c['id'],
+            'name': c.get('name') or '(unnamed)',
+            'system': (c.get('system') or 'pf2e'),
+            'members': len(c.get('members', [])),
+            'owner': (owner or {}).get('display_name') or (owner or {}).get('username') or '—',
+            'is_live': c['id'] == live,
+        })
+    rows.sort(key=lambda r: r['name'].lower())
+    return render_template('admin_campaigns.html', campaigns=rows,
+                           systems=list(_storage.SUPPORTED_SYSTEMS),
+                           notice=session.pop('_campaign_notice', None))
+
+
+@app.route('/admin/campaigns/<cid>/system', methods=['POST'])
+@_auth.login_required
+def admin_set_campaign_system(cid):
+    """Admin: correct a campaign's stored game system (e.g. a Pathfinder game
+    saved as Cosmere). Rebinds the in-memory state if it's the live campaign."""
+    if not _auth.current_user().get('is_admin'):
+        return jsonify({'error': 'admin only'}), 403
+    new_system = (request.form.get('system') or '').strip().lower()
+    camp = _campaigns.get_campaign(cid)
+    if camp and new_system in _storage.SUPPORTED_SYSTEMS:
+        old = camp.get('system') or 'pf2e'
+        if old != new_system:
+            camp['system'] = new_system
+            _campaigns.save_campaign(camp)
+            if _storage.get_live_campaign_id() == cid:
+                load_campaign(cid)   # rebind globals so live state matches the new system
+        session['_campaign_notice'] = {'name': camp.get('name') or cid, 'old': old, 'new': new_system}
+    return redirect('/admin/campaigns')
+
+
 @app.route('/gm')
 @gm_required
 def gm_hub():
