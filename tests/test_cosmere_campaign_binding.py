@@ -215,3 +215,68 @@ def test_cosmere_gm_build_then_handoff():
         print('COSMERE_HANDOFF_OK')
     ''')
     assert 'COSMERE_HANDOFF_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_active_system_follows_user_not_global_live_slot():
+    """Regression: a user's active campaign/system must follow THEIR own selection
+    (this session, or the campaign they last activated), and must NEVER be dictated
+    by whichever campaign happens to hold the server-wide live slot.
+
+    The bug: `_active_campaign_doc()` fell back to the global live slot for any
+    logged-in user with no session selection -- so a Cosmere game running on the
+    single live slot flipped every other user (and the same user on a fresh login)
+    onto the Cosmere side, regardless of their own campaigns.
+    """
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        from core import storage, auth, campaigns
+
+        def active_system(client):
+            gm = client.get('/gm')
+            if gm.status_code == 302 and '/cosmere' in gm.headers.get('Location', ''):
+                return 'cosmere'
+            return 'pf2e' if gm.status_code == 200 else '?%s' % gm.status_code
+
+        c = A.app.test_client()
+        assert c.post('/setup', data={'username': 'gm', 'password': 'secret1', 'display_name': 'GM'}).status_code == 302
+        gm_id = auth.get_user_by_username('gm')['id']
+        assert c.post('/campaigns/new', data={'name': 'Roshar', 'system': 'cosmere'}).status_code == 302
+        assert c.post('/campaigns/new', data={'name': 'Golarion', 'system': 'pf2e'}).status_code == 302
+        by = {campaigns.get_campaign(cid)['system']: cid for cid in storage.list_campaign_ids()}
+        cos, pf = by['cosmere'], by['pf2e']
+
+        # the admin selects their Pathfinder game -> sees pf2e, choice remembered
+        assert c.post('/campaign/' + pf + '/activate').status_code == 302
+        assert active_system(c) == 'pf2e'
+        assert auth.get_user(gm_id).get('last_campaign_id') == pf
+
+        # a DIFFERENT table puts Cosmere on the single server-wide live slot
+        storage.set_live_campaign_id(cos)
+        assert storage.get_live_campaign_id() == cos
+
+        # the admin on a FRESH session (expired cookie / new device) resumes THEIR
+        # own pf2e game -- not the globally-live Cosmere campaign
+        fresh = A.app.test_client()
+        assert fresh.post('/login', data={'username': 'gm', 'password': 'secret1'}).status_code == 302
+        assert active_system(fresh) == 'pf2e', 'fresh login bled onto the live cosmere slot'
+
+        # a player who belongs ONLY to the Pathfinder game, with Cosmere live, is
+        # never adopted onto the campaign they are not a member of
+        bob = A.app.test_client()
+        assert bob.post('/register', data={'username': 'bob', 'password': 'pw12345', 'display_name': 'Bob'}).status_code == 302
+        bob_id = auth.get_user_by_username('bob')['id']
+        campaigns.add_member(pf, bob_id, 'player')
+        storage.set_live_campaign_id(cos)
+        with A.app.test_request_context('/'):
+            from flask import session as s
+            s['user_id'] = bob_id                       # logged in, never selected anything
+            assert A._active_system() == 'pf2e', 'player bled onto the live cosmere slot'
+            assert A._active_campaign_doc() is None      # not a member of the live campaign -> not adopted
+            s['active_campaign_id'] = pf                 # bob picks his own game
+            assert A._active_system() == 'pf2e'
+
+        print('ACTIVE_SYSTEM_PER_USER_OK')
+    ''')
+    assert 'ACTIVE_SYSTEM_PER_USER_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)

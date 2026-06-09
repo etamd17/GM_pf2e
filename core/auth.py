@@ -119,6 +119,17 @@ def _touch_login(user_id):
         _save_users(data)
 
 
+def set_last_campaign(user_id, cid):
+    """Remember the user's most-recently-selected campaign on their account, so a
+    fresh login resumes THEIR table rather than inheriting whatever campaign holds
+    the server-wide live slot. Persisted; replaced only by selecting another."""
+    data = _load_users()
+    u = data['users'].get(user_id)
+    if u is not None and u.get('last_campaign_id') != cid:
+        u['last_campaign_id'] = cid
+        _save_users(data)
+
+
 # --------------------------------------------------------------------------
 # Session
 # --------------------------------------------------------------------------
