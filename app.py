@@ -7737,6 +7737,34 @@ def _sync_cosmere_combatant_state(name, ps):
     return hit
 
 
+def _sync_cosmere_pc_from_combatant(c):
+    """Reverse of _sync_cosmere_combatant_state: write a live Cosmere PC
+    combatant's health / injuries / conditions back to its saved doc's play_state
+    and broadcast cosmere_player_state, so the player's OWN sheet repaints in place
+    when the GM changes them from the tracker (e.g. dealing damage). No-op for
+    non-PC or non-Cosmere combatants. Matches by name (unique in a party)."""
+    if not getattr(c, 'is_pc', False) or getattr(c, 'system', 'pf2e') != 'cosmere':
+        return
+    name = getattr(c, 'name', None)
+    if not name:
+        return
+    for d in _list_cosmere_pcs():
+        if (d.get('name') or (d.get('build') or {}).get('name')) == name:
+            ps = dict(d.get('play_state') or {})
+            ps['health'] = max(0, int(getattr(c, 'current_hp', ps.get('health', 0)) or 0))
+            ps['injuries'] = max(0, int(getattr(c, 'injuries', ps.get('injuries', 0)) or 0))
+            conds = getattr(c, 'conditions', None)
+            if isinstance(conds, dict):
+                ps['conditions'] = {k: v for k, v in conds.items() if v}
+            d['play_state'] = ps
+            _save_cosmere_pc(d, fsync=False)
+            try:
+                sse_broadcast('cosmere_player_state', {'pid': d.get('id'), 'name': name, 'play_state': ps})
+            except Exception:
+                pass
+            break
+
+
 @app.route('/cosmere/pc/<pid>/state', methods=['POST'])
 def cosmere_pc_state(pid):
     """Persist a Cosmere PC's live resource state (current health / focus /
@@ -8739,6 +8767,10 @@ def adjust_hp(instance_id):
                     _cosmere_adjust_hp(c, amount, action, damage_type)
                     _persist_encounter_state()
                     _broadcast_encounter_state()
+                    # Reflect the new HP/injuries onto the player's own Cosmere
+                    # sheet (it repaints from cosmere_player_state) so the tracker
+                    # and the sheet stay in sync, not just the GM's tracker view.
+                    _sync_cosmere_pc_from_combatant(c)
                     break
                 effective = amount
                 wri_notes = []
