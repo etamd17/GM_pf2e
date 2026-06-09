@@ -1,5 +1,18 @@
 {% extends "_account_base.html" %}
 {% block title %}Manage campaign{% endblock %}
+{% block head %}
+<style>
+  .invite-row { align-items:flex-start; }
+  .invite-main { display:flex; gap:14px; align-items:flex-start; width:100%; }
+  .invite-main .qr { flex:0 0 auto; width:96px; height:96px; background:#f5efe0; border-radius:8px; padding:5px; box-sizing:border-box; }
+  .invite-main .qr svg { width:100%; height:100%; display:block; }
+  .invite-main .qr:empty { display:none; }
+  .invite-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; }
+  .invite-body .link { display:block; word-break:break-all; font-size:11px; }
+  .invite-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .copy-btn.copied { background:rgba(120,180,110,.18); border-color:rgba(150,200,120,.5); color:#bfe0a8; }
+</style>
+{% endblock %}
 {% block content %}
 <h1>{{ campaign.name }} &mdash; manage</h1>
 <p class="sub">Add players, hand out characters, and manage who's in your campaign.</p>
@@ -34,15 +47,23 @@
   <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="player"><button type="submit">+ Player link</button></form>
   <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="gm"><button type="submit">+ Co-GM link</button></form>
 </div>
+<p class="sub" style="margin-top:-4px;">Players can <strong>scan the QR</strong> off your screen &mdash; no typing the link.</p>
 {% if open_invites %}
-<ul class="list">
+<ul class="list invite-list">
   {% for inv in open_invites %}
-  <li class="row">
-    <div>
-      <code class="muted">{{ url_for('join', code=inv.code, _external=True) }}</code>
-      <div class="meta"><span class="badge">{{ inv.role|upper }}</span></div>
+  {% set link = url_for('join', code=inv.code, _external=True) %}
+  <li class="row invite-row">
+    <div class="invite-main">
+      <div class="qr">{{ qr_svg(link) | safe }}</div>
+      <div class="invite-body">
+        <div class="meta"><span class="badge">{{ inv.role|upper }}</span></div>
+        <code class="muted link" data-link="{{ link }}">{{ link }}</code>
+        <div class="invite-actions">
+          <button type="button" class="copy-btn" data-link="{{ link }}">Copy link</button>
+          <form method="POST" action="/campaign/{{ campaign.id }}/invite/{{ inv.code }}/revoke" style="display:inline;"><button type="submit" title="Cancel this code">Revoke</button></form>
+        </div>
+      </div>
     </div>
-    <form method="POST" action="/campaign/{{ campaign.id }}/invite/{{ inv.code }}/revoke"><button type="submit" title="Cancel this code">Revoke</button></form>
   </li>
   {% endfor %}
 </ul>
@@ -51,20 +72,29 @@
 {% if rows %}
 <div class="section-title">Characters</div>
 <p class="sub">A character link claims that specific character. A character you built yourself can be <em>handed off</em> to free its link.</p>
-<ul class="list">
+<ul class="list invite-list">
   {% for r in rows %}
-  <li class="row">
+  <li class="row invite-row">
+    {% if r.claimed %}
     <div>
       <strong>{{ r.name }}</strong>
-      <div class="meta">
-        {% if r.claimed %}<span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span>
-        {% else %}<code class="muted">{{ url_for('join', code=r.code, _external=True) }}</code>{% endif %}
-      </div>
+      <div class="meta"><span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span></div>
     </div>
-    {% if r.kind == 'cosmere' and r.claimed %}
+    {% if r.kind == 'cosmere' %}
     <form method="POST" action="/cosmere/pc/{{ r.id }}/release" onsubmit="return confirm('Hand off {{ r.name }}? This frees their join link so a player can claim it.');">
       <button type="submit" title="Clear ownership and mint a fresh join link">Hand off</button>
     </form>
+    {% endif %}
+    {% else %}
+    {% set link = url_for('join', code=r.code, _external=True) %}
+    <div class="invite-main">
+      <div class="qr">{{ qr_svg(link) | safe }}</div>
+      <div class="invite-body">
+        <strong>{{ r.name }}</strong>
+        <code class="muted link" data-link="{{ link }}">{{ link }}</code>
+        <div class="invite-actions"><button type="button" class="copy-btn" data-link="{{ link }}">Copy link</button></div>
+      </div>
+    </div>
     {% endif %}
   </li>
   {% endfor %}
@@ -82,4 +112,24 @@
 </form>
 
 <p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+
+<script>
+// Copy-to-clipboard for the join links (so the GM can paste into chat). The QR
+// is for in-person scanning; this is the remote-table path.
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.copy-btn'); if (!b) return;
+  var link = b.getAttribute('data-link') || '';
+  function done() {
+    var t = b.textContent; b.textContent = 'Copied'; b.classList.add('copied');
+    setTimeout(function () { b.textContent = t; b.classList.remove('copied'); }, 1400);
+  }
+  function fallback(txt) {
+    try { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (_) {}
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(done, function () { fallback(link); done(); });
+  } else { fallback(link); done(); }
+});
+</script>
 {% endblock %}

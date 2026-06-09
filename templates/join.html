@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Join a campaign</h1>
 {% if invite %}
-<p class="sub">You've been invited to join as <strong>{{ invite.role }}</strong>.</p>
+<p class="sub">You've been invited to join{% if campaign_name %} <strong>{{ campaign_name }}</strong>{% endif %} as <strong>{{ invite.role }}</strong>.{% if not logged_in %} Create an account below &mdash; you'll be in the campaign right after.{% endif %}</p>
 {% else %}
 <p class="sub">Enter your invite code to join a campaign.</p>
 {% endif %}
