@@ -93,12 +93,27 @@
   .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
     border:1px solid var(--accent); color:var(--accent); font-weight:600; }
   .cs-cbtn.on { background:var(--accent); color:#06242b; }
+  /* Read-only notice for a sheet you don't own (no roll/stat controls). */
+  .cs-readonly { margin:0 0 1rem; padding:.55rem .85rem; border-radius:9px; font-size:12.5px;
+    background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.5); color:#fbbf24; }
+  /* Floating roll-result toast so a roll fired from anywhere on the page is
+     always visible (the inline cs-result line is easy to miss while scrolled). */
+  #cs-toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(12px);
+    z-index:60; max-width:min(560px,92vw); padding:.7rem 1.1rem; border-radius:12px; pointer-events:none;
+    background:rgba(13,17,23,.97); border:1px solid var(--accent); box-shadow:0 8px 30px rgba(0,0,0,.5);
+    color:var(--text-on-dark,#e8eef5); font-size:14px; text-align:center; opacity:0; transition:opacity .18s, transform .18s; }
+  #cs-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #cs-toast b { font-family:'JetBrains Mono',monospace; font-size:20px; color:var(--cs-accent-2); }
+  #cs-toast .opp { color:#34d399; } #cs-toast .comp { color:#f59e0b; }
 {% endblock %}
 
 {% block content %}
 {# Adversary sheets (bestiary) don't pass cur/interactive -> default to read-only. #}
 {% set cur = cur | default({'health': a.health.value, 'focus': a.focus_max, 'investiture': a.investiture_max, 'injuries': 0}) %}
 <div class="cs-wrap">
+  {% if pc and not interactive %}
+  <div class="cs-readonly">Read-only view. You can roll skills, strikes, and abilities &mdash; and adjust Health/Focus &mdash; on a character you <b>own</b>. Open it from <a href="/cosmere/player" style="color:inherit; text-decoration:underline;">My Character</a>, or ask your GM to assign this one to you.</div>
+  {% endif %}
   <div class="cs-head">
     <div>
       <div class="cs-name">{{ a.name }}</div>
@@ -284,7 +299,8 @@
       {% if actions %}
       <div class="cs-section-h">Actions &amp; Abilities</div>
       {% for ab in actions %}
-      <div class="cs-ability"><div class="an">{{ ab.name }}</div>
+      <div class="cs-ability{% if interactive %} roll{% endif %}"{% if interactive %} onclick="cosAbility({{ ab.name|tojson }}, {{ (ab.description or '')|tojson }})"{% endif %}>
+        <div class="an">{{ ab.name }}{% if interactive %} <span style="font-size:11px; color:var(--accent); font-weight:400;">tap to roll</span>{% endif %}</div>
         {% if ab.description %}<div class="ad">{{ ab.description }}</div>{% endif %}</div>
       {% endfor %}
       {% endif %}
@@ -309,7 +325,7 @@
     <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
     <div class="ad"><b style="color:#f0a9a9;">Disease cost:</b> {{ art.cost }}</div>
     {% if art.abilities %}<ul style="margin:.45rem 0 0 1.1rem; line-height:1.5;">
-      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;"><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
+      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;{% if interactive %} cursor:pointer;{% endif %}"{% if interactive %} class="inf-roll" onclick="cosAbility({{ ab.name|tojson }}, {{ ab.desc|tojson }})" title="Tap to roll this ability's dice / log its use"{% endif %}><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %}{% if interactive %} <span style="font-size:10px; color:var(--accent);">tap to roll</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
     </ul>{% endif %}
   </div>
   {% endfor %}
@@ -355,7 +371,16 @@
     let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}};
     let mods = {adv:false, dis:false, plot:false};
     const d = n => 1 + Math.floor(Math.random()*n);
-    const res = h => { const el=document.getElementById('cs-result'); if(el) el.innerHTML=h; };
+    let _toastT=null;
+    function csToast(html){
+      let t=document.getElementById('cs-toast');
+      if(!t){ t=document.createElement('div'); t.id='cs-toast'; document.body.appendChild(t); }
+      t.innerHTML=html; t.classList.add('show');
+      clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'), 4200);
+    }
+    // Update the inline result line AND pop a floating toast so the roll is
+    // always visible no matter where on the sheet it was triggered.
+    const res = h => { const el=document.getElementById('cs-result'); if(el) el.innerHTML=h; csToast(h); };
 
     function rollD20(){
       let a=d(20), nat=a, note='d20('+a+')';
@@ -399,6 +424,20 @@
       res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+enh);
       post(name+' strike', 'atk '+atk+' / dmg '+dmg,
         roll.note+' '+sign+m+(e?' (Enhanced)':'')+' → hit '+atk+'; '+dmgFormula+sign+m+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:''));
+    };
+    // Roll an ability/action: rolls any dice in its text (damage/heal/effect dice)
+    // and logs the use. Abilities with no dice are simply announced to the feed.
+    window.cosAbility = function(name, text){
+      const dice=(String(text||'').match(/\d+\s*d\s*\d+(\s*\+\s*\d+)?/gi)||[]);
+      if(!dice.length){
+        res('<span class="opp">'+name+'</span> &mdash; activated <span style="font-size:11px;color:var(--text-on-dark-3)">(resolve per its description)</span>');
+        post('uses '+name, 'ability', String(text||'').replace(/<[^>]+>/g,'').slice(0,140));
+        return;
+      }
+      let parts=[], total=0;
+      dice.forEach(dx=>{ const v=rollFormula(dx); total+=v; parts.push(dx.replace(/\s+/g,'')+'→'+v); });
+      res('<span class="opp">'+name+'</span> &mdash; rolled <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+parts.join(' · ')+' &middot; add modifiers</span>');
+      post('uses '+name, total, parts.join(' · ')+' (dice only; add modifiers)');
     };
 
     function paint(){

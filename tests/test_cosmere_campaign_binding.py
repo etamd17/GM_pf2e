@@ -280,3 +280,49 @@ def test_active_system_follows_user_not_global_live_slot():
         print('ACTIVE_SYSTEM_PER_USER_OK')
     ''')
     assert 'ACTIVE_SYSTEM_PER_USER_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_admin_can_repair_mis_stamped_campaign_system():
+    """Admin tool: a campaign mistakenly stored as the wrong system can be flipped
+    back, which fixes the routing (a Pathfinder game saved as 'cosmere' stops
+    routing to the Cosmere side once corrected)."""
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        from core import storage, auth, campaigns
+        c = A.app.test_client()
+        assert c.post('/setup', data={'username': 'gm', 'password': 'secret1', 'display_name': 'GM'}).status_code == 302
+
+        # a Pathfinder game that got mis-stamped as Cosmere
+        assert c.post('/campaigns/new', data={'name': 'Golarion', 'system': 'cosmere'}).status_code == 302
+        cid = [i for i in storage.list_campaign_ids() if campaigns.get_campaign(i)['name'] == 'Golarion'][0]
+        assert campaigns.get_campaign(cid)['system'] == 'cosmere'
+
+        # selecting it routes to the Cosmere side (the reported symptom)
+        ar = c.post('/campaign/' + cid + '/activate')
+        assert ar.status_code == 302 and '/cosmere' in ar.headers['Location'], ar.headers.get('Location')
+
+        # the admin page lists it and shows its stored system
+        page = c.get('/admin/campaigns')
+        assert page.status_code == 200 and b'Golarion' in page.data and b'COSMERE' in page.data
+
+        # repair it to Pathfinder
+        fix = c.post('/admin/campaigns/' + cid + '/system', data={'system': 'pf2e'})
+        assert fix.status_code == 302
+        assert campaigns.get_campaign(cid)['system'] == 'pf2e'
+
+        # now selecting it routes to the Pathfinder GM hub, not Cosmere
+        ar2 = c.post('/campaign/' + cid + '/activate')
+        assert ar2.status_code == 302 and ar2.headers['Location'].endswith('/gm'), ar2.headers.get('Location')
+
+        # non-admins are refused (register on a FRESH client -> logs bob in)
+        nb = A.app.test_client()
+        assert nb.post('/register', data={'username': 'bob', 'password': 'pw12345', 'display_name': 'Bob'}).status_code == 302
+        assert nb.get('/admin/campaigns').status_code == 403
+        assert nb.post('/admin/campaigns/' + cid + '/system', data={'system': 'cosmere'}).status_code == 403
+        assert campaigns.get_campaign(cid)['system'] == 'pf2e'   # unchanged by the non-admin
+
+        print('ADMIN_CAMPAIGN_REPAIR_OK')
+    ''')
+    assert 'ADMIN_CAMPAIGN_REPAIR_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
