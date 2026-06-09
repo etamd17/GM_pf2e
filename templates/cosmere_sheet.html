@@ -561,6 +561,9 @@
       // Shared SSE hub (base.html <head>) — one socket per tab.
       const _csbSse = { addEventListener: function(n, h) { window.appSSE(n, h); } };
       _csbSse.addEventListener('encounter_update', function(){ refreshCombat(); });
+      // On (re)connect (incl. the hub's wake/online recovery) re-pull the combat
+      // strip so a backgrounded phone resyncs its turn/round on wake.
+      _csbSse.addEventListener('connected', function(){ refreshCombat(); });
       _csbSse.addEventListener('cosmere_player_state', function(e){
         try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}
       });
