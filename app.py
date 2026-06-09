@@ -147,9 +147,47 @@ def _account_mode():
     return _auth.any_users_exist()
 
 
+def _active_campaign_id():
+    """The campaign id THIS request should treat as active -- for the system,
+    nav/chrome, landing redirects, and per-user PC authorization.
+
+    Account mode: the user's own selection (this session), or on a fresh session
+    the campaign they last activated -- ALWAYS scoped to a campaign they actually
+    belong to, and NEVER the server-wide live slot. That decoupling is the fix
+    for one table's live session (e.g. a Cosmere game holding the global slot)
+    flipping another user -- or the same user on a new login -- onto the wrong
+    system. Legacy mode (no accounts): the single global live slot, unchanged.
+    """
+    if _account_mode():
+        u = _auth.current_user()
+        if not u:
+            return None
+        cid = session.get('active_campaign_id') or u.get('last_campaign_id')
+        if not cid:
+            return None
+        camp = _campaigns.get_campaign(cid)
+        if camp and (u.get('is_admin') or _campaigns.user_role(camp, u['id'])):
+            return cid
+        return None   # stale / not-a-member -> don't adopt someone else's campaign
+    return session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
+
+
 def _active_campaign_doc():
-    cid = session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
-    return _campaigns.get_campaign(cid)
+    return _campaigns.get_campaign(_active_campaign_id())
+
+
+def _set_active_campaign(cid):
+    """Select a campaign for the current user: stash it in the session AND remember
+    it on the account, so a later fresh login resumes the same table instead of
+    inheriting the server-wide live slot's system. The single place that records
+    a per-user campaign choice."""
+    session['active_campaign_id'] = cid
+    try:
+        u = _auth.current_user()
+        if u:
+            _auth.set_last_campaign(u['id'], cid)
+    except Exception:
+        pass
 
 
 def _active_system():
@@ -251,7 +289,7 @@ def require_pc_self_or_gm(f):
 
 def _user_owns_pc(user_id, pc_name):
     """True if user_id owns the character shown as pc_name in the active campaign."""
-    cid = session.get('active_campaign_id') or _campaigns.get_live_campaign_id()
+    cid = _active_campaign_id()
     if not cid:
         return False
     pdir = _storage.party_dir(cid)
@@ -5836,7 +5874,7 @@ def _auto_migrate_legacy(admin_user_id):
         from tools.migrate_to_campaigns import migrate as _run_migration
         new_cid = _run_migration(created_by=admin_user_id)
         if new_cid:
-            session['active_campaign_id'] = new_cid
+            _set_active_campaign(new_cid)
             load_campaign(new_cid)
     except Exception as e:
         app.logger.warning(f"setup auto-migration skipped: {e}")
@@ -5917,7 +5955,7 @@ def activate_campaign(cid):
     is_member = bool(_campaigns.user_role(camp, u['id'])) or u.get('is_admin')
     if not camp or not is_member:
         return jsonify({'error': 'not a member of that campaign'}), 403
-    session['active_campaign_id'] = cid
+    _set_active_campaign(cid)
     gm = _campaigns.is_gm(camp, u['id']) or u.get('is_admin')
     if gm:
         _storage.set_live_campaign_id(cid)
@@ -6110,7 +6148,7 @@ def join():
         _campaigns.add_member(inv['campaign_id'], u['id'], inv['role'], character_id=inv.get('character_id'))
         if inv.get('character_id'):
             _claim_by_id(inv['campaign_id'], inv['character_id'], u['id'])
-        session['active_campaign_id'] = inv['campaign_id']
+        _set_active_campaign(inv['campaign_id'])
         return redirect('/me')
     return render_template('join.html', error=None, code=code, invite=inv, logged_in=bool(_auth.current_user()))
 
@@ -6155,7 +6193,7 @@ def _me_render(**extra):
     gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
     ctx = dict(user=u, campaigns=camps, gm_campaign_ids=gm_ids,
                characters=_me_characters(u['id']),
-               active_campaign_id=session.get('active_campaign_id') or _campaigns.get_live_campaign_id())
+               active_campaign_id=_active_campaign_id())
     ctx.update(extra)
     return render_template('account_home.html', **ctx)
 
@@ -6191,7 +6229,7 @@ def new_campaign():
         if system not in _storage.SUPPORTED_SYSTEMS:
             system = 'pf2e'
         camp = _campaigns.create_campaign(name, system, _auth.current_user()['id'])
-        session['active_campaign_id'] = camp['id']
+        _set_active_campaign(camp['id'])
         return redirect('/me')
     return render_template('new_campaign.html', error=None)
 
