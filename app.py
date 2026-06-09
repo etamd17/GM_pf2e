@@ -595,6 +595,17 @@ def _save_loot_ledger(ledger):
         pass
 
 
+def _mutate_loot_ledger(fn):
+    """Locked read-modify-write on the loot ledger so concurrent adds/deletes
+    don't lose entries -- a load->append->save by one greenlet would otherwise be
+    clobbered by another's. `fn(ledger)` mutates the loaded ledger dict in place."""
+    with _path_lock(LOOT_LEDGER_FILE):
+        ledger = _load_loot_ledger()
+        fn(ledger)
+        _save_loot_ledger(ledger)
+    return ledger
+
+
 # --- SESSION HIGHLIGHTS (Chunk 6: Session Complete scrapbook) ---
 # A structured accumulator filled as play happens (the combat log is free-text
 # and capped, so it can't be mined retroactively). Reset on session begin,
@@ -630,6 +641,32 @@ def _mvp_tally():
 # (_combat_log, _broadcast_*, _get_tracker_state, _do_persist_*) so that
 # multi-step reads/writes are consistent under threaded=True.
 ENCOUNTER_LOCK = threading.RLock()
+
+# --- PER-FILE READ-MODIFY-WRITE LOCKS ---
+# In-memory combat state is serialized by ENCOUNTER_LOCK and persisted via a
+# coalesced flush, so it has no disk read-modify-write race. But some state lives
+# IN its JSON file and is mutated load->change->save (Cosmere PC play_state, the
+# loot ledger, campaign.json). On the single gevent worker the disk READ yields,
+# so a second greenlet can load the same file before the first saves, and the
+# later save clobbers the earlier one (a lost update -- e.g. a player setting HP
+# on their sheet while the GM sets injuries from the tracker). A per-file lock
+# makes each such sequence atomic. threading.Lock is gevent-patched by the
+# gunicorn gevent worker, so this cooperates correctly with greenlets.
+_PATH_LOCKS = {}
+_PATH_LOCKS_META = threading.Lock()
+
+
+def _path_lock(path):
+    """Return the lock guarding read-modify-write on `path` (lazily created, one
+    per absolute path). Wrap a load->mutate->save sequence in `with _path_lock(p):`
+    so concurrent writers serialize instead of clobbering each other."""
+    key = os.path.abspath(str(path or ''))
+    with _PATH_LOCKS_META:
+        lock = _PATH_LOCKS.get(key)
+        if lock is None:
+            lock = _PATH_LOCKS[key] = threading.Lock()
+    return lock
+
 
 # --- DEBOUNCED PERSISTENCE ---
 # Rather than writing JSON to disk on every mutation, mark dirty and let a
@@ -4954,24 +4991,28 @@ def _save_campaign_config(updates):
     keys -- id / slug / system / members / system_config -- survive a config
     write (campaign.json is the same file the campaign doc lives in). Returns
     the merged config view."""
-    full = {}
-    if os.path.exists(CAMPAIGN_FILE):
-        data, _err = safe_load_json_file(CAMPAIGN_FILE)
-        if isinstance(data, dict):
-            full = data
-    for k in CAMPAIGN_DEFAULT:
-        if k in updates and updates[k] is not None:
-            full[k] = updates[k]
-    if 'session_number' in full:
+    # Locked load-merge-save: a recap save racing a session-number bump (or two
+    # GMs/devices) would otherwise read-modify-write the same file and lose one
+    # update -- and this file IS the campaign doc (id/system/members live here).
+    with _path_lock(CAMPAIGN_FILE):
+        full = {}
+        if os.path.exists(CAMPAIGN_FILE):
+            data, _err = safe_load_json_file(CAMPAIGN_FILE)
+            if isinstance(data, dict):
+                full = data
+        for k in CAMPAIGN_DEFAULT:
+            if k in updates and updates[k] is not None:
+                full[k] = updates[k]
+        if 'session_number' in full:
+            try:
+                full['session_number'] = max(1, int(full['session_number']))
+            except (TypeError, ValueError):
+                full['session_number'] = 1
         try:
-            full['session_number'] = max(1, int(full['session_number']))
-        except (TypeError, ValueError):
-            full['session_number'] = 1
-    try:
-        with open(CAMPAIGN_FILE, 'w', encoding='utf-8') as fp:
-            json.dump(full, fp, indent=2, ensure_ascii=False)
-    except OSError as e:
-        print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
+            with open(CAMPAIGN_FILE, 'w', encoding='utf-8') as fp:
+                json.dump(full, fp, indent=2, ensure_ascii=False)
+        except OSError as e:
+            print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
     return _load_campaign_config()
 
 
@@ -6493,9 +6534,8 @@ def api_loot_ledger_add():
     note = (data.get('note') or '').strip()
     if not recipient:
         return jsonify({"success": False, "error": "recipient required"}), 400
-    ledger = _load_loot_ledger()
     from datetime import datetime as _dt_ledger
-    ledger['entries'].append({
+    entry = {
         'id': str(uuid.uuid4()),
         'timestamp': _dt_ledger.now().isoformat(),
         'recipient': recipient,
@@ -6503,8 +6543,8 @@ def api_loot_ledger_add():
                   for it in items if isinstance(it, dict) and it.get('name')],
         'coins': {k: int(v or 0) for k, v in coins.items() if k in ('pp', 'gp', 'sp', 'cp')},
         'note': note,
-    })
-    _save_loot_ledger(ledger)
+    }
+    _mutate_loot_ledger(lambda l: l['entries'].append(entry))
     return jsonify({"success": True})
 
 
@@ -6515,9 +6555,7 @@ def api_loot_ledger_delete():
     entry_id = (request.get_json(silent=True) or {}).get('id', '')
     if not entry_id:
         return jsonify({"success": False}), 400
-    ledger = _load_loot_ledger()
-    ledger['entries'] = [e for e in ledger['entries'] if e.get('id') != entry_id]
-    _save_loot_ledger(ledger)
+    _mutate_loot_ledger(lambda l: l.update(entries=[e for e in l['entries'] if e.get('id') != entry_id]))
     return jsonify({"success": True})
 
 
@@ -6579,8 +6617,7 @@ def api_cosmere_loot_add():
                   for it in items if isinstance(it, dict) and (it.get('name') or '').strip()]
     norm_spheres = {k: int(spheres.get(k, 0) or 0) for k in ('chip', 'mark', 'broam')}
     from datetime import datetime as _dt_loot
-    ledger = _load_loot_ledger()
-    ledger['entries'].append({
+    entry = {
         'id': str(uuid.uuid4()),
         'timestamp': _dt_loot.now().isoformat(),
         'recipient': recipient[:60],
@@ -6588,8 +6625,8 @@ def api_cosmere_loot_add():
         'spheres': norm_spheres,
         'gem': gem,
         'note': (data.get('note') or '').strip()[:280],
-    })
-    _save_loot_ledger(ledger)
+    }
+    _mutate_loot_ledger(lambda l: l['entries'].append(entry))
     # Also feed the session scrapbook's loot highlights -- the ledger is the
     # permanent wealth record; this is tonight's haul for the Session Complete recap.
     try:
@@ -6609,9 +6646,7 @@ def api_cosmere_loot_delete():
     entry_id = (request.get_json(silent=True) or {}).get('id', '')
     if not entry_id:
         return jsonify({'success': False}), 400
-    ledger = _load_loot_ledger()
-    ledger['entries'] = [e for e in ledger['entries'] if e.get('id') != entry_id]
-    _save_loot_ledger(ledger)
+    _mutate_loot_ledger(lambda l: l.update(entries=[e for e in l['entries'] if e.get('id') != entry_id]))
     return jsonify({'success': True})
 
 
@@ -7765,21 +7800,32 @@ def _sync_cosmere_pc_from_combatant(c):
     name = getattr(c, 'name', None)
     if not name:
         return
+    # Find the PC id by name (cheap scan), then do the write under its file lock
+    # so it can't clobber a concurrent player-side save of the SAME doc.
+    pid = None
     for d in _list_cosmere_pcs():
         if (d.get('name') or (d.get('build') or {}).get('name')) == name:
-            ps = dict(d.get('play_state') or {})
-            ps['health'] = max(0, int(getattr(c, 'current_hp', ps.get('health', 0)) or 0))
-            ps['injuries'] = max(0, int(getattr(c, 'injuries', ps.get('injuries', 0)) or 0))
-            conds = getattr(c, 'conditions', None)
-            if isinstance(conds, dict):
-                ps['conditions'] = {k: v for k, v in conds.items() if v}
-            d['play_state'] = ps
-            _save_cosmere_pc(d, fsync=False)
-            try:
-                sse_broadcast('cosmere_player_state', {'pid': d.get('id'), 'name': name, 'play_state': ps})
-            except Exception:
-                pass
+            pid = d.get('id')
             break
+    if not pid:
+        return
+    ps = None
+    with _path_lock(_cosmere_pc_path(pid)):
+        d = _load_cosmere_pc(pid)               # re-read inside the lock
+        if not d:
+            return
+        ps = dict(d.get('play_state') or {})
+        ps['health'] = max(0, int(getattr(c, 'current_hp', ps.get('health', 0)) or 0))
+        ps['injuries'] = max(0, int(getattr(c, 'injuries', ps.get('injuries', 0)) or 0))
+        conds = getattr(c, 'conditions', None)
+        if isinstance(conds, dict):
+            ps['conditions'] = {k: v for k, v in conds.items() if v}
+        d['play_state'] = ps
+        _save_cosmere_pc(d, fsync=False)
+    try:
+        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': name, 'play_state': ps})
+    except Exception:
+        pass
 
 
 @app.route('/cosmere/pc/<pid>/state', methods=['POST'])
@@ -7794,24 +7840,28 @@ def cosmere_pc_state(pid):
     if not _cosmere_can_act_on(doc):
         return jsonify({'ok': False, 'error': 'not your character'}), 403
     data = request.get_json(silent=True) or {}
-    ps = dict(doc.get('play_state') or {})
-    for k in ('health', 'focus', 'investiture', 'injuries'):
-        if k in data:
-            try:
-                ps[k] = max(0, int(data[k]))
-            except (TypeError, ValueError):
-                pass
-    if 'enhanced' in data:
-        ps['enhanced'] = bool(data['enhanced'])
-    if isinstance(data.get('conditions'), dict):
-        ps['conditions'] = data['conditions']
-    doc['play_state'] = ps
-    # Update the live combatant + broadcast the encounter FIRST (in-memory, instant)
-    # so the GM tracker repaints immediately, regardless of disk latency. Then
-    # persist without fsync -- the value is re-derivable; we don't stall the worker.
+    # Lock the load->mutate->save so a player's sheet save and the GM's tracker
+    # write-back (_sync_cosmere_pc_from_combatant) to the SAME doc can't clobber
+    # each other's fields (one sets health, the other injuries -> both must stick).
+    with _path_lock(_cosmere_pc_path(pid)):
+        doc = _load_cosmere_pc(pid) or doc       # re-read inside the lock for a fresh base
+        ps = dict(doc.get('play_state') or {})
+        for k in ('health', 'focus', 'investiture', 'injuries'):
+            if k in data:
+                try:
+                    ps[k] = max(0, int(data[k]))
+                except (TypeError, ValueError):
+                    pass
+        if 'enhanced' in data:
+            ps['enhanced'] = bool(data['enhanced'])
+        if isinstance(data.get('conditions'), dict):
+            ps['conditions'] = data['conditions']
+        doc['play_state'] = ps
+        _save_cosmere_pc(doc, fsync=False)
+    # In-memory combatant mirror + SSE happen AFTER releasing the file lock (they
+    # touch ACTIVE_ENCOUNTER, not the file). The tracker still repaints instantly.
     if _sync_cosmere_combatant_state(doc.get('name'), ps):
         _broadcast_encounter_state()
-    _save_cosmere_pc(doc, fsync=False)
     try:
         sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
     except Exception:
@@ -12114,9 +12164,8 @@ def send_loot_to_player():
         pass
     # Persistent loot ledger: append a timestamped entry for wealth tracking.
     try:
-        ledger = _load_loot_ledger()
         from datetime import datetime as _dt_loot
-        ledger['entries'].append({
+        entry = {
             'id': str(uuid.uuid4()),
             'timestamp': _dt_loot.now().isoformat(),
             'recipient': target,
@@ -12124,8 +12173,8 @@ def send_loot_to_player():
                       for it in items if isinstance(it, dict) and it.get('name')],
             'coins': {k: int(v or 0) for k, v in coins.items() if k in ('pp', 'gp', 'sp', 'cp')},
             'note': (data.get('note') or '').strip(),
-        })
-        _save_loot_ledger(ledger)
+        }
+        _mutate_loot_ledger(lambda l: l['entries'].append(entry))
     except Exception:
         pass
     # Tell the target player's sheet to refresh (and surface a toast).

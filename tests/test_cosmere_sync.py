@@ -124,3 +124,38 @@ def test_sheet_listens_for_pushed_state(pc):
     body = app.app.test_client().get('/cosmere/pc/' + pc).data.decode()
     assert 'cosmere_player_state' in body                # listens for GM-pushed state
     assert 'applyRemoteState' in body and 'paintConds' in body
+
+
+# --- concurrency: two writers, different fields, same doc -> both must stick ---
+def test_concurrent_play_state_writes_do_not_clobber(pc, monkeypatch):
+    """A player setting HP on their sheet while the GM sets injuries from the
+    tracker both write the SAME PC doc (load->change->save). The per-file lock
+    must serialize them so one full-doc save can't clobber the other's field."""
+    import threading
+    import time
+    base = app.app.test_client()
+    base.post('/cosmere/pc/' + pc + '/state', json={'health': 100, 'injuries': 0, 'focus': 4})
+
+    # Widen the read-modify-write window so a MISSING lock would deterministically
+    # clobber (both greenlets read the old doc, then both write their full doc back).
+    real = app._load_cosmere_pc
+    monkeypatch.setattr(app, '_load_cosmere_pc', lambda p: (real(p), time.sleep(0.05))[0])
+
+    def setter(payload):
+        app.app.test_client().post('/cosmere/pc/' + pc + '/state', json=payload)
+
+    t1 = threading.Thread(target=setter, args=({'health': 42},))
+    t2 = threading.Thread(target=setter, args=({'injuries': 5},))
+    t1.start(); t2.start(); t1.join(); t2.join()
+
+    ps = real(pc)['play_state']
+    assert ps['health'] == 42 and ps['injuries'] == 5, ps   # neither update was lost
+
+
+def test_path_lock_is_per_path_and_stable():
+    """_path_lock returns the SAME lock for a path (so writers actually serialize)
+    and DIFFERENT locks for different paths (so unrelated files don't contend)."""
+    a1 = app._path_lock('/tmp/x/a.json')
+    a2 = app._path_lock('/tmp/x/../x/a.json')   # same file, different spelling
+    b = app._path_lock('/tmp/x/b.json')
+    assert a1 is a2 and a1 is not b
