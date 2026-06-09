@@ -6460,6 +6460,89 @@ def api_loot_ledger_delete():
     return jsonify({"success": True})
 
 
+# ── Cosmere loot ledger ───────────────────────────────────────────────────
+# The Rosharan sibling of the PF2e ledger: spheres & spoils instead of coins.
+# Reuses the same campaign-scoped storage (a Cosmere campaign keeps its own
+# loot_ledger.json), just with Cosmere-shaped entries (spheres, gem colour).
+_COSMERE_GEMS = ('diamond', 'garnet', 'ruby', 'sapphire', 'smokestone', 'emerald')
+_SPHERE_DENOMS = (('broam', 20), ('mark', 5), ('chip', 1))   # value in clearchips
+
+
+def _sphere_value(spheres):
+    """A sphere stash's worth in clearchips (chip 1 / mark 5 / broam 20)."""
+    s = spheres or {}
+    return sum(int(s.get(k, 0) or 0) * v for k, v in _SPHERE_DENOMS)
+
+
+@app.route('/cosmere/loot')
+@gm_required
+def cosmere_loot_view():
+    """Cosmere loot ledger -- spheres & spoils awarded to the party. The Rosharan
+    sibling of /gm/loot; redirects out in non-Cosmere mode like the other tools."""
+    if _active_system() != 'cosmere':
+        return redirect(_active_system_ui().gm_home)
+    return render_template('cosmere_loot.html')
+
+
+@app.route('/api/cosmere/loot')
+@gm_required
+def api_cosmere_loot():
+    """Ledger entries + the Cosmere party roster + the running spheres total."""
+    if _active_system() != 'cosmere':
+        return jsonify({'error': 'cosmere only'}), 400
+    ledger = _load_loot_ledger()
+    entries = ledger.get('entries', [])
+    party = []
+    for d in _list_cosmere_pcs():
+        b = d.get('build') or {}
+        party.append({'name': d.get('name') or b.get('name') or 'Unnamed',
+                      'level': b.get('level', 1)})
+    return jsonify({'entries': entries, 'party': party, 'gems': list(_COSMERE_GEMS),
+                    'total_chips': sum(_sphere_value(e.get('spheres')) for e in entries)})
+
+
+@app.route('/api/cosmere/loot/add', methods=['POST'])
+@gm_required
+def api_cosmere_loot_add():
+    """Record a loot award (items + spheres) to a PC or the whole party."""
+    if _active_system() != 'cosmere':
+        return jsonify({'success': False, 'error': 'cosmere only'}), 400
+    data = request.get_json(silent=True) or {}
+    recipient = (data.get('recipient') or '').strip()
+    if not recipient:
+        return jsonify({'success': False, 'error': 'recipient required'}), 400
+    items = data.get('items') or []
+    spheres = data.get('spheres') or {}
+    gem = data.get('gem') if data.get('gem') in _COSMERE_GEMS else 'diamond'
+    from datetime import datetime as _dt_loot
+    ledger = _load_loot_ledger()
+    ledger['entries'].append({
+        'id': str(uuid.uuid4()),
+        'timestamp': _dt_loot.now().isoformat(),
+        'recipient': recipient[:60],
+        'items': [{'name': str(it.get('name', '')).strip()[:80], 'qty': int(it.get('qty', 1) or 1)}
+                  for it in items if isinstance(it, dict) and (it.get('name') or '').strip()],
+        'spheres': {k: int(spheres.get(k, 0) or 0) for k in ('chip', 'mark', 'broam')},
+        'gem': gem,
+        'note': (data.get('note') or '').strip()[:280],
+    })
+    _save_loot_ledger(ledger)
+    return jsonify({'success': True})
+
+
+@app.route('/api/cosmere/loot/delete', methods=['POST'])
+@gm_required
+def api_cosmere_loot_delete():
+    """Remove a loot-ledger entry by id."""
+    entry_id = (request.get_json(silent=True) or {}).get('id', '')
+    if not entry_id:
+        return jsonify({'success': False}), 400
+    ledger = _load_loot_ledger()
+    ledger['entries'] = [e for e in ledger['entries'] if e.get('id') != entry_id]
+    _save_loot_ledger(ledger)
+    return jsonify({'success': True})
+
+
 def _extract_beats_via_claude(session_notes, existing_beats):
     """Send session-note markdown + existing beats to Claude and get back a
     merged beats array. Returns (beats_list, error_reason)."""

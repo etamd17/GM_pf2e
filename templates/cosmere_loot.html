@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Loot Ledger - Cosmere{% endblock %}
+{% block extra_head %}
+  /* Cosmere loot ledger. Raw CSS -- base.html already wraps extra_head in <style>;
+     never nest a <style> here (the CSS parser eats the first rule). */
+  .cl-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+    border-bottom:1px solid var(--border-rule); padding-bottom:.7rem; margin-bottom:1.1rem; }
+  .cl-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
+  .cl-sub { font-size:12px; color:var(--text-on-dark-3); margin-top:2px; }
+  .cl-total { text-align:right; }
+  .cl-total-val { font-family:var(--font-display, serif); font-size:1.9rem; font-weight:700; color:var(--accent); }
+  .cl-total-lbl { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-on-dark-3); display:block; }
+  .cl-total-break { font-size:12px; color:var(--text-on-dark-3); margin-top:3px; }
+  .cl-form { background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:1rem 1.1rem; margin-bottom:1.4rem; }
+  .cl-form label { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--text-on-dark-3); display:flex; flex-direction:column; gap:4px; }
+  .cl-row { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem; }
+  .cl-row > label { flex:1; min-width:180px; }
+  .cl-form input, .cl-form select { background:var(--bg-page, #0d1117); border:1px solid var(--border-card); color:var(--text-on-dark);
+    border-radius:7px; padding:8px 10px; font-size:13px; font-family:inherit; }
+  .cl-items { display:flex; flex-direction:column; gap:.5rem; margin-bottom:.6rem; }
+  .cl-item { display:flex; gap:.5rem; align-items:center; }
+  .cl-item input.nm { flex:1; }
+  .cl-item input.qty { width:64px; }
+  .cl-item .rm { background:none; border:1px solid var(--border-card); color:var(--text-on-dark-3); border-radius:6px;
+    width:28px; height:30px; cursor:pointer; line-height:1; }
+  .cl-item .rm:hover { color:#f59e0b; border-color:#f59e0b; }
+  .cl-additem { background:none; border:1px dashed var(--border-card); color:var(--text-on-dark-3); border-radius:7px;
+    padding:.4rem .8rem; font-size:12px; cursor:pointer; margin-bottom:.9rem; }
+  .cl-additem:hover { color:var(--accent); border-color:var(--accent); }
+  .cl-spheres { display:flex; gap:.8rem; flex-wrap:wrap; margin-bottom:.8rem; }
+  .cl-spheres label { flex-direction:row; align-items:center; gap:6px; text-transform:none; letter-spacing:0; font-size:12px; color:var(--text-on-dark); }
+  .cl-spheres input { width:72px; }
+  .cl-add { background:var(--accent); color:#06242b; border:none; border-radius:8px; padding:.55rem 1.2rem; font-weight:700; font-size:13px; cursor:pointer; }
+  .cl-add:hover { filter:brightness(1.08); }
+  .cl-entries { display:flex; flex-direction:column; gap:.6rem; }
+  .cl-entry { background:var(--bg-card); border:1px solid var(--border-card); border-left:3px solid var(--accent); border-radius:var(--r-md);
+    padding:.7rem .9rem; display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+  .cl-entry-who { font-weight:700; color:var(--storm-100, var(--accent)); font-size:13px; }
+  .cl-entry-loot { font-size:13px; color:var(--text-on-dark); margin-top:3px; line-height:1.5; }
+  .cl-entry-sph { color:var(--accent); font-weight:600; }
+  .cl-entry-note { font-size:12px; color:var(--text-on-dark-3); font-style:italic; margin-top:2px; }
+  .cl-entry-meta { font-size:10.5px; color:var(--text-on-dark-3); margin-top:3px; }
+  .cl-del { background:none; border:1px solid var(--border-card); color:var(--text-on-dark-3); border-radius:6px;
+    padding:.25rem .55rem; font-size:11px; cursor:pointer; white-space:nowrap; }
+  .cl-del:hover { color:#f59e0b; border-color:#f59e0b; }
+  .cl-empty { color:var(--text-on-dark-3); font-size:13px; padding:1.4rem; text-align:center;
+    border:1px dashed var(--border-card); border-radius:var(--r-md); }
+{% endblock %}
+{% block content %}
+<div class="cl-head">
+  <div>
+    <div class="cl-title">Spheres &amp; Spoils</div>
+    <div class="cl-sub">A running ledger of loot awarded to the party &mdash; by broam, mark, and chip.</div>
+  </div>
+  <div class="cl-total">
+    <span class="cl-total-val" id="cl-total">0</span>
+    <span class="cl-total-lbl">clearchips earned</span>
+    <div class="cl-total-break" id="cl-total-break"></div>
+  </div>
+</div>
+
+<form class="cl-form" id="cl-form">
+  <div class="cl-row">
+    <label>Recipient
+      <select id="cl-recipient"><option value="The Party">The Party</option></select>
+    </label>
+    <label>Gem
+      <select id="cl-gem"></select>
+    </label>
+  </div>
+  <div class="cl-items" id="cl-items"></div>
+  <button type="button" class="cl-additem" id="cl-additem">+ add item</button>
+  <div class="cl-spheres">
+    <label>Broams <input type="number" id="cl-broam" min="0" value="0"></label>
+    <label>Marks <input type="number" id="cl-mark" min="0" value="0"></label>
+    <label>Chips <input type="number" id="cl-chip" min="0" value="0"></label>
+  </div>
+  <label style="margin-bottom:.8rem;">Note
+    <input type="text" id="cl-note" placeholder="e.g. recovered from the chasmfiend's gemheart">
+  </label>
+  <button type="submit" class="cl-add">Record award</button>
+</form>
+
+<div class="cl-entries" id="cl-entries"></div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const DENOM = [['broam',20],['mark',5],['chip',1]];
+
+  function breakdown(chips){
+    let n = chips, out = [];
+    for (const [name, val] of DENOM){
+      const c = Math.floor(n / val); n -= c * val;
+      if (c) out.push(c + ' ' + name + (c===1?'':'s'));
+    }
+    return out.length ? out.join(', ') : '0 chips';
+  }
+  function sphereValue(s){ return DENOM.reduce((t,[k,v]) => t + (parseInt(s[k]||0)||0)*v, 0); }
+  function fmtSpheres(s, gem){
+    const parts = [];
+    for (const [k] of DENOM){ const c = parseInt(s[k]||0)||0; if (c) parts.push(c + ' ' + gem + ' ' + k + (c===1?'':'s')); }
+    return parts.join(', ');
+  }
+  function esc(t){ const d = document.createElement('div'); d.textContent = t==null?'':String(t); return d.innerHTML; }
+
+  function addItemRow(name, qty){
+    const row = document.createElement('div');
+    row.className = 'cl-item';
+    row.innerHTML = '<input class="nm" type="text" placeholder="item" value="'+esc(name||'')+'">'
+      + '<input class="qty" type="number" min="1" value="'+(qty||1)+'">'
+      + '<button type="button" class="rm" title="remove">&times;</button>';
+    row.querySelector('.rm').onclick = () => row.remove();
+    $('cl-items').appendChild(row);
+  }
+
+  function render(data){
+    // recipient options: keep "The Party" + the roster
+    const rec = $('cl-recipient');
+    const cur = rec.value;
+    rec.innerHTML = '<option value="The Party">The Party</option>'
+      + (data.party||[]).map(p => '<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');
+    if ([...rec.options].some(o => o.value === cur)) rec.value = cur;
+    // gem options
+    if (!$('cl-gem').options.length)
+      $('cl-gem').innerHTML = (data.gems||['diamond']).map(g => '<option value="'+g+'">'+g+'</option>').join('');
+    // total
+    $('cl-total').textContent = data.total_chips || 0;
+    $('cl-total-break').textContent = breakdown(data.total_chips || 0);
+    // entries (newest first)
+    const wrap = $('cl-entries');
+    const entries = (data.entries||[]).slice().reverse();
+    if (!entries.length){ wrap.innerHTML = '<div class="cl-empty">No loot recorded yet. Award the party their first spheres above.</div>'; return; }
+    wrap.innerHTML = '';
+    for (const e of entries){
+      const items = (e.items||[]).map(i => esc(i.name) + (i.qty>1 ? ' &times;'+i.qty : '')).join(', ');
+      const sph = fmtSpheres(e.spheres||{}, e.gem||'diamond');
+      const when = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : '';
+      const loot = [items, sph ? '<span class="cl-entry-sph">'+sph+'</span>' : ''].filter(Boolean).join(' &middot; ') || '&mdash;';
+      const div = document.createElement('div');
+      div.className = 'cl-entry';
+      div.innerHTML = '<div><div class="cl-entry-who">'+esc(e.recipient)+'</div>'
+        + '<div class="cl-entry-loot">'+loot+'</div>'
+        + (e.note ? '<div class="cl-entry-note">'+esc(e.note)+'</div>' : '')
+        + '<div class="cl-entry-meta">'+when+'</div></div>'
+        + '<button class="cl-del" data-id="'+esc(e.id)+'">Remove</button>';
+      div.querySelector('.cl-del').onclick = () => del(e.id);
+      wrap.appendChild(div);
+    }
+  }
+
+  function load(){
+    fetch('/api/cosmere/loot').then(r => r.json()).then(render).catch(()=>{});
+  }
+  function del(id){
+    fetch('/api/cosmere/loot/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})})
+      .then(() => load());
+  }
+
+  $('cl-additem').onclick = () => addItemRow('', 1);
+  $('cl-form').onsubmit = function(ev){
+    ev.preventDefault();
+    const items = [...document.querySelectorAll('#cl-items .cl-item')].map(r => ({
+      name: r.querySelector('.nm').value.trim(),
+      qty: parseInt(r.querySelector('.qty').value||1)||1,
+    })).filter(i => i.name);
+    const spheres = {broam: +$('cl-broam').value||0, mark: +$('cl-mark').value||0, chip: +$('cl-chip').value||0};
+    if (!items.length && !sphereValue(spheres) && !$('cl-note').value.trim()) return;
+    fetch('/api/cosmere/loot/add', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({recipient: $('cl-recipient').value, gem: $('cl-gem').value, items, spheres, note: $('cl-note').value.trim()})})
+      .then(r => r.json()).then(() => {
+        $('cl-items').innerHTML = ''; $('cl-broam').value = $('cl-mark').value = $('cl-chip').value = 0; $('cl-note').value = '';
+        load();
+      });
+  };
+
+  load();
+})();
+</script>
+{% endblock %}
