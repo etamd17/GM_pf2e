@@ -4490,4 +4490,17 @@ body.system-cosmere .cos-hero { color: var(--storm-100); }
 body.system-cosmere .tile.is-soon { opacity: .5; cursor: default; pointer-events: none; }
 body.system-cosmere .tile.is-soon:hover { transform: none; box-shadow: none; }
 
+/* Encounter tracker + GM screen (the shared .trk / --t-* namespace). The base
+   .trk rule pins the brand accents to gilt; in Cosmere mode re-point JUST those
+   gold tokens to the Stormlight ramp so the combat surface matches the rest of
+   the side. Semantic hues (red danger, amber hazard, green success) are left
+   alone -- they read the same in both systems. Higher specificity than the base
+   `.trk` rule (0,2,1 > 0,1,1), and both are !important, so this wins. */
+body.system-cosmere .trk {
+    --t-gold:       var(--storm-200) !important;
+    --t-gold-b:     var(--storm-100) !important;
+    --t-purple:     var(--storm-200) !important;   /* deprecated hue, was gilt */
+    --t-row-active: rgba(95, 168, 224, 0.12) !important;
+}
+
 /* End of system.css */
