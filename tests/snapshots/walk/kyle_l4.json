@@ -91,7 +91,7 @@
     }
   ],
   "focus_max": 3,
-  "fort": 8,
+  "fort": 10,
   "heritage": "Climbing Animal",
   "hero_points": 1,
   "hp": 52,
@@ -117,7 +117,7 @@
   "proficiencies": {
     "ac": 2,
     "class_dc": 2,
-    "fortitude": 2,
+    "fortitude": 4,
     "light": 2,
     "medium": 2,
     "perception": 4,

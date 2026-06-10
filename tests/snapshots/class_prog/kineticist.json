@@ -4,8 +4,6 @@
     "class_dc": 4,
     "fortitude": 6,
     "perception": 4,
-    "simple": 4,
-    "unarmed": 4,
     "will": 4
   },
   "11": {
@@ -32,8 +30,8 @@
     "light": 4,
     "perception": 4,
     "reflex": 6,
-    "simple": 6,
-    "unarmed": 6,
+    "simple": 4,
+    "unarmed": 4,
     "unarmored": 4,
     "will": 4
   },
@@ -43,77 +41,77 @@
     "light": 4,
     "perception": 4,
     "reflex": 6,
-    "simple": 6,
-    "unarmed": 6,
+    "simple": 4,
+    "unarmed": 4,
     "unarmored": 4,
     "will": 4
   },
   "15": {
-    "class_dc": 4,
-    "fortitude": 6,
+    "class_dc": 6,
+    "fortitude": 8,
     "light": 4,
     "perception": 4,
     "reflex": 6,
-    "simple": 6,
-    "unarmed": 6,
+    "simple": 4,
+    "unarmed": 4,
     "unarmored": 4,
-    "will": 6
+    "will": 4
   },
   "16": {
-    "class_dc": 4,
-    "fortitude": 6,
+    "class_dc": 6,
+    "fortitude": 8,
     "light": 4,
     "perception": 4,
     "reflex": 6,
-    "simple": 6,
-    "unarmed": 6,
+    "simple": 4,
+    "unarmed": 4,
     "unarmored": 4,
-    "will": 6
+    "will": 4
   },
   "17": {
-    "class_dc": 4,
+    "class_dc": 6,
     "fortitude": 8,
-    "light": 6,
+    "light": 4,
     "perception": 4,
     "reflex": 6,
-    "simple": 6,
-    "unarmed": 6,
-    "unarmored": 6,
-    "will": 6
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
   },
   "18": {
-    "class_dc": 4,
+    "class_dc": 6,
+    "fortitude": 8,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "19": {
+    "class_dc": 8,
     "fortitude": 8,
     "light": 6,
     "perception": 4,
     "reflex": 6,
-    "simple": 6,
-    "unarmed": 6,
+    "simple": 4,
+    "unarmed": 4,
     "unarmored": 6,
-    "will": 6
-  },
-  "19": {
-    "class_dc": 4,
-    "fortitude": 8,
-    "light": 6,
-    "perception": 4,
-    "reflex": 8,
-    "simple": 6,
-    "unarmed": 6,
-    "unarmored": 6,
-    "will": 6
+    "will": 4
   },
   "2": {},
   "20": {
-    "class_dc": 4,
+    "class_dc": 8,
     "fortitude": 8,
     "light": 6,
     "perception": 4,
-    "reflex": 8,
-    "simple": 6,
-    "unarmed": 6,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
     "unarmored": 6,
-    "will": 6
+    "will": 4
   },
   "3": {
     "will": 4
@@ -122,35 +120,25 @@
     "will": 4
   },
   "5": {
-    "simple": 4,
-    "unarmed": 4,
     "will": 4
   },
   "6": {
-    "simple": 4,
-    "unarmed": 4,
     "will": 4
   },
   "7": {
     "class_dc": 4,
-    "perception": 4,
-    "simple": 4,
-    "unarmed": 4,
+    "fortitude": 6,
     "will": 4
   },
   "8": {
     "class_dc": 4,
-    "perception": 4,
-    "simple": 4,
-    "unarmed": 4,
+    "fortitude": 6,
     "will": 4
   },
   "9": {
     "class_dc": 4,
     "fortitude": 6,
     "perception": 4,
-    "simple": 4,
-    "unarmed": 4,
     "will": 4
   }
 }

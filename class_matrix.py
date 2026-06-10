@@ -5,12 +5,16 @@
 # =============================================================================
 # AUTOMATIC BONUS PROGRESSION (ABP) - Variant Rule
 # =============================================================================
+# Automatic Bonus Progression variant (GM Core p.83). Perception potency is
+# L7/L13/L19 (audited 2026-06-09; was wrongly L9/L15). Skill potency and the L17
+# Ability apex are player-choice/multi-skill and aren't modeled here (a flat
+# per-type value can't represent "three skills at +2, one at +1").
 ABP_TABLE = {
     1: {}, 2: {"attack_potency": 1}, 3: {}, 4: {"devastating_attacks": 2}, 5: {"defense_potency": 1},
-    6: {}, 7: {}, 8: {"save_potency": 1}, 9: {"perception_potency": 1}, 10: {"attack_potency": 2},
-    11: {"defense_potency": 2}, 12: {"devastating_attacks": 3}, 13: {}, 14: {"save_potency": 2},
-    15: {"perception_potency": 2}, 16: {"attack_potency": 3}, 17: {}, 18: {"defense_potency": 3},
-    19: {"devastating_attacks": 4}, 20: {"save_potency": 3}
+    6: {}, 7: {"perception_potency": 1}, 8: {"save_potency": 1}, 9: {}, 10: {"attack_potency": 2},
+    11: {"defense_potency": 2}, 12: {"devastating_attacks": 3}, 13: {"perception_potency": 2}, 14: {"save_potency": 2},
+    15: {}, 16: {"attack_potency": 3}, 17: {}, 18: {"defense_potency": 3},
+    19: {"devastating_attacks": 4, "perception_potency": 3}, 20: {"save_potency": 3}
 }
 
 def get_abp_bonus(level, bonus_type):
@@ -147,6 +151,10 @@ ANCESTRY_SIZES = {
     "kitsune": "Medium", "automaton": "Medium", "fleshwarp": "Medium",
     "sprite": "Tiny", "hobgoblin": "Medium", "lizardfolk": "Medium", "goloma": "Medium",
     "awakened animal": "Tiny",
+    # Content audit 2026-06-09 (vs compendium): these defaulted to Medium but are
+    # Large/Small in PF2e. (Other exotic-ancestry speed gaps were left as report
+    # recommendations — the compendium itself has errors there, e.g. centaur speed.)
+    "centaur": "Large", "minotaur": "Large", "poppet": "Small",
 }
 
 # =============================================================================
@@ -367,8 +375,8 @@ CLASS_PROGRESSION = {
         # L1 initial: perception=4, fort=4, ref=4, will=2, simple=4, martial=4, unarmed=4, advanced=2, all armor=2, unarmored=2, class_dc=2
         3:  {"will": 4},                                                                    # Bravery
         7:  {"perception": 6},                                                               # Battlefield Surveyor
-        9:  {"fortitude": 6, "class_dc": 4},                                                # Battle Hardened + Combat Flexibility
-        11: {"unarmored": 4, "light": 4, "medium": 4, "heavy": 4},                          # Armor Expertise
+        9:  {"fortitude": 6},                                                                # Battle Hardened (Fort Master) + Combat Flexibility
+        11: {"unarmored": 4, "light": 4, "medium": 4, "heavy": 4, "class_dc": 4},           # Armor Expertise + Fighter Expertise (class DC Expert @11, not @9)
         13: {"simple": 6, "martial": 6, "unarmed": 6, "advanced": 4},                       # Weapon Legend
         15: {"reflex": 6},                                                                   # Tempered Reflexes
         17: {"unarmored": 6, "light": 6, "medium": 6, "heavy": 6},                          # Armor Mastery
@@ -378,16 +386,17 @@ CLASS_PROGRESSION = {
     # RANGER (Player Core p.152)
     # -------------------------------------------------------------------------
     "ranger": {
+        # Player Core p.152 advancement table (audited 2026-06-09).
         # L1 initial: perception=4, fort=4, ref=4, will=2, simple=2, martial=2, unarmed=2, light=2, medium=2, unarmored=2, class_dc=2
-        3:  {"will": 4},                                                                    # Iron Will
-        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Expertise
-        7:  {"perception": 6},                                                               # Vigilant Senses
-        9:  {"reflex": 6, "class_dc": 4},                                                   # Nature's Edge / Ranger Expertise
-        11: {"unarmored": 4, "light": 4, "medium": 4},                                      # Medium Armor Expertise
-        13: {"simple": 6, "martial": 6, "unarmed": 6},                                      # Weapon Mastery
-        15: {"fortitude": 6},                                                                # Greater Weapon Specialization-level Fort bump
-        17: {"unarmored": 6, "light": 6, "medium": 6},                                      # Medium Armor Mastery
-        19: {"perception": 8},                                                               # Masterful Ranger / Keen Senses
+        3:  {"will": 4},                                                                    # Will Expertise
+        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Ranger Weapon Expertise
+        7:  {"perception": 6, "reflex": 6},                                                 # Perception Mastery + Natural Reflexes (Reflex Master)
+        9:  {"class_dc": 4},                                                                 # Ranger Expertise
+        11: {"unarmored": 4, "light": 4, "medium": 4, "fortitude": 6},                      # Medium Armor Expertise + Warden's Endurance (Fort Master)
+        13: {"simple": 6, "martial": 6, "unarmed": 6},                                      # Martial Weapon Mastery
+        15: {"reflex": 8, "perception": 8},                                                 # Greater Natural Reflexes (Reflex Legendary) + Perception Legend
+        17: {"class_dc": 6},                                                                 # Masterful Hunter (class DC Master)
+        19: {"unarmored": 6, "light": 6, "medium": 6},                                      # Medium Armor Mastery
     },
     # -------------------------------------------------------------------------
     # BARBARIAN (Player Core p.118)
@@ -439,16 +448,17 @@ CLASS_PROGRESSION = {
     # ROGUE (Player Core p.160)
     # -------------------------------------------------------------------------
     "rogue": {
+        # Player Core p.156 advancement table (audited 2026-06-09).
         # L1 initial: perception=4, fort=2, ref=4, will=4, simple=2, martial=2(rapier/sap/shortbow/shortsword), unarmed=2, light=2, unarmored=2, class_dc=2
-        3:  {},                                                                              # Deny Advantage (no proficiency bumps; perception/will already expert at L1)
-        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Tricks
-        7:  {"perception": 6, "reflex": 6},                                                  # Vigilant Senses + Evasion
-        9:  {"fortitude": 4, "class_dc": 4},                                                # Great Fortitude + Rogue Expertise
-        11: {"unarmored": 4, "light": 4},                                                   # Light Armor Expertise
-        13: {"simple": 6, "martial": 6, "unarmed": 6, "reflex": 8},                         # Weapon Mastery + Improved Evasion (Legendary Ref)
-        15: {"will": 6},                                                                     # Slippery Mind
-        17: {"unarmored": 6, "light": 6},                                                   # Light Armor Mastery
-        19: {"perception": 8, "fortitude": 6},                                               # Master Strike area
+        3:  {},                                                                              # Deny Advantage (no proficiency bump)
+        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Tricks (weapons Expert)
+        7:  {"perception": 6, "reflex": 6},                                                  # Vigilant Senses (Perception Master) + Evasive Reflexes (Reflex Master)
+        9:  {"fortitude": 4},                                                                # Rogue Resilience (Fort Expert)
+        11: {"class_dc": 4},                                                                 # Rogue Expertise (class DC Expert @11, not @9)
+        13: {"simple": 6, "martial": 6, "unarmed": 6, "reflex": 8, "perception": 8, "unarmored": 4, "light": 4},  # Master Tricks (weapons Master) + Improved Rogue Reflexes (Reflex Legendary) + Incredible Senses (Perception Legendary) + Light Armor Expertise
+        15: {},                                                                              # Double Debilitation / Greater Weapon Spec (no rank)
+        17: {"will": 6},                                                                     # Slippery Mind (Will Master @17, not @15)
+        19: {"unarmored": 6, "light": 6},                                                   # Light Armor Mastery (no phantom Perception/Fort bump)
     },
     # -------------------------------------------------------------------------
     # SWASHBUCKLER (Player Core 2 / APG)
@@ -545,12 +555,12 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "bard": {
         # L1 initial: perception=4, fort=2, ref=2, will=4, simple=2, martial=2(longsword,rapier,sap,shortbow,shortsword,whip), unarmed=2, light=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"reflex": 4},                                                                  # Lightning Reflexes
-        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Expertise (bard weapons)
-        7:  {"spell_attack": 4, "spell_dc": 4, "fortitude": 4},                             # Expert Spellcaster + Expert Fort
-        9:  {"will": 6, "perception": 6},                                                    # Resolve + Great Perception
-        11: {"unarmored": 4, "light": 4, "reflex": 6},                                      # Light Armor Expertise + Evasion
-        13: {},                                                                              # Weapon Spec increase
+        # Player Core p.100 advancement table (audited 2026-06-09).
+        3:  {"reflex": 4},                                                                  # Reflex Expertise
+        7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster (Fortitude Expertise is L9, not L7)
+        9:  {"will": 6, "fortitude": 4},                                                     # Performer's Heart (Will Master) + Fortitude Expertise
+        11: {"simple": 4, "martial": 4, "unarmed": 4, "perception": 6},                     # Bard Weapon Expertise + Vigilant Senses (Perception Master). Bard has NO Reflex Master.
+        13: {"unarmored": 4, "light": 4},                                                   # Light Armor Expertise
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
         17: {"will": 8},                                                                     # Legendary Will
         19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
@@ -729,35 +739,35 @@ CLASS_PROGRESSION = {
     # Warpriest has its own SUBCLASS_PROGRESSION entry
     # -------------------------------------------------------------------------
     "cleric": {
+        # Cloistered Cleric (Player Core p.130 doctrine table; audited 2026-06-09).
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"fortitude": 4},                                                                # 2nd Doctrine: Expert Fort
-        5:  {"perception": 4},                                                               # Alertness
-        7:  {"spell_attack": 4, "spell_dc": 4},                                             # 3rd Doctrine: Expert Spellcaster
-        9:  {"will": 6},                                                                     # Resolute Faith (Master Will)
-        11: {"reflex": 4},                                                                   # Lightning Reflexes
-        13: {"unarmored": 4},                                                                # Divine Defense (Expert Unarmored)
-        15: {"spell_attack": 6, "spell_dc": 6},                                             # 5th Doctrine: Master Spellcaster
-        17: {"will": 8, "fortitude": 6},                                                     # Greater Will + Greater Fort
-        19: {"spell_attack": 8, "spell_dc": 8},                                             # Final Doctrine: Legendary Spellcaster
+        3:  {"fortitude": 4},                                                                # 2nd Doctrine: Fort Expert
+        5:  {"perception": 4},                                                               # Perception Expertise
+        7:  {"spell_attack": 4, "spell_dc": 4},                                             # 3rd Doctrine: spell Expert
+        9:  {"will": 6},                                                                     # Resolute Faith (Will Master)
+        11: {"reflex": 4, "simple": 4, "unarmed": 4},                                       # Reflex Expertise + 4th Doctrine (favored/simple/unarmed Expert)
+        13: {"unarmored": 4},                                                                # Divine Defense (unarmored Expert)
+        15: {"spell_attack": 6, "spell_dc": 6},                                             # 5th Doctrine: spell Master
+        # L17 grants no proficiency increase (Cloistered Will caps at Master/L9, Fort at Expert/L3).
+        19: {"spell_attack": 8, "spell_dc": 8},                                             # Final Doctrine: spell Legendary
     },
     # -------------------------------------------------------------------------
-    # DRUID (Player Core p.134) — AoN verified
-    # Verified against Kyle L10 Pathbuilder export 2026-05-09: PB shows
-    # simple=2 / unarmed=2 / light=2 / medium=2 at L10, so the "Weapon
-    # Expertise" bump that legacy PF2e Druids had at L9 is NOT in
-    # Remaster — Druid leans on spells and orders, not weapon prof.
+    # DRUID (Player Core p.134) — rulebook advancement table verified 2026-06-09.
+    # NB: the prior "Weapon Expertise removed in Remaster" note was a misread of a
+    # LEVEL-10 Pathbuilder export — Druid Weapon Expertise is at L11, so an L10
+    # export can't show it. Player Core table (lines 11817-11845) is authoritative:
+    # L3 Fortitude+Perception expertise; L5 Reflex expertise; L11 Weapon Expertise +
+    # Wild Willpower; L13 Medium Armor Expertise; no L17 save increase.
     # -------------------------------------------------------------------------
     "druid": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, light=2, medium=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"perception": 4},                                                               # Alertness (L3 only — Fort Expertise moved to L5 per Remaster Player Core)
-        5:  {"fortitude": 4, "reflex": 4},                                                  # Fortitude Expertise (Great Fortitude) + Lightning Reflexes
+        3:  {"perception": 4, "fortitude": 4},                                              # Perception Expertise + Fortitude Expertise
+        5:  {"reflex": 4},                                                                   # Reflex Expertise
         7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        # L9: nothing class-wide in Remaster. (Pre-Remaster Druids had a
-        # Weapon Expertise bump here; Remaster removed it.)
-        11: {"will": 6},                                                                     # Druid's Resolve (Master Will). Armor Expertise is feat-driven, not class-baseline in Remaster.
-        13: {},                                                                              # Weapon Specialization (damage only — no prof bump)
+        11: {"will": 6, "simple": 4, "unarmed": 4},                                         # Wild Willpower (Will→Master) + Weapon Expertise (simple/unarmed→Expert)
+        13: {"light": 4, "medium": 4, "unarmored": 4},                                      # Medium Armor Expertise (Weapon Specialization grants no rank)
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"will": 8, "fortitude": 6},                                                     # Legendary Will + Greater Fortitude (Master)
+        # L17 grants no proficiency increase (9th-rank spells / ancestry feat / skill increase).
         19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
     },
     # -------------------------------------------------------------------------
@@ -765,15 +775,15 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "kineticist": {
         # L1 initial: perception=2, fort=4, ref=4, will=2, simple=2, unarmed=2, light=2, unarmored=2, class_dc=2
-        3:  {"will": 4},                                                                    # Will of the Elements
-        5:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (kinetic blasts count as unarmed)
-        7:  {"perception": 4, "class_dc": 4},                                               # Alertness + Kinetic Expertise
-        9:  {"fortitude": 6},                                                                # Elemental Resistance / Juggernaut
-        11: {"reflex": 6},                                                                   # Evasion (Reflex Master). Armor stays Trained — see L13.
-        13: {"simple": 6, "unarmed": 6, "unarmored": 4, "light": 4},                        # Weapon Mastery + Armor Expertise (PB-verified: armor is Trained at L11, Expert at L13)
-        15: {"will": 6},                                                                     # Greater Will
-        17: {"unarmored": 6, "light": 6, "fortitude": 8},                                   # Armor Mastery + Legendary Fort
-        19: {"reflex": 8},                                                                   # Improved Evasion (Legendary Ref)
+        # (Rage of Elements advancement table p.16 + feature texts; audited 2026-06-09.)
+        3:  {"will": 4},                                                                    # Will Expertise
+        7:  {"fortitude": 6, "class_dc": 4},                                                # Kinetic Durability (Fort→Master) + Kinetic Expertise (class DC→Expert)
+        9:  {"perception": 4},                                                               # Perception Expertise
+        11: {"reflex": 6, "simple": 4, "unarmed": 4},                                       # Kinetic Quickness (Reflex→Master) + Weapon Expertise (simple/unarmed→Expert)
+        13: {"light": 4, "unarmored": 4},                                                   # Light Armor Expertise (Weapon Specialization grants no rank)
+        15: {"fortitude": 8, "class_dc": 6},                                               # Greater Kinetic Durability (Fort→Legendary) + Kinetic Mastery (class DC→Master)
+        # L17 (Double Reflow / Final Gate region) grants no proficiency increase.
+        19: {"light": 6, "unarmored": 6, "class_dc": 8},                                    # Light Armor Mastery (armor→Master) + Kinetic Legend (class DC→Legendary)
     },
 }
 
@@ -789,16 +799,17 @@ SUBCLASS_PROGRESSION = {
     # Doctrine-specific: L1 armor/Fort, L3 martial, L7 weapons, L11 Expert Spell, L13 armor Expert
     # -------------------------------------------------------------------------
     "Warpriest": {
+        # Warpriest (Player Core p.130 doctrine table; audited 2026-06-09).
         # L1 initial overrides handled by SUBCLASS_MATRIX (Fort Expert, light/medium armor)
         3:  {"martial": 2},                                                                  # 2nd Doctrine: Trained martial weapons
-        5:  {"perception": 4},                                                               # Alertness (shared)
-        7:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # 3rd Doctrine: Expert weapons
-        9:  {"will": 6},                                                                     # Resolute Faith (shared)
-        11: {"reflex": 4, "spell_attack": 4, "spell_dc": 4},                                # Lightning Reflexes (shared) + 4th Doctrine: Expert Spellcaster
-        13: {"unarmored": 4, "light": 4, "medium": 4},                                      # Divine Defense (shared) + Warpriest armor upgrade
-        15: {"spell_attack": 6, "spell_dc": 6},                                             # 5th Doctrine: Master Spellcaster
-        17: {"will": 8, "fortitude": 6},                                                     # Greater Will + Greater Fort (shared)
-        19: {"spell_attack": 8, "spell_dc": 8},                                             # Final Doctrine: Legendary Spellcaster
+        5:  {"perception": 4},                                                               # Perception Expertise (shared)
+        7:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # 3rd Doctrine: weapons Expert
+        9:  {"will": 6},                                                                     # Resolute Faith (Will Master, shared)
+        11: {"reflex": 4, "spell_attack": 4, "spell_dc": 4},                                # Reflex Expertise (shared) + 4th Doctrine: spell Expert
+        13: {"unarmored": 4, "light": 4, "medium": 4},                                      # Divine Defense + Warpriest light/medium armor Expert
+        15: {"fortitude": 6},                                                                # 5th Doctrine: Fortitude Master (NOT spell — that's the Cloistered doctrine)
+        # L17 grants no proficiency increase (Will caps at Master/L9).
+        19: {"spell_attack": 6, "spell_dc": 6},                                             # Final Doctrine: spell + favored weapon Master (weapon categories stay Expert in this model)
     },
     # Cloistered Cleric uses the base "cleric" CLASS_PROGRESSION — no override needed
     

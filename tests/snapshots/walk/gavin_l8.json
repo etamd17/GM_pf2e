@@ -32,12 +32,12 @@
     }
   ],
   "focus_max": 0,
-  "fort": 14,
+  "fort": 16,
   "heritage": "",
   "hero_points": 1,
   "hp": 88,
   "immunities": [],
-  "initiative_mod": 12,
+  "initiative_mod": 10,
   "languages": [
     "None selected"
   ],
@@ -51,16 +51,16 @@
     "wis": 0
   },
   "name": "Unknown Adventurer",
-  "perception": 12,
+  "perception": 10,
   "proficiencies": {
     "ac": 2,
     "class_dc": 4,
-    "fortitude": 4,
+    "fortitude": 6,
     "light": 2,
-    "perception": 4,
+    "perception": 2,
     "reflex": 4,
-    "simple": 4,
-    "unarmed": 4,
+    "simple": 2,
+    "unarmed": 2,
     "unarmored": 2,
     "will": 4
   },
