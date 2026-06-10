@@ -2,33 +2,26 @@
   "1": {},
   "10": {
     "fortitude": 4,
-    "perception": 4,
     "spell_attack": 4,
     "spell_dc": 4,
     "will": 6
   },
   "11": {
     "fortitude": 4,
-    "light": 4,
     "perception": 4,
-    "reflex": 4,
     "simple": 4,
     "spell_attack": 4,
     "spell_dc": 4,
     "unarmed": 4,
-    "unarmored": 4,
     "will": 6
   },
   "12": {
     "fortitude": 4,
-    "light": 4,
     "perception": 4,
-    "reflex": 4,
     "simple": 4,
     "spell_attack": 4,
     "spell_dc": 4,
     "unarmed": 4,
-    "unarmored": 4,
     "will": 6
   },
   "13": {
@@ -128,35 +121,22 @@
     "unarmored": 4,
     "will": 8
   },
-  "3": {
-    "fortitude": 4
-  },
-  "4": {
-    "fortitude": 4
-  },
-  "5": {
-    "fortitude": 4,
-    "perception": 4
-  },
-  "6": {
-    "fortitude": 4,
-    "perception": 4
-  },
+  "3": {},
+  "4": {},
+  "5": {},
+  "6": {},
   "7": {
-    "fortitude": 4,
-    "perception": 4,
     "spell_attack": 4,
-    "spell_dc": 4
+    "spell_dc": 4,
+    "will": 6
   },
   "8": {
-    "fortitude": 4,
-    "perception": 4,
     "spell_attack": 4,
-    "spell_dc": 4
+    "spell_dc": 4,
+    "will": 6
   },
   "9": {
     "fortitude": 4,
-    "perception": 4,
     "spell_attack": 4,
     "spell_dc": 4,
     "will": 6

@@ -3,92 +3,104 @@
   "10": {
     "class_dc": 4,
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "11": {
     "class_dc": 4,
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "12": {
     "class_dc": 4,
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "13": {
     "class_dc": 4,
     "perception": 4,
     "simple": 6,
-    "unarmed": 6
+    "unarmed": 6,
+    "unarmored": 6
   },
   "14": {
     "class_dc": 4,
     "perception": 4,
     "simple": 6,
-    "unarmed": 6
+    "unarmed": 6,
+    "unarmored": 6
   },
   "15": {
     "class_dc": 4,
     "perception": 4,
     "simple": 6,
-    "unarmed": 6
+    "unarmed": 6,
+    "unarmored": 6
   },
   "16": {
     "class_dc": 4,
     "perception": 4,
     "simple": 6,
-    "unarmed": 6
+    "unarmed": 6,
+    "unarmored": 6
   },
   "17": {
-    "class_dc": 4,
+    "class_dc": 6,
     "perception": 4,
     "simple": 6,
     "unarmed": 6,
-    "unarmored": 6
+    "unarmored": 8
   },
   "18": {
-    "class_dc": 4,
+    "class_dc": 6,
     "perception": 4,
     "simple": 6,
     "unarmed": 6,
-    "unarmored": 6
+    "unarmored": 8
   },
   "19": {
-    "class_dc": 4,
+    "class_dc": 6,
     "perception": 4,
-    "simple": 8,
-    "unarmed": 8,
-    "unarmored": 6
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 8
   },
   "2": {},
   "20": {
-    "class_dc": 4,
+    "class_dc": 6,
     "perception": 4,
-    "simple": 8,
-    "unarmed": 8,
-    "unarmored": 6
+    "simple": 6,
+    "unarmed": 6,
+    "unarmored": 8
   },
   "3": {},
   "4": {},
   "5": {
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "6": {
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "7": {
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "8": {
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   },
   "9": {
     "class_dc": 4,
     "perception": 4,
-    "simple": 4
+    "simple": 4,
+    "unarmed": 4
   }
 }

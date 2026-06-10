@@ -44,28 +44,36 @@ or above the fixtures; `test_pb_ground_truth` still passes after every fix.
 | **Fighter** | class DC (Fighter Expertise) L9→**L11**. |
 | **ABP table** | Perception potency L9/L15 → **L7/L13/L19** (GM Core). |
 
+### Player Core 2 classes (audited 2026-06-10, once PC2 was uploaded)
+| Class | Key corrections |
+|---|---|
+| **Alchemist** | Fully reworked to the remaster: weapon expertise L5→**L7**; Fort→Master via Chemical Hardiness **L11** (no Legendary); Medium Armor Expertise L11→**L13**; weapon Master L13→**L15** + Explosion Dodger (Reflex Master); +class DC Master **L17**; armor Master L17→**L19**; removed phantom Will-Master & Perception-Master (both cap Expert). |
+| **Barbarian** | Juggernaut Fort Master L9→**L7**; +Greater Juggernaut Fort Legendary **L13**; class DC Expert L9→**L11** + Master (Devastator) **L19**; Reflex Expertise **L9**; Perception Master **L17**; removed phantom Reflex/Will/Fort bumps. |
+| **Monk** | **L1 unarmed: Expert→Trained** (base fix; Expert via Expert Strikes L5); weapons cap **Master** L13 (removed phantom Legendary L19); Graceful Mastery unarmored Master **L13**; Graceful Legend unarmored Legendary + class DC Master **L17**. (Path-to-Perfection saves are player-choice — left unmodeled.) |
+| **Investigator** | weapon expertise spurious L3 removed; Vigilant Senses L7; Dogged Will L11; Incredible Senses (Perception Legendary) **L13**; Savvy Reflexes L15; Greater Dogged Will L17; +Master Detective class DC **L19**; removed phantom Fort-Master/Reflex-Legendary. |
+| **Oracle** | Mysterious Resolve Will Master L9→**L7**; Magical Fortitude L3→**L9**; Oracular Senses + weapon expertise L11; Premonition's Reflexes + Light Armor Expertise **L13**; was built from a generic caster template. |
+| **Swashbuckler** | Fortitude Expertise L3 (Will was wrong); Confident Evasion Reflex Master **L7**; Perception Mastery **L11**; Assured Evasion Reflex Legendary + armor **L13**; Reinforced Ego Will Master **L17**; +Eternal Confidence class DC Master **L19**; removed phantom Fort-Master & Perception-Legendary. |
+
 ### Content (vs compendium)
 - Ancestry sizes: **centaur → Large, minotaur → Large, poppet → Small** (defaulted to Medium).
 
-**Tests:** `tests/test_party_class_progression_fixes.py` (6) + `tests/test_pf2e_nonparty_progression_fixes.py` (5), rulebook-cited. Snapshots regenerated. **477 pass.**
+**Tests:** `test_party_class_progression_fixes.py` (6) + `test_pf2e_nonparty_progression_fixes.py` (5) + `test_pf2e_pc2_progression_fixes.py` (6), rulebook-cited. Snapshots regenerated. **477 pass.**
 
 ---
 
 ## RECOMMENDATIONS (not fixed — need a decision or a source)
 
-### Need Player Core 2 (remaster) to fix safely
-The engine is remaster-aligned, but **alchemist, barbarian, monk** are remastered
-in **Player Core 2** (not uploaded). The pre-remaster Core Rulebook flags these,
-but applying CRB values to a remaster engine is risky, so they're left for you:
-- **Monk** — caps weapons at Legendary (L19) but should be **Master**; missing class DC Master (Graceful Legend, L17); unarmored timing (Graceful Mastery/Legend).
-- **Alchemist** — missing class DC Master (L17); weapon-Master timing (L13 vs L15).
-- **Barbarian** — missing class DC Master at L19 (Devastator).
-
 ### Need the class's source book to audit at all
-13 encoded classes can't be math-audited without their books: **magus, summoner**
-(Secrets of Magic); **psychic, thaumaturge** (Dark Archive); **gunslinger,
-inventor** (Guns & Gears); **animist, exemplar** (War of Immortals); **commander,
-guardian** (Battlecry!); **investigator, oracle, swashbuckler** (APG / Player Core 2).
+**10 encoded classes** still can't be math-audited without their books (5 books):
+**magus, summoner** (Secrets of Magic); **psychic, thaumaturge** (Dark Archive);
+**gunslinger, inventor** (Guns & Gears); **animist, exemplar** (War of Immortals);
+**commander, guardian** (Battlecry!). War of Immortals + Battlecry! are clean
+remaster; the other three are the only (legacy) source for those classes, so
+usable with a remaster-errata cross-check. Upload any of these and I'll run the
+same per-class audit + fix.
+
+*Resolved:* the 6 Player Core 2 classes (alchemist, barbarian, monk, investigator,
+oracle, swashbuckler) are now FIXED — see the table above.
 
 ### Content (low priority / source-conflicting)
 - **ABP** doesn't model **skill potency** or the **L17 Ability apex** — these are

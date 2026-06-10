@@ -403,15 +403,16 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "barbarian": {
         # L1 initial: perception=4, fort=4, ref=2, will=4, simple=2, martial=2, unarmed=2, light=2, medium=2, unarmored=2, class_dc=2
-        3:  {"reflex": 4},                                                                  # (general save bump in Deny Advantage area)
-        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Brutality
-        7:  {"perception": 6, "will": 6},                                                    # Keen Senses + Juggernaut-era Will
-        9:  {"fortitude": 6, "class_dc": 4},                                                # Juggernaut + Barbarian Expertise
-        11: {"unarmored": 4, "light": 4, "medium": 4},                                      # Armor of Fury
-        13: {"simple": 6, "martial": 6, "unarmed": 6},                                      # Weapon Fury
-        15: {"reflex": 6, "will": 6},                                                       # Greater Juggernaut (Fort→legend level), Improved saves
-        17: {"unarmored": 6, "light": 6, "medium": 6, "fortitude": 8},                      # Armor of Fury (master), Indomitable Will / Mighty Rage
-        19: {"perception": 8},                                                               # Keen Senses upgrade
+        # Player Core 2 advancement table (audited 2026-06-10).
+        3:  {},                                                                              # Furious Footfalls (Speed only)
+        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Brutality (weapons Expert)
+        7:  {"fortitude": 6},                                                                # Juggernaut (Fort Master)
+        9:  {"reflex": 4},                                                                   # Reflex Expertise
+        11: {"class_dc": 4},                                                                 # Mighty Rage (class DC Expert)
+        13: {"fortitude": 8, "light": 4, "medium": 4, "unarmored": 4, "simple": 6, "martial": 6, "unarmed": 6},  # Greater Juggernaut (Fort Legendary) + Medium Armor Expertise + Weapon Mastery
+        15: {"will": 6},                                                                     # Indomitable Will (Will Master)
+        17: {"perception": 6},                                                               # Perception Mastery
+        19: {"light": 6, "medium": 6, "unarmored": 6, "class_dc": 6},                        # Armor Mastery + Devastator (class DC Master)
     },
     # -------------------------------------------------------------------------
     # CHAMPION (Player Core p.124)
@@ -434,15 +435,17 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "monk": {
         # L1 initial: perception=2, fort=4, ref=4, will=4, simple=2, unarmed=4, unarmored=4, class_dc=2
-        3:  {},                                                                              # Mystic Strikes (magical unarmed, no proficiency change)
-        5:  {"perception": 4, "simple": 4},                                                  # Alertness + Expert Strikes (simple→expert; unarmed already expert from L1)
-        7:  {},                                                                              # Path to Perfection (player choice: one save → master)
+        # Player Core 2 advancement table (audited 2026-06-10). L1 unarmed is
+        # Trained (corrected in CLASS_MATRIX base) -> Expert at L5 via Expert Strikes.
+        3:  {},                                                                              # Mystic Strikes (no proficiency change)
+        5:  {"perception": 4, "unarmed": 4, "simple": 4},                                    # Perception Expertise + Expert Strikes (unarmed/simple Expert)
+        7:  {},                                                                              # Path to Perfection (player-choice save -> Master; not modeled)
         9:  {"class_dc": 4},                                                                 # Monk Expertise
-        11: {},                                                                              # Second Path to Perfection (another save → master)
-        13: {"simple": 6, "unarmed": 6},                                                    # Graceful Mastery
-        15: {},                                                                              # Third Path to Perfection (one of first two → legendary)
-        17: {"unarmored": 6},                                                                # Perfected Form / Adamantine Strikes area
-        19: {"simple": 8, "unarmed": 8},                                                    # Graceful Legend
+        11: {},                                                                              # Second Path to Perfection (player-choice save -> Master)
+        13: {"unarmed": 6, "simple": 6, "unarmored": 6},                                     # Master Strikes (weapons Master) + Graceful Mastery (unarmored Master)
+        15: {},                                                                              # Third Path to Perfection (player-choice save -> Legendary)
+        17: {"unarmored": 8, "class_dc": 6},                                                 # Graceful Legend (unarmored Legendary + class DC Master). Monk has NO Legendary weapons.
+        19: {},                                                                              # Perfected Form (fortune effect; no proficiency change)
     },
     # -------------------------------------------------------------------------
     # ROGUE (Player Core p.160)
@@ -465,15 +468,16 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "swashbuckler": {
         # L1 initial: perception=4, fort=2, ref=4, will=4, simple=2, martial=2, unarmed=2, light=2, unarmored=2, class_dc=2
-        3:  {"will": 4},                                                                    # Stylish Trick / Deny Advantage
+        # Player Core 2 advancement table (audited 2026-06-10).
+        3:  {"fortitude": 4},                                                                # Fortitude Expertise
         5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Expertise
-        7:  {"perception": 6, "reflex": 6},                                                  # Evasion + Vigilant Senses
-        9:  {"fortitude": 4, "class_dc": 4},                                                # Great Fort + Swashbuckler Expertise
-        11: {"unarmored": 4, "light": 4},                                                   # Light Armor Expertise
-        13: {"simple": 6, "martial": 6, "unarmed": 6, "reflex": 8},                         # Weapon Mastery + Improved Evasion
-        15: {"will": 6, "fortitude": 6},                                                     # Keen Flair + Greater saves
-        17: {"unarmored": 6, "light": 6},                                                   # Light Armor Mastery
-        19: {"perception": 8},                                                               # Eternal Confidence
+        7:  {"reflex": 6},                                                                   # Confident Evasion (Reflex Master)
+        9:  {"class_dc": 4},                                                                 # Swashbuckler Expertise
+        11: {"perception": 6},                                                               # Perception Mastery
+        13: {"reflex": 8, "light": 4, "unarmored": 4, "simple": 6, "martial": 6, "unarmed": 6},  # Assured Evasion (Reflex Legendary) + Light Armor Expertise + Weapon Mastery
+        15: {},                                                                              # Greater Weapon Spec / Keen Flair (no rank)
+        17: {"will": 6},                                                                     # Reinforced Ego (Will Master)
+        19: {"class_dc": 6, "light": 6, "unarmored": 6},                                     # Eternal Confidence (class DC Master) + Light Armor Mastery
     },
     # -------------------------------------------------------------------------
     # GUNSLINGER (Guns & Gears)
@@ -495,15 +499,16 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "investigator": {
         # L1 initial: perception=4, fort=2, ref=4, will=4, simple=2, martial=2, unarmed=2, light=2, unarmored=2, class_dc=2
-        3:  {"perception": 4},                                                               # Keen Recollection
+        # Player Core 2 advancement table (audited 2026-06-10).
+        3:  {},                                                                              # Keen Recollection (no proficiency rank change)
         5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Expertise
-        7:  {"perception": 6, "will": 6},                                                    # Vigilant Senses + Resolve
-        9:  {"fortitude": 4, "class_dc": 4},                                                # Great Fortitude + Investigator Expertise
-        11: {"unarmored": 4, "light": 4, "reflex": 6},                                      # Light Armor Expertise + Evasion
-        13: {"simple": 6, "martial": 6, "unarmed": 6},                                      # Weapon Mastery
-        15: {"will": 8},                                                                     # Greater Resolve (Legendary Will)
-        17: {"unarmored": 6, "light": 6},                                                   # Light Armor Mastery
-        19: {"fortitude": 6, "reflex": 8},                                                   # Master Fort + Improved Evasion
+        7:  {"perception": 6},                                                               # Vigilant Senses (Perception Master)
+        9:  {"fortitude": 4, "class_dc": 4},                                                # Fortitude Expertise + Investigator Expertise
+        11: {"will": 6},                                                                     # Dogged Will (Will Master)
+        13: {"perception": 8, "light": 4, "unarmored": 4, "simple": 6, "martial": 6, "unarmed": 6},  # Incredible Senses (Perception Legendary) + Light Armor Expertise + Weapon Mastery
+        15: {"reflex": 6},                                                                   # Savvy Reflexes (Reflex Master)
+        17: {"will": 8},                                                                     # Greater Dogged Will (Will Legendary)
+        19: {"light": 6, "unarmored": 6, "class_dc": 6},                                     # Light Armor Mastery + Master Detective (class DC Master)
     },
     # -------------------------------------------------------------------------
     # THAUMATURGE (Dark Archive)
@@ -525,15 +530,16 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "alchemist": {
         # L1 initial: perception=2, fort=4, ref=4, will=2, simple=2, unarmed=2, light=2, medium=2, unarmored=2, class_dc=2
-        3:  {"will": 4},                                                                    # Iron Will
-        5:  {"simple": 4, "unarmed": 4},                                                    # Weapon Expertise (alchemist bombs)
-        7:  {"perception": 4, "fortitude": 6},                                               # Alertness + Juggernaut
-        9:  {"class_dc": 4, "reflex": 6},                                                   # Alchemist Expertise + Evasion-equivalent
-        11: {"unarmored": 4, "light": 4, "medium": 4},                                      # Medium Armor Expertise
-        13: {"simple": 6, "unarmed": 6},                                                    # Weapon Mastery (bombs)
-        15: {"will": 6},                                                                     # Greater Will
-        17: {"unarmored": 6, "light": 6, "medium": 6, "fortitude": 8},                      # Armor Mastery + Legendary Fort
-        19: {"perception": 6},                                                               # Master Perception
+        # Player Core 2 advancement table (audited 2026-06-10). Remaster reworked
+        # the alchemist heavily; Fort caps at Master (Chemical Hardiness), Will/
+        # Perception cap at Expert, class DC reaches Master (Alchemical Mastery).
+        7:  {"simple": 4, "unarmed": 4, "will": 4},                                          # Alchemical Weapon Expertise (bombs/simple/unarmed Expert) + Will Expertise
+        9:  {"class_dc": 4, "perception": 4},                                                # Alchemical Expertise (class DC Expert) + Perception Expertise
+        11: {"fortitude": 6},                                                                # Chemical Hardiness (Fort Master)
+        13: {"light": 4, "medium": 4, "unarmored": 4},                                       # Medium Armor Expertise
+        15: {"simple": 6, "unarmed": 6, "reflex": 6},                                        # Alchemical Weapon Mastery + Explosion Dodger (Reflex Master)
+        17: {"class_dc": 6},                                                                 # Alchemical Mastery (class DC Master)
+        19: {"light": 6, "medium": 6, "unarmored": 6},                                       # Medium Armor Mastery
     },
     # -------------------------------------------------------------------------
     # INVENTOR (Guns & Gears)
@@ -585,14 +591,13 @@ CLASS_PROGRESSION = {
     # -------------------------------------------------------------------------
     "oracle": {
         # L1 initial: perception=2, fort=2, ref=2, will=4, simple=2, unarmed=2, light=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"fortitude": 4},                                                                # Expert Fort
-        5:  {"perception": 4},                                                               # Alertness
-        7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        9:  {"will": 6},                                                                     # Resolve
-        11: {"reflex": 4, "simple": 4, "unarmed": 4, "unarmored": 4, "light": 4},           # Lightning Reflexes + Weapon Expertise + Light Armor Expertise
-        13: {},                                                                              #
+        # Player Core 2 advancement table (audited 2026-06-10).
+        7:  {"spell_attack": 4, "spell_dc": 4, "will": 6},                                   # Expert Spellcaster + Mysterious Resolve (Will Master)
+        9:  {"fortitude": 4},                                                                # Magical Fortitude (Fort Expert)
+        11: {"perception": 4, "simple": 4, "unarmed": 4},                                    # Oracular Senses (Perception Expert) + Weapon Expertise
+        13: {"reflex": 4, "light": 4, "unarmored": 4},                                       # Premonition's Reflexes (Reflex Expert) + Light Armor Expertise
         15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"will": 8},                                                                     # Legendary Will
+        17: {"will": 8},                                                                     # Greater Mysterious Resolve (Will Legendary)
         19: {"spell_attack": 8, "spell_dc": 8},                                             # Legendary Spellcaster
     },
     # -------------------------------------------------------------------------
@@ -1010,7 +1015,7 @@ CLASS_MATRIX = {
     "inventor":     {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4}, "progression": base_prog},
     "kineticist":   {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 2}, "progression": base_prog},
     "magus":        {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
-    "monk":         {"base_proficiencies": {"unarmored": 4, "light": 0, "medium": 0, "heavy": 0, "unarmed": 4, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},
+    "monk":         {"base_proficiencies": {"unarmored": 4, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 4}, "progression": base_prog},  # PC2: unarmed is Trained at L1 (Expert via Expert Strikes @5)
     "oracle":       {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "psychic":      {"base_proficiencies": {"unarmored": 2, "light": 0, "medium": 0, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 0, "advanced": 0, "perception": 2, "fortitude": 2, "reflex": 2, "class_dc": 2, "will": 4, "spell_attack": 2, "spell_dc": 2}, "progression": base_prog},
     "ranger":       {"base_proficiencies": {"unarmored": 2, "light": 2, "medium": 2, "heavy": 0, "unarmed": 2, "simple": 2, "martial": 2, "advanced": 0, "perception": 4, "fortitude": 4, "reflex": 4, "class_dc": 2, "will": 2}, "progression": base_prog},
