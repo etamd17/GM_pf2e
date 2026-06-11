@@ -3,6 +3,7 @@ import sqlite3
 import json
 import math
 import os
+import glob
 import uuid
 import copy
 import re
@@ -22,7 +23,7 @@ from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_prof
 from class_matrix import CLASS_AWARDED_FEATS, SUBCLASS_AWARDED_FEATS, HERITAGE_AWARDED_FEATS
 from class_matrix import MONK_PATH_CONFIG
 from class_matrix import SUBCLASS_DESCRIPTIONS
-from class_matrix import SPELL_ACTIONS, get_action_cost
+from class_matrix import SPELL_ACTIONS, get_action_cost, foundry_action_cost
 from class_matrix import SKILL_FEAT_PREREQS, check_feat_prereqs, RANK_VALUES
 from class_matrix import CLASS_LEVEL_FEATURES
 from pf2e_generator import RobustPF2eGenerator
@@ -1645,6 +1646,49 @@ def clean_foundry_text(text):
     text = re.sub(r'@\w+\[(.*?)\]', extract_name, text)
     return text.strip()
 
+def _load_kineticist_impulse_data():
+    """name (lowercased) -> {'actions': glyph/text, 'desc': cleaned full text} for
+    every kineticist impulse, read straight from the committed Foundry compendium.
+
+    Impulses are feats/actions, not spells, so they're absent from the master
+    spell list and the name 'Elemental Blast' collides with a focus spell of the
+    same name. Resolving impulse cost + description from the authoritative
+    per-ability files (rather than the name-keyed spell path) fixes both. Returns
+    {} if compendium_data is absent so the module still imports."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    out = {}
+    patterns = [
+        os.path.join(base, 'compendium_data', 'actions', '**', 'kineticist', '**', '*.json'),
+        os.path.join(base, 'compendium_data', 'feats', '**', 'kineticist', '**', '*.json'),
+    ]
+    for pattern in patterns:
+        for path in glob.glob(pattern, recursive=True):
+            try:
+                with open(path, encoding='utf-8') as fp:
+                    d = json.load(fp)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(d, dict) or not d.get('name'):
+                continue
+            system = d.get('system') or {}
+            name = d['name'].strip().lower()
+            cost = foundry_action_cost(system)
+            d_obj = system.get('description')
+            desc = clean_foundry_text(d_obj.get('value', '') if isinstance(d_obj, dict) else '')
+            # The compendium often leads with the action-cost line ("1 or 2"
+            # glyphs) + an <hr>; the cost renders as a separate badge, so drop it.
+            m = re.match(r'^\s*<p>\s*<span[^>]*action-glyph.*?</p>\s*(?:<hr\s*/?>)?\s*', desc, re.I | re.S)
+            if m:
+                desc = desc[m.end():].lstrip()
+            # On duplicates (e.g. class vs archetype) keep the richer description.
+            if name not in out or len(desc) > len(out[name]['desc']):
+                out[name] = {'actions': cost, 'desc': desc}
+    return out
+
+
+KINETICIST_IMPULSE_DATA = _load_kineticist_impulse_data()
+
+
 def get_col(row, key, default=""):
     try: return row[key] if row[key] is not None else default
     except: return default
@@ -3122,6 +3166,18 @@ class Character:
             for cf in self.class_features:
                 if cf['type'] in ['action', 'toggle'] and cf['name'] not in [i['name'] for i in k_impulses]:
                     k_impulses.append({'name': cf['name'], 'desc': cf['desc']})
+            # Impulses are feats/actions, not spells: pull authoritative action
+            # cost + full description from the Foundry compendium. Without this,
+            # costs fall back to the stale name-keyed table (Scorching Column 2
+            # vs the correct 3) or collide with a same-named focus spell
+            # (Elemental Blast 2 vs the at-will blast's 1-or-2), and class-feature
+            # impulses show only a short summary instead of the full rules text.
+            for imp in k_impulses:
+                info = KINETICIST_IMPULSE_DATA.get(imp['name'].strip().lower())
+                if info:
+                    imp['actions'] = info['actions']  # set (even '') so it isn't re-derived downstream
+                    if len(info['desc']) > len(imp.get('desc') or ''):
+                        imp['desc'] = info['desc']
             if k_impulses: self.spell_casters.append({'name': 'Kineticist Impulses', 'tradition': 'Primal', 'type': 'Impulse', 'levels': [{'level': 1, 'label': 'Impulses', 'slots': 0, 'spells': k_impulses}]})
 
         # Focus Spells — comprehensive detection for all classes

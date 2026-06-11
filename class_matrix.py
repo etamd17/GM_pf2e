@@ -1368,6 +1368,39 @@ def _action_display(raw):
     return low
 
 
+def foundry_action_cost(system):
+    """Action cost from a raw Foundry feat/action `system` block, read the way a
+    stat block is: leading action-glyphs in the description (variable '1 or 2')
+    win, then actionType / actions.value, then a casting-time duration. Passive
+    abilities return '' (no action glyph). Used for kineticist impulses, which
+    are feats/actions rather than spells and so aren't in the master spell list."""
+    if not isinstance(system, dict):
+        return ''
+    glyph = {'1': '◆', '2': '◆◆', '3': '◆◆◆'}
+    d_obj = system.get('description')
+    head = (d_obj.get('value', '') if isinstance(d_obj, dict) else '')[:160]
+    gl = re.findall(r'action-glyph[^>]*>\s*([0-9])\s*<', head)
+    if gl:
+        if len(gl) >= 2 and (' or ' in head.lower() or ' to ' in head.lower()):
+            a, b = glyph.get(gl[0], ''), glyph.get(gl[-1], '')
+            if a and b:
+                return f"{a}-{b}"
+        if gl[0] in glyph:
+            return glyph[gl[0]]
+    at = (system.get('actionType') or {}).get('value')
+    av = (system.get('actions') or {}).get('value')
+    if at == 'reaction':
+        return '⟳'
+    if at == 'free':
+        return '◇'
+    if at == 'action' and isinstance(av, int) and str(av) in glyph:
+        return glyph[str(av)]
+    tm = (system.get('time') or {}).get('value')
+    if tm:
+        return _action_display(tm)
+    return ''
+
+
 def _load_master_spell_actions():
     """name (lowercased) -> display cost, from the master spell list. Returns
     {} if the file is absent so the module still imports (CI/headless)."""
