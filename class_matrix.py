@@ -2,6 +2,10 @@
 # Comprehensive PF2E Remaster Class Data
 # Proficiency values: 0=untrained, 2=trained, 4=expert, 6=master, 8=legendary
 
+import json
+import os
+import re
+
 # =============================================================================
 # AUTOMATIC BONUS PROGRESSION (ABP) - Variant Rule
 # =============================================================================
@@ -1237,7 +1241,7 @@ SUBCLASS_DESCRIPTIONS = {
 # SPELL/ABILITY ACTION COSTS — ◆ = 1 action, ◆◆ = 2 actions, ◆◆◆ = 3 actions
 # ◇ = free action, ⟳ = reaction, ◆-◆◆◆ = variable
 # =============================================================================
-SPELL_ACTIONS = {
+_LEGACY_SPELL_ACTIONS = {
     # --- Common Spells ---
     'acid splash': '◆◆', 'air bubble': '⟳', 'alarm': '◆◆◆', 'animate dead': '◆◆◆',
     'bane': '◆◆', 'bless': '◆◆', 'blur': '◆◆', 'breathe fire': '◆◆',
@@ -1331,9 +1335,62 @@ SPELL_ACTIONS = {
     'grapple': '◆', 'shove': '◆', 'disarm': '◆',
 }
 
-# Helper function to get action cost
+# --- Action cost, driven by the Foundry-sourced master spell list ----------
+# The legacy table above is kept ONLY as a fallback for non-spell combat
+# actions (Strike, Stride, Shield Block) and any pre-remaster name the master
+# list no longer carries. Every real spell's cost comes from
+# compendium_data/spells/master_spells.json, which has an authoritative
+# `actions` value for all ~1,795 spells. Master wins on any name overlap.
+
+def _action_display(raw):
+    """Map a Foundry casting-time value to what the sheet should show.
+
+    Action counts -> Paizo action glyphs; reaction/free -> their glyphs;
+    variable counts -> a glyph range; anything else is a duration
+    (minutes / hours / days / rounds) rendered as compact text."""
+    low = str(raw or '').strip().lower()
+    glyphs = {
+        '1': '◆', '2': '◆◆', '3': '◆◆◆',
+        'reaction': '⟳', 'free': '◇',
+        '1 to 3': '◆-◆◆◆', '1 or 2': '◆-◆◆', '2 or 3': '◆◆-◆◆◆',
+    }
+    if low in glyphs:
+        return glyphs[low]
+    if not low:
+        return ''
+    # Duration: "10 minutes" -> "10 min", "1 hour" -> "1 hr",
+    # "2 to 2 rounds" -> "2 rounds"; days / weeks kept as written.
+    m = re.match(r'^(\d+)\s+to\s+\1\s+(\w+)$', low)
+    if m:
+        low = f"{m.group(1)} {m.group(2)}"
+    low = re.sub(r'\bminutes?\b', 'min', low)
+    low = re.sub(r'\bhours?\b', 'hr', low)
+    return low
+
+
+def _load_master_spell_actions():
+    """name (lowercased) -> display cost, from the master spell list. Returns
+    {} if the file is absent so the module still imports (CI/headless)."""
+    out = {}
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'compendium_data', 'spells', 'master_spells.json')
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        for s in data:
+            name = (s.get('name') or '').strip().lower()
+            if name:
+                out[name] = _action_display(s.get('actions'))
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+SPELL_ACTIONS = {**_LEGACY_SPELL_ACTIONS, **_load_master_spell_actions()}
+
+
 def get_action_cost(name):
-    return SPELL_ACTIONS.get(name.lower(), '')
+    return SPELL_ACTIONS.get((name or '').strip().lower(), '')
 # type: "passive" (always on), "toggle" (player activates), "reaction", "action"
 # toggle_effects: dict of stat modifications when active
 # =============================================================================

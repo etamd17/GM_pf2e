@@ -1392,6 +1392,47 @@ BUILDER_CLASSES = {}
 BUILDER_FEATS = { 'class': [], 'skill': [], 'general': [], 'ancestry': [] }
 BUILDER_SPELLS = []
 BUILDER_WEAPONS = []
+
+# A few rituals ship with empty descriptions in the Foundry compendium data
+# (the raw per-spell JSON is blank too). Backfilled from Archives of Nethys —
+# the official PF2e SRD (2e.aonprd.com) — so the sheet isn't blank for them.
+_SPELL_DESC_OVERRIDES = {
+    'transmigrate': (
+        "You temporarily transmigrate slain characters out of a mindscape so they appear in the "
+        "living world in solid bodies made of ectoplasm, existing for a short time in a hazy area "
+        "between life and undeath. Cast over 4 hours with 2 secondary casters (primary check "
+        "Occultism or Religion); the targets are encased in clay within a kiln. Range 20 feet; "
+        "Duration 1 month. Critical Success: the targets reach a border realm between life and death "
+        "and, on overcoming its challenge, manifest in the living world as ectoplasmic forms for up "
+        "to 1 month, gaining a +1 status bonus to all skill checks for the first week. Success: as "
+        "critical success but without the first-week bonus. Failure: the targets face the border-realm "
+        "challenge with a -1 status penalty to Strikes, saving throws, and skill checks, which "
+        "persists during the first week. Critical Failure: the ritual fails and each target takes 9d6 "
+        "fire damage (DC 24 basic Fortitude) as the kiln breaks open; a new attempt requires waiting 24 hours."
+    ),
+    'mindscape shift': (
+        "You attempt to transport targets from a mindscape they currently occupy into an adjacent, "
+        "nearly identical mindscape. Unlike mindscape door, mindscape shift moves its targets entirely "
+        "into the new mindscape rather than merely projecting their minds, and they appear in "
+        "corresponding locations. Cast over 1 hour with 3 secondary casters and focusing diagrams and "
+        "incense worth 28 gp (primary check Arcana or Occultism [expert], or Willowshore Lore); range "
+        "touch, targeting you and the secondary casters. Critical Success: the targets are transported "
+        "and you can leave a portal back to the previous mindscape that lasts up to 24 hours. Success: "
+        "the targets are transported as intended. Failure: you fail to transport the targets. Critical "
+        "Failure: you fail and mental feedback deals 9d6 mental damage to all ritual casters (DC 26 "
+        "basic Will save). Heightened (8th): you can transport targets to any mindscape you have visited "
+        "before or have detailed knowledge of."
+    ),
+    'open the wall of ghosts': (
+        "You open a passage through the Wall of Ghosts; the ritual must be performed during a crescent "
+        "or new moon. Cast over 1 day with 3 secondary casters and rice grains and incense worth 60 gp "
+        "(primary check Occultism or Religion [expert]); range 40 feet, targeting the Wall of Ghosts; "
+        "Duration 1 year. Critical Success: the ritual succeeds and grants you and the secondary casters "
+        "a +2 status bonus to AC and saving throws while passing through the Wall of Ghosts. Success: the "
+        "ritual succeeds. Failure: the ritual fails. Critical Failure: the ritual fails and two ghost "
+        "commoners tear free and attack, their ghostly hand Strikes dealing mental damage."
+    ),
+}
 BUILDER_ARMOR = []
 
 # PF2e standard shield stats (Core Rulebook + Secrets of Magic basics).
@@ -4394,12 +4435,22 @@ def load_compendium():
                     try:
                         cols = r.keys()
                         name = get_col(r, 'name', 'Unknown')
+                        # Skip Foundry folder-label rows ingested as fake spells
+                        # ("Cantrip", "Rank 1".."Rank 10", "Rituals", "Spells",
+                        # "Focus") — empty descriptions, no action cost, garbage
+                        # in spell pickers.
+                        _jl = name.strip().lower()
+                        if _jl in ('cantrip', 'focus', 'rituals', 'spells') or re.match(r'^rank \d+$', _jl):
+                            continue
                         sys_data = safe_json_load(r, 'system', {})
-                        
+
                         desc = get_col(r, 'description', '')
                         if not desc and isinstance(sys_data, dict):
                             d_obj = sys_data.get('description', {})
                             desc = d_obj.get('value', '') if isinstance(d_obj, dict) else (d_obj if isinstance(d_obj, str) else '')
+                        # Backfill the handful of rituals with empty Foundry descriptions (AoN SRD).
+                        if not (desc or '').strip() and _jl in _SPELL_DESC_OVERRIDES:
+                            desc = _SPELL_DESC_OVERRIDES[_jl]
 
                         lvl = get_col(r, 'level', 1)
                         
