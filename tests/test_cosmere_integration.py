@@ -290,6 +290,38 @@ def test_corrupt_cosmere_combatant_does_not_wipe_encounter(tmp_path, monkeypatch
         app._invalidate_tracker_cache()
 
 
+def test_cosmere_injury_records_details_and_applies_effect(monkeypatch):
+    """Dropping to 0 must record a STRUCTURED injury (severity/duration/effect)
+    on the combatant AND auto-apply the d8 effect as a tracked condition, instead
+    of only scrolling past in the combat log with an integer count."""
+    import systems.cosmere.combat as cc
+    monkeypatch.setattr(cc, 'roll_injury', lambda **k: {
+        'd20': 10, 'total': 10, 'severity': 'shallow',
+        'duration': '1d6 days', 'is_death': False, 'effect': 'Slowed'})
+    a = app._cosmere_combatant(_adv_id('Archer'))
+    a.instance_id = 'inj-1'
+    a.current_hp = 3
+    app._cosmere_adjust_hp(a, 50, 'damage', 'impact')
+    assert a.current_hp == 0 and a.injuries == 1
+    assert a.conditions.get('slowed') is True          # d8 effect auto-applied
+    assert isinstance(a.injury_log, list) and len(a.injury_log) == 1
+    rec = a.injury_log[-1]
+    assert rec['severity'] == 'shallow' and rec['effect'] == 'Slowed'
+    assert rec['duration'] == '1d6 days' and rec['n'] == 1
+
+
+def test_cosmere_injury_exhausted_effect_stacks(monkeypatch):
+    import systems.cosmere.combat as cc
+    monkeypatch.setattr(cc, 'roll_injury', lambda **k: {
+        'd20': 9, 'total': 9, 'severity': 'shallow', 'duration': '',
+        'is_death': False, 'effect': 'Exhausted [-2]'})
+    a = app._cosmere_combatant(_adv_id('Archer'))
+    a.instance_id = 'inj-2'
+    a.current_hp = 2
+    app._cosmere_adjust_hp(a, 50, 'damage', 'impact')
+    assert a.conditions.get('exhausted') == 2          # magnitude parsed + stacked
+
+
 def test_plot_die_route():
     r = app.app.test_client().post('/api/plot_die')
     assert r.status_code == 200
