@@ -27,6 +27,7 @@
         color: var(--gilt-200); }
 {% endblock %}
 {% block content %}
+{% set system = system|default('pf2e') %}
 <div style="max-width: 1000px; margin: 0 auto;">
     <header style="text-align: center; margin-bottom: var(--sp-5);">
         <h1 class="font-display" style="font-size: 28px; color: var(--gilt-100); margin: 0; letter-spacing: 0.04em;">Party Status</h1>
@@ -42,7 +43,7 @@
                     <div class="sb-class">{{ pc.ancestry }} {{ pc.class_name }} {{ pc.level }}</div>
                 </div>
                 <div style="text-align: right;">
-                    <div class="sb-stat-label">AC</div>
+                    <div class="sb-stat-label">{{ 'Phy' if system == 'cosmere' else 'AC' }}</div>
                     <div style="font-size: 20px; font-weight: 800; color: var(--text-on-dark); font-family: var(--font-display);">{{ pc.ac }}</div>
                 </div>
             </div>
@@ -60,14 +61,22 @@
 
             <!-- Stats row -->
             <div style="display: flex; gap: 8px; margin-top: var(--sp-3); flex-wrap: wrap;">
+                {% if pc.hero_points is not none %}
                 <div class="sb-stat">
                     <span class="sb-stat-label">Hero</span>
                     <span class="sb-stat-val" data-hero="{{ pc.name }}">{{ pc.hero_points }}</span>
                 </div>
+                {% endif %}
                 {% if pc.focus_max > 0 %}
                 <div class="sb-stat">
                     <span class="sb-stat-label">Focus</span>
                     <span class="sb-stat-val" data-focus="{{ pc.name }}">{{ pc.focus_current }}/{{ pc.focus_max }}</span>
+                </div>
+                {% endif %}
+                {% if pc.investiture_max and pc.investiture_max > 0 %}
+                <div class="sb-stat">
+                    <span class="sb-stat-label">Invest</span>
+                    <span class="sb-stat-val" data-invest="{{ pc.name }}">{{ pc.investiture_current }}/{{ pc.investiture_max }}</span>
                 </div>
                 {% endif %}
                 {% if pc.exploration_activity %}
@@ -152,6 +161,36 @@ try {
                     html += '<span class="sb-cond condition-pill" data-cond-name="' + k + '">' + label + '</span>';
                 }
             }
+            el.innerHTML = html;
+        });
+    });
+
+    // Cosmere PCs broadcast a play_state blob (health/focus/investiture/
+    // conditions) rather than a PF2e pc_update — repaint the same cards from it.
+    src.addEventListener('cosmere_player_state', function(e) {
+        var d = JSON.parse(e.data);
+        var name = d.name; var ps = d.play_state || {};
+        if (!name) return;
+        var card = document.getElementById('sb-' + name.replace(/ /g, '-'));
+        if (!card) return;
+        var hpEls = document.querySelectorAll('[data-hp="' + name + '"]');
+        var fills = document.querySelectorAll('[data-pc="' + name + '"]');
+        if (ps.health !== undefined) {
+            var maxTxt = (hpEls[0] ? (hpEls[0].textContent.split('/')[1] || '') : '').trim();
+            var mx = parseInt(maxTxt) || 0;
+            var pct = mx > 0 ? Math.max(0, Math.min(100, Math.round(ps.health / mx * 100))) : 0;
+            var color = pct > 50 ? '#6a9c44' : pct > 25 ? '#e0b65a' : '#d36e6e';
+            fills.forEach(function(el) { el.style.width = pct + '%'; el.style.background = color; });
+            hpEls.forEach(function(el) { el.style.color = color; el.textContent = ps.health + ' / ' + (mx || '?'); });
+        }
+        var fEls = document.querySelectorAll('[data-focus="' + name + '"]');
+        fEls.forEach(function(el) { if (ps.focus !== undefined) el.textContent = ps.focus + '/' + (el.textContent.split('/')[1] || '?'); });
+        var iEls = document.querySelectorAll('[data-invest="' + name + '"]');
+        iEls.forEach(function(el) { if (ps.investiture !== undefined) el.textContent = ps.investiture + '/' + (el.textContent.split('/')[1] || '?'); });
+        var condEls2 = document.querySelectorAll('[data-conds="' + name + '"]');
+        condEls2.forEach(function(el) {
+            var conds = ps.conditions || {}; var html = '';
+            for (var k in conds) { if (conds[k]) html += '<span class="sb-cond condition-pill" data-cond-name="' + k + '">' + k + '</span>'; }
             el.innerHTML = html;
         });
     });

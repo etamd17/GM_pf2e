@@ -219,6 +219,37 @@ def test_cosmere_encounter_survives_autosave_roundtrip(tmp_path, monkeypatch):
         app._invalidate_tracker_cache()
 
 
+def test_cosmere_turn_advance_keeps_fast_actions_and_bool_conditions(tmp_path, monkeypatch):
+    """Advancing turns must NOT run PF2e integer condition-ticking on Cosmere
+    combatants (whose conditions are booleans) and must NOT reset a Fast actor's
+    action ceiling to 3 -- fast=2 / slow=3 has to survive turn advance, derived
+    from the elected speed each turn."""
+    monkeypatch.setattr(app, 'ENCOUNTER_DIR', str(tmp_path))
+    a = app._cosmere_combatant(_adv_id('Archer'))
+    a.instance_id = 'cos-t-a'; a.speed_choice = 'fast'; a.max_actions = 2
+    a.conditions = {'slowed': True}
+    b = app._cosmere_combatant(_adv_id('Archer'))
+    b.instance_id = 'cos-t-b'; b.speed_choice = 'slow'; b.max_actions = 3
+    saved, idx, rnd = list(app.ACTIVE_ENCOUNTER), app.TURN_INDEX, app.ROUND_NUMBER
+    try:
+        app.ACTIVE_ENCOUNTER[:] = [a, b]
+        app.TURN_INDEX = 0
+        client = app.app.test_client()
+        hdr = {'X-Requested-With': 'XMLHttpRequest'}
+        client.post('/api/cycle_turn/next', headers=hdr)     # end a's turn, start b's
+        assert app.ACTIVE_ENCOUNTER[app.TURN_INDEX].instance_id == 'cos-t-b'
+        assert b.max_actions == 3                             # slow keeps 3
+        client.post('/api/cycle_turn/next', headers=hdr)      # wrap to a's turn again
+        assert app.ACTIVE_ENCOUNTER[app.TURN_INDEX].instance_id == 'cos-t-a'
+        assert a.max_actions == 2                             # fast keeps 2 (not reset to 3)
+        assert a.conditions.get('slowed') is True             # boolean NOT mangled to int 0
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = saved
+        app.TURN_INDEX = idx
+        app.ROUND_NUMBER = rnd
+        app._invalidate_tracker_cache()
+
+
 def test_plot_die_route():
     r = app.app.test_client().post('/api/plot_die')
     assert r.status_code == 200

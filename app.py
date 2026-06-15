@@ -1071,10 +1071,13 @@ def _broadcast_pc_state(pc_name):
             _PC_BROADCAST_TIMER = t
             t.start()
 
-def _do_broadcast_pc_state(pc_name):
-    """Actually compute and emit the PC-state SSE frame."""
+def _pc_state_payload(pc_name):
+    """Build the full pc_update SSE frame for a PC (HP / shield / temp HP /
+    derived saves+skills+strikes / conditions / effects). Returns None if the PC
+    is unknown. Shared by the SSE broadcast and the /api/pc_state refetch route
+    so a reconnecting sheet can pull a COMPLETE fresh state, not just HP."""
     if pc_name not in PARTY_LIBRARY:
-        return
+        return None
     # Snapshot under lock so HP/conditions read is consistent
     with ENCOUNTER_LOCK:
         pc = PARTY_LIBRARY[pc_name]
@@ -1167,7 +1170,26 @@ def _do_broadcast_pc_state(pc_name):
         except Exception as _e:
             print(f"[BROADCAST] {pc_name}: derived compute failed: {_e}")
             payload['derived'] = {}
-    sse_broadcast('pc_update', payload)
+    return payload
+
+
+def _do_broadcast_pc_state(pc_name):
+    """Compute and emit the PC-state SSE frame."""
+    payload = _pc_state_payload(pc_name)
+    if payload is not None:
+        sse_broadcast('pc_update', payload)
+
+
+@app.route('/api/pc_state/<pc_name>')
+def api_pc_state(pc_name):
+    """The full pc_update-shaped state for one PC so the player sheet can do a
+    COMPLETE refetch on SSE reconnect/wake (AC, saves, skills, strikes, shield,
+    temp HP, conditions) instead of only patching HP+conditions after 45s."""
+    payload = _pc_state_payload(pc_name)
+    if payload is None:
+        return jsonify({'error': 'unknown character'}), 404
+    return jsonify(payload)
+
 
 def _flush_enc_broadcast():
     global _ENC_BROADCAST_TIMER, _ENC_BROADCAST_PENDING
@@ -6915,19 +6937,30 @@ def api_session_export():
         md.append(f"_Campaign: {campaign['name']}_")
     if campaign.get('session_number'):
         md.append(f"_Session number: {campaign['session_number']}_")
-    md += ["", "## Party State", "", "| PC | Class | HP | Hero | Conditions |",
-           "|----|-------|----|------|------------|"]
-    for name, pc in sorted(PARTY_LIBRARY.items()):
-        cls = (getattr(pc, 'class_name', '') or '').strip()
-        conds = []
-        try:
-            for k, v in (pc.conditions or {}).items():
-                if v and v != 0 and v is not False:
-                    conds.append(f"{k}{(' ' + str(v)) if isinstance(v, int) and v > 0 else ''}")
-        except Exception:
-            pass
-        md.append(f"| {name} | {cls} | {getattr(pc, 'current_hp', 0)}/{getattr(pc, 'hp', 0)} | "
-                  f"{getattr(pc, 'hero_points', 0)} | {', '.join(conds) if conds else '—'} |")
+    if _active_system() == 'cosmere':
+        # Cosmere party table — read from the Cosmere PC store (PARTY_LIBRARY is
+        # PF2e-only and empty here), with Injuries instead of Hero points.
+        md += ["", "## Party State", "", "| PC | Path | Health | Injuries | Conditions |",
+               "|----|------|--------|----------|------------|"]
+        for row in _cosmere_status_party(_list_cosmere_pcs()):
+            conds = [k for k, v in (row.get('conditions') or {}).items() if v]
+            md.append(f"| {row['name']} | {row.get('class_name', '')} | "
+                      f"{row['current_hp']}/{row['max_hp']} | {row.get('injuries', 0)} | "
+                      f"{', '.join(conds) if conds else '—'} |")
+    else:
+        md += ["", "## Party State", "", "| PC | Class | HP | Hero | Conditions |",
+               "|----|-------|----|------|------------|"]
+        for name, pc in sorted(PARTY_LIBRARY.items()):
+            cls = (getattr(pc, 'class_name', '') or '').strip()
+            conds = []
+            try:
+                for k, v in (pc.conditions or {}).items():
+                    if v and v != 0 and v is not False:
+                        conds.append(f"{k}{(' ' + str(v)) if isinstance(v, int) and v > 0 else ''}")
+            except Exception:
+                pass
+            md.append(f"| {name} | {cls} | {getattr(pc, 'current_hp', 0)}/{getattr(pc, 'hp', 0)} | "
+                      f"{getattr(pc, 'hero_points', 0)} | {', '.join(conds) if conds else '—'} |")
     md.append("")
     if ACTIVE_ENCOUNTER:
         md += ["## Active Encounter at Export", ""]
@@ -8024,6 +8057,83 @@ def cosmere_pc_state(pid):
     except Exception:
         pass
     return jsonify({'ok': True, 'play_state': ps})
+
+
+def _cosmere_apply_rest(doc, mode):
+    """Apply a Cosmere rest (Ch.9) to a PC doc and return the new play_state.
+    Long rest: health + focus to max, Exhausted reduced by 1, short-lived
+    conditions cleared (an ongoing Affliction is kept for the GM to resolve).
+    Short rest: heal a recovery-die roll (capped at max) and refill focus;
+    conditions untouched. Investiture + injury count are left to the GM (RAW:
+    Investiture refills only via Stormlight; most injuries heal over days)."""
+    import systems.cosmere.build as _cb
+    import systems.cosmere.combat as _cc
+    b = _cb.CosmereBuild(doc.get('build') or {}, homebrew=_cosmere_homebrew_store())
+    ps = dict(doc.get('play_state') or {})
+    hmax, fmax = b.health_max(), b.focus_max()
+    conds = dict(ps.get('conditions') or {})
+    if mode == 'long':
+        ps['health'] = hmax
+        ps['focus'] = fmax
+        ex = conds.get('exhausted')
+        if isinstance(ex, bool):
+            conds.pop('exhausted', None)
+        elif isinstance(ex, (int, float)):
+            nv = int(ex) - 1
+            conds['exhausted'] = nv if nv > 0 else None
+            if not conds['exhausted']:
+                conds.pop('exhausted', None)
+        # Clear short-lived conditions; keep Affliction (and the exhausted we
+        # just reduced) so the GM still sees lingering effects.
+        for k in list(conds):
+            if k not in ('afflicted', 'exhausted'):
+                conds.pop(k, None)
+        ps['conditions'] = conds
+    else:  # short rest
+        wil = int((b.eff_attributes() or {}).get('wil', 0) or 0)
+        heal = _cc.roll_recovery(wil)
+        ps['health'] = min(hmax, int(ps.get('health', hmax) or 0) + heal)
+        ps['focus'] = fmax
+    return ps
+
+
+@app.route('/api/cosmere/rest', methods=['POST'])
+@gm_required
+def cosmere_rest():
+    """GM: run a Cosmere short/long rest across the campaign's PCs (or one PC by
+    `pid`), writing each PC's recovered play_state through to disk and pushing it
+    live to their sheet + the tracker."""
+    if _active_system() != 'cosmere':
+        return jsonify({'ok': False, 'error': 'not a Cosmere campaign'}), 400
+    data = request.get_json(silent=True) or request.form
+    mode = (data.get('mode') or 'long').strip().lower()
+    if mode not in ('short', 'long'):
+        mode = 'long'
+    pid = data.get('pid')
+    docs = _list_cosmere_pcs()
+    if pid:
+        docs = [d for d in docs if d.get('id') == pid]
+    rested = []
+    for d in docs:
+        pidd = d.get('id')
+        if not pidd:
+            continue
+        with _path_lock(_cosmere_pc_path(pidd)):
+            doc = _load_cosmere_pc(pidd) or d
+            ps = _cosmere_apply_rest(doc, mode)
+            doc['play_state'] = ps
+            _save_cosmere_pc(doc, fsync=False)
+        if _sync_cosmere_combatant_state(doc.get('name'), ps):
+            _broadcast_encounter_state()
+        try:
+            sse_broadcast('cosmere_player_state', {'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
+        except Exception:
+            pass
+        rested.append({'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
+    _combat_log(f"Cosmere {mode} rest — {len(rested)} character(s) recovered.", 'success')
+    if _is_ajax():
+        return jsonify({'ok': True, 'mode': mode, 'rested': rested})
+    return redirect(url_for('status_board'))
 
 
 @app.route('/api/cosmere/roll', methods=['POST'])
@@ -10043,25 +10153,30 @@ def cycle_turn(direction):
                         except Exception:
                             pass
 
-        # Frightened decreases by 1 at end of turn (PF2E Core p.619)
-        if current_c.conditions.get('frightened', 0) > 0:
-            current_c.conditions['frightened'] -= 1
-            _combat_log(f"{current_c.name}: Frightened reduced to {current_c.conditions['frightened']}", 'condition')
-            if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['frightened'] = current_c.conditions['frightened']
+        # PF2e Remaster integer condition-ticking. Cosmere conditions are
+        # BOOLEANS (and follow their own refresh model), so running this on a
+        # Cosmere combatant would mangle e.g. slowed=True into the int 0. Skip
+        # the PF2e tick entirely for Cosmere combatants.
+        if getattr(current_c, 'system', 'pf2e') != 'cosmere':
+            # Frightened decreases by 1 at end of turn (PF2E Core p.619)
+            if current_c.conditions.get('frightened', 0) > 0:
+                current_c.conditions['frightened'] -= 1
+                _combat_log(f"{current_c.name}: Frightened reduced to {current_c.conditions['frightened']}", 'condition')
+                if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['frightened'] = current_c.conditions['frightened']
 
-        # Stupefied doesn't auto-reduce, but tracked here for completeness (requires Remove Curse / rest)
-        # Enfeebled doesn't auto-reduce (requires specific recovery)
-        # Clumsy doesn't auto-reduce (requires specific recovery)
-        # Drained doesn't auto-reduce (requires long rest, reducing by 1 per long rest)
-        # Sickened doesn't auto-reduce (must retch / Fortitude save)
-        # Slowed: reduces by 1 at end of turn if caused by a non-permanent source (PF2E Core)
-        if current_c.conditions.get('slowed', 0) > 0:
-            # Only auto-reduce slowed if it has a duration (most slowed effects are 1 round)
-            # Tracked via a flag — if no flag, assume it's round-based and auto-decrement
-            if not getattr(current_c, '_slowed_persistent', False):
-                current_c.conditions['slowed'] -= 1
-                _combat_log(f"{current_c.name}: Slowed reduced to {current_c.conditions['slowed']}", 'condition')
-                if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['slowed'] = current_c.conditions['slowed']
+            # Stupefied doesn't auto-reduce, but tracked here for completeness (requires Remove Curse / rest)
+            # Enfeebled doesn't auto-reduce (requires specific recovery)
+            # Clumsy doesn't auto-reduce (requires specific recovery)
+            # Drained doesn't auto-reduce (requires long rest, reducing by 1 per long rest)
+            # Sickened doesn't auto-reduce (must retch / Fortitude save)
+            # Slowed: reduces by 1 at end of turn if caused by a non-permanent source (PF2E Core)
+            if current_c.conditions.get('slowed', 0) > 0:
+                # Only auto-reduce slowed if it has a duration (most slowed effects are 1 round)
+                # Tracked via a flag — if no flag, assume it's round-based and auto-decrement
+                if not getattr(current_c, '_slowed_persistent', False):
+                    current_c.conditions['slowed'] -= 1
+                    _combat_log(f"{current_c.name}: Slowed reduced to {current_c.conditions['slowed']}", 'condition')
+                    if current_c.is_pc and current_c.name in PARTY_LIBRARY: PARTY_LIBRARY[current_c.name].conditions['slowed'] = current_c.conditions['slowed']
 
         # Sync conditions to PC file if applicable
         if current_c.is_pc and current_c.name in PARTY_LIBRARY:
@@ -10108,28 +10223,38 @@ def cycle_turn(direction):
                 _combat_log(f"{_pc.name}: Raise a Shield expired (start of turn)", 'condition')
             _persist_pc_combat_state(new_c.name)
             _broadcast_pc_state(new_c.name)
-        # Action economy reset: Slowed lowers the action ceiling, Stunned
-        # then spends from what's left (PF2E Core p.448). Pip widget reads
-        # max_actions/actions_used directly, so both must reflect the
-        # condition math BEFORE the turn renders.
-        slowed_val = new_c.conditions.get('slowed', 0)
-        new_c.max_actions = max(0, min(4, 3 - int(slowed_val or 0)))
-        new_c.actions_used = 0
-        if not new_c.is_pc:
-            new_c.reaction_used = False
+        # Action economy reset.
+        if getattr(new_c, 'system', 'pf2e') == 'cosmere':
+            # Cosmere fast/slow ceiling, derived from the elected speed EACH turn
+            # so it survives turn advance (fast = 2 actions, slow = 3). No PF2e
+            # slowed/stunned integer math — Cosmere conditions are booleans.
+            new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
+            new_c.actions_used = 0
+            if not new_c.is_pc:
+                new_c.reaction_used = False
+        else:
+            # PF2e: Slowed lowers the action ceiling, Stunned then spends from
+            # what's left (PF2E Core p.448). Pip widget reads max_actions/
+            # actions_used directly, so both must reflect the condition math
+            # BEFORE the turn renders.
+            slowed_val = new_c.conditions.get('slowed', 0)
+            new_c.max_actions = max(0, min(4, 3 - int(slowed_val or 0)))
+            new_c.actions_used = 0
+            if not new_c.is_pc:
+                new_c.reaction_used = False
 
-        # Stunned: lose actions (cap at the remaining max), then decrement
-        # stunned by the number lost. We pre-fill actions_used so the pip
-        # widget shows the stunned cost already spent — otherwise the GM
-        # would see 3/3 actions on a stunned combatant's turn and have to
-        # remember to click them off manually.
-        stunned_val = new_c.conditions.get('stunned', 0)
-        if stunned_val > 0:
-            actions_lost = min(stunned_val, new_c.max_actions)
-            new_c.conditions['stunned'] = max(0, stunned_val - actions_lost)
-            new_c.actions_used = actions_lost
-            _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
-            if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
+            # Stunned: lose actions (cap at the remaining max), then decrement
+            # stunned by the number lost. We pre-fill actions_used so the pip
+            # widget shows the stunned cost already spent — otherwise the GM
+            # would see 3/3 actions on a stunned combatant's turn and have to
+            # remember to click them off manually.
+            stunned_val = new_c.conditions.get('stunned', 0)
+            if stunned_val > 0:
+                actions_lost = min(stunned_val, new_c.max_actions)
+                new_c.conditions['stunned'] = max(0, stunned_val - actions_lost)
+                new_c.actions_used = actions_lost
+                _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
+                if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
         
         # Persistent damage (start of turn, PF2e Core p.451).
         # Two representations coexist:
@@ -15609,8 +15734,55 @@ def api_rest_apply():
     return jsonify({'success': True, 'results': results})
 
 # -- Quick Status Board -----------------------------------------------
+def _cosmere_status_party(docs):
+    """Party-status rows for Cosmere PCs (mirrors the PF2e shape the status board
+    expects). Live health/focus/investiture/conditions come from each PC's saved
+    play_state; the maxes + defenses come from the build. `hero_points` is None
+    (Cosmere has none) so the board can hide that stat."""
+    import systems.cosmere.build as _cb
+    hb = _cosmere_homebrew_store()
+    out = []
+    for d in docs:
+        try:
+            b = _cb.CosmereBuild(d.get('build') or {}, homebrew=hb)
+        except Exception:
+            continue
+        ps = d.get('play_state') if isinstance(d.get('play_state'), dict) else {}
+        def _ps(key, default):
+            try:
+                return int(ps[key])
+            except (KeyError, TypeError, ValueError):
+                return int(default)
+        hmax = b.health_max()
+        cur = _ps('health', hmax)
+        o = b.order()
+        out.append({
+            'name': d.get('name', 'Unknown'),
+            'ancestry': b.ancestry,
+            'class_name': (o['name'] if o else b.path) or '',
+            'level': b.level,
+            'ac': b.defenses().get('phy', 10),
+            'current_hp': cur, 'max_hp': hmax,
+            'hp_pct': round(cur / hmax * 100) if hmax > 0 else 0,
+            'temp_hp': 0,
+            'conditions': {k: v for k, v in (ps.get('conditions') or {}).items() if v},
+            'hero_points': None,
+            'injuries': _ps('injuries', 0),
+            'focus_current': _ps('focus', b.focus_max()), 'focus_max': b.focus_max(),
+            'investiture_current': _ps('investiture', b.investiture_max()),
+            'investiture_max': b.investiture_max(),
+            'exploration_activity': '',
+        })
+    return out
+
+
 @app.route('/status')
 def status_board():
+    # The party board must follow the active system — a Cosmere campaign was
+    # getting a blank board because this iterated the (empty) PF2e PARTY_LIBRARY.
+    if _active_system() == 'cosmere':
+        party = _cosmere_status_party(_list_cosmere_pcs())
+        return render_template('status_board.html', party=party, system='cosmere')
     party = []
     for name, pc in PARTY_LIBRARY.items():
         party.append({'name': name, 'current_hp': pc.current_hp, 'max_hp': pc.hp,
@@ -15624,7 +15796,7 @@ def status_board():
             'focus_max': getattr(pc, 'focus_max', 0),
             'temp_hp': int(getattr(pc, 'temp_hp', 0) or 0),
             'ac': int(getattr(pc, 'ac', 0) or 0)})
-    return render_template('status_board.html', party=party)
+    return render_template('status_board.html', party=party, system='pf2e')
 
 
 # =====================================================================
