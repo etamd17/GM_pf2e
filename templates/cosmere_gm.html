@@ -102,7 +102,32 @@
         <p class="tile__desc">Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.</p>
     </a>
 
+    <div class="tile" style="cursor:default;">
+        <div class="tile__glyph">&#9788;</div>
+        <h2 class="tile__title">Rest &amp; Recovery</h2>
+        <p class="tile__desc">Resolve a rest for the whole party &mdash; long rest restores health &amp; focus and reduces Exhausted; short rest heals a recovery die and refills focus.</p>
+        <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-3);">
+            <button type="button" class="btn btn--sm" onclick="cosmereRest('short')">Short Rest</button>
+            <button type="button" class="btn btn--sm" onclick="cosmereRest('long')">Long Rest</button>
+        </div>
+    </div>
+
 </div>
+<script>
+function cosmereRest(mode) {
+    var label = mode === 'long' ? 'Long' : 'Short';
+    if (!confirm(label + ' rest for the whole party? This updates every Cosmere PC’s sheet.')) return;
+    var fd = new FormData(); fd.append('mode', mode);
+    fetch('/api/cosmere/rest', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: fd})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var n = (d && d.rested) ? d.rested.length : 0;
+            if (window.pf2eToast) window.pf2eToast(label + ' rest applied to ' + n + ' character(s).', 'success');
+            else alert(label + ' rest applied to ' + n + ' character(s).');
+        })
+        .catch(function(){ if (window.pf2eToast) window.pf2eToast('Rest failed', 'danger'); });
+}
+</script>
 
 {# ── Session ritual: the opening curtain + "Previously on…" recap ── #}
 <div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-5); margin-bottom:var(--sp-7);">

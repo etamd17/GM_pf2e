@@ -5678,7 +5678,12 @@
             // its reconnect; the evtSource alias keeps the registrations below
             // unchanged.
             const evtSource = { addEventListener: (name, fn) => window.appSSE(name, fn) };
-            window.appSSE('connected', _sheetMarkSseAlive);
+            // On (re)connect, mark alive AND pull a complete fresh state — this
+            // is what fires after a phone wake / wifi return / bfcache restore.
+            window.appSSE('connected', () => {
+                _sheetMarkSseAlive();
+                if (window.refetchPcState) window.refetchPcState();
+            });
             window.appSSE('keepalive', _sheetMarkSseAlive);
 
             // Roll-feed + handout + turn-banner listeners share the hub.
@@ -5689,6 +5694,13 @@
                 try {
                     const data = JSON.parse(e.data);
                     if (data.name !== pcName) return;
+                    window.applyPcUpdate(data);
+                } catch(err) { console.error('SSE pc_update error:', err); }
+            });
+
+            // Reusable: apply a full pc_update payload to the sheet in place —
+            // used by the live SSE frame above AND the reconnect refetch below.
+            window.applyPcUpdate = function(data) {
                     applyHpUpdate(data.current_hp);
                     applyConditionUpdate(data.conditions || {});
                     _paintMetaQuickConds(data.conditions || {});
@@ -5764,8 +5776,20 @@
                             data.pc_active_effects,
                             Array.isArray(data.effects_breakdown) ? data.effects_breakdown : []);
                     }
-                } catch(err) { console.error('SSE pc_update error:', err); }
-            });
+            };
+
+            // Full-state refetch on (re)connect/wake. Phone sleep / wifi blip is
+            // the most common in-person event; pull the COMPLETE pc_update
+            // payload so AC/saves/skills/strikes/shield/temp HP are fresh, not
+            // just HP+conditions (the old 45s-silence fallback).
+            window.refetchPcState = async function() {
+                try {
+                    const res = await fetch('/api/pc_state/' + pcNameEncoded);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.name === pcName) window.applyPcUpdate(data);
+                } catch (e) {}
+            };
 
             evtSource.addEventListener('reaction_available', (e) => {
                 _sheetMarkSseAlive();
@@ -5827,6 +5851,9 @@
         // per-player poll rate from 4/min to ~0 while SSE is delivering,
         // and recovers smoothly if SSE dies.
         async function syncFromGM() {
+            // Full repaint (AC/saves/skills/strikes/shield/temp HP/conditions),
+            // not just HP — same payload the live pc_update frame carries.
+            if (window.refetchPcState) { await window.refetchPcState(); return; }
             try {
                 const res = await fetch('/api/player_state');
                 const data = await res.json();

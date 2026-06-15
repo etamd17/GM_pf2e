@@ -77,6 +77,29 @@ def roll_injury(deflect=0, existing_injuries=0, mods=0):
     return res
 
 
+# --- resting / recovery (Ch.9) ---------------------------------------------
+def recovery_die(wil):
+    """The recovery die size for a given Willpower (Ch.9 step table):
+    WIL 0 -> d4, 1-2 -> d6, 3-4 -> d8, 5-6 -> d10, 7-8 -> d12, 9+ -> d20."""
+    wil = int(wil or 0)
+    if wil <= 0:
+        return 4
+    if wil <= 2:
+        return 6
+    if wil <= 4:
+        return 8
+    if wil <= 6:
+        return 10
+    if wil <= 8:
+        return 12
+    return 20
+
+
+def roll_recovery(wil):
+    """Roll a single recovery die for the live app."""
+    return random.randint(1, recovery_die(wil))
+
+
 # --- the Plot Die (Ch.0/13) ------------------------------------------------
 # A d6 rolled alongside the d20 when the stakes are raised: 2 blank,
 # 2 Opportunity, 2 Complication. A Complication face also adds +2 or +4 to the

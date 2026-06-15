@@ -225,6 +225,29 @@ def is_wrapped(doc):
     return isinstance(doc, dict) and doc.get('schema_version') == SCHEMA_VERSION and 'owner_user_id' in doc
 
 
+def ensure_character_envelope(doc, cid, system='pf2e', *, existing=None, new_id=None):
+    """Ensure `doc` carries the FLAT-ADDITIVE campaign envelope so a PF2e PC
+    created or re-imported in-app flows through invite -> claim -> My-Characters.
+
+    Identity precedence: if `existing` (the on-disk doc being overwritten) is
+    already wrapped, REUSE its id / owner_user_id / campaign_id -- so re-importing
+    a CLAIMED character keeps it claimed. Else if `doc` itself is already wrapped,
+    keep that identity. Otherwise stamp a fresh, UNCLAIMED envelope
+    (owner_user_id=None) with a new id under campaign `cid`. The new `doc`'s
+    native content (build/success/...) always wins.
+    """
+    src = existing if is_wrapped(existing or {}) else (doc if is_wrapped(doc) else None)
+    if src is not None:
+        chid = src['id']
+        owner = src.get('owner_user_id')
+        ecid = src.get('campaign_id') or cid
+    else:
+        chid = new_id or uuid.uuid4().hex
+        owner = None
+        ecid = cid
+    return wrap_character(chid, ecid, system, doc, owner_user_id=owner)
+
+
 # --------------------------------------------------------------------------
 # Server state (the single live-campaign slot; survives restarts/redeploys)
 # --------------------------------------------------------------------------
