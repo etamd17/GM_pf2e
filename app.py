@@ -837,7 +837,7 @@ def _do_persist_encounter_state():
                 # GM creature tactics notes — per-combatant free-text.
                 'tactics': getattr(c, 'tactics', ''),
             }
-            encounter_data['combatants'].append(entry)
+            encounter_data['combatants'].append(_augment_combatant_save(entry, c))
     try:
         os.makedirs(ENCOUNTER_DIR, exist_ok=True)
         _atomic_write_json(os.path.join(ENCOUNTER_DIR, '_autosave.json'), encounter_data, indent=2)
@@ -4915,6 +4915,13 @@ def _restore_encounter_autosave():
         ACTIVE_ENCOUNTER.clear()
         for item in combatants:
             new_c = None
+            # Cosmere combatants rebuild from their source id (bestiary _id or
+            # campaign PC id), not the PF2e MONSTER/PARTY libraries.
+            if item.get('system') == 'cosmere':
+                cos = _restore_cosmere_combatant(item)
+                if cos is not None:
+                    ACTIVE_ENCOUNTER.append(cos)
+                continue
             if item.get('type') == 'monster' and item.get('path') in MONSTER_LIBRARY:
                 new_c = copy.deepcopy(MONSTER_LIBRARY[item['path']])
             elif item.get('type') == 'pc' and item.get('path') in PARTY_LIBRARY:
@@ -7120,15 +7127,58 @@ def _cosmere_combatant(actor_id):
     actor doc carries type='character' so is_pc (the fast/slow PC phase) is set."""
     doc = _cosmere_doc_by_id(actor_id)
     if doc:
-        return systems.cosmere.CosmereActor(doc)
+        actor = systems.cosmere.CosmereActor(doc)
+        actor.restore_id = actor_id        # so the encounter autosave can rehydrate it
+        return actor
     pc = _load_cosmere_pc(actor_id)
     if pc:
         import systems.cosmere.build as _cb
         actor = systems.cosmere.CosmereActor(
             _cb.CosmereBuild(pc.get('build') or {}, homebrew=_cosmere_homebrew_store()).to_actor_doc())
         actor.name = pc.get('name') or actor.name
+        actor.restore_id = actor_id        # so the encounter autosave can rehydrate it
         return actor
     return None
+
+
+def _augment_combatant_save(entry, c):
+    """Stamp the game system (+ Cosmere rehydrate keys) onto a serialized
+    combatant so the encounter autosave / saved encounter round-trips across
+    systems. PF2e combatants get only `system` (back-compatible)."""
+    entry['system'] = getattr(c, 'system', 'pf2e')
+    if entry['system'] == 'cosmere':
+        entry['cosmere_id'] = getattr(c, 'restore_id', None)
+        entry['injuries'] = int(getattr(c, 'injuries', 0) or 0)
+        entry['speed_choice'] = getattr(c, 'speed_choice', None)
+    return entry
+
+
+def _restore_cosmere_combatant(item):
+    """Rebuild a Cosmere combatant from a serialized encounter entry, overlaying
+    its live combat state (HP / injuries / conditions / fast-slow / initiative /
+    visibility). Returns None if it can't be rebuilt (unknown id)."""
+    new_c = _cosmere_combatant(item.get('cosmere_id'))
+    if new_c is None:
+        return None
+    new_c.instance_id = item.get('instance_id', str(uuid.uuid4()))
+    new_c.initiative = item.get('initiative', 0)
+    if 'current_hp' in item:
+        new_c.current_hp = item['current_hp']
+    if isinstance(item.get('conditions'), dict):
+        new_c.conditions = dict(item['conditions'])
+    try:
+        new_c.injuries = max(0, int(item.get('injuries', getattr(new_c, 'injuries', 0)) or 0))
+    except (TypeError, ValueError):
+        pass
+    if item.get('speed_choice'):
+        new_c.speed_choice = item['speed_choice']
+    if 'visible_to_players' in item:
+        new_c.visible_to_players = bool(item['visible_to_players'])
+    if item.get('epithet'):
+        new_c.epithet = str(item['epithet'])
+    if 'tactics' in item:
+        new_c.tactics = str(item['tactics'] or '')
+    return new_c
 
 
 @app.route('/cosmere/bestiary')
@@ -8899,7 +8949,13 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
         _combat_log(f"{c.name} recovers {amount} health.", 'success')
         return
     deflect = int((getattr(c, 'deflect', {}) or {}).get('value', 0) or 0)
-    dtype = (damage_type or 'impact').strip().lower()
+    # Map any non-Cosmere damage type -- the UI quick/Enter path and the route
+    # both default to 'untyped', and the GM may pick a PF2e type -- to a
+    # deflectable physical hit ('impact'), the rulebook default for a blow.
+    # Only the explicit bypassing Cosmere types (spirit/vital) skip Deflect.
+    dtype = (damage_type or '').strip().lower()
+    if dtype not in _cc.DAMAGE_TYPES:
+        dtype = 'impact'
     at_zero_before = c.current_hp <= 0
     new_hp, taken, hit_zero = _cc.apply_damage(c.current_hp, amount, dtype, deflect)
     c.current_hp = new_hp
@@ -10451,7 +10507,7 @@ def save_encounter():
                 # GM creature tactics notes.
                 'tactics': getattr(c, 'tactics', ''),
             }
-            encounter_data['combatants'].append(entry)
+            encounter_data['combatants'].append(_augment_combatant_save(entry, c))
         with open(os.path.join(ENCOUNTER_DIR, f"{name}.json"), 'w', encoding='utf-8') as f:
             json.dump(encounter_data, f, indent=2)
     return redirect(url_for('tracker_view'))
@@ -10491,6 +10547,12 @@ def load_encounter():
 
         for item in combatants:
             new_c = None
+            # Cosmere combatants rebuild from their source id, not PF2e libraries.
+            if item.get('system') == 'cosmere':
+                cos = _restore_cosmere_combatant(item)
+                if cos is not None:
+                    ACTIVE_ENCOUNTER.append(cos)
+                continue
             if item.get('type') == 'monster' and item.get('path') in MONSTER_LIBRARY:
                 new_c = copy.deepcopy(MONSTER_LIBRARY[item['path']])
             elif item.get('type') == 'pc' and item.get('path') in PARTY_LIBRARY:
@@ -13787,10 +13849,18 @@ def import_pathbuilder():
             else:
                 final_json = pc_json
         
+        # In account/campaign mode, carry the campaign envelope so the PC stays
+        # invitable/claimable -- and on a re-import (merge) PRESERVE the existing
+        # id/owner so a claimed PC is not un-claimed. Legacy mode is unchanged.
+        cid = _active_campaign_id()
+        if cid:
+            final_json = _storage.ensure_character_envelope(
+                final_json, cid, existing=(existing_json if merged else None))
+
         # Save to disk
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(final_json, f, indent=2)
-        
+
         # Reload into library
         try:
             PARTY_LIBRARY[name] = Character(final_json, file_path)
@@ -14040,6 +14110,14 @@ def save_new_character():
         }
     }
     file_path = os.path.join(PARTY_DIR, f"{safe_name}.json")
+    # In account/campaign mode, stamp the campaign envelope so this PC is
+    # invitable/claimable and shows up in My Characters (re-save preserves any
+    # existing ownership). Legacy single-game mode (no active campaign) is
+    # unchanged.
+    cid = _active_campaign_id()
+    if cid:
+        existing = _storage.load_json(file_path) if os.path.exists(file_path) else None
+        new_char_json = _storage.ensure_character_envelope(new_char_json, cid, existing=existing)
     save_and_reload_character(char_name, new_char_json, file_path)
     return jsonify({"success": True, "message": "Character saved successfully!"})
 

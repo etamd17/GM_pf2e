@@ -1843,6 +1843,14 @@ const VALUED_CONDITIONS = ['frightened','sickened','dying','wounded','doomed','s
 const COSMERE_CONDITIONS = ['afflicted','determined','disoriented','empowered','enhanced','exhausted','focused','immobilized','prone','restrained','slowed','stunned','surprised','unconscious'];
 const DEADLY_CONDS = new Set(['dying','wounded','doomed']);
 const DAMAGE_TYPES = ['untyped','bludgeoning','piercing','slashing','fire','cold','electricity','acid','sonic','vitality','void','force','spirit','mental','poison','bleed'];
+// Cosmere damage types (Stormlight Ch.9): impact/keen/energy are reduced by
+// Deflect; spirit/vital bypass it. impact is the default (a deflectable blow).
+const COSMERE_DAMAGE_TYPES = ['impact','keen','energy','spirit','vital'];
+const COSMERE_DEFLECTABLE = new Set(['impact','keen','energy']);
+// Pick the damage-type vocabulary for a combatant by its game system.
+function damageTypeListFor(c) {
+    return (c && c.system === 'cosmere') ? COSMERE_DAMAGE_TYPES : DAMAGE_TYPES;
+}
 
 /* ──────────────── Top-level mutable globals (hoisted above bootstrap IIFE to avoid TDZ) ──────────────── */
 let sortableInstance = null;
@@ -2015,6 +2023,24 @@ function _renderNow() {
     paintMoodControl();
     renderEncounterNotes();
     renderSessionTimer();
+    syncMultiDamageTypes();
+}
+
+// The multi-target damage modal's type selector is static HTML; rebuild it to
+// match the active system so a Cosmere encounter offers impact/keen/energy/
+// spirit/vital (and defaults to a deflectable impact) rather than PF2e types.
+function syncMultiDamageTypes() {
+    const sel = document.getElementById('multi-dmg-type');
+    if (!sel) return;
+    const isCos = (STATE.combatants || []).some(c => c.system === 'cosmere');
+    const want = isCos ? 'cosmere' : 'pf2e';
+    if (sel.dataset.sys === want) return;        // already built for this system
+    sel.dataset.sys = want;
+    const list = isCos ? COSMERE_DAMAGE_TYPES : DAMAGE_TYPES;
+    const prev = sel.value;
+    sel.innerHTML = list.map(d => `<option value="${d}">${d}</option>`).join('');
+    if (isCos) sel.value = 'impact';
+    else if (list.includes(prev)) sel.value = prev;
 }
 
 // Keep the active combatant visible no matter how many participants are
@@ -2448,7 +2474,8 @@ function renderActivePanel() {
     // HP ribbon with inline damage controls
     const pctColor = hpPctColor(hpPct, c.is_pc);
     const fillCls = hpBarClass(hpPct, c.is_pc);
-    const dmgOpts = DAMAGE_TYPES.map(d => `<option value="${d}">${d === 'untyped' ? '— type —' : d}</option>`).join('');
+    const _dmgIsCos = (c.system === 'cosmere');
+    const dmgOpts = damageTypeListFor(c).map(d => `<option value="${d}"${(_dmgIsCos && d === 'impact') ? ' selected' : ''}>${(!_dmgIsCos && d === 'untyped') ? '— type —' : d}</option>`).join('');
     html += `<div class="hp-ribbon">
         <div class="hp-r-top">
             <span class="l">Hit Points</span>
@@ -3892,8 +3919,22 @@ function toggleSessionTimer() {
 function computeDamagePreview(amount, damageType, combatant) {
     // Only for non-PC combatants with W/R/I data
     if (!combatant || combatant.is_pc) return null;
-    if (!damageType || damageType === 'untyped') return null;
     if (!amount || amount <= 0) return null;
+    // Cosmere: show the Deflect reduction (impact/keen/energy) or the bypass
+    // (spirit/vital). Mirrors the server default of treating an unknown/blank
+    // type as a deflectable impact blow.
+    if (combatant.system === 'cosmere') {
+        const cdt = COSMERE_DAMAGE_TYPES.includes((damageType || '').toLowerCase().trim())
+            ? damageType.toLowerCase().trim() : 'impact';
+        const deflect = (combatant.cosmere && combatant.cosmere.deflect && combatant.cosmere.deflect.value) || 0;
+        if (COSMERE_DEFLECTABLE.has(cdt)) {
+            if (deflect <= 0) return null;
+            const final = Math.max(0, amount - deflect);
+            return { final, note: amount + ' ' + cdt + ' -> ' + final + ' (Deflect ' + deflect + ')', cls: 'resist' };
+        }
+        return { final: amount, note: amount + ' ' + cdt + ' (bypasses Deflect)', cls: 'neutral' };
+    }
+    if (!damageType || damageType === 'untyped') return null;
 
     const dtype = damageType.toLowerCase().trim();
     const immunities = (combatant.immunities || []).map(i => (typeof i === 'string' ? i : '').toLowerCase().trim());
