@@ -250,6 +250,46 @@ def test_cosmere_turn_advance_keeps_fast_actions_and_bool_conditions(tmp_path, m
         app._invalidate_tracker_cache()
 
 
+def test_corrupt_cosmere_combatant_does_not_wipe_encounter(tmp_path, monkeypatch):
+    """One Cosmere combatant whose build throws on rebuild (e.g. a malformed PC
+    doc off the volume after a partial write / schema drift) must NOT abort the
+    whole restore loop and silently truncate the live fight. The bad one is
+    skipped; everything else survives."""
+    monkeypatch.setattr(app, 'ENCOUNTER_DIR', str(tmp_path))
+    archer_id = _adv_id('Archer')
+    real = app._cosmere_combatant
+
+    def boom(aid):
+        if aid == 'BOOM':
+            raise ValueError('corrupt cosmere build')
+        return real(aid)
+    monkeypatch.setattr(app, '_cosmere_combatant', boom)
+
+    import json as _json
+    autosave = {'round': 2, 'turn_index': 0, 'notes': '', 'session_timer_start': None,
+                'combatants': [
+                    {'system': 'cosmere', 'type': 'monster', 'cosmere_id': archer_id,
+                     'instance_id': 'g1', 'current_hp': 10, 'conditions': {}},
+                    {'system': 'cosmere', 'type': 'monster', 'cosmere_id': 'BOOM',
+                     'instance_id': 'bad', 'current_hp': 5, 'conditions': {}},
+                    {'system': 'cosmere', 'type': 'monster', 'cosmere_id': archer_id,
+                     'instance_id': 'g2', 'current_hp': 8, 'conditions': {}},
+                ]}
+    with open(tmp_path / '_autosave.json', 'w', encoding='utf-8') as f:
+        _json.dump(autosave, f)
+    saved, idx, rnd = list(app.ACTIVE_ENCOUNTER), app.TURN_INDEX, app.ROUND_NUMBER
+    try:
+        app.ACTIVE_ENCOUNTER.clear()
+        app._restore_encounter_autosave()
+        ids = [c.instance_id for c in app.ACTIVE_ENCOUNTER]
+        assert ids == ['g1', 'g2']        # corrupt one skipped, the rest survive
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = saved
+        app.TURN_INDEX = idx
+        app.ROUND_NUMBER = rnd
+        app._invalidate_tracker_cache()
+
+
 def test_plot_die_route():
     r = app.app.test_client().post('/api/plot_die')
     assert r.status_code == 200

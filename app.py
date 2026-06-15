@@ -7189,8 +7189,15 @@ def _augment_combatant_save(entry, c):
 def _restore_cosmere_combatant(item):
     """Rebuild a Cosmere combatant from a serialized encounter entry, overlaying
     its live combat state (HP / injuries / conditions / fast-slow / initiative /
-    visibility). Returns None if it can't be rebuilt (unknown id)."""
-    new_c = _cosmere_combatant(item.get('cosmere_id'))
+    visibility). Returns None if it can't be rebuilt (unknown id, or a malformed
+    PC build that throws) -- a single bad combatant must never abort the whole
+    restore loop and wipe the live fight."""
+    try:
+        new_c = _cosmere_combatant(item.get('cosmere_id'))
+    except Exception as e:
+        print(f"[ENCOUNTER] skipped un-rebuildable cosmere combatant "
+              f"{item.get('cosmere_id')!r}: {e}")
+        return None
     if new_c is None:
         return None
     new_c.instance_id = item.get('instance_id', str(uuid.uuid4()))
@@ -7199,12 +7206,17 @@ def _restore_cosmere_combatant(item):
         new_c.current_hp = item['current_hp']
     if isinstance(item.get('conditions'), dict):
         new_c.conditions = dict(item['conditions'])
+    if isinstance(item.get('condition_expiry'), dict):
+        new_c.condition_expiry = dict(item['condition_expiry'])
     try:
         new_c.injuries = max(0, int(item.get('injuries', getattr(new_c, 'injuries', 0)) or 0))
     except (TypeError, ValueError):
         pass
     if item.get('speed_choice'):
         new_c.speed_choice = item['speed_choice']
+    # Match the fast(2)/slow(3) action ceiling cycle_turn would set, so the pip
+    # widget is right immediately on reload (not only after the next turn).
+    new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
     if 'visible_to_players' in item:
         new_c.visible_to_players = bool(item['visible_to_players'])
     if item.get('epithet'):
