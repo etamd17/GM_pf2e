@@ -6797,7 +6797,7 @@ def api_cosmere_loot_add():
     # ledger). A whole-party award (recipient not matching a PC, e.g. 'Party')
     # stays ledger-only. Mirrors the PF2e send_loot sheet write.
     for d in _list_cosmere_pcs():
-        if (d.get('name') or '') == recipient:
+        if (d.get('name') or (d.get('build') or {}).get('name') or '') == recipient:
             pid = d.get('id')
             wallet = None
             with _path_lock(_cosmere_pc_path(pid)):
@@ -7750,6 +7750,14 @@ def cosmere_builder():
         }
         if existing and existing.get('campaign_id'):
             doc['campaign_id'] = existing['campaign_id']
+        # Carry forward live state the builder rebuild would otherwise drop:
+        # the GM-awarded wallet (Tier 3) and the player's play_state (HP /
+        # conditions / focus). A level-up resets HP to max on next sheet load
+        # anyway, but silently wiping awarded spheres/items is data loss.
+        if existing and isinstance(existing.get('wallet'), dict):
+            doc['wallet'] = existing['wallet']
+        if existing and isinstance(existing.get('play_state'), dict):
+            doc['play_state'] = existing['play_state']
         _save_cosmere_pc(doc)
         return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
                         'url': url_for('cosmere_pc_sheet', pid=doc['id'])})

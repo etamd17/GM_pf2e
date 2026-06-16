@@ -594,8 +594,9 @@
             const el=document.querySelector('[data-sphere-v="'+k+'"]'); if(el) el.textContent=(sp[k]||0);
           });
           const goods=document.getElementById('cos-wallet-goods');
+          const _esc=function(s){ const t=document.createElement('span'); t.textContent=String(s==null?'':s); return t.innerHTML; };
           if(goods){ goods.innerHTML=(w.items||[]).map(function(it){
-            return '<span class="cs-chip">'+it.name+(it.qty>1?(' &times;'+it.qty):'')+'</span>'; }).join(''); }
+            return '<span class="cs-chip">'+_esc(it.name)+(it.qty>1?(' &times;'+it.qty):'')+'</span>'; }).join(''); }
           if(window.pf2eToast) window.pf2eToast('Loot received', 'success');
         } catch(ex){}
       });

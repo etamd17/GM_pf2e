@@ -24,6 +24,30 @@ def test_credit_cosmere_loot_accumulates_spheres_and_merges_items():
     assert doc['wallet'] == w2
 
 
+def test_builder_save_preserves_wallet_and_play_state(tmp_path, monkeypatch):
+    """Leveling up / editing a Cosmere PC in the builder must NOT wipe the
+    GM-awarded wallet (top-level doc['wallet']) or live play_state -- the builder
+    rebuilds the doc from scratch, so it has to carry these forward."""
+    import json
+    monkeypatch.setattr(app, 'COSMERE_PC_DIR', str(tmp_path))
+    pid = 'b' * 32
+    build = {'name': 'Kal', 'level': 1, 'ancestry': 'Human', 'path': 'Warrior',
+             'attributes': {'str': 1, 'spd': 1, 'int': 1, 'wil': 1, 'awa': 1, 'pre': 1}}
+    existing = {'id': pid, 'system': 'cosmere', 'name': 'Kal', 'owner_user_id': None,
+                'build': build,
+                'wallet': {'spheres': {'chip': 10, 'mark': 2, 'broam': 1},
+                           'items': [{'name': 'Sphere Pouch', 'qty': 1}]},
+                'play_state': {'health': 5, 'conditions': {'slowed': True}}}
+    with open(tmp_path / (pid + '.json'), 'w', encoding='utf-8') as f:
+        json.dump(existing, f)
+    r = app.app.test_client().post('/cosmere/builder', json={'id': pid, 'build': build})
+    assert r.status_code == 200
+    doc = app._load_cosmere_pc(pid)
+    assert doc.get('wallet', {}).get('spheres', {}).get('chip') == 10   # wallet kept
+    assert any(i['name'] == 'Sphere Pouch' for i in doc['wallet']['items'])
+    assert doc.get('play_state', {}).get('health') == 5                 # play_state kept
+
+
 def test_credit_cosmere_loot_ignores_blank_items():
     doc = {'id': 'p2', 'name': 'Shallan'}
     w = app._credit_cosmere_loot(doc, [{'name': '', 'qty': 5}, {'name': '  ', 'qty': 1}], {})
