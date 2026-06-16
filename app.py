@@ -485,7 +485,7 @@ ACTIVE_CAMPAIGN_ID = None
 PARTY_DIR = ENCOUNTER_DIR = CAMPAIGN_ASSETS_DIR = HANDOUTS_DIR = CAMPAIGN_AUDIO_DIR = None
 CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
 SCRAPBOOK_FILE = SCRAPBOOK_DIR = PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
-HANDOUTS_FILE = None
+HANDOUTS_FILE = COSMERE_ADVERSARIES_FILE = None
 
 
 def _bind_campaign_paths(cid):
@@ -495,7 +495,7 @@ def _bind_campaign_paths(cid):
     global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
     global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
     global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
-    global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE, HANDOUTS_FILE
+    global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE, HANDOUTS_FILE, COSMERE_ADVERSARIES_FILE
     ACTIVE_CAMPAIGN_ID = cid
     if cid:
         PARTY_DIR = _storage.party_dir(cid)
@@ -515,6 +515,7 @@ def _bind_campaign_paths(cid):
         COSMERE_PC_DIR = _storage.cosmere_pc_dir(cid)
         COSMERE_HOMEBREW_FILE = _storage.homebrew_file(cid)
         HANDOUTS_FILE = _storage.handouts_file(cid)
+        COSMERE_ADVERSARIES_FILE = _storage.cosmere_adversaries_file(cid)
         _storage.ensure_campaign_dirs(cid)
     else:
         PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
@@ -534,6 +535,7 @@ def _bind_campaign_paths(cid):
         COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
         COSMERE_HOMEBREW_FILE = os.path.join(DATA_DIR, 'homebrew.json')
         HANDOUTS_FILE = os.path.join(DATA_DIR, 'handouts.json')
+        COSMERE_ADVERSARIES_FILE = os.path.join(DATA_DIR, 'cosmere_adversaries.json')
 
 
 def load_campaign(cid):
@@ -7191,11 +7193,75 @@ def api_tracker_state():
     return _tracker_json_response()
 
 # ── Cosmere RPG (Phase 3): bestiary browsing, sheet view, tracker add ──────
+def _load_cosmere_custom_adversaries():
+    """Per-campaign GM-authored Cosmere adversaries (homebrew). Stored as full
+    Foundry-shaped docs so CosmereActor + the tracker treat them like canon."""
+    data = _storage.load_json(COSMERE_ADVERSARIES_FILE, []) if COSMERE_ADVERSARIES_FILE else []
+    return data if isinstance(data, list) else []
+
+
+def _save_cosmere_custom_adversary(doc):
+    advs = _load_cosmere_custom_adversaries()
+    advs.append(doc)
+    if COSMERE_ADVERSARIES_FILE:
+        _atomic_write_json(COSMERE_ADVERSARIES_FILE, advs, indent=2)
+
+
+def _build_cosmere_adversary_doc(data):
+    """Build a Foundry-shaped Cosmere adversary doc from a GM quick form, using
+    overrides so the GM's final defenses / health / deflect / strike are used
+    verbatim (CosmereActor honors `useOverride`)."""
+    def _gi(k, dflt):
+        try:
+            return int(data.get(k, dflt) if data.get(k) not in (None, '') else dflt)
+        except (TypeError, ValueError):
+            return dflt
+    name = (str(data.get('name') or 'Custom Adversary').strip()) or 'Custom Adversary'
+    health = max(1, _gi('health', 12))
+    atk_mod = _gi('atk_mod', 5)
+    return {
+        '_id': uuid.uuid4().hex,
+        'name': name[:80], 'type': 'adversary',
+        'system': {
+            'level': {'value': _gi('level', 1)},
+            'tier': _gi('tier', 1), 'role': str(data.get('role') or '').strip()[:40],
+            'size': str(data.get('size') or 'medium').strip()[:20],
+            'attributes': {k: {'value': 0} for k in ('str', 'spd', 'int', 'wil', 'awa', 'pre')},
+            'defenses': {
+                'phy': {'useOverride': True, 'override': _gi('phy', 11)},
+                'cog': {'useOverride': True, 'override': _gi('cog', 11)},
+                'spi': {'useOverride': True, 'override': _gi('spi', 11)},
+            },
+            'resources': {
+                'hea': {'value': health, 'max': {'useOverride': True, 'override': health}},
+                'foc': {'value': _gi('focus', 0), 'max': {'useOverride': True, 'override': _gi('focus', 0)}},
+                'inv': {'value': 0, 'max': {}},
+            },
+            'deflect': {'natural': max(0, _gi('deflect', 0)),
+                        'types': {'impact': True, 'keen': True, 'energy': True,
+                                  'spirit': False, 'vital': False}},
+            'skills': {'hwp': {'attribute': 'str', 'rank': 0,
+                               'mod': {'useOverride': True, 'override': atk_mod}, 'unlocked': True}},
+        },
+        'items': [{
+            'type': 'weapon', 'name': (str(data.get('atk_name') or 'Strike').strip() or 'Strike')[:60],
+            'system': {'damage': {'formula': (str(data.get('atk_dmg') or '1d6').strip() or '1d6')[:40],
+                                  'type': (str(data.get('atk_type') or 'impact').strip() or 'impact'),
+                                  'skill': 'hwp'}},
+        }],
+    }
+
+
 def _cosmere_doc_by_id(actor_id):
     """An ingested Cosmere adversary doc by its Foundry _id (or None) -- across
-    the base system bestiary AND the ingested modules."""
+    the base system bestiary, the ingested modules, AND per-campaign GM-authored
+    homebrew adversaries (so a custom adversary resolves for both add-to-tracker
+    and encounter restore)."""
     for d in systems.cosmere.adversary_docs():
         if d.get('_id') == actor_id:
+            return d
+    for d in _load_cosmere_custom_adversaries():
+        if isinstance(d, dict) and d.get('_id') == actor_id:
             return d
     return None
 
@@ -8461,6 +8527,27 @@ def add_cosmere_party():
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
+
+@app.route('/api/cosmere/add_custom_adversary', methods=['POST'])
+@gm_required
+def add_cosmere_custom_adversary():
+    """GM: stat a custom Cosmere adversary from a quick form, persist it to the
+    campaign's homebrew adversary store (reusable + survives a restart), and add
+    it to the live encounter. The Cosmere sibling of /api/add_custom_monster."""
+    if _active_system() != 'cosmere':
+        return jsonify({'success': False, 'error': 'cosmere only'}), 400
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
+    doc = _build_cosmere_adversary_doc(data)
+    _save_cosmere_custom_adversary(doc)
+    new_c = _cosmere_combatant(doc['_id'])
+    if new_c is None:
+        return jsonify({'success': False, 'error': 'failed to build adversary'}), 500
+    new_c.instance_id = str(uuid.uuid4())
+    ACTIVE_ENCOUNTER.append(new_c)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'success': True, 'name': doc['name'], 'id': doc['_id'],
+                    'instance_id': new_c.instance_id})
 
 @app.route('/api/remove_combatant/<instance_id>', methods=['POST'])
 def remove_combatant(instance_id):
