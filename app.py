@@ -485,6 +485,7 @@ ACTIVE_CAMPAIGN_ID = None
 PARTY_DIR = ENCOUNTER_DIR = CAMPAIGN_ASSETS_DIR = HANDOUTS_DIR = CAMPAIGN_AUDIO_DIR = None
 CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
 SCRAPBOOK_FILE = SCRAPBOOK_DIR = PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
+HANDOUTS_FILE = COSMERE_ADVERSARIES_FILE = None
 
 
 def _bind_campaign_paths(cid):
@@ -494,7 +495,7 @@ def _bind_campaign_paths(cid):
     global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
     global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
     global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
-    global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE
+    global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE, HANDOUTS_FILE, COSMERE_ADVERSARIES_FILE
     ACTIVE_CAMPAIGN_ID = cid
     if cid:
         PARTY_DIR = _storage.party_dir(cid)
@@ -513,6 +514,8 @@ def _bind_campaign_paths(cid):
         STORY_THREADS_FILE = _storage.story_threads_file(cid)
         COSMERE_PC_DIR = _storage.cosmere_pc_dir(cid)
         COSMERE_HOMEBREW_FILE = _storage.homebrew_file(cid)
+        HANDOUTS_FILE = _storage.handouts_file(cid)
+        COSMERE_ADVERSARIES_FILE = _storage.cosmere_adversaries_file(cid)
         _storage.ensure_campaign_dirs(cid)
     else:
         PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
@@ -531,6 +534,8 @@ def _bind_campaign_paths(cid):
         STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
         COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
         COSMERE_HOMEBREW_FILE = os.path.join(DATA_DIR, 'homebrew.json')
+        HANDOUTS_FILE = os.path.join(DATA_DIR, 'handouts.json')
+        COSMERE_ADVERSARIES_FILE = os.path.join(DATA_DIR, 'cosmere_adversaries.json')
 
 
 def load_campaign(cid):
@@ -540,6 +545,7 @@ def load_campaign(cid):
     load_libraries()
     _load_session_state()
     _load_session_highlights()
+    _load_handouts()
     return ACTIVE_CAMPAIGN_ID
 
 
@@ -6736,6 +6742,30 @@ def api_cosmere_loot():
                     'total_chips': sum(_sphere_value(e.get('spheres')) for e in entries)})
 
 
+def _credit_cosmere_loot(doc, items, spheres):
+    """Accumulate awarded spheres + items onto a Cosmere PC doc's `wallet` so the
+    award shows on the player's sheet (not just the ledger). Spheres sum by
+    denomination; items merge by name. Returns the updated wallet."""
+    w = doc.get('wallet') if isinstance(doc.get('wallet'), dict) else {}
+    sp = dict(w.get('spheres') or {})
+    for k in ('chip', 'mark', 'broam'):
+        sp[k] = int(sp.get(k, 0) or 0) + int((spheres or {}).get(k, 0) or 0)
+    goods = [dict(g) for g in (w.get('items') or []) if isinstance(g, dict)]
+    for it in (items or []):
+        name = str(it.get('name', '')).strip()
+        if not name:
+            continue
+        qty = int(it.get('qty', 1) or 1)
+        for g in goods:
+            if g.get('name') == name[:80]:
+                g['qty'] = int(g.get('qty', 0) or 0) + qty
+                break
+        else:
+            goods.append({'name': name[:80], 'qty': qty})
+    doc['wallet'] = {'spheres': sp, 'items': goods}
+    return doc['wallet']
+
+
 @app.route('/api/cosmere/loot/add', methods=['POST'])
 @gm_required
 def api_cosmere_loot_add():
@@ -6763,6 +6793,24 @@ def api_cosmere_loot_add():
         'note': (data.get('note') or '').strip()[:280],
     }
     _mutate_loot_ledger(lambda l: l['entries'].append(entry))
+    # Credit a NAMED PC's sheet wallet (so player-visible wealth tracks the
+    # ledger). A whole-party award (recipient not matching a PC, e.g. 'Party')
+    # stays ledger-only. Mirrors the PF2e send_loot sheet write.
+    for d in _list_cosmere_pcs():
+        if (d.get('name') or (d.get('build') or {}).get('name') or '') == recipient:
+            pid = d.get('id')
+            wallet = None
+            with _path_lock(_cosmere_pc_path(pid)):
+                doc = _load_cosmere_pc(pid) or d
+                wallet = _credit_cosmere_loot(doc, norm_items, norm_spheres)
+                _save_cosmere_pc(doc, fsync=False)
+            try:
+                sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
+                                               'wallet': wallet, 'items': norm_items,
+                                               'spheres': norm_spheres})
+            except Exception:
+                pass
+            break
     # Also feed the session scrapbook's loot highlights -- the ledger is the
     # permanent wealth record; this is tonight's haul for the Session Complete recap.
     try:
@@ -7145,11 +7193,75 @@ def api_tracker_state():
     return _tracker_json_response()
 
 # ── Cosmere RPG (Phase 3): bestiary browsing, sheet view, tracker add ──────
+def _load_cosmere_custom_adversaries():
+    """Per-campaign GM-authored Cosmere adversaries (homebrew). Stored as full
+    Foundry-shaped docs so CosmereActor + the tracker treat them like canon."""
+    data = _storage.load_json(COSMERE_ADVERSARIES_FILE, []) if COSMERE_ADVERSARIES_FILE else []
+    return data if isinstance(data, list) else []
+
+
+def _save_cosmere_custom_adversary(doc):
+    advs = _load_cosmere_custom_adversaries()
+    advs.append(doc)
+    if COSMERE_ADVERSARIES_FILE:
+        _atomic_write_json(COSMERE_ADVERSARIES_FILE, advs, indent=2)
+
+
+def _build_cosmere_adversary_doc(data):
+    """Build a Foundry-shaped Cosmere adversary doc from a GM quick form, using
+    overrides so the GM's final defenses / health / deflect / strike are used
+    verbatim (CosmereActor honors `useOverride`)."""
+    def _gi(k, dflt):
+        try:
+            return int(data.get(k, dflt) if data.get(k) not in (None, '') else dflt)
+        except (TypeError, ValueError):
+            return dflt
+    name = (str(data.get('name') or 'Custom Adversary').strip()) or 'Custom Adversary'
+    health = max(1, _gi('health', 12))
+    atk_mod = _gi('atk_mod', 5)
+    return {
+        '_id': uuid.uuid4().hex,
+        'name': name[:80], 'type': 'adversary',
+        'system': {
+            'level': {'value': _gi('level', 1)},
+            'tier': _gi('tier', 1), 'role': str(data.get('role') or '').strip()[:40],
+            'size': str(data.get('size') or 'medium').strip()[:20],
+            'attributes': {k: {'value': 0} for k in ('str', 'spd', 'int', 'wil', 'awa', 'pre')},
+            'defenses': {
+                'phy': {'useOverride': True, 'override': _gi('phy', 11)},
+                'cog': {'useOverride': True, 'override': _gi('cog', 11)},
+                'spi': {'useOverride': True, 'override': _gi('spi', 11)},
+            },
+            'resources': {
+                'hea': {'value': health, 'max': {'useOverride': True, 'override': health}},
+                'foc': {'value': _gi('focus', 0), 'max': {'useOverride': True, 'override': _gi('focus', 0)}},
+                'inv': {'value': 0, 'max': {}},
+            },
+            'deflect': {'natural': max(0, _gi('deflect', 0)),
+                        'types': {'impact': True, 'keen': True, 'energy': True,
+                                  'spirit': False, 'vital': False}},
+            'skills': {'hwp': {'attribute': 'str', 'rank': 0,
+                               'mod': {'useOverride': True, 'override': atk_mod}, 'unlocked': True}},
+        },
+        'items': [{
+            'type': 'weapon', 'name': (str(data.get('atk_name') or 'Strike').strip() or 'Strike')[:60],
+            'system': {'damage': {'formula': (str(data.get('atk_dmg') or '1d6').strip() or '1d6')[:40],
+                                  'type': (str(data.get('atk_type') or 'impact').strip() or 'impact'),
+                                  'skill': 'hwp'}},
+        }],
+    }
+
+
 def _cosmere_doc_by_id(actor_id):
     """An ingested Cosmere adversary doc by its Foundry _id (or None) -- across
-    the base system bestiary AND the ingested modules."""
+    the base system bestiary, the ingested modules, AND per-campaign GM-authored
+    homebrew adversaries (so a custom adversary resolves for both add-to-tracker
+    and encounter restore)."""
     for d in systems.cosmere.adversary_docs():
         if d.get('_id') == actor_id:
+            return d
+    for d in _load_cosmere_custom_adversaries():
+        if isinstance(d, dict) and d.get('_id') == actor_id:
             return d
     return None
 
@@ -7182,6 +7294,7 @@ def _augment_combatant_save(entry, c):
     if entry['system'] == 'cosmere':
         entry['cosmere_id'] = getattr(c, 'restore_id', None)
         entry['injuries'] = int(getattr(c, 'injuries', 0) or 0)
+        entry['injury_log'] = [dict(r) for r in (getattr(c, 'injury_log', []) or []) if isinstance(r, dict)]
         entry['speed_choice'] = getattr(c, 'speed_choice', None)
     return entry
 
@@ -7212,6 +7325,8 @@ def _restore_cosmere_combatant(item):
         new_c.injuries = max(0, int(item.get('injuries', getattr(new_c, 'injuries', 0)) or 0))
     except (TypeError, ValueError):
         pass
+    if isinstance(item.get('injury_log'), list):
+        new_c.injury_log = [dict(r) for r in item['injury_log'] if isinstance(r, dict)]
     if item.get('speed_choice'):
         new_c.speed_choice = item['speed_choice']
     # Match the fast(2)/slow(3) action ceiling cycle_turn would set, so the pip
@@ -7635,6 +7750,14 @@ def cosmere_builder():
         }
         if existing and existing.get('campaign_id'):
             doc['campaign_id'] = existing['campaign_id']
+        # Carry forward live state the builder rebuild would otherwise drop:
+        # the GM-awarded wallet (Tier 3) and the player's play_state (HP /
+        # conditions / focus). A level-up resets HP to max on next sheet load
+        # anyway, but silently wiping awarded spheres/items is data loss.
+        if existing and isinstance(existing.get('wallet'), dict):
+            doc['wallet'] = existing['wallet']
+        if existing and isinstance(existing.get('play_state'), dict):
+            doc['play_state'] = existing['play_state']
         _save_cosmere_pc(doc)
         return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
                         'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
@@ -7782,6 +7905,7 @@ def cosmere_pc_sheet(pid):
         attr_names=systems.cosmere.ATTR_NAMES,
         defense_names=systems.cosmere.DEFENSE_NAMES,
         pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
+        wallet=doc.get('wallet') if isinstance(doc.get('wallet'), dict) else None,
         infected=build.infected_records(),           # selected Infected Arts (cost + abilities)
         warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
         radiant=build.order(),                       # canon OR homebrew order
@@ -8412,6 +8536,27 @@ def add_cosmere_party():
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
+@app.route('/api/cosmere/add_custom_adversary', methods=['POST'])
+@gm_required
+def add_cosmere_custom_adversary():
+    """GM: stat a custom Cosmere adversary from a quick form, persist it to the
+    campaign's homebrew adversary store (reusable + survives a restart), and add
+    it to the live encounter. The Cosmere sibling of /api/add_custom_monster."""
+    if _active_system() != 'cosmere':
+        return jsonify({'success': False, 'error': 'cosmere only'}), 400
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
+    doc = _build_cosmere_adversary_doc(data)
+    _save_cosmere_custom_adversary(doc)
+    new_c = _cosmere_combatant(doc['_id'])
+    if new_c is None:
+        return jsonify({'success': False, 'error': 'failed to build adversary'}), 500
+    new_c.instance_id = str(uuid.uuid4())
+    ACTIVE_ENCOUNTER.append(new_c)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'success': True, 'name': doc['name'], 'id': doc['_id'],
+                    'instance_id': new_c.instance_id})
+
 @app.route('/api/remove_combatant/<instance_id>', methods=['POST'])
 def remove_combatant(instance_id):
     global ACTIVE_ENCOUNTER, TURN_INDEX
@@ -8901,6 +9046,28 @@ def recall_knowledge_info(instance_id):
 # ──────────────────────────────────────────────────────────
 HANDOUTS = []  # [{id, title, content, image_url, recipients: ['all' or pc_names], time, from_gm}]
 
+
+def _load_handouts():
+    """Load the campaign's persisted handout records (text/title/recipients).
+    The uploaded images already live on the volume; this keeps the records that
+    point at them from vanishing on a single-worker restart/redeploy."""
+    global HANDOUTS
+    data = _storage.load_json(HANDOUTS_FILE, []) if HANDOUTS_FILE else []
+    HANDOUTS = data if isinstance(data, list) else []
+
+
+def _save_handouts():
+    if not HANDOUTS_FILE:
+        return
+    try:
+        _atomic_write_json(HANDOUTS_FILE, HANDOUTS, indent=2)
+    except Exception as e:
+        print(f"[HANDOUTS] save failed: {e}")
+
+
+_load_handouts()
+
+
 @app.route('/api/handouts', methods=['GET'])
 def get_handouts():
     """Get handouts. Players only see handouts addressed to them or 'all'."""
@@ -8936,6 +9103,7 @@ def create_handout():
     }
     HANDOUTS.append(handout)
     if len(HANDOUTS) > 50: HANDOUTS.pop(0)
+    _save_handouts()
 
     # Broadcast to all clients (players filter client-side)
     sse_broadcast('handout', handout)
@@ -8948,6 +9116,7 @@ def delete_handout(handout_id):
     """GM deletes a handout."""
     global HANDOUTS
     HANDOUTS = [h for h in HANDOUTS if h['id'] != handout_id]
+    _save_handouts()
     sse_broadcast('handout_deleted', {'id': handout_id})
     return jsonify({"success": True})
 
@@ -9052,6 +9221,29 @@ PF2E_DAMAGE_TYPES = [
     'mental', 'poison', 'bleed',
 ]
 
+
+def _apply_cosmere_injury_effect(c, effect):
+    """Apply an injury's d8 effect (Ch.9) as a tracked condition on the combatant
+    so it surfaces on the sheet. Exhausted parses its magnitude and stacks (a
+    valued condition); slowed/disoriented/surprised set the boolean. 'Can only
+    use one hand' has no condition mapping -- it lives in the injury_log only."""
+    e = (effect or '').lower()
+    conds = c.conditions
+    if 'exhausted' in e:
+        import re as _re
+        m = _re.search(r'(\d+)', e)
+        mag = int(m.group(1)) if m else 1
+        cur = conds.get('exhausted', 0)
+        cur = int(cur) if (isinstance(cur, (int, float)) and not isinstance(cur, bool)) else (1 if cur else 0)
+        conds['exhausted'] = cur + mag
+    elif 'slowed' in e:
+        conds['slowed'] = True
+    elif 'disoriented' in e:
+        conds['disoriented'] = True
+    elif 'surprised' in e:
+        conds['surprised'] = True
+
+
 def _cosmere_adjust_hp(c, amount, action, damage_type):
     """Damage/heal a Cosmere combatant via the Cosmere combat engine: Deflect
     reduces impact/keen/energy only, and reaching 0 health triggers an injury
@@ -9095,10 +9287,21 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
         roll = _cc.roll_injury(deflect=deflect, existing_injuries=inj)
         c.injuries = inj + 1
         c.conditions['unconscious'] = True
+        # Persist the STRUCTURED injury (severity/duration/effect) so the GM can
+        # track the death spiral over a long fight, not just an integer count.
+        if not isinstance(getattr(c, 'injury_log', None), list):
+            c.injury_log = []
+        eff = roll.get('effect', '')
+        c.injury_log.append({'n': c.injuries, 'total': roll['total'],
+                             'severity': roll['severity'],
+                             'duration': roll.get('duration', ''), 'effect': eff})
         if roll['severity'] == 'death':
             note += f" — Unconscious. INJURY ROLL {roll['total']}: DEATH"
         else:
-            eff = roll.get('effect', '')
+            # Auto-apply the d8 effect as a tracked condition so it shows on the
+            # sheet instead of only scrolling past in the log.
+            if eff:
+                _apply_cosmere_injury_effect(c, eff)
             note += (f" — Unconscious, injury #{c.injuries} (roll {roll['total']} = "
                      f"{roll['severity'].replace('_', ' ')}" + (f"; {eff})" if eff else ")"))
     _combat_log(note, 'critical')
@@ -10875,6 +11078,10 @@ def encounter_notes_api():
 @app.route('/gmscreen')
 @gm_required
 def gm_screen():
+    # System guard: a bookmarked/typed /gmscreen must not drop a Cosmere table
+    # onto the PF2e GM screen. Send them to the Cosmere equivalent.
+    if _active_system() == 'cosmere':
+        return redirect(url_for('cosmere_gmscreen'))
     return render_template('gmscreen.html')
 
 
@@ -11171,6 +11378,10 @@ def api_monster_statblock(instance_id):
 @app.route('/generator')
 @gm_required
 def dm_generator():
+    # System guard: the PF2e (Golarion) generators don't belong to a Cosmere
+    # table; redirect to the Rosharan generators.
+    if _active_system() == 'cosmere':
+        return redirect(url_for('cosmere_generator'))
     # Honor explicit ?biome / ?level overrides so a refresh-after-tweak
     # restores the GM's chosen context. Default biome was previously
     # hardcoded "City", which silently overrode every initial card on
@@ -11286,6 +11497,10 @@ def mobile_combat():
 
 @app.route('/player')
 def player_view():
+    # System guard: a Cosmere player who lands on /player (bookmark / stale link)
+    # goes to their Cosmere hub instead of the empty PF2e party picker.
+    if _active_system() == 'cosmere':
+        return redirect(url_for('cosmere_player_hub'))
     # Sync from disk to catch any characters added outside this process
     _sync_party_from_disk()
     # Pass the campaign config so the hub can render the same hero band
@@ -14974,6 +15189,68 @@ def import_monster():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _save_custom_monster(monster_json, name):
+    """Persist a GM-authored monster to the bestiary (atomic write) and register
+    it in MONSTER_LIBRARY for reuse. Returns (filename, Monster)."""
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name) or 'Custom_Monster'
+    fname = f"{safe_name}.json"
+    _atomic_write_json(os.path.join(MONSTER_DIR, fname), monster_json, indent=2)
+    m = Monster(monster_json, fname)
+    MONSTER_LIBRARY[fname] = m
+    return fname, m
+
+
+@app.route('/api/add_custom_monster', methods=['POST'])
+@gm_required
+def add_custom_monster():
+    """Create a one-off custom monster from the tracker's quick form, persist it
+    as a reusable bestiary entry (atomic), and add it to the LIVE encounter.
+    (Previously this route did not exist, so the tracker's Add-Custom-Monster
+    button silently did nothing -- the /api/add_combatant fallback has no
+    'custom' branch.)"""
+    data = request.json or {}
+    name = (data.get('name') or 'Custom Monster').strip() or 'Custom Monster'
+    hp = int(data.get('hp', 20) or 20)
+    monster_json = {
+        "name": name, "type": "npc",
+        "system": {
+            "details": {"level": {"value": int(data.get('level', 1) or 1)}},
+            "attributes": {
+                "hp": {"value": hp, "max": hp},
+                "ac": {"value": int(data.get('ac', 15) or 15)},
+                "speed": {"value": int(data.get('speed', 25) or 25)},
+            },
+            "saves": {
+                "fortitude": {"value": int(data.get('fort', 5) or 5)},
+                "reflex": {"value": int(data.get('ref', 5) or 5)},
+                "will": {"value": int(data.get('will', 3) or 3)},
+            },
+            "perception": {"value": int(data.get('perception', 5) or 5)},
+            "traits": {"value": []},
+        },
+        "items": [{
+            "name": (data.get('atk_name') or 'Strike').strip() or 'Strike',
+            "type": "melee",
+            "system": {
+                "bonus": {"value": int(data.get('atk_mod', 8) or 8)},
+                "damageRolls": {"0": {"damage": (data.get('atk_dmg') or '1d6+3'),
+                                      "damageType": "slashing"}},
+                "traits": {"value": []},
+            },
+        }],
+    }
+    try:
+        _fname, m = _save_custom_monster(monster_json, name)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"could not create monster: {e}"}), 500
+    new_c = copy.deepcopy(m)
+    new_c.instance_id = str(uuid.uuid4())
+    ACTIVE_ENCOUNTER.append(new_c)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({"success": True, "name": name, "instance_id": new_c.instance_id})
+
+
 @app.route('/api/create_monster', methods=['POST'])
 @gm_required
 def create_custom_monster():
@@ -15022,14 +15299,8 @@ def create_custom_monster():
             "system": {"description": {"value": action.get('desc', '')}}
         })
     
-    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
-    file_path = os.path.join(MONSTER_DIR, f"{safe_name}.json")
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(monster_json, f, indent=2)
-    
     try:
-        m = Monster(monster_json, f"{safe_name}.json")
-        MONSTER_LIBRARY[f"{safe_name}.json"] = m
+        _fname, m = _save_custom_monster(monster_json, name)
         return jsonify({"success": True, "name": name, "level": m.level})
     except Exception as e:
         return jsonify({"success": True, "name": name, "warning": f"Saved but parse error: {e}"})

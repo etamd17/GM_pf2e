@@ -1429,6 +1429,20 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             title="Cosmere initiative house-rule: rulebook Fast/Slow phases, or a traditional rolled d20+Speed order">
         Initiative: <b id="cos-init-mode">{{ 'Traditional (d20+Speed)' if cosmere_initiative == 'traditional' else 'Fast / Slow phases' }}</b>
     </button>
+    <button class="ts-btn" onclick="document.getElementById('cos-custom-adv').classList.toggle('hidden')" title="Stat a custom Cosmere adversary and add it to the encounter">+ Custom</button>
+    <div id="cos-custom-adv" class="hidden" style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px;">
+        <input id="cca-name" class="ts-select" style="min-width:150px;" placeholder="Name">
+        <input id="cca-level" type="number" class="ts-select" style="width:64px;" placeholder="Lvl" value="1">
+        <input id="cca-phy" type="number" class="ts-select" style="width:64px;" placeholder="Phy" title="Physical defense">
+        <input id="cca-cog" type="number" class="ts-select" style="width:64px;" placeholder="Cog" title="Cognitive defense">
+        <input id="cca-spi" type="number" class="ts-select" style="width:64px;" placeholder="Spi" title="Spiritual defense">
+        <input id="cca-health" type="number" class="ts-select" style="width:74px;" placeholder="Health">
+        <input id="cca-deflect" type="number" class="ts-select" style="width:74px;" placeholder="Deflect" value="0">
+        <input id="cca-atk-name" class="ts-select" style="width:110px;" placeholder="Strike" value="Strike">
+        <input id="cca-atk-mod" type="number" class="ts-select" style="width:64px;" placeholder="+Atk">
+        <input id="cca-atk-dmg" class="ts-select" style="width:90px;" placeholder="Damage" value="1d6">
+        <button class="ts-btn primary" onclick="addCustomCosmereAdversary()">Add</button>
+    </div>
     {% else %}
     <div class="ts-search" id="monster-search-wrap">
         {# API-backed search: the previous version inlined 4,797 <div>
@@ -2896,6 +2910,25 @@ function addCosmere(selId) {
     const sel = document.getElementById(selId);
     if (!sel || !sel.value) return;
     apiPost('/api/add_combatant', {type:'cosmere', path: sel.value});
+}
+
+async function addCustomCosmereAdversary() {
+    const v = id => (document.getElementById(id) || {}).value;
+    const payload = {
+        name: v('cca-name') || 'Custom Adversary',
+        level: parseInt(v('cca-level')) || 1,
+        phy: parseInt(v('cca-phy')) || 11, cog: parseInt(v('cca-cog')) || 11, spi: parseInt(v('cca-spi')) || 11,
+        health: parseInt(v('cca-health')) || 12, deflect: parseInt(v('cca-deflect')) || 0,
+        atk_name: v('cca-atk-name') || 'Strike', atk_mod: parseInt(v('cca-atk-mod')) || 5,
+        atk_dmg: v('cca-atk-dmg') || '1d6',
+    };
+    try {
+        const res = await fetch('/api/cosmere/add_custom_adversary', {method:'POST', headers:JSON_HEADERS, body:JSON.stringify(payload)});
+        if (!res.ok) throw new Error('bad status');
+        applyState(await apiGet('/api/tracker_state'));
+        document.getElementById('cos-custom-adv').classList.add('hidden');
+        toast('Added ' + payload.name, 'success');
+    } catch(e) { toast('Failed to add adversary', 'error'); }
 }
 
 async function adjustHP(id, action) {

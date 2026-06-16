@@ -331,6 +331,24 @@
   {% endfor %}
   {% endif %}
 
+  {% if pc %}
+  <div class="cs-section-h">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
+  <div id="cos-wallet">
+    {% set w = wallet or {} %}
+    {% set sp = w.spheres or {} %}
+    <div class="cs-chips" id="cos-wallet-spheres">
+      <span class="cs-chip" data-sphere="broam">Broam <b data-sphere-v="broam">{{ sp.broam or 0 }}</b></span>
+      <span class="cs-chip" data-sphere="mark">Mark <b data-sphere-v="mark">{{ sp.mark or 0 }}</b></span>
+      <span class="cs-chip" data-sphere="chip">Chip <b data-sphere-v="chip">{{ sp.chip or 0 }}</b></span>
+    </div>
+    <div class="cs-chips" id="cos-wallet-goods" style="margin-top:.35rem;">
+      {% for it in (w['items'] if w.get('items') else []) %}
+      <span class="cs-chip">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="cs-section-h">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
   {% if inventory %}
   <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
@@ -566,6 +584,21 @@
       _csbSse.addEventListener('connected', function(){ refreshCombat(); });
       _csbSse.addEventListener('cosmere_player_state', function(e){
         try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}
+      });
+      // GM awarded loot to this PC -> repaint the Spheres & Goods panel live + toast.
+      _csbSse.addEventListener('cosmere_loot', function(e){
+        try {
+          const d=JSON.parse(e.data); if(!d || d.pid!==PID) return;
+          const w=d.wallet||{}; const sp=w.spheres||{};
+          ['broam','mark','chip'].forEach(function(k){
+            const el=document.querySelector('[data-sphere-v="'+k+'"]'); if(el) el.textContent=(sp[k]||0);
+          });
+          const goods=document.getElementById('cos-wallet-goods');
+          const _esc=function(s){ const t=document.createElement('span'); t.textContent=String(s==null?'':s); return t.innerHTML; };
+          if(goods){ goods.innerHTML=(w.items||[]).map(function(it){
+            return '<span class="cs-chip">'+_esc(it.name)+(it.qty>1?(' &times;'+it.qty):'')+'</span>'; }).join(''); }
+          if(window.pf2eToast) window.pf2eToast('Loot received', 'success');
+        } catch(ex){}
       });
     } catch(e) {}
     refreshCombat();
