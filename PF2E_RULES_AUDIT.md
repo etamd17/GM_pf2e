@@ -126,13 +126,25 @@ Foundry data (which mirrors it) is the usable structured source.
   expert, Fortitude trained.
 Guarded by `tests/test_pf2e_class_l1_audit.py`.
 
+### Per-level progression — magus + summoner now FULLY verified (Secrets of Magic)
+Using the Secrets of Magic text (Table 2-1 / 2-3 + the verbatim feature
+descriptions), cross-checked against the Foundry pf2e data, the **full L1–L20
+progression for magus and summoner was rewritten** — the old tables had nearly
+every save/spell/weapon/armor bump at the wrong level plus phantom legendary
+ranks neither class gets. Examples: magus Lightning Reflexes L3→L5, Resolve (Will
+master) L11→L9, Juggernaut (Fort master) L9→L15, Master Spellcaster L15→L17,
+removed a fake Fort-legendary@17 and master-Perception@19; summoner perception
+bump now via Shared Vigilance@3, Twin Juggernauts (Fort master) @11, simple-weapon
+expertise L5→L11, removed fake legendary Fort/Will/spell. Guarded by milestone
+assertions in `tests/test_pf2e_class_l1_audit.py`.
+
 ### Still open (do NOT trust the current tables here)
-- The **per-level save/armor/class-DC/spellcasting progression** for these 10
-  classes is unverified and the spot-checks found likely errors (e.g. gunslinger
-  has spurious will@3 / reflex@9,19 / fort@15 bumps and is missing Perception
-  legend@19; exemplar's perception bumps are at the wrong levels). A correct fix
-  needs either the printed sourcebooks (Dark Archive, Guns & Gears, War of
-  Immortals — not on disk; Secrets of Magic IS, for magus/summoner) or a Pathbuilder
-  L20 export per class dropped into the ground-truth harness.
-- None of these are the live party's classes, so table impact today is nil; the
-  L1 fixes correct the most-used (low-level) ranks for anyone who rolls one.
+- The **per-level progression for the other 8 classes** (psychic, thaumaturge,
+  gunslinger, inventor, animist, exemplar, commander, guardian) is still
+  unverified — spot-checks found likely errors (e.g. gunslinger has spurious
+  will@3 / reflex@9,19 / fort@15 bumps and is missing Perception legend@19). A
+  correct fix needs the printed sourcebooks (Dark Archive, Guns & Gears, War of
+  Immortals — not on disk) or a Pathbuilder L20 export per class.
+- Only the **L1 base ranks** for gunslinger/exemplar/commander were corrected
+  (above); their leveled curves remain unverified.
+- None of these are the live party's classes, so table impact today is nil.

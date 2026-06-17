@@ -655,31 +655,36 @@ CLASS_PROGRESSION = {
     # MAGUS (Secrets of Magic)
     # -------------------------------------------------------------------------
     "magus": {
-        # L1 initial: perception=2, fort=4, ref=2, will=4, simple=2, martial=2, unarmed=2, light=2, medium=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"reflex": 4},                                                                  # Lightning Reflexes
-        5:  {"simple": 4, "martial": 4, "unarmed": 4},                                      # Weapon Expertise
-        7:  {"perception": 4, "spell_attack": 4, "spell_dc": 4},                            # Alertness + Studious Spells
-        9:  {"fortitude": 6, "class_dc": 4},                                                # Juggernaut + Magus Expertise
-        11: {"unarmored": 4, "light": 4, "medium": 4, "will": 6},                           # Armor Expertise + Resolve
-        13: {"simple": 6, "martial": 6, "unarmed": 6},                                      # Weapon Mastery
-        15: {"spell_attack": 6, "spell_dc": 6},                                             # Master Spellcaster
-        17: {"unarmored": 6, "light": 6, "medium": 6, "fortitude": 8},                      # Armor Mastery + Greater saves
-        19: {"reflex": 6, "perception": 6},                                                  # Greater saves + Master Perception
+        # Verified vs Secrets of Magic Table 2-1 (Magus Advancement) + the
+        # feature descriptions, cross-checked with the Foundry pf2e data
+        # (2026-06-15). L1 initial: perception=2, fort=4, ref=2, will=4,
+        # simple/martial/unarmed=2, light/medium/unarmored=2, spell_attack/dc=2;
+        # magus has NO class DC progression and no legendary proficiencies.
+        5:  {"reflex": 4, "simple": 4, "martial": 4, "unarmed": 4},                          # Lightning Reflexes + Weapon Expertise
+        9:  {"perception": 4, "spell_attack": 4, "spell_dc": 4, "will": 6},                  # Alertness + Expert Spellcaster + Resolve
+        11: {"unarmored": 4, "light": 4, "medium": 4},                                       # Medium Armor Expertise
+        13: {"simple": 6, "martial": 6, "unarmed": 6},                                       # Weapon Mastery
+        15: {"fortitude": 6},                                                                # Juggernaut
+        17: {"unarmored": 6, "light": 6, "medium": 6, "spell_attack": 6, "spell_dc": 6},     # Medium Armor Mastery + Master Spellcaster
     },
     # -------------------------------------------------------------------------
     # SUMMONER (Secrets of Magic)
     # -------------------------------------------------------------------------
     "summoner": {
-        # L1 initial: perception=2, fort=4, ref=2, will=4, simple=2, unarmed=2, unarmored=2, spell_attack=2, spell_dc=2
-        3:  {"reflex": 4},                                                                  # Lightning Reflexes
-        5:  {"perception": 4, "simple": 4, "unarmed": 4},                                   # Alertness + Weapon Expertise
-        7:  {"spell_attack": 4, "spell_dc": 4},                                             # Expert Spellcaster
-        9:  {"fortitude": 6, "class_dc": 4},                                                # Juggernaut + Summoner Expertise
-        11: {"unarmored": 4, "will": 6},                                                     # Expert Unarmored + Resolve
-        13: {"simple": 6, "unarmed": 6},                                                    # Weapon Mastery
-        15: {"spell_attack": 6, "spell_dc": 6, "reflex": 6},                                # Master Spellcaster + Greater Ref
-        17: {"fortitude": 8, "unarmored": 6},                                               # Legendary Fort + Armor Mastery
-        19: {"will": 8, "spell_attack": 8, "spell_dc": 8},                                  # Legendary Spellcaster + Legendary Will
+        # Verified vs Secrets of Magic Table 2-3 (Summoner Advancement) + the
+        # feature descriptions, cross-checked with the Foundry pf2e data
+        # (2026-06-15). L1 initial: perception=2, fort=4, ref=2, will=4,
+        # simple/unarmed=2, unarmored=2, spell_attack/dc=2 (NO martial, NO
+        # light/medium armor). Many advancement features boost the EIDOLON, not
+        # the summoner's own sheet, and are excluded here. The summoner gains no
+        # legendary proficiency and no class DC progression. NB simple-weapon /
+        # unarmed expertise is L11 (Simple Weapon Expertise), not L5.
+        3:  {"perception": 4},                                                               # Shared Vigilance
+        9:  {"reflex": 4, "spell_attack": 4, "spell_dc": 4},                                 # Shared Reflexes + Expert Spellcaster
+        11: {"simple": 4, "unarmed": 4, "fortitude": 6},                                     # Simple Weapon Expertise + Twin Juggernauts
+        13: {"unarmored": 4},                                                                # Defensive Robes
+        15: {"will": 6},                                                                     # Shared Resolve
+        17: {"spell_attack": 6, "spell_dc": 6},                                              # Master Spellcaster
     },
     # =========================================================================
     # WAR OF IMMORTALS / PLAYER CORE 2 CLASSES

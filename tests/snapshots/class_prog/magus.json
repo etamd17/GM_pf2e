@@ -1,19 +1,16 @@
 {
   "1": {},
   "10": {
-    "class_dc": 4,
-    "fortitude": 6,
     "martial": 4,
     "perception": 4,
     "reflex": 4,
     "simple": 4,
     "spell_attack": 4,
     "spell_dc": 4,
-    "unarmed": 4
+    "unarmed": 4,
+    "will": 6
   },
   "11": {
-    "class_dc": 4,
-    "fortitude": 6,
     "light": 4,
     "martial": 4,
     "medium": 4,
@@ -27,8 +24,6 @@
     "will": 6
   },
   "12": {
-    "class_dc": 4,
-    "fortitude": 6,
     "light": 4,
     "martial": 4,
     "medium": 4,
@@ -42,8 +37,6 @@
     "will": 6
   },
   "13": {
-    "class_dc": 4,
-    "fortitude": 6,
     "light": 4,
     "martial": 6,
     "medium": 4,
@@ -57,8 +50,6 @@
     "will": 6
   },
   "14": {
-    "class_dc": 4,
-    "fortitude": 6,
     "light": 4,
     "martial": 6,
     "medium": 4,
@@ -72,7 +63,6 @@
     "will": 6
   },
   "15": {
-    "class_dc": 4,
     "fortitude": 6,
     "light": 4,
     "martial": 6,
@@ -80,14 +70,13 @@
     "perception": 4,
     "reflex": 4,
     "simple": 6,
-    "spell_attack": 6,
-    "spell_dc": 6,
+    "spell_attack": 4,
+    "spell_dc": 4,
     "unarmed": 6,
     "unarmored": 4,
     "will": 6
   },
   "16": {
-    "class_dc": 4,
     "fortitude": 6,
     "light": 4,
     "martial": 6,
@@ -95,15 +84,14 @@
     "perception": 4,
     "reflex": 4,
     "simple": 6,
-    "spell_attack": 6,
-    "spell_dc": 6,
+    "spell_attack": 4,
+    "spell_dc": 4,
     "unarmed": 6,
     "unarmored": 4,
     "will": 6
   },
   "17": {
-    "class_dc": 4,
-    "fortitude": 8,
+    "fortitude": 6,
     "light": 6,
     "martial": 6,
     "medium": 6,
@@ -117,8 +105,7 @@
     "will": 6
   },
   "18": {
-    "class_dc": 4,
-    "fortitude": 8,
+    "fortitude": 6,
     "light": 6,
     "martial": 6,
     "medium": 6,
@@ -132,13 +119,12 @@
     "will": 6
   },
   "19": {
-    "class_dc": 4,
-    "fortitude": 8,
+    "fortitude": 6,
     "light": 6,
     "martial": 6,
     "medium": 6,
-    "perception": 6,
-    "reflex": 6,
+    "perception": 4,
+    "reflex": 4,
     "simple": 6,
     "spell_attack": 6,
     "spell_dc": 6,
@@ -148,13 +134,12 @@
   },
   "2": {},
   "20": {
-    "class_dc": 4,
-    "fortitude": 8,
+    "fortitude": 6,
     "light": 6,
     "martial": 6,
     "medium": 6,
-    "perception": 6,
-    "reflex": 6,
+    "perception": 4,
+    "reflex": 4,
     "simple": 6,
     "spell_attack": 6,
     "spell_dc": 6,
@@ -162,12 +147,8 @@
     "unarmored": 6,
     "will": 6
   },
-  "3": {
-    "reflex": 4
-  },
-  "4": {
-    "reflex": 4
-  },
+  "3": {},
+  "4": {},
   "5": {
     "martial": 4,
     "reflex": 4,
@@ -182,31 +163,24 @@
   },
   "7": {
     "martial": 4,
-    "perception": 4,
     "reflex": 4,
     "simple": 4,
-    "spell_attack": 4,
-    "spell_dc": 4,
     "unarmed": 4
   },
   "8": {
     "martial": 4,
-    "perception": 4,
     "reflex": 4,
     "simple": 4,
-    "spell_attack": 4,
-    "spell_dc": 4,
     "unarmed": 4
   },
   "9": {
-    "class_dc": 4,
-    "fortitude": 6,
     "martial": 4,
     "perception": 4,
     "reflex": 4,
     "simple": 4,
     "spell_attack": 4,
     "spell_dc": 4,
-    "unarmed": 4
+    "unarmed": 4,
+    "will": 6
   }
 }
