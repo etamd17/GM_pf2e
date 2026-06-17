@@ -92,3 +92,47 @@ oracle, swashbuckler) are now FIXED — see the table above.
 None of the fixed bugs affected your players' *current* sheets — almost all bite at
 **L5+**, and the party-class endpoints already matched Pathbuilder. The value is in
 correct level-ups going forward.
+
+---
+
+## 2026-06-15 — verification of the 10 previously-unaudited classes (vs Foundry pf2e data)
+
+Re-verified the 10 classes that shipped full L3–L19 tables but were never
+math-checked (magus, summoner, psychic, thaumaturge, gunslinger, inventor,
+animist, exemplar, commander, guardian), this time against the **authoritative
+Foundry `pf2e` system data** installed locally (the `classes` + `class-features`
+packs, unpacked with the `fvtt` CLI — same source pattern as the Cosmere ingest).
+Tooling: `tools/verify_pf2e_progression.py` (dev-only; needs the local Foundry
+install). AoN itself is a JS app and is not machine-readable via fetch — the
+Foundry data (which mirrors it) is the usable structured source.
+
+### What is reliably verifiable, and what is not
+- **L1 base proficiencies ARE reliable** — the class doc carries explicit, complete
+  L1 ranks. Verified + corrected below.
+- **Per-level increases are NOT safely machine-extractable** from the pack data.
+  PF2e encodes leveled bumps heterogeneously: explicit rank rules for class weapon
+  features, but name-only "marker" features for saves/perception/armor/spellcasting
+  whose rank the system *code* applies. The extractor under-captures class-specific
+  flavor-named features (proven: commander's "Commanding Will" Will bump is not a
+  standard name and was missed), so its per-level diffs are noisy and were NOT used
+  to edit the engine.
+
+### Fixed (L1 base ranks — confirmed by Foundry AND independent web sources)
+- **gunslinger**: Fortitude trained → **expert** (gunslinger is expert in
+  Perception/Fortitude/Reflex, trained in Will at L1).
+- **exemplar**: reflex/will were **swapped** — now Fortitude + Will expert,
+  Perception + Reflex trained.
+- **commander**: fortitude/reflex were **swapped** — now Perception/Reflex/Will
+  expert, Fortitude trained.
+Guarded by `tests/test_pf2e_class_l1_audit.py`.
+
+### Still open (do NOT trust the current tables here)
+- The **per-level save/armor/class-DC/spellcasting progression** for these 10
+  classes is unverified and the spot-checks found likely errors (e.g. gunslinger
+  has spurious will@3 / reflex@9,19 / fort@15 bumps and is missing Perception
+  legend@19; exemplar's perception bumps are at the wrong levels). A correct fix
+  needs either the printed sourcebooks (Dark Archive, Guns & Gears, War of
+  Immortals — not on disk; Secrets of Magic IS, for magus/summoner) or a Pathbuilder
+  L20 export per class dropped into the ground-truth harness.
+- None of these are the live party's classes, so table impact today is nil; the
+  L1 fixes correct the most-used (low-level) ranks for anyone who rolls one.
