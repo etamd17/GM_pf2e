@@ -163,6 +163,50 @@
             }
             </script>
 
+            {# ── Advancement: GM XP / level award (PR2) ── #}
+            <div class="session-ritual-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
+                    <div>
+                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Advancement</h2>
+                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Mode: <b id="adv-mode">{{ advancement_mode }}</b> &mdash; milestone marks the party ready to level; XP tracks points and rolls over at 1000.</p>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" class="btn btn--sm" onclick="setAdvMode('milestone')">Milestone</button>
+                        <button type="button" class="btn btn--sm" onclick="setAdvMode('xp')">XP</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:var(--sp-3);">
+                    <button type="button" class="btn btn--sm" onclick="markReady()">Mark party ready to level</button>
+                    <span id="adv-xp-controls" style="display:{{ 'inline-flex' if advancement_mode == 'xp' else 'none' }}; gap:6px; align-items:center;">
+                        <input id="adv-xp-amt" type="number" min="1" value="80" style="width:80px;" placeholder="XP">
+                        <button type="button" class="btn btn--sm" onclick="awardXp(false)">Award XP</button>
+                        <button type="button" class="btn btn--sm" onclick="awardXp(true)">Award encounter XP</button>
+                    </span>
+                </div>
+            </div>
+            <script>
+            function _advToast(m, t){ if(window.pf2eToast) window.pf2eToast(m, t||'success'); }
+            function setAdvMode(mode){
+                fetch('/api/gm/advancement_mode', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode:mode})})
+                  .then(function(r){return r.json();}).then(function(d){
+                    if(!d.ok){ _advToast(d.error||'failed','danger'); return; }
+                    document.getElementById('adv-mode').textContent = d.mode;
+                    document.getElementById('adv-xp-controls').style.display = (d.mode==='xp') ? 'inline-flex' : 'none';
+                    _advToast('Advancement mode: '+d.mode);
+                  });
+            }
+            function markReady(){
+                if(!confirm('Mark the whole party ready to level up?')) return;
+                fetch('/api/gm/mark_ready', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ready:1})})
+                  .then(function(r){return r.json();}).then(function(d){ _advToast(d.ok?'Party marked ready to level':'Failed', d.ok?'success':'danger'); });
+            }
+            function awardXp(fromEncounter){
+                var body = fromEncounter ? {from_encounter:true} : {amount: parseInt(document.getElementById('adv-xp-amt').value)||0};
+                fetch('/api/gm/award_xp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+                  .then(function(r){return r.json();}).then(function(d){ _advToast(d.ok?('Awarded '+d.amount+' XP'):(d.error||'Failed'), d.ok?'success':'danger'); });
+            }
+            </script>
+
             {# ── Session ritual: opening curtain control + prep ── #}
             <div class="session-ritual-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">

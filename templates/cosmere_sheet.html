@@ -130,6 +130,7 @@
           {% if build.is_radiant %}<span class="cs-tag">Radiant</span>{% endif %}
         {% endif %}
         <span class="cs-tag">Cosmere RPG</span>
+        {% if pc and ready_to_level %}<a class="cs-tag" href="{{ edit_url }}" style="background:rgba(110,231,168,.16); border-color:rgba(110,231,168,.5); color:#6ee7a8; text-decoration:none;">&#9650; Ready to level up</a>{% endif %}
       </div>
     </div>
     <div style="display:flex; gap:.6rem; align-items:center;">

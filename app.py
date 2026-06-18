@@ -1162,6 +1162,8 @@ def _pc_state_payload(pc_name):
             'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
             'focus': getattr(pc, 'current_focus', 0),
             'hero_points': getattr(pc, 'hero_points', 1),
+            'xp': int(getattr(pc, 'xp', 0) or 0),
+            'ready_to_level': bool(getattr(pc, 'ready_to_level', False)),
             'spell_casters': spell_summary,
             # Read from the in-memory PC (hydrated at __init__ from the
             # build's expended_slots dict). Routes that mutate slots keep
@@ -2137,6 +2139,11 @@ class Character:
 
         self.name = safe_str(build.get('name'), 'Unknown Hero')
         self.level = safe_int(build.get('level'), 1)
+        # Advancement state (GM XP/level award). xp is the PF2e XP toward the
+        # next level (1000 = ready); ready_to_level is set by the GM (milestone)
+        # or on XP rollover, and cleared on level-up.
+        self.xp = safe_int(build.get('xp'), 0)
+        self.ready_to_level = bool(build.get('ready_to_level'))
         # Automatic Bonus Progression is a PF2e *variant* rule (CRB Gamemastery
         # Guide). Pathbuilder doesn't apply it, so vanilla PF2e rolls were
         # silently inflating by +1 AC at L5+, +1/+2/+3 attacks at L2/L10/L16,
@@ -5128,6 +5135,10 @@ CAMPAIGN_DEFAULT = {
     # fast/slow queue (default); 'traditional' = a rolled d20+Speed initiative
     # order, for tables that don't run fast/slow turns.
     'cosmere_initiative': 'phases',
+    # How the party advances: 'milestone' (GM marks the party ready to level, no
+    # XP math; default) or 'xp' (track XP per PC, auto-award the encounter total,
+    # roll over at 1000). XP mode is PF2e-only; Cosmere always uses milestone.
+    'advancement_mode': 'milestone',
 }
 
 MODULES_DIR = os.path.join(BASE_DIR, 'static', 'js', 'modules')
@@ -5195,6 +5206,123 @@ def _save_campaign_config(updates):
         except OSError as e:
             print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
     return _load_campaign_config()
+
+
+# ── GM advancement: XP award + milestone "ready to level" ──────────────────
+def _advancement_mode():
+    return (_load_campaign_config().get('advancement_mode') or 'milestone')
+
+
+def _pf2e_set_pc_advancement(name, *, add_xp=None, ready=None):
+    """Update a PF2e PC's advancement state on disk (xp / ready_to_level),
+    reload it into PARTY_LIBRARY, and broadcast so the sheet badge repaints.
+    XP rolls the ready flag on at 1000. Returns a small summary or None."""
+    fp = get_pc_file_path(name)
+    if not fp or not os.path.exists(fp):
+        return None
+    with _path_lock(fp):
+        doc = _storage.load_json(fp)
+        if not isinstance(doc, dict):
+            return None
+        build = doc.get('build')
+        if not isinstance(build, dict):
+            build = doc.setdefault('build', {})
+        if add_xp is not None:
+            build['xp'] = max(0, int(build.get('xp', 0) or 0) + int(add_xp))
+            if build['xp'] >= 1000:
+                build['ready_to_level'] = True
+        if ready is not None:
+            build['ready_to_level'] = bool(ready)
+        _atomic_write_json(fp, doc, indent=2)
+        summary = {'name': name, 'xp': int(build.get('xp', 0) or 0),
+                   'ready': bool(build.get('ready_to_level'))}
+    try:
+        reload_single_character(fp)
+    except Exception:
+        pass
+    try:
+        _broadcast_pc_state(name)
+    except Exception:
+        pass
+    return summary
+
+
+def _pf2e_award_xp(amount):
+    return [s for s in (_pf2e_set_pc_advancement(n, add_xp=amount)
+                        for n in list(PARTY_LIBRARY)) if s]
+
+
+def _mark_party_ready(ready=True):
+    """Milestone: flag every PC in the active campaign ready (or not) to level.
+    Works for both systems; the sheet badge links to the right level-up flow."""
+    out = []
+    if _active_system() == 'cosmere':
+        for d in _list_cosmere_pcs():
+            pid = d.get('id')
+            if not pid:
+                continue
+            with _path_lock(_cosmere_pc_path(pid)):
+                doc = _load_cosmere_pc(pid) or d
+                doc['ready_to_level'] = bool(ready)
+                _save_cosmere_pc(doc, fsync=False)
+            try:
+                sse_broadcast('cosmere_player_state',
+                              {'pid': pid, 'name': doc.get('name'),
+                               'play_state': doc.get('play_state') or {}, 'ready_to_level': bool(ready)})
+            except Exception:
+                pass
+            out.append({'name': doc.get('name'), 'ready': bool(ready)})
+    else:
+        for n in list(PARTY_LIBRARY):
+            s = _pf2e_set_pc_advancement(n, ready=ready)
+            if s:
+                out.append(s)
+    return out
+
+
+@app.route('/api/gm/advancement_mode', methods=['POST'])
+@gm_required
+def api_set_advancement_mode():
+    mode = ((request.get_json(silent=True) or request.form).get('mode') or '').strip()
+    if mode not in ('milestone', 'xp'):
+        return jsonify({'ok': False, 'error': 'mode must be milestone or xp'}), 400
+    _save_campaign_config({'advancement_mode': mode})
+    return jsonify({'ok': True, 'mode': mode})
+
+
+@app.route('/api/gm/award_xp', methods=['POST'])
+@gm_required
+def api_award_xp():
+    """Award XP to every PF2e PC (a manual amount, or the live encounter's
+    computed XP). PF2e-only; Cosmere advances by milestone."""
+    if _active_system() != 'pf2e':
+        return jsonify({'ok': False, 'error': 'XP award is PF2e-only'}), 400
+    data = request.get_json(silent=True) or request.form
+    if str(data.get('from_encounter')) in ('1', 'true', 'True', 'on'):
+        plv = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc]
+                  or [p.level for p in PARTY_LIBRARY.values()] or [1])
+        amount = calculate_encounter_xp(ACTIVE_ENCOUNTER, plv)
+    else:
+        try:
+            amount = int(data.get('amount') or 0)
+        except (TypeError, ValueError):
+            amount = 0
+    if amount <= 0:
+        return jsonify({'ok': False, 'error': 'no XP to award'}), 400
+    party = _pf2e_award_xp(amount)
+    _combat_log(f"Awarded {amount} XP to the party.", 'success')
+    return jsonify({'ok': True, 'amount': amount, 'party': party})
+
+
+@app.route('/api/gm/mark_ready', methods=['POST'])
+@gm_required
+def api_mark_ready():
+    """Milestone: mark the whole party ready to level (or clear it)."""
+    data = request.get_json(silent=True) or request.form
+    ready = str(data.get('ready', '1')) not in ('0', 'false', 'False', '')
+    party = _mark_party_ready(ready)
+    _combat_log('Party marked ready to level.' if ready else 'Cleared ready-to-level.', 'success')
+    return jsonify({'ok': True, 'ready': ready, 'party': party})
 
 
 _VALID_MOODS = ('calm', 'mystery', 'tension', 'combat', 'dread')
@@ -6534,6 +6662,7 @@ def _inject_account_ctx():
         'active_system': _active_system(),
         'cosmere_player_char': _cosmere_player_char_name(),
         'system_ui': _active_system_ui(),
+        'advancement_mode': (_advancement_mode() if u else 'milestone'),
     }
 
 
@@ -7972,6 +8101,7 @@ def cosmere_pc_sheet(pid):
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
         interactive=interactive, cur=cur, tier=actor.tier,
+        ready_to_level=bool(doc.get('ready_to_level')),
         stormlight_actions=systems.cosmere.radiant.STORMLIGHT_ACTIONS,
         radiant_powers=radiant_powers,
         conditions=systems.cosmere.CONDITION_INFO,
@@ -14723,7 +14853,12 @@ def submit_levelup(pc_name):
     build['level_history'] = level_history
     
     build['level'] = new_level
-    
+    # Advancement: this level-up consumes the "ready to level" flag, and in XP
+    # mode spends 1000 XP toward the level just gained.
+    build['ready_to_level'] = False
+    if int(build.get('xp', 0) or 0) >= 1000:
+        build['xp'] = int(build['xp']) - 1000
+
     # Only apply ability boosts at PF2E-qualifying levels (5, 10, 15, 20)
     ABILITY_BOOST_LEVELS = {5, 10, 15, 20}
     if 'abilities' in data and new_level in ABILITY_BOOST_LEVELS:
