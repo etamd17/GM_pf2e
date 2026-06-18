@@ -4466,6 +4466,23 @@ body.system-cosmere {
     /* Cool the warm gilt hairlines so cards read as blue-ink, not gold. */
     --border-card:   rgba(95, 168, 224, 0.16);
     --border-rule:   rgba(95, 168, 224, 0.30);
+
+    /* Remap the gilt ramp ITSELF to the Stormlight ramp. Nearly every brand
+       affordance ultimately derives from --gilt-* (via --accent, --gilt,
+       --accent-gold, --accent-primary, --color-spell, --rune-color, and the
+       many headings that read var(--gilt-100) directly). Re-pointing the ramp
+       here re-themes all of them in one place instead of hunting each call
+       site — and keeps any future shared component blue-by-default in Cosmere.
+       Steps mirror the gilt lightness curve so contrast/affordance weights hold. */
+    --gilt-50:   #eef7ff;
+    --gilt-100:  #d3ecfb;
+    --gilt-200:  #9fd2f2;
+    --gilt-300:  #5fa8e0;
+    --gilt-400:  #3d83bf;
+    --gilt-500:  #2a608f;
+    --gilt-600:  #1c456a;
+    /* The shared focus/hover glow bakes the gilt rgb — cool it to Stormlight. */
+    --shadow-glow-gilt: 0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(95,168,224,0.45);
 }
 
 /* The brand + accent nav links (and dice widget) carry baked hex from the
@@ -4501,6 +4518,17 @@ body.system-cosmere .trk {
     --t-gold-b:     var(--storm-100) !important;
     --t-purple:     var(--storm-200) !important;   /* deprecated hue, was gilt */
     --t-row-active: rgba(95, 168, 224, 0.12) !important;
+}
+
+/* Crit-roll toast bakes a gilt edge-flash + shimmer (lines ~3838). Re-tint the
+   flourish to Stormlight so a crit on a Cosmere surface flashes blue, not gold.
+   (The fumble flourish stays ruby — danger reads the same in both systems.) */
+body.system-cosmere .roll-toast.crit-flourish {
+    border-color: var(--storm-200) !important;
+    box-shadow: 0 0 24px rgba(159,210,242,0.35), 0 8px 28px rgba(0,0,0,0.5) !important;
+}
+body.system-cosmere .roll-toast.crit-flourish::after {
+    background: linear-gradient(105deg, transparent, rgba(211,236,251,0.55), transparent);
 }
 
 /* End of system.css */
