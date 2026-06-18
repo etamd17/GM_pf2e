@@ -3035,6 +3035,18 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20">
 
+        <!-- Ready-to-level banner (GM XP/milestone award) -->
+        <div id="ready-to-level-banner" class="no-print" style="display:{{ '' if pc.ready_to_level else 'none' }}; margin:0 0 .6rem;">
+            <a href="/player/levelup/{{ pc.name|urlencode }}" style="display:flex; align-items:center; gap:10px; padding:.65rem 1rem; border-radius:10px; border:1px solid rgba(74,222,128,.5); background:rgba(74,222,128,.12); color:#86EFAC; text-decoration:none; font-size:14px;">
+                <span style="font-size:16px;">&#9650;</span><b>Ready to level up!</b>
+                <span style="opacity:.8;">Open the level-up wizard.</span>
+                {% if advancement_mode == 'xp' %}<span id="ready-xp" style="margin-left:auto; opacity:.75; font-size:12px;">{{ pc.xp }} / 1000 XP</span>{% endif %}
+            </a>
+        </div>
+        {% if advancement_mode == 'xp' and not pc.ready_to_level %}
+        <div class="no-print" style="margin:0 0 .6rem; font-size:11px; color:var(--text-faint,#9aa);">XP <b id="xp-val">{{ pc.xp }}</b> / 1000 to next level</div>
+        {% endif %}
+
         <!-- Favorite Actions Bar (Tier 4 #16) — populated by JS from localStorage -->
         <div id="favorites-bar" class="favorites-bar no-print" aria-label="Favorite actions quick-roll bar"></div>
 
@@ -5701,6 +5713,15 @@
             // Reusable: apply a full pc_update payload to the sheet in place —
             // used by the live SSE frame above AND the reconnect refetch below.
             window.applyPcUpdate = function(data) {
+                    // GM XP/level award: show the ready banner + repaint XP live.
+                    if (typeof data.ready_to_level === 'boolean') {
+                        var _rb = document.getElementById('ready-to-level-banner');
+                        if (_rb) _rb.style.display = data.ready_to_level ? '' : 'none';
+                    }
+                    if (typeof data.xp === 'number') {
+                        var _rx = document.getElementById('ready-xp'); if (_rx) _rx.textContent = data.xp + ' / 1000 XP';
+                        var _xv = document.getElementById('xp-val'); if (_xv) _xv.textContent = data.xp;
+                    }
                     applyHpUpdate(data.current_hp);
                     applyConditionUpdate(data.conditions || {});
                     _paintMetaQuickConds(data.conditions || {});
