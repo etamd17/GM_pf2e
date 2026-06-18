@@ -6517,6 +6517,79 @@ def campaign_delete(cid):
     return redirect('/me')
 
 
+@app.route('/campaign/<cid>/export')
+@_auth.login_required
+def campaign_export(cid):
+    """Download a .zip backup of the ENTIRE campaign tree (party PCs, encounters,
+    loot, threads, journals, handouts, campaign.json). GM/owner or site admin."""
+    import io, zipfile
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    cdir = _storage.campaign_dir(cid)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for root, _dirs, files in os.walk(cdir):
+            for f in files:
+                full = os.path.join(root, f)
+                z.write(full, os.path.relpath(full, cdir))
+    buf.seek(0)
+    safe = re.sub(r'[^a-zA-Z0-9_-]+', '-', (camp.get('slug') or camp.get('name') or 'campaign')).strip('-') or 'campaign'
+    return send_file(buf, mimetype='application/zip', as_attachment=True,
+                     download_name='%s-backup.zip' % safe)
+
+
+@app.route('/campaign/import', methods=['POST'])
+@_auth.login_required
+def campaign_import():
+    """Restore a campaign from a .zip export into a NEW campaign (non-destructive
+    -- never overwrites an existing game), owned by the importer as GM."""
+    import io, zipfile
+    u = _auth.current_user()
+    f = request.files.get('backup')
+    if not f:
+        return jsonify({'ok': False, 'error': 'no file uploaded'}), 400
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(f.read()))
+    except zipfile.BadZipFile:
+        return jsonify({'ok': False, 'error': 'not a valid .zip'}), 400
+    if 'campaign.json' not in zf.namelist():
+        return jsonify({'ok': False, 'error': 'not a campaign backup (missing campaign.json)'}), 400
+    new_cid = _storage.new_id()
+    _storage.ensure_campaign_dirs(new_cid)
+    dest = _storage.campaign_dir(new_cid)
+    for n in zf.namelist():
+        if n.endswith('/'):
+            continue
+        target = os.path.normpath(os.path.join(dest, n))
+        # zip-slip guard: every extracted path must stay inside the campaign dir
+        if target != dest and not target.startswith(dest + os.sep):
+            return jsonify({'ok': False, 'error': 'unsafe path in archive'}), 400
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, 'wb') as out:
+            out.write(zf.read(n))
+    # Re-key the campaign doc to the new id + the importer as GM owner.
+    doc = _storage.load_json(_storage.campaign_file(new_cid)) or {}
+    doc['id'] = new_cid
+    doc['created_by'] = u['id']
+    doc['members'] = [_storage.campaign_member(u['id'], 'gm')]
+    doc['name'] = (doc.get('name') or 'Campaign') + ' (restored)'
+    _campaigns.save_campaign(doc)
+    # Re-stamp character envelopes to the new campaign id.
+    for pdir in (_storage.party_dir(new_cid), _storage.cosmere_pc_dir(new_cid)):
+        if not os.path.isdir(pdir):
+            continue
+        for fn in os.listdir(pdir):
+            if not fn.endswith('.json'):
+                continue
+            p = os.path.join(pdir, fn)
+            cd = _storage.load_json(p)
+            if isinstance(cd, dict) and 'campaign_id' in cd:
+                cd['campaign_id'] = new_cid
+                _atomic_write_json(p, cd, indent=2)
+    return jsonify({'ok': True, 'id': new_cid, 'name': doc['name']})
+
+
 def _claim_by_id(cid, character_id, user_id):
     pdir = _storage.party_dir(cid)
     for fn in (os.listdir(pdir) if os.path.isdir(pdir) else []):
