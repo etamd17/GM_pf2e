@@ -76,6 +76,11 @@
                 </a>
                 <div class="nav-links flex items-center gap-1 text-xs font-medium flex-nowrap">
                     {% if account_user %}
+                    {# One-click home — straight to the screen with all your campaigns + characters
+                       (was previously only reachable buried inside the switcher dropdown). #}
+                    <a href="/me" class="text-base-300 hover:text-base-100 px-2 py-1.5 rounded transition-colors flex items-center" title="Home — all your campaigns &amp; characters" aria-label="Home">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><polyline points="9 21 9 14 15 14 15 21"/></svg>
+                    </a>
                     <div class="campaign-switcher" style="position:relative;">
                         <button type="button" id="cs-btn" onclick="window._csToggle && window._csToggle()" aria-haspopup="true" aria-expanded="false" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Switch campaign / my characters">{% if active_campaign %}{{ active_campaign.name }}{% else %}My Table{% endif %} &#9662;</button>
                         <div id="cs-menu" role="menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; min-width:248px; background:var(--bg-sunken); border:1px solid var(--border-card); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.45); z-index:60; overflow:hidden;">
