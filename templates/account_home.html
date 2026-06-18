@@ -73,7 +73,10 @@
   </form>
   {% endif %}
 
-  <div class="sect">Your Campaigns <a class="add" href="/campaigns/new">+ New campaign</a></div>
+  <div class="sect">Your Campaigns
+    <a class="add" href="/campaigns/new">+ New campaign</a>
+    <label class="add" style="cursor:pointer;" title="Restore a .zip backup as a new campaign">Restore backup<input type="file" accept=".zip,application/zip" style="display:none;" onchange="restoreBackup(this)"></label>
+  </div>
   {% if campaigns %}
   <div class="grid">
     {% for c in campaigns %}
@@ -93,7 +96,8 @@
         </div>
         <div class="cc-actions">
           <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == live_campaign_id %}Join session{% elif c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
-          {% if is_gm %}<a class="manage" href="/campaign/{{ c.id }}/invites">Manage</a>{% endif %}
+          {% if is_gm %}<a class="manage" href="/campaign/{{ c.id }}/invites">Manage</a>
+          <a class="manage" href="/campaign/{{ c.id }}/export" title="Download a full .zip backup of this campaign">Backup</a>{% endif %}
         </div>
       </div>
     </div>
@@ -150,4 +154,15 @@
     </div>
   </details>
 </div>
+<script>
+function restoreBackup(input){
+    if(!input.files || !input.files[0]) return;
+    var fd = new FormData(); fd.append('backup', input.files[0]);
+    fetch('/campaign/import', {method:'POST', body:fd})
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d.ok){ window.location = '/me'; } else { alert(d.error || 'Restore failed'); } })
+        .catch(function(){ alert('Restore failed'); })
+        .finally(function(){ input.value = ''; });
+}
+</script>
 {% endblock %}
