@@ -64,6 +64,15 @@
     <p class="sub">Choose a table to enter &mdash; a game you run, or one your character is part of.{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</p>
   </div>
 
+  {% if last_campaign %}
+  <form method="POST" action="/campaign/{{ last_campaign.id }}/activate" style="margin:0 0 1.4rem;">
+    <button type="submit" style="width:100%;text-align:left;padding:.95rem 1.1rem;border-radius:12px;border:1px solid {{ '#9fd2f2' if last_campaign.system=='cosmere' else '#f0d88a' }};background:rgba(255,255,255,.03);color:inherit;cursor:pointer;font-size:15px;">
+      &#9654;&nbsp; Resume <b>{{ last_campaign.name }}</b>
+      <span style="opacity:.6;font-size:12px;">&mdash; {{ last_campaign.system|upper }} &middot; {% if last_campaign.is_gm %}you GM{% else %}your character{% endif %}{% if last_campaign.id == live_campaign_id %} &middot; <span style="color:#6ee7a8;font-weight:700;">LIVE now</span>{% endif %}</span>
+    </button>
+  </form>
+  {% endif %}
+
   <div class="sect">Your Campaigns <a class="add" href="/campaigns/new">+ New campaign</a></div>
   {% if campaigns %}
   <div class="grid">
@@ -80,9 +89,10 @@
           {% if is_gm %}You GM{% else %}Player{% endif %}
           &middot; {{ c.members|length }} member{{ '' if c.members|length == 1 else 's' }}
           {% if c.id == active_campaign_id %}<span class="active">active</span>{% endif %}
+          {% if c.id == live_campaign_id %}<span class="active" style="background:rgba(110,231,168,.16);color:#6ee7a8;">&#9679; LIVE</span>{% endif %}
         </div>
         <div class="cc-actions">
-          <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
+          <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == live_campaign_id %}Join session{% elif c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
           {% if is_gm %}<a class="manage" href="/campaign/{{ c.id }}/invites">Manage</a>{% endif %}
         </div>
       </div>
@@ -111,8 +121,8 @@
       </div>
       {% endif %}
       <div class="ch-foot">
-        <span class="ch-camp">{{ ch.campaign_name }} &middot; {{ ch.system|upper }}</span>
-        <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><button type="submit">Play</button></form>
+        <span class="ch-camp">{{ ch.campaign_name }} &middot; {{ ch.system|upper }}{% if ch.is_live %} &middot; <span style="color:#6ee7a8;font-weight:700;">&#9679; LIVE</span>{% endif %}</span>
+        <form method="POST" action="/campaign/{{ ch.campaign_id }}/activate"><input type="hidden" name="then" value="{{ ch.sheet_url }}"><button type="submit">{% if ch.is_live %}Join{% else %}Play{% endif %}</button></form>
       </div>
     </div>
     {% endfor %}

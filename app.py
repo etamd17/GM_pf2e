@@ -177,6 +177,45 @@ def _active_campaign_doc():
     return _campaigns.get_campaign(_active_campaign_id())
 
 
+def _safe_then(target):
+    """Return `target` only if it is a safe SAME-SITE path (single leading slash,
+    no scheme, no protocol-relative //, no control chars) so the activate redirect
+    can never become an open redirect. Otherwise None."""
+    if not isinstance(target, str):
+        return None
+    t = target.strip()
+    if not t or not t.startswith('/') or t.startswith('//') or t.startswith('/\\'):
+        return None
+    if any(c in t for c in '\r\n\t '):
+        return None
+    return t[:512]
+
+
+def _pc_sheet_url(system, name, pid):
+    """The deep-link to a character's own sheet, per system."""
+    from urllib.parse import quote
+    if (system or 'pf2e') == 'cosmere':
+        return '/cosmere/pc/' + quote(str(pid or ''), safe='')
+    return '/player/sheet/' + quote(str(name or ''), safe='')
+
+
+def _my_pc_names(user_id):
+    """PF2e PC names in the active campaign owned by user_id (account mode)."""
+    cid = _active_campaign_id()
+    if not cid:
+        return []
+    pdir = _storage.party_dir(cid)
+    names = []
+    if os.path.isdir(pdir):
+        for fn in os.listdir(pdir):
+            if not fn.endswith('.json'):
+                continue
+            doc = _storage.load_json(os.path.join(pdir, fn))
+            if _storage.is_wrapped(doc) and doc.get('owner_user_id') == user_id:
+                names.append(_campaigns._character_name(doc))
+    return names
+
+
 def _set_active_campaign(cid):
     """Select a campaign for the current user: stash it in the session AND remember
     it on the account, so a later fresh login resumes the same table instead of
@@ -6201,6 +6240,11 @@ def activate_campaign(cid):
     if gm:
         _storage.set_live_campaign_id(cid)
         load_campaign(cid)
+    # A validated same-site `then` target (e.g. deep-link straight to the
+    # player's own sheet from My Characters) wins over the default hub landing.
+    then = _safe_then(request.form.get('then') or request.args.get('then'))
+    if then:
+        return redirect(then)
     # System-aware landing, registry-driven: every system declares a GM home and
     # a player home, so this works for any system with no per-system branching.
     ui = systems.get(camp.get('system') or systems.DEFAULT_SYSTEM).ui
@@ -6402,9 +6446,12 @@ def _me_characters(user_id):
     stats + a per-system accent, so the dashboard reads like a launcher rather
     than a flat list. Falls back gracefully if a doc can't be parsed."""
     cards = []
+    _live = _storage.get_live_campaign_id()
     for ch in _campaigns.characters_for_user(user_id):
         card = dict(ch)
         cid = ch.get('campaign_id')
+        card['sheet_url'] = _pc_sheet_url(ch.get('system'), ch.get('name'), ch.get('id'))
+        card['is_live'] = (cid == _live)
         try:
             if ch.get('system') == 'cosmere':
                 import systems.cosmere.build as _cb
@@ -6435,11 +6482,39 @@ def _me_render(**extra):
     u = _auth.current_user()
     camps = _campaigns.campaigns_for_user(u['id'])
     gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
+    live_id = _storage.get_live_campaign_id()
+    # The campaign to offer as "Resume last session" -- the user's last-activated
+    # table, but only if they're still a member of it.
+    last = None
+    last_id = u.get('last_campaign_id')
+    if last_id:
+        lc = _campaigns.get_campaign(last_id)
+        if lc and (u.get('is_admin') or _campaigns.user_role(lc, u['id'])):
+            last = {'id': lc['id'], 'name': lc.get('name'), 'system': lc.get('system') or 'pf2e',
+                    'is_gm': _campaigns.is_gm(lc, u['id']) or bool(u.get('is_admin'))}
     ctx = dict(user=u, campaigns=camps, gm_campaign_ids=gm_ids,
                characters=_me_characters(u['id']),
-               active_campaign_id=_active_campaign_id())
+               active_campaign_id=_active_campaign_id(),
+               live_campaign_id=live_id, last_campaign=last)
     ctx.update(extra)
     return render_template('account_home.html', **ctx)
+
+
+@app.route('/api/my_campaigns')
+@_auth.login_required
+def api_my_campaigns():
+    """The logged-in user's campaigns (id/name/system/role/live/active) -- feeds
+    the in-nav campaign switcher dropdown."""
+    u = _auth.current_user()
+    live = _storage.get_live_campaign_id()
+    active = _active_campaign_id()
+    out = []
+    for c in _campaigns.campaigns_for_user(u['id']):
+        gm = _campaigns.is_gm(c, u['id']) or bool(u.get('is_admin'))
+        out.append({'id': c['id'], 'name': c.get('name'), 'system': c.get('system') or 'pf2e',
+                    'role': 'GM' if gm else 'Player',
+                    'is_live': c['id'] == live, 'is_active': c['id'] == active})
+    return jsonify({'campaigns': out, 'active': active})
 
 
 @app.context_processor
@@ -11501,6 +11576,16 @@ def player_view():
     # goes to their Cosmere hub instead of the empty PF2e party picker.
     if _active_system() == 'cosmere':
         return redirect(url_for('cosmere_player_hub'))
+    # Owner-aware landing (account mode): a player who owns exactly one PC in this
+    # campaign goes straight to their sheet instead of a 4-tile party picker --
+    # parity with the Cosmere player hub.
+    if _account_mode():
+        _u = _auth.current_user()
+        if _u:
+            mine = _my_pc_names(_u['id'])
+            if len(mine) == 1:
+                from urllib.parse import quote
+                return redirect('/player/sheet/' + quote(mine[0]))
     # Sync from disk to catch any characters added outside this process
     _sync_party_from_disk()
     # Pass the campaign config so the hub can render the same hero band

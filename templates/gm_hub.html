@@ -54,13 +54,6 @@
                     <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
                 </a>
 
-                <a href="/gm/threads" class="tile">
-                    <div class="tile__glyph">&#10070;</div>
-                    <h2 class="tile__title">Story Threads</h2>
-                    <p class="tile__desc">Branching map of plot beats &mdash; open vs. resolved, who and where, at a glance.</p>
-                    <span class="pill" style="margin-top:var(--sp-3);">read-only</span>
-                </a>
-
                 <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
                     <div class="tile__glyph">&#9876;</div>
                     <h2 class="tile__title">Encounter Tracker</h2>

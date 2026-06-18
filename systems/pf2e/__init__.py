@@ -54,16 +54,12 @@ _UI = SystemUI(
         NavLink('GM Hub', '/gm', accent=True),
         NavLink('Party', '/party'),
         NavLink('Tracker', '/tracker'),
-        NavLink('Threads', '/gm/threads'),
         NavLink('GM Screen', '/gmscreen'),
         NavLink('Generators', '/generator'),
         NavLink('Loot', '/gm/loot'),
-        NavLink('Status', '/status'),
-        NavLink('Notes', '/notes', title='Session notes scratchpad'),
     ),
     player_nav=(
         NavLink('Player Hub', '/player'),
-        NavLink('Notes', '/notes', title='Session notes scratchpad'),
     ),
 )
 
