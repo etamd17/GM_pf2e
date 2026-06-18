@@ -462,45 +462,16 @@ _GZIP_MIME_PREFIXES = (
 
 @app.after_request
 def _gzip_response(response):
-    # Short-circuit: client must accept gzip, body must be eligible.
-    accept = request.headers.get('Accept-Encoding', '')
-    if 'gzip' not in accept.lower():
-        return response
-    # Never compress SSE — it must stream event-by-event with immediate flush.
-    if response.mimetype == 'text/event-stream':
-        return response
-    # Only compress the mime types that actually benefit.
-    ctype = (response.content_type or '').split(';', 1)[0].strip().lower()
-    if not any(ctype.startswith(p) for p in _GZIP_MIME_PREFIXES):
-        return response
-    # Already encoded? Leave alone.
-    if response.headers.get('Content-Encoding'):
-        return response
-    # Passthrough / direct responses (e.g. send_file in chunked mode) —
-    # we'd have to buffer them entirely; not worth the RAM cost here.
-    if response.direct_passthrough:
-        return response
-    try:
-        data = response.get_data()
-    except RuntimeError:
-        return response
-    if len(data) < _GZIP_MIN_BYTES:
-        return response
-    # Compress.
-    buf = _BytesIO()
-    with _gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=6) as gz:
-        gz.write(data)
-    compressed = buf.getvalue()
-    response.set_data(compressed)
-    response.headers['Content-Encoding'] = 'gzip'
-    response.headers['Content-Length'] = str(len(compressed))
-    # Vary so intermediaries cache gzip + non-gzip variants separately.
-    vary = response.headers.get('Vary')
-    if vary:
-        if 'Accept-Encoding' not in vary:
-            response.headers['Vary'] = vary + ', Accept-Encoding'
-    else:
-        response.headers['Vary'] = 'Accept-Encoding'
+    # DISABLED 2026-06-18. App-level Content-Encoding broke responses in
+    # production: behind Railway's edge proxy (which already compresses), the
+    # manual gzip + Content-Length double-encoded / mis-framed the body, so the
+    # BROWSER could not decode JSON responses -- every large tracker mutation
+    # (add/remove party or combatant returns the full encounter state) failed
+    # client-side with "request failed" even though the server had already
+    # applied the change (a manual refresh then showed it). It worked locally
+    # (incl. a real browser against the dev server) because there is no second
+    # compression layer there. Compression is handled at the edge; doing it in
+    # the app too is redundant AND harmful. Left as a no-op pass-through.
     return response
 
 
