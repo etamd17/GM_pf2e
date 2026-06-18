@@ -1903,9 +1903,13 @@ let STATE = {
         STATE.encounter_notes = initial.encounter_notes || '';
         STATE.session_timer_start = initial.session_timer_start || null;
     }
-    // Initial render runs synchronously so background tabs (where rAF is
-    // throttled) still paint the tracker on first load.
-    _renderNow();
+    // NB: the initial render is intentionally deferred to the END of this
+    // <script> (search "INITIAL RENDER"). Calling _renderNow() HERE threw a
+    // temporal-dead-zone error — render helpers reference `let`/`const`s that
+    // are declared further down (e.g. _lastScrolledActive, _renderScheduled,
+    // _syncResetTimer). That throw halted the rest of the top-level script, so
+    // those lets never initialized and render()/applyState()/pulseSync() threw
+    // forever — which surfaced as "Request failed" on every tracker mutation.
 })();
 
 function toggleSaveLoadPanel() {
@@ -4784,6 +4788,14 @@ async function sendCheckRequest() {
         });
     } catch(e) { console.error('GM inbox SSE failed:', e); }
 })();
+
+/* ── INITIAL RENDER ──────────────────────────────────────────────────────────
+   Paint the tracker once on first load. This MUST be the last thing the script
+   does: every top-level `let`/`const` above is now initialized, so the render
+   helpers (which reference _lastScrolledActive, _renderScheduled, etc.) no
+   longer hit a temporal-dead-zone error. Kept synchronous (not rAF) so a
+   background tab whose requestAnimationFrame is throttled still paints. */
+try { _renderNow(); } catch (e) { console.error('Initial tracker render failed:', e); }
 
 </script>
 {% endblock %}

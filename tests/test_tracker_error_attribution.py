@@ -75,3 +75,38 @@ def test_apiaction_also_surfaces_status():
     fn = _js_fn(_tracker(), 'apiAction')
     assert 'server returned ' in fn
     assert 'never reached the server' in fn
+
+
+def test_initial_render_runs_after_its_lexical_decls():
+    """THE actual root cause of the production "Request failed" — a load-time TDZ.
+
+    The on-load render call (`_renderNow()`) had been hoisted into the bootstrap
+    IIFE near the top of the inline script, AHEAD of the top-level `let`s the
+    render helpers reference (_lastScrolledActive, _renderScheduled,
+    _syncResetTimer, _sessionTimerInterval). At load, `_renderNow()` ->
+    `scrollActiveIntoView()` touched `_lastScrolledActive` while it was still in
+    its temporal dead zone and threw. That uncaught throw halted the REST of the
+    top-level script, so those `let`s never initialized — and from then on
+    render() / applyState() / pulseSync() threw a TDZ error on every call. Since
+    the page uses inline onclick handlers + server-rendered rows, mutations still
+    reached the server (a refresh showed them), but the client repaint always
+    threw, surfacing as "Request failed" on every add/remove.
+
+    Invariant: the initial render must come AFTER every render-state `let` it
+    depends on, and the bootstrap IIFE must not call _renderNow() early.
+    """
+    src = _tracker()
+    init_call = src.index('try { _renderNow()')  # the trailing INITIAL RENDER call
+    for decl in ('let _syncResetTimer', 'let _renderScheduled',
+                 'let _lastScrolledActive', 'let _sessionTimerInterval'):
+        assert decl in src, 'missing expected declaration %r' % decl
+        assert src.index(decl) < init_call, \
+            '%s is declared AFTER the initial _renderNow() call — TDZ at load' % decl
+    # The bootstrap IIFE must NOT invoke _renderNow() before those lexical
+    # declarations have run (that was exactly the regression).
+    boot = src.index('Bootstrap initial state from Jinja')
+    boot_region = src[boot:src.index('let _syncResetTimer')]
+    # Match the call form `_renderNow();` (a statement), not prose mentions of it
+    # in the explanatory comment that documents this very regression.
+    assert '_renderNow();' not in boot_region, \
+        'bootstrap IIFE calls _renderNow() before its lexical deps initialize (TDZ)'
