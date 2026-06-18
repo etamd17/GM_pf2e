@@ -76,7 +76,14 @@
                 </a>
                 <div class="nav-links flex items-center gap-1 text-xs font-medium flex-nowrap">
                     {% if account_user %}
-                    <a href="/me" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Switch campaign / my characters">{% if active_campaign %}{{ active_campaign.name }}{% else %}My Table{% endif %} &#9662;</a>
+                    <div class="campaign-switcher" style="position:relative;">
+                        <button type="button" id="cs-btn" onclick="window._csToggle && window._csToggle()" aria-haspopup="true" aria-expanded="false" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Switch campaign / my characters">{% if active_campaign %}{{ active_campaign.name }}{% else %}My Table{% endif %} &#9662;</button>
+                        <div id="cs-menu" role="menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; min-width:248px; background:var(--bg-sunken); border:1px solid var(--border-card); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.45); z-index:60; overflow:hidden;">
+                            <div style="padding:8px 12px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-on-dark-3);">Switch table</div>
+                            <div id="cs-list" style="max-height:60vh; overflow:auto;"><div style="padding:10px 12px; font-size:12px; color:var(--text-on-dark-3);">Loading&hellip;</div></div>
+                            <a href="/me" style="display:block; padding:9px 12px; font-size:12px; border-top:1px solid var(--border-card); color:var(--text-on-dark-2); text-decoration:none;">All campaigns &amp; characters &rarr;</a>
+                        </div>
+                    </div>
                     {% endif %}
                     {# Nav links are registry-driven: each system declares its GM + player nav (systems/<key>/__init__.py SystemUI), so a new system needs no edits here and the GM/player split is structural. No cross-system bleed. #}
                     {% for ln in (system_ui.gm_nav if is_gm else system_ui.player_nav) %}
@@ -92,6 +99,55 @@
             </div>
         </div>
     </nav>
+    <style>
+      /* System accent that follows the active campaign — an unmistakable cue you
+         can't run a PF2e check in the Cosmere game (and vice versa). */
+      body.system-pf2e nav { box-shadow: inset 0 -2px 0 rgba(240,216,138,.45); }
+      body.system-cosmere nav { box-shadow: inset 0 -2px 0 rgba(159,210,242,.5); }
+    </style>
+    {% if account_user %}
+    <script>
+    // In-nav campaign switcher: a real dropdown, populated from /api/my_campaigns,
+    // each row a same-origin POST to /campaign/<id>/activate (CSRF-safe).
+    (function(){
+      var menu = document.getElementById('cs-menu'), btn = document.getElementById('cs-btn'),
+          list = document.getElementById('cs-list'), loaded = false, open = false;
+      if (!menu || !btn) return;
+      function esc(s){ var d=document.createElement('span'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+      function badge(sys){
+        var on = sys==='cosmere'; var col = on ? '#9fd2f2' : '#f0d88a';
+        return '<span style="font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 5px;border-radius:3px;border:1px solid '+col+'55;color:'+col+';">'+(on?'COSMERE':'PF2E')+'</span>';
+      }
+      function row(c){
+        var live = c.is_live ? ' <span style="color:#6ee7a8;">&#9679; LIVE</span>' : '';
+        var active = c.is_active ? ' <span style="opacity:.55;">&middot; active</span>' : '';
+        return '<form method="POST" action="/campaign/'+encodeURIComponent(c.id)+'/activate" style="margin:0;">'
+          + '<button type="submit" style="display:flex;width:100%;align-items:center;gap:8px;padding:9px 12px;background:none;border:none;border-top:1px solid var(--border-card);cursor:pointer;text-align:left;color:var(--text-on-dark);font-size:12px;">'
+          + badge(c.system)
+          + '<span style="flex:1;">'+esc(c.name)+active+live+'</span>'
+          + '<span style="opacity:.6;font-size:10px;">'+esc(c.role)+'</span>'
+          + '</button></form>';
+      }
+      function load(){
+        if (loaded) return; loaded = true;
+        fetch('/api/my_campaigns').then(function(r){ return r.json(); }).then(function(d){
+          var cs = (d && d.campaigns) || [];
+          list.innerHTML = cs.length ? cs.map(row).join('')
+            : '<div style="padding:10px 12px;font-size:12px;color:var(--text-on-dark-3);">No campaigns yet.</div>';
+        }).catch(function(){ list.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text-on-dark-3);">Couldn\'t load.</div>'; });
+      }
+      window._csToggle = function(){
+        open = !open; menu.style.display = open ? 'block' : 'none';
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) load();
+      };
+      document.addEventListener('click', function(e){
+        if (open && !menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) { open=false; menu.style.display='none'; btn.setAttribute('aria-expanded','false'); }
+      });
+      document.addEventListener('keydown', function(e){ if (open && e.key==='Escape'){ open=false; menu.style.display='none'; btn.setAttribute('aria-expanded','false'); } });
+    })();
+    </script>
+    {% endif %}
 
     <div class="flex-1 overflow-y-auto p-4 lg:p-8">
         <div class="max-w-7xl mx-auto">

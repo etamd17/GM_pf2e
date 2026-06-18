@@ -66,15 +66,11 @@ _UI = SystemUI(
         NavLink('GM Screen', '/cosmere/gmscreen', title='Cosmere rules reference'),
         NavLink('Generators', '/cosmere/generator', title='Rosharan names, NPCs, weather, loot'),
         NavLink('Loot', '/cosmere/loot', title='Spheres & spoils ledger'),
-        NavLink('Threads', '/gm/threads'),
-        NavLink('Status', '/status'),
-        NavLink('Notes', '/notes', title='Session notes scratchpad'),
     ),
     player_nav=(
         NavLink('My Character', '/cosmere/player', title='My character'),
         NavLink('Party', '/cosmere/pcs', title='The party'),
         NavLink('Combat', '/tracker', title='Live combat'),
-        NavLink('Notes', '/notes', title='Session notes scratchpad'),
     ),
 )
 
