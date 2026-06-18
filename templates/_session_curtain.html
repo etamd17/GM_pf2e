@@ -4,11 +4,15 @@
    its own SSE listener for `session_start` / `session_dismiss`.
 
    Role:
-     - 'gm'     → curtain shows an "Enter the Session" button that parts
-                  it for EVERY screen (POST /api/session/dismiss).
-     - 'player' → no button; the curtain parts when the GM's dismiss
-                  broadcast arrives (with a generous auto-part fallback so
-                  a missed SSE never strands the player).
+     - 'gm'     → "Enter the Session" button parts it for EVERY screen
+                  (POST /api/session/dismiss).
+     - 'player' → "Enter the session →" button advances ONLY that player,
+                  straight to their character sheet (/player or /cosmere/player),
+                  so they're never stranded on the recap. The curtain ALSO
+                  parts on its own when the GM's dismiss broadcast arrives
+                  (with a generous auto-part fallback so a missed SSE never
+                  strands the player).
+   Long recaps scroll inside the veil; a "scroll for more" cue shows on overflow.
    Set `curtain_role` before the include; defaults to 'player'.
    ════════════════════════════════════════════════════════════════════ #}
 <div id="session-curtain" class="session-curtain" data-curtain-role="{{ curtain_role|default('player') }}" aria-hidden="true">
@@ -23,6 +27,7 @@
         <div id="sc-recap-wrap" class="sc-recap-wrap" style="display:none;">
             <div class="sc-recap-label">Previously</div>
             <p id="sc-recap" class="sc-recap"></p>
+            <div id="sc-scrollcue" class="sc-scrollcue">&#9662;&nbsp; scroll for more</div>
         </div>
         <button id="sc-enter" class="sc-enter" type="button" style="display:none;">Enter the Session</button>
         <div id="sc-await" class="sc-await" style="display:none;">The tale resumes&hellip;</div>
@@ -112,7 +117,30 @@
         line-height: 1.55; color: #ede4cf; margin: 0;
         text-shadow: 0 2px 10px rgba(0,0,0,0.7);
         white-space: pre-line;
+        /* Long recaps scroll inside the curtain instead of overflowing the veil. */
+        max-height: 42vh; overflow-y: auto; padding-right: 10px;
+        scrollbar-width: thin; scrollbar-color: rgba(201,163,78,0.5) transparent;
+        text-align: left;
     }
+    .session-curtain .sc-recap::-webkit-scrollbar { width: 7px; }
+    .session-curtain .sc-recap::-webkit-scrollbar-thumb {
+        background: rgba(201,163,78,0.45); border-radius: 4px;
+    }
+    body.system-cosmere .session-curtain .sc-recap {
+        scrollbar-color: rgba(95,168,224,0.5) transparent;
+    }
+    body.system-cosmere .session-curtain .sc-recap::-webkit-scrollbar-thumb {
+        background: rgba(95,168,224,0.45);
+    }
+    /* A faint cue that there's more recap below the fold (shown by JS only when it overflows). */
+    .session-curtain .sc-scrollcue {
+        display: none; margin-top: 9px; text-align: center;
+        font-family: 'Cinzel', serif; font-size: 10px; font-weight: 600;
+        letter-spacing: 0.18em; text-transform: uppercase;
+        color: rgba(201,163,78,0.6);
+        animation: scAwaitPulse 2.4s ease-in-out infinite;
+    }
+    body.system-cosmere .session-curtain .sc-scrollcue { color: rgba(95,168,224,0.6); }
 
     .session-curtain .sc-enter {
         margin-top: 18px;
@@ -186,6 +214,7 @@
     var titleEl = document.getElementById('sc-title');
     var recapWrap = document.getElementById('sc-recap-wrap');
     var recapEl = document.getElementById('sc-recap');
+    var scrollCue = document.getElementById('sc-scrollcue');
     var enterBtn = document.getElementById('sc-enter');
     var awaitEl = document.getElementById('sc-await');
     var litTimer = null, autoPartTimer = null;
@@ -208,17 +237,33 @@
         if (recap) {
             recapEl.textContent = recap;
             recapWrap.style.display = '';
+            recapEl.scrollTop = 0;
+            // Reveal the "scroll for more" cue once layout settles — only if it overflows.
+            setTimeout(function() {
+                if (!scrollCue) return;
+                var more = recapEl.scrollHeight - recapEl.clientHeight > 8;
+                scrollCue.style.display = more ? 'block' : 'none';
+            }, 120);
+            // Fade the cue once the reader reaches the bottom.
+            recapEl.onscroll = function() {
+                if (!scrollCue) return;
+                var atBottom = recapEl.scrollTop + recapEl.clientHeight >= recapEl.scrollHeight - 6;
+                scrollCue.style.opacity = atBottom ? '0' : '';
+            };
         } else {
             recapWrap.style.display = 'none';
+            if (scrollCue) scrollCue.style.display = 'none';
         }
-        // Role-specific controls
+        // Role-specific controls. Both roles get an Enter button so a player is
+        // never stranded on the recap with no way forward; the GM's also parts
+        // the curtain for every screen, while a player's advances only them.
         if (role === 'gm') {
-            enterBtn.style.display = '';
-            awaitEl.style.display = 'none';
+            enterBtn.textContent = 'Enter the Session';
         } else {
-            enterBtn.style.display = 'none';
-            awaitEl.style.display = '';
+            enterBtn.textContent = 'Enter the session →';
         }
+        enterBtn.style.display = '';
+        awaitEl.style.display = 'none';
         // Show + light up
         curtain.classList.remove('parting');
         curtain.classList.add('show');
@@ -244,11 +289,17 @@
         }, 950);
     }
 
-    // GM's Enter button parts the curtain for EVERYONE.
+    // Enter button: the GM parts the curtain for EVERY screen; a player advances
+    // only themselves, straight to their character sheet.
     if (enterBtn) {
         enterBtn.addEventListener('click', function() {
             part(); // part our own immediately for snappy feel
-            fetch('/api/session/dismiss', { method: 'POST' }).catch(function() {});
+            if (role === 'gm') {
+                fetch('/api/session/dismiss', { method: 'POST' }).catch(function() {});
+            } else {
+                var dest = document.body.classList.contains('system-cosmere') ? '/cosmere/player' : '/player';
+                setTimeout(function() { window.location.href = dest; }, 240);
+            }
         });
     }
 
