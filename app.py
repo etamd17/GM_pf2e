@@ -7841,6 +7841,7 @@ def _cosmere_builder_context(build, hb_store=None):
         ancestry_info=systems.cosmere.origins.ANCESTRY_INFO,
         paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
         path_talents=_cosmere_path_talents(),
+        path_trees=systems.cosmere.talents.tree_graphs(),   # positioned DAG per path (visual tree)
         radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
         radiant_ideals=_rad.ORDER_IDEALS, ideal_personal=list(_rad.IDEAL_PERSONAL),
         fourth_ideal_level=_rad.FOURTH_IDEAL_LEVEL,
