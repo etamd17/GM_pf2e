@@ -74,6 +74,81 @@ def _uuid_id(uuid):
     return m.group(1) if m else None
 
 
+_TREE_GRAPHS = None
+
+
+def tree_graphs() -> dict:
+    """Positioned talent-tree graphs per heroic path, for the builder's visual
+    tree. {path: [ {name, specialty, vb:{x,y,w,h}, nodes:[{id, slug, name, iid,
+    x, y, deps:[{slug,name}], edges:[node_id], skillReq:[{skill,rank}],
+    attrReq:[{attr,value}]}] } ]}. Edges connect prerequisite nodes WITHIN the
+    same tree; deps carry every prerequisite talent (incl. cross-tree, e.g. the
+    path key) so node state can be computed. Coordinates are the rulebook tree
+    layout (Foundry node positions)."""
+    global _TREE_GRAPHS
+    if _TREE_GRAPHS is not None:
+        return _TREE_GRAPHS
+    docs = []
+    for pack in _PACKS:
+        docs.extend(load_pack(pack))
+    by_iid = {d['_id']: d for d in docs if d.get('type') == 'talent' and d.get('_id')}
+    seen = {}
+    for d in docs:
+        if d.get('type') != 'talent_tree':
+            continue
+        sysd = d.get('system', {}) or {}
+        nodes_raw = sysd.get('nodes', {}) or {}
+        nlist, slug2id, path = [], {}, None
+        for nid, n in nodes_raw.items():
+            if n.get('type') != 'talent':
+                continue
+            item = by_iid.get(_uuid_id(n.get('uuid')))
+            if not item:
+                continue
+            path = path or norm_path((item.get('system') or {}).get('path'))
+            pos = n.get('position') or {}
+            deps, skillreq, attrreq = [], [], []
+            for g in (n.get('prerequisites') or {}).values():
+                ty = g.get('type')
+                if ty == 'talent':
+                    for slug, info in (g.get('talents') or {}).items():
+                        deps.append({'slug': slug, 'name': (info or {}).get('label', slug)})
+                elif ty == 'skill':
+                    skillreq.append({'skill': g.get('skill'), 'rank': g.get('rank') or 0})
+                elif ty == 'attribute':
+                    attrreq.append({'attr': g.get('attribute'), 'value': g.get('value') or 0})
+            slug = n.get('talentId')
+            nlist.append({'id': nid, 'slug': slug, 'name': item.get('name', ''),
+                          'iid': item.get('_id'), 'x': pos.get('x', 0), 'y': pos.get('y', 0),
+                          'deps': deps, 'skillReq': skillreq, 'attrReq': attrreq, 'edges': []})
+            if slug:
+                slug2id[slug] = nid
+        if not path or not nlist:
+            continue
+        for nd in nlist:                                    # within-tree edges (prereq -> node)
+            nd['edges'] = [slug2id[dp['slug']] for dp in nd['deps'] if dp['slug'] in slug2id]
+        name = (d.get('name') or '').strip()
+        vb = sysd.get('viewBounds') or {}
+        tree = {
+            'name': name, 'specialty': '' if name.lower().endswith('talents') else name,
+            'vb': {'x': vb.get('x', 0), 'y': vb.get('y', 0),
+                   'w': vb.get('width', 300), 'h': vb.get('height', 300)},
+            'nodes': nlist,
+        }
+        # The base + handbook packs both carry a tree per (path, name); keep the
+        # fuller one (more nodes) so we don't render duplicates.
+        key = (path, name)
+        if key not in seen or len(nlist) > len(seen[key]['nodes']):
+            seen[key] = tree
+    out = {}
+    for (path, _name), tree in seen.items():
+        out.setdefault(path, []).append(tree)
+    for p in out:                                           # core ("<Path> Talents") first
+        out[p].sort(key=lambda t: (t['specialty'] != '', t['specialty'].lower()))
+    _TREE_GRAPHS = out
+    return out
+
+
 def _normalize(pr) -> list:
     """A Foundry prerequisites dict (item- or node-shaped) -> a uniform list of
     groups. Tree nodes key ``talents`` by slug (a dict); item docs use a list --

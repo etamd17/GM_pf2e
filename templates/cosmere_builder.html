@@ -48,6 +48,21 @@
   .ideal .ms .dot { width:16px; height:16px; border-radius:50%; border:1px solid var(--border-rule); cursor:pointer; display:inline-block; }
   .ideal .ms .dot.on { background:var(--accent); border-color:var(--accent); }
   .btn.sm { padding:4px 11px; font-size:11px; min-height:0; }
+  /* Visual talent tree (the rulebook DAG; node positions from the source). */
+  .path-tree { margin-top:1rem; display:flex; flex-direction:column; gap:1rem; }
+  .tree-block { border:1px solid var(--border-card); border-radius:10px; padding:.5rem .7rem .7rem; background:var(--bg-page); }
+  .tree-h { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); font-family:var(--font-display,serif); margin-bottom:.3rem; }
+  .tree-svg { width:100%; height:auto; max-height:320px; display:block; }
+  .tedge { stroke:var(--border-rule); stroke-width:1.5; }
+  .tnode { cursor:pointer; }
+  .tnode circle { fill:var(--bg-sunken,#131922); stroke:var(--text-on-dark-3); stroke-width:1.5; transition:fill .12s, stroke .12s; }
+  .tnode .tlabel { fill:var(--text-on-dark-2); font-size:10px; text-anchor:middle; pointer-events:none; }
+  .tnode.taken circle { fill:var(--accent); stroke:var(--accent); }
+  .tnode.taken .tlabel { fill:var(--text-on-dark); }
+  .tnode.avail circle { stroke:var(--accent); stroke-width:2; }
+  .tnode.avail:hover circle { fill:rgba(95,168,224,.20); }
+  .tnode.locked circle { stroke-dasharray:3 3; opacity:.55; }
+  .tnode.locked .tlabel { opacity:.5; }
   .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
   .btn:hover { background:rgba(95,168,224,.26); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
@@ -210,10 +225,11 @@
           <div style="flex:1;" id="path-info" class="muted"></div>
         </div>
         <div class="row" style="margin-top:.7rem;">
-          <div style="flex:1;"><label>Add a talent from your path</label>
+          <div style="flex:1;"><label>Add a talent from your path <span class="muted" style="text-transform:none;">(or tap a node in the tree below)</span></label>
             <select id="talent-pick"><option value="">&mdash; choose path first &mdash;</option></select></div>
           <button class="btn" type="button" onclick="addTalent()">Add Talent</button>
         </div>
+        <div id="path-tree" class="path-tree"></div>
       </section>
 
       <section class="step" data-step="4">
@@ -358,6 +374,7 @@ const ANCESTRY_INFO = {{ ancestry_info|tojson }};
 const CULTURE_INFO = {{ culture_info|tojson }};
 const SURGE = {{ surge_skills|tojson }};
 const PATH_TALENTS = {{ path_talents|tojson }};
+const PATH_TREES = {{ path_trees|tojson }};
 const ORDERS = {{ radiant_orders|tojson }};
 const SURGE_INFO = {{ surges|tojson }};
 const FIRST_IDEAL = {{ first_ideal|tojson }};
@@ -559,6 +576,52 @@ function renderTalents(){
       ? `<span class="chip" title="Key talent (granted)"><b style="color:var(--accent)">★ ${t.name||t.id}</b></span>`
       : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
   ).join('') || '<span class="muted">None yet</span>';
+  renderPathTree();
+}
+
+// ── Visual talent tree: the rulebook DAG (node positions from source), with
+//    taken / available / prerequisite-locked states computed client-side. ──
+function _treeEsc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _treeTaken(){ return new Set(TALENTS.map(t=>(t.name||'').toLowerCase())); }
+function _skillRank(c){ const i=document.querySelector('.skill-rank[data-code="'+c+'"]'); return i?(+i.value||0):0; }
+function _attrVal(c){ return +v('attr-'+c)||0; }
+function _nodeMet(n,taken){
+  return n.deps.every(d=>taken.has((d.name||'').toLowerCase()))
+      && n.skillReq.every(s=>_skillRank(s.skill)>=s.rank)
+      && n.attrReq.every(a=>_attrVal(a.attr)>=a.value);
+}
+function toggleTreeTalent(g){
+  const iid=g.getAttribute('data-iid'), name=g.getAttribute('data-name');
+  const keyName=((PATH_INFO[v('f-path')]||{}).key_talent||'').toLowerCase();
+  if(name.toLowerCase()===keyName) return;        // key talent is granted — can't remove
+  const idx=TALENTS.findIndex(t=>t.id===iid || (t.name||'').toLowerCase()===name.toLowerCase());
+  if(idx>=0){ if(!TALENTS[idx].key) TALENTS.splice(idx,1); }      // remove (re-locks dependents)
+  else { if(g.classList.contains('locked')) return; TALENTS.push({id:iid, name:name}); }  // can't pick a locked node
+  renderTalents(); recompute();
+}
+function renderPathTree(){
+  const box=document.getElementById('path-tree'); if(!box) return;
+  const trees=(PATH_TREES[v('f-path')]||[]);
+  if(!trees.length){ box.innerHTML=''; return; }
+  const taken=_treeTaken();
+  box.innerHTML=trees.map(tr=>{
+    const vb=tr.vb, pad=30, W=vb.w+pad*2, H=vb.h+pad*2, by={};
+    tr.nodes.forEach(n=>by[n.id]=n);
+    const cx=n=>(n.x-vb.x)+pad+25, cy=n=>(n.y-vb.y)+pad+25;
+    let edges='';
+    tr.nodes.forEach(n=>n.edges.forEach(eid=>{ const p=by[eid]; if(p) edges+=`<line class="tedge" x1="${cx(p)}" y1="${cy(p)}" x2="${cx(n)}" y2="${cy(n)}"/>`; }));
+    const nodes=tr.nodes.map(n=>{
+      const tk=taken.has((n.name||'').toLowerCase()), met=_nodeMet(n,taken);
+      const st=tk?'taken':(met?'avail':'locked');
+      const reqs=[].concat(n.deps.map(d=>d.name), n.skillReq.map(s=>(SKILL_NAMES[s.skill]||s.skill)+' '+s.rank), n.attrReq.map(a=>a.attr.toUpperCase()+' '+a.value));
+      const lab=n.name.length>16?n.name.slice(0,15)+'…':n.name;
+      return `<g class="tnode ${st}" data-iid="${_treeEsc(n.iid)}" data-name="${_treeEsc(n.name)}" onclick="toggleTreeTalent(this)">`
+        +`<title>${_treeEsc(n.name)}${reqs.length?' — needs '+_treeEsc(reqs.join(', ')):' — no prerequisite'}</title>`
+        +`<circle cx="${cx(n)}" cy="${cy(n)}" r="16"/><text class="tlabel" x="${cx(n)}" y="${cy(n)+30}">${_treeEsc(lab)}</text></g>`;
+    }).join('');
+    return `<div class="tree-block"><div class="tree-h">${_treeEsc(tr.specialty?tr.specialty+' specialty':'Core path')}</div>`
+      +`<svg class="tree-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">${edges}${nodes}</svg></div>`;
+  }).join('');
 }
 function onKit(){
   const k=STARTING_KITS.find(x=>x.key===v('kit-pick')), box=document.getElementById('kit-info');
@@ -634,6 +697,7 @@ function recompute(){
   const okT=setBudget('b-tal',TALENTS.length,talentBudget(L));
   document.getElementById('validity').textContent =
     (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L) : 'Over budget — reduce to save';
+  if(typeof renderPathTree==='function') renderPathTree();   // refresh node availability
   refreshPreview();
 }
 
