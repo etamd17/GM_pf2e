@@ -35,6 +35,19 @@
   @media (min-width:680px){ .cb-gloss-grid { grid-template-columns:1fr 1fr; } }
   .cb-gloss-grid dt { font-weight:700; color:var(--text-on-dark); font-size:12.5px; }
   .cb-gloss-grid dd { margin:0 0 .2rem; color:var(--text-on-dark-2); font-size:11.5px; line-height:1.4; }
+  /* Radiant Ideal progression track */
+  .ideal-track { display:flex; flex-direction:column; gap:.5rem; }
+  .ideal { border:1px solid var(--border-card); border-radius:9px; padding:.5rem .7rem; background:var(--bg-page); }
+  .ideal.on { border-color:var(--accent); background:rgba(95,168,224,.07); }
+  .ideal.locked { opacity:.5; }
+  .ideal .ih { font-size:12px; margin-bottom:.3rem; }
+  .ideal .ih .sw { color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:.06em; margin-left:.3rem; }
+  .ideal .ih .wk, .ideal .ih .lk { color:var(--text-on-dark-3); font-size:10px; text-transform:uppercase; letter-spacing:.06em; margin-left:.3rem; }
+  .ideal-words { width:100%; font-size:12px; font-style:italic; }
+  .ideal .ms { display:flex; align-items:center; gap:6px; margin-top:.45rem; flex-wrap:wrap; }
+  .ideal .ms .dot { width:16px; height:16px; border-radius:50%; border:1px solid var(--border-rule); cursor:pointer; display:inline-block; }
+  .ideal .ms .dot.on { background:var(--accent); border-color:var(--accent); }
+  .btn.sm { padding:4px 11px; font-size:11px; min-height:0; }
   .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
   .btn:hover { background:rgba(95,168,224,.26); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
@@ -215,11 +228,12 @@
         <div id="radiant-detail" style="display:none; margin-top:.7rem;">
           <div class="row">
             <div style="min-width:210px;"><label>Spren name (optional)</label><input id="f-spren" value="{{ build.spren_name }}"></div>
-            <div><label>Ideals sworn (of 5)</label>
-              <div class="stepper"><button type="button" onclick="bumpIdeals(-1)">&minus;</button>
-                <input id="f-ideals" type="number" min="0" max="5" value="{{ build.ideals_sworn }}" readonly style="background:var(--bg-sunken); width:48px;">
-                <button type="button" onclick="bumpIdeals(1)">+</button></div></div>
-            <div style="flex:1;" id="ideal-info" class="muted"></div>
+            <div style="flex:1 1 100%;"><label>Ideals &mdash; mark three milestones, then speak the Words</label>
+              <div id="ideal-track" class="ideal-track"></div>
+              <div id="ideal-info" class="muted" style="margin-top:.3rem;"></div>
+              <input type="hidden" id="f-ideals" value="{{ build.ideals_sworn }}">
+              <input type="hidden" id="f-ideal-progress" value="{{ build.ideal_progress }}">
+            </div>
           </div>
           <div id="surge-skills" class="grid g-skills" style="margin-top:.7rem; display:none;">
             {% for code, name in skill_names.items() if code in surge_skills %}
@@ -374,7 +388,7 @@ const v=id=>document.getElementById(id).value;
 const lvl=()=>Math.max(1,+document.getElementById('f-level').value||1);
 
 function bumpLevel(d){const e=document.getElementById('f-level');e.value=Math.max(1,(+e.value||1)+d);onLevel();}
-function onLevel(){recompute();}
+function onLevel(){if(typeof renderIdeals==='function')renderIdeals(); recompute();}
 function onPath(){
   const p=v('f-path'); const sel=document.getElementById('talent-pick');
   const list=(PATH_TALENTS[p]||[]);
@@ -459,15 +473,52 @@ function addRadiantTalent(){
   const id='radiant:'+t.name;
   if(!TALENTS.some(x=>x.id===id)){ TALENTS.push({id, name:t.name}); renderTalents(); recompute(); }
 }
-function bumpIdeals(d){const e=document.getElementById('f-ideals'); e.value=Math.max(0,Math.min(5,(+e.value||0)+d)); onIdeals();}
-function onIdeals(){
-  const n=+v('f-ideals')||0, o=v('f-order');
-  let html='<b>First Ideal:</b> <i>'+FIRST_IDEAL+'</i>';
-  if(o){ html += n>=1 ? `<br>Sworn ${n} of 5${n>=5?' — the 5th Ideal is unreachable in play.':'.'} Surges unlocked.`
-                      : '<br>Order chosen — grants Investiture. Swear the First Ideal to unlock your surges.'; }
-  document.getElementById('ideal-info').innerHTML=html;
-  updateSurges(); recompute();
+const RADIANT_IDEALS = {{ radiant_ideals|tojson }};   // {order:{2:text,3:text}}
+const IDEAL_PERSONAL = {{ ideal_personal|tojson }};
+const FOURTH_IDEAL_LEVEL = {{ fourth_ideal_level }};
+let IDEAL_WORDS = ({{ build.ideal_words|tojson }} || []).slice();
+const _ORD=['','First','Second','Third','Fourth'];
+function idealSuggested(order,n){ return n<=1?FIRST_IDEAL:(((RADIANT_IDEALS[order]||{})[n])||''); }
+function idealWordsInput(n,val){ IDEAL_WORDS[n-1]=val; }
+function setIdealProgress(m){ const e=document.getElementById('f-ideal-progress'); const c=+e.value||0; e.value=(c===m?m-1:m); renderIdeals(); }
+function speakIdeal(n){ document.getElementById('f-ideals').value=n; document.getElementById('f-ideal-progress').value=0;
+  // Fixed-wording orders default to the canon Words; personalized orders keep
+  // whatever the player wrote (their own oath), never the guidance placeholder.
+  if(!IDEAL_WORDS[n-1] && IDEAL_PERSONAL.indexOf(v('f-order'))<0) IDEAL_WORDS[n-1]=idealSuggested(v('f-order'),n);
+  renderIdeals(); updateSurges(); recompute(); }
+function renounceIdeal(){ const e=document.getElementById('f-ideals'); e.value=Math.max(0,(+e.value||0)-1);
+  document.getElementById('f-ideal-progress').value=0; renderIdeals(); updateSurges(); recompute(); }
+function renderIdeals(){
+  const order=v('f-order'), box=document.getElementById('ideal-track'); if(!box) return;
+  const info=document.getElementById('ideal-info');
+  if(!order){ box.innerHTML=''; if(info) info.innerHTML=''; return; }
+  const sworn=+document.getElementById('f-ideals').value||0, prog=+document.getElementById('f-ideal-progress').value||0, L=lvl();
+  const esc=s=>(s||'').replace(/"/g,'&quot;');
+  let html='';
+  for(let n=1;n<=4;n++){
+    const sug=idealSuggested(order,n), isSworn=n<=sworn, isNext=n===sworn+1;
+    const words=(IDEAL_WORDS[n-1]||'')||(n<=1?sug:'');
+    html+=`<div class="ideal ${isSworn?'on':isNext?'next':'locked'}">`;
+    html+=`<div class="ih"><b>${_ORD[n]} Ideal</b> ${isSworn?'<span class="sw">&#10003; sworn</span>':isNext?'<span class="wk">in progress</span>':'<span class="lk">locked</span>'}</div>`;
+    if(isSworn||isNext){
+      html+=`<input class="ideal-words" value="${esc(words)}" placeholder="${esc(sug||'Speak your Words…')}" oninput="idealWordsInput(${n}, this.value)"${isSworn?' readonly':''}>`;
+    }
+    if(isNext){
+      const levelOk = n===1? L>=2 : (n>=4? L>=FOURTH_IDEAL_LEVEL : true);
+      html+='<div class="ms">';
+      for(let m=1;m<=3;m++) html+=`<span class="dot ${m<=prog?'on':''}" onclick="setIdealProgress(${m})" title="Milestone ${m} of 3"></span>`;
+      html+=` <button type="button" class="btn sm" ${(prog>=3&&levelOk)?'':'disabled'} onclick="speakIdeal(${n})">Speak the Words</button>`;
+      if(!levelOk) html+=`<span class="muted" style="margin-left:.5rem; font-size:11px;">Requires level ${n>=4?FOURTH_IDEAL_LEVEL:2}</span>`;
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+  box.innerHTML=html;
+  if(info) info.innerHTML = sworn>=1
+    ? `Sworn the ${_ORD[sworn]} Ideal — surges unlocked. <a href="javascript:void(0)" onclick="renounceIdeal()">renounce</a>`
+    : 'Order chosen — grants Investiture. Mark three milestones, then speak the First Ideal to unlock your surges.';
 }
+function onIdeals(){ renderIdeals(); updateSurges(); recompute(); }
 function updateSurges(){
   const o=ORDERS[v('f-order')], sworn=(+v('f-ideals')||0)>=1, show=!!(o&&sworn);
   const cont=document.getElementById('surge-skills');
@@ -670,7 +721,7 @@ function collect(){
   return {
     name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
     path:v('f-path'), singer_form:v('f-singer-form'),
-    radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, spren_name:v('f-spren'),
+    radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, ideal_progress:+v('f-ideal-progress')||0, ideal_words:IDEAL_WORDS, spren_name:v('f-spren'),
     attributes:attrs, skills, talents:TALENTS, inventory:INV, infected_arts:INFECTED,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
     purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'),
