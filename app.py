@@ -7792,10 +7792,12 @@ def _cosmere_path_talents():
             out.setdefault(p, []).append({
                 'id': d.get('_id'), 'name': name,
                 'key': name.strip().lower() == key_names.get(p, '\x00'),
+                'specialty': _ct.talent_specialty().get(d.get('_id'), ''),   # '' = core path talent
                 'prereq': _talent_prereq_summary(_ct.resolved_prereqs(d.get('_id'))),
             })
     for p in out:
-        out[p].sort(key=lambda t: (not t['key'], t['name'].lower()))   # key talents first
+        # Key talents first, then group by specialty (core '' first), then name.
+        out[p].sort(key=lambda t: (not t['key'], t['specialty'] or '', t['name'].lower()))
     return out
 
 

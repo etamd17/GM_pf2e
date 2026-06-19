@@ -378,8 +378,19 @@ function onLevel(){recompute();}
 function onPath(){
   const p=v('f-path'); const sel=document.getElementById('talent-pick');
   const list=(PATH_TALENTS[p]||[]);
-  sel.innerHTML='<option value="">'+(list.length?'— select a talent —':'(choose a path first)')+'</option>'
-    + list.map(t=>`<option value="${t.id}">${t.key?'★ ':''}${t.name}${t.prereq?' — needs '+t.prereq:''}${t.homebrew?' · HB':''}</option>`).join('');
+  const escA=s=>(s||'').replace(/"/g,'&quot;');
+  const opt=t=>`<option value="${t.id}">${t.key?'★ ':''}${t.name}${t.prereq?' — needs '+t.prereq:''}${t.homebrew?' · HB':''}</option>`;
+  let thtml='<option value="">'+(list.length?'— select a talent —':'(choose a path first)')+'</option>';
+  if(list.length){
+    // Group the picker by specialty (rulebook: 3 specialties per path); core talents first.
+    const groups={}, order=[];
+    list.forEach(t=>{ const g=t.specialty||''; if(!(g in groups)){groups[g]=[];order.push(g);} groups[g].push(t); });
+    order.sort((a,b)=> a===''?-1 : b===''?1 : a.localeCompare(b));
+    order.forEach(g=>{
+      thtml += `<optgroup label="${escA(g===''?'Core path talents':g+' (specialty)')}">`+groups[g].map(opt).join('')+'</optgroup>';
+    });
+  }
+  sel.innerHTML=thtml;
   const info=PATH_INFO[p], box=document.getElementById('path-info');
   if(info){
     box.innerHTML=`Grants key talent <b style="color:var(--accent)">${info.key_talent}</b> and a free rank in <b>${SKILL_NAMES[info.start_skill]}</b> (starting skill).`;

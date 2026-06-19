@@ -40,6 +40,35 @@ def norm_path(p) -> str:
     return PATH_FIX.get(p, p)
 
 
+_SPECIALTY = None
+
+
+def talent_specialty() -> dict:
+    """{talent _id: specialty display name}. Each heroic path's talents are
+    divided across talent-tree nodes (rulebook Ch.4: 3 specialties per path); a
+    talent's specialty is the tree whose node references it. Base trees named
+    '<Path> Talents' map to '' (core path talents, no specialty). Lets the
+    builder GROUP a path's talent picker by specialty instead of one flat list."""
+    global _SPECIALTY
+    if _SPECIALTY is not None:
+        return _SPECIALTY
+    out = {}
+    docs = []
+    for pack in _PACKS:
+        docs.extend(load_pack(pack))
+    for d in docs:
+        if d.get('type') != 'talent_tree':
+            continue
+        name = (d.get('name') or '').strip()
+        spec = '' if name.lower().endswith('talents') else name
+        for node in (d.get('system', {}).get('nodes', {}) or {}).values():
+            iid = _uuid_id(node.get('uuid'))
+            if iid and iid not in out:
+                out[iid] = spec
+    _SPECIALTY = out
+    return out
+
+
 def _uuid_id(uuid):
     m = re.search(r'Item\.([A-Za-z0-9]+)$', uuid or '')
     return m.group(1) if m else None
