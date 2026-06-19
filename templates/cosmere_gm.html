@@ -17,6 +17,26 @@
     </div>
 </header>
 
+{# ── World skin (visual theme only — the ruleset is unchanged) ── #}
+<div class="flex flex-wrap justify-center items-center" style="gap:var(--sp-2); margin:calc(-1*var(--sp-5)) 0 var(--sp-6);">
+  <span class="font-display" style="letter-spacing:.14em; text-transform:uppercase; font-size:10px; color:var(--text-on-dark-3);">World skin</span>
+  <div style="display:inline-flex; border:1px solid var(--border-card); border-radius:8px; overflow:hidden;">
+    <button type="button" onclick="cosWorld('stormlight')" class="cw-btn{{ ' on' if cosmere_world != 'mistborn' }}">Stormlight</button>
+    <button type="button" onclick="cosWorld('mistborn')" class="cw-btn{{ ' on' if cosmere_world == 'mistborn' }}">Mistborn</button>
+  </div>
+</div>
+<style>
+  .cw-btn{background:transparent; border:none; color:var(--text-on-dark-2); padding:6px 15px; font-size:12px; cursor:pointer; font-family:var(--font-ui); transition:background .15s;}
+  .cw-btn.on{background:var(--accent); color:var(--bg-page); font-weight:600;}
+  .cw-btn+.cw-btn{border-left:1px solid var(--border-card);}
+</style>
+<script>
+function cosWorld(w){
+  fetch('/api/cosmere/world',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({world:w})})
+    .then(function(r){return r.json();}).then(function(d){ if(d&&d.ok) location.reload(); }).catch(function(){});
+}
+</script>
+
 {# ── Tool grid ── #}
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
 

@@ -60,12 +60,15 @@
         .toast-animate { animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
         {% block extra_head %}{% endblock %}
     </style>
+    {# Cosmere world-skin display fonts — only loaded on the Cosmere side so the
+       PF2e pages stay lean. Stormlight = Cormorant Garamond, Mistborn = Playfair. #}
+    {% if active_system == 'cosmere' %}<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Playfair+Display:wght@500;600&display=swap">{% endif %}
     <!-- Design system — loaded LAST in cascade. Single source of truth
          for the two-color brand (gilt + ruby), neutral grays, and
          strict typography roles. New code consumes classes from here. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
-<body class="min-h-screen flex flex-col system-{{ active_system }}{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
+<body class="min-h-screen flex flex-col system-{{ active_system }}{% if active_system == 'cosmere' %} cosmere-{{ cosmere_world }}{% endif %}{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
 
     <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

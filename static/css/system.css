@@ -4483,6 +4483,64 @@ body.system-cosmere {
     --gilt-600:  #1c456a;
     /* The shared focus/hover glow bakes the gilt rgb — cool it to Stormlight. */
     --shadow-glow-gilt: 0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(95,168,224,0.45);
+
+    /* Stormlight reads on a COOL storm-slate surface (PF2e stays warm ink), so
+       the whole side feels like Roshar rather than gold-on-brown. The functional
+       bg/text aliases (--bg-base, --bg-surface, --text-primary, …) all resolve
+       through these base tokens, so overriding the bases re-skins everything. */
+    --bg-page:   #0b0f15;
+    --bg-card:   #131b26;
+    --bg-card-2: #1a2431;
+    --bg-sunken: #0e141c;
+    --bg-input:  #0e141c;
+    --text-on-dark:    #e7eef6;
+    --text-on-dark-2:  #9fb2c6;
+    --text-on-dark-3:  #6f8298;
+    --text-on-cream:   #e7eef6;
+    --text-on-cream-2: #b9c6d6;
+    --text-on-cream-3: #8295a8;
+    /* An elegant inscriptional serif for headings — distinct from PF2e's Cinzel. */
+    --font-display: 'Cormorant Garamond', 'Cinzel', Georgia, serif;
+}
+
+/* ── Mistborn world-skin ──────────────────────────────────────────────────────
+   The per-campaign alternative to Stormlight (GM toggles `cosmere_world`, which
+   adds the `cosmere-mistborn` body class). Ash-charcoal surfaces, a brushed-
+   pewter accent, a Victorian serif. SAME layout/components — different
+   atmosphere. Purely visual; the ruleset is unchanged. Remapping --storm-* and
+   --gilt-* to the pewter ramp means every Stormlight-tinted rule above
+   auto-adapts to pewter, so there's no per-rule hunting. */
+body.system-cosmere.cosmere-mistborn {
+    --storm-50:  #eef0f3;
+    --storm-100: #d7dbe0;
+    --storm-200: #c8cdd5;
+    --storm-300: #aab0ba;
+    --storm-400: #828892;
+    --storm-500: #5c616b;
+    --gilt-50:   #eef0f3;
+    --gilt-100:  #d7dbe0;
+    --gilt-200:  #c8cdd5;
+    --gilt-300:  #aab0ba;
+    --gilt-400:  #828892;
+    --gilt-500:  #5c616b;
+    --gilt-600:  #3e424a;
+    --accent:        #c8cdd5;       /* brushed pewter */
+    --accent-hover:  #e2e5ea;
+    --border-card:   rgba(202, 204, 212, 0.13);
+    --border-rule:   rgba(202, 204, 212, 0.26);
+    --shadow-glow-gilt: 0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(200,205,215,0.32);
+    --bg-page:   #0d0d0e;
+    --bg-card:   #151518;
+    --bg-card-2: #1d1d21;
+    --bg-sunken: #100f12;
+    --bg-input:  #100f12;
+    --text-on-dark:    #e9e7e2;
+    --text-on-dark-2:  #b3b2aa;
+    --text-on-dark-3:  #87867d;
+    --text-on-cream:   #e9e7e2;
+    --text-on-cream-2: #b3b2aa;
+    --text-on-cream-3: #87867d;
+    --font-display: 'Playfair Display', 'Cinzel', Georgia, serif;
 }
 
 /* The brand + accent nav links (and dice widget) carry baked hex from the
