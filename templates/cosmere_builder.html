@@ -24,7 +24,17 @@
   .skill .nm { font-size:13px; } .skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; }
   .skill .mod { font-family:'JetBrains Mono',monospace; color:var(--ac2); font-weight:700; min-width:28px; text-align:right; }
   .stepper { display:flex; align-items:center; gap:4px; }
-  .stepper button { background:var(--bg-page); border:1px solid var(--border-card); color:#e8eef5; border-radius:6px; width:24px; height:24px; cursor:pointer; }
+  .stepper button { background:var(--bg-page); border:1px solid var(--border-card); color:#e8eef5; border-radius:6px; width:32px; height:32px; font-size:15px; line-height:1; cursor:pointer; }
+  /* First-timer glossary — a collapsible "what do these words mean" panel. */
+  .cb-glossary { margin:0 0 1rem; border:1px solid var(--border-card); border-radius:10px; background:var(--bg-sunken,#131922); overflow:hidden; }
+  .cb-glossary > summary { cursor:pointer; padding:.7rem 1rem; font-family:var(--font-display,serif); font-size:13px; letter-spacing:.04em; color:var(--accent); list-style:none; }
+  .cb-glossary > summary::-webkit-details-marker { display:none; }
+  .cb-glossary > summary::before { content:'\25B8'; margin-right:.5rem; color:var(--text-on-dark-3); font-size:11px; }
+  .cb-glossary[open] > summary::before { content:'\25BE'; }
+  .cb-gloss-grid { display:grid; grid-template-columns:1fr; gap:.5rem .9rem; padding:.2rem 1rem 1rem; }
+  @media (min-width:680px){ .cb-gloss-grid { grid-template-columns:1fr 1fr; } }
+  .cb-gloss-grid dt { font-weight:700; color:var(--text-on-dark); font-size:12.5px; }
+  .cb-gloss-grid dd { margin:0 0 .2rem; color:var(--text-on-dark-2); font-size:11.5px; line-height:1.4; }
   .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
   .btn:hover { background:rgba(95,168,224,.26); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
@@ -96,6 +106,24 @@
 
   <h2 style="margin-top:1rem;">{{ 'Edit' if pid else 'New' }} Cosmere Character</h2>
   <p class="muted">A guided, step-by-step build. Caps and budgets are enforced &mdash; you can't exceed a per-attribute cap, a skill's tier max, or any point budget (your GM can override). Your character updates live on the right.</p>
+
+  {# First-timer glossary — rulebook-accurate one-liners (Stormlight RPG Ch.3-6). #}
+  <details class="cb-glossary">
+    <summary>New to the Cosmere? &mdash; key terms</summary>
+    <dl class="cb-gloss-grid">
+      <div><dt>Ancestry</dt><dd>The species you descend from (human or singer); guides your look and grants ancestry talents.</dd></div>
+      <div><dt>Culture</dt><dd>The society you were raised in; grants its cultural Expertise.</dd></div>
+      <div><dt>Expertise</dt><dd>A field you know deeply &mdash; a language, craft, or place &mdash; that lets you attempt related tasks and gives an edge on them.</dd></div>
+      <div><dt>Heroic Path</dt><dd>Your training (Agent, Envoy, Hunter, Leader, Scholar, Warrior); grants a key talent, a free skill rank, and talent trees.</dd></div>
+      <div><dt>Talent</dt><dd>An ability or benefit gained through experience or training. A <b>key talent</b> tops each path and unlocks its specialties.</dd></div>
+      <div><dt>Investiture</dt><dd>Your Stormlight pool &mdash; the energy that fuels a Knight Radiant's surges.</dd></div>
+      <div><dt>Surge</dt><dd>One of ten powers over a fundamental force (gravity, healing, decay&hellip;). A Radiant wields the two of their order.</dd></div>
+      <div><dt>Radiant Order</dt><dd>One of ten orders, each bonded to a kind of spren, with two surges and a guiding philosophy.</dd></div>
+      <div><dt>Ideals</dt><dd>Five oaths a Radiant swears. Everyone's First Ideal is &ldquo;Life before death&hellip;&rdquo;; swearing it unlocks your surges.</dd></div>
+      <div><dt>Spren</dt><dd>A fragment of Investiture given life. A Radiant spren bonds with you to grant your powers.</dd></div>
+      <div><dt>Infected Art</dt><dd>Optional homebrew: an Invested disease that grants powerful Arts in exchange for a permanent cost. Most characters have none.</dd></div>
+    </dl>
+  </details>
 
   <div id="save-gate" class="save-gate" style="display:none;"></div>
 
