@@ -106,6 +106,11 @@
   .cs-rest-btn { font-size:12px; padding:7px 14px; border-radius:8px; cursor:pointer; min-height:34px;
     background:rgba(255,255,255,.04); border:1px solid var(--border-card); color:var(--text-on-dark); font-family:var(--font-ui); }
   .cs-rest-btn:hover { background:rgba(255,255,255,.09); border-color:var(--accent); }
+  /* Attribute-derived values (move / senses / lift / recovery), auto-calculated. */
+  .cs-derived { display:flex; gap:1rem; flex-wrap:wrap; margin:0 0 1rem; padding:.5rem .8rem; border:1px solid var(--border-card); border-radius:9px; background:var(--bg-sunken,#131922); font-size:12.5px; color:var(--text-on-dark); }
+  .cs-derived span { white-space:nowrap; }
+  .cs-derived b { color:var(--order-accent,var(--accent)); font-weight:600; margin-right:.25rem; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
+  .cs-derived .dim { color:var(--text-on-dark-3); }
   .cs-combat { margin-bottom:1rem; padding:.55rem .85rem; border-radius:10px; background:var(--bg-sunken,#131922); border:1px solid var(--accent); }
   .cs-combat.myturn { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 22px rgba(52,211,153,.18); }
   .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
@@ -240,6 +245,18 @@
     <button class="cs-rest-btn" onclick="cosRest('short')" title="Short rest: heal a recovery-die roll (d-by-Willpower) and refill Focus.">Short rest</button>
     <button class="cs-rest-btn" onclick="cosRest('long')" title="Long rest: Health &amp; Focus to full, Exhausted reduced by 1, short-lived conditions cleared.">Long rest</button>
   </div>
+  {% endif %}
+  {# Attribute-derived sheet values (Ch.3) — auto-calculated. #}
+  {% if derived %}
+  <div class="cs-derived">
+    <span><b>Move</b> {{ derived.movement }} ft</span>
+    <span><b>Senses</b> {{ derived.senses }}{% if derived.senses != 'Unaffected' %} ft{% endif %}</span>
+    <span><b>Lift</b> {{ derived.lifting }} lb <span class="dim">/ carry {{ derived.carrying }}</span></span>
+    <span><b>Recovery</b> {{ derived.recovery_die }}</span>
+  </div>
+  {% endif %}
+  {% if pc and build and build.connections %}
+  <div class="cs-derived" style="border-style:dashed;"><span><b>Connections</b> {{ build.connections }}</span></div>
   {% endif %}
 
   {# --- Radiant (Surgebinding) --- #}

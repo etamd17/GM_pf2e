@@ -8057,6 +8057,7 @@ def cosmere_builder_preview():
         'defenses': b.defenses(),
         'health': b.health_max(), 'focus': b.focus_max(),
         'investiture': b.investiture_max(), 'deflect': b.deflect_value(),
+        'derived': b.derived_stats(),          # move / senses / lift / recovery die (Ch.3)
         'tier': b.tier, 'level': b.level, 'is_radiant': b.is_radiant,
         'budgets': {
             'attr': [b.attr_points_spent(), b.attr_points_available()],
@@ -8183,7 +8184,7 @@ def cosmere_pc_sheet(pid):
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
         crest_glyph=crest_glyph, crest_color=crest_color, house_metal=_hm,
-        ideal_states=build.ideal_states(),
+        ideal_states=build.ideal_states(), derived=build.derived_stats(),
         interactive=interactive, cur=cur, tier=actor.tier,
         ready_to_level=bool(doc.get('ready_to_level')),
         stormlight_actions=systems.cosmere.radiant.STORMLIGHT_ACTIONS,

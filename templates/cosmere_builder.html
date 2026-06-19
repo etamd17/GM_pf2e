@@ -306,6 +306,8 @@
             <p class="field-hint">Concrete things you&rsquo;re working toward &mdash; some talents list a goal as a prerequisite.</p></div>
           <div><label>Appearance / Notes</label><textarea id="f-appearance">{{ build.appearance }}</textarea>
             <p class="field-hint">How you look and carry yourself, plus anything else worth noting.</p></div>
+          <div><label>Connections</label><textarea id="f-connections">{{ build.connections }}</textarea>
+            <p class="field-hint">Bonds with NPCs and factions you build in play (companions, patrons, allies). Usually blank at creation.</p></div>
         </div>
       </section>
 
@@ -339,6 +341,7 @@
         <span>Deflect <b id="cs-deflect">&mdash;</b></span>
         <span id="cs-inv-wrap" style="display:none;">&#9889; Inv <b id="cs-inv">&mdash;</b></span>
       </div>
+      <div class="cs-res" id="cs-derived-pv" style="font-size:11px; color:var(--text-on-dark-3);"></div>
       <div class="cs-bud" id="cs-bud"></div>
       <div class="cs-tal">
         <label style="margin-bottom:4px;">Talents</label>
@@ -673,6 +676,8 @@ function paintPreview(p){
   document.getElementById('cs-deflect').textContent = p.deflect;
   document.getElementById('cs-inv-wrap').style.display = p.is_radiant ? '' : 'none';
   document.getElementById('cs-inv').textContent = p.investiture;
+  const dv=p.derived, dpv=document.getElementById('cs-derived-pv');
+  if(dv && dpv) dpv.innerHTML = `<span>Move <b>${dv.movement} ft</b></span><span>Senses <b>${dv.senses}${dv.senses==='Unaffected'?'':' ft'}</b></span><span>Lift <b>${dv.lifting} lb</b></span><span>Recovery <b>${dv.recovery_die}</b></span>`;
   const b=p.budgets, line=(lbl,a)=>`<div><span>${lbl}</span><span class="v ${a[0]>a[1]?'over':''}">${a[0]}/${a[1]}</span></div>`;
   document.getElementById('cs-bud').innerHTML =
     line('Attributes',b.attr)+line('Skill ranks',b.skills)+line('Talents',b.talents)+line('Expertises',b.expertises);
@@ -724,7 +729,7 @@ function collect(){
     radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, ideal_progress:+v('f-ideal-progress')||0, ideal_words:IDEAL_WORDS, spren_name:v('f-spren'),
     attributes:attrs, skills, talents:TALENTS, inventory:INV, infected_arts:INFECTED,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
-    purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'),
+    purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'), connections:v('f-connections'),
   };
 }
 function save(){
