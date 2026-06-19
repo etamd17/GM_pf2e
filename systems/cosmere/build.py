@@ -80,6 +80,37 @@ def expertises_total(intellect: int) -> int:
     return 2 + max(0, int(intellect))
 
 
+# ── Attribute-derived lookup tables (rulebook Ch.3). Each maps an attribute
+#    score to a sheet value. Recovery Die lives in combat.py (combat.recovery_die).
+def _band(score: int) -> int:
+    """The shared attribute band index: 0 -> 0, 1-2 -> 1, 3-4 -> 2, 5-6 -> 3,
+    7-8 -> 4, 9+ -> 5."""
+    s = max(0, int(score or 0))
+    return 0 if s == 0 else min(5, (s + 1) // 2)
+
+
+def movement_rate(speed: int) -> int:
+    """Movement in feet per action, from Speed (Ch.3)."""
+    return (20, 25, 30, 40, 60, 80)[_band(speed)]
+
+
+def senses_range(awareness: int):
+    """Range (ft) you sense clearly when obscured, from Awareness (Ch.3). At 9+
+    you are unaffected by obscured senses -> returns the string 'Unaffected'."""
+    b = _band(awareness)
+    return 'Unaffected' if b >= 5 else (5, 10, 20, 50, 100)[b]
+
+
+def lifting_capacity(strength: int) -> int:
+    """Max lift in pounds, from Strength (Ch.3)."""
+    return (100, 200, 500, 1000, 5000, 10000)[_band(strength)]
+
+
+def carrying_capacity(strength: int) -> int:
+    """Max carry in pounds (half of lifting), from Strength (Ch.3)."""
+    return (50, 100, 250, 500, 2500, 5000)[_band(strength)]
+
+
 def health_gain_at(level: int, strength: int) -> int:
     """Health gained when reaching `level` (the advancement-table row)."""
     if level <= 1:
@@ -140,6 +171,14 @@ class CosmereBuild:
         self.obstacle = d.get('obstacle', '')
         self.appearance = d.get('appearance', '')
         self.notes = d.get('notes', '')
+        # Narrative fields the rulebook character sheet records (Ch.1). Connections
+        # (NPC/faction bonds) is the one the sheet explicitly tracks; the rest are
+        # the recommended story prompts. All free-form text.
+        self.connections = d.get('connections', '')
+        self.occupation = d.get('occupation', '')
+        self.relationships = d.get('relationships', '')
+        self.loyalties = d.get('loyalties', '')
+        self.personality = d.get('personality', '')
         # Structured stat bonuses from the homebrew this character has selected.
         self.homebrew_bonuses, self.homebrew_sources, self.homebrew_dangling = \
             _homebrew.resolve_bonuses(d, self._homebrew)
@@ -218,6 +257,20 @@ class CosmereBuild:
                 'personal': self.radiant_order in _radiant.IDEAL_PERSONAL,
             })
         return out
+
+    def derived_stats(self) -> dict:
+        """Attribute-derived sheet values (Ch.3): movement, senses, lifting/
+        carrying capacity, and the recovery die size. Uses effective attributes
+        (so Singer-form bonuses apply)."""
+        import systems.cosmere.combat as _cc
+        a = self.eff_attributes()
+        return {
+            'movement': movement_rate(a['spd']),
+            'senses': senses_range(a['awa']),
+            'lifting': lifting_capacity(a['str']),
+            'carrying': carrying_capacity(a['str']),
+            'recovery_die': 'd%d' % _cc.recovery_die(a['wil']),
+        }
 
     def _hb(self, key) -> int:
         """An additive structured bonus for a derived-stat target (0 if none) --
@@ -470,6 +523,9 @@ class CosmereBuild:
             'infected_arts': list(self.infected_arts),
             'goals': self.goals, 'purpose': self.purpose, 'obstacle': self.obstacle,
             'appearance': self.appearance, 'notes': self.notes,
+            'connections': self.connections, 'occupation': self.occupation,
+            'relationships': self.relationships, 'loyalties': self.loyalties,
+            'personality': self.personality,
         }
 
     def infected_records(self) -> list:
