@@ -95,6 +95,11 @@
   .cs-cond-fx .fx-row { display:flex; gap:.55rem; font-size:11.5px; line-height:1.35; align-items:baseline; }
   .cs-cond-fx .fx-name { flex:0 0 auto; min-width:92px; font-weight:700; color:var(--accent); }
   .cs-cond-fx .fx-desc { color:var(--text-on-dark-2); }
+  /* Per-character name crest (Radiant order / house-metal glyph) in the
+     character's secondary accent, layered on the world skin. */
+  .cs-id { display:flex; align-items:center; gap:.7rem; }
+  .cs-crest { width:38px; height:38px; flex:0 0 auto; color:var(--order-accent, var(--accent)); }
+  .cs-surge-gl { width:1.05em; height:1.05em; vertical-align:-0.18em; color:var(--order-accent, var(--accent)); margin-right:.15em; }
   .cs-combat { margin-bottom:1rem; padding:.55rem .85rem; border-radius:10px; background:var(--bg-sunken,#131922); border:1px solid var(--accent); }
   .cs-combat.myturn { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 22px rgba(52,211,153,.18); }
   .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
@@ -117,12 +122,15 @@
 {% block content %}
 {# Adversary sheets (bestiary) don't pass cur/interactive -> default to read-only. #}
 {% set cur = cur | default({'health': a.health.value, 'focus': a.focus_max, 'investiture': a.investiture_max, 'injuries': 0}) %}
-<div class="cs-wrap">
+{% include '_cosmere_glyphs.html' %}
+<div class="cs-wrap"{% if crest_color %} style="--order-accent:{{ crest_color }};"{% endif %}>
   {% if pc and not interactive %}
   <div class="cs-readonly">Read-only view. You can roll skills, strikes, and abilities &mdash; and adjust Health/Focus &mdash; on a character you <b>own</b>. Open it from <a href="/cosmere/player" style="color:inherit; text-decoration:underline;">My Character</a>, or ask your GM to assign this one to you.</div>
   {% endif %}
   <div class="cs-head">
-    <div>
+    <div class="cs-id">
+      {% if crest_glyph %}<svg class="cs-crest" aria-hidden="true"><use href="#{{ crest_glyph }}"></use></svg>{% endif %}
+      <div>
       <div class="cs-name">{{ a.name }}</div>
       <div class="cs-sub">
         <span class="cs-tag">{{ a.type|capitalize }}</span>
@@ -138,6 +146,7 @@
         {% endif %}
         <span class="cs-tag">Cosmere RPG</span>
         {% if pc and ready_to_level %}<a class="cs-tag" href="{{ edit_url }}" style="background:rgba(110,231,168,.16); border-color:rgba(110,231,168,.5); color:#6ee7a8; text-decoration:none;">&#9650; Ready to level up</a>{% endif %}
+      </div>
       </div>
     </div>
     <div style="display:flex; gap:.6rem; align-items:center;">
@@ -224,7 +233,7 @@
   <div class="cs-card" style="text-align:left; border-color:rgba(95,168,224,.4);">
     <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--accent);">{{ build.spren_name or radiant.spren }}</b></div>
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}{{ surge_names[s].name }}{% if not loop.last %} + {% endif %}{% endfor %}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}<svg class="cs-surge-gl" aria-hidden="true"><use href="#cg-surge-{{ s }}"></use></svg>{{ surge_names[s].name }}{% if not loop.last %} &nbsp;+ {% endif %}{% endfor %}</b></div>
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
     </div>
     <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>

@@ -8022,6 +8022,12 @@ def cosmere_builder():
             doc['wallet'] = existing['wallet']
         if existing and isinstance(existing.get('play_state'), dict):
             doc['play_state'] = existing['play_state']
+        # Cosmetic Mistborn "house metal" (theming) — purely visual, preserved
+        # across rebuilds. Accept it from the POST or carry the existing value.
+        import systems.cosmere.lore as _lore
+        _hm = (data.get('house_metal') or (existing or {}).get('house_metal') or '').lower()
+        if _hm in _lore.METALS:
+            doc['house_metal'] = _hm
         _save_cosmere_pc(doc)
         return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
                         'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
@@ -8158,8 +8164,21 @@ def cosmere_pc_sheet(pid):
     _order = build.order()
     radiant_powers = [dict(_rt.SURGE_POWERS[c], code=c)
                       for c in (_order['surges'] if _order else ()) if c in _rt.SURGE_POWERS]
+    # Per-character name crest + secondary accent (theming PR-B). In a Mistborn
+    # campaign a chosen cosmetic "house metal" wins; otherwise the Radiant order
+    # (the character's actual mechanic) drives the crest + its accent color.
+    import systems.cosmere.lore as _lore
+    _world = _cosmere_world()
+    _hm = (doc.get('house_metal') or '').lower()
+    if _world == 'mistborn' and _hm in _lore.METALS:
+        crest_glyph, crest_color = 'cg-metal-' + _hm, _lore.metal_tint(_hm)
+    elif build.radiant_order:
+        crest_glyph, crest_color = 'cg-order-' + build.radiant_order, systems.cosmere.radiant.order_color(build.radiant_order)
+    else:
+        crest_glyph, crest_color = '', ''
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
+        crest_glyph=crest_glyph, crest_color=crest_color, house_metal=_hm,
         interactive=interactive, cur=cur, tier=actor.tier,
         ready_to_level=bool(doc.get('ready_to_level')),
         stormlight_actions=systems.cosmere.radiant.STORMLIGHT_ACTIONS,
@@ -8225,9 +8244,21 @@ def cosmere_player_hub():
         if cid_char:
             mine = [d for d in all_pcs if d.get('id') == cid_char]
     cards = [_cosmere_player_card(d) for d in mine]
+    # Reference iconography (theming PR-C): the ten Radiant orders (with colors +
+    # surges) for the Stormlight skin, and the 16-metal Allomantic table for the
+    # Mistborn skin. The template shows whichever matches the campaign's world.
+    import systems.cosmere.radiant as _rad
+    import systems.cosmere.lore as _lore
+    _all_orders = dict(_rad.RADIANT_ORDERS); _all_orders['bondsmiths'] = _rad.BONDSMITHS
+    order_ref = [{
+        'key': k, 'name': o['name'],
+        'color': _rad.ORDER_COLORS.get(k, '#cbb46a'),
+        'surges': ' + '.join(_rad.surge_name(s) for s in o['surges']),
+    } for k, o in _all_orders.items()]
     return render_template(
         'cosmere_player.html', cards=cards, has_pc=bool(cards),
         roster_count=len(all_pcs), is_gm=_is_gm(),
+        order_ref=order_ref, metal_families=_lore.metals_by_family(),
         attr_names=systems.cosmere.ATTR_NAMES, defense_names=systems.cosmere.DEFENSE_NAMES,
     )
 
