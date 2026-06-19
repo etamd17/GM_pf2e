@@ -88,6 +88,13 @@
     background:rgba(255,255,255,.05); border:1px solid var(--border-card); color:#e8eef5; user-select:none; }
   .cs-cond.on { opacity:1; background:rgba(245,158,11,.16); border-color:#f59e0b; color:#fbbf24; }
   .cs-cond:hover { opacity:.85; }
+  /* Active-effects summary: what each live condition is doing right now. */
+  .cs-cond-fx { margin-top:.55rem; display:flex; flex-direction:column; gap:.25rem; }
+  .cs-cond-fx:empty { display:none; }
+  .cs-cond-fx .fx-h { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:.1rem; }
+  .cs-cond-fx .fx-row { display:flex; gap:.55rem; font-size:11.5px; line-height:1.35; align-items:baseline; }
+  .cs-cond-fx .fx-name { flex:0 0 auto; min-width:92px; font-weight:700; color:var(--accent); }
+  .cs-cond-fx .fx-desc { color:var(--text-on-dark-2); }
   .cs-combat { margin-bottom:1rem; padding:.55rem .85rem; border-radius:10px; background:var(--bg-sunken,#131922); border:1px solid var(--accent); }
   .cs-combat.myturn { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 22px rgba(52,211,153,.18); }
   .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
@@ -173,6 +180,9 @@
       <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" onclick="cosCond({{ code|tojson }})" title="{{ info }}">{{ code|capitalize }}</span>
       {% endfor %}
     </div>
+    {# Plain-language summary of what every ACTIVE condition is doing right now —
+       so it's obvious which stats/abilities each one affects. JS-rendered. #}
+    <div id="cos-cond-fx" class="cs-cond-fx"></div>
   </div>
   {% endif %}
 
@@ -387,8 +397,68 @@
     const PID = {{ actor_id|tojson }};
     const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
     const TIER = {{ tier|default(1) }};
-    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}};
     let mods = {adv:false, dis:false, plot:false};
+
+    /* ── Condition automation (Stormlight Ch.3 "Advantages & Disadvantages",
+       Ch.9 "Conditions"). Active conditions auto-modify your tests; you can
+       still override per roll with the Adv/Dis toggles — a manual advantage
+       cancels a condition's disadvantage 1:1 exactly like the rulebook, and
+       vice versa. Numeric penalties (Exhausted) always apply.  ───────────── */
+    const COND_VAL = c => { const v=(cur.conditions||{})[c]; return (typeof v==='number') ? v : (v?1:0); };
+    function condRollFx(){
+      const c = cur.conditions || {};
+      return {
+        flat: -COND_VAL('exhausted'),                  // Exhausted [-X]: -X to EVERY test result
+        adv:  c.empowered ? 1 : 0,                      // Empowered: advantage on all tests
+        dis:  (c.disoriented?1:0) + (c.restrained?1:0), // Disoriented / Restrained: disadvantage
+      };
+    }
+    // Net the manual Adv/Dis toggles with the condition-driven ones (cancel 1:1).
+    function netAdvDis(){
+      const fx = condRollFx();
+      const net = ((mods.adv?1:0) + fx.adv) - ((mods.dis?1:0) + fx.dis);
+      return { adv: net > 0, dis: net < 0 };
+    }
+    // Plain-language, rulebook-accurate effect of each active condition — drives
+    // the "Active effects" panel so it's obvious what every condition changes.
+    const COND_FX = {
+      afflicted:   v => 'Takes ' + (v||'?') + ' damage at the end of each of your turns (the GM applies it).',
+      determined:  () => 'On a failed test you may add an Opportunity to the result, then remove Determined.',
+      disoriented: () => 'Disadvantage on Perception &amp; sense-based tests; no reactions; your senses count as obscured.',
+      empowered:   () => 'Advantage on all tests; your Investiture refills to maximum at the start of each turn.',
+      exhausted:   v => '−' + (v||1) + ' to every test result. Reduce by 1 per long rest.',
+      focused:     () => 'Abilities that cost focus cost 1 less.',
+      immobilized: () => 'Your movement rate is 0 — you cannot move or be moved.',
+      prone:       () => 'Also Slowed; melee attacks against you gain advantage. Stand (1 action) to end it.',
+      restrained:  () => 'Movement 0; disadvantage on all tests except those to escape.',
+      slowed:      () => 'Your movement rate is halved.',
+      stunned:     () => 'Lose your reactions; you gain two fewer actions on your turn.',
+      surprised:   () => 'Lose reactions; you cannot take a fast turn and gain one fewer action. Ends after your next turn.',
+      unconscious: () => 'Movement 0; you fall Prone and drop held items; you can act only via Breathe Stormlight / Regenerate.',
+    };
+    function _cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+    function paintCondFx(){
+      const box = document.getElementById('cos-cond-fx'); if(!box) return;
+      const c = cur.conditions || {}, rows = [];
+      if(cur.enhanced) rows.push('<div class="fx-row"><span class="fx-name">Enhanced</span><span class="fx-desc">STR +1 / SPD +1 to tests, talents &amp; movement.</span></div>');
+      Object.keys(COND_FX).forEach(code => {
+        const v = c[code]; if(!v) return;
+        const val = (typeof v === 'number') ? v : 0;
+        rows.push('<div class="fx-row"><span class="fx-name">' + _cap(code) + (val ? ' ['+val+']' : '') +
+                  '</span><span class="fx-desc">' + COND_FX[code](val) + '</span></div>');
+      });
+      box.innerHTML = rows.length ? ('<div class="fx-h">Active effects</div>' + rows.join('')) : '';
+    }
+    // Annotate a roll with the conditions that touched it (shown after the total).
+    function condTags(enh, roll){
+      const c = cur.conditions || {}, t = [];
+      if(enh) t.push('Enhanced +' + enh);
+      const ex = COND_VAL('exhausted'); if(ex) t.push('Exhausted −' + ex);
+      if(roll.adv) t.push('advantage' + (c.empowered ? ' (Empowered)' : ''));
+      if(roll.dis){ const src = c.disoriented ? 'Disoriented' : (c.restrained ? 'Restrained' : ''); t.push('disadvantage' + (src ? ' ('+src+')' : '')); }
+      return t.length ? ' <span class="opp">' + t.join(' · ') + '</span>' : '';
+    }
     const d = n => 1 + Math.floor(Math.random()*n);
     let _toastT=null;
     function csToast(html){
@@ -402,9 +472,10 @@
     const res = h => { const el=document.getElementById('cs-result'); if(el) el.innerHTML=h; csToast(h); };
 
     function rollD20(){
+      const ad=netAdvDis();
       let a=d(20), nat=a, note='d20('+a+')';
-      if(mods.adv||mods.dis){ const b=d(20); nat=mods.adv?Math.max(a,b):Math.min(a,b); note='d20('+a+','+b+'→'+nat+')'; }
-      return {v:nat, note, nat};
+      if(ad.adv||ad.dis){ const b=d(20); nat=ad.adv?Math.max(a,b):Math.min(a,b); note='d20('+a+','+b+'→'+nat+')'; }
+      return {v:nat, note, nat, adv:ad.adv, dis:ad.dis};
     }
     function plot(){ const p=d(6); if(p<=2) return {l:'',b:0}; if(p<=4) return {l:'Opportunity',b:0,c:'opp'};
       return p===5 ? {l:'Complication +2',b:2,c:'comp'} : {l:'Complication +4',b:4,c:'comp'}; }
@@ -432,17 +503,20 @@
     };
     const enhBonus = attr => (cur.enhanced && (attr==='str'||attr==='spd')) ? 1 : 0;  // Enhance: +1 to physical
     window.cosRoll = function(name, mod, attr){
-      const e=enhBonus(attr), m=mod+e, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';
-      const total=roll.v+m+f.bonus, enh = e ? ' <span class="opp">Enhanced +1</span>' : '';
-      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+enh);
-      post(name+' test', total, roll.note+' '+sign+m+(e?' (Enhanced)':'')+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:''));
+      const e=enhBonus(attr), fx=condRollFx();
+      const m=mod+e+fx.flat, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';
+      const total=roll.v+m+f.bonus, tags=condTags(e, roll), plain=tags.replace(/<[^>]+>/g,'').trim();
+      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags);
+      post(name+' test', total, roll.note+' '+sign+m+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
     };
     window.cosStrike = function(name, mod, dmgFormula, dtype){
-      const e=cur.enhanced?1:0, m=mod+e, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';   // weapons are physical
-      const atk=roll.v+m+f.bonus, dmg=rollFormula(dmgFormula)+m, enh = e ? ' <span class="opp">Enhanced +1</span>' : '';
-      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+enh);
+      // Exhausted + Adv/Dis hit the attack TEST; they don't modify damage (not a test).
+      const e=cur.enhanced?1:0, fx=condRollFx();
+      const atkMod=mod+e+fx.flat, dmgMod=mod+e, roll=rollD20(), f=flair(roll), sign=atkMod>=0?'+':'';
+      const atk=roll.v+atkMod+f.bonus, dmg=rollFormula(dmgFormula)+dmgMod, tags=condTags(e, roll), plain=tags.replace(/<[^>]+>/g,'').trim();
+      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+tags);
       post(name+' strike', 'atk '+atk+' / dmg '+dmg,
-        roll.note+' '+sign+m+(e?' (Enhanced)':'')+' → hit '+atk+'; '+dmgFormula+sign+m+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:''));
+        roll.note+' '+sign+atkMod+' → hit '+atk+'; '+dmgFormula+(dmgMod>=0?'+':'')+dmgMod+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
     };
     // Roll an ability/action: rolls any dice in its text (damage/heal/effect dice)
     // and logs the use. Abilities with no dice are simply announced to the feed.
@@ -517,7 +591,11 @@
       const el=document.querySelector('#cos-conditions .cs-cond[data-cond="'+code+'"]'); if(!el) return;
       el.classList.toggle('on');
       const conds={};
-      document.querySelectorAll('#cos-conditions .cs-cond.on').forEach(x=>{ conds[x.getAttribute('data-cond')]=true; });
+      document.querySelectorAll('#cos-conditions .cs-cond.on').forEach(x=>{
+        const k=x.getAttribute('data-cond'), prev=(cur.conditions||{})[k];
+        conds[k] = (typeof prev==='number' && prev) ? prev : true;   // keep valued magnitude (Exhausted/Afflicted)
+      });
+      cur.conditions = conds; paintCondFx();
       pending.conditions=conds; clearTimeout(saveT); saveT=setTimeout(flush, 250);
     };
 
@@ -564,9 +642,11 @@
     // --- GM -> player: apply state the GM pushed (e.g. a condition) live ---
     function paintConds(conds){
       conds = conds || {};
+      cur.conditions = conds;
       document.querySelectorAll('#cos-conditions .cs-cond').forEach(x=>{
         x.classList.toggle('on', !!conds[x.getAttribute('data-cond')]);
       });
+      paintCondFx();
     }
     function applyRemoteState(ps){
       if(!ps) return;
@@ -605,6 +685,7 @@
     refreshCombat();
 
     paintEnhance();
+    paintCondFx();
   })();
   </script>
   {% endif %}
