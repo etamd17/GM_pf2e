@@ -270,10 +270,11 @@
             <div id="surge-powers-list" class="grid" style="grid-template-columns:1fr 1fr; gap:.5rem;"></div>
           </div>
           <div class="row" style="margin-top:.7rem;">
-            <div style="flex:1;"><label>Add a Radiant talent (spren-bond tree + your surges)</label>
+            <div style="flex:1;"><label>Add a Radiant talent <span class="muted" style="text-transform:none;">(or tap a node in the tree below)</span></label>
               <select id="radiant-talent-pick"><option value="">&mdash; choose an order &mdash;</option></select></div>
             <button class="btn" type="button" onclick="addRadiantTalent()">Add Talent</button>
           </div>
+          <div id="radiant-tree" class="path-tree"></div>
         </div>
       </section>
 
@@ -375,6 +376,7 @@ const CULTURE_INFO = {{ culture_info|tojson }};
 const SURGE = {{ surge_skills|tojson }};
 const PATH_TALENTS = {{ path_talents|tojson }};
 const PATH_TREES = {{ path_trees|tojson }};
+const RADIANT_TREES = {{ radiant_trees|tojson }};
 const ORDERS = {{ radiant_orders|tojson }};
 const SURGE_INFO = {{ surges|tojson }};
 const FIRST_IDEAL = {{ first_ideal|tojson }};
@@ -576,7 +578,7 @@ function renderTalents(){
       ? `<span class="chip" title="Key talent (granted)"><b style="color:var(--accent)">★ ${t.name||t.id}</b></span>`
       : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
   ).join('') || '<span class="muted">None yet</span>';
-  renderPathTree();
+  renderPathTree(); renderRadiantTree();
 }
 
 // ── Visual talent tree: the rulebook DAG (node positions from source), with
@@ -585,10 +587,13 @@ function _treeEsc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function _treeTaken(){ return new Set(TALENTS.map(t=>(t.name||'').toLowerCase())); }
 function _skillRank(c){ const i=document.querySelector('.skill-rank[data-code="'+c+'"]'); return i?(+i.value||0):0; }
 function _attrVal(c){ return +v('attr-'+c)||0; }
+function _idealsSworn(){ const e=document.getElementById('f-ideals'); return e?(+e.value||0):0; }
 function _nodeMet(n,taken){
   return n.deps.every(d=>taken.has((d.name||'').toLowerCase()))
       && n.skillReq.every(s=>_skillRank(s.skill)>=s.rank)
-      && n.attrReq.every(a=>_attrVal(a.attr)>=a.value);
+      && n.attrReq.every(a=>_attrVal(a.attr)>=a.value)
+      && (!n.levelReq || lvl()>=n.levelReq)        // radiant: level gate (3rd/4th Ideal talents)
+      && (!n.idealReq || _idealsSworn()>=n.idealReq); // radiant: Ideal gate
 }
 function toggleTreeTalent(g){
   const iid=g.getAttribute('data-iid'), name=g.getAttribute('data-name');
@@ -599,29 +604,43 @@ function toggleTreeTalent(g){
   else { if(g.classList.contains('locked')) return; TALENTS.push({id:iid, name:name}); }  // can't pick a locked node
   renderTalents(); recompute();
 }
+const _ORDINAL=['','First','Second','Third','Fourth','Fifth'];
+function _renderTreeBlock(tr, taken, label){
+  const vb=tr.vb, pad=30, W=vb.w+pad*2, H=vb.h+pad*2, by={};
+  tr.nodes.forEach(n=>by[n.id]=n);
+  const cx=n=>(n.x-vb.x)+pad+25, cy=n=>(n.y-vb.y)+pad+25;
+  let edges='';
+  tr.nodes.forEach(n=>n.edges.forEach(eid=>{ const p=by[eid]; if(p) edges+=`<line class="tedge" x1="${cx(p)}" y1="${cy(p)}" x2="${cx(n)}" y2="${cy(n)}"/>`; }));
+  const nodes=tr.nodes.map(n=>{
+    const tk=taken.has((n.name||'').toLowerCase()), met=_nodeMet(n,taken);
+    const st=tk?'taken':(met?'avail':'locked');
+    const reqs=[].concat(n.deps.map(d=>d.name), n.skillReq.map(s=>(SKILL_NAMES[s.skill]||s.skill)+' '+s.rank),
+      n.attrReq.map(a=>a.attr.toUpperCase()+' '+a.value), n.levelReq?['level '+n.levelReq]:[],
+      n.idealReq?[(_ORDINAL[n.idealReq]||n.idealReq)+' Ideal']:[]);
+    const lab=n.name.length>16?n.name.slice(0,15)+'…':n.name;
+    return `<g class="tnode ${st}" data-iid="${_treeEsc(n.iid)}" data-name="${_treeEsc(n.name)}" onclick="toggleTreeTalent(this)">`
+      +`<title>${_treeEsc(n.name)}${reqs.length?' — needs '+_treeEsc(reqs.join(', ')):' — no prerequisite'}</title>`
+      +`<circle cx="${cx(n)}" cy="${cy(n)}" r="16"/><text class="tlabel" x="${cx(n)}" y="${cy(n)+30}">${_treeEsc(lab)}</text></g>`;
+  }).join('');
+  return `<div class="tree-block"><div class="tree-h">${_treeEsc(label)}</div>`
+    +`<svg class="tree-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">${edges}${nodes}</svg></div>`;
+}
 function renderPathTree(){
   const box=document.getElementById('path-tree'); if(!box) return;
   const trees=(PATH_TREES[v('f-path')]||[]);
   if(!trees.length){ box.innerHTML=''; return; }
   const taken=_treeTaken();
-  box.innerHTML=trees.map(tr=>{
-    const vb=tr.vb, pad=30, W=vb.w+pad*2, H=vb.h+pad*2, by={};
-    tr.nodes.forEach(n=>by[n.id]=n);
-    const cx=n=>(n.x-vb.x)+pad+25, cy=n=>(n.y-vb.y)+pad+25;
-    let edges='';
-    tr.nodes.forEach(n=>n.edges.forEach(eid=>{ const p=by[eid]; if(p) edges+=`<line class="tedge" x1="${cx(p)}" y1="${cy(p)}" x2="${cx(n)}" y2="${cy(n)}"/>`; }));
-    const nodes=tr.nodes.map(n=>{
-      const tk=taken.has((n.name||'').toLowerCase()), met=_nodeMet(n,taken);
-      const st=tk?'taken':(met?'avail':'locked');
-      const reqs=[].concat(n.deps.map(d=>d.name), n.skillReq.map(s=>(SKILL_NAMES[s.skill]||s.skill)+' '+s.rank), n.attrReq.map(a=>a.attr.toUpperCase()+' '+a.value));
-      const lab=n.name.length>16?n.name.slice(0,15)+'…':n.name;
-      return `<g class="tnode ${st}" data-iid="${_treeEsc(n.iid)}" data-name="${_treeEsc(n.name)}" onclick="toggleTreeTalent(this)">`
-        +`<title>${_treeEsc(n.name)}${reqs.length?' — needs '+_treeEsc(reqs.join(', ')):' — no prerequisite'}</title>`
-        +`<circle cx="${cx(n)}" cy="${cy(n)}" r="16"/><text class="tlabel" x="${cx(n)}" y="${cy(n)+30}">${_treeEsc(lab)}</text></g>`;
-    }).join('');
-    return `<div class="tree-block"><div class="tree-h">${_treeEsc(tr.specialty?tr.specialty+' specialty':'Core path')}</div>`
-      +`<svg class="tree-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">${edges}${nodes}</svg></div>`;
-  }).join('');
+  box.innerHTML=trees.map(tr=>_renderTreeBlock(tr, taken, tr.specialty?tr.specialty+' specialty':'Core path')).join('');
+}
+function renderRadiantTree(){
+  const box=document.getElementById('radiant-tree'); if(!box) return;
+  const ord=v('f-order'), o=ORDERS[ord];
+  if(!o){ box.innerHTML=''; return; }
+  const singular=ord.replace(/s$/,'');                 // windrunners -> windrunner
+  let trees=(RADIANT_TREES[singular]||[]).slice();
+  (o.surges||[]).forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));
+  const taken=_treeTaken();
+  box.innerHTML=trees.length ? trees.map(tr=>_renderTreeBlock(tr, taken, tr.name)).join('') : '';
 }
 function onKit(){
   const k=STARTING_KITS.find(x=>x.key===v('kit-pick')), box=document.getElementById('kit-info');
@@ -697,7 +716,7 @@ function recompute(){
   const okT=setBudget('b-tal',TALENTS.length,talentBudget(L));
   document.getElementById('validity').textContent =
     (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L) : 'Over budget — reduce to save';
-  if(typeof renderPathTree==='function') renderPathTree();   // refresh node availability
+  if(typeof renderPathTree==='function'){ renderPathTree(); renderRadiantTree(); }   // refresh node availability
   refreshPreview();
 }
 

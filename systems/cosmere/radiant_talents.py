@@ -28,6 +28,105 @@ from systems.cosmere import load_pack, SKILL_NAMES
 from systems.cosmere.radiant import SURGES, RADIANT_ORDERS
 
 
+def _uuid_id(uuid):
+    m = re.search(r'Item\.([A-Za-z0-9]+)$', uuid or '')
+    return m.group(1) if m else None
+
+
+_IDEAL_NUM = {'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5}
+
+
+def _ideal_num(slug):
+    m = re.match(r'(first|second|third|fourth|fifth)-ideal', (slug or '').lower())
+    return _IDEAL_NUM[m.group(1)] if m else None
+
+
+_RADIANT_TREE_GRAPHS = None
+
+
+def radiant_tree_graphs() -> dict:
+    """Positioned Radiant talent-tree graphs for the builder's visual tree, keyed
+    by order-singular slug (the order's "<Order> Talents" + "<Spren> Bond" trees)
+    and by surge code (the 10 surge trees). Ideal NODES are excluded (the Ideal
+    track owns them); a node gated by the Nth Ideal carries idealReq=N instead.
+    Nodes use iid='radiant:<name>' to match the builder's radiant-talent convention."""
+    global _RADIANT_TREE_GRAPHS
+    if _RADIANT_TREE_GRAPHS is not None:
+        return _RADIANT_TREE_GRAPHS
+    name_to_surge = {v['name'].lower(): code for code, v in SURGES.items()}
+    seen = {}
+    for pack in ('handbook-radiant-paths', 'handbook-surges'):
+        docs = load_pack(pack)
+        by_iid = {d['_id']: d for d in docs if d.get('type') == 'talent' and d.get('_id')}
+        for d in docs:
+            if d.get('type') != 'talent_tree':
+                continue
+            name = (d.get('name') or '').strip()
+            base = name.lower().replace(' talents', '').strip()
+            # Surge trees come from the surges pack (canonical); skip their
+            # duplicates in the radiant-paths pack so they aren't double-listed.
+            if pack == 'handbook-radiant-paths' and base in name_to_surge:
+                continue
+            sysd = d.get('system', {}) or {}
+            nlist, slug2id, order_grp = [], {}, None
+            for nid, n in (sysd.get('nodes', {}) or {}).items():
+                if n.get('type') != 'talent':
+                    continue
+                item = by_iid.get(_uuid_id(n.get('uuid')))
+                if not item:
+                    continue
+                slug = n.get('talentId')
+                if _ideal_num(slug):            # the Ideal track owns Ideal nodes
+                    continue
+                p = ((item.get('system') or {}).get('path') or '').lower()
+                if p:
+                    order_grp = order_grp or p
+                pos = n.get('position') or {}
+                deps, skillreq, attrreq, levelreq, idealreq = [], [], [], 0, 0
+                for g in (n.get('prerequisites') or {}).values():
+                    ty = g.get('type')
+                    if ty == 'talent':
+                        for ds, info in (g.get('talents') or {}).items():
+                            ino = _ideal_num(ds)
+                            if ino:
+                                idealreq = max(idealreq, ino)
+                            else:
+                                deps.append({'slug': ds, 'name': (info or {}).get('label', ds)})
+                    elif ty == 'skill':
+                        skillreq.append({'skill': g.get('skill'), 'rank': g.get('rank') or 0})
+                    elif ty == 'attribute':
+                        attrreq.append({'attr': g.get('attribute'), 'value': g.get('value') or 0})
+                    elif ty == 'level':
+                        levelreq = max(levelreq, int(g.get('level') or 0))
+                tname = item.get('name', '')
+                nlist.append({'id': nid, 'slug': slug, 'name': tname, 'iid': 'radiant:' + tname,
+                              'x': pos.get('x', 0), 'y': pos.get('y', 0), 'deps': deps, 'edges': [],
+                              'skillReq': skillreq, 'attrReq': attrreq,
+                              'levelReq': levelreq, 'idealReq': idealreq})
+                if slug:
+                    slug2id[slug] = nid
+            if not nlist:
+                continue
+            grp = order_grp or name_to_surge.get(base)   # order slug, else surge code
+            if not grp:
+                continue
+            for nd in nlist:
+                nd['edges'] = [slug2id[dp['slug']] for dp in nd['deps'] if dp['slug'] in slug2id]
+            vb = sysd.get('viewBounds') or {}
+            tree = {'name': name,
+                    'vb': {'x': vb.get('x', 0), 'y': vb.get('y', 0),
+                           'w': vb.get('width', 300), 'h': vb.get('height', 300)},
+                    'nodes': nlist}
+            key = (grp, name)
+            if key not in seen or len(nlist) > len(seen[key]['nodes']):
+                seen[key] = tree
+    out = {}
+    for (grp, _n), tree in seen.items():
+        out.setdefault(grp, []).append(tree)
+    _RADIANT_TREE_GRAPHS = out
+    return out
+
+
 def _first_sentence(s: str) -> str:
     s = ' '.join(s.split())
     m = re.match(r'(.+?[.!?])(\s|$)', s)

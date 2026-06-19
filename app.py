@@ -7851,6 +7851,7 @@ def _cosmere_builder_context(build, hb_store=None):
         starting_kits=_cosmere_starting_kits(),
         radiant_surge_talents=_rt.SURGE_TALENTS, radiant_order_talents=_rt.ORDER_TALENTS,
         radiant_surge_powers=_rt.SURGE_POWERS,
+        radiant_trees=_rt.radiant_tree_graphs(),    # positioned Radiant DAGs (visual tree)
         homebrew=hb_store,            # {type: [entry]} -- merged into the pickers client-side
         budgets=dict(
             attr_points=build.attr_points_available(),
