@@ -252,7 +252,11 @@
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
     </div>
     <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
-    {% if build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
+    {% if ideal_states and build.ideals_sworn >= 1 %}<div style="margin-top:.45rem; display:flex; flex-direction:column; gap:.25rem;">
+      {% for id in ideal_states if id.sworn %}
+      <div style="font-size:12px; line-height:1.4;"><b style="color:var(--order-accent,var(--accent));">{{ ['','First','Second','Third','Fourth'][id.n] }} Ideal</b> &mdash; <i>{{ id.words or id.suggested or 'spoken' }}</i></div>
+      {% endfor %}
+    </div>{% elif build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
   </div>
 
   {% if interactive and a.investiture_max %}

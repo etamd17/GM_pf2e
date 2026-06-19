@@ -129,6 +129,9 @@ class CosmereBuild:
         self.ideals_sworn = max(0, min(_radiant.IDEAL_COUNT, int(d.get('ideals_sworn', 0) or 0)))
         self.spren_name = d.get('spren_name', '')
         self.ideal_words = list(d.get('ideal_words') or [])
+        # Milestones (0-3) toward speaking the NEXT Ideal (Ch.5: the GM marks
+        # three, then the Words can be spoken). Per-character progress, not RAW math.
+        self.ideal_progress = max(0, min(3, int(d.get('ideal_progress', 0) or 0)))
         self.is_radiant = bool(self.radiant_order) or bool(d.get('is_radiant'))
         self.inventory = Inventory(d.get('inventory'))
         self.epic_choices = list(d.get('epic_choices') or [])       # per L21+ level: 'skill' | 'talent'
@@ -178,6 +181,43 @@ class CosmereBuild:
     @property
     def first_ideal_sworn(self) -> bool:
         return self.ideals_sworn >= 1
+
+    def next_ideal(self):
+        """The Ideal number (1-4) the character is working toward, or None when
+        all reachable Ideals are sworn (the Fifth is unreachable in play)."""
+        return self.ideals_sworn + 1 if self.ideals_sworn < 4 else None
+
+    def next_ideal_level_ok(self) -> bool:
+        """Is the character high enough level to swear the next Ideal? First needs
+        L2+ (becoming Radiant); the Fourth needs L13+ (Ch.5)."""
+        n = self.next_ideal()
+        if n is None:
+            return False
+        if n == 1:
+            return self.level >= _radiant.RADIANT_MIN_LEVEL
+        if n >= 4:
+            return self.level >= _radiant.FOURTH_IDEAL_LEVEL
+        return True
+
+    def can_speak_next_ideal(self) -> bool:
+        """The next Ideal can be sworn once its three milestones are marked and
+        the level gate is met."""
+        return self.next_ideal() is not None and self.ideal_progress >= 3 and self.next_ideal_level_ok()
+
+    def ideal_states(self) -> list:
+        """Per-Ideal view for the sheet/builder: [{n, sworn, words, suggested}]
+        for Ideals 1-4 (5th is unreachable)."""
+        out = []
+        for n in range(1, 5):
+            words = self.ideal_words[n - 1] if n - 1 < len(self.ideal_words) else ''
+            out.append({
+                'n': n,
+                'sworn': self.ideals_sworn >= n,
+                'words': words,
+                'suggested': _radiant.ideal_text(self.radiant_order, n),
+                'personal': self.radiant_order in _radiant.IDEAL_PERSONAL,
+            })
+        return out
 
     def _hb(self, key) -> int:
         """An additive structured bonus for a derived-stat target (0 if none) --
@@ -341,6 +381,8 @@ class CosmereBuild:
             issues.append("Unknown Radiant order.")
         if self.radiant_order and self.level < _radiant.RADIANT_MIN_LEVEL:
             issues.append("Becoming Radiant (a First Ideal) requires level %d+." % _radiant.RADIANT_MIN_LEVEL)
+        if self.ideals_sworn >= 4 and self.level < _radiant.FOURTH_IDEAL_LEVEL:
+            issues.append("The Fourth Ideal can't be sworn before level %d." % _radiant.FOURTH_IDEAL_LEVEL)
 
         exp_av = self.expertises_available()
         if len(self.expertises) > exp_av:
@@ -422,6 +464,7 @@ class CosmereBuild:
             'path_skill': self.path_skill, 'expertises': list(self.expertises),
             'talents': list(self.talents), 'is_radiant': self.is_radiant,
             'radiant_order': self.radiant_order, 'ideals_sworn': self.ideals_sworn,
+            'ideal_progress': self.ideal_progress,
             'spren_name': self.spren_name, 'ideal_words': list(self.ideal_words),
             'inventory': self.inventory.to_list(), 'epic_choices': list(self.epic_choices),
             'infected_arts': list(self.infected_arts),

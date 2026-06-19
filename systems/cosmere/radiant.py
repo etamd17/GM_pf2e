@@ -16,7 +16,43 @@ from __future__ import annotations
 FIRST_IDEAL = ("Life before death. Strength before weakness. "
                "Journey before destination.")
 RADIANT_MIN_LEVEL = 2     # a First Ideal key talent requires level 2+
+FOURTH_IDEAL_LEVEL = 13   # the Fourth Ideal can't be sworn before level 13 (Ch.5)
 IDEAL_COUNT = 5           # five Ideals per order; the 5th is unreachable in play
+
+# Suggested Words for each order's Second and Third Ideals (Ch.5). The First is
+# shared (FIRST_IDEAL); the Fourth is fully personalized (no fixed text). Some
+# orders' Words are personal/player-completed — these are starting points the
+# player edits. Orders in IDEAL_PERSONAL declare their own Words from scratch.
+ORDER_IDEALS = {
+    'windrunners':   {2: 'I will protect those who cannot protect themselves.',
+                      3: 'I will protect even those I hate, so long as it is right.'},
+    'skybreakers':   {2: 'I swear to seek justice, to let it guide me, until I find a more perfect Ideal.',
+                      3: 'I swear to follow the code I have chosen.'},
+    'dustbringers':  {2: 'To control my power, I will control myself.',
+                      3: 'To understand my power, I will understand what power is.'},
+    'edgedancers':   {2: 'I will remember those who have been forgotten.',
+                      3: 'I will listen to those who have been ignored.'},
+    'truthwatchers': {2: 'I will seek truth wherever it is hidden.',
+                      3: 'I will reveal truth to all who seek it.'},
+    'lightweavers':  {2: 'A personal truth you must admit to yourself.',
+                      3: 'A deeper, harder truth about who you are.'},
+    'elsecallers':   {2: 'An aspiration of self-improvement you set for yourself.',
+                      3: 'A harder aspiration than the one before.'},
+    'willshapers':   {2: 'I will seek freedom for those in bondage.',
+                      3: 'I will fight oppression where I find it.'},
+    'stonewards':    {2: 'I will step forward when others fall back.',
+                      3: 'I will be the foundation on which others can build.'},
+}
+# Orders whose Words are written by the player (no fixed wording even as a stem).
+IDEAL_PERSONAL = frozenset({'lightweavers', 'elsecallers'})
+
+
+def ideal_text(order_key, n) -> str:
+    """The suggested Words for Ideal `n` (1-5) of an order. 1 = the shared First
+    Ideal; 2-3 = the order's Words; 4-5 = personalized (empty)."""
+    if n <= 1:
+        return FIRST_IDEAL
+    return (ORDER_IDEALS.get((order_key or '').lower(), {}) or {}).get(n, '')
 
 # The ten surges, each governing a fundamental force. Codes match SKILL_ATTR /
 # the surge skills. Descriptions are concise, canon-faithful summaries.

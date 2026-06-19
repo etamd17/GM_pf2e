@@ -7842,6 +7842,8 @@ def _cosmere_builder_context(build, hb_store=None):
         paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
         path_talents=_cosmere_path_talents(),
         radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
+        radiant_ideals=_rad.ORDER_IDEALS, ideal_personal=list(_rad.IDEAL_PERSONAL),
+        fourth_ideal_level=_rad.FOURTH_IDEAL_LEVEL,
         path_info=systems.cosmere.origins.PATH_INFO,
         singer_forms=systems.cosmere.origins.SINGER_FORMS,
         singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
@@ -8181,6 +8183,7 @@ def cosmere_pc_sheet(pid):
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
         crest_glyph=crest_glyph, crest_color=crest_color, house_metal=_hm,
+        ideal_states=build.ideal_states(),
         interactive=interactive, cur=cur, tier=actor.tier,
         ready_to_level=bool(doc.get('ready_to_level')),
         stormlight_actions=systems.cosmere.radiant.STORMLIGHT_ACTIONS,
