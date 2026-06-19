@@ -100,6 +100,12 @@
   .cs-id { display:flex; align-items:center; gap:.7rem; }
   .cs-crest { width:38px; height:38px; flex:0 0 auto; color:var(--order-accent, var(--accent)); }
   .cs-surge-gl { width:1.05em; height:1.05em; vertical-align:-0.18em; color:var(--order-accent, var(--accent)); margin-right:.15em; }
+  /* Self-service rest (short/long) — recovers Health/Focus + clears conditions. */
+  .cs-rest { display:flex; align-items:center; gap:.55rem; margin:.2rem 0 1rem; flex-wrap:wrap; }
+  .cs-rest-l { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3); font-family:var(--font-display, serif); }
+  .cs-rest-btn { font-size:12px; padding:7px 14px; border-radius:8px; cursor:pointer; min-height:34px;
+    background:rgba(255,255,255,.04); border:1px solid var(--border-card); color:var(--text-on-dark); font-family:var(--font-ui); }
+  .cs-rest-btn:hover { background:rgba(255,255,255,.09); border-color:var(--accent); }
   .cs-combat { margin-bottom:1rem; padding:.55rem .85rem; border-radius:10px; background:var(--bg-sunken,#131922); border:1px solid var(--accent); }
   .cs-combat.myturn { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 22px rgba(52,211,153,.18); }
   .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
@@ -218,14 +224,23 @@
     <div class="cs-card">
       <div class="l">Investiture</div><div class="v sm" id="rv-investiture">{{ cur.investiture }}<span class="x">/{{ a.investiture_max }}</span></div>
       {% if interactive and a.investiture_max %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Investiture amount"><button class="cs-amt-btn spend" onclick="cosApply('investiture',-1,this)" title="Spend Investiture (power a surge)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('investiture',1,this)" title="Gain Investiture">Gain</button><button class="cs-amt-btn breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe</button></div>{% endif %}
+      {% if not a.investiture_max %}<div style="font-size:10px; color:var(--text-on-dark-3); margin-top:.4rem; line-height:1.3;">Not a Radiant &mdash; swear a First Ideal to gain Stormlight.</div>{% endif %}
     </div>
     <div class="cs-card">
       <div class="l">Deflect</div><div class="v sm">{{ a.deflect.value }}</div>
       <div class="cs-chips" style="justify-content:center;margin-top:.3rem;">
-        {% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df">{{ t }}</span>{% endfor %}
+        {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
+        {% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}
       </div>
     </div>
   </div>
+  {% if interactive %}
+  <div class="cs-rest">
+    <span class="cs-rest-l">Rest &amp; recover</span>
+    <button class="cs-rest-btn" onclick="cosRest('short')" title="Short rest: heal a recovery-die roll (d-by-Willpower) and refill Focus.">Short rest</button>
+    <button class="cs-rest-btn" onclick="cosRest('long')" title="Long rest: Health &amp; Focus to full, Exhausted reduced by 1, short-lived conditions cleared.">Long rest</button>
+  </div>
+  {% endif %}
 
   {# --- Radiant (Surgebinding) --- #}
   {% if pc and radiant %}
@@ -278,6 +293,7 @@
 
   {# --- Skills --- #}
   <div class="cs-section-h">Skills <span style="text-transform:none;letter-spacing:0;">(Surge skills dimmed until a Radiant unlocks them)</span></div>
+  <div style="font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .65rem; line-height:1.4;">A skill&rsquo;s modifier is its <b>ranks</b> plus its governing attribute (the small label below each). <b>R#</b> shows your rank.</div>
   {% if interactive %}
   <div class="cs-rolltools">
     <span class="cs-toggle" id="t-adv" onclick="cosTog('adv')" title="Roll an extra d20, keep the best">Advantage</span>
@@ -593,6 +609,22 @@
       res('<span class="opp">'+name+'</span>'+(invCost?' (−'+invCost+' Investiture)':'')+' — '+(effect||'').slice(0,80));
       post('uses '+name, invCost?('−'+invCost+' Inv'):'surge', effect);
       paint(); if(invCost) flush();
+    };
+
+    // Self-service rest (Stormlight Ch.9). The server applies the recovery and
+    // returns the new play_state; we adopt it and repaint Health/Focus + conditions.
+    window.cosRest = function(mode){
+      fetch('/cosmere/pc/'+encodeURIComponent(PID)+'/rest',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:mode})})
+        .then(function(r){return r.json();}).then(function(d){
+          if(!d || !d.ok){ res('<span class="comp">Rest failed</span>'); return; }
+          var ps=d.play_state||{};
+          ['health','focus','investiture','injuries'].forEach(function(k){ if(k in ps) cur[k]=ps[k]; });
+          if('enhanced' in ps) cur.enhanced=!!ps.enhanced;
+          cur.conditions = (ps.conditions && typeof ps.conditions==='object') ? ps.conditions : {};
+          paint(); paintEnhance(); paintConds(cur.conditions);
+          res('<span class="opp">'+(mode==='long'?'Long':'Short')+' rest</span> — recovered. Health <b>'+cur.health+'</b>/'+MAX.health+' &middot; Focus <b>'+cur.focus+'</b>/'+MAX.focus+'.');
+        }).catch(function(){ res('<span class="comp">Rest failed</span>'); });
     };
 
     // --- Conditions (self-managed): toggle a chip, persist the whole set ---

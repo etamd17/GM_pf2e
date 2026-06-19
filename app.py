@@ -8568,6 +8568,34 @@ def cosmere_rest():
     return redirect(url_for('status_board'))
 
 
+@app.route('/cosmere/pc/<pid>/rest', methods=['POST'])
+def cosmere_pc_rest(pid):
+    """A PLAYER rests their OWN character from the sheet (owner or GM): short or
+    long rest per the rulebook (Ch.9), via the shared _cosmere_apply_rest. Mirrors
+    the GM campaign-wide rest but scoped to one PC + self-serviceable."""
+    doc = _load_cosmere_pc(pid)
+    if not doc:
+        return jsonify({'ok': False, 'error': 'unknown character'}), 404
+    if not _cosmere_can_act_on(doc):
+        return jsonify({'ok': False, 'error': 'not your character'}), 403
+    mode = ((request.get_json(silent=True) or request.form or {}).get('mode') or 'long').strip().lower()
+    if mode not in ('short', 'long'):
+        mode = 'long'
+    with _path_lock(_cosmere_pc_path(pid)):
+        doc = _load_cosmere_pc(pid) or doc
+        ps = _cosmere_apply_rest(doc, mode)
+        doc['play_state'] = ps
+        _save_cosmere_pc(doc, fsync=False)
+    if _sync_cosmere_combatant_state(doc.get('name'), ps):
+        _broadcast_encounter_state()
+    try:
+        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
+    except Exception:
+        pass
+    _combat_log(f"{doc.get('name', 'A hero')} took a {mode} rest.", 'info')
+    return jsonify({'ok': True, 'mode': mode, 'play_state': ps})
+
+
 @app.route('/api/cosmere/roll', methods=['POST'])
 def api_cosmere_roll():
     """Log a roll made from a Cosmere player sheet (skill test / strike) and
