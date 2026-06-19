@@ -2026,6 +2026,16 @@ def _cosmere_initiative_mode():
         return 'phases'
 
 
+def _cosmere_world():
+    """The active campaign's Cosmere visual world-skin: 'stormlight' (default) or
+    'mistborn'. Pure theming -- the ruleset is unchanged either way."""
+    try:
+        w = _load_campaign_config().get('cosmere_world', 'stormlight')
+        return 'mistborn' if w == 'mistborn' else 'stormlight'
+    except Exception:
+        return 'stormlight'
+
+
 def _sort_cosmere_phases():
     """Order a Cosmere encounter into the 4-phase queue (Ch.10): fast_pc ->
     fast_npc -> slow_pc -> slow_npc; within a phase, higher Speed first, then
@@ -5106,6 +5116,11 @@ CAMPAIGN_DEFAULT = {
     # fast/slow queue (default); 'traditional' = a rolled d20+Speed initiative
     # order, for tables that don't run fast/slow turns.
     'cosmere_initiative': 'phases',
+    # Cosmere VISUAL world-skin: 'stormlight' (storm-slate + cyan + Cormorant
+    # headings, default) or 'mistborn' (ash-charcoal + pewter + Playfair). Pure
+    # theming, selectable per campaign -- the whole Cosmere side re-skins, but
+    # characters still use the (Stormlight) Cosmere ruleset underneath.
+    'cosmere_world': 'stormlight',
     # How the party advances: 'milestone' (GM marks the party ready to level, no
     # XP math; default) or 'xp' (track XP per PC, auto-award the encounter total,
     # roll over at 1000). XP mode is PF2e-only; Cosmere always uses milestone.
@@ -6704,6 +6719,7 @@ def _inject_account_ctx():
         'account_user': u,
         'active_campaign': (_active_campaign_doc() if u else None),
         'active_system': _active_system(),
+        'cosmere_world': _cosmere_world(),
         'cosmere_player_char': _cosmere_player_char_name(),
         'system_ui': _active_system_ui(),
         'advancement_mode': (_advancement_mode() if u else 'milestone'),
@@ -10560,6 +10576,16 @@ def api_cosmere_initiative_mode():
     _persist_encounter_state()
     _broadcast_encounter_state()
     return jsonify({'ok': True, 'mode': mode})
+
+@app.route('/api/cosmere/world', methods=['POST'])
+@gm_required
+def api_cosmere_world():
+    """Switch this campaign's Cosmere visual world-skin: 'stormlight' <-> 'mistborn'.
+    Pure theming (re-skins the whole Cosmere side); the ruleset is unchanged."""
+    w = (request.get_json(silent=True) or request.form or {}).get('world')
+    w = 'mistborn' if w == 'mistborn' else 'stormlight'
+    _save_campaign_config({'cosmere_world': w})
+    return jsonify({'ok': True, 'world': w})
 
 @app.route('/api/reorder_initiative', methods=['POST'])
 def reorder_initiative():
