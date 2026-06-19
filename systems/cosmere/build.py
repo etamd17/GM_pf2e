@@ -461,14 +461,24 @@ class CosmereBuild:
                                       for t in self.talents):
             issues.append("Add the Singer key talent: Change Form.")
 
-        # Talent prerequisites (guided) — warn on any unmet prerequisite.
+        # Talent prerequisites — now hard-enforced (see hard_violations); listed
+        # here too so the full guidance view still mentions them.
+        issues.extend(self.unmet_prereqs())
+        return issues
+
+    def unmet_prereqs(self) -> list:
+        """Taken talents whose CONCRETE prerequisites (a predecessor talent, a
+        skill rank, or an attribute floor) aren't met — one human-readable string
+        each. Narrative gates (goals, Ideals, level) are NOT machine-checked.
+        Uses effective attributes so a Singer form's bonus counts."""
         taken = [t.get('name', '') for t in self.talents if isinstance(t, dict)]
+        out = []
         for t in self.talents:
             if isinstance(t, dict) and t.get('id'):
-                miss = _talents.unmet(t['id'], taken, self.skills, self.attributes)
+                miss = _talents.unmet(t['id'], taken, self.skills, self.eff_attributes())
                 if miss:
-                    issues.append("%s needs %s." % (t.get('name', 'A talent'), ' + '.join(miss)))
-        return issues
+                    out.append("%s needs %s." % (t.get('name', 'A talent'), ' + '.join(miss)))
+        return out
 
     @property
     def is_valid(self) -> bool:
@@ -479,9 +489,10 @@ class CosmereBuild:
         more attribute points / skill ranks / talents / expertises than the build
         is entitled to, a value above its hard cap, or a negative score. These are
         the "you literally can't have this much" breaks -- they BLOCK a player's
-        save (a GM may override). Under-spending, a missing key talent, unmet
-        prerequisites, and other "incomplete" guidance are NOT included: those are
-        warnings, not illegal characters."""
+        save (a GM may override). Unmet talent PREREQUISITES are also blocked here
+        (the rulebook requires a predecessor talent before a deeper one). Under-
+        spending, a missing key talent, and other "incomplete" guidance are NOT
+        included: those are warnings, not illegal characters."""
         hard = []
         sp, av = self.attr_points_spent(), self.attr_points_available()
         if sp > av:
@@ -506,6 +517,7 @@ class CosmereBuild:
         t_av = self.talents_available()
         if len(self.talents) > t_av:
             hard.append(f"Talents: {len(self.talents)} chosen of {t_av} available.")
+        hard.extend(self.unmet_prereqs())     # a talent without its prerequisite is illegal
         return hard
 
     # -- serialization ------------------------------------------------------

@@ -708,8 +708,11 @@ function updateSaveGate(p){
 function renderReview(){
   const p=LAST_PREVIEW;
   const wb=document.getElementById('review-warnings');
-  wb.innerHTML = (p && p.issues && p.issues.length)
-    ? '<div class="warn-box"><b>Guidance:</b><ul style="margin:.3rem 0 0 1rem;">'+p.issues.map(i=>`<li>${i}</li>`).join('')+'</ul></div>'
+  // Guidance = advisory issues only; anything that also blocks (hard) is shown in the gate.
+  const _hard=(p&&p.hard)||[];
+  const guide=((p&&p.issues)||[]).filter(i=>_hard.indexOf(i)<0);
+  wb.innerHTML = guide.length
+    ? '<div class="warn-box"><b>Guidance:</b><ul style="margin:.3rem 0 0 1rem;">'+guide.map(i=>`<li>${i}</li>`).join('')+'</ul></div>'
     : '<div class="muted" style="margin-bottom:1rem;">No rules flags — your build is on budget.</div>';
   const order=ORDERS[v('f-order')];
   document.getElementById('review-summary').innerHTML =

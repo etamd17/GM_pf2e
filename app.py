@@ -7996,9 +7996,10 @@ def cosmere_builder():
         build = _cb.CosmereBuild(data.get('build') or data, homebrew=_hb_store)
         issues = build.validate()
         # Rules enforcement: a build that OVER-applies the rules (over a cap or
-        # budget) cannot be saved by a player. The GM may override with force=true
-        # (their builder shows the toggle). Soft guidance (under-spend, missing
-        # key talent, unmet prereqs) never blocks -- only hard_violations() do.
+        # budget, OR a talent without its prerequisite) cannot be saved by a
+        # player. The GM may override with force=true (their builder shows the
+        # toggle). Soft guidance (under-spend, missing key talent) never blocks --
+        # only hard_violations() do.
         hard = build.hard_violations()
         if hard and not (bool(data.get('force')) and _is_gm()):
             return jsonify({'ok': False, 'blocked': True, 'hard': hard, 'issues': issues,
