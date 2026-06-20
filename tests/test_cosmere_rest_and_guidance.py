@@ -62,7 +62,7 @@ def test_builder_glossary_present():
 
 def test_builder_tap_targets_enlarged():
     h = _read('templates/cosmere_builder.html')
-    assert '.stepper button' in h and 'width:32px; height:32px' in h
+    assert '.stepper button' in h and 'width:34px; height:34px' in h
 
 
 def test_sheet_guidance_tooltips_and_legend():

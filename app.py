@@ -7766,6 +7766,7 @@ def _cosmere_path_talents():
     (key talents first; each carries a prerequisite summary)."""
     import systems.cosmere.origins as _o
     import systems.cosmere.talents as _ct
+    from systems.cosmere.radiant_talents import _effect as _talent_effect   # readable one-line summary
     # The real key talent per path is the one named in PATH_INFO (handbook trees
     # have many prereq-less roots, so "no prerequisite" is NOT the discriminator).
     key_names = {p: (info.get('key_talent') or '').strip().lower()
@@ -7794,6 +7795,7 @@ def _cosmere_path_talents():
                 'key': name.strip().lower() == key_names.get(p, '\x00'),
                 'specialty': _ct.talent_specialty().get(d.get('_id'), ''),   # '' = core path talent
                 'prereq': _talent_prereq_summary(_ct.resolved_prereqs(d.get('_id'))),
+                'effect': _talent_effect(s.get('description')),   # readable text for the inspector panel
             })
     for p in out:
         # Key talents first, then group by specialty (core '' first), then name.

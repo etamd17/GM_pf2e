@@ -20,11 +20,17 @@
   .g-attrs { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }
   .g-skills { grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
   .card { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px; padding:.6rem .7rem; }
-  .skill { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
-  .skill .nm { font-size:13px; } .skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; }
-  .skill .mod { font-family:'JetBrains Mono',monospace; color:var(--ac2); font-weight:700; min-width:28px; text-align:right; }
-  .stepper { display:flex; align-items:center; gap:4px; }
-  .stepper button { background:var(--bg-page); border:1px solid var(--border-card); color:#e8eef5; border-radius:6px; width:32px; height:32px; font-size:15px; line-height:1; cursor:pointer; }
+  /* Skill card: a vertical card (name+mod header, blurb, then the stepper row)
+     so the −/+ controls and the modifier never overflow a narrow column. */
+  .skill { display:flex; flex-direction:column; gap:.4rem; }
+  .skill .skill-top { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; }
+  .skill .nm { font-size:13px; font-weight:600; } .skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .skill .hint { margin-top:0; min-height:2.6em; }
+  .skill .mod { font-family:'JetBrains Mono',monospace; color:var(--ac2); font-weight:700; min-width:30px; text-align:right; flex:0 0 auto; }
+  .stepper { display:flex; align-items:center; justify-content:center; gap:6px; }
+  .stepper button { background:var(--bg-page); border:1px solid var(--border-card); color:#e8eef5; border-radius:6px; width:34px; height:34px; font-size:15px; line-height:1; cursor:pointer; flex:0 0 auto; }
+  .stepper button:hover { border-color:var(--accent); }
+  .stepper .skill-rank { flex:0 0 auto; }
   /* First-timer glossary — a collapsible "what do these words mean" panel. */
   .cb-glossary { margin:0 0 1rem; border:1px solid var(--border-card); border-radius:10px; background:var(--bg-sunken,#131922); overflow:hidden; }
   .cb-glossary > summary { cursor:pointer; padding:.7rem 1rem; font-family:var(--font-display,serif); font-size:13px; letter-spacing:.04em; color:var(--accent); list-style:none; }
@@ -63,6 +69,23 @@
   .tnode.avail:hover circle { fill:rgba(95,168,224,.20); }
   .tnode.locked circle { stroke-dasharray:3 3; opacity:.55; }
   .tnode.locked .tlabel { opacity:.5; }
+  .tnode.sel circle { stroke:var(--ac2); stroke-width:3.5; }
+  /* Talent inspector — tap a node to read its effect + see what you're missing
+     (so you don't have to cross-reference your skills tab to know if you qualify). */
+  .tree-tools { display:flex; align-items:center; gap:.6rem; margin:.6rem 0 .1rem; }
+  .tree-toggle { display:inline-flex; align-items:center; gap:.4rem; font-size:11.5px; color:var(--text-on-dark-3); cursor:pointer; text-transform:none; letter-spacing:0; margin:0; user-select:none; }
+  .tree-toggle input { width:auto; }
+  .tree-detail { margin-top:.6rem; border:1px solid var(--border-card); border-radius:10px; padding:.7rem .85rem; background:var(--bg-sunken,#131922); font-size:12.5px; color:var(--text-on-dark-2); }
+  .tree-detail .td-h { font-family:var(--font-display,serif); font-size:15px; color:var(--text-on-dark); margin-bottom:.25rem; display:flex; justify-content:space-between; align-items:baseline; gap:.6rem; }
+  .tree-detail .td-badge { font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; padding:2px 7px; border-radius:6px; white-space:nowrap; }
+  .td-badge.taken { background:rgba(95,168,224,.18); color:var(--accent); }
+  .td-badge.avail { background:rgba(52,211,153,.16); color:#34d399; }
+  .td-badge.locked { background:rgba(248,113,113,.14); color:#f4a4a4; }
+  .tree-detail .td-eff { line-height:1.5; margin:.35rem 0 .55rem; color:var(--text-on-dark-2); }
+  .tree-detail .td-reqs { list-style:none; padding:0; margin:0 0 .55rem; display:flex; flex-direction:column; gap:.18rem; }
+  .tree-detail .td-reqs li { font-size:11.5px; }
+  .td-req-ok::before { content:'\2713\00a0'; color:#34d399; }
+  .td-req-no { color:#f4a4a4; } .td-req-no::before { content:'\2717\00a0'; color:#f87171; }
   .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
   .btn:hover { background:rgba(95,168,224,.26); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
@@ -200,14 +223,16 @@
         <div class="grid g-skills" id="basic-skills">
           {% for code, name in skill_names.items() if code not in surge_skills %}
           <div class="card skill" title="{{ skill_desc.get(code, '') }}">
-            <div class="nm">{{ name }} <small>{{ skill_attr[code] }}</small></div>
+            <div class="skill-top">
+              <div class="nm">{{ name }} <small>{{ skill_attr[code] }}</small></div>
+              <div class="mod" id="mod-{{ code }}">+0</div>
+            </div>
             <div class="hint">{{ skill_desc.get(code, '') }}</div>
             <div class="stepper">
-              <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
-              <input class="skill-rank" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
-              <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+              <button type="button" aria-label="Lower {{ name }}" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
+              <input class="skill-rank" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:54px;" oninput="recompute()">
+              <button type="button" aria-label="Raise {{ name }}" onclick="bumpSkill('{{ code }}',1)">+</button>
             </div>
-            <div class="mod" id="mod-{{ code }}">+0</div>
           </div>
           {% endfor %}
         </div>
@@ -229,7 +254,11 @@
             <select id="talent-pick"><option value="">&mdash; choose path first &mdash;</option></select></div>
           <button class="btn" type="button" onclick="addTalent()">Add Talent</button>
         </div>
+        <div class="tree-tools" id="path-tree-tools" style="display:none;">
+          <label class="tree-toggle"><input type="checkbox" id="path-only-avail" onchange="renderPathTree()"> Only show talents I qualify for</label>
+        </div>
         <div id="path-tree" class="path-tree"></div>
+        <div id="path-tree-detail" class="tree-detail" style="display:none;"></div>
       </section>
 
       <section class="step" data-step="4">
@@ -254,14 +283,16 @@
           <div id="surge-skills" class="grid g-skills" style="margin-top:.7rem; display:none;">
             {% for code, name in skill_names.items() if code in surge_skills %}
             <div class="card skill" title="{{ skill_desc.get(code, '') }}">
-              <div class="nm">{{ name }} <small>surge &middot; {{ skill_attr[code] }}</small></div>
+              <div class="skill-top">
+                <div class="nm">{{ name }} <small>surge &middot; {{ skill_attr[code] }}</small></div>
+                <div class="mod" id="mod-{{ code }}">+0</div>
+              </div>
               <div class="hint">{{ skill_desc.get(code, '') }}</div>
               <div class="stepper">
-                <button type="button" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
-                <input class="skill-rank surge" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:48px;" oninput="recompute()">
-                <button type="button" onclick="bumpSkill('{{ code }}',1)">+</button>
+                <button type="button" aria-label="Lower {{ name }}" onclick="bumpSkill('{{ code }}',-1)">&minus;</button>
+                <input class="skill-rank surge" data-code="{{ code }}" data-attr="{{ skill_attr[code] }}" type="number" min="0" value="{{ build.skills.get(code,0) }}" style="width:54px;" oninput="recompute()">
+                <button type="button" aria-label="Raise {{ name }}" onclick="bumpSkill('{{ code }}',1)">+</button>
               </div>
-              <div class="mod" id="mod-{{ code }}">+0</div>
             </div>
             {% endfor %}
           </div>
@@ -274,7 +305,11 @@
               <select id="radiant-talent-pick"><option value="">&mdash; choose an order &mdash;</option></select></div>
             <button class="btn" type="button" onclick="addRadiantTalent()">Add Talent</button>
           </div>
+          <div class="tree-tools" id="radiant-tree-tools" style="display:none;">
+            <label class="tree-toggle"><input type="checkbox" id="radiant-only-avail" onchange="renderRadiantTree()"> Only show talents I qualify for</label>
+          </div>
           <div id="radiant-tree" class="path-tree"></div>
+          <div id="radiant-tree-detail" class="tree-detail" style="display:none;"></div>
         </div>
       </section>
 
@@ -595,6 +630,8 @@ function _nodeMet(n,taken){
       && (!n.levelReq || lvl()>=n.levelReq)        // radiant: level gate (3rd/4th Ideal talents)
       && (!n.idealReq || _idealsSworn()>=n.idealReq); // radiant: Ideal gate
 }
+// Legacy quick-toggle (kept for back-compat); the tree now uses select-then-add
+// via the inspector panel below so players can read a talent before taking it.
 function toggleTreeTalent(g){
   const iid=g.getAttribute('data-iid'), name=g.getAttribute('data-name');
   const keyName=((PATH_INFO[v('f-path')]||{}).key_talent||'').toLowerCase();
@@ -605,20 +642,97 @@ function toggleTreeTalent(g){
   renderTalents(); recompute();
 }
 const _ORDINAL=['','First','Second','Third','Fourth','Fifth'];
-function _renderTreeBlock(tr, taken, label){
+
+// Effect-text lookup so the inspector can explain a node (the tree graph only
+// carries name + prereqs; the flat talent lists carry the rules text).
+const TALENT_EFFECTS={};
+(function(){
+  const put=t=>{ if(t&&t.effect){ if(t.id)TALENT_EFFECTS['id:'+t.id]=t.effect; if(t.name)TALENT_EFFECTS['nm:'+t.name.toLowerCase()]=t.effect; } };
+  Object.values(PATH_TALENTS||{}).forEach(list=>(list||[]).forEach(put));
+  Object.values(RADIANT_ORDER_TALENTS||{}).forEach(list=>(list||[]).forEach(put));
+  Object.values(RADIANT_SURGE_TALENTS||{}).forEach(list=>(list||[]).forEach(put));
+})();
+function _talentEffect(n){ return TALENT_EFFECTS['nm:'+(n.name||'').toLowerCase()] || TALENT_EFFECTS['id:'+n.iid] || ''; }
+
+// Per-requirement met/unmet breakdown (drives the green-check / red-x list).
+function _nodeReqStatus(n,taken){
+  const out=[];
+  (n.deps||[]).forEach(d=>out.push({label:'Talent: '+d.name, met:taken.has((d.name||'').toLowerCase())}));
+  (n.skillReq||[]).forEach(s=>out.push({label:(SKILL_NAMES[s.skill]||s.skill)+' rank '+s.rank, met:_skillRank(s.skill)>=s.rank, have:_skillRank(s.skill)}));
+  (n.attrReq||[]).forEach(a=>out.push({label:a.attr.toUpperCase()+' '+a.value, met:_attrVal(a.attr)>=a.value, have:_attrVal(a.attr)}));
+  if(n.levelReq) out.push({label:'Character level '+n.levelReq, met:lvl()>=n.levelReq, have:lvl()});
+  if(n.idealReq) out.push({label:(_ORDINAL[n.idealReq]||n.idealReq)+' Ideal sworn', met:_idealsSworn()>=n.idealReq});
+  return out;
+}
+
+// The trees currently in play for a side (path | radiant), used to resolve a
+// selected node id back to its full node record for the inspector.
+function _currentTrees(which){
+  if(which==='path') return (PATH_TREES[v('f-path')]||[]);
+  const ord=v('f-order'), o=ORDERS[ord]; if(!o) return [];
+  let trees=(RADIANT_TREES[ord.replace(/s$/,'')]||[]).slice();
+  (o.surges||[]).forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));
+  return trees;
+}
+function _findNode(which,iid){ let f=null; _currentTrees(which).forEach(tr=>tr.nodes.forEach(n=>{ if(n.iid===iid) f=n; })); return f; }
+function _isKeyTalent(which,n){ return which==='path' && (n.name||'').toLowerCase()===((PATH_INFO[v('f-path')]||{}).key_talent||'').toLowerCase(); }
+
+let _selPath=null, _selRadiant=null;
+function selectTreeNode(g){
+  const which=g.closest('#radiant-tree')?'radiant':'path', iid=g.getAttribute('data-iid');
+  if(which==='radiant') _selRadiant=iid; else _selPath=iid;
+  const box=document.getElementById(which==='radiant'?'radiant-tree':'path-tree');
+  box.querySelectorAll('.tnode.sel').forEach(e=>e.classList.remove('sel'));
+  g.classList.add('sel');
+  renderTreeDetail(which);
+}
+function renderTreeDetail(which){
+  const box=document.getElementById(which==='radiant'?'radiant-tree-detail':'path-tree-detail'); if(!box) return;
+  const iid=which==='radiant'?_selRadiant:_selPath, n=iid?_findNode(which,iid):null;
+  if(!n){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  const taken=_treeTaken(), isTaken=taken.has((n.name||'').toLowerCase()), met=_nodeMet(n,taken);
+  const badge=isTaken?'taken':(met?'avail':'locked'), badgeTxt=isTaken?'Taken':met?'Available':'Locked';
+  const eff=_talentEffect(n), reqs=_nodeReqStatus(n,taken), isKey=_isKeyTalent(which,n);
+  let h=`<div class="td-h"><span>${_treeEsc(n.name)}</span><span class="td-badge ${badge}">${badgeTxt}</span></div>`;
+  h+=`<div class="td-eff">${eff?_treeEsc(eff):'<span class="muted">No description on file for this talent.</span>'}</div>`;
+  if(reqs.length){ h+='<ul class="td-reqs">'+reqs.map(r=>`<li class="${r.met?'td-req-ok':'td-req-no'}">${_treeEsc(r.label)}${(!r.met&&r.have!=null)?` — you have ${r.have}`:''}</li>`).join('')+'</ul>'; }
+  else { h+='<div class="muted" style="margin-bottom:.55rem;">No prerequisites.</div>'; }
+  if(isKey) h+='<span class="muted">&#9733; Key talent — granted free by your path.</span>';
+  else if(isTaken) h+=`<button class="btn sm" type="button" onclick="treeDetailAct('${which}',false)">Remove from build</button>`;
+  else if(met) h+=`<button class="btn sm primary" type="button" onclick="treeDetailAct('${which}',true)">Add to build</button>`;
+  else h+='<button class="btn sm" type="button" disabled title="Meet the requirements above to take this talent">Requirements not met</button>';
+  box.innerHTML=h;
+}
+function treeDetailAct(which,add){
+  const iid=which==='radiant'?_selRadiant:_selPath; if(!iid) return;
+  const n=_findNode(which,iid); if(!n) return;
+  const idx=TALENTS.findIndex(t=>t.id===iid || (t.name||'').toLowerCase()===(n.name||'').toLowerCase());
+  if(add){ if(idx<0 && _nodeMet(n,_treeTaken())) TALENTS.push({id:iid, name:n.name}); }
+  else { if(idx>=0 && !TALENTS[idx].key) TALENTS.splice(idx,1); }
+  renderTalents(); recompute();   // re-renders both trees + the inspector (selection preserved)
+}
+function _reapplySel(which){
+  const box=document.getElementById(which==='radiant'?'radiant-tree':'path-tree');
+  const iid=which==='radiant'?_selRadiant:_selPath; if(!box||!iid) return;
+  box.querySelectorAll('.tnode').forEach(g=>{ if(g.getAttribute('data-iid')===iid) g.classList.add('sel'); });
+}
+function _renderTreeBlock(tr, taken, label, onlyAvail){
   const vb=tr.vb, pad=30, W=vb.w+pad*2, H=vb.h+pad*2, by={};
   tr.nodes.forEach(n=>by[n.id]=n);
   const cx=n=>(n.x-vb.x)+pad+25, cy=n=>(n.y-vb.y)+pad+25;
+  const show={};
+  tr.nodes.forEach(n=>{ const tk=taken.has((n.name||'').toLowerCase()); show[n.id]=!onlyAvail || tk || _nodeMet(n,taken); });
   let edges='';
-  tr.nodes.forEach(n=>n.edges.forEach(eid=>{ const p=by[eid]; if(p) edges+=`<line class="tedge" x1="${cx(p)}" y1="${cy(p)}" x2="${cx(n)}" y2="${cy(n)}"/>`; }));
-  const nodes=tr.nodes.map(n=>{
+  tr.nodes.forEach(n=>{ if(!show[n.id]) return; n.edges.forEach(eid=>{ const p=by[eid]; if(p&&show[eid]) edges+=`<line class="tedge" x1="${cx(p)}" y1="${cy(p)}" x2="${cx(n)}" y2="${cy(n)}"/>`; }); });
+  const nodes=tr.nodes.filter(n=>show[n.id]).map(n=>{
     const tk=taken.has((n.name||'').toLowerCase()), met=_nodeMet(n,taken);
     const st=tk?'taken':(met?'avail':'locked');
     const reqs=[].concat(n.deps.map(d=>d.name), n.skillReq.map(s=>(SKILL_NAMES[s.skill]||s.skill)+' '+s.rank),
       n.attrReq.map(a=>a.attr.toUpperCase()+' '+a.value), n.levelReq?['level '+n.levelReq]:[],
       n.idealReq?[(_ORDINAL[n.idealReq]||n.idealReq)+' Ideal']:[]);
     const lab=n.name.length>16?n.name.slice(0,15)+'…':n.name;
-    return `<g class="tnode ${st}" data-iid="${_treeEsc(n.iid)}" data-name="${_treeEsc(n.name)}" onclick="toggleTreeTalent(this)">`
+    return `<g class="tnode ${st}" data-iid="${_treeEsc(n.iid)}" data-name="${_treeEsc(n.name)}" onclick="selectTreeNode(this)">`
       +`<title>${_treeEsc(n.name)}${reqs.length?' — needs '+_treeEsc(reqs.join(', ')):' — no prerequisite'}</title>`
       +`<circle cx="${cx(n)}" cy="${cy(n)}" r="16"/><text class="tlabel" x="${cx(n)}" y="${cy(n)+30}">${_treeEsc(lab)}</text></g>`;
   }).join('');
@@ -628,19 +742,22 @@ function _renderTreeBlock(tr, taken, label){
 function renderPathTree(){
   const box=document.getElementById('path-tree'); if(!box) return;
   const trees=(PATH_TREES[v('f-path')]||[]);
-  if(!trees.length){ box.innerHTML=''; return; }
-  const taken=_treeTaken();
-  box.innerHTML=trees.map(tr=>_renderTreeBlock(tr, taken, tr.specialty?tr.specialty+' specialty':'Core path')).join('');
+  const tools=document.getElementById('path-tree-tools'); if(tools) tools.style.display=trees.length?'flex':'none';
+  if(!trees.length){ box.innerHTML=''; _selPath=null; renderTreeDetail('path'); return; }
+  const onlyAvail=!!(document.getElementById('path-only-avail')||{}).checked, taken=_treeTaken();
+  box.innerHTML=trees.map(tr=>_renderTreeBlock(tr, taken, tr.specialty?tr.specialty+' specialty':'Core path', onlyAvail)).join('');
+  _reapplySel('path'); renderTreeDetail('path');
 }
 function renderRadiantTree(){
   const box=document.getElementById('radiant-tree'); if(!box) return;
-  const ord=v('f-order'), o=ORDERS[ord];
-  if(!o){ box.innerHTML=''; return; }
-  const singular=ord.replace(/s$/,'');                 // windrunners -> windrunner
-  let trees=(RADIANT_TREES[singular]||[]).slice();
+  const ord=v('f-order'), o=ORDERS[ord], tools=document.getElementById('radiant-tree-tools');
+  if(!o){ box.innerHTML=''; if(tools) tools.style.display='none'; _selRadiant=null; renderTreeDetail('radiant'); return; }
+  let trees=(RADIANT_TREES[ord.replace(/s$/,'')]||[]).slice();   // windrunners -> windrunner
   (o.surges||[]).forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));
-  const taken=_treeTaken();
-  box.innerHTML=trees.length ? trees.map(tr=>_renderTreeBlock(tr, taken, tr.name)).join('') : '';
+  if(tools) tools.style.display=trees.length?'flex':'none';
+  const onlyAvail=!!(document.getElementById('radiant-only-avail')||{}).checked, taken=_treeTaken();
+  box.innerHTML=trees.length ? trees.map(tr=>_renderTreeBlock(tr, taken, tr.name, onlyAvail)).join('') : '';
+  _reapplySel('radiant'); renderTreeDetail('radiant');
 }
 function onKit(){
   const k=STARTING_KITS.find(x=>x.key===v('kit-pick')), box=document.getElementById('kit-info');
