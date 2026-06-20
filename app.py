@@ -8619,13 +8619,24 @@ def api_cosmere_roll():
         return jsonify({'ok': False, 'error': 'unknown character'}), 404
     if not _cosmere_can_act_on(doc):
         return jsonify({'ok': False, 'error': 'not your character'}), 403
+    # Roll visibility (player-chosen on the sheet): 'group' = the whole table,
+    # 'gm' = whispered to the GM only, 'private' = never sent (the client skips
+    # posting entirely, so a 'private' that reaches here is a no-op safeguard).
+    vis = str(data.get('visibility', 'group')).lower()
+    if vis not in ('group', 'gm', 'private'):
+        vis = 'group'
+    if vis == 'private':
+        return jsonify({'ok': True})
     from datetime import datetime
+    detail = str(data.get('detail', ''))[:200]
+    if vis == 'gm':
+        detail = ('[GM only] ' + detail)[:200]   # so the GM's feed shows it was a whisper
     entry = {
         'id': str(uuid.uuid4()),
         'name': doc.get('name') or 'Cosmere Hero',
         'action': str(data.get('action', 'Test'))[:80],
         'result': str(data.get('result', ''))[:48],
-        'detail': str(data.get('detail', ''))[:200],
+        'detail': detail,
         'degree': None,                       # Cosmere is meet-or-beat: no PF2e degree banner
         'time': datetime.now().strftime('%H:%M:%S'),
         'round': ROUND_NUMBER,
@@ -8638,7 +8649,11 @@ def api_cosmere_roll():
     except Exception:
         pass
     try:
-        sse_broadcast('player_roll', {k: entry[k] for k in ('name', 'action', 'result', 'detail', 'degree', 'time')})
+        payload = {k: entry[k] for k in ('name', 'action', 'result', 'detail', 'degree', 'time')}
+        # 'gm' whispers: GM subscribers get the payload; the player filter returns
+        # None so it's dropped for every player connection.
+        pf = (lambda _d: None) if vis == 'gm' else None
+        sse_broadcast('player_roll', payload, player_filter=pf)
     except Exception:
         pass
     # Feed the session scrapbook: a nat-20 (Opportunity) / nat-1 (Complication)

@@ -69,3 +69,36 @@
     } catch (e) {}
 })();
 </script>
+
+{# Roll notifications: when another player (or the GM) makes a roll the table can
+   see, pop a themed toast. The Cosmere nav had no player_roll handler, so players
+   never saw each other's rolls (the PF2e nav has one). GM-whispered rolls are
+   filtered out server-side, so they never arrive here. #}
+<div id="cos-roll-toast-container" aria-live="polite"
+     style="position:fixed; top:14px; right:14px; z-index:200; display:flex; flex-direction:column; gap:8px; width:248px; pointer-events:none;"></div>
+<script>
+(function() {
+    var CHAR = {{ (cosmere_player_char or '')|tojson }};
+    function _esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+    function _rollToast(roll) {
+        if (!roll || (CHAR && roll.name === CHAR)) return;   // skip my own roll (my sheet shows it big)
+        var c = document.getElementById('cos-roll-toast-container'); if (!c) return;
+        var el = document.createElement('div');
+        el.style.cssText = 'pointer-events:auto; padding:9px 11px; border-radius:9px; border:1px solid var(--border-card,#2a3340); '
+            + 'background:var(--bg-card,#131922); box-shadow:0 6px 20px rgba(0,0,0,.45); '
+            + 'animation:slideIn .3s cubic-bezier(.16,1,.3,1) forwards; font-family:var(--font-body,inherit);';
+        el.innerHTML = '<div style="display:flex; justify-content:space-between; gap:.5rem; margin-bottom:3px;">'
+            + '<span style="font-weight:700; font-size:11px; color:var(--accent,#5fa8e0); text-transform:uppercase; letter-spacing:.05em;">' + _esc(roll.name) + '</span>'
+            + '<span style="font-size:9px; color:var(--text-on-dark-3,#7c8694);">' + _esc(roll.time || '') + '</span></div>'
+            + '<div style="font-size:13px; color:var(--text-on-dark-2,#c4ccd6);">' + _esc(roll.action) + ': <b style="color:var(--text-on-dark,#e8eef5);">' + _esc(roll.result) + '</b></div>'
+            + (roll.detail ? '<div style="font-size:10px; font-family:monospace; color:var(--text-on-dark-3,#7c8694); margin-top:3px;">' + _esc(roll.detail) + '</div>' : '');
+        c.prepend(el);
+        while (c.children.length > 4) c.removeChild(c.lastChild);
+        setTimeout(function() {
+            el.style.transition = 'all .3s ease'; el.style.opacity = '0'; el.style.transform = 'translateX(110%)';
+            setTimeout(function() { el.remove(); }, 300);
+        }, 6500);
+    }
+    try { window.appSSE('player_roll', function(e) { try { _rollToast(JSON.parse(e.data)); } catch (ex) {} }); } catch (e) {}
+})();
+</script>
