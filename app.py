@@ -7992,6 +7992,17 @@ def cosmere_pcs():
                            is_gm=_is_gm(), active_cid=ACTIVE_CAMPAIGN_ID)
 
 
+@app.route('/cosmere/gm/vitals')
+@gm_required
+def cosmere_gm_vitals():
+    """GM-only at-a-glance board of every Cosmere PC's LIVE vitals (Health /
+    Focus / Investiture + conditions + injuries), updating in real time from the
+    cosmere_player_state SSE as players adjust their sheets."""
+    party = _cosmere_status_party(_list_cosmere_pcs())
+    party.sort(key=lambda r: r['name'].lower())
+    return render_template('cosmere_gm_vitals.html', party=party)
+
+
 @app.route('/cosmere/builder', methods=['GET', 'POST'])
 def cosmere_builder():
     import systems.cosmere.build as _cb
