@@ -480,11 +480,27 @@ class CosmereBuild:
         Uses effective attributes so a Singer form's bonus counts."""
         taken = [t.get('name', '') for t in self.talents if isinstance(t, dict)]
         out = []
+        # Radiant talents are gated by Ideal (and sometimes level); enforce those
+        # at save the same way the visual tree locks them client-side.
+        import systems.cosmere.radiant_talents as _rt
+        _gates = _rt.talent_gates()
+        _ORD = ['', 'First', 'Second', 'Third', 'Fourth', 'Fifth']
         for t in self.talents:
-            if isinstance(t, dict) and t.get('id'):
-                miss = _talents.unmet(t['id'], taken, self.skills, self.eff_attributes())
-                if miss:
-                    out.append("%s needs %s." % (t.get('name', 'A talent'), ' + '.join(miss)))
+            if not (isinstance(t, dict) and t.get('id')):
+                continue
+            tid, tname = t['id'], t.get('name', 'A talent')
+            if str(tid).startswith('radiant:'):
+                g = _gates.get((t.get('name') or '').lower())
+                if g:
+                    if g['ideal'] > self.ideals_sworn:
+                        ord_name = _ORD[g['ideal']] if g['ideal'] < len(_ORD) else str(g['ideal'])
+                        out.append("%s needs the %s Ideal." % (tname, ord_name))
+                    if g['level'] > self.level:
+                        out.append("%s needs level %d." % (tname, g['level']))
+                continue
+            miss = _talents.unmet(tid, taken, self.skills, self.eff_attributes())
+            if miss:
+                out.append("%s needs %s." % (tname, ' + '.join(miss)))
         return out
 
     @property

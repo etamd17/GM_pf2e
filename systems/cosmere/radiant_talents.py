@@ -309,3 +309,30 @@ def _safe(fn) -> dict:
 SURGE_TALENTS = _safe(_build_surge_talents)
 ORDER_TALENTS = _safe(_build_order_talents)
 SURGE_POWERS = _safe(_build_surge_powers)
+
+
+_TALENT_GATES = None
+
+
+def talent_gates() -> dict:
+    """{talent-name (lower) -> {'ideal': N, 'level': M}} for radiant talents, from
+    the tree graphs' per-node idealReq / levelReq. Lets the build engine enforce
+    Ideal/level gates at save the same way the visual tree locks them client-side."""
+    global _TALENT_GATES
+    if _TALENT_GATES is not None:
+        return _TALENT_GATES
+    gates = {}
+    try:
+        for trees in radiant_tree_graphs().values():
+            for tr in trees:
+                for n in tr.get('nodes', []):
+                    key = (n.get('name') or '').lower()
+                    if not key:
+                        continue
+                    g = gates.setdefault(key, {'ideal': 0, 'level': 0})
+                    g['ideal'] = max(g['ideal'], int(n.get('idealReq') or 0))
+                    g['level'] = max(g['level'], int(n.get('levelReq') or 0))
+    except Exception:
+        pass
+    _TALENT_GATES = gates
+    return gates
