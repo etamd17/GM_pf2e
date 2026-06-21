@@ -347,6 +347,16 @@
           <button class="btn" type="button" onclick="addItem()">Add Item</button>
         </div>
         <div id="inv-list" style="margin-top:.6rem;"></div>
+        <div class="sec-h" style="margin-top:1.3rem;">Fabrials <span class="muted" style="text-transform:none; letter-spacing:0;">(Ch.7 &mdash; spren-powered devices; track charges on your sheet)</span></div>
+        <div class="row">
+          <div style="flex:1;"><label>Add a fabrial</label>
+            <select id="fabrial-pick">
+              <option value="">&mdash;</option>
+              {% for f in fabrials %}<option value="{{ f.id }}" title="{{ f.effect|e }}">{{ f.name }}{% if f.tier %} &middot; Tier {{ f.tier }}{% endif %} &middot; {{ f.charges }} charge{{ '' if f.charges == 1 else 's' }}</option>{% endfor %}
+            </select></div>
+          <button class="btn" type="button" onclick="addFabrial()">Add Fabrial</button>
+        </div>
+        <div id="fabrial-list" class="chip-row" style="margin-top:.5rem;"></div>
       </section>
 
       <section class="step" data-step="7">
@@ -440,8 +450,10 @@ const BUILD_SEL = {ancestry: {{ build.ancestry|tojson }}, culture: {{ build.cult
                    path: {{ build.path|tojson }}, order: {{ build.radiant_order|tojson }},
                    variant: {{ build.radiant_variant|tojson }}};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
+const FAB_INDEX = {}; {% for f in fabrials %}FAB_INDEX[{{ f.id|tojson }}] = {{ f|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
+let FABRIALS = ({{ build.fabrials|tojson }} || []).slice();
 const INFECTED_ARTS = {{ infected_arts|tojson }};
 const INFECTED_BY_ID = {}; INFECTED_ARTS.forEach(a=>INFECTED_BY_ID[a.id]=a);
 let INFECTED = {{ build.infected_arts|tojson }};
@@ -811,6 +823,17 @@ function renderInv(){
     </div>`;
   }).join('') || '<span class="muted">Empty</span>';
 }
+function addFabrial(){
+  const id=document.getElementById('fabrial-pick').value; if(!id) return;
+  if(!FABRIALS.includes(id)){ FABRIALS.push(id); renderFabrials(); recompute(); }
+  document.getElementById('fabrial-pick').value='';
+}
+function renderFabrials(){
+  const box=document.getElementById('fabrial-list'); if(!box) return;
+  box.innerHTML = FABRIALS.map((id,i)=>{ const f=FAB_INDEX[id]||{name:id,charges:0};
+    return `<span class="chip" title="${(f.effect||'').replace(/"/g,'&quot;')}"><b>${f.name}</b>${f.tier?` <span class="muted">T${f.tier}</span>`:''} <span class="muted">${f.charges}c</span> <span class="x" onclick="FABRIALS.splice(${i},1);renderFabrials();recompute()">&times;</span></span>`;
+  }).join('') || '<span class="muted">No fabrials</span>';
+}
 function addInfected(){
   const id=document.getElementById('infected-pick').value; if(!id) return;
   if(!INFECTED.includes(id)){ INFECTED.push(id); renderInfected(); recompute(); }
@@ -956,7 +979,7 @@ function collect(){
     name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
     path:v('f-path'), singer_form:v('f-singer-form'),
     radiant_order:v('f-order'), radiant_variant:(document.getElementById('f-variant')||{}).value||'', ideals_sworn:+v('f-ideals')||0, ideal_progress:+v('f-ideal-progress')||0, ideal_words:IDEAL_WORDS, spren_name:v('f-spren'),
-    attributes:attrs, skills, talents:TALENTS, inventory:INV, infected_arts:INFECTED,
+    attributes:attrs, skills, talents:TALENTS, inventory:INV, fabrials:FABRIALS, infected_arts:INFECTED,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
     purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'), connections:v('f-connections'),
   };
@@ -1016,7 +1039,7 @@ buildRail();
 mergeHomebrew();
 onPath(); onAncestry(); paintCultureInfo(); onOrder();
 (function(){ const vs=document.getElementById('f-variant'); if(vs && BUILD_SEL.variant && [...vs.options].some(o=>o.value===BUILD_SEL.variant)){ vs.value=BUILD_SEL.variant; onVariant(); } })();
-renderTalents(); renderInv(); renderInfected(); recompute();
+renderTalents(); renderInv(); renderFabrials(); renderInfected(); recompute();
 goStep(0);
 </script>
 {% endblock %}

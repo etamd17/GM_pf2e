@@ -7835,6 +7835,7 @@ def _cosmere_builder_context(build, hb_store=None):
         build=build.to_dict(),
         infected_arts=_inf.load_arts(),     # the Infected Arts catalog (disease cost + abilities)
         catalog=systems.cosmere.items.catalog(),
+        fabrials=systems.cosmere.items.fabrials(),
         skill_names=build.eff_skill_names(), skill_attr=build.eff_skill_attr(),
         surge_skills=list(build.eff_surge_skills()),
         attr_names=systems.cosmere.ATTR_NAMES,
@@ -8204,6 +8205,17 @@ def cosmere_pc_sheet(pid):
     has_take_squire = any(n.startswith('Take Squire') for n in _tnames)
     has_wound_regen = any(n == 'Wound Regeneration' for n in _tnames)
     radiant_variant = systems.cosmere.radiant.variants(build.radiant_order).get(build.radiant_variant)  # {name,desc} or None
+    # Equipped Fabrials (Ch.7) + their live charge counts (default = full).
+    _fab_state = ps.get('fabrials') if isinstance(ps.get('fabrials'), dict) else {}
+    fabrials = []
+    for _fid in (build.to_dict().get('fabrials') or []):
+        _f = systems.cosmere.items.fabrial(_fid)
+        if _f:
+            try:
+                _cur = int(_fab_state.get(_fid, _f['charges']))
+            except (TypeError, ValueError):
+                _cur = _f['charges']
+            fabrials.append(dict(_f, current=max(0, min(_f['charges'], _cur))))
     # Per-character name crest + secondary accent (theming PR-B). In a Mistborn
     # campaign a chosen cosmetic "house metal" wins; otherwise the Radiant order
     # (the character's actual mechanic) drives the crest + its accent color.
@@ -8239,7 +8251,7 @@ def cosmere_pc_sheet(pid):
         singer_form=systems.cosmere.origins.singer_form(build.singer_form),
         shardblade=shardblade, shardplate=shardplate,
         has_take_squire=has_take_squire, has_wound_regen=has_wound_regen,
-        radiant_variant=radiant_variant,
+        radiant_variant=radiant_variant, fabrials=fabrials,
     )
 
 
@@ -8528,6 +8540,14 @@ def cosmere_pc_state(pid):
             ps['squire'] = str(data['squire'] or '')[:80]  # Take Squire roster
         if 'forsaken' in data:
             ps['forsaken'] = bool(data['forsaken'])        # oaths forsaken — spren withdrawn
+        if isinstance(data.get('fabrials'), dict):         # per-fabrial charge counts {id: charges}
+            clean = {}
+            for k, v in data['fabrials'].items():
+                try:
+                    clean[str(k)] = max(0, int(v))
+                except (TypeError, ValueError):
+                    continue
+            ps['fabrials'] = clean
         if isinstance(data.get('conditions'), dict):
             ps['conditions'] = data['conditions']
         doc['play_state'] = ps

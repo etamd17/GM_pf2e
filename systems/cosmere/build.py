@@ -166,6 +166,7 @@ class CosmereBuild:
         self.ideal_progress = max(0, min(3, int(d.get('ideal_progress', 0) or 0)))
         self.is_radiant = bool(self.radiant_order) or bool(d.get('is_radiant'))
         self.inventory = Inventory(d.get('inventory'))
+        self.fabrials = [str(x) for x in (d.get('fabrials') or [])]   # equipped Fabrial device ids (Ch.7)
         self.epic_choices = list(d.get('epic_choices') or [])       # per L21+ level: 'skill' | 'talent'
         self.goals = d.get('goals', '')
         self.purpose = d.get('purpose', '')
@@ -539,6 +540,7 @@ class CosmereBuild:
             'ideal_progress': self.ideal_progress,
             'spren_name': self.spren_name, 'ideal_words': list(self.ideal_words),
             'inventory': self.inventory.to_list(), 'epic_choices': list(self.epic_choices),
+            'fabrials': list(self.fabrials),
             'infected_arts': list(self.infected_arts),
             'goals': self.goals, 'purpose': self.purpose, 'obstacle': self.obstacle,
             'appearance': self.appearance, 'notes': self.notes,

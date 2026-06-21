@@ -115,6 +115,54 @@ def get_raw(item_id) -> dict | None:
     return _RAW.get(item_id)
 
 
+_FABRIALS = None
+
+
+def _fab_text(doc) -> str:
+    desc = doc.get('system', {}).get('description', {}) if isinstance(doc.get('system'), dict) else {}
+    raw = (desc.get('value') or desc.get('chat') or '') if isinstance(desc, dict) else str(desc or '')
+    return re.sub(r'<[^>]+>', ' ', raw).replace('\xa0', ' ')
+
+
+def fabrials() -> list:
+    """Catalog of Fabrial devices (Ch.7), parsed from handbook-items: each is
+    {id, name, tier, charges, effect}. Tier + charge count live in the
+    description text (not structured fields), so we parse them out; a fabrial is
+    detected by 'Fabrial' in the name/description or a stated charge count. The
+    "Fabrials" section-header doc is skipped. Crafting rules aren't in the packs,
+    so this is purchase/reward + charge-tracking only."""
+    global _FABRIALS
+    if _FABRIALS is not None:
+        return _FABRIALS
+    out = []
+    for d in load_pack('handbook-items'):
+        nm = (d.get('name') or '').strip()
+        if not nm or nm.lower() == 'fabrials':
+            continue
+        txt = _fab_text(d)
+        is_fab = ('fabrial' in nm.lower() or 'Fabrial Effect' in txt
+                  or re.search(r'[Cc]harges?\s+\d|\d+\s*charge', txt))
+        if not is_fab:
+            continue
+        tier = re.search(r'Tier\s*(\d)', txt)
+        ch = re.search(r'Charges\s+(\d+)', txt) or re.search(r'(\d+)\s*charges?\b', txt)
+        # Effect = the description sentence after the stat preamble (either the
+        # "...Fabrial Effect" lead-in, or the "Price ...; Charges N;" block).
+        eff = re.sub(r'^.*?(?:Fabrial Effect|Charges\s+\d+\s*;)\s*', '', txt, count=1)
+        eff = re.sub(r'\s+', ' ', eff).strip()[:240]
+        out.append({'id': d.get('_id'), 'name': nm,
+                    'tier': int(tier.group(1)) if tier else 0,
+                    'charges': int(ch.group(1)) if ch else 3,
+                    'effect': eff})
+    out.sort(key=lambda f: (f['tier'], f['name'].lower()))
+    _FABRIALS = out
+    return out
+
+
+def fabrial(fid) -> dict | None:
+    return next((f for f in fabrials() if f['id'] == fid), None)
+
+
 def by_name(name) -> dict | None:
     """A normalized catalog item by (case-insensitive) name."""
     _build()
