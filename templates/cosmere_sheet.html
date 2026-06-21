@@ -195,6 +195,12 @@
   .cs-ideal-dots { display:inline-flex; gap:5px; vertical-align:middle; margin-left:.35rem; }
   .cs-ideal-dots i { width:11px; height:11px; border-radius:50%; display:inline-block; border:1px solid var(--order-accent,var(--accent)); }
   .cs-ideal-dots i.on { background:var(--order-accent,var(--accent)); box-shadow:0 0 7px color-mix(in srgb,var(--order-accent,var(--accent)) 70%, transparent); }
+  /* Forsaken oaths (GM-toggleable): the spren withdraws — Stormlight actions seal. */
+  .cs-rad-plate.forsaken { filter:grayscale(.7) brightness(.78); }
+  .cs-rad-plate.forsaken .cs-rad-btn, .cs-rad-plate.forsaken .cs-ability, .cs-rad-plate.forsaken input { pointer-events:none; opacity:.4; }
+  .cos-forsaken-banner { display:none; font-size:12px; color:#f0a9a9; background:rgba(168,58,58,.14); border:1px solid rgba(168,58,58,.5); border-radius:7px; padding:.45rem .65rem; margin-bottom:.6rem; }
+  .cs-rad-plate.forsaken .cos-forsaken-banner { display:block; }
+  #btn-forsake.on { border-color:#a83a3a; color:#f0a9a9; background:rgba(168,58,58,.16); }
   /* Sticky quick-vitals bar — manage resources mid-combat without scrolling. */
   .cs-vbar { position:sticky; top:6px; z-index:40; display:flex; align-items:center; gap:.85rem; flex-wrap:wrap;
     margin:0 0 1rem; padding:.45rem .85rem; border-radius:12px;
@@ -420,10 +426,16 @@
       <div style="font-size:12px; line-height:1.4;"><b style="color:var(--order-accent,var(--accent));">{{ ['','First','Second','Third','Fourth'][id.n] }} Ideal</b> &mdash; <i>{{ id.words or id.suggested or 'spoken' }}</i></div>
       {% endfor %}
     </div>{% elif build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
+    {% if interactive and build.ideals_sworn >= 1 %}
+    <div style="margin-top:.6rem;">
+      <button class="cs-rad-btn{{ ' on' if cur.forsaken }}" id="btn-forsake" onclick="cosForsake()" title="Mark your oaths forsaken — your spren withdraws and your Stormlight powers seal until your bond is renewed. GM-toggleable; the rules leave the in-fiction consequences to your table.">{{ 'Renew oaths' if cur.forsaken else 'Oaths forsaken' }}</button>
+    </div>
+    {% endif %}
   </div>
 
   {% if interactive and a.investiture_max %}
-  <div class="cs-rad-plate" style="margin-top:.6rem;">
+  <div class="cs-rad-plate{{ ' forsaken' if cur.forsaken }}" id="cos-sl-actions" style="margin-top:.6rem;">
+    <div class="cos-forsaken-banner">Oaths forsaken &mdash; your spren has withdrawn. Surges, Shardblade &amp; Plate are sealed until your bond is renewed.</div>
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin-bottom:.5rem;">Stormlight Actions</div>
     <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
       <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
@@ -632,7 +644,7 @@
     const PID = {{ actor_id|tojson }};
     const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
     const TIER = {{ tier|default(1) }};
-    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, squire:{{ cur.squire|tojson }}};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, squire:{{ cur.squire|tojson }}, forsaken:{{ 'true' if cur.forsaken else 'false' }}};
     let mods = {adv:false, dis:false, plot:false, vis:'group'};
 
     /* ── Condition automation (Stormlight Ch.3 "Advantages & Disadvantages",
@@ -868,6 +880,23 @@
     // Take Squire: persist who they've taken under their wing.
     let _sqT=null;
     window.cosSquire = function(name){ cur.squire=String(name||''); pending.squire=cur.squire; clearTimeout(_sqT); _sqT=setTimeout(flush, 400); };
+    // Forsaking the oaths (GM-toggleable): the spren withdraws — Stormlight
+    // actions seal and a summoned Shardblade is dismissed, until the bond renews.
+    window.cosForsake = function(){
+      cur.forsaken = !cur.forsaken;
+      const plate=document.getElementById('cos-sl-actions'); if(plate) plate.classList.toggle('forsaken', cur.forsaken);
+      const b=document.getElementById('btn-forsake'); if(b){ b.classList.toggle('on', cur.forsaken); b.textContent = cur.forsaken ? 'Renew oaths' : 'Oaths forsaken'; }
+      if(cur.forsaken && cur.shardblade){   // the withdrawing spren reclaims the Blade
+        cur.shardblade=false; const card=document.getElementById('cos-shardblade-strike'); if(card) card.style.display='none';
+        const sb=document.getElementById('btn-shardblade'); if(sb){ sb.textContent='Summon Shardblade'; sb.classList.remove('on'); }
+        pending.shardblade=false;
+      }
+      res(cur.forsaken
+        ? '<span class="comp">Oaths forsaken</span> &mdash; your spren withdraws; surges, Shardblade &amp; Plate are sealed.'
+        : '<span class="opp">Oaths renewed</span> &mdash; your bond is restored.');
+      post(cur.forsaken?'forsakes their oaths':'renews their oaths', cur.forsaken?'spren withdrawn':'bond restored', '');
+      pending.forsaken=cur.forsaken; flush();
+    };
     // Wound Regeneration: while Regenerating, spend 1 Investiture to clear an injury.
     window.cosMendInjury = function(){
       if(cur.injuries < 1){ res('No injuries to mend.'); return; }
