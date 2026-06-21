@@ -329,10 +329,10 @@
     {% for key in ['phy','cog','spi'] %}
     <div class="cs-facet"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
     {% endfor %}
-    <div class="cs-facet deflect">
-      <div class="l">Deflect</div><div class="n">{{ a.deflect.value }}</div>
+    <div class="cs-facet deflect" id="cs-deflect" data-base="{{ a.deflect.value }}" data-base-types="{{ a.deflect.types.items()|selectattr('1')|map(attribute='0')|join(',') }}">
+      <div class="l">Deflect <span id="cs-deflect-plate" style="display:{{ '' if cur.shardplate else 'none' }}; color:var(--order-accent,var(--accent)); font-size:9px;">&middot; Plate</span></div><div class="n" id="cs-deflect-n">{{ 5 if cur.shardplate else a.deflect.value }}</div>
       {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
-      <div class="cs-chips">{% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}</div>
+      <div class="cs-chips" id="cs-deflect-types">{% if cur.shardplate %}{% for t in ['impact','keen','energy','spirit','vital'] %}<span class="cs-chip df">{{ t }}</span>{% endfor %}{% else %}{% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}{% endif %}</div>
     </div>
   </div>
   <div class="cs-orbs">
@@ -443,6 +443,7 @@
       <button class="cs-rad-btn" onclick="cosRegenerate()" title="Spend 1 Investiture: recover health equal to 1d6 + your tier ({{ tier }}).">Regenerate <span style="opacity:.7;">(1 Inv)</span></button>
       {% if has_wound_regen %}<button class="cs-rad-btn" onclick="cosMendInjury()" title="Wound Regeneration: while Regenerating, spend 1 Investiture to instantly recover from an injury of your choice.">Mend Injury <span style="opacity:.7;">(1 Inv)</span></button>{% endif %}
       {% if shardblade %}<button class="cs-rad-btn" id="btn-shardblade" onclick="cosShardblade()" title="Third Ideal: summon your spren as a Shardblade (2d8 spirit, deadly — bypasses Deflect). Tap again to dismiss.">Summon Shardblade</button>{% endif %}
+      {% if shardplate %}<button class="cs-rad-btn{{ ' on' if cur.shardplate }}" id="btn-shardplate" onclick="cosShardplate()" title="Fourth Ideal: don living Shardplate — Deflect 5 against EVERY damage type (even spirit &amp; vital). Tap again to doff.">{{ 'Doff' if cur.shardplate else 'Don' }} Shardplate</button>{% endif %}
       <span id="enh-chip" class="cs-chip df" style="display:{{ '' if cur.enhanced else 'none' }};">Enhanced &middot; STR +1 / SPD +1</span>
     </div>
     {% if has_take_squire %}
@@ -644,7 +645,7 @@
     const PID = {{ actor_id|tojson }};
     const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
     const TIER = {{ tier|default(1) }};
-    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, squire:{{ cur.squire|tojson }}, forsaken:{{ 'true' if cur.forsaken else 'false' }}};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, shardplate:{{ 'true' if cur.shardplate else 'false' }}, squire:{{ cur.squire|tojson }}, forsaken:{{ 'true' if cur.forsaken else 'false' }}};
     let mods = {adv:false, dis:false, plot:false, vis:'group'};
 
     /* ── Condition automation (Stormlight Ch.3 "Advantages & Disadvantages",
@@ -877,6 +878,32 @@
       post(cur.shardblade?'summons their Shardblade':'dismisses their Shardblade', cur.shardblade?'manifest':'dismissed', '');
       pending.shardblade=cur.shardblade; flush();
     };
+    // Fourth Ideal: don / doff living Shardplate. Donned -> Deflect 5 vs EVERY
+    // damage type (even spirit & vital, which normally bypass Deflect).
+    function _paintShardplate(){
+      const f=document.getElementById('cs-deflect'); if(!f) return;
+      const n=document.getElementById('cs-deflect-n'), badge=document.getElementById('cs-deflect-plate'), types=document.getElementById('cs-deflect-types');
+      if(cur.shardplate){
+        n.textContent='5';
+        types.innerHTML=['impact','keen','energy','spirit','vital'].map(t=>'<span class="cs-chip df">'+t+'</span>').join('');
+        if(badge) badge.style.display='';
+        f.style.borderColor='var(--order-accent,var(--accent))';
+      } else {
+        n.textContent=f.getAttribute('data-base')||'0';
+        const bt=(f.getAttribute('data-base-types')||'').split(',').filter(Boolean);
+        types.innerHTML=bt.map(t=>'<span class="cs-chip df">'+t+'</span>').join('');
+        if(badge) badge.style.display='none';
+        f.style.borderColor='';
+      }
+    }
+    window.cosShardplate = function(){
+      cur.shardplate = !cur.shardplate;
+      const b=document.getElementById('btn-shardplate'); if(b){ b.textContent=(cur.shardplate?'Doff':'Don')+' Shardplate'; b.classList.toggle('on', cur.shardplate); }
+      _paintShardplate();
+      res('<span class="opp">'+(cur.shardplate?'Shardplate donned':'Shardplate doffed')+'</span>'+(cur.shardplate?' — Deflect 5 against every damage type.':'.'));
+      post(cur.shardplate?'dons Shardplate':'doffs Shardplate', cur.shardplate?'Deflect 5 (all types)':'doffed', '');
+      pending.shardplate=cur.shardplate; flush();
+    };
     // Take Squire: persist who they've taken under their wing.
     let _sqT=null;
     window.cosSquire = function(name){ cur.squire=String(name||''); pending.squire=cur.squire; clearTimeout(_sqT); _sqT=setTimeout(flush, 400); };
@@ -890,6 +917,10 @@
         cur.shardblade=false; const card=document.getElementById('cos-shardblade-strike'); if(card) card.style.display='none';
         const sb=document.getElementById('btn-shardblade'); if(sb){ sb.textContent='Summon Shardblade'; sb.classList.remove('on'); }
         pending.shardblade=false;
+      }
+      if(cur.forsaken && cur.shardplate){   // ...and the Plate, too
+        cur.shardplate=false; const pb=document.getElementById('btn-shardplate'); if(pb){ pb.textContent='Don Shardplate'; pb.classList.remove('on'); }
+        if(typeof _paintShardplate==='function') _paintShardplate(); pending.shardplate=false;
       }
       res(cur.forsaken
         ? '<span class="comp">Oaths forsaken</span> &mdash; your spren withdraws; surges, Shardblade &amp; Plate are sealed.'
