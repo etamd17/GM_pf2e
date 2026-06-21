@@ -151,6 +151,70 @@
   #cs-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   #cs-toast b { font-family:'JetBrains Mono',monospace; font-size:20px; color:var(--cs-accent-2); }
   #cs-toast .opp { color:#34d399; } #cs-toast .comp { color:#f59e0b; }
+
+  /* ===== Sphere-gauge redesign: "Stormlight Gauges" + Shardplate order-glow ===== */
+  /* Defenses become quiet hex facets so the three glowing spheres are the hero. */
+  .cs-facets { display:flex; gap:.55rem; margin:0 0 1rem; flex-wrap:wrap; }
+  .cs-facet { flex:1 1 0; min-width:88px; text-align:center; background:#0c1825; border:1px solid var(--border-card);
+    padding:.6rem .3rem; clip-path:polygon(13% 0,87% 0,100% 50%,87% 100%,13% 100%,0 50%); }
+  .cs-facet .l { font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3); }
+  .cs-facet .n { font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:700; color:var(--text-on-dark); }
+  .cs-facet.deflect { clip-path:none; border-radius:9px; border-color:color-mix(in srgb,var(--order-accent,var(--accent)) 40%, var(--border-card)); }
+  .cs-facet.deflect .n { color:var(--order-accent,var(--accent)); }
+  .cs-facet.deflect .cs-chips { justify-content:center; margin-top:.3rem; }
+  .cs-orbs { display:flex; gap:1.4rem; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin:0 0 1rem; }
+  .orb-w { display:flex; flex-direction:column; align-items:center; gap:.5rem; }
+  .orb { width:108px; height:108px; border-radius:50%; position:relative; overflow:hidden; cursor:pointer;
+    background:#0a121b; border:1px solid var(--orb-rim,#2a4259);
+    box-shadow:inset 0 0 0 3px rgba(0,0,0,.35), 0 0 16px -3px var(--orb-glow,transparent); }
+  .orb-fill { position:absolute; left:0; right:0; bottom:0; height:60%;
+    background:radial-gradient(125% 85% at 50% 135%, var(--orb-core,#fff), var(--orb-mid,#5fa8e0) 55%, transparent 100%);
+    transition:height .55s cubic-bezier(.2,.8,.2,1); }
+  .orb-spec { position:absolute; top:16px; left:26px; width:26px; height:13px; border-radius:50%; background:rgba(255,255,255,.16); pointer-events:none; }
+  .orb-arc { position:absolute; inset:0; transform:rotate(-90deg); pointer-events:none; }
+  .orb-arc .trk { fill:none; stroke:var(--orb-rim,#22303f); stroke-width:3; }
+  .orb-arc .prg { fill:none; stroke:var(--orb-mid,#5fa8e0); stroke-width:3; stroke-linecap:round; transition:stroke-dasharray .55s cubic-bezier(.2,.8,.2,1); }
+  .orb-val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2; pointer-events:none; }
+  .orb-num { font-family:'JetBrains Mono',monospace; font-size:1.7rem; font-weight:700; color:var(--orb-core,#fff); line-height:1; text-shadow:0 1px 6px rgba(0,0,0,.7); }
+  .orb-max { font-family:'JetBrains Mono',monospace; font-size:.78rem; color:#5e7790; }
+  .orb.dun .orb-fill { display:none; } .orb.dun { box-shadow:inset 0 0 0 3px rgba(0,0,0,.45); }
+  .orb.dun .orb-num { color:#5e7790; }
+  .orb.low .orb-fill { animation:orbpulse 1.6s ease-in-out infinite; }
+  @keyframes orbpulse { 0%,100%{ opacity:.6; } 50%{ opacity:1; } }
+  .orb-l { font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-on-dark-2); font-family:var(--font-display,serif); }
+  .orb-ctrl { display:none; flex-direction:column; gap:.3rem; width:130px; }
+  .orb-w.open .orb-ctrl { display:flex; }
+  .orb-hint { font-size:9px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-on-dark-4,#5e7790); }
+  /* Order-flooded Radiant plate (the Shardplate graft): the one deeply order-tinted panel. */
+  .cs-rad-plate { position:relative; text-align:left; border:1px solid rgba(95,168,224,.45);
+    border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 55%, transparent);
+    border-radius:11px; padding:.85rem 1rem;
+    background:var(--bg-sunken,#131922);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--order-accent,var(--accent)) 17%, transparent), transparent 62%), var(--bg-sunken,#131922);
+    box-shadow:inset 0 0 30px -8px color-mix(in srgb, var(--order-accent,var(--accent)) 45%, transparent); }
+  .cs-ideal-dots { display:inline-flex; gap:5px; vertical-align:middle; margin-left:.35rem; }
+  .cs-ideal-dots i { width:11px; height:11px; border-radius:50%; display:inline-block; border:1px solid var(--order-accent,var(--accent)); }
+  .cs-ideal-dots i.on { background:var(--order-accent,var(--accent)); box-shadow:0 0 7px color-mix(in srgb,var(--order-accent,var(--accent)) 70%, transparent); }
+  /* Sticky quick-vitals bar — manage resources mid-combat without scrolling. */
+  .cs-vbar { position:sticky; top:6px; z-index:40; display:flex; align-items:center; gap:.85rem; flex-wrap:wrap;
+    margin:0 0 1rem; padding:.45rem .85rem; border-radius:12px;
+    background:rgba(9,14,21,.93); border:1px solid var(--border-card); box-shadow:0 6px 18px rgba(0,0,0,.45); }
+  .cs-vbar .vb-name { font-family:var(--font-display,serif); color:var(--order-accent,var(--accent)); font-weight:700; font-size:14px; margin-right:auto; }
+  .cs-vb { display:inline-flex; align-items:center; gap:.32rem; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-on-dark-2); }
+  .cs-vb .d { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .cs-vb b { font-weight:700; color:var(--text-on-dark); }
+  .cs-vbar .vb-cond { font-size:11px; color:#fbbf24; }
+  .cs-vbar .vb-cond:empty { display:none; }
+  /* Themed roll feedback: an Opportunity (nat 20) flares the order color, a Complication (nat 1) dims. */
+  .cs-result.flare-opp, #cs-toast.flare-opp { animation:flareopp 1.1s ease-out; }
+  .cs-result.flare-comp, #cs-toast.flare-comp { animation:flarecomp 1.1s ease-out; }
+  @keyframes flareopp { 0%{ text-shadow:none; } 25%{ text-shadow:0 0 16px var(--order-accent,#5fa8e0); } 100%{ text-shadow:none; } }
+  @keyframes flarecomp { 0%,100%{ filter:none; } 30%{ filter:grayscale(.55) brightness(.72); } }
+  @media (prefers-reduced-motion: reduce){
+    .orb-fill, .orb-arc .prg { transition:none; }
+    .orb.low .orb-fill { animation:none; }
+    .cs-result.flare-opp, #cs-toast.flare-opp, .cs-result.flare-comp, #cs-toast.flare-comp { animation:none; }
+  }
 {% endblock %}
 
 {% block content %}
@@ -203,6 +267,16 @@
     <b>Build notes:</b> {{ warnings|join(' · ') }}
   </div>
   {% endif %}
+  {% if interactive %}
+  {# Sticky quick-vitals: manage the three resources mid-combat without scrolling. #}
+  <div class="cs-vbar" id="cs-vbar">
+    <span class="vb-name">{{ a.name }}</span>
+    <span class="cs-vb" title="Health"><span class="d" style="background:#5fe6b0;"></span>HP&nbsp;<b id="vb-health">{{ cur.health }}</b><span style="color:#5e7790;">/{{ a.health.max }}</span></span>
+    {% if a.investiture_max %}<span class="cs-vb" title="Investiture"><span class="d" style="background:var(--order-accent,#7ec7ff);"></span>Inv&nbsp;<b id="vb-investiture">{{ cur.investiture }}</b><span style="color:#5e7790;">/{{ a.investiture_max }}</span></span>{% endif %}
+    <span class="cs-vb" title="Focus"><span class="d" style="background:#f2c879;"></span>Foc&nbsp;<b id="vb-focus">{{ cur.focus }}</b><span style="color:#5e7790;">/{{ a.focus_max }}</span></span>
+    <span class="vb-cond" id="vb-cond"></span>
+  </div>
+  {% endif %}
 
   {% if interactive %}
   {# --- Live combat strip (shown when this character is in the active encounter) --- #}
@@ -229,38 +303,72 @@
   </div>
   {% endif %}
 
-  {# --- Defenses + resources --- #}
-  <div class="cs-grid cs-cards">
+  {# --- Defenses (quiet hex facets) + the sphere bank (the hero region) --- #}
+  <div class="cs-facets">
     {% for key in ['phy','cog','spi'] %}
-    <div class="cs-card cs-def">
-      <div class="l">{{ defense_names[key] }}</div>
-      <div class="v">{{ a.defenses[key] }}</div>
-      <div class="x">Defense</div>
-    </div>
+    <div class="cs-facet"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
     {% endfor %}
-    <div class="cs-card">
-      <div class="l">Health</div>
-      <div class="v" id="rv-health">{{ cur.health }}<span class="x">/{{ a.health.max }}</span></div>
-      <div class="cs-hpbar"><div class="cs-hpfill" id="rb-health" style="width:{{ (100 * cur.health / a.health.max)|round|int if a.health.max else 0 }}%"></div></div>
-      {% if cur.injuries or interactive %}<div style="font-size:10px; color:#d36e6e; margin-top:.4rem; display:flex; align-items:center; justify-content:center; gap:.4rem;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span>{% if interactive %}<span class="cs-inj"><button onclick="cosAdjust('injuries',-1)" title="Remove an injury">&minus;</button><button onclick="cosAdjust('injuries',1)" title="Take an injury">+</button></span>{% endif %}</div>{% endif %}
-      {% if interactive %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Health amount"><button class="cs-amt-btn dmg" onclick="cosApply('health',-1,this)" title="Take this much damage">Damage</button><button class="cs-amt-btn heal" onclick="cosApply('health',1,this)" title="Recover this much health">Heal</button></div>{% endif %}
+    <div class="cs-facet deflect">
+      <div class="l">Deflect</div><div class="n">{{ a.deflect.value }}</div>
+      {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
+      <div class="cs-chips">{% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}</div>
     </div>
-    <div class="cs-card">
-      <div class="l">Focus</div><div class="v sm" id="rv-focus">{{ cur.focus }}<span class="x">/{{ a.focus_max }}</span></div>
-      {% if interactive %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Focus amount"><button class="cs-amt-btn spend" onclick="cosApply('focus',-1,this)" title="Spend focus (react / graze / off-hand)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('focus',1,this)" title="Collect Yourself">Gain</button></div>{% endif %}
-    </div>
-    <div class="cs-card">
-      <div class="l">Investiture</div><div class="v sm" id="rv-investiture">{{ cur.investiture }}<span class="x">/{{ a.investiture_max }}</span></div>
-      {% if interactive and a.investiture_max %}<div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Investiture amount"><button class="cs-amt-btn spend" onclick="cosApply('investiture',-1,this)" title="Spend Investiture (power a surge)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('investiture',1,this)" title="Gain Investiture">Gain</button><button class="cs-amt-btn breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe</button></div>{% endif %}
-      {% if not a.investiture_max %}<div style="font-size:10px; color:var(--text-on-dark-3); margin-top:.4rem; line-height:1.3;">Not a Radiant &mdash; swear a First Ideal to gain Stormlight.</div>{% endif %}
-    </div>
-    <div class="cs-card">
-      <div class="l">Deflect</div><div class="v sm">{{ a.deflect.value }}</div>
-      <div class="cs-chips" style="justify-content:center;margin-top:.3rem;">
-        {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
-        {% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}
+  </div>
+  <div class="cs-orbs">
+    {% set hpct = (cur.health / a.health.max) if a.health.max else 0 %}
+    <div class="orb-w">
+      <div class="orb{{ ' dun' if cur.health <= 0 }}" id="orb-health" style="--orb-core:#eafff4;--orb-mid:#5fe6b0;--orb-rim:#0c5f43;--orb-glow:rgba(95,230,176,.45);"{% if interactive %} onclick="this.closest('.orb-w').classList.toggle('open')" title="Tap for Damage / Heal controls"{% endif %}>
+        <div class="orb-fill" id="fill-health" style="height:{{ (hpct*100)|round|int }}%;"></div>
+        <div class="orb-spec"></div>
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-health" cx="54" cy="54" r="46" stroke-dasharray="{{ (hpct*289.0)|round(1) }} 289"/></svg>
+        <div class="orb-val"><div class="orb-num" id="rv-health">{{ cur.health }}</div><div class="orb-max">/{{ a.health.max }}</div></div>
       </div>
+      <div class="orb-l">Health</div>
+      {% if interactive %}<div class="orb-ctrl">
+        <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Health amount"><button class="cs-amt-btn dmg" onclick="cosApply('health',-1,this)" title="Take this much damage">Damage</button><button class="cs-amt-btn heal" onclick="cosApply('health',1,this)" title="Recover this much health">Heal</button></div>
+        <div class="orb-hint" style="text-align:center;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span> <span class="cs-inj"><button onclick="cosAdjust('injuries',-1)" title="Remove an injury">&minus;</button><button onclick="cosAdjust('injuries',1)" title="Take an injury">+</button></span></div>
+      </div>{% endif %}
     </div>
+
+    {% set fpct = (cur.focus / a.focus_max) if a.focus_max else 0 %}
+    <div class="orb-w">
+      <div class="orb{{ ' dun' if cur.focus <= 0 }}" id="orb-focus" style="--orb-core:#fff3d6;--orb-mid:#f2c879;--orb-rim:#6e4a12;--orb-glow:rgba(242,200,121,.4);"{% if interactive %} onclick="this.closest('.orb-w').classList.toggle('open')" title="Tap for Spend / Gain controls"{% endif %}>
+        <div class="orb-fill" id="fill-focus" style="height:{{ (fpct*100)|round|int }}%;"></div>
+        <div class="orb-spec"></div>
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-focus" cx="54" cy="54" r="46" stroke-dasharray="{{ (fpct*289.0)|round(1) }} 289"/></svg>
+        <div class="orb-val"><div class="orb-num" id="rv-focus">{{ cur.focus }}</div><div class="orb-max">/{{ a.focus_max }}</div></div>
+      </div>
+      <div class="orb-l">Focus</div>
+      {% if interactive %}<div class="orb-ctrl">
+        <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Focus amount"><button class="cs-amt-btn spend" onclick="cosApply('focus',-1,this)" title="Spend focus (react / graze / off-hand)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('focus',1,this)" title="Collect Yourself">Gain</button></div>
+      </div>{% endif %}
+    </div>
+
+    {% if a.investiture_max %}
+    {% set ipct = (cur.investiture / a.investiture_max) if a.investiture_max else 0 %}
+    <div class="orb-w">
+      <div class="orb{{ ' dun' if cur.investiture <= 0 }}" id="orb-investiture" style="--orb-core:#f4fbff;--orb-mid:var(--order-accent,#7ec7ff);--orb-rim:#13456f;--orb-glow:color-mix(in srgb,var(--order-accent,#7ec7ff) 45%, transparent);"{% if interactive %} onclick="this.closest('.orb-w').classList.toggle('open')" title="Tap for Spend / Gain / Breathe controls"{% endif %}>
+        <div class="orb-fill" id="fill-investiture" style="height:{{ (ipct*100)|round|int }}%;"></div>
+        <div class="orb-spec"></div>
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-investiture" cx="54" cy="54" r="46" stroke-dasharray="{{ (ipct*289.0)|round(1) }} 289"/></svg>
+        <div class="orb-val"><div class="orb-num" id="rv-investiture">{{ cur.investiture }}</div><div class="orb-max">/{{ a.investiture_max }}</div></div>
+      </div>
+      <div class="orb-l">Investiture</div>
+      {% if interactive %}<div class="orb-ctrl">
+        <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Investiture amount"><button class="cs-amt-btn spend" onclick="cosApply('investiture',-1,this)" title="Spend Investiture (power a surge)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('investiture',1,this)" title="Gain Investiture">Gain</button></div>
+        <button class="cs-amt-btn breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe Stormlight</button>
+      </div>{% endif %}
+    </div>
+    {% else %}
+    <div class="orb-w">
+      <div class="orb dun" title="Not a Radiant">
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/></svg>
+        <div class="orb-val"><div class="orb-num">&mdash;</div></div>
+      </div>
+      <div class="orb-l">Investiture</div>
+      <div class="orb-hint" style="max-width:130px; text-align:center;">Swear a First Ideal to gain Stormlight.</div>
+    </div>
+    {% endif %}
   </div>
   {% if interactive %}
   <div class="cs-rest">
@@ -285,11 +393,11 @@
   {# --- Radiant (Surgebinding) --- #}
   {% if pc and radiant %}
   <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}</div>
-  <div class="cs-card" style="text-align:left; border-color:rgba(95,168,224,.4);">
+  <div class="cs-rad-plate">
     <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--accent);">{{ build.spren_name or radiant.spren }}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--order-accent,var(--accent));">{{ build.spren_name or radiant.spren }}</b></div>
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}<svg class="cs-surge-gl" aria-hidden="true"><use href="#cg-surge-{{ s }}"></use></svg>{{ surge_names[s].name }}{% if not loop.last %} &nbsp;+ {% endif %}{% endfor %}</b></div>
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b><span class="cs-ideal-dots" aria-hidden="true">{% for n in range(1,6) %}<i class="{{ 'on' if n <= build.ideals_sworn }}"></i>{% endfor %}</span>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
     </div>
     <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
     {% if ideal_states and build.ideals_sworn >= 1 %}<div style="margin-top:.45rem; display:flex; flex-direction:column; gap:.25rem;">
@@ -300,8 +408,8 @@
   </div>
 
   {% if interactive and a.investiture_max %}
-  <div class="cs-card" style="text-align:left; margin-top:.6rem; border-color:rgba(95,168,224,.4);">
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:.5rem;">Stormlight Actions</div>
+  <div class="cs-rad-plate" style="margin-top:.6rem;">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin-bottom:.5rem;">Stormlight Actions</div>
     <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
       <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
       <button class="cs-rad-btn" id="btn-enhance" onclick="cosEnhance()" title="Spend 1 Investiture: Enhanced [Strength +1] and [Speed +1] until the end of your next turn. Tap again to drop it.">Enhance <span style="opacity:.7;">(1 Inv)</span></button>
@@ -524,6 +632,7 @@
                   '</span><span class="fx-desc">' + COND_FX[code](val) + '</span></div>');
       });
       box.innerHTML = rows.length ? ('<div class="fx-h">Active effects</div>' + rows.join('')) : '';
+      if(typeof syncVbar === 'function') syncVbar();   // keep the sticky bar's condition count fresh
     }
     // Annotate a roll with the conditions that touched it (shown after the total).
     function condTags(enh, roll){
@@ -536,15 +645,23 @@
     }
     const d = n => 1 + Math.floor(Math.random()*n);
     let _toastT=null;
-    function csToast(html){
+    // Re-trigger a CSS flare class (order-glow on an Opportunity / dim on a
+    // Complication) by removing then re-adding it on the next frame.
+    function _flare(el, flare){
+      if(!el) return;
+      el.classList.remove('flare-opp','flare-comp');
+      if(flare){ void el.offsetWidth; el.classList.add('flare-' + flare); }
+    }
+    function csToast(html, flare){
       let t=document.getElementById('cs-toast');
       if(!t){ t=document.createElement('div'); t.id='cs-toast'; document.body.appendChild(t); }
-      t.innerHTML=html; t.classList.add('show');
+      t.innerHTML=html; t.classList.add('show'); _flare(t, flare);
       clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'), 4200);
     }
     // Update the inline result line AND pop a floating toast so the roll is
-    // always visible no matter where on the sheet it was triggered.
-    const res = h => { const el=document.getElementById('cs-result'); if(el) el.innerHTML=h; csToast(h); };
+    // always visible no matter where on the sheet it was triggered. `flare` is
+    // 'opp' (nat-20 Opportunity) or 'comp' (nat-1 Complication) — themed feedback.
+    const res = (h, flare) => { const el=document.getElementById('cs-result'); if(el){ el.innerHTML=h; _flare(el, flare); } csToast(h, flare); };
 
     function rollD20(){
       const ad=netAdvDis();
@@ -588,7 +705,7 @@
       const e=enhBonus(attr), fx=condRollFx();
       const m=mod+e+fx.flat, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';
       const total=roll.v+m+f.bonus, tags=condTags(e, roll), plain=tags.replace(/<[^>]+>/g,'').trim();
-      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags);
+      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags, roll.nat===20?'opp':(roll.nat===1?'comp':''));
       post(name+' test', total, roll.note+' '+sign+m+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
     };
     window.cosStrike = function(name, mod, dmgFormula, dtype){
@@ -596,7 +713,7 @@
       const e=cur.enhanced?1:0, fx=condRollFx();
       const atkMod=mod+e+fx.flat, dmgMod=mod+e, roll=rollD20(), f=flair(roll), sign=atkMod>=0?'+':'';
       const atk=roll.v+atkMod+f.bonus, dmg=rollFormula(dmgFormula)+dmgMod, tags=condTags(e, roll), plain=tags.replace(/<[^>]+>/g,'').trim();
-      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+tags);
+      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+tags, roll.nat===20?'opp':(roll.nat===1?'comp':''));
       post(name+' strike', 'atk '+atk+' / dmg '+dmg,
         roll.note+' '+sign+atkMod+' → hit '+atk+'; '+dmgFormula+(dmgMod>=0?'+':'')+dmgMod+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
     };
@@ -615,12 +732,31 @@
       post('uses '+name, total, parts.join(' · ')+' (dice only; add modifiers)');
     };
 
+    // Drive one sphere gauge: fill height (light from the bottom), rim arc,
+    // value, and the dun (empty) / low (ember-pulse) states.
+    const _ORBC = 2 * Math.PI * 46;   // arc circumference (r=46)
+    function _orb(key, val, max){
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const pct = max > 0 ? Math.max(0, Math.min(1, val / max)) : 0;
+      const fill = document.getElementById('fill-' + key); if(fill) fill.style.height = (pct * 100) + '%';
+      const arc = document.getElementById('arc-' + key); if(arc) arc.setAttribute('stroke-dasharray', (pct * _ORBC).toFixed(1) + ' ' + _ORBC.toFixed(1));
+      const num = document.getElementById('rv-' + key); if(num) num.textContent = val;
+      o.classList.toggle('dun', val <= 0);
+      o.classList.toggle('low', max > 0 && val > 0 && pct <= 0.25);
+    }
+    function syncVbar(){
+      const set = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+      set('vb-health', cur.health); set('vb-focus', cur.focus); set('vb-investiture', cur.investiture);
+      const c = cur.conditions || {}, act = Object.keys(c).filter(k => c[k]);
+      const vc = document.getElementById('vb-cond');
+      if(vc) vc.textContent = act.length ? (act.length + ' condition' + (act.length > 1 ? 's' : '')) : '';
+    }
     function paint(){
-      document.getElementById('rv-health').innerHTML=cur.health+'<span class="x">/'+MAX.health+'</span>';
-      const bar=document.getElementById('rb-health'); if(bar) bar.style.width=(MAX.health?Math.round(100*cur.health/MAX.health):0)+'%';
-      document.getElementById('rv-focus').innerHTML=cur.focus+'<span class="x">/'+MAX.focus+'</span>';
-      const inv=document.getElementById('rv-investiture'); if(inv) inv.innerHTML=cur.investiture+'<span class="x">/'+MAX.investiture+'</span>';
-      const ij=document.getElementById('rv-injuries'); if(ij) ij.textContent=cur.injuries;
+      _orb('health', cur.health, MAX.health);
+      _orb('focus', cur.focus, MAX.focus);
+      _orb('investiture', cur.investiture, MAX.investiture);
+      const ij = document.getElementById('rv-injuries'); if(ij) ij.textContent = cur.injuries;
+      syncVbar();
     }
     let saveT=null, pending={};
     function flush(){ const body=Object.assign({}, pending); pending={};
@@ -782,6 +918,7 @@
     } catch(e) {}
     refreshCombat();
 
+    paint();          // sync spheres (fill/arc/dun/low) + sticky vitals on load
     paintEnhance();
     paintCondFx();
   })();
