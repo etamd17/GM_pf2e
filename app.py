@@ -8170,6 +8170,7 @@ def cosmere_pc_sheet(pid):
         'enhanced': bool(ps.get('enhanced')),         # the Stormlight Enhance toggle
         'conditions': ps.get('conditions') if isinstance(ps.get('conditions'), dict) else {},
         'shardblade': bool(ps.get('shardblade')),      # spren summoned as a Shardblade (3rd Ideal)
+        'shardplate': bool(ps.get('shardplate')),      # living Shardplate donned (4th Ideal)
         'squire': str(ps.get('squire') or ''),         # Take Squire: who they've taken under their wing
         'forsaken': bool(ps.get('forsaken')),          # oaths forsaken — spren withdrawn (GM-toggleable)
     }
@@ -8186,6 +8187,9 @@ def cosmere_pc_sheet(pid):
     if build.is_radiant and build.ideals_sworn >= 3:
         shardblade = {'name': 'Shardblade', 'damage': '2d8', 'type': 'spirit',
                       'mod': (actor.skills.get('hwp') or {}).get('mod', 0)}
+    # Living Shardplate (RAW: Fourth Ideal+) — Deflect 5 against EVERY damage type
+    # (even spirit/vital, which normally bypass Deflect). Don/doff toggle.
+    shardplate = {'deflect': 5} if (build.is_radiant and build.ideals_sworn >= 4) else None
     has_take_squire = any(n.startswith('Take Squire') for n in _tnames)
     has_wound_regen = any(n == 'Wound Regeneration' for n in _tnames)
     radiant_variant = systems.cosmere.radiant.variants(build.radiant_order).get(build.radiant_variant)  # {name,desc} or None
@@ -8222,7 +8226,8 @@ def cosmere_pc_sheet(pid):
         first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
         surge_names=build.eff_surge_names(),          # canon + homebrew surge names
         singer_form=systems.cosmere.origins.singer_form(build.singer_form),
-        shardblade=shardblade, has_take_squire=has_take_squire, has_wound_regen=has_wound_regen,
+        shardblade=shardblade, shardplate=shardplate,
+        has_take_squire=has_take_squire, has_wound_regen=has_wound_regen,
         radiant_variant=radiant_variant,
     )
 
@@ -8506,6 +8511,8 @@ def cosmere_pc_state(pid):
             ps['enhanced'] = bool(data['enhanced'])
         if 'shardblade' in data:
             ps['shardblade'] = bool(data['shardblade'])   # Shardblade summoned / dismissed
+        if 'shardplate' in data:
+            ps['shardplate'] = bool(data['shardplate'])   # Shardplate donned / doffed
         if 'squire' in data:
             ps['squire'] = str(data['squire'] or '')[:80]  # Take Squire roster
         if 'forsaken' in data:
