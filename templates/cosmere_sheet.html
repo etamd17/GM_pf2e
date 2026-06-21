@@ -414,8 +414,15 @@
       <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
       <button class="cs-rad-btn" id="btn-enhance" onclick="cosEnhance()" title="Spend 1 Investiture: Enhanced [Strength +1] and [Speed +1] until the end of your next turn. Tap again to drop it.">Enhance <span style="opacity:.7;">(1 Inv)</span></button>
       <button class="cs-rad-btn" onclick="cosRegenerate()" title="Spend 1 Investiture: recover health equal to 1d6 + your tier ({{ tier }}).">Regenerate <span style="opacity:.7;">(1 Inv)</span></button>
+      {% if has_wound_regen %}<button class="cs-rad-btn" onclick="cosMendInjury()" title="Wound Regeneration: while Regenerating, spend 1 Investiture to instantly recover from an injury of your choice.">Mend Injury <span style="opacity:.7;">(1 Inv)</span></button>{% endif %}
+      {% if shardblade %}<button class="cs-rad-btn" id="btn-shardblade" onclick="cosShardblade()" title="Third Ideal: summon your spren as a Shardblade (2d8 spirit, deadly — bypasses Deflect). Tap again to dismiss.">Summon Shardblade</button>{% endif %}
       <span id="enh-chip" class="cs-chip df" style="display:{{ '' if cur.enhanced else 'none' }};">Enhanced &middot; STR +1 / SPD +1</span>
     </div>
+    {% if has_take_squire %}
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin:.85rem 0 .35rem;">Squire <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(breathes Stormlight &amp; uses your surges; choose after a long rest)</span></div>
+    <input id="cos-squire" value="{{ cur.squire }}" placeholder="Name your squire&hellip;" oninput="cosSquire(this.value)"
+           style="width:100%; max-width:320px; background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; color:#e8eef5; font-size:13px;">
+    {% endif %}
     {% if radiant_powers and build.ideals_sworn >= 1 %}
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin:.85rem 0 .4rem;">Surge Powers <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(tap to spend Investiture &amp; log)</span></div>
     <div class="cs-grid" style="grid-template-columns:1fr 1fr; gap:.5rem;">
@@ -475,7 +482,7 @@
   {# --- Abilities --- #}
   <div class="cs-2col">
     <div>
-      {% if strikes %}
+      {% if strikes or shardblade %}
       <div class="cs-section-h">Strikes</div>
       {% for s in strikes %}
       <div class="cs-ability{% if interactive %} roll{% endif %}"
@@ -483,6 +490,14 @@
         <div class="an">{{ s.name }}{% if interactive %} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if s.mod|default(0) >= 0 else '' }}{{ s.mod|default(0) }}</span>{% endif %}</div>
         <div class="ad">{{ s.damage }}{% if s.type %} <span class="cs-chip">{{ s.type }}</span>{% endif %}{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
       {% endfor %}
+      {% if shardblade %}
+      {# Summoned spren-Blade (3rd Ideal). Hidden until summoned via the Stormlight action. #}
+      <div id="cos-shardblade-strike" class="cs-ability{% if interactive %} roll{% endif %}"
+           style="display:{{ '' if cur.shardblade else 'none' }}; border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 55%, transparent);"
+           {% if interactive %}onclick="cosStrike({{ shardblade.name|tojson }}, {{ shardblade.mod }}, {{ shardblade.damage|tojson }}, {{ shardblade.type|tojson }})"{% endif %}>
+        <div class="an" style="color:var(--order-accent,var(--accent));">{{ shardblade.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if shardblade.mod >= 0 else '' }}{{ shardblade.mod }} &middot; deadly</span></div>
+        <div class="ad">{{ shardblade.damage }} <span class="cs-chip">{{ shardblade.type }}</span> <span class="cs-chip" title="Spirit damage bypasses physical Deflect">bypasses Deflect</span>{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
+      {% endif %}
       {% endif %}
       {% if traits %}
       <div class="cs-section-h">Traits</div>
@@ -580,7 +595,7 @@
     const PID = {{ actor_id|tojson }};
     const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
     const TIER = {{ tier|default(1) }};
-    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, squire:{{ cur.squire|tojson }}};
     let mods = {adv:false, dis:false, plot:false, vis:'group'};
 
     /* ── Condition automation (Stormlight Ch.3 "Advantages & Disadvantages",
@@ -802,6 +817,28 @@
       res('<span class="opp">'+name+'</span>'+(invCost?' (−'+invCost+' Investiture)':'')+' — '+(effect||'').slice(0,80));
       post('uses '+name, invCost?('−'+invCost+' Inv'):'surge', effect);
       paint(); if(invCost) flush();
+    };
+    // --- Ideal payoffs (RAW) ---
+    // Third Ideal: summon / dismiss your spren as a Shardblade (adds its Strike).
+    window.cosShardblade = function(){
+      cur.shardblade = !cur.shardblade;
+      const card=document.getElementById('cos-shardblade-strike'); if(card) card.style.display = cur.shardblade ? '' : 'none';
+      const btn=document.getElementById('btn-shardblade'); if(btn){ btn.textContent = cur.shardblade ? 'Dismiss Shardblade' : 'Summon Shardblade'; btn.classList.toggle('on', cur.shardblade); }
+      res('<span class="opp">'+(cur.shardblade?'Shardblade summoned':'Shardblade dismissed')+'</span>'+(cur.shardblade?' — 2d8 spirit, deadly (bypasses Deflect).':'.'));
+      post(cur.shardblade?'summons their Shardblade':'dismisses their Shardblade', cur.shardblade?'manifest':'dismissed', '');
+      pending.shardblade=cur.shardblade; flush();
+    };
+    // Take Squire: persist who they've taken under their wing.
+    let _sqT=null;
+    window.cosSquire = function(name){ cur.squire=String(name||''); pending.squire=cur.squire; clearTimeout(_sqT); _sqT=setTimeout(flush, 400); };
+    // Wound Regeneration: while Regenerating, spend 1 Investiture to clear an injury.
+    window.cosMendInjury = function(){
+      if(cur.injuries < 1){ res('No injuries to mend.'); return; }
+      if(cur.investiture < 1){ res('<span class="comp">Not enough Investiture</span> to Mend Injury.'); return; }
+      cur.investiture -= 1; cur.injuries -= 1;
+      res('<span class="opp">Wound Regeneration</span> — mended an injury. (−1 Investiture)');
+      post('Wound Regeneration', '−1 injury', '−1 Investiture; injuries now '+cur.injuries);
+      paint(); pending.investiture=cur.investiture; pending.injuries=cur.injuries; flush();
     };
 
     // Self-service rest (Stormlight Ch.9). The server applies the recovery and
