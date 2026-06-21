@@ -7844,7 +7844,8 @@ def _cosmere_builder_context(build, hb_store=None):
         paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
         path_talents=_cosmere_path_talents(),
         path_trees=systems.cosmere.talents.tree_graphs(),   # positioned DAG per path (visual tree)
-        radiant_orders=_rad.RADIANT_ORDERS, surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
+        radiant_orders=_rad.RADIANT_ORDERS, radiant_variants=_rad.RADIANT_VARIANTS,
+        surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
         radiant_ideals=_rad.ORDER_IDEALS, ideal_personal=list(_rad.IDEAL_PERSONAL),
         fourth_ideal_level=_rad.FOURTH_IDEAL_LEVEL,
         path_info=systems.cosmere.origins.PATH_INFO,
@@ -8187,6 +8188,7 @@ def cosmere_pc_sheet(pid):
                       'mod': (actor.skills.get('hwp') or {}).get('mod', 0)}
     has_take_squire = any(n.startswith('Take Squire') for n in _tnames)
     has_wound_regen = any(n == 'Wound Regeneration' for n in _tnames)
+    radiant_variant = systems.cosmere.radiant.variants(build.radiant_order).get(build.radiant_variant)  # {name,desc} or None
     # Per-character name crest + secondary accent (theming PR-B). In a Mistborn
     # campaign a chosen cosmetic "house metal" wins; otherwise the Radiant order
     # (the character's actual mechanic) drives the crest + its accent color.
@@ -8221,6 +8223,7 @@ def cosmere_pc_sheet(pid):
         surge_names=build.eff_surge_names(),          # canon + homebrew surge names
         singer_form=systems.cosmere.origins.singer_form(build.singer_form),
         shardblade=shardblade, has_take_squire=has_take_squire, has_wound_regen=has_wound_regen,
+        radiant_variant=radiant_variant,
     )
 
 

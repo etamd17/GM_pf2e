@@ -157,6 +157,7 @@ class CosmereBuild:
         # Radiant / Surgebinding (Ch.5): an order grants Investiture + Stormlight
         # actions; swearing its First Ideal unlocks its two surge skills.
         self.radiant_order = (d.get('radiant_order') or '').lower()
+        self.radiant_variant = (d.get('radiant_variant') or '').lower()   # order sub-path (canon/nale/enlightened)
         self.ideals_sworn = max(0, min(_radiant.IDEAL_COUNT, int(d.get('ideals_sworn', 0) or 0)))
         self.spren_name = d.get('spren_name', '')
         self.ideal_words = list(d.get('ideal_words') or [])
@@ -278,7 +279,10 @@ class CosmereBuild:
         return int(self.homebrew_bonuses.get(key, 0) or 0) + int(self._inf_add.get(key, 0) or 0)
 
     def order(self):
-        return _radiant.order(self.radiant_order) or _homebrew.radiant_order(self._homebrew, self.radiant_order)
+        # Variant-adjusted (e.g. Canon Dustbringers lose Division) so surge_codes()
+        # — and everything downstream — reflects the chosen sub-path.
+        return (_radiant.order_with_variant(self.radiant_order, self.radiant_variant)
+                or _homebrew.radiant_order(self._homebrew, self.radiant_order))
 
     def surge_codes(self) -> tuple:
         o = self.order()
@@ -432,6 +436,8 @@ class CosmereBuild:
                           + ', '.join(_radiant.surge_name(c) for c in sorted(stray_surge)) + '.')
         if self.radiant_order and self.radiant_order not in _radiant.RADIANT_ORDERS:
             issues.append("Unknown Radiant order.")
+        if self.radiant_variant and self.radiant_variant not in _radiant.variants(self.radiant_order):
+            issues.append("That order variant doesn't belong to this order.")
         if self.radiant_order and self.level < _radiant.RADIANT_MIN_LEVEL:
             issues.append("Becoming Radiant (a First Ideal) requires level %d+." % _radiant.RADIANT_MIN_LEVEL)
         if self.ideals_sworn >= 4 and self.level < _radiant.FOURTH_IDEAL_LEVEL:
@@ -528,7 +534,8 @@ class CosmereBuild:
             'attributes': dict(self.attributes), 'skills': dict(self.skills),
             'path_skill': self.path_skill, 'expertises': list(self.expertises),
             'talents': list(self.talents), 'is_radiant': self.is_radiant,
-            'radiant_order': self.radiant_order, 'ideals_sworn': self.ideals_sworn,
+            'radiant_order': self.radiant_order, 'radiant_variant': self.radiant_variant,
+            'ideals_sworn': self.ideals_sworn,
             'ideal_progress': self.ideal_progress,
             'spren_name': self.spren_name, 'ideal_words': list(self.ideal_words),
             'inventory': self.inventory.to_list(), 'epic_choices': list(self.epic_choices),

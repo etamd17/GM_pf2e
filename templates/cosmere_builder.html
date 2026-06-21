@@ -268,8 +268,11 @@
           <div style="min-width:210px;"><label>Radiant Order</label>
             <select id="f-order" onchange="onOrder()"><option value="">&mdash; Not Radiant &mdash;</option>
               {% for key, o in radiant_orders.items() %}<option value="{{ key }}" {{ 'selected' if build.radiant_order==key }}>{{ o.name }}</option>{% endfor %}</select></div>
+          <div id="variant-wrap" style="min-width:180px; display:none;"><label>Variant</label>
+            <select id="f-variant" onchange="onVariant()"><option value="">&mdash; standard &mdash;</option></select></div>
           <div style="flex:1;" id="order-info" class="muted"></div>
         </div>
+        <div id="variant-info" class="muted" style="margin-top:.3rem;"></div>
         <div id="radiant-detail" style="display:none; margin-top:.7rem;">
           <div class="row">
             <div style="min-width:210px;"><label>Spren name (optional)</label><input id="f-spren" value="{{ build.spren_name }}"></div>
@@ -413,6 +416,15 @@ const PATH_TALENTS = {{ path_talents|tojson }};
 const PATH_TREES = {{ path_trees|tojson }};
 const RADIANT_TREES = {{ radiant_trees|tojson }};
 const ORDERS = {{ radiant_orders|tojson }};
+const RADIANT_VARIANTS = {{ radiant_variants|tojson }};
+function _variantInfo(){ const vk=(document.getElementById('f-variant')||{}).value||''; return (RADIANT_VARIANTS[v('f-order')]||{})[vk]; }
+function effSurges(){ const o=ORDERS[v('f-order')]; if(!o) return []; const vi=_variantInfo(), drop=(vi&&vi.drop_surges)||[]; return (o.surges||[]).filter(s=>drop.indexOf(s)<0); }
+function _grantedExtraTree(){ const vi=_variantInfo(); return (vi&&vi.extra_tree)||''; }
+function _variantOnlyTrees(){ return Object.values(RADIANT_VARIANTS[v('f-order')]||{}).map(x=>x.extra_tree).filter(Boolean); }
+// Order/bond trees, minus any variant-only tree (e.g. Enlightened Talents) the chosen variant doesn't grant.
+function _orderTrees(){ const ord=v('f-order'), granted=_grantedExtraTree(), only=_variantOnlyTrees();
+  return (RADIANT_TREES[ord.replace(/s$/,'')]||[]).filter(t=> only.indexOf(t.name)<0 || t.name===granted ); }
+function onVariant(){ _paintVariantInfo(); _paintOrderSurfaces(); updateSurges(); renderRadiantTree(); recompute(); }
 const SURGE_INFO = {{ surges|tojson }};
 const FIRST_IDEAL = {{ first_ideal|tojson }};
 const PATH_INFO = {{ path_info|tojson }};
@@ -425,7 +437,8 @@ const RADIANT_ORDER_TALENTS = {{ radiant_order_talents|tojson }};
 const RADIANT_SURGE_POWERS = {{ radiant_surge_powers|tojson }};
 const HOMEBREW = {{ homebrew|tojson }};
 const BUILD_SEL = {ancestry: {{ build.ancestry|tojson }}, culture: {{ build.culture|tojson }},
-                   path: {{ build.path|tojson }}, order: {{ build.radiant_order|tojson }}};
+                   path: {{ build.path|tojson }}, order: {{ build.radiant_order|tojson }},
+                   variant: {{ build.radiant_variant|tojson }}};
 const ITEM_INDEX = {}; {% for it in catalog %}ITEM_INDEX[{{ it.id|tojson }}] = {{ it|tojson }};{% endfor %}
 let TALENTS = {{ build.talents|tojson }};
 let INV = {{ build.inventory|tojson }};
@@ -509,19 +522,31 @@ function prereqLabel(p){
   if(p.text) return ' — '+p.text;
   return '';
 }
-function onOrder(){
-  const k=v('f-order'), o=ORDERS[k];
-  document.getElementById('radiant-detail').style.display=o?'block':'none';
+function _paintVariantInfo(){ const vi=_variantInfo(), box=document.getElementById('variant-info');
+  if(box) box.innerHTML = vi ? `<span class="info-line"><b>${vi.name}:</b> ${vi.desc}</span>` : ''; }
+function _paintOrderSurfaces(){
+  const k=v('f-order'), o=ORDERS[k], surges=effSurges();
   const info=document.getElementById('order-info');
-  info.innerHTML = o ? `<b style="color:var(--accent)">${o.spren}</b> &middot; Surges: <b>${o.surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
-  const sel=document.getElementById('radiant-talent-pick');
+  if(info) info.innerHTML = o ? `<b style="color:var(--accent)">${(_variantInfo()||o).spren||o.spren}</b> &middot; Surges: <b>${surges.map(s=>SURGE_INFO[s].name).join(' + ')}</b><br>${o.philosophy}` : '';
+  const sel=document.getElementById('radiant-talent-pick'); if(!sel) return;
   if(o){
     let list=(RADIANT_ORDER_TALENTS[k]||[]).map(t=>({name:t.name,prereq:t.prereq,effect:t.effect,group:'Bond',homebrew:t.homebrew}));
-    o.surges.forEach(s=>(RADIANT_SURGE_TALENTS[s]||[]).forEach(t=>list.push({name:t.name,prereq:t.prereq,effect:t.effect,group:(SURGE_INFO[s]||{}).name||s,homebrew:t.homebrew})));
+    surges.forEach(s=>(RADIANT_SURGE_TALENTS[s]||[]).forEach(t=>list.push({name:t.name,prereq:t.prereq,effect:t.effect,group:(SURGE_INFO[s]||{}).name||s,homebrew:t.homebrew})));
     const esc=s=>(s||'').replace(/"/g,'&quot;');
     sel.innerHTML='<option value="">— select a Radiant talent —</option>'+list.map((t,i)=>`<option value="${i}" title="${esc(t.effect)}">[${t.group}] ${t.name}${prereqLabel(t.prereq)}${t.homebrew?' · HB':''}</option>`).join('');
     sel._list=list;
   } else { sel.innerHTML='<option value="">— choose an order —</option>'; sel._list=[]; }
+}
+function onOrder(){
+  const k=v('f-order'), o=ORDERS[k];
+  document.getElementById('radiant-detail').style.display=o?'block':'none';
+  // Populate the variant dropdown for this order (keep the current variant only if valid here).
+  const vwrap=document.getElementById('variant-wrap'), vsel=document.getElementById('f-variant');
+  const vars=RADIANT_VARIANTS[k]||{}, vkeys=Object.keys(vars);
+  if(vsel){ const keep=vars[vsel.value]?vsel.value:'';
+    vsel.innerHTML='<option value="">&mdash; standard &mdash;</option>'+vkeys.map(vk=>`<option value="${vk}">${vars[vk].name}</option>`).join(''); vsel.value=keep; }
+  if(vwrap) vwrap.style.display = vkeys.length ? 'block' : 'none';
+  _paintVariantInfo(); _paintOrderSurfaces();
   onIdeals();
 }
 function addRadiantTalent(){
@@ -578,18 +603,19 @@ function renderIdeals(){
 function onIdeals(){ renderIdeals(); updateSurges(); recompute(); }
 function updateSurges(){
   const o=ORDERS[v('f-order')], sworn=(+v('f-ideals')||0)>=1, show=!!(o&&sworn);
+  const surges=effSurges();   // variant-adjusted (Canon Dustbringers drop Division)
   const cont=document.getElementById('surge-skills');
   cont.style.display = show?'grid':'none';
   document.querySelectorAll('#surge-skills .card').forEach(card=>{
     const inp=card.querySelector('.skill-rank'), code=inp.dataset.code;
-    const on=show && o.surges.includes(code);
+    const on=show && surges.includes(code);
     card.style.display = on?'flex':'none';
     if(on && (+inp.value||0)<1) inp.value=1;
   });
   const pwrap=document.getElementById('surge-powers'), plist=document.getElementById('surge-powers-list');
   if(pwrap){
     pwrap.style.display = show?'block':'none';
-    if(show) plist.innerHTML = o.surges.map(s=>{
+    if(show) plist.innerHTML = surges.map(s=>{
       const p=RADIANT_SURGE_POWERS[s]; if(!p) return '';
       const meta=[p.cost!=null?`${p.cost} action${p.cost>1?'s':''}`:'', p.investiture!=null?`${p.investiture} Investiture`:''].filter(Boolean).join(' · ');
       return `<div class="card"><div class="nm">${p.name}${meta?` <small>${meta}</small>`:''}</div><div class="muted" style="font-size:12px; margin-top:.25rem;">${p.effect||''}</div></div>`;
@@ -670,8 +696,8 @@ function _nodeReqStatus(n,taken){
 function _currentTrees(which){
   if(which==='path') return (PATH_TREES[v('f-path')]||[]);
   const ord=v('f-order'), o=ORDERS[ord]; if(!o) return [];
-  let trees=(RADIANT_TREES[ord.replace(/s$/,'')]||[]).slice();
-  (o.surges||[]).forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));
+  let trees=_orderTrees().slice();
+  effSurges().forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));
   return trees;
 }
 function _findNode(which,iid){ let f=null; _currentTrees(which).forEach(tr=>tr.nodes.forEach(n=>{ if(n.iid===iid) f=n; })); return f; }
@@ -752,8 +778,8 @@ function renderRadiantTree(){
   const box=document.getElementById('radiant-tree'); if(!box) return;
   const ord=v('f-order'), o=ORDERS[ord], tools=document.getElementById('radiant-tree-tools');
   if(!o){ box.innerHTML=''; if(tools) tools.style.display='none'; _selRadiant=null; renderTreeDetail('radiant'); return; }
-  let trees=(RADIANT_TREES[ord.replace(/s$/,'')]||[]).slice();   // windrunners -> windrunner
-  (o.surges||[]).forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));
+  let trees=_orderTrees().slice();   // bond trees (minus ungranted variant trees)
+  effSurges().forEach(sc=>(RADIANT_TREES[sc]||[]).forEach(t=>trees.push(t)));   // variant-adjusted surges
   if(tools) tools.style.display=trees.length?'flex':'none';
   const onlyAvail=!!(document.getElementById('radiant-only-avail')||{}).checked, taken=_treeTaken();
   box.innerHTML=trees.length ? trees.map(tr=>_renderTreeBlock(tr, taken, tr.name, onlyAvail)).join('') : '';
@@ -929,7 +955,7 @@ function collect(){
   return {
     name:v('f-name')||'New Hero', level:lvl(), ancestry:v('f-ancestry'), culture:v('f-culture'),
     path:v('f-path'), singer_form:v('f-singer-form'),
-    radiant_order:v('f-order'), ideals_sworn:+v('f-ideals')||0, ideal_progress:+v('f-ideal-progress')||0, ideal_words:IDEAL_WORDS, spren_name:v('f-spren'),
+    radiant_order:v('f-order'), radiant_variant:(document.getElementById('f-variant')||{}).value||'', ideals_sworn:+v('f-ideals')||0, ideal_progress:+v('f-ideal-progress')||0, ideal_words:IDEAL_WORDS, spren_name:v('f-spren'),
     attributes:attrs, skills, talents:TALENTS, inventory:INV, infected_arts:INFECTED,
     expertises:v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean),
     purpose:v('f-purpose'), obstacle:v('f-obstacle'), goals:v('f-goals'), appearance:v('f-appearance'), connections:v('f-connections'),
@@ -988,7 +1014,9 @@ function mergeHomebrew(){
 // init
 buildRail();
 mergeHomebrew();
-onPath(); onAncestry(); paintCultureInfo(); onOrder(); renderTalents(); renderInv(); renderInfected(); recompute();
+onPath(); onAncestry(); paintCultureInfo(); onOrder();
+(function(){ const vs=document.getElementById('f-variant'); if(vs && BUILD_SEL.variant && [...vs.options].some(o=>o.value===BUILD_SEL.variant)){ vs.value=BUILD_SEL.variant; onVariant(); } })();
+renderTalents(); renderInv(); renderInfected(); recompute();
 goStep(0);
 </script>
 {% endblock %}
