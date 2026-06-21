@@ -215,6 +215,21 @@
     .orb.low .orb-fill { animation:none; }
     .cs-result.flare-opp, #cs-toast.flare-opp, .cs-result.flare-comp, #cs-toast.flare-comp { animation:none; }
   }
+  /* Ambient highstorm: a faint, slow-breathing light leaking in from the right
+     edge (the world's storm just out of frame). Very restrained; off when the
+     content is narrow enough to overlap, and under reduced-motion. */
+  body.system-cosmere::after {
+    content:''; position:fixed; top:0; right:0; bottom:0; width:140px; pointer-events:none; z-index:0;
+    background:linear-gradient(270deg, rgba(95,168,224,.5), transparent);
+    background:linear-gradient(270deg, color-mix(in srgb, var(--accent) 55%, transparent), transparent);
+    opacity:.05; animation:highstorm 11s ease-in-out infinite; }
+  @keyframes highstorm { 0%,100%{ opacity:.03; } 50%{ opacity:.085; } }
+  @media (max-width:900px){ body.system-cosmere::after { display:none; } }   /* don't wash narrow screens */
+  @media (prefers-reduced-motion: reduce){ body.system-cosmere::after { animation:none; opacity:.05; } }
+  /* Collapsible reference sections (combat-first: fold away the non-combat stuff). */
+  .cs-section-h.cs-foldable { cursor:pointer; user-select:none; }
+  .cs-fold-chev { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-on-dark-3); flex:0 0 auto; margin-left:.2rem; }
+  .cs-fold-body.collapsed { display:none; }
 {% endblock %}
 
 {% block content %}
@@ -517,18 +532,18 @@
   </div>
 
   {% if pc %}
-  <div class="cs-section-h">Expertises</div>
+  <div class="cs-section-h cs-foldable">Expertises</div>
   <div class="cs-chips">
     {% for e in build.expertises %}<span class="cs-chip">{{ e }}</span>{% else %}<span style="color:var(--text-on-dark-3); font-size:12px;">None</span>{% endfor %}
   </div>
 
-  <div class="cs-section-h">Talents</div>
+  <div class="cs-section-h cs-foldable">Talents</div>
   {% if build.talents %}
   <div class="cs-chips">{% for t in build.talents %}<span class="cs-chip df">{{ t.name if t.name is defined else t }}</span>{% endfor %}</div>
   {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">None selected</div>{% endif %}
 
   {% if infected %}
-  <div class="cs-section-h">Infected Arts</div>
+  <div class="cs-section-h cs-foldable">Infected Arts</div>
   {% for art in infected %}
   <div class="cs-ability" style="border-color:rgba(205,81,191,.5);">
     <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
@@ -541,7 +556,7 @@
   {% endif %}
 
   {% if pc %}
-  <div class="cs-section-h">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
+  <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
   <div id="cos-wallet">
     {% set w = wallet or {} %}
     {% set sp = w.spheres or {} %}
@@ -558,7 +573,7 @@
   </div>
   {% endif %}
 
-  <div class="cs-section-h">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
+  <div class="cs-section-h cs-foldable">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
   {% if inventory %}
   <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
     {% for it in inventory %}
@@ -573,7 +588,7 @@
   </div>
   {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
 
-  <div class="cs-section-h">Session Notes</div>
+  <div class="cs-section-h cs-foldable">Session Notes</div>
   <textarea id="pc-notes" placeholder="Jot down anything during the session — saves automatically."
             style="width:100%; min-height:140px; background:var(--bg-sunken,#131922); color:#e8eef5; border:1px solid var(--border-card); border-radius:9px; padding:.75rem; font-size:13px; line-height:1.6; resize:vertical;">{{ build.notes }}</textarea>
   <div id="pc-notes-status" style="font-size:11px; color:var(--text-on-dark-3); margin-top:.25rem;">Saved</div>
@@ -586,6 +601,28 @@
         .then(r=>r.json()).then(()=>{ last=a.value; s.textContent='Saved'; }).catch(()=>s.textContent='Save failed'); }
     a.addEventListener('input',()=>{ s.textContent='Editing…'; clearTimeout(t); t=setTimeout(save,800); });
     window.addEventListener('beforeunload',()=>{ if(a.value!==last && navigator.sendBeacon) navigator.sendBeacon('/cosmere/pc/{{ actor_id }}/notes', new Blob([JSON.stringify({text:a.value})],{type:'application/json'})); });
+  })();
+  </script>
+
+  {# Collapsible reference sections (combat-first): fold the non-combat sections
+     away; the choice persists per character in localStorage. #}
+  <script>
+  (function(){
+    var PID = {{ actor_id|tojson }};
+    document.querySelectorAll('.cs-section-h.cs-foldable').forEach(function(h){
+      var body=document.createElement('div'); body.className='cs-fold-body';
+      var n=h.nextElementSibling;
+      while(n && !(n.classList && n.classList.contains('cs-section-h')) && n.tagName!=='SCRIPT'){ var nx=n.nextElementSibling; body.appendChild(n); n=nx; }
+      h.after(body);
+      var chev=document.createElement('span'); chev.className='cs-fold-chev'; chev.setAttribute('aria-hidden','true'); h.appendChild(chev);
+      var key='cosfold:'+PID+':'+h.textContent.trim().slice(0,24);
+      function apply(f){ body.classList.toggle('collapsed',f); chev.textContent=f?'▸':'▾'; h.setAttribute('aria-expanded', f?'false':'true'); }
+      var folded=false; try{ folded=localStorage.getItem(key)==='1'; }catch(e){}
+      apply(folded);
+      h.setAttribute('role','button'); h.setAttribute('tabindex','0');
+      h.addEventListener('click',function(){ folded=!folded; apply(folded); try{ localStorage.setItem(key, folded?'1':'0'); }catch(e){} });
+      h.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } });
+    });
   })();
   </script>
 
