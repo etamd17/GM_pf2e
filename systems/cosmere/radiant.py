@@ -127,5 +127,52 @@ def order(key):
     return RADIANT_ORDERS.get((key or '').lower())
 
 
+# Order VARIANTS (Stormlight Canon sub-paths). Each variant tweaks the base order:
+#   drop_surges  — surge codes the variant LOSES (Canon Dustbringers forgo Division)
+#   extra_tree   — an extra talent tree the variant GAINS (Enlightened Truthwatchers)
+#   spren        — the variant's spren type (flavor)
+# The First Ideal Words are unchanged (variants are philosophy, not new oaths).
+RADIANT_VARIANTS = {
+    'dustbringers': {
+        'canon': {'name': 'Canon', 'spren': 'Ashspren',
+                  'desc': 'Canonical Dustbringers (Releasers) wield only Abrasion — they forgo Division.',
+                  'drop_surges': ['dvs']},
+    },
+    'skybreakers': {
+        'nale': {'name': "Nale's", 'spren': 'Highspren',
+                 'desc': "Nale's strict legalists — same surges, a sterner reading of the law.",
+                 'drop_surges': []},
+    },
+    'truthwatchers': {
+        'enlightened': {'name': 'Enlightened', 'spren': 'Mistspren',
+                        'desc': 'The Enlightened gain precognitive talents (the Enlightened Talents tree).',
+                        'drop_surges': [], 'extra_tree': 'Enlightened Talents'},
+    },
+}
+
+
+def variants(order_key):
+    """{variant_key: {name, desc, ...}} for an order (empty if it has none)."""
+    return RADIANT_VARIANTS.get((order_key or '').lower(), {})
+
+
+def order_with_variant(order_key, variant_key):
+    """The order dict adjusted for a chosen variant: surges minus the variant's
+    drop_surges, plus a `variant` marker. Returns the canon order unchanged when
+    there is no (valid) variant."""
+    base = order(order_key)
+    if not base:
+        return base
+    v = variants(order_key).get((variant_key or '').lower())
+    if not v:
+        return base
+    o = dict(base)
+    drop = set(v.get('drop_surges') or [])
+    if drop:
+        o['surges'] = [s for s in base['surges'] if s not in drop]
+    o['variant'] = variant_key
+    return o
+
+
 def surge_name(code) -> str:
     return SURGES.get(code, {}).get('name', code)

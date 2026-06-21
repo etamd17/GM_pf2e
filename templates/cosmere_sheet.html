@@ -413,7 +413,7 @@
 
   {# --- Radiant (Surgebinding) --- #}
   {% if pc and radiant %}
-  <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}</div>
+  <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}{% if radiant_variant %} <span style="text-transform:none; letter-spacing:0; color:var(--order-accent,var(--accent)); font-size:12px;">&middot; {{ radiant_variant.name }}</span>{% endif %}</div>
   <div class="cs-rad-plate">
     <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
       <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--order-accent,var(--accent));">{{ build.spren_name or radiant.spren }}</b></div>
