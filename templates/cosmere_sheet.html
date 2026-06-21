@@ -236,6 +236,36 @@
   .cs-section-h.cs-foldable { cursor:pointer; user-select:none; }
   .cs-fold-chev { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-on-dark-3); flex:0 0 auto; margin-left:.2rem; }
   .cs-fold-body.collapsed { display:none; }
+
+  /* ===== Print / PDF: a clean light paper sheet (hide all chrome, ink on white) ===== */
+  @media print {
+    @page { margin: 1.2cm; }
+    /* page chrome + interactivity off */
+    nav, #player-nav, .player-nav, .cs-vbar, .cs-rolltools, .cs-amt, .cs-rad-btn, .cs-rest,
+    .cs-inj, .stepper, #cs-toast, .cs-fold-chev, .cs-head-links, #cos-combat,
+    .cos-forsaken-banner, .no-print, #dice-widget, #audio-widget, #chat-widget,
+    #journal-widget, [data-no-print] { display: none !important; }
+    html, body { background: #fff !important; }
+    body.system-cosmere::after, body.system-cosmere::before { display: none !important; }
+    /* expand any folded reference sections so the printout is complete */
+    .cs-fold-body.collapsed { display: block !important; }
+    /* ink on white — override the dark theme */
+    body, body.system-cosmere, .cs-wrap { background: #fff !important; color: #111 !important; }
+    .cs-card, .cs-facet, .cs-rad-plate, .cs-ability, .cs-skill, .cs-chip, .cs-derived,
+    .orb, #pc-notes, .cs-cond, .cs-tag {
+      background: #fff !important; color: #111 !important; border-color: #999 !important; box-shadow: none !important; filter: none !important; }
+    .cs-name, .cs-section-h, .orb-num, .orb-max, .orb-l, .cs-card .v, .cs-card .l, .cs-facet .n,
+    .cs-facet .l, .cs-skill .mod, .cs-ability .an, .cs-section-h > span {
+      color: #111 !important; text-shadow: none !important; -webkit-text-fill-color: #111 !important; }
+    .cs-section-h::before { background: #111 !important; box-shadow: none !important; }
+    .cs-section-h::after, .cs-head::after { background: #ccc !important; }
+    /* spheres -> plain ringed circles with the value (gradients/arcs don't print well) */
+    .orb { border: 1.5px solid #333 !important; }
+    .orb-fill, .orb-spec, .orb-arc { display: none !important; }
+    /* keep sections + cards from splitting across pages */
+    .cs-section-h, .orb-w, .cs-ability, .cs-card, .cs-facet, .cs-rad-plate { break-inside: avoid; }
+    a { color: #111 !important; text-decoration: none !important; }
+  }
 {% endblock %}
 
 {% block content %}
@@ -268,9 +298,10 @@
       </div>
       </div>
     </div>
-    <div style="display:flex; gap:.6rem; align-items:center;">
+    <div class="cs-head-links" style="display:flex; gap:.6rem; align-items:center;">
       {% if pc %}
         <a class="cs-back" href="{{ edit_url }}" style="color:var(--accent);">Edit / Level Up</a>
+        <button type="button" class="cs-back" style="background:none; cursor:pointer;" onclick="window.print()" title="Print or save this sheet as a PDF">Print</button>
         <a class="cs-back" href="/cosmere/pcs">&larr; Characters</a>
         {% if can_delete %}
         <form method="POST" action="/cosmere/pc/{{ actor_id }}/delete" style="margin:0;"
