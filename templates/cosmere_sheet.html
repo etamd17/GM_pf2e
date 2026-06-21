@@ -85,6 +85,27 @@
   .cs-fab-btn { width:22px; height:22px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; line-height:1;
     background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; margin:0 .15rem; vertical-align:middle; }
   .cs-fab-btn:hover { border-color:var(--order-accent,var(--accent)); }
+  /* Fabrial Workshop (Inventing Unique Fabrials, Ch.7) */
+  .cs-workshop { margin-top:.7rem; border:1px solid var(--border-card); border-radius:10px; background:var(--bg-sunken,#131922); }
+  .cs-workshop > summary { cursor:pointer; padding:.6rem .8rem; font-family:var(--font-display,serif); font-size:14px; color:var(--order-accent,var(--accent)); list-style:none; }
+  .cs-workshop > summary::-webkit-details-marker { display:none; }
+  .cs-workshop > summary::before { content:'\25B8'; margin-right:.5rem; color:var(--text-on-dark-3); font-size:11px; }
+  .cs-workshop[open] > summary::before { content:'\25BE'; }
+  .ws-inner { padding:0 .8rem .8rem; }
+  .ws-l { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); display:block; margin:.5rem 0 .3rem; }
+  .ws-body { margin-top:.4rem; font-size:12.5px; color:var(--text-on-dark-2); }
+  .ws-info { background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:8px; padding:.5rem .65rem; margin-bottom:.5rem; line-height:1.5; }
+  .ws-info b { color:var(--text-on-dark); }
+  .ws-step { margin:.5rem 0; }
+  .ws-result { font-size:13px; margin:.35rem 0; } .ws-result.ok { color:#34d399; } .ws-result.no { color:#f0a9a9; }
+  .ws-pick { display:block; font-size:12px; margin:.18rem 0; color:var(--text-on-dark-2); }
+  .ws-pick input { width:auto; margin-right:.4rem; vertical-align:-1px; }
+  .cs-workshop select { width:100%; max-width:340px; background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; color:#e8eef5; font-size:13px; }
+  .ws-btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--accent); border-radius:8px; padding:.4rem .85rem; font-size:12.5px; cursor:pointer; margin-top:.3rem; }
+  .ws-btn:hover { background:rgba(95,168,224,.26); }
+  .ws-btn.primary { background:var(--order-accent,var(--accent)); color:#06242b; font-weight:700; border-color:var(--order-accent,var(--accent)); }
+  .cs-crafted { border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 45%, transparent) !important; }
+  .cs-crafted .ud { font-size:11px; margin-top:.25rem; } .cs-crafted .up { color:#7fd6a8; } .cs-crafted .dn { color:#f0a9a9; }
   .cs-skill.roll { cursor:pointer; transition:border-color .12s, background .12s; }
   .cs-skill.roll:hover { border-color:var(--accent); background:rgba(95,168,224,.08); }
   .cs-skill.roll:active { transform:translateY(1px); }
@@ -620,7 +641,7 @@
   </div>
   {% endif %}
 
-  {% if fabrials %}
+  {% if fabrials or crafted or interactive %}
   <div class="cs-section-h cs-foldable">Fabrials <span style="text-transform:none; letter-spacing:0;">(tap &minus;/+ to spend &amp; recharge)</span></div>
   {% for f in fabrials %}
   <div class="cs-ability" style="margin-bottom:.5rem;">
@@ -633,6 +654,21 @@
     <div class="ad">{{ f.effect }}</div>
   </div>
   {% endfor %}
+  {# Workshop-crafted unique fabrials (with their chosen upgrades/drawbacks) — JS-rendered so the workshop can update them live. #}
+  <div id="cos-crafted-list"></div>
+  {% if interactive %}
+  <details class="cs-workshop" id="cos-workshop">
+    <summary>Fabrial Workshop <span class="muted" style="text-transform:none;">&mdash; invent a unique fabrial (Ch.7)</span></summary>
+    <div class="ws-inner">
+      <label class="ws-l">Choose an effect</label>
+      <select id="ws-effect" onchange="wsPick()">
+        <option value="">&mdash; choose an effect &mdash;</option>
+        {% for e in crafting.effects %}<option value="{{ e.key }}">Tier {{ e.tier }} &middot; {{ e.name }} ({{ e.charges }} charges)</option>{% endfor %}
+      </select>
+      <div id="ws-body" class="ws-body"></div>
+    </div>
+  </details>
+  {% endif %}
   {% endif %}
 
   <div class="cs-section-h cs-foldable">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
@@ -963,6 +999,70 @@
       const el = document.querySelector('[data-fab-cur="' + id + '"]'); if(el) el.textContent = _fabCur[id];
       pending.fabrials = Object.assign({}, _fabCur); flush();
     };
+    // ── Fabrial Workshop (Ch.7: Inventing Unique Fabrials) ──
+    const CRAFT = {{ crafting|tojson }};
+    let CRAFTED = ({{ crafted|tojson }} || []).slice();
+    function _esc2(s){ const d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
+    function _craftBand(total){ for(const b of (CRAFT.bands||[])){ if(total>=b[0]) return {label:b[1], up:b[2], dn:b[3], failed:b[4]}; } return {label:'Utter Failure', up:0, dn:0, failed:true}; }
+    function _persistCrafted(){ pending.crafted_fabrials = CRAFTED.map(c=>({key:c.key,name:c.name,tier:c.tier,charges:c.charges,current:c.current,effect:c.effect,upgrades:c.upgrades,drawbacks:c.drawbacks})); flush(); }
+    function renderCrafted(){
+      const box=document.getElementById('cos-crafted-list'); if(!box) return;
+      box.innerHTML = CRAFTED.map((c,i)=>{
+        const ud=(c.upgrades||[]).map(u=>`<div class="ud up">&#9650; ${_esc2(u)}</div>`).join('')+(c.drawbacks||[]).map(x=>`<div class="ud dn">&#9660; ${_esc2(x)}</div>`).join('');
+        return `<div class="cs-ability cs-crafted" style="margin-bottom:.5rem;"><div class="an">${_esc2(c.name)} <span class="cs-chip">Tier ${c.tier}</span> <span class="cs-chip">crafted</span>`
+          +`<span style="float:right; font-size:12px; white-space:nowrap;"><button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},-1)" aria-label="Spend">&minus;</button>`
+          +`<b style="font-family:'JetBrains Mono',monospace; color:var(--order-accent,var(--accent));">${c.current}</b><span style="color:var(--text-on-dark-3);">/${c.charges}</span>`
+          +`<button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},1)" aria-label="Recharge">+</button>`
+          +`<span class="x" style="cursor:pointer; color:#f87171; margin-left:.45rem; font-weight:700;" onclick="cosCraftedRemove(${i})" title="Discard">&times;</span></span></div>`
+          +`<div class="ad">${_esc2(c.effect)}${ud}</div></div>`;
+      }).join('');
+    }
+    window.cosCrafted = function(i,delta){ const c=CRAFTED[i]; if(!c) return; c.current=Math.max(0,Math.min(c.charges,(c.current||0)+delta)); renderCrafted(); _persistCrafted(); };
+    window.cosCraftedRemove = function(i){ if(!CRAFTED[i]) return; CRAFTED.splice(i,1); renderCrafted(); _persistCrafted(); };
+    let _ws = {effect:null, trapped:false, result:null, trapResult:null};
+    function wsRender(){
+      const body=document.getElementById('ws-body'); if(!body) return;
+      const e=_ws.effect; if(!e){ body.innerHTML=''; return; }
+      const cost=CRAFT.tier_cost[e.tier], dc=CRAFT.trap_dc[e.tier];
+      let h=`<div class="ws-info"><b>${_esc2(e.name)}</b> &middot; Tier ${e.tier} &middot; ${e.charges} charges<br>${_esc2(e.effect)}<br><span class="muted">Materials <b>${cost} mk</b> + a Tier-${e.tier}+ gem &middot; trap-spren <b>Lore DC ${dc}</b></span></div>`;
+      if(!_ws.trapped){
+        h+=`<div class="ws-step"><button class="ws-btn" onclick="wsTrap()">Trap the spren (Lore vs DC ${dc})</button></div>`;
+        if(_ws.trapResult) h+=`<div class="ws-result ${_ws.trapResult.ok?'ok':'no'}">${_esc2(_ws.trapResult.text)}</div>`;
+      } else {
+        h+=`<div class="ws-result ok">&#10003; Spren trapped.</div>`;
+        if(!_ws.result){
+          h+=`<div class="ws-step"><button class="ws-btn" onclick="wsCraft()">Make the Crafting test (raise the stakes)</button></div>`;
+        } else {
+          const r=_ws.result;
+          h+=`<div class="ws-result ${r.failed?'no':'ok'}">Crafting test <b>${r.total}</b> &mdash; ${_esc2(r.label)} (${r.up} upgrade${r.up==1?'':'s'}, ${r.dn} drawback${r.dn==1?'':'s'})</div>`;
+          if(r.failed){ h+=`<div class="ws-step"><button class="ws-btn" onclick="wsReset()">Start over</button></div>`; }
+          else {
+            const ups=[e.upgrade].concat(CRAFT.general_up||[]), dns=[e.drawback].concat(CRAFT.general_dn||[]);
+            if(r.up>0){ h+=`<label class="ws-l">Choose ${r.up} upgrade${r.up==1?'':'s'}</label>`+ups.map(u=>`<label class="ws-pick"><input type="checkbox" class="ws-up" value="${_esc2(u)}"> ${_esc2(u)}</label>`).join(''); }
+            if(r.up>=2){ h+=`<div class="muted" style="margin:.3rem 0 .1rem;">&hellip;or spend 2 upgrades on one Advanced Feature:</div>`+(CRAFT.advanced||[]).map(a=>`<label class="ws-pick"><input type="checkbox" class="ws-adv" value="${_esc2(a)}"> ${_esc2(a)}</label>`).join(''); }
+            if(r.dn>0){ h+=`<label class="ws-l">Choose ${r.dn} drawback${r.dn==1?'':'s'}</label>`+dns.map(x=>`<label class="ws-pick"><input type="checkbox" class="ws-dn" value="${_esc2(x)}"> ${_esc2(x)}</label>`).join(''); }
+            h+=`<div class="ws-step"><button class="ws-btn primary" onclick="wsForge()">Forge fabrial</button> <button class="ws-btn" onclick="wsReset()">Reset</button></div>`;
+          }
+        }
+      }
+      body.innerHTML=h;
+    }
+    window.wsPick = function(){ const key=document.getElementById('ws-effect').value; _ws={effect:(CRAFT.effects||[]).find(e=>e.key===key)||null, trapped:false, result:null, trapResult:null}; wsRender(); };
+    window.wsTrap = function(){ const e=_ws.effect; if(!e) return; const dc=CRAFT.trap_dc[e.tier], roll=rollD20(), total=roll.v+CRAFT.lore_mod, ok=total>=dc;
+      _ws.trapResult={ok, text:`Lore ${roll.note} +${CRAFT.lore_mod} = ${total} vs DC ${dc} — ${ok?'success!':'failed; try again another day.'}`}; if(ok) _ws.trapped=true;
+      res((ok?'<span class="opp">Spren trapped</span>':'<span class="comp">Spren slips away</span>')+` — Lore ${total} vs DC ${dc}`);
+      post('traps a spren for '+e.name, total+' vs DC'+dc, roll.note+' +'+CRAFT.lore_mod); wsRender(); };
+    window.wsCraft = function(){ const e=_ws.effect; if(!e) return; const roll=rollD20(), pd=plot(), total=roll.v+CRAFT.crafting_mod+pd.b, band=_craftBand(total);
+      _ws.result={total, label:band.label, up:band.up, dn:band.dn, failed:band.failed};
+      res(`<span class="opp">Crafting ${_esc2(e.name)}</span> — ${total} (${_esc2(band.label)})`);
+      post('crafts '+e.name, total+' '+band.label, roll.note+' +'+CRAFT.crafting_mod+(pd.l?' · '+pd.l:'')); wsRender(); };
+    window.wsForge = function(){ const e=_ws.effect, r=_ws.result; if(!e||!r||r.failed) return;
+      const allUp=[...document.querySelectorAll('.ws-up:checked'),...document.querySelectorAll('.ws-adv:checked')].map(x=>x.value);
+      const dns=[...document.querySelectorAll('.ws-dn:checked')].map(x=>x.value);
+      let charges=e.charges; allUp.forEach(u=>{ if(/Higher Capacity/.test(u)) charges+=1; if(/Expanded Capacity/.test(u)) charges+=3; }); dns.forEach(x=>{ if(/Lower Capacity/.test(x)) charges=Math.max(1,charges-1); });
+      CRAFTED.push({key:e.key, name:e.name, tier:e.tier, charges, current:charges, effect:e.effect, upgrades:allUp, drawbacks:dns});
+      renderCrafted(); _persistCrafted(); res('<span class="opp">'+_esc2(e.name)+' forged!</span>'); wsReset(); };
+    window.wsReset = function(){ _ws={effect:null, trapped:false, result:null, trapResult:null}; const s=document.getElementById('ws-effect'); if(s) s.value=''; wsRender(); };
     // Take Squire: persist who they've taken under their wing.
     let _sqT=null;
     window.cosSquire = function(name){ cur.squire=String(name||''); pending.squire=cur.squire; clearTimeout(_sqT); _sqT=setTimeout(flush, 400); };
@@ -1114,6 +1214,7 @@
     paint();          // sync spheres (fill/arc/dun/low) + sticky vitals on load
     paintEnhance();
     paintCondFx();
+    if(typeof renderCrafted==='function') renderCrafted();   // workshop-crafted fabrials
   })();
   </script>
   {% endif %}
