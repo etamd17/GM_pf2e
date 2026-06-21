@@ -8170,6 +8170,7 @@ def cosmere_pc_sheet(pid):
         'conditions': ps.get('conditions') if isinstance(ps.get('conditions'), dict) else {},
         'shardblade': bool(ps.get('shardblade')),      # spren summoned as a Shardblade (3rd Ideal)
         'squire': str(ps.get('squire') or ''),         # Take Squire: who they've taken under their wing
+        'forsaken': bool(ps.get('forsaken')),          # oaths forsaken — spren withdrawn (GM-toggleable)
     }
     # Radiant (Phase 2): the 3 Stormlight actions + the order's castable surge powers.
     import systems.cosmere.radiant_talents as _rt
@@ -8504,6 +8505,8 @@ def cosmere_pc_state(pid):
             ps['shardblade'] = bool(data['shardblade'])   # Shardblade summoned / dismissed
         if 'squire' in data:
             ps['squire'] = str(data['squire'] or '')[:80]  # Take Squire roster
+        if 'forsaken' in data:
+            ps['forsaken'] = bool(data['forsaken'])        # oaths forsaken — spren withdrawn
         if isinstance(data.get('conditions'), dict):
             ps['conditions'] = data['conditions']
         doc['play_state'] = ps
