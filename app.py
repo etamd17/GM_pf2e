@@ -8168,12 +8168,24 @@ def cosmere_pc_sheet(pid):
         'injuries': _ps('injuries', 0),
         'enhanced': bool(ps.get('enhanced')),         # the Stormlight Enhance toggle
         'conditions': ps.get('conditions') if isinstance(ps.get('conditions'), dict) else {},
+        'shardblade': bool(ps.get('shardblade')),      # spren summoned as a Shardblade (3rd Ideal)
+        'squire': str(ps.get('squire') or ''),         # Take Squire: who they've taken under their wing
     }
     # Radiant (Phase 2): the 3 Stormlight actions + the order's castable surge powers.
     import systems.cosmere.radiant_talents as _rt
     _order = build.order()
     radiant_powers = [dict(_rt.SURGE_POWERS[c], code=c)
                       for c in (_order['surges'] if _order else ()) if c in _rt.SURGE_POWERS]
+    # Ideal payoffs (RAW): the Third Ideal lets a Radiant summon their spren as a
+    # Shardblade (2d8 spirit, deadly — bypasses Deflect); Take Squire and Wound
+    # Regeneration are talents whose effects surface as sheet actions once taken.
+    _tnames = [(t.get('name') or '') for t in (build.to_dict().get('talents') or [])]
+    shardblade = None
+    if build.is_radiant and build.ideals_sworn >= 3:
+        shardblade = {'name': 'Shardblade', 'damage': '2d8', 'type': 'spirit',
+                      'mod': (actor.skills.get('hwp') or {}).get('mod', 0)}
+    has_take_squire = any(n.startswith('Take Squire') for n in _tnames)
+    has_wound_regen = any(n == 'Wound Regeneration' for n in _tnames)
     # Per-character name crest + secondary accent (theming PR-B). In a Mistborn
     # campaign a chosen cosmetic "house metal" wins; otherwise the Radiant order
     # (the character's actual mechanic) drives the crest + its accent color.
@@ -8207,6 +8219,7 @@ def cosmere_pc_sheet(pid):
         first_ideal=systems.cosmere.radiant.FIRST_IDEAL,
         surge_names=build.eff_surge_names(),          # canon + homebrew surge names
         singer_form=systems.cosmere.origins.singer_form(build.singer_form),
+        shardblade=shardblade, has_take_squire=has_take_squire, has_wound_regen=has_wound_regen,
     )
 
 
@@ -8487,6 +8500,10 @@ def cosmere_pc_state(pid):
                     pass
         if 'enhanced' in data:
             ps['enhanced'] = bool(data['enhanced'])
+        if 'shardblade' in data:
+            ps['shardblade'] = bool(data['shardblade'])   # Shardblade summoned / dismissed
+        if 'squire' in data:
+            ps['squire'] = str(data['squire'] or '')[:80]  # Take Squire roster
         if isinstance(data.get('conditions'), dict):
             ps['conditions'] = data['conditions']
         doc['play_state'] = ps
