@@ -8216,6 +8216,21 @@ def cosmere_pc_sheet(pid):
             except (TypeError, ValueError):
                 _cur = _f['charges']
             fabrials.append(dict(_f, current=max(0, min(_f['charges'], _cur))))
+    # Fabrial Workshop (Ch.7 "Inventing Unique Fabrials"): the crafting rules +
+    # the skill mods the in-app rolls need, plus any fabrials this PC has crafted.
+    import systems.cosmere.fabrial_crafting as _fc
+    crafting = {
+        'effects': _fc.EFFECTS, 'tier_cost': _fc.TIER_COST, 'trap_dc': _fc.TRAP_DC,
+        'bands': _fc.CRAFT_BANDS, 'general_up': _fc.GENERAL_UPGRADES,
+        'general_dn': _fc.GENERAL_DRAWBACKS, 'advanced': _fc.ADVANCED_FEATURES,
+        'lore_mod': (actor.skills.get('lor') or {}).get('mod', 0),
+        'crafting_mod': (actor.skills.get('cra') or {}).get('mod', 0),
+    }
+    crafted = []
+    for _c in (ps.get('crafted_fabrials') or []):
+        if isinstance(_c, dict) and _c.get('name'):
+            mx = int(_c.get('charges') or 0)
+            crafted.append(dict(_c, charges=mx, current=max(0, min(mx, int(_c.get('current', mx))))))
     # Per-character name crest + secondary accent (theming PR-B). In a Mistborn
     # campaign a chosen cosmetic "house metal" wins; otherwise the Radiant order
     # (the character's actual mechanic) drives the crest + its accent color.
@@ -8252,6 +8267,7 @@ def cosmere_pc_sheet(pid):
         shardblade=shardblade, shardplate=shardplate,
         has_take_squire=has_take_squire, has_wound_regen=has_wound_regen,
         radiant_variant=radiant_variant, fabrials=fabrials,
+        crafting=crafting, crafted=crafted,
     )
 
 
@@ -8548,6 +8564,22 @@ def cosmere_pc_state(pid):
                 except (TypeError, ValueError):
                     continue
             ps['fabrials'] = clean
+        if isinstance(data.get('crafted_fabrials'), list):   # workshop-crafted unique fabrials
+            cf = []
+            for c in data['crafted_fabrials'][:40]:
+                if not isinstance(c, dict) or not c.get('name'):
+                    continue
+                try:
+                    mx = max(0, int(c.get('charges') or 0))
+                    cf.append({'key': str(c.get('key', ''))[:40], 'name': str(c.get('name'))[:80],
+                               'tier': int(c.get('tier') or 0), 'charges': mx,
+                               'current': max(0, min(mx, int(c.get('current', mx)))),
+                               'effect': str(c.get('effect', ''))[:400],
+                               'upgrades': [str(u)[:160] for u in (c.get('upgrades') or [])][:6],
+                               'drawbacks': [str(x)[:160] for x in (c.get('drawbacks') or [])][:6]})
+                except (TypeError, ValueError):
+                    continue
+            ps['crafted_fabrials'] = cf
         if isinstance(data.get('conditions'), dict):
             ps['conditions'] = data['conditions']
         doc['play_state'] = ps
