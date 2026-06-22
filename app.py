@@ -908,6 +908,13 @@ def _start_persistence_thread():
 _sse_subscribers = []
 _sse_lock = threading.Lock()
 _sse_last_cleanup = time.time()
+# Event-replay ring buffer: every broadcast gets a monotonic id, and the last
+# _SSE_BUFFER_MAX events are kept so a client that briefly dropped (tablet asleep
+# / off wifi) can reconnect with Last-Event-ID and be replayed the events it
+# missed — instead of silently showing stale HP/conditions until a manual reload.
+_sse_event_seq = 0
+_sse_buffer = []            # list of (id, gm_frame, player_frame_or_None)
+_SSE_BUFFER_MAX = 256
 _SSE_MAX_SUBSCRIBERS = 200  # Hard cap to prevent memory leaks. Sized for a full
 # table across several devices, each tab holding multiple EventSource
 # connections; broadcasts iterate this list so it stays bounded, but 50 was low
@@ -991,7 +998,18 @@ def sse_broadcast(event_type, data, *, player_filter=None):
         if filtered is not None and filtered is not False:
             player_msg = f"event: {event_type}\ndata: {json.dumps(filtered)}\n\n"
 
+    global _sse_event_seq
     with _sse_lock:
+        # Stamp a monotonic id on the frame (so the browser tracks lastEventId)
+        # and keep it in the replay buffer.
+        _sse_event_seq += 1
+        sid = _sse_event_seq
+        idln = "id: %d\n" % sid
+        gm_msg = idln + gm_msg
+        player_msg = (idln + player_msg) if player_msg else None
+        _sse_buffer.append((sid, gm_msg, player_msg))
+        if len(_sse_buffer) > _SSE_BUFFER_MAX:
+            del _sse_buffer[:-_SSE_BUFFER_MAX]
         dead = []
         for entry in _sse_subscribers:
             q, is_gm = entry
@@ -12246,6 +12264,13 @@ def sse_stream():
     # sse_broadcast() uses to decide whether this subscriber gets raw GM
     # data or the player-sanitized view.
     is_gm = _is_gm()
+    # On reconnect the client tells us the last event it saw (the hub passes it as
+    # ?last_event_id=, native EventSource as the Last-Event-ID header); we replay
+    # any events it missed from the ring buffer so the sheet never shows stale data.
+    try:
+        last_seen = int(request.args.get('last_event_id') or request.headers.get('Last-Event-ID') or 0)
+    except (TypeError, ValueError):
+        last_seen = 0
 
     def generate():
         q = queue.Queue(maxsize=50)
@@ -12260,8 +12285,18 @@ def sse_stream():
             if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
                 _sse_subscribers.pop(0)
             _sse_subscribers.append(entry)
+            # Snapshot the events to replay: everything after last_seen up to the
+            # id at subscribe time. Events newer than this arrive live via the
+            # queue (we subscribed first), so there's no gap and no duplicate.
+            start_id = _sse_event_seq
+            replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer if last_seen < i <= start_id]
+                      if last_seen else [])
         try:
             yield "event: connected\ndata: {}\n\n"
+            for (i, gm_frame, pl_frame) in replay:
+                frame = gm_frame if is_gm else pl_frame
+                if frame is not None:
+                    yield frame
             while True:
                 try:
                     msg = q.get(timeout=30)
