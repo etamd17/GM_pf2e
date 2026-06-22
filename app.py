@@ -6494,13 +6494,41 @@ def campaign_delete(cid):
         return jsonify({'error': 'GM only'}), 403
     if (request.form.get('confirm_name') or '').strip() != (camp.get('name') or '').strip():
         return redirect('/campaign/%s/invites?delete_error=1' % cid)
-    _campaigns.delete_campaign(cid)
+    _campaigns.delete_campaign(cid)   # soft delete -> trash (restorable ~30 days)
     if session.get('active_campaign_id') == cid:
         session.pop('active_campaign_id', None)
     # The active/live campaign may have just been removed -> rebind the globals
     # (load_campaign(None) falls back to the legacy flat layout).
     load_campaign(_storage.get_live_campaign_id())
-    return redirect('/me')
+    return redirect('/me?trashed=1')
+
+
+@app.route('/campaign/<cid>/restore', methods=['POST'])
+@_auth.login_required
+def campaign_restore(cid):
+    """Restore a soft-deleted campaign from the trash. The GM (of the trashed
+    campaign) or a site admin only."""
+    u = _auth.current_user()
+    doc = _campaigns.get_trashed_campaign(cid)
+    if not doc or not (u.get('is_admin') or _campaigns.is_gm(doc, u['id'])):
+        return jsonify({'error': 'not authorized'}), 403
+    _campaigns.restore_campaign(cid)
+    return redirect('/me?restored=1')
+
+
+@app.route('/campaign/<cid>/purge', methods=['POST'])
+@_auth.login_required
+def campaign_purge(cid):
+    """Permanently delete a trashed campaign (irreversible). GM/admin + name
+    confirmation, same guard as the original delete."""
+    u = _auth.current_user()
+    doc = _campaigns.get_trashed_campaign(cid)
+    if not doc or not (u.get('is_admin') or _campaigns.is_gm(doc, u['id'])):
+        return jsonify({'error': 'not authorized'}), 403
+    if (request.form.get('confirm_name') or '').strip() != (doc.get('name') or '').strip():
+        return redirect('/me?purge_error=1')
+    _campaigns.purge_campaign(cid)
+    return redirect('/me?purged=1')
 
 
 @app.route('/campaign/<cid>/export')
@@ -6667,7 +6695,12 @@ def _me_characters(user_id):
 
 def _me_render(**extra):
     u = _auth.current_user()
+    try:
+        _campaigns.purge_expired_trash()    # self-cleaning trash (no cron needed)
+    except Exception:
+        pass
     camps = _campaigns.campaigns_for_user(u['id'])
+    trashed = _campaigns.trashed_for_user(u['id'])
     gm_ids = [c['id'] for c in camps if _campaigns.is_gm(c, u['id']) or u.get('is_admin')]
     live_id = _storage.get_live_campaign_id()
     # The campaign to offer as "Resume last session" -- the user's last-activated
@@ -6682,7 +6715,8 @@ def _me_render(**extra):
     ctx = dict(user=u, campaigns=camps, gm_campaign_ids=gm_ids,
                characters=_me_characters(u['id']),
                active_campaign_id=_active_campaign_id(),
-               live_campaign_id=live_id, last_campaign=last)
+               live_campaign_id=live_id, last_campaign=last,
+               trashed_campaigns=trashed, trash_ttl_days=_campaigns.TRASH_TTL_DAYS)
     ctx.update(extra)
     return render_template('account_home.html', **ctx)
 
