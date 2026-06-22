@@ -77,6 +77,22 @@
     <a class="add" href="/campaigns/new">+ New campaign</a>
     <label class="add" style="cursor:pointer;" title="Restore a .zip backup as a new campaign">Restore backup<input type="file" accept=".zip,application/zip" style="display:none;" onchange="restoreBackup(this)"></label>
   </div>
+  {% if gm_campaign_ids %}
+  <div style="font-size:11.5px; color:var(--text-on-dark-3); margin:-.4rem 0 .85rem; display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
+    <span>{% if last_backup_at %}Last automatic backup: <span id="bk-when" data-ts="{{ last_backup_at }}">&hellip;</span>{% else %}Automatic daily backups on &mdash; none taken yet{% endif %}</span>
+    <button type="button" class="add" style="cursor:pointer; border:0; background:none; padding:0;" onclick="backupNow(this)">Back up now</button>
+  </div>
+  <script>
+    (function(){ var el=document.getElementById('bk-when');
+      if(el){ try{ el.textContent = new Date(+el.dataset.ts*1000).toLocaleString(); }catch(e){ el.textContent='recently'; } } })();
+    function backupNow(btn){ btn.disabled=true; btn.textContent='Backing up…';
+      fetch('/api/backup_now',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+        btn.textContent = d.ok ? ('Backed up '+d.count+' campaign'+(d.count==1?'':'s')) : 'Failed';
+        if(d.ok) setTimeout(function(){ location.reload(); }, 900);
+        else btn.disabled=false;
+      }).catch(function(){ btn.textContent='Failed'; btn.disabled=false; }); }
+  </script>
+  {% endif %}
   {% if campaigns %}
   <div class="grid">
     {% for c in campaigns %}
