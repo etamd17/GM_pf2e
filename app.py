@@ -8267,6 +8267,7 @@ def cosmere_pc_sheet(pid):
         'shardplate': bool(ps.get('shardplate')),      # living Shardplate donned (4th Ideal)
         'squire': str(ps.get('squire') or ''),         # Take Squire: who they've taken under their wing
         'forsaken': bool(ps.get('forsaken')),          # oaths forsaken — spren withdrawn (GM-toggleable)
+        'goals': ps.get('goals') if isinstance(ps.get('goals'), list) else [],  # Ch.8 goals + rewards
     }
     # Radiant (Phase 2): the 3 Stormlight actions + the order's castable surge powers.
     import systems.cosmere.radiant_talents as _rt
@@ -8664,6 +8665,24 @@ def cosmere_pc_state(pid):
             ps['crafted_fabrials'] = cf
         if isinstance(data.get('conditions'), dict):
             ps['conditions'] = data['conditions']
+        if isinstance(data.get('goals'), list):            # Ch.8 goals: 3 milestones -> reward
+            goals = []
+            for g in data['goals'][:12]:
+                if not isinstance(g, dict) or not str(g.get('text', '')).strip():
+                    continue
+                ms = g.get('milestones')
+                ms = [bool(x) for x in ms[:3]] if isinstance(ms, list) else []
+                ms += [False] * (3 - len(ms))
+                rw = g.get('reward') if isinstance(g.get('reward'), dict) else {}
+                goals.append({
+                    'id': str(g.get('id', ''))[:40],
+                    'text': str(g.get('text'))[:240],
+                    'milestones': ms[:3],
+                    'concluded': bool(g.get('concluded')),
+                    'reward': {'category': str(rw.get('category', ''))[:40],
+                               'text': str(rw.get('text', ''))[:240]},
+                })
+            ps['goals'] = goals
         doc['play_state'] = ps
         _save_cosmere_pc(doc, fsync=False)
     # In-memory combatant mirror + SSE happen AFTER releasing the file lock (they

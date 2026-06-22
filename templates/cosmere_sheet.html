@@ -142,6 +142,34 @@
   .cs-cond-fx .fx-row { display:flex; gap:.55rem; font-size:11.5px; line-height:1.35; align-items:baseline; }
   .cs-cond-fx .fx-name { flex:0 0 auto; min-width:92px; font-weight:700; color:var(--accent); }
   .cs-cond-fx .fx-desc { color:var(--text-on-dark-2); }
+  /* Goals & Rewards (Ch.8) */
+  .goal-add { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; cursor:pointer;
+    background:transparent; color:var(--order-accent,var(--accent)); border:1px solid var(--order-accent,var(--accent));
+    border-radius:6px; padding:2px 8px; opacity:.85; }
+  .goal-add:hover { opacity:1; }
+  .cs-goals { display:flex; flex-direction:column; gap:.4rem; }
+  .goal-empty { font-size:11.5px; color:var(--text-on-dark-3); font-style:italic; }
+  .goal-row { border:1px solid rgba(255,255,255,.10); border-radius:8px; padding:.5rem .65rem;
+    background:rgba(255,255,255,.025); }
+  .goal-row.done { border-color:var(--order-accent,var(--accent)); background:rgba(126,199,255,.06); }
+  .goal-top { display:flex; align-items:flex-start; gap:.5rem; }
+  .goal-text { flex:1; font-size:12.5px; line-height:1.35; color:var(--text-on-dark); font-weight:600; }
+  .goal-row.done .goal-text { text-decoration:line-through; opacity:.7; }
+  .goal-x { cursor:pointer; color:var(--text-on-dark-3); font-size:15px; line-height:1; opacity:.6; }
+  .goal-x:hover { opacity:1; color:#f87171; }
+  .goal-bot { display:flex; align-items:center; gap:.6rem; margin-top:.45rem; flex-wrap:wrap; }
+  .goal-boxes { display:flex; gap:.3rem; }
+  .goal-ms { width:16px; height:16px; border-radius:4px; border:1.5px solid var(--text-on-dark-3);
+    cursor:pointer; flex:0 0 auto; transition:background .12s, border-color .12s; }
+  .goal-ms:hover { border-color:var(--order-accent,var(--accent)); }
+  .goal-ms.on { background:var(--order-accent,var(--accent)); border-color:var(--order-accent,var(--accent));
+    box-shadow:0 0 6px var(--order-accent,rgba(126,199,255,.6)); }
+  .goal-hint { font-size:10.5px; color:var(--text-on-dark-3); font-style:italic; }
+  .goal-btn { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; cursor:pointer;
+    background:var(--order-accent,var(--accent)); color:#06121f; border:0; border-radius:6px; padding:3px 9px; font-weight:700; }
+  .goal-btn.ghost { background:transparent; color:var(--text-on-dark-3); border:1px solid rgba(255,255,255,.18);
+    font-weight:600; padding:2px 7px; }
+  .goal-reward { font-size:11.5px; color:var(--order-accent,var(--accent)); font-weight:600; }
   /* Per-character name crest (Radiant order / house-metal glyph) in the
      character's secondary accent, layered on the world skin. */
   .cs-id { display:flex; align-items:center; gap:.7rem; }
@@ -376,6 +404,18 @@
     {# Plain-language summary of what every ACTIVE condition is doing right now —
        so it's obvious which stats/abilities each one affects. JS-rendered. #}
     <div id="cos-cond-fx" class="cs-cond-fx"></div>
+  </div>
+  {% endif %}
+
+  {% if interactive %}
+  {# --- Goals & Rewards (Ch.8): work a goal across three milestones, then conclude
+        it for a reward (a possession, relationship, status, …). --- #}
+  <div class="cs-goals-wrap" style="margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem;">
+      <span style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3);">Goals &amp; Rewards</span>
+      <button type="button" class="goal-add" onclick="cosGoalAdd()">+ Add goal</button>
+    </div>
+    <div id="cos-goals" class="cs-goals"></div>
   </div>
   {% endif %}
 
@@ -730,7 +770,7 @@
     const PID = {{ actor_id|tojson }};
     const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
     const TIER = {{ tier|default(1) }};
-    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, shardplate:{{ 'true' if cur.shardplate else 'false' }}, squire:{{ cur.squire|tojson }}, forsaken:{{ 'true' if cur.forsaken else 'false' }}};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, shardplate:{{ 'true' if cur.shardplate else 'false' }}, squire:{{ cur.squire|tojson }}, forsaken:{{ 'true' if cur.forsaken else 'false' }}, goals:{{ cur.goals|tojson }}};
     let mods = {adv:false, dis:false, plot:false, vis:'group'};
 
     /* ── Condition automation (Stormlight Ch.3 "Advantages & Disadvantages",
@@ -1182,6 +1222,68 @@
       if('enhanced' in ps){ cur.enhanced=!!ps.enhanced; paintEnhance(); }
       paint();
       if('conditions' in ps) paintConds(ps.conditions);
+      if('goals' in ps){ cur.goals = Array.isArray(ps.goals) ? ps.goals : []; paintGoals(); }
+    }
+
+    // --- Goals & Rewards (Ch.8) ---------------------------------------------
+    const _gEsc = s => { const t=document.createElement('span'); t.textContent=String(s==null?'':s); return t.innerHTML; };
+    const _goalById = id => (cur.goals||[]).find(g => g.id === id);
+    function saveGoals(){ paintGoals(); pending.goals = cur.goals; clearTimeout(saveT); saveT = setTimeout(flush, 250); }
+    window.cosGoalAdd = function(){
+      const txt = (prompt('New goal — what are you working toward?') || '').trim();
+      if(!txt) return;
+      cur.goals = cur.goals || [];
+      cur.goals.push({ id: 'g' + Date.now() + Math.floor(Math.random()*1000),
+                       text: txt, milestones: [false,false,false], concluded: false,
+                       reward: { category:'', text:'' } });
+      saveGoals();
+    };
+    window.cosGoalMilestone = function(id, i){
+      const g = _goalById(id); if(!g || g.concluded) return;
+      g.milestones[i] = !g.milestones[i]; saveGoals();
+    };
+    window.cosGoalConclude = function(id){
+      const g = _goalById(id); if(!g) return;
+      if(!(g.milestones||[]).every(Boolean)){ res('Mark all three milestones before concluding this goal.'); return; }
+      const cat = (prompt('Reward category — Possession, Relationship, Status, or Other:', 'Possession') || '').trim();
+      if(!cat) return;
+      const rwd = (prompt('Reward — what do you gain? (e.g. a fabrial or Shardplate, a companion or patron, a noble title)') || '').trim();
+      g.concluded = true; g.reward = { category: cat, text: rwd };
+      saveGoals();
+      res('<span class="opp">Goal concluded</span> — ' + _gEsc(g.text) + (rwd ? (' &rarr; ' + _gEsc(rwd)) : ''), 'opp');
+    };
+    window.cosGoalReopen = function(id){
+      const g = _goalById(id); if(!g) return;
+      g.concluded = false; saveGoals();
+    };
+    window.cosGoalRemove = function(id){
+      if(!confirm('Remove this goal?')) return;
+      cur.goals = (cur.goals||[]).filter(g => g.id !== id); saveGoals();
+    };
+    function paintGoals(){
+      const box = document.getElementById('cos-goals'); if(!box) return;
+      const gs = cur.goals || [];
+      if(!gs.length){ box.innerHTML = '<div class="goal-empty">No goals yet. Add one to start working toward a reward.</div>'; return; }
+      box.innerHTML = gs.map(g => {
+        const ms = g.milestones || [false,false,false];
+        const boxes = ms.map((m,i) => '<span class="goal-ms' + (m?' on':'') + '" onclick="cosGoalMilestone(\'' + g.id + '\',' + i + ')" title="Milestone ' + (i+1) + '"></span>').join('');
+        const done = ms.every(Boolean);
+        let tail;
+        if(g.concluded){
+          const rw = g.reward || {};
+          tail = '<span class="goal-reward">Reward: ' + _gEsc(rw.category||'?') + (rw.text ? (' &middot; ' + _gEsc(rw.text)) : '') +
+                 '</span><button class="goal-btn ghost" onclick="cosGoalReopen(\'' + g.id + '\')" title="Reopen this goal">reopen</button>';
+        } else if(done){
+          tail = '<button class="goal-btn" onclick="cosGoalConclude(\'' + g.id + '\')">Conclude &rarr; reward</button>';
+        } else {
+          tail = '<span class="goal-hint">Mark a box for each milestone reached</span>';
+        }
+        return '<div class="goal-row' + (g.concluded?' done':'') + '">' +
+                 '<div class="goal-top"><span class="goal-text">' + _gEsc(g.text) + '</span>' +
+                 '<span class="goal-x" onclick="cosGoalRemove(\'' + g.id + '\')" title="Remove goal">&times;</span></div>' +
+                 '<div class="goal-bot"><span class="goal-boxes">' + boxes + '</span>' + tail + '</div>' +
+               '</div>';
+      }).join('');
     }
     try {
       // Shared SSE hub (base.html <head>) — one socket per tab.
@@ -1214,6 +1316,7 @@
     paint();          // sync spheres (fill/arc/dun/low) + sticky vitals on load
     paintEnhance();
     paintCondFx();
+    paintGoals();
     if(typeof renderCrafted==='function') renderCrafted();   // workshop-crafted fabrials
   })();
   </script>
