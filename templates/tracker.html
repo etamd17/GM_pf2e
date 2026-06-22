@@ -1178,6 +1178,12 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 }
 .trk .st-btn:hover { color:var(--t-gold); border-color:var(--t-gold); }
 .trk .st-btn.active { color:var(--t-gold); background:rgba(200,168,78,0.12); border-color:var(--t-gold); }
+/* Per-turn timer: a cooler tint so it reads distinct from the gold encounter
+   "Elapsed" clock; nudges brighter once a turn runs long. */
+.trk .turn-timer { background:rgba(126,199,255,0.10); border-color:rgba(126,199,255,0.25); color:#7ec7ff; }
+.trk .turn-timer .st-time { color:#aedcff; }
+.trk .turn-timer.slow { background:rgba(245,158,11,0.12); border-color:rgba(245,158,11,0.4); color:#fbbf24; }
+.trk .turn-timer.slow .st-time { color:#fcd34d; }
 
 /* ═══ DAMAGE PREVIEW (Feature 12) ═══ */
 .trk .dmg-preview {
@@ -1349,6 +1355,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             <span class="st-label">Elapsed</span>
             <span class="st-time" id="session-timer-val">00:00</span>
             {% if is_gm %}<button class="st-btn" id="session-timer-btn" onclick="toggleSessionTimer()" title="Start/stop the encounter timer">Start</button>{% endif %}
+        </span>
+        <span id="turn-timer" class="session-timer turn-timer" style="display:none;" title="Time on the current turn — resets each turn to help keep play moving.">
+            <span class="st-label">Turn</span>
+            <span class="st-time" id="turn-timer-val">0:00</span>
         </span>
     </div>
     <div class="hb-turn">
@@ -2076,6 +2086,7 @@ function _renderNow() {
     paintMoodControl();
     renderEncounterNotes();
     renderSessionTimer();
+    renderTurnTimer();
     syncMultiDamageTypes();
 }
 
@@ -3984,6 +3995,38 @@ function _tickTimer() {
 function toggleSessionTimer() {
     const action = STATE.session_timer_start ? 'stop' : 'start';
     apiPost('/api/session_timer/' + action);
+}
+
+/* Per-turn timer (client-only): times the CURRENT turn and resets whenever the
+   active combatant changes, so the GM can keep turns moving. No server state —
+   each viewer times from when it saw the turn change, which is all the GM needs. */
+let _turnTimerName = null, _turnTimerStart = 0, _turnTimerInterval = null;
+const TURN_SLOW_SECS = 90;   // gentle amber nudge once a turn runs long
+function renderTurnTimer() {
+    const el = document.getElementById('turn-timer');
+    if (!el) return;
+    const active = STATE.active_name || null;
+    if (!active) {                                   // no one's turn -> hide + stop
+        el.style.display = 'none';
+        if (_turnTimerInterval) { clearInterval(_turnTimerInterval); _turnTimerInterval = null; }
+        _turnTimerName = null;
+        return;
+    }
+    if (active !== _turnTimerName) {                 // turn advanced -> reset the clock
+        _turnTimerName = active;
+        _turnTimerStart = Math.floor(Date.now() / 1000);
+    }
+    el.style.display = '';
+    _tickTurnTimer();
+    if (!_turnTimerInterval) _turnTimerInterval = setInterval(_tickTurnTimer, 1000);
+}
+function _tickTurnTimer() {
+    const valEl = document.getElementById('turn-timer-val');
+    const el = document.getElementById('turn-timer');
+    if (!valEl || !_turnTimerName) return;
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - _turnTimerStart);
+    valEl.textContent = Math.floor(elapsed / 60) + ':' + String(elapsed % 60).padStart(2, '0');
+    if (el) el.classList.toggle('slow', elapsed >= TURN_SLOW_SECS);
 }
 
 /* ═══════════════════ FEATURE 12: DAMAGE TYPE AUTO-CALC PREVIEW ═══════════════════ */
