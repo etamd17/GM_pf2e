@@ -141,7 +141,7 @@ if GM_PASSWORD:
 # Account-based auth (multi-campaign). When any user account exists we authorize
 # via the logged-in user's per-campaign role; with no accounts yet (tests /
 # un-bootstrapped) we fall back to the legacy GM_PASSWORD behavior below.
-from core import auth as _auth, campaigns as _campaigns
+from core import auth as _auth, campaigns as _campaigns, backups as _backups
 
 
 def _account_mode():
@@ -6549,6 +6549,34 @@ def campaign_purge(cid):
     return redirect('/me?purged=1')
 
 
+@app.route('/api/backup_now', methods=['POST'])
+@_auth.login_required
+def backup_now():
+    """Trigger an immediate on-volume snapshot of every active campaign. Any GM
+    (or a site admin) may run it; it's their data and the op only writes backups."""
+    u = _auth.current_user()
+    if not (u.get('is_admin') or _campaigns.campaigns_for_user(u['id'])):
+        return jsonify({'ok': False, 'error': 'not authorized'}), 403
+    n = _backups.run_backup()
+    return jsonify({'ok': True, 'count': n, 'last_backup_at': _backups.last_backup_at()})
+
+
+@app.route('/campaign/<cid>/backup/latest')
+@_auth.login_required
+def campaign_backup_latest(cid):
+    """Download the most-recent automatic snapshot of a campaign (to pull a copy
+    off-device). GM/owner or admin."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    path = _backups.latest_backup(cid)
+    if not path or not os.path.isfile(path):
+        return jsonify({'error': 'no snapshot yet'}), 404
+    safe = re.sub(r'[^a-zA-Z0-9_-]+', '-', (camp.get('slug') or camp.get('name') or 'campaign')).strip('-') or 'campaign'
+    return send_file(path, mimetype='application/zip', as_attachment=True,
+                     download_name='%s-snapshot.zip' % safe)
+
+
 @app.route('/campaign/<cid>/export')
 @_auth.login_required
 def campaign_export(cid):
@@ -6715,6 +6743,7 @@ def _me_render(**extra):
     u = _auth.current_user()
     try:
         _campaigns.purge_expired_trash()    # self-cleaning trash (no cron needed)
+        _backups.ensure_backup_thread()     # lazily start the daily-snapshot thread
     except Exception:
         pass
     camps = _campaigns.campaigns_for_user(u['id'])
@@ -6734,7 +6763,8 @@ def _me_render(**extra):
                characters=_me_characters(u['id']),
                active_campaign_id=_active_campaign_id(),
                live_campaign_id=live_id, last_campaign=last,
-               trashed_campaigns=trashed, trash_ttl_days=_campaigns.TRASH_TTL_DAYS)
+               trashed_campaigns=trashed, trash_ttl_days=_campaigns.TRASH_TTL_DAYS,
+               last_backup_at=_backups.last_backup_at())
     ctx.update(extra)
     return render_template('account_home.html', **ctx)
 
