@@ -42,12 +42,62 @@ def create_campaign(name, system, created_by):
     return save_campaign(doc)
 
 
+TRASH_TTL_DAYS = 30   # trashed campaigns are auto-purged after this many days
+
+
 def delete_campaign(cid):
-    """Permanently delete a campaign and all its data. Frees the live slot if
-    this campaign held it (so the platform falls back to no live campaign)."""
+    """SOFT delete: move the campaign to the trash (restorable for TRASH_TTL_DAYS)
+    instead of destroying it. Frees the live slot if this campaign held it."""
     if storage.get_live_campaign_id() == cid:
         storage.set_live_campaign_id(None)
-    storage.delete_campaign_dir(cid)
+    doc = get_campaign(cid)
+    if doc:
+        doc['_trashed_at'] = _now()
+        save_campaign(doc)
+    storage.trash_campaign_dir(cid)
+
+
+def get_trashed_campaign(cid):
+    return storage.load_json(storage.trashed_campaign_file(cid)) if cid else None
+
+
+def list_trashed():
+    return [c for c in (get_trashed_campaign(cid) for cid in storage.list_trashed_campaign_ids()) if c]
+
+
+def trashed_for_user(user_id):
+    """Trashed campaigns the user was GM of (so a player can't see/restore others')."""
+    return [c for c in list_trashed() if user_role(c, user_id) == 'gm']
+
+
+def restore_campaign(cid):
+    """Move a trashed campaign back to active. Returns the doc, or None."""
+    if not storage.restore_campaign_dir(cid):
+        return None
+    doc = get_campaign(cid)
+    if doc and '_trashed_at' in doc:
+        doc.pop('_trashed_at', None)
+        save_campaign(doc)
+    return doc
+
+
+def purge_campaign(cid):
+    """Permanently delete a TRASHED campaign and all its data."""
+    storage.purge_campaign_dir(cid)
+
+
+def purge_expired_trash(ttl_days=TRASH_TTL_DAYS):
+    """Permanently remove trashed campaigns older than ttl_days (by trashed-dir
+    mtime, which is tz-safe). Returns the number purged. Called lazily on the
+    account home so the trash self-cleans without a cron."""
+    cutoff = time.time() - ttl_days * 86400
+    n = 0
+    for cid in storage.list_trashed_campaign_ids():
+        mt = storage.trashed_dir_mtime(cid)
+        if mt and mt < cutoff:
+            storage.purge_campaign_dir(cid)
+            n += 1
+    return n
 
 
 # --------------------------------------------------------------------------

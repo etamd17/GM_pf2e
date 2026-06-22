@@ -100,6 +100,68 @@ def delete_campaign_dir(cid):
         shutil.rmtree(d)
 
 
+# --------------------------------------------------------------------------
+# Soft delete: campaigns are moved to a trash dir (restorable) instead of being
+# rmtree'd outright, so a misclick can't destroy a multi-month campaign.
+# --------------------------------------------------------------------------
+CAMPAIGNS_TRASH_DIR = os.path.join(DATA_DIR, 'campaigns_trash')
+
+
+def campaign_trash_dir(cid):
+    return os.path.join(CAMPAIGNS_TRASH_DIR, _check_id(cid, 'campaign_id'))
+
+
+def trashed_campaign_file(cid):
+    return os.path.join(campaign_trash_dir(cid), 'campaign.json')
+
+
+def trash_campaign_dir(cid):
+    """Move a campaign's data dir into the trash. Returns True if moved."""
+    src = campaign_dir(cid)
+    if not os.path.isdir(src):
+        return False
+    os.makedirs(CAMPAIGNS_TRASH_DIR, exist_ok=True)
+    dst = campaign_trash_dir(cid)
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)            # replace an older trashed copy of the same id
+    shutil.move(src, dst)
+    return True
+
+
+def restore_campaign_dir(cid):
+    """Move a campaign back from the trash. Returns True if restored (False if the
+    trashed copy is missing or a live campaign already occupies that id)."""
+    src = campaign_trash_dir(cid)
+    dst = campaign_dir(cid)
+    if not os.path.isdir(src) or os.path.isdir(dst):
+        return False
+    shutil.move(src, dst)
+    return True
+
+
+def purge_campaign_dir(cid):
+    """Permanently remove a TRASHED campaign (no-op if it isn't in the trash)."""
+    d = campaign_trash_dir(cid)
+    if os.path.isdir(d):
+        shutil.rmtree(d)
+
+
+def list_trashed_campaign_ids():
+    """Ids of campaigns currently in the trash."""
+    if not os.path.isdir(CAMPAIGNS_TRASH_DIR):
+        return []
+    return [n for n in os.listdir(CAMPAIGNS_TRASH_DIR)
+            if _ID_RE.match(n) and os.path.isfile(os.path.join(CAMPAIGNS_TRASH_DIR, n, 'campaign.json'))]
+
+
+def trashed_dir_mtime(cid):
+    """When the campaign was trashed (the trashed dir's mtime), or 0."""
+    try:
+        return os.path.getmtime(campaign_trash_dir(cid))
+    except OSError:
+        return 0
+
+
 # The per-campaign subdirectories created for every campaign.
 CAMPAIGN_SUBDIRS = (
     'party_data',

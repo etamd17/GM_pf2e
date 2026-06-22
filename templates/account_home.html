@@ -135,6 +135,36 @@
   <div class="empty">No characters yet. Enter a campaign to build one, or claim a character with a GM&rsquo;s invite link.</div>
   {% endif %}
 
+  {% if trashed_campaigns %}
+  <div class="sect">Recently deleted <span style="font-weight:400;font-size:12px;opacity:.7;">&mdash; restorable for {{ trash_ttl_days }} days</span></div>
+  <div class="grid">
+    {% for c in trashed_campaigns %}
+    <div class="cc {{ c.system }}" style="opacity:.8;">
+      <div class="cc-body">
+        <div class="cc-name">{{ c.name }}</div>
+        <div class="cc-meta">{{ c.system|upper }} &middot; {{ c.members|length }} member{{ '' if c.members|length == 1 else 's' }} &middot; <span style="color:#f0a3a3;">deleted</span></div>
+        <div class="cc-actions">
+          <form method="POST" action="/campaign/{{ c.id }}/restore"><button type="submit">Restore</button></form>
+          <form method="POST" action="/campaign/{{ c.id }}/purge" onsubmit="return purgeConfirm(this, {{ c.name|tojson }});">
+            <input type="hidden" name="confirm_name" value="">
+            <button type="submit" class="manage" style="color:#f0a3a3;border-color:rgba(211,110,110,.4);">Delete forever</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <script>
+    function purgeConfirm(form, name){
+      var typed = window.prompt('Permanently delete "' + name + '"? This cannot be undone.\n\nType the campaign name to confirm:');
+      if(typed === null) return false;
+      if(typed.trim() !== name.trim()){ alert('Name did not match — not deleted.'); return false; }
+      form.querySelector('input[name=confirm_name]').value = typed.trim();
+      return true;
+    }
+  </script>
+  {% endif %}
+
   <details class="acct"{% if pw_msg or pw_error %} open{% endif %}>
     <summary>Account settings</summary>
     <div class="inner">
