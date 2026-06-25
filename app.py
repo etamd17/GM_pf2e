@@ -6502,6 +6502,29 @@ def campaign_set_role(cid, uid):
     return redirect('/campaign/%s/invites' % cid)
 
 
+@app.route('/campaign/<cid>/system', methods=['POST'])
+@_auth.login_required
+def campaign_set_system(cid):
+    """The campaign's own GM (or a site admin) repairs a mis-stamped game system --
+    e.g. a Pathfinder game saved as Cosmere that routes the whole table to the
+    Cosmere side. Mirrors /admin/campaigns/<cid>/system but scoped to the GM's own
+    campaign so they never need site-admin access. Rebinds the live globals when
+    this campaign holds the live slot, so the fix takes effect immediately."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    new_system = (request.form.get('system') or '').strip().lower()
+    if new_system not in _storage.SUPPORTED_SYSTEMS:
+        return redirect('/campaign/%s/invites?system_error=1' % cid)
+    old = camp.get('system') or 'pf2e'
+    if old != new_system:
+        camp['system'] = new_system
+        _campaigns.save_campaign(camp)
+        if _storage.get_live_campaign_id() == cid:
+            load_campaign(cid)   # rebind globals so live in-memory state matches the new system
+    return redirect('/campaign/%s/invites?system_set=%s' % (cid, new_system))
+
+
 @app.route('/campaign/<cid>/delete', methods=['POST'])
 @_auth.login_required
 def campaign_delete(cid):
@@ -7399,6 +7422,28 @@ def _is_ajax():
 def _tracker_json_response():
     """Return full tracker state as JSON for AJAX calls."""
     return jsonify(_get_tracker_state())
+
+
+def _find_active_combatant(instance_id):
+    """The combatant with this instance_id in the live encounter, or None."""
+    return next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
+
+
+def require_live_combatant(fn):
+    """Guard per-combatant actions against a STALE tracker tab. If the targeted
+    instance_id is no longer in the live encounter (the encounter was cleared,
+    reloaded, or the campaign switched out from under an open tab), fail loudly
+    with 409 + {"stale": true} instead of the old silent fall-through to a 200
+    with unchanged state -- which read as "nothing happened" (HP wouldn't move,
+    no error). The client surfaces the message and re-syncs from /api/tracker_state."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        iid = kwargs.get('instance_id')
+        if iid is not None and _find_active_combatant(iid) is None:
+            return jsonify({'error': 'This combatant is no longer in the live encounter — reloading the tracker.',
+                            'stale': True}), 409
+        return fn(*args, **kwargs)
+    return wrapper
 
 def _get_tracker_state():
     """Build the full tracker state dict.
@@ -9113,6 +9158,7 @@ def remove_combatant(instance_id):
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/toggle_combatant_visibility/<instance_id>', methods=['POST'])
+@require_live_combatant
 def toggle_combatant_visibility(instance_id):
     """GM-only: flip whether a combatant is visible to player SSE feeds.
 
@@ -9245,6 +9291,7 @@ def session_timer(action):
 
 @app.route('/api/set_combatant_tactics/<instance_id>', methods=['POST'])
 @gm_required
+@require_live_combatant
 def set_combatant_tactics(instance_id):
     """GM-only: set/update the per-creature tactics note. Persisted with
     encounter save/load. Hidden from players (GM view only)."""
@@ -9852,6 +9899,7 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
 
 
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
+@require_live_combatant
 def adjust_hp(instance_id):
     try:
         amount = int(request.form.get('amount', 0))
@@ -10512,6 +10560,7 @@ def update_pc_condition(pc_name):
     return jsonify({"success": False})
 
 @app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
+@require_live_combatant
 def toggle_condition(instance_id):
     condition = request.form.get('condition')
     action = request.form.get('action')
@@ -10686,6 +10735,7 @@ def recovery_check(instance_id):
     })
 
 @app.route('/api/set_persistent_damage/<instance_id>', methods=['POST'])
+@require_live_combatant
 def set_persistent_damage(instance_id):
     pd_val = request.form.get('persistent_damage', '') or (request.json or {}).get('persistent_damage', '')
     # Hold ENCOUNTER_LOCK across the iterate-and-mutate so the autosave
@@ -10714,6 +10764,7 @@ def set_persistent_damage(instance_id):
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/toggle_elite_weak/<instance_id>', methods=['POST'])
+@require_live_combatant
 def toggle_elite_weak(instance_id):
     mode = request.form.get('mode', 'normal') or (request.json or {}).get('mode', 'normal')
     mode_val = {'elite': 1, 'weak': -1, 'normal': 0}.get(mode, 0)
@@ -10728,6 +10779,7 @@ def toggle_elite_weak(instance_id):
     return redirect(url_for('tracker_view'))
 
 @app.route('/api/update_initiative/<instance_id>', methods=['POST'])
+@require_live_combatant
 def update_initiative(instance_id):
     try: init_val = int(request.form.get('initiative', 0) or (request.json or {}).get('initiative', 0))
     except ValueError: init_val = 0

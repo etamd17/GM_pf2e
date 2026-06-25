@@ -1988,6 +1988,10 @@ async function apiPost(url, body, contentType) {
         console.error('API HTTP error:', url, res.status, data);
         toast(data.error || ('Request failed (' + res.status + ')'), 'error');
         pulseSync(false);
+        // Stale tracker tab (the targeted combatant is gone from the live
+        // encounter): re-sync from the server so the page self-heals instead
+        // of staying out of date.
+        if (data && data.stale) apiGet('/api/tracker_state').then(applyState).catch(() => {});
         return data;
     }
     // The request SUCCEEDED. Repainting is best-effort and must NEVER be reported
@@ -2020,6 +2024,7 @@ async function apiAction(url, body) {
             console.error('Action failed:', url, 'status=' + res.status, data);
             toast(data.error || (res.ok ? 'Action failed' : ('Action failed — server returned ' + res.status)), 'error');
             pulseSync(false);
+            if (data && data.stale) apiGet('/api/tracker_state').then(applyState).catch(() => {});
             return null;
         }
         return data;
@@ -2936,7 +2941,10 @@ function renderMeta() {
         pill.textContent = tier;
         pill.style.background = color + '33';
         pill.style.color = color;
-    } else {
+    } else if (xpWrap) {
+        // Cosmere mode omits the PF2e XP/difficulty bar entirely, so #xp-bar-wrap
+        // is absent — guard the null or renderMeta() throws and aborts EVERY
+        // render (the Cosmere tracker froze: HP/conditions wouldn't repaint).
         xpWrap.classList.add('hidden');
     }
 }
