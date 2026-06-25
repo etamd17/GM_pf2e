@@ -12542,6 +12542,41 @@ def log_roll():
 
     return jsonify({"success": True})
 
+@app.route('/api/log_spell_cast', methods=['POST'])
+def log_spell_cast():
+    """Slice 2 (tableview_3d): emit a 'player_cast' SSE frame so the 3D renderer
+    can play a cast animation + suppress the inferred melee attack. Additive."""
+    data = request.form if request.form else (request.json or {})
+    if _is_gm():
+        actor_name = data.get('name', 'Player')
+    else:
+        actor_name = session.get('player_name') or 'Player'
+    spell_name = data.get('spell_name', '')
+    try:
+        level = int(data.get('level')) if data.get('level') not in (None, '') else None
+    except (TypeError, ValueError):
+        level = None
+    payload = {
+        'name': actor_name,
+        'spell_name': spell_name,
+        'level': level,
+        'result': data.get('result', ''),
+        'detail': data.get('detail', ''),
+        't': int(time.time()),
+    }
+
+    def _cast_player_filter(p):
+        hidden = _hidden_npc_names()
+        if not hidden:
+            return p
+        for key in ('name', 'spell_name', 'detail'):
+            if key in p:
+                p[key] = _scrub_hidden_names(p.get(key), hidden)
+        return p
+
+    sse_broadcast('player_cast', payload, player_filter=_cast_player_filter)
+    return jsonify({"success": True})
+
 @app.route('/api/get_logs')
 def get_logs():
     last_id = request.args.get('last_id')
