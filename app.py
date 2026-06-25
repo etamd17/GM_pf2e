@@ -6502,6 +6502,29 @@ def campaign_set_role(cid, uid):
     return redirect('/campaign/%s/invites' % cid)
 
 
+@app.route('/campaign/<cid>/system', methods=['POST'])
+@_auth.login_required
+def campaign_set_system(cid):
+    """The campaign's own GM (or a site admin) repairs a mis-stamped game system --
+    e.g. a Pathfinder game saved as Cosmere that routes the whole table to the
+    Cosmere side. Mirrors /admin/campaigns/<cid>/system but scoped to the GM's own
+    campaign so they never need site-admin access. Rebinds the live globals when
+    this campaign holds the live slot, so the fix takes effect immediately."""
+    u, camp = _require_campaign_gm(cid)
+    if not camp:
+        return jsonify({'error': 'GM only'}), 403
+    new_system = (request.form.get('system') or '').strip().lower()
+    if new_system not in _storage.SUPPORTED_SYSTEMS:
+        return redirect('/campaign/%s/invites?system_error=1' % cid)
+    old = camp.get('system') or 'pf2e'
+    if old != new_system:
+        camp['system'] = new_system
+        _campaigns.save_campaign(camp)
+        if _storage.get_live_campaign_id() == cid:
+            load_campaign(cid)   # rebind globals so live in-memory state matches the new system
+    return redirect('/campaign/%s/invites?system_set=%s' % (cid, new_system))
+
+
 @app.route('/campaign/<cid>/delete', methods=['POST'])
 @_auth.login_required
 def campaign_delete(cid):

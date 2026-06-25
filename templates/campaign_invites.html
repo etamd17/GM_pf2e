@@ -11,6 +11,7 @@
   .invite-body .link { display:block; word-break:break-all; font-size:11px; }
   .invite-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .copy-btn.copied { background:rgba(120,180,110,.18); border-color:rgba(150,200,120,.5); color:#bfe0a8; }
+  .ok-note { background:rgba(120,180,110,.14); border:1px solid rgba(150,200,120,.4); color:#bfe0a8; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:10px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -100,6 +101,21 @@
   {% endfor %}
 </ul>
 {% endif %}
+
+<div class="section-title">Game system</div>
+<p class="sub">The rules, sheets, and tools for the whole table. If this game is opening the wrong side &mdash; e.g. a Pathfinder campaign routing to the Cosmere screens &mdash; fix the stored system here.</p>
+{% if request.args.get('system_set') %}<div class="ok-note">Game system set to <strong>{{ request.args.get('system_set')|upper }}</strong>.</div>{% endif %}
+{% if request.args.get('system_error') %}<div class="err">That isn&rsquo;t a supported game system.</div>{% endif %}
+<form method="POST" action="/campaign/{{ campaign.id }}/system"
+      onsubmit="return confirm('Switch {{ campaign.name }} to the selected system? This changes the rules, sheets, and tools for the whole table.');"
+      style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+  <select name="system" style="width:auto;min-width:220px;">
+    <option value="pf2e"{% if (campaign.system or 'pf2e') == 'pf2e' %} selected{% endif %}>Pathfinder 2e</option>
+    <option value="cosmere"{% if campaign.system == 'cosmere' %} selected{% endif %}>Cosmere RPG (Stormlight)</option>
+  </select>
+  <button type="submit">Change system</button>
+  <span class="muted" style="font-size:12px;">Currently <strong>{{ (campaign.system or 'pf2e')|upper }}</strong></span>
+</form>
 
 <div class="section-title" style="color:#d36e6e; border-top:1px solid rgba(168,58,58,.25); margin-top:30px; padding-top:18px;">Danger zone</div>
 {% if request.args.get('delete_error') %}<div class="err">The name didn&rsquo;t match &mdash; the campaign was not deleted.</div>{% endif %}
