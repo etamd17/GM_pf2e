@@ -2936,7 +2936,10 @@ function renderMeta() {
         pill.textContent = tier;
         pill.style.background = color + '33';
         pill.style.color = color;
-    } else {
+    } else if (xpWrap) {
+        // Cosmere mode omits the PF2e XP/difficulty bar entirely, so #xp-bar-wrap
+        // is absent — guard the null or renderMeta() throws and aborts EVERY
+        // render (the Cosmere tracker froze: HP/conditions wouldn't repaint).
         xpWrap.classList.add('hidden');
     }
 }
