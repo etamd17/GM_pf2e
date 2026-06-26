@@ -849,6 +849,20 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .ew-btn:hover { border-color:var(--t-t4); }
 .trk .ew-btn.on-elite { background:rgba(200,168,78,0.18); color:var(--t-gold); border-color:rgba(200,168,78,0.45); }
 .trk .ew-btn.on-weak { background:rgba(255,255,255,0.08); color:var(--t-t2); border-color:rgba(255,255,255,0.2); }
+/* Initiative-row overflow (UX-B): secondary controls behind a ⋯ menu so the
+   run-time row stays calm. */
+.trk .c-of-wrap { position:relative; display:inline-block; }
+.trk .c-of-btn { padding:1px 8px; font-size:16px; line-height:1.1; border-radius:6px; cursor:pointer; }
+.trk .c-of-menu { display:none; position:absolute; right:0; top:calc(100% + 4px); z-index:var(--z-dock);
+  min-width:158px; background:var(--t-bg-raised); border:1px solid var(--t-border); border-radius:8px;
+  padding:5px; box-shadow:0 8px 24px rgba(0,0,0,.4); flex-direction:column; gap:3px; }
+.trk .c-of-menu.open { display:flex; }
+.trk .c-of-menu .of-item { width:100%; text-align:left; border-radius:5px !important; padding:6px 9px !important;
+  font-size:11px; cursor:pointer; }
+.trk .c-of-menu .of-item:hover { background:var(--t-accent-soft) !important; border-color:var(--t-accent-line) !important; color:var(--t-accent) !important; }
+.trk .c-of-menu .of-item.danger:hover { background:rgba(196,60,60,0.12) !important; border-color:rgba(196,60,60,0.4) !important; color:var(--t-red-b) !important; }
+.trk .c-of-menu .of-ew { display:flex; align-items:center; gap:4px; padding:2px 4px; }
+.trk .c-of-menu .of-ew .of-lbl { font-size:10px; color:var(--t-t3); margin-right:auto; }
 .trk .act-btn {
   padding:3px 0; border-radius:4px; font-size:9px; font-weight:700; cursor:pointer;
   background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
@@ -2259,6 +2273,18 @@ function initials(name) {
     return (parts[0][0] + (parts[1][0] || '')).toUpperCase();
 }
 
+// Initiative-row ⋯ overflow (UX-B): toggle this row's menu, closing any other.
+function toggleRowOverflow(btn) {
+    const menu = btn.parentElement.querySelector('.c-of-menu');
+    if (!menu) return;
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.c-of-menu.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+}
+document.addEventListener('click', function () {
+    document.querySelectorAll('.c-of-menu.open').forEach(m => m.classList.remove('open'));
+});
+
 function renderInitList() {
     const list = document.getElementById('initiative-list');
     const empty = document.getElementById('empty-state');
@@ -2357,25 +2383,30 @@ function renderInitList() {
         if (isAtDeath) subText += ` · <span class="dying-badge">DEAD</span>`;
         else if (isDying) subText += ` · <span class="dying-badge">Dying ${dyingVal}</span>`;
 
-        // Elite/Weak (NPC only)
-        let ewHtml = '';
-        if (!c.is_pc) {
-            const eCls = c.elite_weak === 1 ? 'on-elite' : '';
-            const wCls = c.elite_weak === -1 ? 'on-weak' : '';
-            ewHtml = `<div class="ew-row">
-                <button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button>
-                <button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button>
-                <button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button>
-            </div>`;
-        }
-
-        // Delay / Ready
+        // Delay / Ready — the one contextual turn action that stays on the row.
         let delayHtml = '';
         if (c.delaying) {
             delayHtml = `<button class="act-btn ready" onclick="apiPost('/api/reenter_initiative/${c.instance_id}')">Ready</button>`;
         } else if (isActive) {
             delayHtml = `<button class="act-btn delay" onclick="apiPost('/api/delay_turn/${c.instance_id}')">Delay</button>`;
         }
+
+        // Secondary controls live behind a ⋯ overflow (UX-B): elite/weak,
+        // announce, hide/reveal, remove — so the run-time row stays calm.
+        const ofItems = [];
+        if (!c.is_pc && !c.is_hazard) {
+            const eCls = c.elite_weak === 1 ? 'on-elite' : '';
+            const wCls = c.elite_weak === -1 ? 'on-weak' : '';
+            ofItems.push(`<div class="of-ew"><span class="of-lbl">Adjust</span><button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button><button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button><button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button></div>`);
+        }
+        if (!c.is_pc && c.epithet && c.epithet.trim()) {
+            ofItems.push(`<button class="act-btn of-item" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen">Announce reveal</button>`);
+        }
+        if (!c.is_pc) {
+            ofItems.push(`<button class="act-btn of-item" onclick="toggleVisibility('${c.instance_id}')">${isHidden ? 'Reveal to players' : 'Hide from players'}</button>`);
+        }
+        ofItems.push(`<button class="act-btn of-item danger" onclick="removeCombatant('${c.instance_id}')">Remove</button>`);
+        const overflowHtml = `<div class="c-of-wrap"><button class="act-btn c-of-btn" onclick="event.stopPropagation();toggleRowOverflow(this)" aria-label="More actions for ${escapeHtml(c.name)}" title="More actions">⋯</button><div class="c-of-menu" onclick="event.stopPropagation()">${ofItems.join('')}</div></div>`;
 
         const portCls = c.is_pc ? 'pc' : 'enemy';
 
@@ -2396,7 +2427,7 @@ function renderInitList() {
                     <div class="nm-sub">${subText}</div>
                     ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect + injury count">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}${c.cosmere.injuries ? ` · <span style="color:#f87171">Injuries ${c.cosmere.injuries}</span>` : ''}</div>` : ''}
                     ${(c.system === 'cosmere' && c.cosmere && COSMERE_INIT_MODE === 'phases') ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
-                    ${(!c.is_pc && !c.is_hazard) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
+                    ${(!c.is_pc && !c.is_hazard && (isActive || (c.epithet && c.epithet.trim()))) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
                 </div>
             </div>
             <div class="c-ac" title="${(c.system === 'cosmere' && c.cosmere) ? 'Physical Defense' : 'Armor Class'}">${(c.system === 'cosmere' && c.cosmere) ? c.cosmere.defenses.phy : c.ac}</div>
@@ -2427,16 +2458,10 @@ function renderInitList() {
                     ${(c.triggered || c.disabled) ? `<button class="act-btn"
                         onclick="hazardReset('${c.instance_id}')"
                         title="Re-arm hazard (clears triggered + disabled)">Reset</button>` : ''}
-                    <button class="act-btn vis ${isHidden ? 'on-hidden' : ''}"
-                        onclick="toggleVisibility('${c.instance_id}')"
-                        title="${isHidden ? 'Reveal to players' : 'Hide from players until a PC spots it'}">${isHidden ? 'Reveal' : 'Hide'}</button>
                 ` : `
-                    ${ewHtml}
                     ${delayHtml}
-                    ${(!c.is_pc && c.epithet && c.epithet.trim()) ? `<button class="act-btn announce" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen (works even if already visible)">Announce</button>` : ''}
-                    ${c.is_pc ? '' : `<button class="act-btn vis ${isHidden ? 'on-hidden' : ''}" onclick="toggleVisibility('${c.instance_id}')" title="${isHidden ? 'Reveal to players' : 'Hide from players (name + HP + conditions masked)'}">${isHidden ? 'Reveal' : 'Hide'}</button>`}
                 `}
-                <button class="act-btn del" onclick="removeCombatant('${c.instance_id}')">Remove</button>
+                ${overflowHtml}
             </div>
         </div>`;
     }).join('');
