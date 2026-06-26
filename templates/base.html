@@ -188,7 +188,7 @@
         <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-card-2); border:1px solid var(--border-rule);">
             <div class="px-3 py-2 flex justify-between items-center" style="background:var(--bg-card); border-bottom:1px solid var(--border-card);">
                 <span class="text-xs font-semibold text-accent-300">Dice Roller</span>
-                <button onclick="toggleDicePanel()" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
+                <button onclick="toggleDicePanel()" aria-label="Close" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
             </div>
             <div class="p-3">
                 <div class="rounded p-3 mb-3 text-center min-h-[70px] flex flex-col justify-center" style="background:var(--bg-page); border:1px solid var(--border-rule);">
@@ -1222,7 +1222,7 @@
         <div id="chat-panel" class="hidden" style="position:absolute; bottom:48px; left:0; width:300px; max-height:400px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column;">
             <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
                 <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-300);">Party Chat</span>
-                <button type="button" onclick="toggleChatPanel()" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
+                <button type="button" onclick="toggleChatPanel()" aria-label="Close" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
             </div>
             <div id="chat-messages" style="flex:1; overflow-y:auto; padding:8px; max-height:280px; min-height:100px;"></div>
             <form id="chat-form" onsubmit="event.preventDefault(); sendChat();" style="padding:8px; border-top:1px solid var(--border-card); display:flex; gap:6px;">
@@ -1315,7 +1315,7 @@
         <div style="background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; max-width:400px; width:90vw; padding:var(--sp-5);" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
                 <h2 class="font-display" style="font-size:16px; color:var(--gilt-100);">Keyboard Shortcuts</h2>
-                <button onclick="document.getElementById('kb-help-card').classList.add('hidden'); document.getElementById('kb-help-card').style.display='none';" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
+                <button onclick="document.getElementById('kb-help-card').classList.add('hidden'); document.getElementById('kb-help-card').style.display='none';" aria-label="Close" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
             </div>
             <table style="width:100%; font-size:12px; color:var(--text-on-dark-2);">
                 <tr><td style="padding:4px 0;"><kbd class="kbd">N</kbd></td><td>Next turn</td></tr>
@@ -1526,7 +1526,7 @@
         <div id="journal-panel" class="hidden" style="position:absolute; bottom:48px; left:0; width:320px; max-height:420px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column;">
             <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
                 <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-300);">Journal</span>
-                <button type="button" onclick="toggleJournalPanel()" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
+                <button type="button" onclick="toggleJournalPanel()" aria-label="Close" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
             </div>
             <div id="journal-entries" style="flex:1; overflow-y:auto; padding:8px; max-height:260px; min-height:60px;"></div>
             <form id="journal-form" onsubmit="event.preventDefault(); addJournalEntry();" style="padding:8px; border-top:1px solid var(--border-card);">

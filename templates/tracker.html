@@ -177,7 +177,7 @@ body.system-cosmere .trk {
   padding:7px 11px 7px 30px; border-radius:7px; font-size:12px; outline:none;
 }
 .trk .ts-search input:focus { border-color:var(--t-red); box-shadow:0 0 0 3px rgba(196,60,60,0.12); }
-.trk .ts-search::before { content:"🔍"; position:absolute; left:10px; top:50%; transform:translateY(-50%); opacity:.55; font-size:11px; pointer-events:none; }
+.trk .ts-search::before { content:""; }
 .trk .ts-btn {
   padding:7px 12px; background:var(--t-bg-raised); border:1px solid var(--t-border); border-radius:7px;
   color:var(--t-t1); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
@@ -1513,7 +1513,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="save-load-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl">Save &amp; Load Encounters</span>
-        <button class="panel-close" onclick="document.getElementById('save-load-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('save-load-panel').classList.add('hidden')">&times;</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <label class="tlabel" style="margin:0;">Save</label>
@@ -1569,7 +1569,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                     title="Pinned panels stay open between rolls. Click to unpin.">
                 Pinned
             </button>
-            <button class="panel-close" onclick="closeSecretRollPanel()">&times;</button>
+            <button class="panel-close" aria-label="Close" onclick="closeSecretRollPanel()">&times;</button>
         </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1592,7 +1592,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="handout-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Send Handout to Players</span>
-        <button class="panel-close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
         <div>
@@ -1626,7 +1626,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="loot-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Send Loot to Player</span>
-        <button class="panel-close" onclick="document.getElementById('loot-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('loot-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
         <div>
@@ -1660,7 +1660,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="check-request-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Request a Roll from Players</span>
-        <button class="panel-close" onclick="document.getElementById('check-request-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('check-request-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
         <div>
@@ -1705,7 +1705,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="custom-monster-form" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-red-b);">Custom Monster</span>
-        <button class="panel-close" onclick="toggleCustomForm()">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="toggleCustomForm()">&times;</button>
     </div>
     <div class="custom-grid">
         <div style="grid-column:span 2;"><label>Name</label><input id="cm-name" class="tinput" placeholder="Goblin Warrior" style="width:100%;"></div>
@@ -1862,7 +1862,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                     <span id="sm-pos" class="sp-pos"></span>
                 </div>
             </div>
-            <button class="trk-modal-close" onclick="closeStatModal()" title="Close panel (Esc)">&times;</button>
+            <button class="trk-modal-close" onclick="closeStatModal()" aria-label="Close panel" title="Close panel (Esc)">&times;</button>
         </div>
         <div id="sm-body" class="trk-modal-body">
             <div style="text-align:center;padding:32px;color:var(--t-t3);">Click a combatant name to view their stat block.</div>
