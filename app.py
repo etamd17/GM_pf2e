@@ -361,6 +361,7 @@ def _user_owns_pc(user_id, pc_name):
 GM_API_PREFIXES = (
     '/api/add_combatant', '/api/add_party', '/api/remove_combatant', '/api/clear_encounter',
     '/api/adjust_hp/',  # Encounter tracker HP (not adjust_party_hp which is player-facing)
+    '/api/multi_save_damage',  # GM AOE basic-save resolver (compute+log only)
     '/api/toggle_condition/', '/api/set_persistent_damage/', '/api/toggle_elite_weak/',
     '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
     '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
@@ -5143,6 +5144,12 @@ CAMPAIGN_DEFAULT = {
     # XP math; default) or 'xp' (track XP per PC, auto-award the encounter total,
     # roll over at 1000). XP mode is PF2e-only; Cosmere always uses milestone.
     'advancement_mode': 'milestone',
+    # Table safety tools. 'lines' = hard "we don't go there" topics; 'veils' =
+    # "happens off-screen, don't dwell"; 'notes' = free-text content agreement.
+    # The X-Card (a one-tap, anonymous "pause the game" signal any member can
+    # fire) reads no state here -- it just broadcasts safety_xcard. Shown on
+    # every screen via templates/_sse_hub.html.
+    'safety': {'lines': [], 'veils': [], 'notes': ''},
 }
 
 MODULES_DIR = os.path.join(BASE_DIR, 'static', 'js', 'modules')
@@ -6136,6 +6143,47 @@ def api_session_mood():
     _save_campaign_config({'scene_mood': mood})
     sse_broadcast('scene_mood', {'mood': mood, 't': int(time.time())})
     return jsonify({'success': True, 'mood': mood})
+
+
+# ── Table safety tools (X-Card + Lines & Veils) ────────────────────────────
+def _safety_record():
+    s = _load_campaign_config().get('safety') or {}
+    return {'lines': list(s.get('lines') or []),
+            'veils': list(s.get('veils') or []),
+            'notes': str(s.get('notes') or '')}
+
+
+@app.route('/api/safety', methods=['GET', 'POST'])
+def api_safety():
+    """GET the table's lines/veils/content notes (everyone at the table should
+    see them). POST saves them -- GM only. The X-Card itself is a separate,
+    member-callable signal (/api/safety/xcard)."""
+    if request.method == 'GET':
+        rec = _safety_record()
+        rec['can_edit'] = bool(_is_gm())
+        return jsonify(rec)
+    if not _is_gm():
+        return jsonify({'error': 'GM only'}), 403
+    data = request.get_json(silent=True) or {}
+    def _clean_list(v):
+        items = v if isinstance(v, list) else str(v or '').split('\n')
+        return [str(x).strip() for x in items if str(x).strip()][:50]
+    safety = {'lines': _clean_list(data.get('lines')),
+              'veils': _clean_list(data.get('veils')),
+              'notes': str(data.get('notes') or '').strip()[:2000]}
+    _save_campaign_config({'safety': safety})
+    return jsonify({'success': True, **safety})
+
+
+@app.route('/api/safety/xcard', methods=['POST'])
+def api_safety_xcard():
+    """Anyone at the table taps the X-Card: broadcast an ANONYMOUS 'pause the
+    game' signal to every screen. We deliberately record no identity -- the
+    point of an X-Card is that it carries no attribution or explanation."""
+    if _account_mode() and not _auth.current_user():
+        return jsonify({'error': 'login required'}), 401
+    sse_broadcast('safety_xcard', {'t': int(time.time())})
+    return jsonify({'success': True})
 
 
 @app.route('/api/session/roll_initiative', methods=['POST'])
@@ -10050,6 +10098,77 @@ def adjust_hp(instance_id):
     except ValueError: pass
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
+
+
+# ── Basic-save AOE resolver ────────────────────────────────────────────────
+_BASIC_SAVE_MULT = {'crit_success': 0.0, 'success': 0.5, 'failure': 1.0, 'crit_failure': 2.0}
+_SAVE_ATTR = {'fortitude': 'fort', 'fort': 'fort', 'reflex': 'ref', 'ref': 'ref', 'will': 'will'}
+
+
+def _degree_of_success(total, dc, d20=None):
+    """PF2e four-step degree for a check `total` vs `dc`, applying the natural-20
+    bumps-up-one-step / natural-1 bumps-down-one-step rule when the raw `d20` is
+    given. Returns 'crit_failure' | 'failure' | 'success' | 'crit_success'."""
+    if total >= dc + 10:
+        step = 3
+    elif total >= dc:
+        step = 2
+    elif total <= dc - 10:
+        step = 0
+    else:
+        step = 1
+    if d20 == 20:
+        step = min(3, step + 1)
+    elif d20 == 1:
+        step = max(0, step - 1)
+    return ('crit_failure', 'failure', 'success', 'crit_success')[step]
+
+
+@app.route('/api/multi_save_damage', methods=['POST'])
+def multi_save_damage():
+    """Resolve a basic-save area effect against several combatants at once: roll
+    each target's save (or use a GM-provided d20), compute the PF2e degree, and
+    report the post-save damage (crit-success 0 / success half / failure full /
+    crit-failure double). COMPUTES + LOGS only -- the client then applies each
+    `effective` through /api/adjust_hp, so weakness/resistance, temp HP, and the
+    dying path all stay in the one tested damage path (no duplication)."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids') or []
+    if not ids:
+        return jsonify({'error': 'no targets selected'}), 400
+    save = str(data.get('save') or 'reflex').strip().lower()
+    attr = _SAVE_ATTR.get(save, 'ref')
+    save_label = {'fort': 'Fortitude', 'ref': 'Reflex', 'will': 'Will'}[attr]
+    try:
+        dc = int(data.get('dc') or 0)
+        damage = max(0, int(data.get('damage') or 0))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'dc and damage must be numbers'}), 400
+    rolls = data.get('rolls') or {}
+    dtype = str(data.get('damage_type') or 'untyped').strip()
+    by_id = {c.instance_id: c for c in ACTIVE_ENCOUNTER}
+    results = []
+    for iid in ids:
+        c = by_id.get(iid)
+        if c is None:
+            continue   # stale id -> skip; the tab re-syncs on the next broadcast
+        bonus = int(getattr(c, attr, 0) or 0)
+        try:
+            d20 = int(rolls[iid]) if iid in rolls else random.randint(1, 20)
+        except (TypeError, ValueError, KeyError):
+            d20 = random.randint(1, 20)
+        d20 = max(1, min(20, d20))
+        total = d20 + bonus
+        degree = _degree_of_success(total, dc, d20)
+        mult = _BASIC_SAVE_MULT[degree]
+        effective = int(math.floor(damage * mult))
+        results.append({'instance_id': iid, 'name': c.name, 'd20': d20, 'bonus': bonus,
+                        'total': total, 'degree': degree, 'multiplier': mult, 'effective': effective})
+        tstr = (' ' + dtype) if dtype and dtype != 'untyped' else ''
+        _combat_log(f"{c.name}: {save_label} save {total} vs DC {dc} — "
+                    f"{degree.replace('_', ' ')} ({effective} of {damage}{tstr})", 'roll')
+    return jsonify({'results': results})
+
 
 @app.route('/api/adjust_party_hp/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm

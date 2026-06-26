@@ -104,3 +104,80 @@
         }
     })();
 </script>
+<script>
+    // ───────────── TABLE SAFETY: X-Card + Lines & Veils (shared) ─────────────
+    // One floating control on every live screen. Any member taps the X-Card to
+    // broadcast an anonymous "pause the game" signal (safety_xcard); the GM edits
+    // the table's lines & veils, which everyone can view. Backend: /api/safety.
+    if (!window.__safetyInit) {
+        window.__safetyInit = true;
+        (function () {
+            function ready(fn){ if (document.readyState !== "loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
+            function esc(s){ var d = document.createElement("span"); d.textContent = String(s == null ? "" : s); return d.innerHTML; }
+            var AJAX = { "X-Requested-With": "XMLHttpRequest" };
+            ready(function () {
+                var css = document.createElement("style");
+                css.textContent =
+                    "#safety-fab{position:fixed;right:14px;bottom:14px;z-index:99990;width:38px;height:38px;border-radius:50%;border:1px solid rgba(220,120,90,.5);background:rgba(40,20,18,.85);color:#f3b9a3;font:700 14px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);}" +
+                    "#safety-fab:hover{background:rgba(120,40,30,.92);}" +
+                    "#safety-panel{position:fixed;right:14px;bottom:60px;z-index:99990;width:300px;max-width:88vw;background:#1b1712;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;color:#e8e0d0;font:13px/1.5 system-ui,sans-serif;box-shadow:0 14px 40px rgba(0,0,0,.5);display:none;max-height:72vh;overflow:auto;}" +
+                    "#safety-panel h4{margin:11px 0 3px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#b9b0a0;}" +
+                    "#safety-panel ul{margin:0;padding-left:18px;}#safety-panel .empty{opacity:.45;}" +
+                    "#safety-panel textarea{width:100%;min-height:44px;background:#14110c;color:#e8e0d0;border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:6px;font:12px/1.4 inherit;box-sizing:border-box;margin-bottom:6px;}" +
+                    "#safety-xbtn{width:100%;padding:11px;border-radius:8px;border:1px solid rgba(220,120,90,.55);background:linear-gradient(180deg,#d36e6e,#a83a3a);color:#fff;font-weight:700;cursor:pointer;font-size:14px;}" +
+                    "#safety-overlay{position:fixed;inset:0;z-index:99999;background:rgba(10,8,12,.93);display:none;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:24px;color:#f3ece0;}" +
+                    "#safety-overlay h1{font:700 34px/1.2 system-ui,sans-serif;margin:0 0 10px;color:#f0d0c0;}" +
+                    "#safety-overlay p{max-width:440px;opacity:.85;margin:0 0 22px;}" +
+                    "#safety-overlay button{padding:11px 26px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;font-size:15px;}";
+                document.head.appendChild(css);
+
+                var fab = document.createElement("button");
+                fab.id = "safety-fab"; fab.type = "button"; fab.textContent = "X";
+                fab.title = "Safety tools — tap to pause (X-Card) or view the table's lines & veils";
+                var panel = document.createElement("div"); panel.id = "safety-panel";
+                var overlay = document.createElement("div"); overlay.id = "safety-overlay";
+                overlay.innerHTML = "<h1>The game is paused</h1><p>Someone used the X-Card. No reason needed and no blame — take a breath, and the table will check in and adjust.</p><button type=\"button\" id=\"safety-resume\">Resume</button>";
+                document.body.appendChild(fab); document.body.appendChild(panel); document.body.appendChild(overlay);
+
+                var open = false;
+                function listOr(arr){ return arr.length ? "<ul>" + arr.map(function (x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : "<div class=\"empty\">none set</div>"; }
+                function renderPanel(rec){
+                    var lines = rec.lines || [], veils = rec.veils || [];
+                    var html = "<button type=\"button\" id=\"safety-xbtn\">Pause the game (X-Card)</button>" +
+                        "<div style=\"font-size:11px;opacity:.6;margin:6px 0 2px;\">A one-tap, anonymous pause. No reason needed.</div>" +
+                        "<h4>Lines (hard no)</h4>" + listOr(lines) +
+                        "<h4>Veils (off-screen)</h4>" + listOr(veils) +
+                        (rec.notes ? "<h4>Notes</h4><div>" + esc(rec.notes) + "</div>" : "");
+                    if (rec.can_edit) {
+                        html += "<h4>Edit &middot; GM (one per line)</h4>" +
+                            "Lines<textarea id=\"sf-lines\">" + esc(lines.join("\n")) + "</textarea>" +
+                            "Veils<textarea id=\"sf-veils\">" + esc(veils.join("\n")) + "</textarea>" +
+                            "Notes<textarea id=\"sf-notes\">" + esc(rec.notes || "") + "</textarea>" +
+                            "<button type=\"button\" id=\"sf-save\" style=\"width:100%;padding:8px;border-radius:7px;border:1px solid rgba(224,182,90,.5);background:rgba(224,182,90,.16);color:#f0d88a;cursor:pointer;\">Save</button>";
+                    }
+                    panel.innerHTML = html;
+                    panel.querySelector("#safety-xbtn").onclick = tapX;
+                    var sv = panel.querySelector("#sf-save");
+                    if (sv) sv.onclick = saveSafety;
+                }
+                function loadAndShow(){
+                    fetch("/api/safety", { headers: AJAX }).then(function (r){ return r.json(); }).then(renderPanel)
+                        .catch(function (){ panel.innerHTML = "<div class=\"empty\">Couldn't load safety info.</div>"; });
+                }
+                function tapX(){
+                    fetch("/api/safety/xcard", { method: "POST", headers: AJAX }).catch(function (){});
+                    open = false; panel.style.display = "none"; overlay.style.display = "flex";   // immediate local feedback (SSE also fires for everyone)
+                }
+                function saveSafety(){
+                    var body = { lines: panel.querySelector("#sf-lines").value || "", veils: panel.querySelector("#sf-veils").value || "", notes: panel.querySelector("#sf-notes").value || "" };
+                    fetch("/api/safety", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" }, body: JSON.stringify(body) })
+                        .then(function (r){ return r.json(); }).then(function (){ loadAndShow(); }).catch(function (){});
+                }
+                fab.onclick = function (){ open = !open; panel.style.display = open ? "block" : "none"; if (open) loadAndShow(); };
+                document.addEventListener("click", function (e){ if (open && !panel.contains(e.target) && e.target !== fab) { open = false; panel.style.display = "none"; } });
+                overlay.querySelector("#safety-resume").onclick = function (){ overlay.style.display = "none"; };
+                if (window.appSSE) window.appSSE("safety_xcard", function (){ overlay.style.display = "flex"; });
+            });
+        })();
+    }
+</script>
