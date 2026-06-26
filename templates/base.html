@@ -167,6 +167,22 @@
     <div id="gm-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none w-72"></div>
     <div id="pf2e-action-toast-container"></div>
 
+    {# UX-A: Action Dock — gather the floating widgets (dice, audio, chat,
+       journal, safety X-Card) into one bottom-right row instead of competing
+       corners that overlap a tablet sheet/tracker. Each widget's panel still
+       opens above its own button. Player views sit above the mobile nav. #}
+    <style>
+      #dice-widget, #audio-widget, #chat-widget, #journal-widget, #safety-fab {
+        bottom: {% if not is_gm and player_name %}76px{% else %}14px{% endif %} !important;
+        left: auto !important; top: auto !important; z-index: 40 !important;
+      }
+      #dice-widget    { right: 14px !important; }
+      #audio-widget   { right: 64px !important; }
+      #chat-widget    { right: 114px !important; }
+      #journal-widget { right: 164px !important; }
+      #safety-fab     { right: 214px !important; width: 44px !important; height: 44px !important; }
+    </style>
+
     <!-- Dice Roller -->
     <div id="dice-widget" class="fixed {% if not is_gm and player_name %}bottom-[72px]{% else %}bottom-4{% endif %} right-4 z-[100] flex flex-col items-end">
         <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-card-2); border:1px solid var(--border-rule);">
