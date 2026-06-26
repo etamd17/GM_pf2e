@@ -1815,6 +1815,17 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button class="hb-btn danger" type="button" onclick="multiApplyDamage('damage')" title="Apply damage to all selected (W/R/I auto-applies for monsters)">Damage</button>
         <button class="hb-btn gold" type="button" onclick="multiApplyDamage('heal')" title="Heal all selected">Heal</button>
     </div>
+    <div class="ma-section" title="Basic save: rolls each target's save vs the DC and applies the amount above as crit-success 0 / success half / failure full / crit-failure double (W/R/I still applies).">
+        <span class="ma-lbl" style="font-size:11px;opacity:.7;">Basic save</span>
+        <select id="multi-save-type" style="width:84px;">
+            <option value="reflex">Reflex</option>
+            <option value="fortitude">Fortitude</option>
+            <option value="will">Will</option>
+        </select>
+        <input type="number" id="multi-save-dc" placeholder="DC" min="1" style="width:64px;">
+        <button class="hb-btn danger" type="button" onclick="multiSaveDamage()" title="Roll saves and apply the amount above (uses the damage amount + type from the row above)">Roll saves</button>
+    </div>
+    <div class="ma-section" id="multi-save-results" style="display:none;font-size:11px;line-height:1.5;flex-direction:column;align-items:flex-start;gap:1px;"></div>
     <div class="ma-section">
         <select id="multi-cond-sel"></select>
         <input type="number" id="multi-cond-val" placeholder="val" min="1" max="9" style="width:48px;" title="For valued conditions (frightened, sickened, etc.) — defaults to 1">
@@ -3298,6 +3309,46 @@ async function multiApplyDamage(action) {
         try {
             await fetch('/api/adjust_hp/' + id, { method: 'POST', body: fd });
         } catch(_) {}
+    }
+}
+// Basic-save AOE: roll each target's save server-side (compute + log), then apply
+// the post-save amount via the existing /api/adjust_hp path (so W/R/I + temp HP +
+// dying stay in one tested place). Uses the amount + type from the damage row.
+async function multiSaveDamage() {
+    const ids = _selectedIds();
+    if (!ids.length) { toast('Select targets first', 'error'); return; }
+    const damage = parseInt(document.getElementById('multi-dmg-amount').value || '0', 10);
+    if (!damage || damage < 1) { toast('Enter the full damage in the amount box above', 'error'); return; }
+    const dc = parseInt(document.getElementById('multi-save-dc').value || '0', 10);
+    if (!dc || dc < 1) { toast('Enter the save DC', 'error'); return; }
+    const save = document.getElementById('multi-save-type').value || 'reflex';
+    const damageType = document.getElementById('multi-dmg-type').value || 'untyped';
+    let results;
+    try {
+        const res = await fetch('/api/multi_save_damage', { method: 'POST', headers: { ...JSON_HEADERS },
+            body: JSON.stringify({ ids, save, dc, damage, damage_type: damageType }) });
+        const data = await res.json();
+        if (!res.ok) { toast(data.error || 'Save resolve failed', 'error'); return; }
+        results = data.results || [];
+    } catch (_) { toast('Network error resolving saves', 'error'); return; }
+    for (const r of results) {
+        if (r.effective > 0) {
+            const fd = new FormData();
+            fd.append('amount', String(r.effective));
+            fd.append('action', 'damage');
+            fd.append('damage_type', damageType);
+            try { await fetch('/api/adjust_hp/' + r.instance_id, { method: 'POST', body: fd, headers: { ...AJAX_HEADERS } }); } catch (_) {}
+        }
+    }
+    const box = document.getElementById('multi-save-results');
+    if (box) {
+        const fmt = { crit_success: 'crit success', success: 'success', failure: 'failure', crit_failure: 'crit failure' };
+        box.innerHTML = results.map(r => {
+            const col = r.degree === 'crit_success' ? '#6ee7a8' : r.degree === 'success' ? '#aedcff'
+                : r.degree === 'crit_failure' ? '#f0a3a3' : '#f0d88a';
+            return `<span><b>${escapeHtml(r.name)}</b>: ${r.total} vs ${dc} — <span style="color:${col};">${fmt[r.degree] || r.degree}</span> · ${r.effective} dmg</span>`;
+        }).join('');
+        box.style.display = results.length ? 'flex' : 'none';
     }
 }
 async function multiApplyCondition() {
