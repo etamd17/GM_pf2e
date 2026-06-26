@@ -25,16 +25,25 @@
   --t-trig-border:#7a1f1f;
   --t-disabled-bg:var(--bg-card-2);
   --t-disabled-fg:var(--text-on-cream-2);
-  --t-row-active: rgba(196,60,60,0.12);
+  /* Folio-calm restyle: one per-system accent (gold on PF2e, Stormlight cyan
+     on Cosmere) drives the active row, tags, and focus rings, so the tracker
+     reads as one cohesive surface instead of six competing accents. */
+  --t-accent: var(--t-gold);
+  --t-accent-soft: rgba(200,168,78,0.12);
+  --t-accent-line: rgba(200,168,78,0.45);
+  --t-row-active: var(--t-accent-soft);
+  /* Stacking scale (UX-A) so overlays/modals/toasts never fight. */
+  --z-row:1; --z-sticky:10; --z-dock:20; --z-modal:30; --z-toast:40; --z-search:50;
   color: var(--t-t1);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   position: relative;
-  background-image:
-    radial-gradient(ellipse at 10% -8%, rgba(196,60,60,0.09), transparent 42%),
-    radial-gradient(ellipse at 92% 6%, rgba(200,168,78,0.05), transparent 50%),
-    radial-gradient(ellipse at 85% 110%, rgba(155,126,222,0.06), transparent 55%);
   padding-bottom: 12px;
+}
+body.system-cosmere .trk {
+  --t-accent:#6fb7d6;
+  --t-accent-soft:rgba(111,183,214,0.12);
+  --t-accent-line:rgba(111,183,214,0.45);
 }
 .trk .font-d { font-family:'Cinzel',serif; }
 .trk .font-n { font-family:'Crimson Pro',serif; }
@@ -46,7 +55,7 @@
   grid-template-columns: 1fr auto 1fr;
   gap:14px;
   padding:6px 14px;
-  background:linear-gradient(180deg, rgba(23,27,38,0.85) 0%, rgba(19,22,31,0.9) 100%);
+  background:var(--t-bg-raised);
   border:1px solid var(--t-border);
   border-radius:12px;
   align-items:center;
@@ -54,9 +63,8 @@
   overflow:hidden;
 }
 .trk .hero-bar::before {
-  content:""; position:absolute; top:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg, transparent, var(--t-red-d), var(--t-red), var(--t-gold), var(--t-red), var(--t-red-d), transparent);
-  opacity:.7;
+  content:""; position:absolute; top:0; left:0; right:0; height:1px;
+  background:var(--t-accent-line);
 }
 .trk .hb-left { display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }
 .trk .hb-left .name { font-family:'Cinzel',serif; font-size:14px; font-weight:700; letter-spacing:.4px; color:var(--t-t1); }
@@ -341,21 +349,15 @@
      compete for vertical space, and keeps the in-grid HP gauge readable. */
   min-height: 56px;
   border-bottom:1px solid var(--t-border);
-  box-shadow: 0 2px 0 -1px rgba(200,168,78,0.08);
   align-items:center;
   transition: background .15s, box-shadow .15s;
 }
 .trk .combatant:hover { background:rgba(255,255,255,0.02); }
 .trk .combatant.active {
-  background:
-    linear-gradient(90deg, var(--t-row-active) 0%, rgba(196,60,60,0.04) 40%, transparent 75%),
-    linear-gradient(90deg, rgba(200,168,78,0.04) 0%, transparent 40%);
-  box-shadow:
-    inset 3px 0 0 var(--t-red),
-    inset -1px 0 0 rgba(200,168,78,0.12),
-    0 2px 0 -1px rgba(200,168,78,0.2);
+  background: var(--t-accent-soft);
+  box-shadow: inset 3px 0 0 var(--t-accent);
 }
-.trk .combatant.active .nm { color:var(--t-red-b); }
+.trk .combatant.active .nm { color:var(--t-accent); }
 .trk .combatant.delaying { opacity:.55; font-style:italic; }
 .trk .combatant.down { opacity:.5; }
 .trk .combatant.down .nm { text-decoration:line-through; color:var(--t-t3); }
@@ -484,10 +486,10 @@ body.multi-mode .trk .combatant.multi-selected { background: rgba(200,168,78,0.0
 }
 .trk .nm:hover { color:var(--t-gold); }
 .trk .nm-sub { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:.4px; margin-top:1px; }
-.trk .nm-sub .k { color:var(--t-red-b); font-weight:700; }
-.trk .nm-sub .k.pc { color:var(--t-teal); }
-.trk .nm-sub .k.active { color:var(--t-gold); }
-.trk .nm-sub .k.delay { color:var(--t-t2); }
+.trk .nm-sub .k { color:var(--t-t2); font-weight:600; }
+.trk .nm-sub .k.pc { color:var(--t-t2); }
+.trk .nm-sub .k.active { color:var(--t-accent); font-weight:700; }
+.trk .nm-sub .k.delay { color:var(--t-t3); }
 /* Reaction indicator — RXN means available, RXN ✗ means spent.
    Buttons so the GM can flip in one click without leaving the row. */
 button.k.rxn-ready, button.k.rxn-spent {
@@ -669,10 +671,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 /* In-grid gauge: 12px tall (vs old 6px) so the GM can read severity from
    across the table. Threshold colors are unchanged. */
 .trk .c-hp-bar { height:12px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; box-shadow: inset 0 1px 0 rgba(0,0,0,0.4); }
-.trk .c-hp-fill { height:100%; transition:width .3s ease, background .3s ease; background:linear-gradient(90deg, var(--t-green), #5fd884); }
-.trk .c-hp-fill.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
-.trk .c-hp-fill.mid-low { background:linear-gradient(90deg, #c47a3a, #e07a2b); }
-.trk .c-hp-fill.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
+.trk .c-hp-fill { height:100%; transition:width .3s ease, background .3s ease; background:var(--t-green); }
+.trk .c-hp-fill.mid { background:var(--t-gold); }
+.trk .c-hp-fill.mid-low { background:#c47a3a; }
+.trk .c-hp-fill.low { background:var(--t-red); }
 /* Damage entry — segmented control: amount + type + [−][+] visually joined */
 .trk .c-hp-ctrl { display:flex; gap:0; margin-top:6px; align-items:stretch; height:32px; }
 .trk .c-hp-ctrl > * { border-radius:0; height:100%; box-sizing:border-box; }
@@ -712,13 +714,12 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 .trk .c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; min-width:0; }
 .trk .cp {
-  font-size:9px; padding:2px 6px; border-radius:9px; font-weight:700;
-  letter-spacing:.5px; text-transform:uppercase;
+  font-size:10px; padding:1px 7px; border-radius:4px; font-weight:600;
+  letter-spacing:.2px; text-transform:capitalize;
   display:inline-flex; gap:4px; align-items:center;
-  background:rgba(255,255,255,0.06); color:var(--t-t2); border:1px solid rgba(255,255,255,0.12);
+  background:transparent; color:var(--t-accent); border:1px solid var(--t-accent-line);
 }
-.trk .cp.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
-.trk .cp.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
+.trk .cp.red, .trk .cp.gold { background:transparent; color:var(--t-accent); border-color:var(--t-accent-line); }
 .trk .cp button {
   background:none; border:none; padding:2px 4px; cursor:pointer; color:inherit; opacity:.85; font-size:14px; line-height:1;
   border-radius:3px;
