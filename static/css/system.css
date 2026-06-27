@@ -1340,8 +1340,8 @@ html[data-theme="light"] .panel-card {
     border-radius: var(--r-sm) !important;
     box-shadow: none !important;
 }
-.trk .next-btn { background: var(--ruby-400) !important; border-color: var(--ruby-400) !important; color: #fff !important; }
-.trk .next-btn:hover { background: var(--ruby-300) !important; border-color: var(--ruby-300) !important; }
+.trk .next-btn { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--ink-950) !important; }
+.trk .next-btn:hover { background: var(--accent-hover) !important; border-color: var(--accent-hover) !important; }
 .trk .prev-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 
 /* Combatant card grid */

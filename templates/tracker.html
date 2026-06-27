@@ -25,16 +25,25 @@
   --t-trig-border:#7a1f1f;
   --t-disabled-bg:var(--bg-card-2);
   --t-disabled-fg:var(--text-on-cream-2);
-  --t-row-active: rgba(196,60,60,0.12);
+  /* Folio-calm restyle: one per-system accent (gold on PF2e, Stormlight cyan
+     on Cosmere) drives the active row, tags, and focus rings, so the tracker
+     reads as one cohesive surface instead of six competing accents. */
+  --t-accent: var(--t-gold);
+  --t-accent-soft: rgba(200,168,78,0.12);
+  --t-accent-line: rgba(200,168,78,0.45);
+  --t-row-active: var(--t-accent-soft);
+  /* Stacking scale (UX-A) so overlays/modals/toasts never fight. */
+  --z-row:1; --z-sticky:10; --z-dock:20; --z-modal:30; --z-toast:40; --z-search:50;
   color: var(--t-t1);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   position: relative;
-  background-image:
-    radial-gradient(ellipse at 10% -8%, rgba(196,60,60,0.09), transparent 42%),
-    radial-gradient(ellipse at 92% 6%, rgba(200,168,78,0.05), transparent 50%),
-    radial-gradient(ellipse at 85% 110%, rgba(155,126,222,0.06), transparent 55%);
   padding-bottom: 12px;
+}
+body.system-cosmere .trk {
+  --t-accent:#6fb7d6;
+  --t-accent-soft:rgba(111,183,214,0.12);
+  --t-accent-line:rgba(111,183,214,0.45);
 }
 .trk .font-d { font-family:'Cinzel',serif; }
 .trk .font-n { font-family:'Crimson Pro',serif; }
@@ -46,7 +55,7 @@
   grid-template-columns: 1fr auto 1fr;
   gap:14px;
   padding:6px 14px;
-  background:linear-gradient(180deg, rgba(23,27,38,0.85) 0%, rgba(19,22,31,0.9) 100%);
+  background:var(--t-bg-raised);
   border:1px solid var(--t-border);
   border-radius:12px;
   align-items:center;
@@ -54,9 +63,8 @@
   overflow:hidden;
 }
 .trk .hero-bar::before {
-  content:""; position:absolute; top:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg, transparent, var(--t-red-d), var(--t-red), var(--t-gold), var(--t-red), var(--t-red-d), transparent);
-  opacity:.7;
+  content:""; position:absolute; top:0; left:0; right:0; height:1px;
+  background:var(--t-accent-line);
 }
 .trk .hb-left { display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; }
 .trk .hb-left .name { font-family:'Cinzel',serif; font-size:14px; font-weight:700; letter-spacing:.4px; color:var(--t-t1); }
@@ -132,13 +140,12 @@
 .trk .turn-now .v::before { content:"▸ "; color:var(--t-gold); }
 .trk .turn-ctl { display:flex; gap:6px; }
 .trk .next-btn {
-  background:linear-gradient(180deg, var(--t-red) 0%, var(--t-red-d) 100%);
-  color:#fff; font-weight:700; border:none;
-  padding:5px 14px; border-radius:8px; cursor:pointer;
+  background:var(--t-accent);
+  color:#1a1407; font-weight:700; border:none;
+  padding:6px 14px; border-radius:8px; cursor:pointer;
   font-size:12px; letter-spacing:.6px; text-transform:uppercase;
-  box-shadow:0 3px 12px rgba(196,60,60,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
 }
-.trk .next-btn:hover { background:linear-gradient(180deg, var(--t-red-b) 0%, var(--t-red) 100%); }
+.trk .next-btn:hover { filter:brightness(1.08); }
 .trk .prev-btn {
   background:transparent; color:var(--t-t2); border:1px solid var(--t-border);
   padding:7px 10px; border-radius:7px; cursor:pointer; font-size:12px;
@@ -159,7 +166,7 @@
 .trk .tool-strip {
   display:flex; gap:8px; align-items:center; flex-wrap:wrap;
   padding:9px 13px;
-  background:linear-gradient(180deg, rgba(26,30,41,0.8), rgba(19,22,31,0.8));
+  background:var(--t-bg-raised);
   border:1px solid var(--t-border);
   border-radius:10px; margin-bottom:10px;
   position:relative;
@@ -170,7 +177,7 @@
   padding:7px 11px 7px 30px; border-radius:7px; font-size:12px; outline:none;
 }
 .trk .ts-search input:focus { border-color:var(--t-red); box-shadow:0 0 0 3px rgba(196,60,60,0.12); }
-.trk .ts-search::before { content:"🔍"; position:absolute; left:10px; top:50%; transform:translateY(-50%); opacity:.55; font-size:11px; pointer-events:none; }
+.trk .ts-search::before { content:""; }
 .trk .ts-btn {
   padding:7px 12px; background:var(--t-bg-raised); border:1px solid var(--t-border); border-radius:7px;
   color:var(--t-t1); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
@@ -341,21 +348,15 @@
      compete for vertical space, and keeps the in-grid HP gauge readable. */
   min-height: 56px;
   border-bottom:1px solid var(--t-border);
-  box-shadow: 0 2px 0 -1px rgba(200,168,78,0.08);
   align-items:center;
   transition: background .15s, box-shadow .15s;
 }
 .trk .combatant:hover { background:rgba(255,255,255,0.02); }
 .trk .combatant.active {
-  background:
-    linear-gradient(90deg, var(--t-row-active) 0%, rgba(196,60,60,0.04) 40%, transparent 75%),
-    linear-gradient(90deg, rgba(200,168,78,0.04) 0%, transparent 40%);
-  box-shadow:
-    inset 3px 0 0 var(--t-red),
-    inset -1px 0 0 rgba(200,168,78,0.12),
-    0 2px 0 -1px rgba(200,168,78,0.2);
+  background: var(--t-accent-soft);
+  box-shadow: inset 3px 0 0 var(--t-accent);
 }
-.trk .combatant.active .nm { color:var(--t-red-b); }
+.trk .combatant.active .nm { color:var(--t-accent); }
 .trk .combatant.delaying { opacity:.55; font-style:italic; }
 .trk .combatant.down { opacity:.5; }
 .trk .combatant.down .nm { text-decoration:line-through; color:var(--t-t3); }
@@ -484,10 +485,10 @@ body.multi-mode .trk .combatant.multi-selected { background: rgba(200,168,78,0.0
 }
 .trk .nm:hover { color:var(--t-gold); }
 .trk .nm-sub { font-size:10px; color:var(--t-t3); text-transform:uppercase; letter-spacing:.4px; margin-top:1px; }
-.trk .nm-sub .k { color:var(--t-red-b); font-weight:700; }
-.trk .nm-sub .k.pc { color:var(--t-teal); }
-.trk .nm-sub .k.active { color:var(--t-gold); }
-.trk .nm-sub .k.delay { color:var(--t-t2); }
+.trk .nm-sub .k { color:var(--t-t2); font-weight:600; }
+.trk .nm-sub .k.pc { color:var(--t-t2); }
+.trk .nm-sub .k.active { color:var(--t-accent); font-weight:700; }
+.trk .nm-sub .k.delay { color:var(--t-t3); }
 /* Reaction indicator — RXN means available, RXN ✗ means spent.
    Buttons so the GM can flip in one click without leaving the row. */
 button.k.rxn-ready, button.k.rxn-spent {
@@ -669,10 +670,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 /* In-grid gauge: 12px tall (vs old 6px) so the GM can read severity from
    across the table. Threshold colors are unchanged. */
 .trk .c-hp-bar { height:12px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; box-shadow: inset 0 1px 0 rgba(0,0,0,0.4); }
-.trk .c-hp-fill { height:100%; transition:width .3s ease, background .3s ease; background:linear-gradient(90deg, var(--t-green), #5fd884); }
-.trk .c-hp-fill.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
-.trk .c-hp-fill.mid-low { background:linear-gradient(90deg, #c47a3a, #e07a2b); }
-.trk .c-hp-fill.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
+.trk .c-hp-fill { height:100%; transition:width .3s ease, background .3s ease; background:var(--t-green); }
+.trk .c-hp-fill.mid { background:var(--t-gold); }
+.trk .c-hp-fill.mid-low { background:#c47a3a; }
+.trk .c-hp-fill.low { background:var(--t-red); }
 /* Damage entry — segmented control: amount + type + [−][+] visually joined */
 .trk .c-hp-ctrl { display:flex; gap:0; margin-top:6px; align-items:stretch; height:32px; }
 .trk .c-hp-ctrl > * { border-radius:0; height:100%; box-sizing:border-box; }
@@ -712,13 +713,12 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 .trk .c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; min-width:0; }
 .trk .cp {
-  font-size:9px; padding:2px 6px; border-radius:9px; font-weight:700;
-  letter-spacing:.5px; text-transform:uppercase;
+  font-size:10px; padding:1px 7px; border-radius:4px; font-weight:600;
+  letter-spacing:.2px; text-transform:capitalize;
   display:inline-flex; gap:4px; align-items:center;
-  background:rgba(255,255,255,0.06); color:var(--t-t2); border:1px solid rgba(255,255,255,0.12);
+  background:transparent; color:var(--t-accent); border:1px solid var(--t-accent-line);
 }
-.trk .cp.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
-.trk .cp.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
+.trk .cp.red, .trk .cp.gold { background:transparent; color:var(--t-accent); border-color:var(--t-accent-line); }
 .trk .cp button {
   background:none; border:none; padding:2px 4px; cursor:pointer; color:inherit; opacity:.85; font-size:14px; line-height:1;
   border-radius:3px;
@@ -849,6 +849,20 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .ew-btn:hover { border-color:var(--t-t4); }
 .trk .ew-btn.on-elite { background:rgba(200,168,78,0.18); color:var(--t-gold); border-color:rgba(200,168,78,0.45); }
 .trk .ew-btn.on-weak { background:rgba(255,255,255,0.08); color:var(--t-t2); border-color:rgba(255,255,255,0.2); }
+/* Initiative-row overflow (UX-B): secondary controls behind a ⋯ menu so the
+   run-time row stays calm. */
+.trk .c-of-wrap { position:relative; display:inline-block; }
+.trk .c-of-btn { padding:1px 8px; font-size:16px; line-height:1.1; border-radius:6px; cursor:pointer; }
+.trk .c-of-menu { display:none; position:absolute; right:0; top:calc(100% + 4px); z-index:var(--z-dock);
+  min-width:158px; background:var(--t-bg-raised); border:1px solid var(--t-border); border-radius:8px;
+  padding:5px; box-shadow:0 8px 24px rgba(0,0,0,.4); flex-direction:column; gap:3px; }
+.trk .c-of-menu.open { display:flex; }
+.trk .c-of-menu .of-item { width:100%; text-align:left; border-radius:5px !important; padding:6px 9px !important;
+  font-size:11px; cursor:pointer; }
+.trk .c-of-menu .of-item:hover { background:var(--t-accent-soft) !important; border-color:var(--t-accent-line) !important; color:var(--t-accent) !important; }
+.trk .c-of-menu .of-item.danger:hover { background:rgba(196,60,60,0.12) !important; border-color:rgba(196,60,60,0.4) !important; color:var(--t-red-b) !important; }
+.trk .c-of-menu .of-ew { display:flex; align-items:center; gap:4px; padding:2px 4px; }
+.trk .c-of-menu .of-ew .of-lbl { font-size:10px; color:var(--t-t3); margin-right:auto; }
 .trk .act-btn {
   padding:3px 0; border-radius:4px; font-size:9px; font-weight:700; cursor:pointer;
   background:var(--t-bg-higher); border:1px solid var(--t-border); color:var(--t-t2);
@@ -878,23 +892,25 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 @media (min-width:1280px) { .trk .side { position:sticky; top:14px; max-height:calc(100vh - 30px); overflow-y:auto; } }
 
 .trk .hero-card {
-  background:
-    linear-gradient(180deg, rgba(196,60,60,0.12) 0%, rgba(26,30,41,0.4) 35%, var(--t-bg-surface) 100%);
+  background:var(--t-bg-surface);
   border:1px solid var(--t-border); border-radius:14px; padding:16px;
   position:relative; overflow:hidden;
-  box-shadow:0 10px 34px rgba(0,0,0,0.32);
 }
 
+.trk .ap-bar { display:flex; align-items:center; gap:8px; margin-bottom:11px; }
+.trk .ap-bar .ap-pin { font-size:10px; letter-spacing:.06em; text-transform:uppercase; font-weight:600; color:var(--t-accent); }
+.trk .ap-bar .ap-pin.dim { color:var(--t-t3); }
+.trk .ap-bar .ap-follow { font-size:10px; padding:3px 9px; cursor:pointer; }
+.trk .ap-bar .ap-full { font-size:10px; padding:3px 9px; cursor:pointer; margin-left:auto; }
 .trk .hero-top { display:flex; gap:13px; align-items:flex-start; margin-bottom:12px; position:relative; }
 .trk .hero-port {
   width:72px; height:72px; border-radius:11px;
-  background:linear-gradient(135deg, var(--t-bg-higher), var(--t-bg-raised));
+  background:var(--t-bg-higher);
   display:flex; align-items:center; justify-content:center;
   font-family:'Cinzel',serif; font-weight:700; font-size:32px; color:var(--t-t1);
-  border:2.5px solid var(--t-red); flex-shrink:0; text-transform:uppercase;
-  box-shadow:inset 0 0 20px rgba(196,60,60,0.18), 0 0 22px rgba(196,60,60,0.28);
+  border:1px solid var(--t-accent-line); flex-shrink:0; text-transform:uppercase;
 }
-.trk .hero-port.pc { border-color:var(--t-teal); box-shadow:inset 0 0 20px rgba(74,150,150,0.18), 0 0 22px rgba(74,150,150,0.28); color:var(--t-teal); }
+.trk .hero-port.pc { border-color:var(--t-border); color:var(--t-t1); }
 .trk .hero-ttl { flex:1; min-width:0; }
 .trk .hero-ttl .hnm {
   font-family:'Cinzel',serif; font-weight:900; font-size:22px; line-height:1.05; letter-spacing:.5px;
@@ -902,23 +918,21 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 }
 .trk .hero-ttl .role { font-family:'Crimson Pro',serif; font-style:italic; font-size:12px; color:var(--t-t2); margin-top:4px; line-height:1.3; }
 .trk .hero-ttl .tag-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
-.trk .tagp { font-size:9px; padding:2px 8px; background:rgba(196,60,60,0.12); border:1px solid rgba(196,60,60,0.35); color:var(--t-red-b); border-radius:4px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; }
-.trk .tagp.gold { background:rgba(200,168,78,0.12); border-color:rgba(200,168,78,0.35); color:var(--t-gold); }
-.trk .tagp.pc { background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.15); color:var(--t-t2); }
-.trk .tagp.rare { background:#002664; color:#fff; border-color:rgba(255,255,255,0.15); }
-.trk .tagp.uncommon { background:#98691E; color:#fff; border-color:rgba(255,255,255,0.15); }
-.trk .tagp.unique { background:#54166E; color:#fff; border-color:rgba(255,255,255,0.15); }
+.trk .tagp { font-size:9px; padding:2px 8px; background:transparent; border:1px solid var(--t-border); color:var(--t-t2); border-radius:4px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
+.trk .tagp.gold { border-color:var(--t-accent-line); color:var(--t-accent); }
+.trk .tagp.pc { border-color:var(--t-border); color:var(--t-t2); }
+.trk .tagp.rare, .trk .tagp.uncommon, .trk .tagp.unique { background:transparent; color:var(--t-t2); border-color:var(--t-border); }
 
 .trk .hero-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; position:relative; }
 .trk .hs-box {
-  background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.1));
+  background:var(--t-bg-higher);
   border:1px solid var(--t-border); border-radius:7px; padding:6px 8px; text-align:center;
 }
 .trk .hs-box .l { font-size:9px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; font-weight:600; }
 .trk .hs-box .v { font-family:'Cinzel',serif; font-size:16px; font-weight:700; margin-top:1px; color:var(--t-t1); }
 
 .trk .hp-ribbon {
-  background:linear-gradient(180deg, rgba(38,43,58,0.6), rgba(26,30,41,0.8));
+  background:var(--t-bg-higher);
   border:1px solid var(--t-border); border-radius:10px; padding:11px 12px; margin-bottom:10px;
 }
 .trk .hp-r-top { display:flex; justify-content:space-between; align-items:baseline; }
@@ -928,10 +942,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .hp-num .slash { color:var(--t-t3); }
 .trk .hp-num .mx { color:var(--t-t3); font-size:15px; }
 .trk .hp-bar { height:7px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; margin-top:5px; }
-.trk .hp-bar .f { height:100%; transition:width .3s; background:linear-gradient(90deg, var(--t-green), #5fd884); }
-.trk .hp-bar .f.mid { background:linear-gradient(90deg, var(--t-gold), #e0b858); }
-.trk .hp-bar .f.mid-low { background:linear-gradient(90deg, #c47a3a, #e07a2b); }
-.trk .hp-bar .f.low { background:linear-gradient(90deg, var(--t-red), var(--t-red-b)); }
+.trk .hp-bar .f { height:100%; transition:width .3s; background:var(--t-green); }
+.trk .hp-bar .f.mid { background:var(--t-gold); }
+.trk .hp-bar .f.mid-low { background:#c47a3a; }
+.trk .hp-bar .f.low { background:var(--t-red); }
 
 .trk .section-h {
   font-family:'Cinzel',serif; font-size:10px; letter-spacing:1.6px; text-transform:uppercase; color:var(--t-t2);
@@ -944,7 +958,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 .trk .strikes { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .trk .strike {
-  background:linear-gradient(135deg, rgba(200,168,78,0.04), transparent), rgba(26,30,41,0.7);
+  background:var(--t-bg-raised);
   border:1px solid var(--t-border); border-radius:7px; padding:7px 9px;
 }
 .trk .strike .snm { font-weight:700; font-size:11.5px; color:var(--t-t1); display:flex; justify-content:space-between; align-items:center; gap:6px; }
@@ -953,12 +967,11 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 .trk .cond-row { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
 .trk .cond-chip {
-  padding:3px 9px; border-radius:14px; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:.2px; text-transform:capitalize;
   display:inline-flex; gap:5px; align-items:center;
-  background:rgba(255,255,255,0.06); color:var(--t-t2); border:1px solid rgba(255,255,255,0.12);
+  background:transparent; color:var(--t-accent); border:1px solid var(--t-accent-line);
 }
-.trk .cond-chip.red { background:rgba(196,60,60,0.15); color:var(--t-red-b); border-color:rgba(196,60,60,0.35); }
-.trk .cond-chip.gold { background:rgba(200,168,78,0.15); color:var(--t-gold); border-color:rgba(200,168,78,0.35); }
+.trk .cond-chip.red, .trk .cond-chip.gold { background:transparent; color:var(--t-accent); border-color:var(--t-accent-line); }
 .trk .cond-chip button { background:none; border:none; color:inherit; opacity:.65; cursor:pointer; font-size:11px; line-height:1; padding:0; }
 .trk .cond-chip button:hover { opacity:1; color:var(--t-red-b); }
 
@@ -970,8 +983,8 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .abl-row .abl-dsc { font-size:11px; color:var(--t-t2); line-height:1.4; font-family:'Crimson Pro',serif; }
 
 .trk .reminder {
-  background:linear-gradient(135deg, rgba(200,168,78,0.08), rgba(200,168,78,0.02));
-  border:1px solid rgba(200,168,78,0.3); border-radius:8px;
+  background:var(--t-accent-soft);
+  border:1px solid var(--t-accent-line); border-radius:8px;
   padding:8px 10px; margin-top:9px;
   font-size:10.5px; color:var(--t-gold); font-family:'Crimson Pro',serif; font-style:italic;
   line-height:1.5;
@@ -1505,7 +1518,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="save-load-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl">Save &amp; Load Encounters</span>
-        <button class="panel-close" onclick="document.getElementById('save-load-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('save-load-panel').classList.add('hidden')">&times;</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <label class="tlabel" style="margin:0;">Save</label>
@@ -1561,7 +1574,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                     title="Pinned panels stay open between rolls. Click to unpin.">
                 Pinned
             </button>
-            <button class="panel-close" onclick="closeSecretRollPanel()">&times;</button>
+            <button class="panel-close" aria-label="Close" onclick="closeSecretRollPanel()">&times;</button>
         </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1584,7 +1597,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="handout-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Send Handout to Players</span>
-        <button class="panel-close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('handout-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
         <div>
@@ -1618,7 +1631,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="loot-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Send Loot to Player</span>
-        <button class="panel-close" onclick="document.getElementById('loot-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('loot-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
         <div>
@@ -1652,7 +1665,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="check-request-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Request a Roll from Players</span>
-        <button class="panel-close" onclick="document.getElementById('check-request-panel').classList.add('hidden')">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="document.getElementById('check-request-panel').classList.add('hidden')">&times;</button>
     </div>
     <div class="handout-grid">
         <div>
@@ -1697,7 +1710,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 <div id="custom-monster-form" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-red-b);">Custom Monster</span>
-        <button class="panel-close" onclick="toggleCustomForm()">&times;</button>
+        <button class="panel-close" aria-label="Close" onclick="toggleCustomForm()">&times;</button>
     </div>
     <div class="custom-grid">
         <div style="grid-column:span 2;"><label>Name</label><input id="cm-name" class="tinput" placeholder="Goblin Warrior" style="width:100%;"></div>
@@ -1854,7 +1867,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                     <span id="sm-pos" class="sp-pos"></span>
                 </div>
             </div>
-            <button class="trk-modal-close" onclick="closeStatModal()" title="Close panel (Esc)">&times;</button>
+            <button class="trk-modal-close" onclick="closeStatModal()" aria-label="Close panel" title="Close panel (Esc)">&times;</button>
         </div>
         <div id="sm-body" class="trk-modal-body">
             <div style="text-align:center;padding:32px;color:var(--t-t3);">Click a combatant name to view their stat block.</div>
@@ -2265,6 +2278,18 @@ function initials(name) {
     return (parts[0][0] + (parts[1][0] || '')).toUpperCase();
 }
 
+// Initiative-row ⋯ overflow (UX-B): toggle this row's menu, closing any other.
+function toggleRowOverflow(btn) {
+    const menu = btn.parentElement.querySelector('.c-of-menu');
+    if (!menu) return;
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.c-of-menu.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+}
+document.addEventListener('click', function () {
+    document.querySelectorAll('.c-of-menu.open').forEach(m => m.classList.remove('open'));
+});
+
 function renderInitList() {
     const list = document.getElementById('initiative-list');
     const empty = document.getElementById('empty-state');
@@ -2363,25 +2388,30 @@ function renderInitList() {
         if (isAtDeath) subText += ` · <span class="dying-badge">DEAD</span>`;
         else if (isDying) subText += ` · <span class="dying-badge">Dying ${dyingVal}</span>`;
 
-        // Elite/Weak (NPC only)
-        let ewHtml = '';
-        if (!c.is_pc) {
-            const eCls = c.elite_weak === 1 ? 'on-elite' : '';
-            const wCls = c.elite_weak === -1 ? 'on-weak' : '';
-            ewHtml = `<div class="ew-row">
-                <button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button>
-                <button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button>
-                <button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button>
-            </div>`;
-        }
-
-        // Delay / Ready
+        // Delay / Ready — the one contextual turn action that stays on the row.
         let delayHtml = '';
         if (c.delaying) {
             delayHtml = `<button class="act-btn ready" onclick="apiPost('/api/reenter_initiative/${c.instance_id}')">Ready</button>`;
         } else if (isActive) {
             delayHtml = `<button class="act-btn delay" onclick="apiPost('/api/delay_turn/${c.instance_id}')">Delay</button>`;
         }
+
+        // Secondary controls live behind a ⋯ overflow (UX-B): elite/weak,
+        // announce, hide/reveal, remove — so the run-time row stays calm.
+        const ofItems = [];
+        if (!c.is_pc && !c.is_hazard) {
+            const eCls = c.elite_weak === 1 ? 'on-elite' : '';
+            const wCls = c.elite_weak === -1 ? 'on-weak' : '';
+            ofItems.push(`<div class="of-ew"><span class="of-lbl">Adjust</span><button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button><button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button><button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button></div>`);
+        }
+        if (!c.is_pc && c.epithet && c.epithet.trim()) {
+            ofItems.push(`<button class="act-btn of-item" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen">Announce reveal</button>`);
+        }
+        if (!c.is_pc) {
+            ofItems.push(`<button class="act-btn of-item" onclick="toggleVisibility('${c.instance_id}')">${isHidden ? 'Reveal to players' : 'Hide from players'}</button>`);
+        }
+        ofItems.push(`<button class="act-btn of-item danger" onclick="removeCombatant('${c.instance_id}')">Remove</button>`);
+        const overflowHtml = `<div class="c-of-wrap"><button class="act-btn c-of-btn" onclick="event.stopPropagation();toggleRowOverflow(this)" aria-label="More actions for ${escapeHtml(c.name)}" title="More actions">⋯</button><div class="c-of-menu" onclick="event.stopPropagation()">${ofItems.join('')}</div></div>`;
 
         const portCls = c.is_pc ? 'pc' : 'enemy';
 
@@ -2398,11 +2428,11 @@ function renderInitList() {
             <div class="c-name">
                 <div class="port ${portCls}">${initials(c.name)}</div>
                 <div class="nm-wrap">
-                    <button class="nm" onclick="openStatModal('${c.instance_id}')" title="Show full stat block">${c.name}${c.elite_weak === 1 ? ' ' : ''}${c.elite_weak === -1 ? ' ⬇' : ''}</button>
+                    <button class="nm" onclick="inspectCombatant('${c.instance_id}')" title="Preview this combatant in the inspector">${c.name}${c.elite_weak === 1 ? ' (E)' : ''}${c.elite_weak === -1 ? ' (W)' : ''}</button>
                     <div class="nm-sub">${subText}</div>
                     ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect + injury count">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}${c.cosmere.injuries ? ` · <span style="color:#f87171">Injuries ${c.cosmere.injuries}</span>` : ''}</div>` : ''}
                     ${(c.system === 'cosmere' && c.cosmere && COSMERE_INIT_MODE === 'phases') ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
-                    ${(!c.is_pc && !c.is_hazard) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
+                    ${(!c.is_pc && !c.is_hazard && (isActive || (c.epithet && c.epithet.trim()))) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
                 </div>
             </div>
             <div class="c-ac" title="${(c.system === 'cosmere' && c.cosmere) ? 'Physical Defense' : 'Armor Class'}">${(c.system === 'cosmere' && c.cosmere) ? c.cosmere.defenses.phy : c.ac}</div>
@@ -2433,16 +2463,10 @@ function renderInitList() {
                     ${(c.triggered || c.disabled) ? `<button class="act-btn"
                         onclick="hazardReset('${c.instance_id}')"
                         title="Re-arm hazard (clears triggered + disabled)">Reset</button>` : ''}
-                    <button class="act-btn vis ${isHidden ? 'on-hidden' : ''}"
-                        onclick="toggleVisibility('${c.instance_id}')"
-                        title="${isHidden ? 'Reveal to players' : 'Hide from players until a PC spots it'}">${isHidden ? 'Reveal' : 'Hide'}</button>
                 ` : `
-                    ${ewHtml}
                     ${delayHtml}
-                    ${(!c.is_pc && c.epithet && c.epithet.trim()) ? `<button class="act-btn announce" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen (works even if already visible)">Announce</button>` : ''}
-                    ${c.is_pc ? '' : `<button class="act-btn vis ${isHidden ? 'on-hidden' : ''}" onclick="toggleVisibility('${c.instance_id}')" title="${isHidden ? 'Reveal to players' : 'Hide from players (name + HP + conditions masked)'}">${isHidden ? 'Reveal' : 'Hide'}</button>`}
                 `}
-                <button class="act-btn del" onclick="removeCombatant('${c.instance_id}')">Remove</button>
+                ${overflowHtml}
             </div>
         </div>`;
     }).join('');
@@ -2480,6 +2504,14 @@ function cosmereAttrBoxes(cm) {
             `<div class="hs-box"><div class="l">${k}</div><div class="v" style="font-size:14px;">${A[k] || 0}</div></div>`).join('') +
         `</div>`;
 }
+// UX-C: one inspector. The active-combatant card follows the turn by default,
+// but clicking any combatant's name PINS the card to preview that creature;
+// "Follow active turn" unpins. The slide-in stat modal becomes an on-demand
+// "Full stats" drill-down rather than a second competing panel.
+let _inspectId = null, _inspectPinned = false;
+function inspectCombatant(id) { _inspectId = id; _inspectPinned = true; renderActivePanel(); }
+function unpinInspector() { _inspectId = null; _inspectPinned = false; renderActivePanel(); }
+
 function renderActivePanel() {
     const wrap = document.getElementById('active-panel-wrap');
     const layout = document.getElementById('main-layout');
@@ -2488,8 +2520,11 @@ function renderActivePanel() {
         layout.classList.remove('has-active');
         return;
     }
-    const c = STATE.combatants[STATE.turn_index];
+    const activeC = STATE.combatants[STATE.turn_index];
+    let c = (_inspectPinned && _inspectId) ? STATE.combatants.find(x => x.instance_id === _inspectId) : null;
+    if (!c) { c = activeC; _inspectPinned = false; _inspectId = null; }   // pinned target gone -> follow active
     if (!c) { wrap.classList.add('hidden'); layout.classList.remove('has-active'); return; }
+    const _previewing = _inspectPinned && activeC && c.instance_id !== activeC.instance_id;
     wrap.classList.remove('hidden');
     layout.classList.add('has-active');
 
@@ -2525,13 +2560,21 @@ function renderActivePanel() {
 
     let html = '';
 
+    // Inspector bar (UX-C): pin state + the "Full stats" drill-down.
+    html += `<div class="ap-bar">
+        ${_inspectPinned
+            ? `<span class="ap-pin">${_previewing ? 'Previewing' : 'Pinned'}</span><button class="ap-follow" onclick="unpinInspector()">Follow active turn</button>`
+            : `<span class="ap-pin dim">Following active turn</span>`}
+        <button class="ap-full" onclick="openStatModal('${c.instance_id}')" title="Open the full stat block">Full stats</button>
+    </div>`;
+
     // Top: portrait + title.  Vault note link is stubbed and populated
     // post-render by _decorateActiveNoteLink (so we don't block the row
     // render on a fetch every turn).
     html += `<div class="hero-top">
         <div class="hero-port ${portCls}">${initials(c.name)}</div>
         <div class="hero-ttl">
-            <div class="hnm">${c.name}${eliteTag}<a class="active-note-link hidden" data-note-for="${escapeHtml(c.name)}" href="#" title="Open vault note for ${escapeHtml(c.name)}" target="_blank">📝</a></div>
+            <div class="hnm">${c.name}${eliteTag}<a class="active-note-link hidden" data-note-for="${escapeHtml(c.name)}" href="#" title="Open vault note for ${escapeHtml(c.name)}" target="_blank">Note</a></div>
             ${c.is_pc
                 ? `<div class="role">${[c.ancestry, c.class_name, c.subclass].filter(Boolean).join(' · ') || 'A soul at war with the dark.'}</div>`
                 : (c.creature_type ? `<div class="role">${c.creature_type}</div>` : '')}
