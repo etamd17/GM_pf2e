@@ -2891,30 +2891,42 @@ class Character:
         for _w in self._raw_weapons:
             if not isinstance(_w, dict):
                 continue
-            # `damage` from PB's `die` + `damageType`. PB pre-bakes the
-            # two-hand-d{N} swap into `die` if the weapon is wielded 2h
-            # (Bastard Sword 2h → die='d12'), so we don't have to do that
-            # math here.
-            if not _w.get('damage'):
+            # `traits` — look up by canonical name in BUILDER_WEAPONS so
+            # finesse/agile/two-hand-d12/etc. all flow through.
+            _name = str(_w.get('name') or '').strip().lower()
+            _ref = next((bw for bw in BUILDER_WEAPONS
+                         if str(bw.get('name', '')).strip().lower() == _name), None) if _name else None
+            if not _w.get('traits') and _ref:
+                _w['traits'] = _ref.get('traits') or []
+            # `damage` — the base (one-handed) die. PB pre-bakes the
+            # two-hand-d{N} swap into `die` when the PC happens to be wielding
+            # the weapon 2h (Bastard Sword 2h → die='d12'), which DESTROYS the
+            # 1h base. When the reference knows the real base AND the weapon has
+            # a two-hand-d{N} trait, use the reference base so attacks() can
+            # swap base ↔ 2h purely from is_two_handed (the grip toggle).
+            # Otherwise both grips resolve to the baked die and the 1H/2H button
+            # is a no-op. For non-two-hand weapons PB's `die` already is the base.
+            _traits_l = [str(t).lower() for t in (_w.get('traits') or [])]
+            _has_2h_die = any(t.startswith('two-hand-d') for t in _traits_l)
+            if _has_2h_die and _ref and _ref.get('damage'):
+                _w['damage'] = _ref['damage']
+            elif not _w.get('damage'):
                 _pb_die = str(_w.get('die') or '').strip()
                 _pb_type = str(_w.get('damageType') or '').strip()
                 if _pb_die:
                     _w['damage'] = f"1{_pb_die} {_pb_type}".strip()
-            # `traits` — look up by canonical name in BUILDER_WEAPONS so
-            # finesse/agile/two-hand-d12/etc. all flow through.
-            _name = str(_w.get('name') or '').strip().lower()
-            if not _w.get('traits') and _name:
-                _ref = next((bw for bw in BUILDER_WEAPONS
-                             if str(bw.get('name','')).strip().lower() == _name), None)
-                if _ref:
-                    _w['traits'] = _ref.get('traits') or []
-                    if not _w.get('damage'):
-                        _w['damage'] = _ref.get('damage', '1d4')
-            # 2-handed wielding flag: PB tags the display string. The
-            # attacks() property uses this to swap d8 → two-hand-d{N}.
-            _disp = str(_w.get('display') or '').lower()
-            if '(2h)' in _disp or 'two-hand' in _disp or 'two-handed' in _disp:
-                _w['is_two_handed'] = True
+                elif _ref and _ref.get('damage'):
+                    _w['damage'] = _ref['damage']
+            # 2-handed wielding flag: seed from PB's "(2h)" display every load
+            # UNLESS the player has explicitly picked a grip via the toggle
+            # (grip_user_set). A bare is_two_handed=False is ambiguous — it's
+            # also the default written for a never-touched weapon — so gating on
+            # grip_user_set keeps the import default ("(2h)" → two-handed) while
+            # letting a real toggle stick. Re-forcing from display unconditionally
+            # was what made the grip toggle appear to do nothing.
+            if not _w.get('grip_user_set'):
+                _disp = str(_w.get('display') or '').lower()
+                _w['is_two_handed'] = ('(2h)' in _disp or 'two-hand' in _disp or 'two-handed' in _disp)
             # prof_val — PB stores the category in `prof`; map to the
             # PC's actual rank in that category. Without this, a Fighter
             # at L5 would still hit at trained rather than expert.
@@ -13778,7 +13790,20 @@ def toggle_two_hand(pc_name):
     if 'weapons' in build and isinstance(build['weapons'], list):
         for w in build['weapons']:
             if w.get('name') == w_name:
-                w['is_two_handed'] = not w.get('is_two_handed', False)
+                # Flip the grip the player currently SEES, then mark it
+                # user-chosen so import stops re-seeding it from the "(2h)"
+                # display. Until grip_user_set is true the displayed grip comes
+                # from that display (the import seed), NOT a possibly-stale
+                # is_two_handed=False — so mirror that here, else the first tap
+                # would just re-assert the displayed grip and take two taps to
+                # actually switch.
+                if w.get('grip_user_set'):
+                    cur = bool(w.get('is_two_handed'))
+                else:
+                    _disp = str(w.get('display') or '').lower()
+                    cur = ('(2h)' in _disp or 'two-hand' in _disp or 'two-handed' in _disp)
+                w['is_two_handed'] = not cur
+                w['grip_user_set'] = True
                 break
 
     save_and_reload_character(pc_name, pc_json, file_path)
