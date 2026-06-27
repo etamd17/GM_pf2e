@@ -7351,8 +7351,8 @@
                                 ${isFont ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px]" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); color:#86EFAC;" title="Cleric Divine Font slot">Font</span>' : ''}
                             </div>
                             ${isExpended
-                                ? `<button class="play-view-cast-btn expended" onclick="uncastSpell('${expendKey}', ${cIdx})" title="Restore this slot">Undo</button>`
-                                : `<button class="play-view-cast-btn" onclick="castPrepSpell('${escName}', '${expendKey}', ${cIdx}, ${rank})">Cast ↑${rank}</button>`}
+                                ? `<button class="play-view-cast-btn expended" onclick="uncastSpell('${expendKey.replace(/'/g, "\\'")}', ${cIdx})" title="Restore this slot">Undo</button>`
+                                : `<button class="play-view-cast-btn" onclick="castPrepSpell('${escName}', '${expendKey.replace(/'/g, "\\'")}', ${cIdx}, ${rank})">Cast ↑${rank}</button>`}
                         </div>`;
                     }
                 }
@@ -7519,8 +7519,8 @@
                             </div>
                             <div class="flex items-center gap-1 shrink-0">
                                 ${isExpended
-                                    ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:var(--border-subtle); color:var(--text-muted);">Undo</button>`
-                                    : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey}', ${cIdx}, ${lvl.level})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(167,139,250,0.15); color:var(--color-spell);">Cast</button>`
+                                    ? `<button onclick="event.stopPropagation(); uncastSpell('${expendKey.replace(/'/g, "\\'")}', ${cIdx})" class="rounded text-[10px] px-1.5 py-0.5" style="background:var(--border-subtle); color:var(--text-muted);">Undo</button>`
+                                    : `<button onclick="event.stopPropagation(); castPrepSpell('${spellName.replace(/'/g,"\\'")}', '${expendKey.replace(/'/g, "\\'")}', ${cIdx}, ${lvl.level})" class="rounded text-[10px] px-1.5 py-0.5" style="background:rgba(167,139,250,0.15); color:var(--color-spell);">Cast</button>`
                                 }
                                 <button onclick="event.stopPropagation(); unprepSpell(${cIdx}, ${lvl.level}, ${i})" class="text-gray-600 hover:text-red-400 text-[10px]">×</button>
                             </div>
