@@ -62,7 +62,41 @@ app = Flask(__name__)
 # and the same-origin CSRF check, secure cookies, and external URLs all break.
 from werkzeug.middleware.proxy_fix import ProxyFix as _ProxyFix
 app.wsgi_app = _ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
+def _stable_secret_key():
+    """A secret key that SURVIVES restarts/deploys. A random key per boot (the old
+    behavior) re-signed the session cookie on every Railway restart, silently
+    invalidating every logged-in session -- the whole table got logged out (and
+    dropped back to their last-remembered campaign) the moment a deploy landed
+    mid-game. Prefer an explicit SECRET_KEY env var; otherwise persist a generated
+    key on the data volume so it's stable across restarts."""
+    env = os.environ.get('SECRET_KEY')
+    if env:
+        return env
+    import secrets as _secrets
+    _dd = os.environ.get('DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
+    keyfile = os.path.join(_dd, '.secret_key')
+    try:
+        if os.path.isfile(keyfile):
+            with open(keyfile, 'r', encoding='utf-8') as f:
+                k = (f.read() or '').strip()
+            if k:
+                return k
+        k = _secrets.token_hex(32)
+        os.makedirs(_dd, exist_ok=True)
+        with open(keyfile, 'w', encoding='utf-8') as f:
+            f.write(k)
+        try:
+            os.chmod(keyfile, 0o600)
+        except OSError:
+            pass
+        return k
+    except OSError:
+        # Read-only FS (shouldn't happen on Railway's writable volume): fall back
+        # to a per-boot random key -- no worse than the old behavior.
+        return 'pf2e-gm-dashboard-' + str(uuid.uuid4())
+
+
+app.secret_key = _stable_secret_key()
 from datetime import timedelta as _timedelta
 app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity for player/GM sessions
 # Reject oversized uploads at the WSGI layer so a multi-GB POST can't OOM
