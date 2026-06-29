@@ -164,9 +164,13 @@ class CosmereActor:
             elif itype == 'weapon':
                 dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
                 skill = dmg.get('skill')
-                # attack mod = the weapon-skill's mod (hwp/lwp); damage = dice + that mod on a hit
+                # attack mod = the weapon-skill's mod (hwp/lwp); damage = dice + that mod on a hit.
+                # `bonus` mirrors `mod` so a Cosmere Strike flows through the same
+                # tracker/stat serializers as a PF2e one (which read `bonus`). Without
+                # it, adding a weapon-bearing Cosmere adversary 500'd tracker_state.
+                _smod = self.skills.get(skill, {}).get('mod', 0) if skill else 0
                 self.strikes.append({'name': iname, 'damage': dmg.get('formula', ''), 'type': dmg.get('type', ''),
-                                     'skill': skill, 'mod': self.skills.get(skill, {}).get('mod', 0) if skill else 0})
+                                     'skill': skill, 'mod': _smod, 'bonus': _smod})
             elif itype == 'trait':
                 self.traits.append(iname)
 
