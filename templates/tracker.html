@@ -4825,7 +4825,7 @@ async function sendCheckRequest() {
             let actions = '';
             if (m.kind === 'nomination' && m.actionable) {
                 actions = `<div style="margin-top:6px;display:flex;gap:6px;">
-                    <button onclick="approveNomination('${esc(m.nominee)}', this)" style="padding:3px 10px;border-radius:4px;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#86EFAC;font-size:11px;font-weight:700;cursor:pointer;">Approve +1 HP</button>
+                    <button onclick="approveNomination('${String(m.nominee==null?'':m.nominee).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', this)" style="padding:3px 10px;border-radius:4px;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.4);color:#86EFAC;font-size:11px;font-weight:700;cursor:pointer;">Approve +1 HP</button>
                     <button onclick="this.closest('.gm-msg').style.opacity='0.4';this.closest('.gm-msg').querySelector('div[style*=margin-top]').remove();" style="padding:3px 10px;border-radius:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#FCA5A5;font-size:11px;font-weight:700;cursor:pointer;">Dismiss</button>
                 </div>`;
             }

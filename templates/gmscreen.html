@@ -583,7 +583,7 @@
                     const lvl = (r.level !== null && r.level !== undefined) ? `Lv ${r.level}` : '';
                     const desc = r.desc ? r.desc.substring(0, 140) + (r.desc.length > 140 ? '…' : '') : '';
                     return `
-                    <button onclick="showCompDetail('${esc(r.name)}', '${r.type}')" class="gm-result-card">
+                    <button onclick="showCompDetail('${String(r.name==null?'':r.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', '${r.type}')" class="gm-result-card">
                         <div class="flex items-center gap-2 mb-1 flex-wrap">
                             <span class="gm-result-name">${esc(r.name)}</span>
                             <span class="gm-type-badge ${r.type}">${r.type}</span>
