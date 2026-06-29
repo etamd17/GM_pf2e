@@ -7780,6 +7780,8 @@ def _restore_cosmere_combatant(item):
         new_c.injury_log = [dict(r) for r in item['injury_log'] if isinstance(r, dict)]
     if item.get('speed_choice'):
         new_c.speed_choice = item['speed_choice']
+    if 'delaying' in item:
+        new_c.delaying = bool(item['delaying'])
     # Match the fast(2)/slow(3) action ceiling cycle_turn would set, so the pip
     # widget is right immediately on reload (not only after the next turn).
     new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
@@ -11574,6 +11576,12 @@ def save_encounter():
                 'initiative': c.initiative,
                 'current_hp': c.current_hp,
                 'conditions': c.conditions,
+                # Match the autosave field set so a manual "save Round 3, resume
+                # next session" doesn't silently drop temp-condition timers or a
+                # delayed combatant's delay (the autosave persists both; this
+                # path used to omit them).
+                'condition_expiry': dict(getattr(c, 'condition_expiry', {}) or {}),
+                'delaying': getattr(c, 'delaying', False),
                 'persistent_damage': getattr(c, 'persistent_damage', ''),
                 'elite_weak': getattr(c, 'elite_weak', 0),
                 # Persist hidden/visible state so saved encounters reload with
@@ -11659,6 +11667,7 @@ def load_encounter():
                             new_c.persistent_damage = '' if s in ('[]', '{}') else _pd_in
                         else:
                             new_c.persistent_damage = _pd_in or ''
+                if 'delaying' in item: new_c.delaying = bool(item['delaying'])
                 if 'elite_weak' in item and hasattr(new_c, 'apply_elite_weak'):
                     new_c.apply_elite_weak(item['elite_weak'])
                 # Restore hidden/visible state from saved encounter files.
