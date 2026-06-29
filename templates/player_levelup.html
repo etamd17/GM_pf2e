@@ -1542,7 +1542,7 @@
                             </div>
                             <div class="flex flex-wrap gap-2" id="ui-new-spells-${idx}-${diff.lvl}">
                                 ${(state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).map(s =>
-                                    `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${esc(s.name)}')" class="text-red-500 ml-1 hidden group-hover:inline">×</button></div>`
+                                    `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${String(s.name==null?'':s.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" class="text-red-500 ml-1 hidden group-hover:inline">×</button></div>`
                                 ).join('')}
                             </div>
                         </div>`;
@@ -1648,7 +1648,7 @@
                         <div class="text-sm font-bold text-gray-200">${f.name}</div>
                         <div class="text-[10px] text-gray-500 uppercase">${f.desc && f.desc.substring(0,30)}...</div>
                     </div>
-                    <button onclick="initRetrainFeat(${i}, '${esc(f.name)}')" class="bg-red-900/40 text-red-400 hover:bg-red-800 hover:text-white px-3 py-1 rounded text-xs font-bold border border-red-900 transition-colors opacity-0 group-hover:opacity-100">Retrain</button>
+                    <button onclick="initRetrainFeat(${i}, '${String(f.name==null?'':f.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" class="bg-red-900/40 text-red-400 hover:bg-red-800 hover:text-white px-3 py-1 rounded text-xs font-bold border border-red-900 transition-colors opacity-0 group-hover:opacity-100">Retrain</button>
                 </div>
             `).join('');
 

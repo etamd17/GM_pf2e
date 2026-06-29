@@ -8342,8 +8342,9 @@
             if (!hits.length) return;
             let html = '<span class="usable-items-label">At hand</span>';
             hits.slice(0, 8).forEach(h => {
-                const safe = (h.item.name || '').replace(/'/g, "&#39;");
-                html += `<button type="button" class="usable-item-btn" onclick="useItem('${safe.replace(/\\/g,'\\\\')}', '${h.label}')" title="${h.label} ${safe}">${h.label}: ${safe}<span class="ui-qty">×${h.item.qty || 1}</span></button>`;
+                const safe = (h.item.name || '').replace(/'/g, "&#39;");           // HTML-safe: title + visible text
+                const safeJs = (h.item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); // JS-safe: the onclick arg
+                html += `<button type="button" class="usable-item-btn" onclick="useItem('${safeJs}', '${h.label}')" title="${h.label} ${safe}">${h.label}: ${safe}<span class="ui-qty">×${h.item.qty || 1}</span></button>`;
             });
             row.innerHTML = html;
         })();
