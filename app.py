@@ -7608,7 +7608,7 @@ def _get_tracker_state():
                     if isinstance(e, dict)
                 ]
             else:
-                entry['strikes'] = [{'name': s['name'], 'hit': f"+{s['bonus']}" if s['bonus'] >= 0 else str(s['bonus']), 'damage': s['damage']} for s in getattr(c, 'strikes', [])]
+                entry['strikes'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in getattr(c, 'strikes', [])]
                 entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
                 entry['immunities'] = getattr(c, 'immunities', [])
                 entry['resistances'] = getattr(c, 'resistances', [])
@@ -12574,7 +12574,7 @@ def combatant_stats(instance_id):
                 data['skills'] = c.skills
                 data['spell_casters'] = c.spell_casters
             else:
-                data['attacks'] = [{'name': s['name'], 'hit': f"+{s['bonus']}", 'damage': s['damage']} for s in c.strikes]
+                data['attacks'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in c.strikes]
                 data['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in c.actions]
                 data['immunities'] = getattr(c, 'immunities', [])
                 data['resistances'] = getattr(c, 'resistances', [])
