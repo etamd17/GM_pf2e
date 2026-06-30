@@ -62,7 +62,41 @@ app = Flask(__name__)
 # and the same-origin CSRF check, secure cookies, and external URLs all break.
 from werkzeug.middleware.proxy_fix import ProxyFix as _ProxyFix
 app.wsgi_app = _ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-app.secret_key = os.environ.get('SECRET_KEY', 'pf2e-gm-dashboard-' + str(uuid.uuid4()))
+def _stable_secret_key():
+    """A secret key that SURVIVES restarts/deploys. A random key per boot (the old
+    behavior) re-signed the session cookie on every Railway restart, silently
+    invalidating every logged-in session -- the whole table got logged out (and
+    dropped back to their last-remembered campaign) the moment a deploy landed
+    mid-game. Prefer an explicit SECRET_KEY env var; otherwise persist a generated
+    key on the data volume so it's stable across restarts."""
+    env = os.environ.get('SECRET_KEY')
+    if env:
+        return env
+    import secrets as _secrets
+    _dd = os.environ.get('DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
+    keyfile = os.path.join(_dd, '.secret_key')
+    try:
+        if os.path.isfile(keyfile):
+            with open(keyfile, 'r', encoding='utf-8') as f:
+                k = (f.read() or '').strip()
+            if k:
+                return k
+        k = _secrets.token_hex(32)
+        os.makedirs(_dd, exist_ok=True)
+        with open(keyfile, 'w', encoding='utf-8') as f:
+            f.write(k)
+        try:
+            os.chmod(keyfile, 0o600)
+        except OSError:
+            pass
+        return k
+    except OSError:
+        # Read-only FS (shouldn't happen on Railway's writable volume): fall back
+        # to a per-boot random key -- no worse than the old behavior.
+        return 'pf2e-gm-dashboard-' + str(uuid.uuid4())
+
+
+app.secret_key = _stable_secret_key()
 from datetime import timedelta as _timedelta
 app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity for player/GM sessions
 # Reject oversized uploads at the WSGI layer so a multi-GB POST can't OOM
@@ -4185,19 +4219,42 @@ class Monster:
         if isinstance(raw_traits, dict):
             self.traits = [str(t) for t in raw_traits.get('value', [])]
         
+        # An NPC's real Strikes are `melee` / `ranged` items (they carry the attack
+        # bonus + damageRolls). A `weapon` item is inventory; for an NPC it has no
+        # strike bonus/damage, so it used to parse to a phantom "+0 / Check Details"
+        # that DUPLICATED the real Strike (every monster with both showed each
+        # weapon twice). Parse the real strikes; fall back to a `weapon` item only
+        # when no melee/ranged Strike already covers that name -- so a weapon-only
+        # creature still gets a Strike, with no phantom duplicate.
+        _weapon_fallback = []
         for item in (data.get('items') or []):
             item_type = item.get('type')
             name = item.get('name')
-            if item_type in ['melee', 'weapon']:
+            if item_type in ('melee', 'ranged', 'weapon'):
                 damage = "Check Details"
                 system_data = item.get('system', {})
                 damage_rolls = system_data.get('damageRolls', {})
                 if isinstance(damage_rolls, dict) and damage_rolls:
                     parts = [f"{roll['damage']} {roll.get('damageType', '')}".strip() for k, roll in damage_rolls.items() if isinstance(roll, dict) and 'damage' in roll]
                     if parts: damage = ", ".join(parts)
-                self.strikes.append({'name': name, 'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0), 'damage': damage})
+                rec = {'name': name, 'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0), 'damage': damage}
+                (_weapon_fallback if item_type == 'weapon' else self.strikes).append(rec)
             elif item_type == 'action':
                 self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', ''))})
+        _real_strike_names = {s['name'] for s in self.strikes}
+        self.strikes.extend(w for w in _weapon_fallback if w['name'] not in _real_strike_names)
+
+        # Spellcasting (NPC): the spellcastingEntry carries the spell attack
+        # (spelldc.value) + DC (spelldc.dc) so the GM can read a caster foe's
+        # numbers straight off the tracker. Take the highest if several entries.
+        self.spell_attack = 0
+        self.spell_dc = 0
+        for item in (data.get('items') or []):
+            if item.get('type') == 'spellcastingEntry':
+                sd = item.get('system', {}).get('spelldc', {})
+                if isinstance(sd, dict):
+                    self.spell_attack = max(self.spell_attack, safe_int(sd.get('value'), 0))
+                    self.spell_dc = max(self.spell_dc, safe_int(sd.get('dc'), 0))
 
         self.conditions = { 'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0, 'doomed': 0, 'stunned': 0, 'slowed': 0, 'enfeebled': 0, 'clumsy': 0, 'drained': 0, 'stupefied': 0, 'prone': False, 'off_guard': False, 'concealed': False, 'hidden': False, 'undetected': False }
 
@@ -7467,10 +7524,21 @@ def tracker_view():
     # + party picker are gated off in the template). PF2e mode is unchanged.
     cosmere_adversaries, cosmere_pcs = [], []
     if _active_system() == 'cosmere':
+        _seen_adv = set()
         for d in systems.cosmere.adversary_docs():
             s = d.get('system', {})
             cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
-                                        'tier': s.get('tier'), 'role': s.get('role')})
+                                        'tier': s.get('tier'), 'role': s.get('role'), 'custom': False})
+            _seen_adv.add(d.get('_id'))
+        # GM-authored homebrew adversaries — so the GM's saved custom enemies are
+        # re-addable from the tracker's adversary picker, not just creatable as a
+        # one-off. _cosmere_doc_by_id already resolves these for add-to-tracker.
+        for d in _load_cosmere_custom_adversaries():
+            if not isinstance(d, dict) or d.get('_id') in _seen_adv:
+                continue
+            s = d.get('system', {}) if isinstance(d.get('system'), dict) else {}
+            cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
+                                        'tier': s.get('tier'), 'role': s.get('role') or 'Homebrew', 'custom': True})
         cosmere_adversaries.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
         cosmere_pcs = [{'id': d['id'], 'name': d.get('name', '?')} for d in _list_cosmere_pcs()]
     return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS, cosmere_adversaries=cosmere_adversaries, cosmere_pcs=cosmere_pcs,
@@ -7615,6 +7683,10 @@ def _get_tracker_state():
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
                 entry['traits'] = getattr(c, 'traits', [])
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+                # Spell attack / DC for caster foes, so the GM can quick-reference
+                # them in the inspector the same way they can for PCs.
+                entry['spell_attack'] = int(getattr(c, 'spell_attack', 0) or 0)
+                entry['spell_dc'] = int(getattr(c, 'spell_dc', 0) or 0)
             # Cosmere combatants carry an extra stat block (defenses/deflect/
             # resources); the tracker UI branches on `system` to render it.
             if entry['system'] == 'cosmere' and hasattr(c, 'tracker_block'):

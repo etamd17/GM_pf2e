@@ -60,3 +60,6 @@ homebrew.json
 
 # Per-player session-notes scratchpads — runtime state on the volume.
 session_notes/
+
+# Persisted Flask session secret (stable across restarts; never commit)
+.secret_key
