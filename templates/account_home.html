@@ -161,7 +161,7 @@
         <div class="cc-meta">{{ c.system|upper }} &middot; {{ c.members|length }} member{{ '' if c.members|length == 1 else 's' }} &middot; <span style="color:#f0a3a3;">deleted</span></div>
         <div class="cc-actions">
           <form method="POST" action="/campaign/{{ c.id }}/restore"><button type="submit">Restore</button></form>
-          <form method="POST" action="/campaign/{{ c.id }}/purge" onsubmit="return purgeConfirm(this, {{ c.name|tojson }});">
+          <form method="POST" action="/campaign/{{ c.id }}/purge" onsubmit='return purgeConfirm(this, {{ c.name|tojson }});'>
             <input type="hidden" name="confirm_name" value="">
             <button type="submit" class="manage" style="color:#f0a3a3;border-color:rgba(211,110,110,.4);">Delete forever</button>
           </form>

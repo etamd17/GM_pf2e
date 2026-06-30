@@ -294,7 +294,7 @@
                 {% for pc in party %}
                 <button class="pc-tile {% if current_player == pc.name %}is-current{% endif %}"
                         data-pc-name="{{ pc.name }}"
-                        onclick="joinAs({{ pc.name|tojson }})"
+                        onclick='joinAs({{ pc.name|tojson }})'
                         title="Join as {{ pc.name }}">
                     <span class="lvl-badge">L{{ pc.level }}</span>
                     <div class="portrait-frame">

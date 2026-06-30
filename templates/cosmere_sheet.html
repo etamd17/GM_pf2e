@@ -398,7 +398,7 @@
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions <span style="text-transform:none; letter-spacing:0;">(tap to toggle)</span></div>
     <div class="cs-chips" id="cos-conditions">
       {% for code, info in conditions.items() %}
-      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" onclick="cosCond({{ code|tojson }})" title="{{ info }}">{{ code|capitalize }}</span>
+      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" onclick='cosCond({{ code|tojson }})' title="{{ info }}">{{ code|capitalize }}</span>
       {% endfor %}
     </div>
     {# Plain-language summary of what every ACTIVE condition is doing right now —
@@ -551,7 +551,7 @@
     <div class="cs-grid" style="grid-template-columns:1fr 1fr; gap:.5rem;">
       {% for p in radiant_powers %}
       <div class="cs-ability roll" style="margin-bottom:0;"
-           onclick="cosSurge({{ p.name|tojson }}, {{ p.investiture or 0 }}, {{ p.effect|tojson }})">
+           onclick='cosSurge({{ p.name|tojson }}, {{ p.investiture or 0 }}, {{ p.effect|tojson }})'>
         <div class="an">{{ p.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">{{ p.cost }} action{{ '' if p.cost == 1 else 's' }}{% if p.investiture %} &middot; {{ p.investiture }} Investiture{% endif %}</span></div>
         <div class="ad">{{ p.effect }}</div>
       </div>
@@ -595,7 +595,7 @@
     {% for code, label in skill_names.items() if code in a.skills %}
     {% set sk = a.skills[code] %}
     <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}{% if interactive and sk.unlocked %} roll{% endif %}"
-         {% if interactive and sk.unlocked %}onclick="cosRoll({{ label|tojson }}, {{ sk.mod }}, {{ sk.attribute|tojson }})"{% endif %}>
+         {% if interactive and sk.unlocked %}onclick='cosRoll({{ label|tojson }}, {{ sk.mod }}, {{ sk.attribute|tojson }})'{% endif %}>
       <div class="nm">{{ label }} <small>{{ sk.attribute }}</small>{% if sk.rank %} <span class="rk">R{{ sk.rank }}</span>{% endif %}</div>
       <div class="mod">{{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}</div>
     </div>
@@ -609,7 +609,7 @@
       <div class="cs-section-h">Strikes</div>
       {% for s in strikes %}
       <div class="cs-ability{% if interactive %} roll{% endif %}"
-           {% if interactive %}onclick="cosStrike({{ s.name|tojson }}, {{ s.mod|default(0) }}, {{ s.damage|tojson }}, {{ (s.type or '')|tojson }})"{% endif %}>
+           {% if interactive %}onclick='cosStrike({{ s.name|tojson }}, {{ s.mod|default(0) }}, {{ s.damage|tojson }}, {{ (s.type or '')|tojson }})'{% endif %}>
         <div class="an">{{ s.name }}{% if interactive %} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if s.mod|default(0) >= 0 else '' }}{{ s.mod|default(0) }}</span>{% endif %}</div>
         <div class="ad">{{ s.damage }}{% if s.type %} <span class="cs-chip">{{ s.type }}</span>{% endif %}{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
       {% endfor %}
@@ -617,7 +617,7 @@
       {# Summoned spren-Blade (3rd Ideal). Hidden until summoned via the Stormlight action. #}
       <div id="cos-shardblade-strike" class="cs-ability{% if interactive %} roll{% endif %}"
            style="display:{{ '' if cur.shardblade else 'none' }}; border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 55%, transparent);"
-           {% if interactive %}onclick="cosStrike({{ shardblade.name|tojson }}, {{ shardblade.mod }}, {{ shardblade.damage|tojson }}, {{ shardblade.type|tojson }})"{% endif %}>
+           {% if interactive %}onclick='cosStrike({{ shardblade.name|tojson }}, {{ shardblade.mod }}, {{ shardblade.damage|tojson }}, {{ shardblade.type|tojson }})'{% endif %}>
         <div class="an" style="color:var(--order-accent,var(--accent));">{{ shardblade.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if shardblade.mod >= 0 else '' }}{{ shardblade.mod }} &middot; deadly</span></div>
         <div class="ad">{{ shardblade.damage }} <span class="cs-chip">{{ shardblade.type }}</span> <span class="cs-chip" title="Spirit damage bypasses physical Deflect">bypasses Deflect</span>{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
       {% endif %}
@@ -631,7 +631,7 @@
       {% if actions %}
       <div class="cs-section-h">Actions &amp; Abilities</div>
       {% for ab in actions %}
-      <div class="cs-ability{% if interactive %} roll{% endif %}"{% if interactive %} onclick="cosAbility({{ ab.name|tojson }}, {{ (ab.description or '')|tojson }})"{% endif %}>
+      <div class="cs-ability{% if interactive %} roll{% endif %}"{% if interactive %} onclick='cosAbility({{ ab.name|tojson }}, {{ (ab.description or '')|tojson }})'{% endif %}>
         <div class="an">{{ ab.name }}{% if interactive %} <span style="font-size:11px; color:var(--accent); font-weight:400;">tap to roll</span>{% endif %}</div>
         {% if ab.description %}<div class="ad">{{ ab.description }}</div>{% endif %}</div>
       {% endfor %}
@@ -657,7 +657,7 @@
     <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
     <div class="ad"><b style="color:#f0a9a9;">Disease cost:</b> {{ art.cost }}</div>
     {% if art.abilities %}<ul style="margin:.45rem 0 0 1.1rem; line-height:1.5;">
-      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;{% if interactive %} cursor:pointer;{% endif %}"{% if interactive %} class="inf-roll" onclick="cosAbility({{ ab.name|tojson }}, {{ ab.desc|tojson }})" title="Tap to roll this ability's dice / log its use"{% endif %}><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %}{% if interactive %} <span style="font-size:10px; color:var(--accent);">tap to roll</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
+      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;{% if interactive %} cursor:pointer;{% endif %}"{% if interactive %} class="inf-roll" onclick='cosAbility({{ ab.name|tojson }}, {{ ab.desc|tojson }})' title="Tap to roll this ability's dice / log its use"{% endif %}><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %}{% if interactive %} <span style="font-size:10px; color:var(--accent);">tap to roll</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
     </ul>{% endif %}
   </div>
   {% endfor %}
@@ -687,9 +687,9 @@
   <div class="cs-ability" style="margin-bottom:.5rem;">
     <div class="an">{{ f.name }}{% if f.tier %} <span class="cs-chip">Tier {{ f.tier }}</span>{% endif %}
       <span style="float:right; font-size:12px; color:var(--text-on-dark-2); white-space:nowrap;">
-        {% if interactive %}<button type="button" class="cs-fab-btn" onclick="cosFabrial({{ f.id|tojson }},-1)" aria-label="Spend a charge">&minus;</button>{% endif %}
+        {% if interactive %}<button type="button" class="cs-fab-btn" onclick='cosFabrial({{ f.id|tojson }},-1)' aria-label="Spend a charge">&minus;</button>{% endif %}
         <b data-fab-cur="{{ f.id }}" style="font-family:'JetBrains Mono',monospace; color:var(--order-accent,var(--accent));">{{ f.current }}</b><span style="color:var(--text-on-dark-3);">/{{ f.charges }} charges</span>
-        {% if interactive %}<button type="button" class="cs-fab-btn" onclick="cosFabrial({{ f.id|tojson }},1)" aria-label="Recharge">+</button>{% endif %}
+        {% if interactive %}<button type="button" class="cs-fab-btn" onclick='cosFabrial({{ f.id|tojson }},1)' aria-label="Recharge">+</button>{% endif %}
       </span></div>
     <div class="ad">{{ f.effect }}</div>
   </div>
