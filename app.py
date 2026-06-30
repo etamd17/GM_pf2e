@@ -4219,19 +4219,42 @@ class Monster:
         if isinstance(raw_traits, dict):
             self.traits = [str(t) for t in raw_traits.get('value', [])]
         
+        # An NPC's real Strikes are `melee` / `ranged` items (they carry the attack
+        # bonus + damageRolls). A `weapon` item is inventory; for an NPC it has no
+        # strike bonus/damage, so it used to parse to a phantom "+0 / Check Details"
+        # that DUPLICATED the real Strike (every monster with both showed each
+        # weapon twice). Parse the real strikes; fall back to a `weapon` item only
+        # when no melee/ranged Strike already covers that name -- so a weapon-only
+        # creature still gets a Strike, with no phantom duplicate.
+        _weapon_fallback = []
         for item in (data.get('items') or []):
             item_type = item.get('type')
             name = item.get('name')
-            if item_type in ['melee', 'weapon']:
+            if item_type in ('melee', 'ranged', 'weapon'):
                 damage = "Check Details"
                 system_data = item.get('system', {})
                 damage_rolls = system_data.get('damageRolls', {})
                 if isinstance(damage_rolls, dict) and damage_rolls:
                     parts = [f"{roll['damage']} {roll.get('damageType', '')}".strip() for k, roll in damage_rolls.items() if isinstance(roll, dict) and 'damage' in roll]
                     if parts: damage = ", ".join(parts)
-                self.strikes.append({'name': name, 'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0), 'damage': damage})
+                rec = {'name': name, 'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0), 'damage': damage}
+                (_weapon_fallback if item_type == 'weapon' else self.strikes).append(rec)
             elif item_type == 'action':
                 self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', ''))})
+        _real_strike_names = {s['name'] for s in self.strikes}
+        self.strikes.extend(w for w in _weapon_fallback if w['name'] not in _real_strike_names)
+
+        # Spellcasting (NPC): the spellcastingEntry carries the spell attack
+        # (spelldc.value) + DC (spelldc.dc) so the GM can read a caster foe's
+        # numbers straight off the tracker. Take the highest if several entries.
+        self.spell_attack = 0
+        self.spell_dc = 0
+        for item in (data.get('items') or []):
+            if item.get('type') == 'spellcastingEntry':
+                sd = item.get('system', {}).get('spelldc', {})
+                if isinstance(sd, dict):
+                    self.spell_attack = max(self.spell_attack, safe_int(sd.get('value'), 0))
+                    self.spell_dc = max(self.spell_dc, safe_int(sd.get('dc'), 0))
 
         self.conditions = { 'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0, 'doomed': 0, 'stunned': 0, 'slowed': 0, 'enfeebled': 0, 'clumsy': 0, 'drained': 0, 'stupefied': 0, 'prone': False, 'off_guard': False, 'concealed': False, 'hidden': False, 'undetected': False }
 
@@ -7649,6 +7672,10 @@ def _get_tracker_state():
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
                 entry['traits'] = getattr(c, 'traits', [])
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
+                # Spell attack / DC for caster foes, so the GM can quick-reference
+                # them in the inspector the same way they can for PCs.
+                entry['spell_attack'] = int(getattr(c, 'spell_attack', 0) or 0)
+                entry['spell_dc'] = int(getattr(c, 'spell_dc', 0) or 0)
             # Cosmere combatants carry an extra stat block (defenses/deflect/
             # resources); the tracker UI branches on `system` to render it.
             if entry['system'] == 'cosmere' and hasattr(c, 'tracker_block'):

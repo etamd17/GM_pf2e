@@ -2279,15 +2279,40 @@ function initials(name) {
 }
 
 // Initiative-row ⋯ overflow (UX-B): toggle this row's menu, closing any other.
+function _closeRowOverflow(m) {
+    m.classList.remove('open');
+    // reset the inline fixed-position styles so the CSS (absolute) takes back over
+    m.style.position = ''; m.style.left = ''; m.style.right = ''; m.style.top = ''; m.style.bottom = '';
+}
 function toggleRowOverflow(btn) {
     const menu = btn.parentElement.querySelector('.c-of-menu');
     if (!menu) return;
     const wasOpen = menu.classList.contains('open');
-    document.querySelectorAll('.c-of-menu.open').forEach(m => m.classList.remove('open'));
-    if (!wasOpen) menu.classList.add('open');
+    document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
+    if (wasOpen) return;
+    menu.classList.add('open');
+    // Render the menu at the VIEWPORT level (position:fixed) so it escapes the
+    // grid-wrap's overflow:hidden -- otherwise Remove / elite-weak / visibility
+    // get clipped off the right edge and can't be clicked (the reported "can't
+    // remove or edit a combatant" bug). Right-align to the ⋯ button.
+    const r = btn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.left = 'auto';
+    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+    menu.style.top = (r.bottom + 4) + 'px';
+    // If it would spill past the bottom of the viewport, flip it above the button.
+    requestAnimationFrame(() => {
+        const mr = menu.getBoundingClientRect();
+        if (mr.bottom > window.innerHeight - 8) {
+            menu.style.top = Math.max(8, r.top - mr.height - 4) + 'px';
+        }
+    });
 }
 document.addEventListener('click', function () {
-    document.querySelectorAll('.c-of-menu.open').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
+});
+window.addEventListener('resize', function () {
+    document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
 });
 
 function renderInitList() {
@@ -2839,6 +2864,20 @@ function renderActivePanel() {
             </div>`;
         });
         html += `</div>`;
+    }
+
+    // Spell attack / DC quick-reference (PCs + caster foes) — the numbers ride
+    // tracker_state for both, so the GM can read a caster's attack/DC without
+    // opening a sheet or stat block.
+    if ((Number(c.spell_attack) || 0) !== 0 || (Number(c.spell_dc) || 0) !== 0) {
+        const _sa = Number(c.spell_attack) || 0;
+        const atk = _sa ? ((_sa >= 0 ? '+' : '') + _sa) : '—';
+        const dc = (Number(c.spell_dc) || 0) || '—';
+        html += `<div class="section-h">Spellcasting</div>
+            <div class="spell-ref" style="display:flex;gap:16px;font-size:12px;color:var(--t-t2);margin-bottom:8px;">
+                <span title="Spell attack roll modifier">Spell Atk <b style="color:var(--t-accent);">${atk}</b></span>
+                <span title="Spell save DC">Spell DC <b style="color:var(--t-accent);">${dc}</b></span>
+            </div>`;
     }
 
     // NPC abilities
