@@ -140,8 +140,18 @@
         if (loaded) return; loaded = true;
         fetch('/api/my_campaigns').then(function(r){ return r.json(); }).then(function(d){
           var cs = (d && d.campaigns) || [];
-          list.innerHTML = cs.length ? cs.map(row).join('')
+          var rows = cs.length ? cs.map(row).join('')
             : '<div style="padding:10px 12px;font-size:12px;color:var(--text-on-dark-3);">No campaigns yet.</div>';
+          // "Stop active campaign": park the session with NO active table so the
+          // GM can switch systems without the old one bleeding over. Shown only
+          // while a campaign is active.
+          var stop = (d && d.active)
+            ? '<form method="POST" action="/campaign/stop" style="margin:0;border-top:1px solid var(--border-card);">'
+              + '<button type="submit" title="Leave the active table; the lobby resets so you can pick another system cleanly"'
+              + ' style="display:flex;width:100%;align-items:center;gap:8px;padding:9px 12px;background:none;border:none;cursor:pointer;text-align:left;color:#f3b9a3;font-size:12px;">'
+              + 'Stop active campaign<span style="opacity:.55;font-size:10px;margin-left:auto;">switch cleanly</span></button></form>'
+            : '';
+          list.innerHTML = rows + stop;
         }).catch(function(){ list.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text-on-dark-3);">Couldn\'t load.</div>'; });
       }
       window._csToggle = function(){
