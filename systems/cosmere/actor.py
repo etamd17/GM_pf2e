@@ -165,10 +165,16 @@ class CosmereActor:
                 dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
                 skill = dmg.get('skill')
                 # attack mod = the weapon-skill's mod (hwp/lwp); damage = dice + that mod on a hit.
+                # A custom / homebrew weapon (e.g. an imported "Soravar's Gauntlet" with
+                # no catalog skill) may instead carry an explicit `attack` bonus, which
+                # wins -- so a Strike for a one-off creation still shows the right number.
                 # `bonus` mirrors `mod` so a Cosmere Strike flows through the same
                 # tracker/stat serializers as a PF2e one (which read `bonus`). Without
                 # it, adding a weapon-bearing Cosmere adversary 500'd tracker_state.
-                _smod = self.skills.get(skill, {}).get('mod', 0) if skill else 0
+                if isys.get('custom_attack_bonus') is not None:
+                    _smod = _i(isys.get('custom_attack_bonus'))
+                else:
+                    _smod = self.skills.get(skill, {}).get('mod', 0) if skill else 0
                 self.strikes.append({'name': iname, 'damage': dmg.get('formula', ''), 'type': dmg.get('type', ''),
                                      'skill': skill, 'mod': _smod, 'bonus': _smod})
             elif itype == 'trait':

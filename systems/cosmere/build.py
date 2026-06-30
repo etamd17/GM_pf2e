@@ -166,6 +166,11 @@ class CosmereBuild:
         self.ideal_progress = max(0, min(3, int(d.get('ideal_progress', 0) or 0)))
         self.is_radiant = bool(self.radiant_order) or bool(d.get('is_radiant'))
         self.inventory = Inventory(d.get('inventory'))
+        # Custom / homebrew weapons that don't match a catalog item (e.g. an
+        # imported "Soravar's Gauntlet"): each {name, damage, type, attack} becomes
+        # a Strike with its explicit attack bonus. Lets the PDF importer keep
+        # one-off creations instead of dropping unmatched weapons.
+        self.custom_weapons = [dict(w) for w in (d.get('custom_weapons') or []) if isinstance(w, dict) and w.get('name')]
         self.fabrials = [str(x) for x in (d.get('fabrials') or [])]   # equipped Fabrial device ids (Ch.7)
         self.epic_choices = list(d.get('epic_choices') or [])       # per L21+ level: 'skill' | 'talent'
         self.goals = d.get('goals', '')
@@ -579,6 +584,7 @@ class CosmereBuild:
             'relationships': self.relationships, 'loyalties': self.loyalties,
             'personality': self.personality,
             'stat_bonuses': dict(self.stat_bonuses),
+            'custom_weapons': list(self.custom_weapons),
         }
 
     def infected_records(self) -> list:
@@ -643,6 +649,19 @@ class CosmereBuild:
         # Equipped homebrew weapons -> Strikes (canon weapons already flow through
         # the Inventory; homebrew items are invisible to it).
         items += _homebrew.weapon_docs(self.to_dict(), self._homebrew)
+        # Custom one-off weapons (e.g. imported homebrew that matches no catalog
+        # id) -> Strikes carrying their explicit attack bonus.
+        for w in self.custom_weapons:
+            try:
+                atk = int(w.get('attack') or 0)
+            except (TypeError, ValueError):
+                atk = 0
+            items.append({'type': 'weapon', 'name': str(w.get('name') or 'Weapon')[:60],
+                          'system': {'damage': {'formula': str(w.get('damage') or ''),
+                                                'type': str(w.get('type') or '')},
+                                     # distinct key: `attack` is a reserved schema
+                                     # field (range/type); CosmereActor reads this.
+                                     'custom_attack_bonus': atk}})
         if self.is_radiant:
             # A First Ideal talent grants the three Stormlight actions (Ch.5).
             for act in _radiant.STORMLIGHT_ACTIONS:
