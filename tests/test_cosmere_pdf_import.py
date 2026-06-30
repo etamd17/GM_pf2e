@@ -65,6 +65,29 @@ def test_authoritative_overrides_reproduce_sheet_exactly():
     assert a2.health_max == 39
 
 
+def test_homebrew_weapon_becomes_custom_strike():
+    from systems.cosmere.pdf_import import _parse_weapon_line
+    p = _parse_weapon_line("Soravar's Gauntlet: +7 (1d10 impact damage) [Melee, Reach]")
+    assert p['name'] == "Soravar's Gauntlet" and p['attack'] == 7 and p['damage'] == '1d10' and p['type'] == 'impact'
+
+    f = _fields()
+    # a homebrew weapon (no catalog match) + a catalog weapon (Knife)
+    f['char_light_weapon'] = '4'
+    f['char_weapons.0'] = "Soravar's Gauntlet: +7 (1d10 impact damage) [Melee, Reach]"
+    f['char_weapons.1'] = 'Knife: +4 (1d4 keen damage) [Melee]'
+    build, play_state, extras = build_from_pdf(f)
+    assert any(w['name'] == "Soravar's Gauntlet" and w['attack'] == 7 for w in build.get('custom_weapons', [])), \
+        ('homebrew weapon dropped', build.get('custom_weapons'))
+
+    a = CosmereActor(CosmereBuild(build).to_actor_doc())
+    by = {s['name']: s for s in a.strikes}
+    assert "Soravar's Gauntlet" in by, ('custom strike missing', list(by))
+    assert by["Soravar's Gauntlet"]['mod'] == 7 and by["Soravar's Gauntlet"]['damage'] == '1d10'
+    # the catalog weapon keeps its SKILL-derived mod (not 0) -- the custom-attack
+    # override must not collide with the reserved `attack` schema field.
+    assert 'Knife' in by and by['Knife']['mod'] != 0, ('catalog weapon mod broke', by.get('Knife'))
+
+
 def test_radiant_order_split_from_path():
     f = _fields()
     f['char_paths'] = 'Scholar, Truthwatcher'

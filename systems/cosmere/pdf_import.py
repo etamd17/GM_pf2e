@@ -13,6 +13,35 @@ Self-contained (only pypdf); no dependency on the Flask app.
 """
 from __future__ import annotations
 
+import re
+
+
+def _parse_weapon_line(line):
+    """Parse a sheet weapon line into {name, attack, damage, type, traits}.
+
+    Lines look like:  "Knife: +5 (1d4 keen damage) [Melee, Thrown [20/60], ...]"
+    or "Soravar's Gauntlet: +7 (1d10 impact damage) [Melee, ...]" or, with no
+    damage, "Improvised Weapon: +0 [Melee, Fragile, 1 action]".
+    """
+    s = (line or '').strip()
+    m = re.match(r'^(?P<name>.+?):\s*(?P<atk>[+-]?\d+)?\s*(?:\((?P<dmg>[^)]*)\))?\s*(?:\[(?P<traits>.*)\])?\s*$', s)
+    if not m:
+        return {'name': s.split(':', 1)[0].strip(), 'attack': None, 'damage': '', 'type': '', 'traits': ''}
+    name = (m.group('name') or '').strip()
+    atk = m.group('atk')
+    attack = int(atk) if atk not in (None, '') else None
+    dmg = (m.group('dmg') or '').strip()
+    formula, dtype = '', ''
+    if dmg:
+        dm = re.search(r'\d+\s*d\s*\d+(?:\s*[+-]\s*\d+)?', dmg)
+        if dm:
+            formula = dm.group(0).replace(' ', '')
+            dmg = dmg.replace(dm.group(0), ' ')
+        dmg = re.sub(r'\bdamage\b', ' ', dmg, flags=re.I).strip().strip(',').strip()
+        dtype = dmg.split()[0] if dmg.split() else ''
+    return {'name': name, 'attack': attack, 'damage': formula, 'type': dtype.lower(),
+            'traits': (m.group('traits') or '').strip()}
+
 # PDF skill field stem -> app 3-letter skill code.
 _PDF_SKILL = {
     'agility': 'agi', 'athletics': 'ath', 'crafting': 'cra', 'deception': 'dec',
@@ -187,18 +216,31 @@ def build_from_pdf(src, homebrew=None):
     # "Improvised Weapon") are skipped silently.
     try:
         from systems.cosmere import items as _items
-        inv, seen = [], set()
-        for w in extras.get('weapons', []):
-            nm = (w.split(':', 1)[0] if ':' in w else w).strip()
-            if not nm:
+        inv, custom, seen, seen_names = [], [], set(), set()
+        for line in extras.get('weapons', []):
+            w = _parse_weapon_line(line)
+            nm = w['name']
+            if not nm or nm.lower() in seen_names:
                 continue
             hit = _items.by_name(nm)
             iid = (hit.get('id') or hit.get('_id')) if hit else None
-            if iid and (hit.get('kind') == 'weapon' or hit.get('type') == 'weapon') and iid not in seen:
-                seen.add(iid)
-                inv.append({'id': iid, 'qty': 1, 'equipped': True})
+            if iid and (hit.get('kind') == 'weapon' or hit.get('type') == 'weapon'):
+                if iid not in seen:
+                    seen.add(iid)
+                    seen_names.add(nm.lower())
+                    inv.append({'id': iid, 'qty': 1, 'equipped': True})
+            elif w['damage']:
+                # No catalog match -> a homebrew / one-off weapon (e.g. "Soravar's
+                # Gauntlet"). Keep it as a custom Strike with its explicit attack
+                # bonus + damage so it isn't dropped. (Bare entries with no damage,
+                # like a generic "Improvised Weapon", are skipped.)
+                seen_names.add(nm.lower())
+                custom.append({'name': nm, 'attack': w['attack'] or 0,
+                               'damage': w['damage'], 'type': w['type']})
         if inv:
             build['inventory'] = inv
+        if custom:
+            build['custom_weapons'] = custom
     except Exception:
         pass
 
