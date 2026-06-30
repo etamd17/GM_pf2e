@@ -197,6 +197,12 @@ def _active_campaign_id():
         u = _auth.current_user()
         if not u:
             return None
+        # "Stop active campaign" parks the session with NO active table -- the
+        # picker/lobby renders system-neutral and nothing bleeds from the last
+        # table. We must NOT fall back to last_campaign_id here, or the stop
+        # wouldn't stick. Cleared the moment any campaign is activated.
+        if session.get('campaign_stopped'):
+            return None
         cid = session.get('active_campaign_id') or u.get('last_campaign_id')
         if not cid:
             return None
@@ -256,6 +262,7 @@ def _set_active_campaign(cid):
     inheriting the server-wide live slot's system. The single place that records
     a per-user campaign choice."""
     session['active_campaign_id'] = cid
+    session.pop('campaign_stopped', None)   # picking a table un-parks the session
     try:
         u = _auth.current_user()
         if u:
@@ -6498,6 +6505,32 @@ def activate_campaign(cid):
     # a player home, so this works for any system with no per-system branching.
     ui = systems.get(camp.get('system') or systems.DEFAULT_SYSTEM).ui
     return redirect(ui.gm_home if gm else ui.player_home)
+
+
+@app.route('/campaign/stop', methods=['POST'])
+@_auth.login_required
+def stop_active_campaign():
+    """Park the session with NO active campaign so the GM can switch systems
+    cleanly -- the lobby renders system-neutral and nothing from the last table
+    bleeds into the next pick. If this user's table currently holds the
+    server-wide live slot, release it too (so stale global state for one system
+    can't leak into a different-system campaign); re-binding happens on the next
+    activate. Does NOT yank the live slot out from under another GM's session."""
+    u = _auth.current_user()
+    prev = session.get('active_campaign_id') or (u.get('last_campaign_id') if u else None)
+    session['campaign_stopped'] = True
+    session.pop('active_campaign_id', None)
+    try:
+        if prev and _storage.get_live_campaign_id() == prev:
+            camp = _campaigns.get_campaign(prev)
+            if camp and (_campaigns.is_gm(camp, u['id']) or u.get('is_admin')):
+                _storage.set_live_campaign_id(None)
+                load_campaign(None)
+    except Exception:
+        pass
+    if _is_ajax():
+        return jsonify({'ok': True})
+    return redirect('/me')
 
 
 @app.route('/campaign/<cid>/invites')
