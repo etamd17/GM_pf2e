@@ -33,9 +33,44 @@
   <span style="display:flex; gap:.6rem;">
     {% if is_gm and active_cid %}<a class="cb-new" href="/campaign/{{ active_cid }}/invites" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);" title="Player join links + hand off a character">Invites</a>{% endif %}
     <a class="cb-new" href="/cosmere/bestiary" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);">Bestiary</a>
+    <label class="cb-new" style="cursor:pointer;" title="Upload filled Cosmere character-sheet PDF(s); auto-creates usable characters in this campaign">
+      + Import PDF<input id="cos-pdf-input" type="file" accept="application/pdf,.pdf" multiple style="display:none;" onchange="importCosmerePdfs(this)">
+    </label>
     <a class="cb-new" href="/cosmere/builder">+ New Character</a>
   </span>
 </div>
+<div id="cos-pdf-status" style="display:none; margin:0 0 1rem; padding:.7rem .9rem; border-radius:8px; font-size:13px; border:1px solid var(--border-card); background:var(--bg-card); color:var(--text-on-dark);"></div>
+<script>
+  async function importCosmerePdfs(input) {
+    const files = [...(input.files || [])];
+    if (!files.length) return;
+    const box = document.getElementById('cos-pdf-status');
+    box.style.display = 'block';
+    box.textContent = 'Importing ' + files.length + ' character sheet' + (files.length === 1 ? '' : 's') + '…';
+    const fd = new FormData();
+    files.forEach(f => fd.append('file', f));
+    try {
+      const r = await fetch('/cosmere/pc/import_pdf', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const d = await r.json();
+      const made = (d.created || []).map(c => c.name);
+      const errs = (d.errors || []).map(e => e.file + ': ' + e.error);
+      if (made.length) {
+        box.style.borderColor = 'rgba(110,231,168,.5)';
+        box.innerHTML = 'Imported: <b>' + made.map(n => n.replace(/</g, '&lt;')).join(', ') + '</b>'
+          + (errs.length ? '<br>Skipped: ' + errs.join('; ').replace(/</g, '&lt;') : '')
+          + '<br><span style="opacity:.7;">Reloading…</span>';
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        box.style.borderColor = 'rgba(239,68,68,.5)';
+        box.textContent = (d.error || 'Import failed.') + (errs.length ? ' (' + errs.join('; ') + ')' : '');
+      }
+    } catch (e) {
+      box.style.borderColor = 'rgba(239,68,68,.5)';
+      box.textContent = 'Upload failed: ' + e.message;
+    }
+    input.value = '';
+  }
+</script>
 {% if pcs %}
 <div class="pc-grid">
   {% for pc in pcs %}

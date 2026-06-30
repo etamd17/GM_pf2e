@@ -6,3 +6,6 @@ PyYAML==6.0.1
 markupsafe==2.1.3
 reportlab==4.1.0
 segno==1.6.6
+
+# Cosmere character-sheet PDF import (AcroForm field extraction)
+pypdf>=4.0
