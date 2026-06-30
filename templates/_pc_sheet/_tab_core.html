@@ -89,7 +89,7 @@
                                         <span class="uppercase" style="font-size:var(--text-2xs); color:var(--text-muted);">{{ skill.stat }}</span>
                                     </div>
                                 </div>
-                                <button onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})"
+                                <button onclick="rollSkill('{{ skill.name|replace("'", "\\'") }}', {{ skill.total | int }})"
                                         class="text-lg font-bold font-mono {{ stat_color }} group-hover:text-amber-400 transition-colors px-2"
                                         aria-label="Roll {{ skill.name }} {{ skill.total }}"
                                         title="{{ skill.name }} {{ skill.total }} — {{ skill.breakdown }}">

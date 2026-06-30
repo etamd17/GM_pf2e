@@ -14,6 +14,7 @@ runner). The fixes were verified live in a browser.
 """
 import os
 import re
+import glob
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -68,4 +69,37 @@ def test_no_html_escape_only_interpolation_in_inline_handlers():
     assert not offenders, (
         "HTML-escaped (not JS-escaped) value(s) inside an inline handler's JS string — "
         "apostrophes will break these:\n" + "\n".join(offenders)
+    )
+
+
+# Server-rendered variant: a Jinja value passed as a single-quoted call argument
+# in an inline handler, e.g. onclick="toggleFeature('{{ feat.name }}')". Raw
+# {{ x }} autoescapes ' -> &#39, which the HTML parser decodes back to ' before
+# the JS runs -> the string closes early -> dead button. (|e is HTML-escape, same
+# trap.) Only |replace("'", "\\'") (JS-escape) survives. Names/titles/labels are
+# the apostrophe-prone fields ("Hunter's Edge", "Go'el", "Thieves' Tools").
+_HANDLER_ON_LINE = re.compile(r'\bon[a-z]+\s*=\s*"')
+# a Jinja interpolation used as a call argument: ( or , then '{{ ... }}'
+_JINJA_CALL_ARG = re.compile(r"[(,]\s*'\{\{\s*(.*?)\s*\}\}'")
+_NAMELIKE = re.compile(r'\b(name|title|label)\b')
+
+
+def test_no_unescaped_jinja_name_in_inline_handler():
+    offenders = []
+    for path in glob.glob(os.path.join(_REPO, 'templates', '**', '*.html'), recursive=True):
+        with open(path, encoding='utf-8') as f:
+            for i, line in enumerate(f, 1):
+                if not _HANDLER_ON_LINE.search(line):
+                    continue
+                for m in _JINJA_CALL_ARG.finditer(line):
+                    expr = m.group(1)
+                    if not _NAMELIKE.search(expr):
+                        continue  # constants (codes, ids, conditions) can't hold apostrophes
+                    if 'replace' in expr or 'tojson' in expr:
+                        continue  # JS-escaped (replace) or single-quote-safe (tojson)
+                    offenders.append('%s:%d  %s' % (os.path.basename(path), i, expr))
+    assert not offenders, (
+        "Raw/HTML-escaped Jinja name passed to an inline handler — autoescaped "
+        "apostrophes (&#39;) decode back to ' and break the JS string. Use "
+        "|replace(\"'\", \"\\\\'\"):\n" + "\n".join(offenders)
     )

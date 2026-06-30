@@ -8,7 +8,7 @@
         <div class="stats-rail-section sr-skills">
             <div class="sr-head">Skills</div>
             {% for skill in pc.skills %}
-            <div class="sr-row sr-row-roll sr-skill-row" onclick="rollSkill('{{ skill.name }}', {{ skill.total | int }})" role="button" tabindex="0" title="{{ skill.breakdown }}">
+            <div class="sr-row sr-row-roll sr-skill-row" onclick="rollSkill('{{ skill.name|replace("'", "\\'") }}', {{ skill.total | int }})" role="button" tabindex="0" title="{{ skill.breakdown }}">
                 <span class="sr-skill-prof
                     {% if skill.prof_letter == 'U' %} sr-prof-u
                     {% elif skill.prof_letter == 'T' %} prof-t
