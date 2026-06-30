@@ -7524,10 +7524,21 @@ def tracker_view():
     # + party picker are gated off in the template). PF2e mode is unchanged.
     cosmere_adversaries, cosmere_pcs = [], []
     if _active_system() == 'cosmere':
+        _seen_adv = set()
         for d in systems.cosmere.adversary_docs():
             s = d.get('system', {})
             cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
-                                        'tier': s.get('tier'), 'role': s.get('role')})
+                                        'tier': s.get('tier'), 'role': s.get('role'), 'custom': False})
+            _seen_adv.add(d.get('_id'))
+        # GM-authored homebrew adversaries — so the GM's saved custom enemies are
+        # re-addable from the tracker's adversary picker, not just creatable as a
+        # one-off. _cosmere_doc_by_id already resolves these for add-to-tracker.
+        for d in _load_cosmere_custom_adversaries():
+            if not isinstance(d, dict) or d.get('_id') in _seen_adv:
+                continue
+            s = d.get('system', {}) if isinstance(d.get('system'), dict) else {}
+            cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
+                                        'tier': s.get('tier'), 'role': s.get('role') or 'Homebrew', 'custom': True})
         cosmere_adversaries.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
         cosmere_pcs = [{'id': d['id'], 'name': d.get('name', '?')} for d in _list_cosmere_pcs()]
     return render_template('tracker.html', monsters=sorted_monsters, party=sorted_party, initial_state=initial_state, turn_index=TURN_INDEX, round_number=ROUND_NUMBER, saved_encounters=sorted(saved_encounters), encounter_xp=encounter_xp, diff_label=diff_label, diff_color=diff_color, party_level=party_level, turn_reminders=TURN_REMINDERS, cosmere_adversaries=cosmere_adversaries, cosmere_pcs=cosmere_pcs,
