@@ -184,6 +184,21 @@ class CosmereBuild:
         # Structured stat bonuses from the homebrew this character has selected.
         self.homebrew_bonuses, self.homebrew_sources, self.homebrew_dangling = \
             _homebrew.resolve_bonuses(d, self._homebrew)
+        # Explicit additive stat bonuses carried by the build dict itself. Used by
+        # the PDF importer to reproduce a sheet's AUTHORITATIVE totals (e.g. a +5
+        # health from the Hardy talent, or armor Deflect) that the build can't
+        # derive from talents-by-name. Keys match _hb(): 'health', 'deflect',
+        # 'focus', 'investiture', 'def:phy|cog|spi', 'skill:<code>'. Merged
+        # additively so they flow through every derived stat via _hb() (and thus
+        # to_actor_doc), at every render site, with no per-site patching.
+        self.stat_bonuses = {}
+        for _k, _v in (d.get('stat_bonuses') or {}).items():
+            try:
+                iv = int(_v)
+            except (TypeError, ValueError):
+                continue
+            self.stat_bonuses[_k] = iv
+            self.homebrew_bonuses[_k] = int(self.homebrew_bonuses.get(_k, 0) or 0) + iv
         # Infected Arts (a homebrew Invested-disease system): a selection of art
         # ids whose disease COSTS apply as structured stat effects -- ``_inf_add``
         # sums into derived stats via _hb(), ``_inf_set`` overrides them (e.g.
@@ -563,6 +578,7 @@ class CosmereBuild:
             'connections': self.connections, 'occupation': self.occupation,
             'relationships': self.relationships, 'loyalties': self.loyalties,
             'personality': self.personality,
+            'stat_bonuses': dict(self.stat_bonuses),
         }
 
     def infected_records(self) -> list:

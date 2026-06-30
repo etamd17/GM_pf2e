@@ -8265,6 +8265,54 @@ def cosmere_gm_vitals():
     return render_template('cosmere_gm_vitals.html', party=party)
 
 
+@app.route('/cosmere/pc/import_pdf', methods=['POST'])
+@_auth.login_required
+def cosmere_import_pdf():
+    """Create Cosmere PC(s) from uploaded filled character-sheet PDF(s). Parses
+    the AcroForm fields, maps them to a CosmereBuild (computing stat_bonuses so
+    the sheet's authoritative totals are reproduced exactly), and saves a PC into
+    the active Cosmere campaign. A GM leaves them UNCLAIMED (players claim via a
+    join link); a player importing their own owns it."""
+    if _active_system() != 'cosmere':
+        return jsonify({'ok': False, 'error': 'Switch to a Cosmere campaign first, then import.'}), 400
+    files = request.files.getlist('file') or request.files.getlist('files')
+    if not files and 'file' in request.files:
+        files = [request.files['file']]
+    files = [f for f in files if f and f.filename]
+    if not files:
+        return jsonify({'ok': False, 'error': 'No PDF uploaded.'}), 400
+    import systems.cosmere.build as _cb
+    from systems.cosmere.pdf_import import build_from_pdf
+    created, errors = [], []
+    for f in files:
+        try:
+            data = f.read()
+            if not data or not data[:5].startswith(b'%PDF'):
+                errors.append({'file': f.filename, 'error': 'Not a PDF file.'})
+                continue
+            build, play_state, extras = build_from_pdf(data, homebrew=_cosmere_homebrew_store())
+            # Normalize through CosmereBuild so the stored build round-trips (and
+            # the in-app builder/leveler can later edit it). to_dict carries the
+            # stat_bonuses overrides.
+            cb = _cb.CosmereBuild(build, homebrew=_cosmere_homebrew_store())
+            doc = {
+                'id': uuid.uuid4().hex, 'system': 'cosmere',
+                'name': cb.name or 'Imported Hero',
+                'owner_user_id': (None if _is_gm() else session.get('user_id')),
+                'build': cb.to_dict(),
+                'play_state': play_state,
+                'imported_from': 'pdf',
+                'import_extras': {k: extras.get(k) for k in ('weapons', 'equipment', 'spheres')},
+            }
+            _save_cosmere_pc(doc)
+            created.append({'id': doc['id'], 'name': doc['name'],
+                            'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
+        except Exception as e:
+            print(f'[PDF IMPORT] {getattr(f, "filename", "?")}: {e}')
+            errors.append({'file': getattr(f, 'filename', '?'), 'error': str(e)[:200]})
+    return jsonify({'ok': bool(created), 'created': created, 'errors': errors})
+
+
 @app.route('/cosmere/builder', methods=['GET', 'POST'])
 def cosmere_builder():
     import systems.cosmere.build as _cb
