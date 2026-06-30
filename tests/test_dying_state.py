@@ -440,3 +440,55 @@ def test_tracker_and_party_paths_agree(goel, client):
     r = _party_damage(client, goel, 5)
     assert r['dying'] == tracker_dying == 2
     assert r['wounded'] == tracker_wounded == 0
+
+
+# ==========================================================================
+# PART 3 — /api/adjust_hp reports the NET hp delta applied
+# ==========================================================================
+#
+# The damage/heal response carries an `applied` block {net, raw} so the client
+# toast shows what actually landed (after resistances / weaknesses / temp HP /
+# overkill + heal clamping), not the raw amount typed. `net` is the real
+# hp-pool change, so it equals `raw` only when nothing reduced or clamped it.
+
+def _applied(r):
+    return (r.get_json() or {}).get('applied') or {}
+
+
+def test_applied_net_equals_raw_for_partial_damage(goel, client):
+    pc = app_module.PARTY_LIBRARY[goel]
+    with _Encounter(pc) as enc:
+        a = _applied(_tracker_damage(client, enc.instance_id, 7))
+        assert a.get('raw') == 7 and a.get('net') == 7      # nothing reduced it
+        assert pc.current_hp == pc.hp - 7
+
+
+def test_applied_net_caps_at_hp_lost_on_overkill(goel, client):
+    """A 9999 hit on a PC reports net = the HP actually lost (capped at 0), so
+    the toast reads "Took <hp>" rather than "Took 9999"."""
+    pc = app_module.PARTY_LIBRARY[goel]
+    hp_before = pc.hp
+    with _Encounter(pc) as enc:
+        a = _applied(_tracker_damage(client, enc.instance_id, 9999))
+        assert a.get('raw') == 9999
+        assert a.get('net') == hp_before
+        assert pc.current_hp == 0
+
+
+def test_applied_net_caps_at_healing_that_fit(goel, client):
+    pc = app_module.PARTY_LIBRARY[goel]
+    with _Encounter(pc) as enc:
+        _tracker_damage(client, enc.instance_id, 9999)       # -> 0
+        a = _applied(_tracker_heal(client, enc.instance_id, 10000))
+        assert a.get('raw') == 10000
+        assert a.get('net') == pc.hp                          # only max HP fit
+        assert pc.current_hp == pc.hp
+
+
+def test_applied_net_zero_for_heal_at_full(goel, client):
+    """Healing a full-HP PC moves nothing, so net is 0 (truthful "Healed 0")."""
+    pc = app_module.PARTY_LIBRARY[goel]
+    with _Encounter(pc) as enc:
+        a = _applied(_tracker_heal(client, enc.instance_id, 25))
+        assert a.get('net') == 0
+        assert pc.current_hp == pc.hp

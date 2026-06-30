@@ -7580,9 +7580,16 @@ def tracker_view():
 def _is_ajax():
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json or request.content_type == 'application/json'
 
-def _tracker_json_response():
-    """Return full tracker state as JSON for AJAX calls."""
-    return jsonify(_get_tracker_state())
+def _tracker_json_response(extra=None):
+    """Return full tracker state as JSON for AJAX calls. `extra`, if given, is
+    merged into a SHALLOW COPY of the state (so the cached state dict isn't
+    polluted) — e.g. the per-action `applied` HP delta a damage/heal reports
+    back so the client toast can show the net amount that actually landed."""
+    state = _get_tracker_state()
+    if extra:
+        state = dict(state)
+        state.update(extra)
+    return jsonify(state)
 
 
 def _find_active_combatant(instance_id):
@@ -10116,6 +10123,9 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
 @require_live_combatant
 def adjust_hp(instance_id):
+    old_hp = None
+    action = None
+    amount = 0
     try:
         amount = int(request.form.get('amount', 0))
         action = request.form.get('action')
@@ -10263,7 +10273,17 @@ def adjust_hp(instance_id):
                 _broadcast_encounter_state()
                 break
     except ValueError: pass
-    if _is_ajax(): return _tracker_json_response()
+    if _is_ajax():
+        # Report the ACTUAL hp-pool change (after Deflect / resistances /
+        # weaknesses / temp HP / clamping) so the client toast says the net
+        # damage that landed, not the raw amount typed.
+        extra = None
+        _c = _find_active_combatant(instance_id)
+        if _c is not None and old_hp is not None and action in ('damage', 'heal'):
+            net = (old_hp - _c.current_hp) if action == 'damage' else (_c.current_hp - old_hp)
+            extra = {'applied': {'instance_id': instance_id, 'action': action,
+                                 'net': int(max(0, net)), 'raw': int(amount or 0)}}
+        return _tracker_json_response(extra)
     return redirect(url_for('tracker_view'))
 
 

@@ -3082,6 +3082,16 @@ async function addCustomCosmereAdversary() {
     } catch(e) { toast('Failed to add adversary', 'error'); }
 }
 
+// HP toast text: prefer the server-reported NET delta (the actual hp-pool
+// change after Deflect / resistances / weaknesses / temp HP / clamping) over
+// the raw amount typed, so e.g. "6 impact" that Deflect knocks down to 5 reads
+// "Took 5 damage". Falls back to the raw amount if the server didn't report one.
+function hpAdjustToast(action, d, rawAmt) {
+    const net = (d && d.applied && typeof d.applied.net === 'number') ? d.applied.net : rawAmt;
+    window.pf2eToast(action === 'heal' ? ('Healed ' + net + ' HP') : ('Took ' + net + ' damage'),
+                     action === 'heal' ? 'success' : 'danger');
+}
+
 async function adjustHP(id, action) {
     const input = document.getElementById('hp-amt-' + id);
     const amt = parseInt(input?.value) || 1;
@@ -3092,7 +3102,7 @@ async function adjustHP(id, action) {
     fd.append('action', action);
     fd.append('damage_type', dmgType);
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
-    if (d) window.pf2eToast(action === 'heal' ? ('Healed ' + amt + ' HP') : ('Took ' + amt + ' damage'), action === 'heal' ? 'success' : 'danger');
+    if (d) hpAdjustToast(action, d, amt);
 }
 
 // Active-panel HP adjust (uses separate input IDs so it doesn't collide with grid row)
@@ -3106,7 +3116,7 @@ async function adjustHPAP(id, action) {
     fd.append('action', action);
     fd.append('damage_type', dmgType);
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
-    if (d) window.pf2eToast(action === 'heal' ? ('Healed ' + amt + ' HP') : ('Took ' + amt + ' damage'), action === 'heal' ? 'success' : 'danger');
+    if (d) hpAdjustToast(action, d, amt);
 }
 
 // Direct HP adjust for keyboard shortcuts (no DOM lookup needed)
@@ -3116,7 +3126,7 @@ async function adjustHPDirect(id, action, amount) {
     fd.append('action', action);
     fd.append('damage_type', 'untyped');
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
-    if (d) window.pf2eToast(action === 'heal' ? ('Healed ' + amount + ' HP') : ('Took ' + amount + ' damage'), action === 'heal' ? 'success' : 'danger');
+    if (d) hpAdjustToast(action, d, amount);
 }
 
 async function updateInit(id, val) {

@@ -131,6 +131,38 @@ def test_cosmere_adjust_hp_route_applies_deflect_on_untyped():
         app._invalidate_tracker_cache()
 
 
+def test_cosmere_adjust_hp_reports_net_after_deflect():
+    """The damage/heal response carries an `applied` block reporting the NET
+    hp-pool change, so the client toast says what actually landed -- "Took 4
+    damage" for a 5-impact hit that Deflect 1 reduced, not "Took 5". A Deflect-
+    bypassing type reports the full amount; a heal reports only what fit."""
+    a = app._cosmere_combatant(_adv_id('Archer'))      # deflect 1, health 12
+    a.instance_id = 'cos-net-1'
+    saved = list(app.ACTIVE_ENCOUNTER)
+    try:
+        app.ACTIVE_ENCOUNTER.append(a)
+        app._invalidate_tracker_cache()
+        client = app.app.test_client()
+        hdr = {'X-Requested-With': 'XMLHttpRequest'}
+        # 5 impact, Deflect 1 -> net 4 (raw still echoes the typed 5)
+        r = client.post('/api/adjust_hp/cos-net-1', headers=hdr,
+                        data={'amount': '5', 'action': 'damage', 'damage_type': 'impact'})
+        ap = r.get_json()['applied']
+        assert ap['net'] == 4 and ap['raw'] == 5 and ap['action'] == 'damage'
+        # spirit bypasses Deflect -> net == raw
+        r = client.post('/api/adjust_hp/cos-net-1', headers=hdr,
+                        data={'amount': '3', 'action': 'damage', 'damage_type': 'spirit'})
+        assert r.get_json()['applied']['net'] == 3      # 8 -> 5
+        # heal past max reports only the amount that fit (5 -> 12 = +7)
+        r = client.post('/api/adjust_hp/cos-net-1', headers=hdr,
+                        data={'amount': '100', 'action': 'heal'})
+        ap = r.get_json()['applied']
+        assert ap['action'] == 'heal' and ap['net'] == 7 and a.current_hp == 12
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = saved
+        app._invalidate_tracker_cache()
+
+
 def test_tracker_offers_cosmere_damage_types():
     """The GM tracker damage UI must expose the Cosmere damage types so the GM
     can force a deflectable hit (impact/keen/energy) or a bypassing one
