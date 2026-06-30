@@ -119,7 +119,7 @@
             <div class="mobile-strike-row">
                 {% for s in atk.strikes %}
                 <button class="mobile-action-btn mobile-strike-btn"
-                        onclick="rollAttack('{{ atk.name|e }}', {{ s.mod }}, '{{ atk.damage|e }}')"
+                        onclick="rollAttack('{{ atk.name|replace("'", "\\'") }}', {{ s.mod }}, '{{ atk.damage|replace("'", "\\'") }}')"
                         title="MAP {{ s.map_label }}">
                     {{ s.label }}
                 </button>

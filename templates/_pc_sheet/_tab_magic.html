@@ -138,7 +138,7 @@
                         <div class="flex flex-wrap items-center gap-3 px-5 py-3" style="background:var(--bg-raised); border-bottom:1px solid var(--border-subtle);">
                             <div class="flex items-center gap-2">
                                 <span class="font-header text-[10px] uppercase tracking-widest" style="color:var(--text-muted);">Kinetic Aura</span>
-                                <button type="button" class="ki-aura-toggle" onclick="toggleKineticAura('{{ pc.name }}', {{ caster_idx }}, this)">
+                                <button type="button" class="ki-aura-toggle" onclick="toggleKineticAura('{{ pc.name|replace("'", "\\'") }}', {{ caster_idx }}, this)">
                                     <span class="ki-aura-dot"></span>
                                     <span class="ki-aura-lbl">Off</span>
                                 </button>
@@ -151,9 +151,9 @@
                             <span class="kineticist-divider"></span>
                             <div class="flex items-center gap-2">
                                 <span class="font-header text-[10px] uppercase tracking-widest" style="color:var(--text-muted);">Overflow</span>
-                                <button type="button" onclick="adjustKineticOverflow('{{ pc.name }}', {{ caster_idx }}, -1)" class="ki-overflow-step" title="Spend 1 overflow">−</button>
+                                <button type="button" onclick="adjustKineticOverflow('{{ pc.name|replace("'", "\\'") }}', {{ caster_idx }}, -1)" class="ki-overflow-step" title="Spend 1 overflow">−</button>
                                 <span id="ki-overflow-val-{{ caster_idx }}" class="ki-overflow-val">0</span>
-                                <button type="button" onclick="adjustKineticOverflow('{{ pc.name }}', {{ caster_idx }}, 1)" class="ki-overflow-step" title="Add 1 overflow">+</button>
+                                <button type="button" onclick="adjustKineticOverflow('{{ pc.name|replace("'", "\\'") }}', {{ caster_idx }}, 1)" class="ki-overflow-step" title="Add 1 overflow">+</button>
                                 <span class="text-[10px]" style="color:var(--text-faint);">/ pool</span>
                             </div>
                         </div>

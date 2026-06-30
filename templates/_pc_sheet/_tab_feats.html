@@ -39,7 +39,7 @@
                     <div class="flex items-center gap-3 mb-2">
                         <!-- Toggle button for toggleable features -->
                         {% if feat.type == 'toggle' %}
-                        <button onclick="toggleFeature('{{ feat.name }}')" 
+                        <button onclick="toggleFeature('{{ feat.name|replace("'", "\\'") }}')"
                                 id="toggle-btn-{{ feat.name|replace(' ', '-') }}"
                                 class="shrink-0 w-12 h-7 rounded-full transition-all relative no-print"
                                 style="{% if feat.name in pc.active_toggles %}background: rgba(167,139,250,0.2); border: 1px solid rgba(167,139,250,0.4);{% else %}background: var(--bg-raised); border: 1px solid var(--border-strong);{% endif %}">
