@@ -101,6 +101,23 @@
         if (typeof window !== 'undefined') {
             window.addEventListener('online', wake);
             window.addEventListener('pageshow', wake);
+            // Campaign-switch guard (belt-and-suspenders behind the server's
+            // no-store header, for edge proxies that may ignore it). When THIS
+            // page is restored from the back/forward cache (e.persisted) -- Back,
+            // or returning to a tab left open before a campaign switch -- its
+            // baked-in system skin may be stale (the "says PF2e but Cosmere-
+            // themed" mixed menu). Compare the page's stamped system to the
+            // session's current one and reload once on mismatch. No-ops on pages
+            // that don't stamp data-active-system.
+            window.addEventListener('pageshow', function (e) {
+                if (!e || !e.persisted) return;
+                var baked = (document.body && document.body.dataset) ? document.body.dataset.activeSystem : '';
+                if (!baked) return;
+                fetch('/api/active_system', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) { if (d && d.system && d.system !== baked) location.reload(); })
+                    .catch(function () {});
+            });
         }
     })();
 </script>

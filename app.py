@@ -514,6 +514,23 @@ def _gzip_response(response):
     # (incl. a real browser against the dev server) because there is no second
     # compression layer there. Compression is handled at the edge; doing it in
     # the app too is redundant AND harmful. Left as a no-op pass-through.
+    #
+    # Campaign-switch bleed fix (2026-07-01): a rendered page bakes the ACTIVE
+    # campaign's system skin into the <body> class + the chrome. With no cache
+    # header the browser's back/forward cache (bfcache) can restore a PRE-SWITCH
+    # page WITHOUT contacting the server, so after a GM switches campaigns a
+    # stale tab / Back navigation keeps the old system's theme -- the "says PF2e
+    # but Cosmere-themed" mixed menu -- until a hard refresh. `no-store` makes
+    # HTML bfcache-ineligible, so Back / returning to a tab forces a fresh render
+    # that always matches the session's active campaign. Scoped to text/html
+    # ONLY: static CSS/JS stay mtime-cache-busted and the SSE stream keeps its
+    # own headers (this never touches campaign or live-combat state).
+    try:
+        if response.mimetype == 'text/html':
+            response.headers['Cache-Control'] = 'no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+    except Exception:
+        pass
     return response
 
 
@@ -6979,6 +6996,16 @@ def _inject_account_ctx():
         'system_ui': _active_system_ui(),
         'advancement_mode': (_advancement_mode() if u else 'milestone'),
     }
+
+
+@app.route('/api/active_system')
+def api_active_system():
+    """Lightweight probe of THIS session's active system, for the bfcache
+    skin-mismatch guard in _sse_hub: a page restored from the back/forward cache
+    after a campaign switch reloads itself if its baked-in system no longer
+    matches. Not GM-gated (players' pages bfcache too); returns session-derived
+    data only."""
+    return jsonify({'system': _active_system(), 'cid': _active_campaign_id()})
 
 
 @app.route('/campaigns/new', methods=['GET', 'POST'])

@@ -53,7 +53,7 @@ def test_stop_then_activate_round_trip():
         with c.session_transaction() as s:
             assert s.get('active_campaign_id') == pf
             assert not s.get('campaign_stopped'), 'activate must clear the stop flag'
-        body = re.search(r'<body class="([^"]*)"', c.get('/tracker').get_data(as_text=True))
+        body = re.search(r'<body[^>]*\\bclass="([^"]*)"', c.get('/tracker').get_data(as_text=True))
         assert body and 'system-pf2e' in body.group(1), ('tracker should be pf2e after re-activate', body and body.group(1))
         print('STOP_ROUNDTRIP_OK')
     ''')
