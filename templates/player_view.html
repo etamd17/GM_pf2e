@@ -304,14 +304,14 @@
 <div id="import-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="rounded-xl w-full max-w-lg p-6" style="background:#28221a; border:1px solid rgba(201,163,78,0.22)">
         <div class="flex justify-between items-center mb-5">
-            <h3 class="font-display text-accent-300 text-lg">Import from Pathbuilder</h3>
+            <h3 class="font-display text-accent-300 text-lg">Import Character</h3>
             <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
         </div>
-        <p class="text-base-400 text-sm mb-5">Export your character as JSON from Pathbuilder, then upload or paste below.</p>
+        <p class="text-base-400 text-sm mb-5">Upload a Pathbuilder JSON export <span class="text-base-500">or</span> a filled official Paizo PF2e character-sheet PDF &mdash; or paste Pathbuilder JSON below.</p>
         <div class="space-y-4">
             <div class="rounded-lg p-6 text-center cursor-pointer" style="border:2px dashed rgba(255,255,255,0.08); background:rgba(15,15,20,0.5)" onclick="document.getElementById('pb-file-input').click()">
-                <input type="file" id="pb-file-input" accept=".json" class="hidden" onchange="handleFileImport(this)">
-                <div class="text-base-500 text-sm">Click to upload JSON file</div>
+                <input type="file" id="pb-file-input" accept=".json,.pdf" class="hidden" onchange="handleFileImport(this)">
+                <div class="text-base-500 text-sm">Click to upload a Pathbuilder <b>.json</b> or Paizo sheet <b>.pdf</b></div>
             </div>
             <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div><span class="text-[10px] text-base-600 uppercase tracking-widest">or paste</span><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div></div>
             <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0c0a07; border:1px solid rgba(201,163,78,0.18)"></textarea>
