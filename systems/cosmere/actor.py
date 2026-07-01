@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import re
 
+from systems.cosmere.enrich import enrich as _enrich
+
 # Defense = 10 + the two governing attributes (rulebook Ch.3).
 _DEFENSE_ATTRS = {
     'phy': ('str', 'spd'),   # Physical
@@ -160,7 +162,7 @@ class CosmereActor:
             itype, iname = it.get('type'), it.get('name', '')
             isys = it.get('system', {}) if isinstance(it.get('system'), dict) else {}
             if itype == 'action':
-                self.actions.append({'name': iname, 'description': _text(isys.get('description'))})
+                self.actions.append({'name': iname, 'description': _enrich(_text(isys.get('description')), self.name)})
             elif itype == 'weapon':
                 dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
                 skill = dmg.get('skill')
