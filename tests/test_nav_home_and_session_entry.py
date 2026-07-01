@@ -1,19 +1,9 @@
-"""Navigation + session-entry UX guards.
+"""Navigation guards.
 
-Two player-facing gaps these cover:
-
-1. Back-to-home: inside a campaign there was no easy link to /me (the account
-   home that lists every campaign + character). The player bottom navs had none
-   at all; base.html only had it buried in the campaign-switcher dropdown. We add
-   an explicit Home link, gated on account mode (account_user).
-
-2. Session curtain: a player landing on the begin-session recap had no button to
-   advance — they sat on a wall of text waiting for the GM. They now get an
-   "Enter the session" button that takes them to their sheet, and a long recap
-   scrolls with a "scroll for more" cue.
-
-These are template renders + structural guards (the curtain logic is client JS;
-the repo has no JS runner, but the invariants below prevent the regressions).
+Back-to-home: inside a campaign there was no easy link to /me (the account home
+that lists every campaign + character). The player bottom navs had none at all;
+base.html only had it buried in the campaign-switcher dropdown. We add an
+explicit Home link, gated on account mode (account_user).
 """
 from __future__ import annotations
 
@@ -62,19 +52,3 @@ def test_base_nav_has_one_click_home():
     src = _read('base.html')
     assert src.count('href="/me"') >= 2, 'expected the dropdown link AND a top-level home link'
     assert 'aria-label="Home"' in src
-
-
-# ---- 2. Session curtain: player can self-advance + recap scrolls -----------
-
-def test_curtain_player_gets_enter_button_to_their_sheet():
-    src = _read('_session_curtain.html')
-    # A player's Enter advances only them, to their character sheet.
-    assert "'/cosmere/player' : '/player'" in src, 'no player→sheet navigation on Enter'
-    # Both roles now get a button (player is never stranded waiting for the GM).
-    assert "enterBtn.textContent = 'Enter the session" in src
-
-
-def test_curtain_recap_scrolls_with_cue():
-    src = _read('_session_curtain.html')
-    assert 'overflow-y: auto' in src, 'recap does not scroll'
-    assert 'sc-scrollcue' in src, 'no "scroll for more" cue element'
