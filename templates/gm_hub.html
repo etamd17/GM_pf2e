@@ -18,6 +18,12 @@
             transition: color var(--t-fast), background var(--t-fast);
         }
         .gm-hub-quick-link:hover { color: var(--text-on-dark); background: rgba(201,163,78,0.06); }
+        .gm-group-label {
+            font-family: var(--font-display);
+            font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--text-on-dark-3);
+            margin: 0 0 var(--sp-2); padding-left: var(--sp-1);
+        }
 {% endblock %}
 {% block content %}
 
@@ -44,24 +50,9 @@
                 </div>
             </header>
 
-            {# ── Tool grid ── #}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
-
-                <a href="/party" class="tile">
-                    <div class="tile__glyph">P</div>
-                    <h2 class="tile__title">Party View</h2>
-                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
-                    <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
-                </a>
-
-                {% if active_system == 'cosmere' %}
-                <a href="/cosmere/gm/vitals" class="tile">
-                    <div class="tile__glyph">&#9830;</div>
-                    <h2 class="tile__title">Party Vitals</h2>
-                    <p class="tile__desc">Live Health, Focus, Investiture, injuries &amp; conditions for every hero &mdash; updates as players adjust their sheets.</p>
-                </a>
-                {% endif %}
-
+            {# ── RUN — live at the table ── #}
+            <div class="gm-group-label">Run &mdash; live at the table</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
                 <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
                     <div class="tile__glyph">&#9876;</div>
                     <h2 class="tile__title">Encounter Tracker</h2>
@@ -70,106 +61,80 @@
                         {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
                     </span>
                 </a>
-
-
+                <a href="/party" class="tile">
+                    <div class="tile__glyph">P</div>
+                    <h2 class="tile__title">Party View</h2>
+                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
+                    <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
+                </a>
+                {% if active_system == 'cosmere' %}
+                <a href="/cosmere/gm/vitals" class="tile">
+                    <div class="tile__glyph">&#9830;</div>
+                    <h2 class="tile__title">Party Vitals</h2>
+                    <p class="tile__desc">Live Health, Focus, Investiture, injuries &amp; conditions for every hero.</p>
+                </a>
+                {% endif %}
                 <a href="/gmscreen" class="tile">
                     <div class="tile__glyph">&#9776;</div>
                     <h2 class="tile__title">GM Screen</h2>
-                    <p class="tile__desc">DCs, conditions, combat math, compendium search. <kbd class="kbd">C</kbd> opens checks drawer.</p>
+                    <p class="tile__desc">DCs, conditions, combat math, compendium &amp; rules at a glance. <kbd class="kbd">C</kbd> opens checks.</p>
                 </a>
+            </div>
 
+            {# ── PREP — build the encounter ── #}
+            <div class="gm-group-label">Prep &mdash; build the encounter</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
+                <a href="/gm/encounter_templates" class="tile">
+                    <div class="tile__glyph">&#9876;</div>
+                    <h2 class="tile__title">Encounter Builder</h2>
+                    <p class="tile__desc">XP-budget encounter builder &mdash; pick creatures by level difference, then stage them.</p>
+                </a>
                 <a href="/generator" class="tile">
                     <div class="tile__glyph">&#9881;</div>
                     <h2 class="tile__title">Generators</h2>
                     <p class="tile__desc">NPCs, taverns, loot, hazards, weather &mdash; scaled to party level &amp; biome.</p>
                 </a>
-
-                <a href="/gm/loot" class="tile">
-                    <div class="tile__glyph">&#9878;</div>
-                    <h2 class="tile__title">Loot Ledger</h2>
-                    <p class="tile__desc">Party treasury, per-PC wealth, award history, and wealth-by-level compliance.</p>
-                </a>
-
-                <a href="/" class="tile">
-                    <div class="tile__glyph">&#9776;</div>
-                    <h2 class="tile__title">Campaign Lobby</h2>
-                    <p class="tile__desc">The intro page players land on. Edit the recap, intro, next-session date.</p>
-                </a>
-
-                <a href="/player" class="tile">
-                    <div class="tile__glyph">&#9823;</div>
-                    <h2 class="tile__title">Player Hub</h2>
-                    <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
-                </a>
-
-                <a href="/gm/stats" class="tile">
-                    <div class="tile__glyph">#</div>
-                    <h2 class="tile__title">Campaign Stats</h2>
-                    <p class="tile__desc">Lifetime counters &mdash; total rolls, crits, damage dealt, healing, combat rounds, sessions.</p>
-                </a>
-
-                <a href="/gm/calendar" class="tile">
-                    <div class="tile__glyph">&#9776;</div>
-                    <h2 class="tile__title">Calendar</h2>
-                    <p class="tile__desc">Golarion in-world calendar &mdash; track dates, advance days, and log events.</p>
-                </a>
-
-                <a href="/gm/encounter_templates" class="tile">
-                    <div class="tile__glyph">&#9876;</div>
-                    <h2 class="tile__title">Encounter Templates</h2>
-                    <p class="tile__desc">XP-budget encounter builder &mdash; pick creatures by level difference, then stage them.</p>
-                </a>
-
                 <a href="/gm/skill_challenge" class="tile">
                     <div class="tile__glyph">&#10070;</div>
                     <h2 class="tile__title">Skill Challenge</h2>
                     <p class="tile__desc">Structured multi-check challenges with success/failure pips and live SSE broadcast.</p>
                 </a>
+            </div>
 
+            {# ── MANAGE — the campaign ── #}
+            <div class="gm-group-label">Manage &mdash; the campaign</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
+                <a href="/player" class="tile">
+                    <div class="tile__glyph">&#9823;</div>
+                    <h2 class="tile__title">Player Hub</h2>
+                    <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
+                </a>
+                <a href="/gm/loot" class="tile">
+                    <div class="tile__glyph">&#9878;</div>
+                    <h2 class="tile__title">Loot Ledger</h2>
+                    <p class="tile__desc">Party treasury, per-PC wealth, award history, and wealth-by-level compliance.</p>
+                </a>
                 <a href="/gm/rest" class="tile">
                     <div class="tile__glyph">&#9883;</div>
                     <h2 class="tile__title">Rest &amp; Recovery</h2>
                     <p class="tile__desc">Guided 10-min rest or daily prep &mdash; Treat Wounds, Refocus, condition clearing.</p>
                 </a>
-
+                <a href="/gm/stats" class="tile">
+                    <div class="tile__glyph">#</div>
+                    <h2 class="tile__title">Campaign Stats</h2>
+                    <p class="tile__desc">Lifetime counters &mdash; rolls, crits, damage dealt, healing, combat rounds.</p>
+                </a>
+                <a href="/gm/calendar" class="tile">
+                    <div class="tile__glyph">&#9776;</div>
+                    <h2 class="tile__title">Calendar</h2>
+                    <p class="tile__desc">Golarion in-world calendar &mdash; track dates, advance days, and log events.</p>
+                </a>
+                <a href="/" class="tile">
+                    <div class="tile__glyph">&#9776;</div>
+                    <h2 class="tile__title">Campaign Lobby</h2>
+                    <p class="tile__desc">The intro page players land on. Edit the intro &amp; next-session date.</p>
+                </a>
             </div>
-
-            {# ── Session Recap button ── #}
-            <div style="margin-bottom:var(--sp-5);">
-                <button type="button" onclick="showSessionRecap()" id="btn-session-recap"
-                        style="font-size:12px; color:var(--text-on-dark-2); background:var(--bg-card); border:1px solid var(--border-card); padding:10px 18px; border-radius:7px; cursor:pointer; font-family:var(--font-display); letter-spacing:0.04em;">
-                    Session Recap
-                </button>
-            </div>
-            <div id="session-recap-modal" class="pf2e-modal" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay);">
-                <div style="background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; max-width:640px; width:92vw; max-height:80vh; overflow:auto; padding:var(--sp-5);" onclick="event.stopPropagation()">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
-                        <h2 class="font-display" style="font-size:16px; color:var(--gilt-100);">Session Recap</h2>
-                        <button onclick="pf2eModal.close('session-recap-modal')" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
-                    </div>
-                    <pre id="session-recap-text" style="font-size:12px; line-height:1.6; color:var(--text-on-dark-2); white-space:pre-wrap; font-family:var(--font-ui); background:var(--bg-page); border:1px solid var(--border-card); border-radius:8px; padding:var(--sp-4); max-height:60vh; overflow:auto;">Loading...</pre>
-                    <div style="margin-top:var(--sp-3); display:flex; gap:8px;">
-                        <button onclick="copyRecap()" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 14px; border-radius:5px; cursor:pointer;">Copy to Clipboard</button>
-                    </div>
-                </div>
-            </div>
-            <script>
-            function showSessionRecap() {
-                pf2eModal.open('session-recap-modal');
-                document.getElementById('session-recap-text').textContent = 'Loading...';
-                fetch('/api/session_recap').then(function(r){return r.json();}).then(function(data) {
-                    document.getElementById('session-recap-text').textContent = data.recap || 'No session data yet.';
-                }).catch(function() {
-                    document.getElementById('session-recap-text').textContent = 'Failed to load recap.';
-                });
-            }
-            function copyRecap() {
-                var text = document.getElementById('session-recap-text').textContent;
-                navigator.clipboard.writeText(text).then(function() {
-                    if (window.pf2eToast) window.pf2eToast('Recap copied', 'info');
-                });
-            }
-            </script>
 
             {# ── Advancement: GM XP / level award (PR2) ── #}
             <div class="session-ritual-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
@@ -213,789 +178,6 @@
                 fetch('/api/gm/award_xp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
                   .then(function(r){return r.json();}).then(function(d){ _advToast(d.ok?('Awarded '+d.amount+' XP'):(d.error||'Failed'), d.ok?'success':'danger'); });
             }
-            </script>
-
-            {# ── Session ritual: opening curtain control + prep ── #}
-            <div class="session-ritual-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
-                    <div>
-                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Begin the Session</h2>
-                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Drops the opening curtain on every connected screen — crest, title, and the &ldquo;Previously on&hellip;&rdquo; recap.</p>
-                    </div>
-                    <div style="display:flex; gap:var(--sp-2); align-items:center;">
-                        <button type="button" id="btn-begin-session" onclick="beginSession()"
-                                style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#0c0a07; background:linear-gradient(180deg,#e0b65a,#a4842b); border:1px solid rgba(240,216,138,0.6); padding:11px 22px; border-radius:7px; cursor:pointer; box-shadow:0 4px 16px rgba(168,58,58,0.2);">
-                            Begin Session
-                        </button>
-                        <button type="button" onclick="toggleSessionPrep()" id="btn-session-prep"
-                                style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 14px; border-radius:7px; cursor:pointer;">
-                            Prep the opening
-                        </button>
-                    </div>
-                </div>
-
-                {# Collapsible prep — crest + recap. Hidden by default. #}
-                <div id="session-prep" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
-                    <div class="grid grid-cols-1 md:grid-cols-2" style="gap:var(--sp-4);">
-                        {# Crest #}
-                        <div>
-                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Campaign Crest</div>
-                            <div style="display:flex; gap:var(--sp-3); align-items:center;">
-                                <div id="crest-preview-wrap" style="width:64px; height:64px; border-radius:8px; border:1px solid var(--border-card); background:var(--bg-base); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
-                                    {% if campaign.crest_image %}
-                                    <img id="crest-preview-img" src="{{ campaign.crest_image }}" alt="crest" style="width:100%; height:100%; object-fit:contain;">
-                                    {% else %}
-                                    <span id="crest-preview-glyph" style="font-size:30px; color:var(--gilt-300);">&#10070;</span>
-                                    {% endif %}
-                                </div>
-                                <div style="flex:1; min-width:0;">
-                                    <input type="file" id="crest-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style="font-size:11px; color:var(--text-on-dark-2); max-width:100%;">
-                                    <div style="display:flex; gap:6px; margin-top:6px;">
-                                        <button type="button" onclick="uploadCrest()" id="crest-upload-btn" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer;">Upload</button>
-                                        <button type="button" onclick="removeCrest()" style="font-size:11px; color:var(--text-on-dark-3); background:transparent; border:1px solid var(--border-card); padding:6px 12px; border-radius:5px; cursor:pointer;">Remove</button>
-                                        <span id="crest-status" style="font-size:10px; color:var(--text-on-dark-3); align-self:center;"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {# Recap #}
-                        <div>
-                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">&ldquo;Previously on&hellip;&rdquo; Recap</div>
-                            {# Which vault folder the note picker reads from (newest-first). #}
-                            <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
-                                <span style="font-size:10px; color:var(--text-on-dark-3); white-space:nowrap;">Folder</span>
-                                <input type="text" id="sessions-folder" value="{{ campaign.sessions_folder }}"
-                                       placeholder="e.g. Shades of Blood/Sessions"
-                                       style="flex:1; min-width:120px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
-                                <button type="button" onclick="saveSessionsFolder()" id="folder-save-btn" style="font-size:11px; color:var(--text-on-dark-2); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 10px; border-radius:5px; cursor:pointer; white-space:nowrap;">Set</button>
-                            </div>
-                            <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
-                                <select id="recap-note-select" style="flex:1; min-width:140px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
-                                    <option value="">Loading session notes…</option>
-                                </select>
-                                <button type="button" onclick="generateRecap()" id="recap-gen-btn" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer; white-space:nowrap;">Generate</button>
-                            </div>
-                            <textarea id="recap-text" rows="4" placeholder="Pick a session note and click Generate, or write the recap here…"
-                                      style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;">{{ campaign.last_recap }}</textarea>
-                            <div style="display:flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:wrap;">
-                                <button type="button" onclick="saveRecap()" id="recap-save-btn" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save recap</button>
-                                <button type="button" onclick="testApiKey()" id="apikey-test-btn" style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:6px 12px; border-radius:5px; cursor:pointer;">Test API key</button>
-                                <span id="recap-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                            </div>
-                            <div id="apikey-models" style="display:none; margin-top:6px; font-size:10px; color:var(--text-on-dark-3); background:var(--bg-base); border:1px solid var(--border-card); border-radius:5px; padding:6px 8px; max-height:120px; overflow:auto;"></div>
-                        </div>
-                    </div>
-
-                    {# ── Soundscapes: map audio tracks to the 3 scenes ── #}
-                    <div style="margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-2); margin-bottom:var(--sp-2); flex-wrap:wrap;">
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200);">Soundscapes</span>
-                                <span id="audio-storage-chip" title="Where uploaded tracks are stored"
-                                      style="display:inline-flex; align-items:center; gap:5px; font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; border:1px solid var(--border-card); color:var(--text-on-dark-3);">
-                                    <span class="storage-dot" style="width:6px; height:6px; border-radius:50%; background:var(--text-on-dark-3);"></span>
-                                    <span class="storage-label">Checking…</span>
-                                </span>
-                            </div>
-                            <span style="font-size:10px; color:var(--text-on-dark-3);">Plays on this (GM) device. Switch live from the &#9835; control, bottom-right.</span>
-                        </div>
-
-                        {# Upload tracks to the server (Railway volume) #}
-                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
-                            <input type="file" id="audio-upload-files" accept="audio/ogg,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.ogg,.mp3,.wav,.m4a,.opus,.flac" multiple style="font-size:11px; color:var(--text-on-dark-2); max-width:100%;">
-                            <button type="button" onclick="uploadAudioFiles()" id="audio-upload-btn" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer;">Upload</button>
-                            <span id="audio-upload-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                        </div>
-                        {# List of tracks already on the server (with delete) #}
-                        <div id="audio-file-list" style="display:none; margin-bottom:8px; max-height:130px; overflow:auto; border:1px solid var(--border-card); border-radius:5px; padding:6px 8px; background:var(--bg-base);"></div>
-
-                        <div id="soundscape-rows" style="display:grid; grid-template-columns:auto 1fr; gap:7px 10px; align-items:center;">
-                            <span style="font-size:11px; color:var(--text-on-dark-2);">Tavern</span>
-                            <select id="ss-tavern" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
-                            <span style="font-size:11px; color:var(--text-on-dark-2);">Dungeon</span>
-                            <select id="ss-dungeon" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
-                            <span style="font-size:11px; color:var(--text-on-dark-2);">Combat</span>
-                            <select id="ss-combat" class="ss-select" style="width:100%; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;"></select>
-                        </div>
-                        <div style="display:flex; gap:6px; align-items:center; margin-top:8px;">
-                            <button type="button" onclick="saveSoundscapes()" id="ss-save-btn" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save soundscapes</button>
-                            <span id="ss-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Session ritual: closing scrapbook (Chunk 6) ── #}
-            <div class="session-complete-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
-                    <div>
-                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Session Complete</h2>
-                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Tonight&rsquo;s highlights, a Claude recap, and your role-play moments &mdash; review, then unfurl the scrapbook on every screen.</p>
-                    </div>
-                    <button type="button" onclick="toggleSessionComplete()" id="btn-session-complete"
-                            style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:7px; cursor:pointer;">
-                        Wrap up &amp; review
-                    </button>
-                </div>
-
-                {# Collapsible review — auto-stats + RP moments + narrative + push. #}
-                <div id="session-complete-panel" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
-                    {# Auto-mined stat tiles #}
-                    <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">This Session, So Far</div>
-                    <div id="sc-stats" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:var(--sp-4); font-size:12px; color:var(--text-on-dark-2);">
-                        <span style="color:var(--text-on-dark-3);">Loading…</span>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2" style="gap:var(--sp-4);">
-                        {# RP moments editor #}
-                        <div>
-                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Role-play Moments</div>
-                            <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
-                                <select id="sc-rp-scope" style="min-width:120px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:6px 8px;">
-                                    <option value="party">Whole party</option>
-                                </select>
-                            </div>
-                            <textarea id="sc-rp-text" rows="2" placeholder="A standout role-play beat — an oath, a betrayal, a perfect line…"
-                                      style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;"></textarea>
-                            <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-                                <button type="button" onclick="addRpMoment()" id="sc-rp-add" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 14px; border-radius:5px; cursor:pointer;">Add moment</button>
-                                <span id="sc-rp-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                            </div>
-                            <ul id="sc-rp-list" style="list-style:none; margin:10px 0 0; padding:0; font-size:12px;"></ul>
-                        </div>
-
-                        {# Narrative #}
-                        <div>
-                            <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Closing Narrative</div>
-                            <div style="display:flex; gap:6px; margin-bottom:6px;">
-                                <button type="button" onclick="genScrapbookNarrative()" id="sc-nar-gen" style="font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer; white-space:nowrap;">Generate from session</button>
-                                <span id="sc-nar-status" style="font-size:10px; color:var(--text-on-dark-3); align-self:center;"></span>
-                            </div>
-                            <textarea id="sc-nar-text" rows="6" placeholder="Click Generate to summarize the session log, or write the closing recap here…"
-                                      style="width:100%; font-size:12px; font-family:var(--font-flavor); background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:5px; padding:8px; resize:vertical;"></textarea>
-                            <div style="margin-top:6px;">
-                                <button type="button" onclick="saveScrapbookNarrative()" id="sc-nar-save" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer;">Save narrative</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {# Push controls #}
-                    <div style="display:flex; gap:10px; align-items:center; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card); flex-wrap:wrap;">
-                        <button type="button" onclick="previewScrapbook()" id="sc-preview" style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:9px 16px; border-radius:7px; cursor:pointer;">Preview on this screen</button>
-                        <button type="button" onclick="pushScrapbook()" id="sc-push"
-                                style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#0c0a07; background:linear-gradient(180deg,#e0b65a,#a4842b); border:1px solid rgba(240,216,138,0.6); padding:10px 22px; border-radius:7px; cursor:pointer; box-shadow:0 4px 16px rgba(168,58,58,0.2);">
-                            Push to Players
-                        </button>
-                        <label style="font-size:11px; color:var(--text-on-dark-3); display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-                            <input type="checkbox" id="sc-feed-recap" checked> Feed the next &ldquo;Previously on&hellip;&rdquo;
-                        </label>
-                        <span id="sc-push-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                    </div>
-                </div>
-            </div>
-
-            {# ── Campaign timeline: browse the arc of past sessions ── #}
-            <div class="campaign-timeline-card" style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); margin-bottom:var(--sp-5); padding:var(--sp-4) var(--sp-5);">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
-                    <div>
-                        <h2 style="font-family:var(--font-display); font-size:16px; font-weight:700; letter-spacing:0.04em; color:var(--gilt-100); margin:0;">Campaign Timeline</h2>
-                        <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Every pushed session, newest first &mdash; level, MVP, and a recap teaser. Open one to relive the full scrapbook.</p>
-                    </div>
-                    <button type="button" onclick="toggleTimeline()" id="btn-timeline"
-                            style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:7px; cursor:pointer;">
-                        Show timeline
-                    </button>
-                </div>
-                <div id="timeline-panel" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
-                    <div id="timeline-list" style="display:flex; flex-direction:column; gap:8px;">
-                        <span style="color:var(--text-on-dark-3);">Loading&hellip;</span>
-                    </div>
-                </div>
-            </div>
-
-            {# ── End-of-session export ── #}
-            <div style="margin: var(--sp-5) 0; text-align: center;">
-                <button type="button" id="end-session-btn"
-                        class="text-xs font-medium text-base-300 hover:text-accent-300 px-4 py-2 rounded border border-accent-300/30 hover:border-accent-300 transition-colors"
-                        style="background:var(--bg-card); cursor:pointer; font-family:var(--font-display); letter-spacing:0.08em; text-transform:uppercase;"
-                        onclick="openSessionExportDialog()"
-                        title="Generate a session recap and download it as a .txt to paste into Claude / Obsidian">
-                    End Session — Export Recap
-                </button>
-            </div>
-
-            <div id="session-export-dialog" class="hidden modal-backdrop"
-                 style="position:fixed; inset:0; background:rgba(8,6,3,0.85); z-index:200; display:none; align-items:center; justify-content:center; padding:var(--sp-3);">
-                <div style="background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); padding:var(--sp-5); max-width:520px; width:100%; box-shadow:var(--shadow-2);">
-                    <h2 style="font-family:var(--font-display); font-size:18px; color:var(--gilt-100); margin-bottom:var(--sp-3); letter-spacing:0.04em;">Export Session Recap</h2>
-                    <p style="font-size:12px; color:var(--text-on-dark-2); margin-bottom:var(--sp-3); line-height:1.5;">
-                        Bundles the current combat log, party state, and active encounter into a
-                        <strong>.txt</strong> you download and paste into Claude / Obsidian.
-                    </p>
-                    <label style="display:block; font-size:10px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; font-family:var(--font-display);">Title</label>
-                    <input type="text" id="ses-title"
-                           style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:6px 10px; border-radius:var(--r-sm); font-size:13px; margin-bottom:var(--sp-3);"
-                           placeholder="Session - 2026-05-10">
-                    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-on-dark-2); margin-bottom:var(--sp-2); cursor:pointer;">
-                        <input type="checkbox" id="ses-include-log" checked> Include combat log
-                    </label>
-                    <div id="ses-result" style="display:none; font-size:11px; padding:var(--sp-2); border-radius:var(--r-sm); margin-bottom:var(--sp-3);"></div>
-                    <div style="display:flex; gap:var(--sp-2); justify-content:flex-end;">
-                        <button type="button" onclick="closeSessionExportDialog()"
-                                class="text-xs px-3 py-1.5 rounded border border-white/[0.06] text-base-400 hover:text-accent-300 transition-colors"
-                                style="background:var(--bg-card-2);">Cancel</button>
-                        <button type="button" id="ses-export-btn" onclick="runSessionExport()"
-                                style="background:var(--accent); border:1px solid var(--accent); color:var(--ink-950); padding:6px 14px; border-radius:var(--r-sm); font-size:12px; font-weight:700; cursor:pointer; letter-spacing:0.04em; text-transform:uppercase;">Export</button>
-                    </div>
-                </div>
-            </div>
-
-            <script>
-                function openSessionExportDialog() {
-                    const d = document.getElementById('session-export-dialog');
-                    d.classList.remove('hidden');
-                    d.style.display = 'flex';
-                    const t = document.getElementById('ses-title');
-                    if (t && !t.value) {
-                        const today = new Date().toISOString().slice(0, 10);
-                        t.value = 'Session - ' + today;
-                    }
-                    document.getElementById('ses-result').style.display = 'none';
-                    setTimeout(() => t && t.focus(), 50);
-                }
-                function closeSessionExportDialog() {
-                    const d = document.getElementById('session-export-dialog');
-                    d.classList.add('hidden');
-                    d.style.display = 'none';
-                }
-                async function runSessionExport() {
-                    const title = (document.getElementById('ses-title').value || '').trim();
-                    const includeLog = document.getElementById('ses-include-log').checked;
-                    const resEl = document.getElementById('ses-result');
-                    const btn = document.getElementById('ses-export-btn');
-                    btn.disabled = true; btn.textContent = 'Exporting…';
-                    try {
-                        const r = await fetch('/api/session/export', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({title, include_log: includeLog}),
-                        });
-                        const j = await r.json();
-                        if (!j.success) {
-                            resEl.style.display = 'block';
-                            resEl.style.background = 'rgba(168,58,58,0.10)';
-                            resEl.style.color = 'var(--ruby-100)';
-                            resEl.style.border = '1px solid rgba(168,58,58,0.40)';
-                            resEl.textContent = 'Export failed: ' + (j.error || 'unknown');
-                            return;
-                        }
-                        const blob = new Blob([j.markdown], {type: 'text/plain'});
-                        const url = URL.createObjectURL(blob);
-                        const safe = (title || 'session').replace(/[^a-z0-9_ -]/gi, '') || 'session';
-                        const a = document.createElement('a');
-                        a.href = url; a.download = safe + '.txt';
-                        document.body.appendChild(a); a.click(); a.remove();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
-                        resEl.style.display = 'block';
-                        resEl.style.background = 'rgba(74,124,42,0.10)';
-                        resEl.style.color = '#b8d68f';
-                        resEl.style.border = '1px solid rgba(74,124,42,0.40)';
-                        resEl.innerHTML = `<div><b>${j.byte_count} bytes</b> downloaded as ${safe}.txt — paste into Claude / Obsidian.</div>`;
-                    } catch (e) {
-                        resEl.style.display = 'block';
-                        resEl.style.background = 'rgba(168,58,58,0.10)';
-                        resEl.style.color = 'var(--ruby-100)';
-                        resEl.textContent = 'Network error: ' + e;
-                    } finally {
-                        btn.disabled = false; btn.textContent = 'Export';
-                    }
-                }
-                document.addEventListener('keydown', (e) => {
-                    const d = document.getElementById('session-export-dialog');
-                    if (!d || d.classList.contains('hidden')) return;
-                    if (e.key === 'Escape') { closeSessionExportDialog(); }
-                });
-            </script>
-
-            {# ── Session ritual controls ── #}
-            <script>
-                function toggleSessionPrep() {
-                    const p = document.getElementById('session-prep');
-                    const open = p.style.display !== 'none';
-                    p.style.display = open ? 'none' : 'block';
-                    if (!open) { loadSessionNotes(); loadAudioFiles(); checkAudioStorage(); }
-                }
-
-                // ── Session Complete scrapbook (Chunk 6) ──
-                let _scDraft = null;
-                function toggleSessionComplete() {
-                    const p = document.getElementById('session-complete-panel');
-                    const open = p.style.display !== 'none';
-                    p.style.display = open ? 'none' : 'block';
-                    if (!open) loadScrapbookDraft();
-                }
-                function _coinStr(c) {
-                    c = c || {}; const parts = [];
-                    ['pp', 'gp', 'sp', 'cp'].forEach(k => { if (c[k]) parts.push(c[k] + ' ' + k); });
-                    return parts.join(', ');
-                }
-                async function loadScrapbookDraft() {
-                    try {
-                        const j = await fetch('/api/session/scrapbook/draft', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
-                        if (!j.success) return;
-                        _scDraft = j.scrapbook;
-                        // Stat chips
-                        const p = j.scrapbook.party || {};
-                        const chips = [];
-                        chips.push('<b style="color:#6ee7a8;">' + (p.crit_count || 0) + '</b> crits');
-                        chips.push('<b style="color:#e88;">' + (p.fumble_count || 0) + '</b> nat 1s');
-                        if (p.biggest_hit) chips.push('biggest hit <b style="color:var(--gilt-100);">' + p.biggest_hit.amount + '</b> → ' + _esc(p.biggest_hit.target));
-                        const loot = [];
-                        if (p.loot_count) loot.push(p.loot_count + ' item' + (p.loot_count === 1 ? '' : 's'));
-                        const cs = _coinStr(p.total_coins); if (cs) loot.push(cs);
-                        if (loot.length) chips.push('loot: <b style="color:var(--gilt-100);">' + loot.join(', ') + '</b>');
-                        document.getElementById('sc-stats').innerHTML = chips.map(c => '<span style="background:var(--bg-base); border:1px solid var(--border-card); border-radius:999px; padding:4px 10px;">' + c + '</span>').join('');
-                        // Scope select (party + PCs)
-                        const sel = document.getElementById('sc-rp-scope');
-                        const cur = sel.value;
-                        sel.innerHTML = '<option value="party">Whole party</option>' +
-                            (j.party_members || []).map(m => '<option value="' + _esc(m) + '">' + _esc(m) + '</option>').join('');
-                        if (cur) sel.value = cur;
-                        // Narrative
-                        const nt = document.getElementById('sc-nar-text');
-                        if (!nt.value.trim() && j.scrapbook.narrative) nt.value = j.scrapbook.narrative;
-                        // RP moments list
-                        renderRpList(j.rp_moments || []);
-                    } catch (e) { /* keep panel usable */ }
-                }
-                function _esc(s) { const d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
-                function renderRpList(moments) {
-                    const ul = document.getElementById('sc-rp-list');
-                    if (!moments.length) { ul.innerHTML = '<li style="color:var(--text-on-dark-3); font-style:italic;">No moments yet.</li>'; return; }
-                    ul.innerHTML = moments.map((m, i) => {
-                        const tag = m.scope === 'party' ? 'Party' : _esc(m.scope);
-                        return '<li style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px dashed var(--border-card);">' +
-                            '<span style="font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--gilt-200); background:rgba(201,163,78,0.1); border:1px solid rgba(201,163,78,0.25); border-radius:4px; padding:2px 6px; white-space:nowrap;">' + tag + '</span>' +
-                            '<span style="flex:1; color:var(--text-on-dark-2); font-style:italic;">' + _esc(m.text) + '</span>' +
-                            '<button type="button" onclick="removeRpMoment(' + i + ')" title="Remove" style="color:var(--text-on-dark-3); background:transparent; border:none; cursor:pointer; font-size:14px; line-height:1;">&times;</button>' +
-                            '</li>';
-                    }).join('');
-                }
-                async function addRpMoment() {
-                    const ta = document.getElementById('sc-rp-text');
-                    const scope = document.getElementById('sc-rp-scope').value || 'party';
-                    const text = (ta.value || '').trim();
-                    const status = document.getElementById('sc-rp-status');
-                    if (!text) { status.textContent = 'Type a moment first.'; return; }
-                    try {
-                        const j = await fetch('/api/session/scrapbook/rp_moment', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                            body: JSON.stringify({ text, scope })
-                        }).then(r => r.json());
-                        if (j.success) { ta.value = ''; status.textContent = 'Added.'; renderRpList(j.rp_moments || []); }
-                        else status.textContent = j.error || 'Failed.';
-                    } catch (e) { status.textContent = 'Network error.'; }
-                }
-                async function removeRpMoment(index) {
-                    try {
-                        const j = await fetch('/api/session/scrapbook/rp_moment/remove', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                            body: JSON.stringify({ index })
-                        }).then(r => r.json());
-                        if (j.success) renderRpList(j.rp_moments || []);
-                    } catch (e) { /* ignore */ }
-                }
-                async function genScrapbookNarrative() {
-                    const status = document.getElementById('sc-nar-status');
-                    const btn = document.getElementById('sc-nar-gen');
-                    status.textContent = 'Summarizing the session…'; btn.disabled = true;
-                    try {
-                        const j = await fetch('/api/session/scrapbook/narrative', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                            body: JSON.stringify({})
-                        }).then(r => r.json());
-                        if (j.success) { document.getElementById('sc-nar-text').value = j.narrative; status.textContent = 'Generated.'; }
-                        else status.textContent = j.note || 'Could not generate.';
-                    } catch (e) { status.textContent = 'Network error.'; }
-                    finally { btn.disabled = false; }
-                }
-                async function saveScrapbookNarrative() {
-                    const status = document.getElementById('sc-nar-status');
-                    const text = document.getElementById('sc-nar-text').value || '';
-                    try {
-                        const j = await fetch('/api/session/scrapbook/narrative', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                            body: JSON.stringify({ text })
-                        }).then(r => r.json());
-                        status.textContent = j.success ? 'Saved.' : 'Failed.';
-                    } catch (e) { status.textContent = 'Network error.'; }
-                }
-                async function previewScrapbook() {
-                    // Save the narrative draft first so the preview matches, then show locally.
-                    await saveScrapbookNarrative();
-                    try {
-                        const j = await fetch('/api/session/scrapbook/draft', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
-                        if (j.success && window.pf2eScrapbook) window.pf2eScrapbook(j.scrapbook, null);
-                    } catch (e) { /* ignore */ }
-                }
-                async function pushScrapbook() {
-                    const status = document.getElementById('sc-push-status');
-                    const feed = document.getElementById('sc-feed-recap').checked;
-                    await saveScrapbookNarrative();
-                    status.textContent = 'Pushing…';
-                    try {
-                        const j = await fetch('/api/session/scrapbook/push', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                            body: JSON.stringify({ feed_recap: feed })
-                        }).then(r => r.json());
-                        status.textContent = j.success ? 'Pushed to every screen.' : 'Failed.';
-                    } catch (e) { status.textContent = 'Network error.'; }
-                }
-
-                // ── Campaign timeline ──
-                function toggleTimeline() {
-                    const p = document.getElementById('timeline-panel');
-                    const open = p.style.display !== 'none';
-                    p.style.display = open ? 'none' : 'block';
-                    if (!open) loadTimeline();
-                }
-                async function loadTimeline() {
-                    const list = document.getElementById('timeline-list');
-                    try {
-                        const j = await fetch('/api/session/timeline', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
-                        const sessions = (j && j.sessions) || [];
-                        if (!sessions.length) {
-                            list.innerHTML = '<span style="color:var(--text-on-dark-3); font-style:italic;">No sessions recorded yet. Push a Session Complete scrapbook to begin the chronicle.</span>';
-                            return;
-                        }
-                        list.innerHTML = sessions.map(function(s) {
-                            const meta = [];
-                            if (s.party_level) meta.push('Lvl ' + s.party_level);
-                            if (s.mvp_winner) meta.push('MVP: ' + _esc(s.mvp_winner));
-                            if (s.date) meta.push(_esc(s.date));
-                            return '<div style="display:flex; gap:12px; align-items:flex-start; padding:10px 12px; background:var(--bg-base); border:1px solid var(--border-card); border-radius:8px;">' +
-                                '<div style="flex:1; min-width:0;">' +
-                                    '<div style="font-family:var(--font-display); font-weight:700; color:var(--gilt-100); font-size:13px;">Session ' + (s.session_number || '?') +
-                                        (meta.length ? ' <span style="color:var(--text-on-dark-3); font-weight:400; font-size:11px;">&middot; ' + meta.join(' &middot; ') + '</span>' : '') + '</div>' +
-                                    (s.teaser ? '<div style="font-family:var(--font-flavor); font-style:italic; color:var(--text-on-dark-2); font-size:13px; margin-top:4px;">' + _esc(s.teaser) + '</div>' : '') +
-                                '</div>' +
-                                '<button type="button" onclick="openTimelineSession(\'' + _esc(s.name) + '\')" style="white-space:nowrap; font-size:11px; color:var(--gilt-100); background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); padding:6px 12px; border-radius:5px; cursor:pointer;">Open</button>' +
-                            '</div>';
-                        }).join('');
-                    } catch (e) {
-                        list.innerHTML = '<span style="color:var(--text-on-dark-3);">Could not load the timeline.</span>';
-                    }
-                }
-                async function openTimelineSession(name) {
-                    try {
-                        const j = await fetch('/api/session/scrapbook/saved/' + encodeURIComponent(name), { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
-                        if (j && j.success && window.pf2eScrapbook) window.pf2eScrapbook(j.scrapbook, null);
-                    } catch (e) { /* ignore */ }
-                }
-
-                async function checkAudioStorage() {
-                    const chip = document.getElementById('audio-storage-chip');
-                    if (!chip) return;
-                    const dot = chip.querySelector('.storage-dot');
-                    const label = chip.querySelector('.storage-label');
-                    try {
-                        const j = await fetch('/api/audio/storage').then(r => r.json());
-                        let color, text, title;
-                        if (!j.writable) {
-                            color = '#ef4444'; text = 'Storage not writable';
-                            title = 'Cannot write to ' + (j.dir || 'the audio dir') + ' — uploads will fail.';
-                        } else if (j.persistent) {
-                            color = '#6a9c44'; text = 'Volume connected';
-                            title = 'Durable storage: ' + j.dir + ' (survives redeploys). ' + j.file_count + ' track(s).';
-                        } else {
-                            color = '#e0b65a'; text = 'Ephemeral storage';
-                            title = 'No DATA_DIR volume configured — uploads to ' + j.dir + ' are LOST on the next Railway redeploy. Set DATA_DIR=/data with a mounted volume.';
-                        }
-                        dot.style.background = color;
-                        chip.style.borderColor = color + '66';
-                        chip.style.color = color;
-                        label.textContent = text;
-                        chip.title = title;
-                    } catch (e) {
-                        dot.style.background = '#ef4444';
-                        label.textContent = 'Storage check failed';
-                        chip.title = String(e);
-                    }
-                }
-
-                // ── Soundscapes: populate the scene <select>s from the audio dir ──
-                let _audioFilesLoaded = false;
-                // Keyword hints for auto-suggesting a track when a scene is unmapped.
-                const _sceneHints = {
-                    tavern:  ['harbor','tavern','town','bounty','indoor','market','inn'],
-                    dungeon: ['cavern','cave','dungeon','crypt','occupied','engine','intake'],
-                    combat:  ['swarm','combat','battle','fight','shadow','chase'],
-                };
-                async function loadAudioFiles(force) {
-                    if (_audioFilesLoaded && !force) return;
-                    const status = document.getElementById('ss-status');
-                    try {
-                        const j = await fetch('/api/audio/list').then(r => r.json());
-                        const selects = { tavern: document.getElementById('ss-tavern'), dungeon: document.getElementById('ss-dungeon'), combat: document.getElementById('ss-combat') };
-                        if (!j.available) {
-                            Object.values(selects).forEach(s => s.innerHTML = '<option value="">No tracks yet — upload above</option>');
-                            renderAudioFileList([]);
-                            status.textContent = 'No tracks on the server yet. Upload .ogg/.mp3 files above, then map them.';
-                            return;
-                        }
-                        const files = j.files || [];
-                        const mapping = j.soundscapes || {};
-                        renderAudioFileList(files);
-                        const optsHtml = '<option value="">— none —</option>' +
-                            files.map(f => `<option value="${f.path.replace(/"/g,'&quot;')}">${(f.group?f.group+' / ':'')+f.name.replace(/</g,'&lt;')}</option>`).join('');
-                        for (const scene of ['tavern','dungeon','combat']) {
-                            const sel = selects[scene];
-                            const prev = sel.value;
-                            sel.innerHTML = optsHtml;
-                            // Keep current selection if still valid; else saved mapping; else auto-suggest.
-                            let val = (prev && files.some(f => f.path === prev)) ? prev : (mapping[scene] || '');
-                            if (!val) {
-                                const hints = _sceneHints[scene];
-                                const guess = files.find(f => hints.some(h => f.path.toLowerCase().includes(h)));
-                                if (guess) val = guess.path;
-                            }
-                            if (val) sel.value = val;
-                        }
-                        _audioFilesLoaded = true;
-                        status.textContent = files.length + ' track' + (files.length===1?'':'s') + ' available. Pick one per scene, then Save.';
-                    } catch (e) {
-                        status.textContent = 'Could not load audio list: ' + e;
-                    }
-                }
-                function renderAudioFileList(files) {
-                    const box = document.getElementById('audio-file-list');
-                    if (!box) return;
-                    if (!files.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-                    box.style.display = 'block';
-                    box.innerHTML = files.map(f => {
-                        const kb = f.size ? Math.round(f.size/1024/1024*10)/10 + ' MB' : '';
-                        const p = f.path.replace(/'/g, "\\'");
-                        return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:2px 0; font-size:11px; color:var(--text-on-dark-2);">
-                            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${(f.group?f.group+' / ':'')+f.name.replace(/</g,'&lt;')} <span style="color:var(--text-on-dark-3);">${kb}</span></span>
-                            <button type="button" onclick="deleteAudioFile('${p}')" title="Delete from server" style="flex-shrink:0; font-size:11px; color:var(--ruby-200); background:transparent; border:none; cursor:pointer;">&times;</button>
-                        </div>`;
-                    }).join('');
-                }
-                async function uploadAudioFiles() {
-                    const input = document.getElementById('audio-upload-files');
-                    const status = document.getElementById('audio-upload-status');
-                    const btn = document.getElementById('audio-upload-btn');
-                    const files = input.files ? Array.from(input.files) : [];
-                    if (!files.length) { status.textContent = 'Pick one or more audio files first.'; return; }
-                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Uploading…';
-                    let done = 0, failed = 0;
-                    for (const file of files) {
-                        status.style.color = 'var(--text-on-dark-3)';
-                        status.textContent = `Uploading ${file.name} (${done+1}/${files.length}, ${Math.round(file.size/1024/1024*10)/10} MB)…`;
-                        const fd = new FormData(); fd.append('audio', file);
-                        try {
-                            const j = await fetch('/api/audio/upload', { method: 'POST', body: fd }).then(r => r.json());
-                            if (j.success) done++; else { failed++; status.style.color='#fca5a5'; status.textContent = (j.error||'upload failed') + ' — ' + file.name; }
-                        } catch (e) { failed++; status.style.color='#fca5a5'; status.textContent = 'Error on ' + file.name + ': ' + e; }
-                    }
-                    btn.disabled = false; btn.textContent = old;
-                    input.value = '';
-                    if (!failed) { status.style.color = '#86efac'; status.textContent = `Uploaded ${done} track${done===1?'':'s'}.`; }
-                    await loadAudioFiles(true);
-                }
-                async function deleteAudioFile(path) {
-                    if (!confirm('Delete "' + path + '" from the server?')) return;
-                    try {
-                        const j = await fetch('/api/audio/delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path }) }).then(r => r.json());
-                        if (j.success) await loadAudioFiles(true);
-                        else alert(j.error || 'Delete failed');
-                    } catch (e) { alert('Network error: ' + e); }
-                }
-                async function saveSoundscapes() {
-                    const status = document.getElementById('ss-status');
-                    const payload = { soundscapes: {
-                        tavern:  document.getElementById('ss-tavern').value,
-                        dungeon: document.getElementById('ss-dungeon').value,
-                        combat:  document.getElementById('ss-combat').value,
-                    }};
-                    try {
-                        const j = await fetch('/api/audio/soundscapes', {
-                            method: 'POST', headers: {'Content-Type':'application/json'},
-                            body: JSON.stringify(payload)
-                        }).then(r => r.json());
-                        if (j.success) {
-                            status.style.color = '#86efac';
-                            status.textContent = 'Soundscapes saved.';
-                            // Refresh the live audio engine on THIS page so the new
-                            // mapping works without a reload (other open GM screens
-                            // pick it up on their next load).
-                            try { window.pf2eAudio && window.pf2eAudio.setMapping(payload.soundscapes); } catch(_) {}
-                        } else { status.textContent = j.error || 'Save failed'; }
-                    } catch (e) { status.textContent = 'Network error: ' + e; }
-                }
-
-                async function beginSession() {
-                    const btn = document.getElementById('btn-begin-session');
-                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Starting…';
-                    try {
-                        const r = await fetch('/api/session/begin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
-                        if (!r.ok) throw new Error('HTTP ' + r.status);
-                        // The curtain appears on THIS page too (base.html GM variant) via SSE.
-                    } catch (e) {
-                        alert('Could not begin session: ' + e);
-                    } finally {
-                        btn.disabled = false; btn.textContent = old;
-                    }
-                }
-
-                async function saveSessionsFolder() {
-                    const folder = document.getElementById('sessions-folder').value.trim();
-                    const btn = document.getElementById('folder-save-btn');
-                    btn.disabled = true; const old = btn.textContent; btn.textContent = '…';
-                    try {
-                        await fetch('/api/campaign', {
-                            method: 'POST', headers: {'Content-Type':'application/json'},
-                            body: JSON.stringify({ sessions_folder: folder })
-                        });
-                        // Re-pull notes from the new folder.
-                        _sessionNotesLoaded = false;
-                        await loadSessionNotes();
-                    } catch (e) {
-                        /* status surfaced via the picker contents */
-                    } finally {
-                        btn.disabled = false; btn.textContent = old;
-                    }
-                }
-
-                let _sessionNotesLoaded = false;
-                async function loadSessionNotes() {
-                    if (_sessionNotesLoaded) return;
-                    const sel = document.getElementById('recap-note-select');
-                    try {
-                        const r = await fetch('/api/session/notes');
-                        const j = await r.json();
-                        const notes = (j && j.notes) || [];
-                        if (!notes.length) {
-                            sel.innerHTML = '<option value="">No notes in ' + (j.folder || 'Sessions') + '/ folder</option>';
-                            return;
-                        }
-                        sel.innerHTML = '<option value="">Select a session note…</option>' +
-                            notes.map(n => `<option value="${n.path.replace(/"/g,'&quot;')}">${(n.title||n.name).replace(/</g,'&lt;')}</option>`).join('');
-                        // Default to the newest (first) note.
-                        if (notes[0]) sel.value = notes[0].path;
-                        _sessionNotesLoaded = true;
-                    } catch (e) {
-                        sel.innerHTML = '<option value="">Could not load notes</option>';
-                    }
-                }
-
-                async function generateRecap() {
-                    const sel = document.getElementById('recap-note-select');
-                    const ta = document.getElementById('recap-text');
-                    const status = document.getElementById('recap-status');
-                    const btn = document.getElementById('recap-gen-btn');
-                    const note = sel.value;
-                    if (!note) { status.textContent = 'Pick a note first.'; return; }
-                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Writing…';
-                    status.style.color = 'var(--text-on-dark-3)'; status.textContent = 'Reading the note…';
-                    try {
-                        const r = await fetch('/api/session/recap/generate', {
-                            method: 'POST', headers: {'Content-Type':'application/json'},
-                            body: JSON.stringify({ note })
-                        });
-                        const j = await r.json();
-                        if (!j.success) { status.textContent = j.error || 'Generate failed'; return; }
-                        ta.value = j.recap || '';
-                        if (j.source === 'ai') {
-                            status.style.color = '#86efac'; status.textContent = 'AI recap written — review & save.';
-                        } else {
-                            status.style.color = '#fbbf24';
-                            // Surface the server's specific reason (key missing vs 401 vs model 404 vs network).
-                            status.textContent = j.note || 'Pulled a section. Edit & save.';
-                            if (j.reason) { try { console.warn('[recap] fallback reason:', j.reason, 'key_present:', j.key_present); } catch(_){} }
-                        }
-                    } catch (e) {
-                        status.textContent = 'Network error: ' + e;
-                    } finally {
-                        btn.disabled = false; btn.textContent = old;
-                    }
-                }
-
-                async function saveRecap() {
-                    const ta = document.getElementById('recap-text');
-                    const status = document.getElementById('recap-status');
-                    try {
-                        const r = await fetch('/api/session/recap', {
-                            method: 'POST', headers: {'Content-Type':'application/json'},
-                            body: JSON.stringify({ recap: ta.value })
-                        });
-                        const j = await r.json();
-                        if (j.success) { status.style.color = '#86efac'; status.textContent = 'Recap saved.'; }
-                        else { status.textContent = j.error || 'Save failed'; }
-                    } catch (e) { status.textContent = 'Network error: ' + e; }
-                }
-
-                async function testApiKey() {
-                    const btn = document.getElementById('apikey-test-btn');
-                    const status = document.getElementById('recap-status');
-                    const box = document.getElementById('apikey-models');
-                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Checking…';
-                    box.style.display = 'none';
-                    try {
-                        const j = await fetch('/api/session/models').then(r => r.json());
-                        if (j.success) {
-                            status.style.color = '#86efac';
-                            status.textContent = 'Key works. Pick one of these for ANTHROPIC_RECAP_MODEL:';
-                            const ids = (j.models || []).map(m => m.id);
-                            box.innerHTML = '<div style="color:var(--gilt-200); margin-bottom:4px;">Available models (current: ' +
-                                (j.current_model || '?') + '):</div>' +
-                                ids.map(id => '<div style="font-family:var(--font-mono,monospace);">' + id + '</div>').join('');
-                            box.style.display = 'block';
-                            try { console.log('[recap] available models:', ids); } catch(_){}
-                        } else {
-                            status.style.color = '#fca5a5';
-                            status.textContent = j.error || 'Key check failed';
-                        }
-                    } catch (e) {
-                        status.style.color = '#fca5a5'; status.textContent = 'Network error: ' + e;
-                    } finally {
-                        btn.disabled = false; btn.textContent = old;
-                    }
-                }
-
-                async function uploadCrest() {
-                    const fileEl = document.getElementById('crest-file');
-                    const status = document.getElementById('crest-status');
-                    const btn = document.getElementById('crest-upload-btn');
-                    if (!fileEl.files || !fileEl.files[0]) { status.textContent = 'Pick a file.'; return; }
-                    const fd = new FormData(); fd.append('image', fileEl.files[0]);
-                    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Uploading…';
-                    try {
-                        const r = await fetch('/api/campaign/crest', { method: 'POST', body: fd });
-                        const j = await r.json();
-                        if (!j.success) { status.style.color = '#fca5a5'; status.textContent = j.error || 'Upload failed'; return; }
-                        const wrap = document.getElementById('crest-preview-wrap');
-                        wrap.innerHTML = '<img src="' + j.crest_image + '" alt="crest" style="width:100%;height:100%;object-fit:contain;">';
-                        status.style.color = '#86efac'; status.textContent = 'Crest set.';
-                        fileEl.value = '';
-                    } catch (e) {
-                        status.style.color = '#fca5a5'; status.textContent = 'Error: ' + e;
-                    } finally { btn.disabled = false; btn.textContent = old; }
-                }
-
-                async function removeCrest() {
-                    const status = document.getElementById('crest-status');
-                    const fd = new FormData(); fd.append('action', 'remove');
-                    try {
-                        const r = await fetch('/api/campaign/crest', { method: 'POST', body: fd });
-                        const j = await r.json();
-                        if (j.success) {
-                            document.getElementById('crest-preview-wrap').innerHTML = '<span style="font-size:30px; color:var(--gilt-300);">&#10070;</span>';
-                            status.textContent = 'Removed.';
-                        }
-                    } catch (e) { status.textContent = 'Error: ' + e; }
-                }
             </script>
 
             {# ── Quick links / footer ── #}

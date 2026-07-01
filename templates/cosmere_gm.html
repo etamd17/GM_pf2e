@@ -29,6 +29,7 @@
   .cw-btn{background:transparent; border:none; color:var(--text-on-dark-2); padding:6px 15px; font-size:12px; cursor:pointer; font-family:var(--font-ui); transition:background .15s;}
   .cw-btn.on{background:var(--accent); color:var(--bg-page); font-weight:600;}
   .cw-btn+.cw-btn{border-left:1px solid var(--border-card);}
+  .gm-group-label{font-family:var(--font-display); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-on-dark-3); margin:0 0 var(--sp-2); padding-left:var(--sp-1);}
 </style>
 <script>
 function cosWorld(w){
@@ -37,37 +38,9 @@ function cosWorld(w){
 }
 </script>
 
-{# ── Tool grid ── #}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
-
-    <a href="/cosmere/pcs" class="tile">
-        <div class="tile__glyph">&#9823;</div>
-        <h2 class="tile__title">Characters</h2>
-        <p class="tile__desc">The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.</p>
-        <span class="pill {% if char_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ char_count }} character{{ '' if char_count == 1 else 's' }}</span>
-    </a>
-
-    <a href="/cosmere/builder" class="tile">
-        <div class="tile__glyph">&#10010;</div>
-        <h2 class="tile__title">Builder</h2>
-        <p class="tile__desc">Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.</p>
-        <span class="pill" style="margin-top:var(--sp-3);">+ New Character</span>
-    </a>
-
-    <a href="/cosmere/homebrew" class="tile">
-        <div class="tile__glyph">&#9670;</div>
-        <h2 class="tile__title">Homebrew</h2>
-        <p class="tile__desc">Author custom talents, items, ancestries, paths &amp; surges &mdash; same schema as canon, applied by the engine, surfaced in the builder.</p>
-        <span class="pill" style="margin-top:var(--sp-3);">Content shelf</span>
-    </a>
-
-    <a href="/cosmere/bestiary" class="tile">
-        <div class="tile__glyph">B</div>
-        <h2 class="tile__title">Bestiary</h2>
-        <p class="tile__desc">The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.</p>
-        <span class="pill" style="margin-top:var(--sp-3);">{{ adv_count }} adversaries</span>
-    </a>
-
+{# ── RUN — live at the table ── #}
+<div class="gm-group-label">Run &mdash; live at the table</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
     <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
         <div class="tile__glyph">&#9876;</div>
         <h2 class="tile__title">Encounter Tracker</h2>
@@ -76,13 +49,60 @@ function cosWorld(w){
             {% if encounter_count > 0 %}{{ encounter_count }} in combat{% else %}no active combat{% endif %}
         </span>
     </a>
-
+    <a href="/cosmere/gm/vitals" class="tile">
+        <div class="tile__glyph">&#9830;</div>
+        <h2 class="tile__title">Party Vitals</h2>
+        <p class="tile__desc">Live Health, Focus, Investiture, injuries &amp; conditions for every hero &mdash; updates as players adjust their sheets.</p>
+    </a>
     <a href="/cosmere/gmscreen" class="tile">
         <div class="tile__glyph">&#9776;</div>
         <h2 class="tile__title">GM Screen</h2>
         <p class="tile__desc">Cosmere rules at a glance &mdash; turn order, damage &amp; deflect, the injury spiral, conditions, Plot Die, surges.</p>
     </a>
+</div>
 
+{# ── PREP — build &amp; author ── #}
+<div class="gm-group-label">Prep &mdash; build &amp; author</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
+    <a href="/cosmere/builder" class="tile">
+        <div class="tile__glyph">&#10010;</div>
+        <h2 class="tile__title">Builder</h2>
+        <p class="tile__desc">Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">+ New Character</span>
+    </a>
+    <a href="/cosmere/pcs" class="tile">
+        <div class="tile__glyph">&#9823;</div>
+        <h2 class="tile__title">Characters</h2>
+        <p class="tile__desc">The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.</p>
+        <span class="pill {% if char_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ char_count }} character{{ '' if char_count == 1 else 's' }}</span>
+    </a>
+    <a href="/cosmere/bestiary" class="tile">
+        <div class="tile__glyph">B</div>
+        <h2 class="tile__title">Bestiary</h2>
+        <p class="tile__desc">The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">{{ adv_count }} adversaries</span>
+    </a>
+    <a href="/cosmere/homebrew" class="tile">
+        <div class="tile__glyph">&#9670;</div>
+        <h2 class="tile__title">Homebrew</h2>
+        <p class="tile__desc">Author custom talents, items, ancestries, paths &amp; surges &mdash; same schema as canon, applied by the engine.</p>
+        <span class="pill" style="margin-top:var(--sp-3);">Content shelf</span>
+    </a>
+    <a href="/cosmere/generator" class="tile">
+        <div class="tile__glyph">&#9881;</div>
+        <h2 class="tile__title">Generators</h2>
+        <p class="tile__desc">Rosharan names, NPCs, highstorms, spheres &amp; loot, locations, plot hooks, rumors, and scene dressing.</p>
+    </a>
+</div>
+
+{# ── MANAGE — the campaign ── #}
+<div class="gm-group-label">Manage &mdash; the campaign</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
+    <a href="/cosmere/loot" class="tile">
+        <div class="tile__glyph">&#9672;</div>
+        <h2 class="tile__title">Loot Ledger</h2>
+        <p class="tile__desc">Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.</p>
+    </a>
     {% if active_cid %}
     <a href="/campaign/{{ active_cid }}/invites" class="tile">
         <div class="tile__glyph">&#10022;</div>
@@ -90,19 +110,6 @@ function cosWorld(w){
         <p class="tile__desc">Player join links, the member roster, and handing a built character off to its player.</p>
     </a>
     {% endif %}
-
-    <a href="/cosmere/generator" class="tile">
-        <div class="tile__glyph">&#9881;</div>
-        <h2 class="tile__title">Generators</h2>
-        <p class="tile__desc">Rosharan names, NPCs, highstorms, spheres &amp; loot, locations, plot hooks, rumors, and scene dressing.</p>
-    </a>
-
-    <a href="/cosmere/loot" class="tile">
-        <div class="tile__glyph">&#9672;</div>
-        <h2 class="tile__title">Loot Ledger</h2>
-        <p class="tile__desc">Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.</p>
-    </a>
-
     <div class="tile" style="cursor:default;">
         <div class="tile__glyph">&#9788;</div>
         <h2 class="tile__title">Rest &amp; Recovery</h2>
@@ -113,7 +120,6 @@ function cosWorld(w){
             <button type="button" class="btn btn--sm" onclick="cosMarkReady()" title="Flag the whole party ready to advance — the badge links each player to the builder level-up">Mark ready to level</button>
         </div>
     </div>
-
 </div>
 <script>
 function cosmereRest(mode) {
@@ -137,164 +143,4 @@ function cosMarkReady(){
 }
 </script>
 
-{# ── Session ritual: the opening curtain + "Previously on…" recap ── #}
-<div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-5); margin-bottom:var(--sp-7);">
-    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap; margin-bottom:var(--sp-3);">
-        <div>
-            <h2 class="font-display" style="font-size:16px; letter-spacing:0.04em; color:var(--accent); margin:0;">Begin the Session</h2>
-            <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Drops the opening curtain on every connected screen &mdash; crest, campaign title, and the &ldquo;Previously on&hellip;&rdquo; recap. Click <b>Enter the Session</b> on the curtain to part it for the whole table.</p>
-        </div>
-        <span class="pill">Session <span class="v">{{ session_number }}</span></span>
-    </div>
-
-    <label for="cos-recap" style="display:block; font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:6px;">&ldquo;Previously on&hellip;&rdquo; recap</label>
-    <textarea id="cos-recap" rows="4" placeholder="What happened last time? This shows on the opening curtain and the splash."
-        style="width:100%; font-size:13px; font-family:var(--font-flavor,serif); background:var(--bg-page,var(--bg-base)); border:1px solid var(--border-card); color:#e8eef5; border-radius:8px; padding:10px; resize:vertical;">{{ last_recap }}</textarea>
-
-    <div style="display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap; margin-top:var(--sp-3);">
-        <button type="button" onclick="cosBeginSession()" id="cos-begin-btn"
-            style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#06242b; background:var(--accent); border:1px solid var(--accent); padding:11px 24px; border-radius:8px; cursor:pointer;">Begin Session</button>
-        <button type="button" onclick="cosSaveRecap()" id="cos-recap-btn"
-            style="font-size:12px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:8px; cursor:pointer;">Save recap</button>
-        <span id="cos-ritual-status" style="font-size:11px; color:var(--text-on-dark-3);"></span>
-    </div>
-</div>
-
-{# ── Session ritual: the closing scrapbook ── #}
-<div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-5); margin-bottom:var(--sp-7);">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;">
-        <div>
-            <h2 class="font-display" style="font-size:16px; letter-spacing:0.04em; color:var(--accent); margin:0;">Session Complete</h2>
-            <p style="font-size:11px; color:var(--text-on-dark-3); margin:4px 0 0;">Tonight&rsquo;s highlights, a recap, and your role-play moments &mdash; review, then unfurl the scrapbook on every screen.</p>
-        </div>
-        <button type="button" onclick="cosScToggle()" id="cos-sc-btn"
-            style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:11px 16px; border-radius:7px; cursor:pointer;">Wrap up &amp; review</button>
-    </div>
-    <div id="cos-sc-panel" style="display:none; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card);">
-        <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); margin-bottom:var(--sp-2);">This Session, So Far</div>
-        <div id="cos-sc-stats" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:var(--sp-4); font-size:12px; color:var(--text-on-dark-2);"><span style="color:var(--text-on-dark-3);">Loading&hellip;</span></div>
-        <div class="grid grid-cols-1 md:grid-cols-2" style="gap:var(--sp-4);">
-            <div>
-                <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); margin-bottom:var(--sp-2);">Role-play Moments</div>
-                <select id="cos-sc-scope" style="min-width:120px; font-size:11px; background:var(--bg-page,var(--bg-base)); border:1px solid var(--border-card); color:#e8eef5; border-radius:5px; padding:6px 8px; margin-bottom:6px;"><option value="party">Whole party</option></select>
-                <textarea id="cos-sc-rp" rows="2" placeholder="A standout moment &mdash; an Ideal spoken, a betrayal, a perfect line&hellip;" style="width:100%; font-size:12px; background:var(--bg-page,var(--bg-base)); border:1px solid var(--border-card); color:#e8eef5; border-radius:5px; padding:8px; resize:vertical;"></textarea>
-                <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-                    <button type="button" onclick="cosScAddRp()" style="font-size:11px; color:#06242b; background:var(--accent); border:none; padding:6px 14px; border-radius:5px; cursor:pointer;">Add moment</button>
-                    <span id="cos-sc-rp-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                </div>
-                <ul id="cos-sc-rp-list" style="list-style:none; margin:10px 0 0; padding:0; font-size:12px;"></ul>
-            </div>
-            <div>
-                <div style="font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); margin-bottom:var(--sp-2);">Closing Narrative</div>
-                <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
-                    <button type="button" onclick="cosScGenNarr()" id="cos-sc-gen" style="font-size:11px; color:#06242b; background:var(--accent); border:none; padding:6px 12px; border-radius:5px; cursor:pointer; white-space:nowrap;">Generate from session</button>
-                    <span id="cos-sc-nar-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-                </div>
-                <textarea id="cos-sc-nar" rows="6" placeholder="Click Generate to summarize the session, or write the closing recap here&hellip;" style="width:100%; font-size:12px; background:var(--bg-page,var(--bg-base)); border:1px solid var(--border-card); color:#e8eef5; border-radius:5px; padding:8px; resize:vertical;"></textarea>
-                <button type="button" onclick="cosScSaveNarr()" style="font-size:11px; color:var(--text-on-dark); background:rgba(255,255,255,0.04); border:1px solid var(--border-card); padding:6px 14px; border-radius:5px; cursor:pointer; margin-top:6px;">Save narrative</button>
-            </div>
-        </div>
-        <div style="display:flex; gap:10px; align-items:center; margin-top:var(--sp-4); padding-top:var(--sp-4); border-top:1px dashed var(--border-card); flex-wrap:wrap;">
-            <button type="button" onclick="cosScPreview()" style="font-size:11px; color:var(--text-on-dark-2); background:transparent; border:1px solid var(--border-card); padding:9px 16px; border-radius:7px; cursor:pointer;">Preview on this screen</button>
-            <button type="button" onclick="cosScPush()" style="font-family:var(--font-display); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:12px; color:#06242b; background:var(--accent); border:1px solid var(--accent); padding:10px 22px; border-radius:7px; cursor:pointer;">Unfurl on every screen</button>
-            <label style="font-size:11px; color:var(--text-on-dark-3); display:inline-flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="cos-sc-feed" checked> Feed the next &ldquo;Previously on&hellip;&rdquo;</label>
-            <span id="cos-sc-push-status" style="font-size:10px; color:var(--text-on-dark-3);"></span>
-        </div>
-    </div>
-</div>
-
-<script>
-function _cosRitualStatus(msg){ var el=document.getElementById('cos-ritual-status'); if(el) el.textContent=msg||''; }
-function cosSaveRecap(){
-    var text=document.getElementById('cos-recap').value;
-    _cosRitualStatus('Saving…');
-    fetch('/api/session/recap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recap:text})})
-        .then(function(r){return r.json();}).then(function(){ _cosRitualStatus('Recap saved.'); })
-        .catch(function(){ _cosRitualStatus('Save failed.'); });
-}
-function cosBeginSession(){
-    // Save the latest recap first so the curtain shows it, then drop the curtain
-    // on every screen (the shared curtain overlay catches the session_start SSE).
-    var text=document.getElementById('cos-recap').value;
-    _cosRitualStatus('Raising the curtain…');
-    fetch('/api/session/recap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recap:text})})
-        .then(function(){ return fetch('/api/session/begin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bump_session:true})}); })
-        .then(function(r){return r.json();}).then(function(){ _cosRitualStatus('Curtain up on every screen.'); })
-        .catch(function(){ _cosRitualStatus('Failed to begin.'); });
-}
-
-// ── Session Complete scrapbook (Cosmere) — reuses the shared scrapbook routes
-//    + the system-aware overlay (window.pf2eScrapbook). ──
-function _cosEsc(s){ var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML; }
-function _cosMoney(o){ o=o||{}; var p=[]; ['broam','mark','chip'].forEach(function(k){ if(o[k]) p.push(o[k]+' '+k+(o[k]===1?'':'s')); }); return p.join(', '); }
-function cosScToggle(){
-    var p=document.getElementById('cos-sc-panel'); var open=p.style.display!=='none';
-    p.style.display=open?'none':'block'; if(!open) cosScLoad();
-}
-function cosScLoad(){
-    fetch('/api/session/scrapbook/draft',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).then(function(j){
-        if(!j.success) return;
-        var p=(j.scrapbook||{}).party||{};
-        var chips=[];
-        chips.push('<b style="color:#6ee7a8;">'+(p.crit_count||0)+'</b> opportunities');
-        chips.push('<b style="color:#e88;">'+(p.fumble_count||0)+'</b> complications');
-        if(p.biggest_hit) chips.push('biggest hit <b style="color:var(--accent);">'+p.biggest_hit.amount+'</b> &rarr; '+_cosEsc(p.biggest_hit.target));
-        var loot=[]; if(p.loot_count) loot.push(p.loot_count+' item'+(p.loot_count===1?'':'s'));
-        var sp=_cosMoney(p.total_spheres); if(sp) loot.push(sp);
-        if(loot.length) chips.push('loot: <b style="color:var(--accent);">'+loot.join(', ')+'</b>');
-        document.getElementById('cos-sc-stats').innerHTML=chips.map(function(c){ return '<span style="background:var(--bg-page,var(--bg-base)); border:1px solid var(--border-card); border-radius:999px; padding:4px 10px;">'+c+'</span>'; }).join('');
-        var sel=document.getElementById('cos-sc-scope'); var cur=sel.value;
-        sel.innerHTML='<option value="party">Whole party</option>'+(j.party_members||[]).map(function(m){ return '<option value="'+_cosEsc(m)+'">'+_cosEsc(m)+'</option>'; }).join('');
-        if(cur) sel.value=cur;
-        var nt=document.getElementById('cos-sc-nar'); if(!nt.value.trim() && (j.scrapbook||{}).narrative) nt.value=j.scrapbook.narrative;
-        cosScRenderRp(j.rp_moments||[]);
-    }).catch(function(){});
-}
-function cosScRenderRp(moments){
-    var ul=document.getElementById('cos-sc-rp-list');
-    if(!moments.length){ ul.innerHTML='<li style="color:var(--text-on-dark-3); font-style:italic;">No moments yet.</li>'; return; }
-    ul.innerHTML=moments.map(function(m,i){
-        var tag=m.scope==='party'?'Party':_cosEsc(m.scope);
-        return '<li style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px dashed var(--border-card);">'+
-            '<span style="font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent); background:rgba(95,168,224,0.1); border:1px solid rgba(95,168,224,0.25); border-radius:4px; padding:2px 6px; white-space:nowrap;">'+tag+'</span>'+
-            '<span style="flex:1; color:var(--text-on-dark-2); font-style:italic;">'+_cosEsc(m.text)+'</span>'+
-            '<button type="button" onclick="cosScRemoveRp('+i+')" style="color:var(--text-on-dark-3); background:transparent; border:none; cursor:pointer; font-size:14px;">&times;</button></li>';
-    }).join('');
-}
-function cosScAddRp(){
-    var ta=document.getElementById('cos-sc-rp'); var scope=document.getElementById('cos-sc-scope').value||'party';
-    var text=(ta.value||'').trim(); var st=document.getElementById('cos-sc-rp-status');
-    if(!text){ st.textContent='Type a moment first.'; return; }
-    fetch('/api/session/scrapbook/rp_moment',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({text:text,scope:scope})})
-        .then(function(r){return r.json();}).then(function(j){ if(j.success){ ta.value=''; st.textContent='Added.'; cosScRenderRp(j.rp_moments||[]); } else st.textContent=j.error||'Failed.'; }).catch(function(){ st.textContent='Network error.'; });
-}
-function cosScRemoveRp(i){
-    fetch('/api/session/scrapbook/rp_moment/remove',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({index:i})})
-        .then(function(r){return r.json();}).then(function(j){ if(j.success) cosScRenderRp(j.rp_moments||[]); }).catch(function(){});
-}
-function cosScGenNarr(){
-    var st=document.getElementById('cos-sc-nar-status'); st.textContent='Summarizing the session…';
-    fetch('/api/session/scrapbook/narrative',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({})})
-        .then(function(r){return r.json();}).then(function(j){ if(j.success){ document.getElementById('cos-sc-nar').value=j.narrative; st.textContent='Generated.'; } else st.textContent=j.note||'Could not generate.'; }).catch(function(){ st.textContent='Network error.'; });
-}
-function cosScSaveNarr(){
-    var st=document.getElementById('cos-sc-nar-status'); var text=document.getElementById('cos-sc-nar').value||'';
-    return fetch('/api/session/scrapbook/narrative',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({text:text})})
-        .then(function(r){return r.json();}).then(function(j){ st.textContent=j.success?'Saved.':'Failed.'; }).catch(function(){ st.textContent='Network error.'; });
-}
-function cosScPreview(){
-    cosScSaveNarr().then(function(){
-        fetch('/api/session/scrapbook/draft',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).then(function(j){
-            if(j.success && window.pf2eScrapbook) window.pf2eScrapbook(j.scrapbook, null);
-        }).catch(function(){});
-    });
-}
-function cosScPush(){
-    var st=document.getElementById('cos-sc-push-status'); st.textContent='Unfurling…';
-    var feed=document.getElementById('cos-sc-feed').checked;
-    cosScSaveNarr().then(function(){
-        return fetch('/api/session/scrapbook/push',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({feed_recap:feed})});
-    }).then(function(r){return r.json();}).then(function(j){ st.textContent=j.success?'Unfurled on every screen.':'Failed.'; }).catch(function(){ st.textContent='Network error.'; });
-}
-</script>
 {% endblock %}

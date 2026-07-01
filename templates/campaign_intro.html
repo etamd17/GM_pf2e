@@ -246,21 +246,13 @@
                {% if not campaign.tagline %}style="display:none;"{% endif %}>{{ campaign.tagline }}</p>
         </header>
 
-        {# ── Last time / intro ── #}
-        {% if campaign.last_recap or campaign.intro %}
-        <div class="grid grid-cols-1 {% if campaign.last_recap and campaign.intro %}md:grid-cols-2{% endif %} gap-3 mb-6">
-            {% if campaign.last_recap %}
-            <section class="panel p-3">
-                <h2 class="font-display text-accent-300 text-xs tracking-wider uppercase mb-1">Last Session</h2>
-                <p class="text-base-300 text-xs leading-relaxed whitespace-pre-line" id="recap-text">{{ campaign.last_recap }}</p>
-            </section>
-            {% endif %}
-            {% if campaign.intro %}
+        {# ── The tale ── #}
+        {% if campaign.intro %}
+        <div class="mb-6">
             <section class="panel p-3">
                 <h2 class="font-display text-accent-300 text-xs tracking-wider uppercase mb-1">The Tale</h2>
                 <p class="text-base-300 text-xs leading-relaxed whitespace-pre-line" id="intro-text">{{ campaign.intro }}</p>
             </section>
-            {% endif %}
         </div>
         {% endif %}
 
@@ -382,10 +374,6 @@
                     </div>
                     <input type="text" id="edit-hero" class="field-input" value="{{ campaign.hero_image }}" placeholder="/campaign_assets/... or https://..."
                            style="font-size:11px;">
-                </div>
-                <div>
-                    <label class="field-label" for="edit-recap">Last Session Recap</label>
-                    <textarea id="edit-recap" class="field-input" rows="5" placeholder="What happened last time...">{{ campaign.last_recap }}</textarea>
                 </div>
                 <div>
                     <label class="field-label" for="edit-intro">Setting / The Tale</label>
@@ -523,7 +511,6 @@
             session_number: parseInt(document.getElementById('edit-session').value, 10) || 1,
             tagline: document.getElementById('edit-tagline').value.trim(),
             next_session_at: document.getElementById('edit-next').value.trim(),
-            last_recap: document.getElementById('edit-recap').value,
             intro: document.getElementById('edit-intro').value,
             hero_image: (document.getElementById('edit-hero')?.value || '').trim(),
         };
@@ -578,8 +565,6 @@
             if (sp) sp.textContent = 'Session ' + c.session_number;
             const nx = document.getElementById('next-session-text');
             if (nx) nx.textContent = c.next_session_at || '';
-            const recapEl = document.getElementById('recap-text');
-            if (recapEl) recapEl.textContent = c.last_recap;
             const introEl = document.getElementById('intro-text');
             if (introEl) introEl.textContent = c.intro;
             // First-session edge case: when both panels started empty,
@@ -589,9 +574,8 @@
             // the GM would see "Saved" but their text wouldn't appear
             // until reload. Detect that, and reload so the panels
             // render correctly.
-            const wantsRecap = !!(c.last_recap && !recapEl);
             const wantsIntro = !!(c.intro && !introEl);
-            if (wantsRecap || wantsIntro) {
+            if (wantsIntro) {
                 showToast('Saved — refreshing to render new panel…', 'success');
                 setTimeout(() => location.reload(), 400);
                 return;
