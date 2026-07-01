@@ -553,7 +553,7 @@ _AUDIO_OVERRIDE = os.environ.get('PF2E_AUDIO_DIR')  # dev: external Foundry audi
 ACTIVE_CAMPAIGN_ID = None
 PARTY_DIR = ENCOUNTER_DIR = CAMPAIGN_ASSETS_DIR = HANDOUTS_DIR = CAMPAIGN_AUDIO_DIR = None
 CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
-SCRAPBOOK_FILE = SCRAPBOOK_DIR = PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
+PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
 HANDOUTS_FILE = COSMERE_ADVERSARIES_FILE = None
 
 
@@ -563,7 +563,7 @@ def _bind_campaign_paths(cid):
     locations -- existing code keeps using PARTY_DIR/ENCOUNTER_DIR/etc unchanged."""
     global ACTIVE_CAMPAIGN_ID, PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR
     global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
-    global SCRAPBOOK_FILE, SCRAPBOOK_DIR, PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
+    global PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
     global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE, HANDOUTS_FILE, COSMERE_ADVERSARIES_FILE
     ACTIVE_CAMPAIGN_ID = cid
     if cid:
@@ -576,8 +576,6 @@ def _bind_campaign_paths(cid):
         LOOT_LEDGER_FILE = _storage.loot_ledger_file(cid)
         CAMPAIGN_STATS_FILE = _storage.campaign_stats_file(cid)
         JOURNAL_DIR = _storage.journal_dir(cid)
-        SCRAPBOOK_FILE = _storage.session_highlights_file(cid)
-        SCRAPBOOK_DIR = _storage.scrapbook_dir(cid)
         PINNED_GENERATORS_FILE = _storage.pinned_generators_file(cid)
         CALENDAR_FILE = _storage.calendar_file(cid)
         STORY_THREADS_FILE = _storage.story_threads_file(cid)
@@ -596,8 +594,6 @@ def _bind_campaign_paths(cid):
         LOOT_LEDGER_FILE = os.path.join(DATA_DIR, 'loot_ledger.json')
         CAMPAIGN_STATS_FILE = os.path.join(DATA_DIR, 'campaign_stats.json')
         JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
-        SCRAPBOOK_FILE = os.path.join(DATA_DIR, 'session_highlights.json')
-        SCRAPBOOK_DIR = os.path.join(DATA_DIR, 'scrapbooks')
         PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
         CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
         STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
@@ -613,7 +609,6 @@ def load_campaign(cid):
     _bind_campaign_paths(cid)
     load_libraries()
     _load_session_state()
-    _load_session_highlights()
     _load_handouts()
     return ACTIVE_CAMPAIGN_ID
 
@@ -689,29 +684,8 @@ def _mutate_loot_ledger(fn):
 # wrap-up. crits/fumbles/loot are PC-attributed; big_hits are party-level
 # (this app applies monster damage GM-side with no attacker attribution);
 # rp_moments are GM-authored before the scrapbook is pushed to players.
-SESSION_HIGHLIGHTS = {
-    'session_number': 1,
-    'started_at': '',
-    'crits': [],       # {pc, action, detail, round}
-    'fumbles': [],     # {pc, action, detail, round}
-    'big_hits': [],    # {target, amount, round}
-    'loot': [],        # {pc, items:[{name,qty}], coins:{pp,gp,sp,cp}}
-    'rp_moments': [],  # {text, scope}  scope = 'party' or a PC name
-    'narrative': '',   # Claude-written, generated at wrap-up
-    'mvp_votes': {},   # {voter_pc: choice_pc} — MVP poll on the scrapbook
-    'mvp_winner': '',  # the PC the GM crowned MVP (set when a Hero Point is granted)
-}
-SESSION_HIGHLIGHTS_LOCK = threading.Lock()
 
 
-def _mvp_tally():
-    """Anonymous vote counts for the MVP poll: {choice_pc: count}. We only
-    ever broadcast counts, never who-voted-for-whom, so the poll stays private."""
-    counts = {}
-    with SESSION_HIGHLIGHTS_LOCK:
-        for choice in SESSION_HIGHLIGHTS['mvp_votes'].values():
-            counts[choice] = counts.get(choice, 0) + 1
-    return counts
 
 # Reentrant lock for encounter/PC state mutations. Used by internal helpers
 # (_combat_log, _broadcast_*, _get_tracker_state, _do_persist_*) so that
@@ -5200,7 +5174,6 @@ CAMPAIGN_DEFAULT = {
     'intro': '',
     'session_number': 1,
     'next_session_at': '',
-    'last_recap': '',
     # Optional CSS-url for the homepage hero background. Drop a portrait /
     # poster-shaped image under static/portraits/ or a public CDN URL and
     # reference it as `/portraits/shades-of-blood.jpg` etc.
@@ -5209,11 +5182,6 @@ CAMPAIGN_DEFAULT = {
     # shown centered on the session-start curtain and, later, in the app
     # corner. Uploaded via /api/campaign/crest.
     'crest_image': '',
-    # Vault folder the session-recap note picker reads from (newest-first).
-    'sessions_folder': 'Sessions',
-    # Soundscape -> audio-file mapping (paths relative to CAMPAIGN_AUDIO_DIR).
-    # The GM assigns these in the hub; the audio engine plays them on demand.
-    'soundscapes': {'tavern': '', 'dungeon': '', 'combat': ''},
     # Current scene mood (Chunk 5). Drives a subtle full-screen tint on every
     # screen. One of: calm | mystery | tension | combat | dread. Persisted so
     # a mid-session reload restores the table's mood.
@@ -5452,167 +5420,14 @@ def _inject_campaign_chrome():
 # SESSION-START CURTAIN — "Previously on..." recap from Obsidian + broadcast
 # ══════════════════════════════════════════════════════════════════════════
 
-def _session_notes(folder=None):
-    """Deprecated: the in-site Obsidian vault was removed. Session recaps are
-    entered manually now. Kept as a no-op so the session-start curtain still
-    renders cleanly with nothing to pull."""
-    return []
 
 
-def _read_session_note_raw(rel_path):
-    """Deprecated: the in-site Obsidian vault was removed."""
-    raise FileNotFoundError("vault removed")
 
 
-def _extract_recap_section(text):
-    """No-AI fallback: pull a recap from a note. Prefers a '## Recap' /
-    '## Summary' heading section; otherwise the first substantial paragraph."""
-    if not text:
-        return ''
-    import re as _re
-    lines = text.splitlines()
-    # Look for a Recap/Summary/Previously heading and grab until the next heading.
-    for i, ln in enumerate(lines):
-        if _re.match(r'^#{1,6}\s*(recap|summary|previously|what happened)', ln.strip(), _re.I):
-            section = []
-            for nxt in lines[i + 1:]:
-                if _re.match(r'^#{1,6}\s', nxt):
-                    break
-                section.append(nxt)
-            blurb = '\n'.join(section).strip()
-            if blurb:
-                return blurb[:1200]
-    # Fallback: first paragraph of >80 chars (skip headings/frontmatter cruft).
-    paras = [p.strip() for p in _re.split(r'\n\s*\n', text) if p.strip()]
-    for p in paras:
-        if p.startswith('#') or p.startswith('---'):
-            continue
-        if len(p) >= 80:
-            return p[:1200]
-    return (paras[0][:1200] if paras else '')
 
 
-def _generate_recap_via_claude(note_text):
-    """Summarize a session note into one evocative 'Previously on...' paragraph
-    via the Anthropic API. Returns (text, reason): text is the recap on success
-    (reason None); on failure text is None and reason is a short human-readable
-    diagnostic the caller can surface. Uses urllib — no new dependency."""
-    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
-    if not api_key:
-        return None, 'no_key'
-    note_text = (note_text or '').strip()
-    if not note_text:
-        return None, 'empty_note'
-    # Cap the input so we never ship a huge note to the API.
-    note_text = note_text[:12000]
-    campaign = _load_campaign_config()
-    prompt = (
-        f"You are the narrator of a \"Previously on...\" recap for the tabletop campaign "
-        f"\"{campaign.get('name', 'the campaign')}\", read aloud to the players at the start of a session. "
-        f"Below are the GM's raw notes from the most recent session.\n\n"
-        f"Write a flowing, story-format recap — 2 to 3 short paragraphs of vivid narrative prose, "
-        f"told in a dramatic narrator voice like the cold-open recap of a TV show. Tell it as a "
-        f"STORY: what the party did, the choices they made, who they met, what they discovered or "
-        f"lost, the tension and the stakes, and the unresolved threads they carry into tonight. "
-        f"Use the characters' names. Keep the momentum and mood high.\n\n"
-        f"IMPORTANT — these are game-prep notes, so IGNORE all the mechanical and logistical "
-        f"scaffolding and never mention it: room or area numbers, map/grid coordinates and "
-        f"directions, encounter or stat-block labels, monster stat lines, dice rolls, DCs, "
-        f"initiative, HP/damage numbers, XP, gold and itemized loot, page or section references, "
-        f"and any GM shorthand or planning notes for scenes that did not actually happen. "
-        f"Translate events into the fiction — e.g. not \"cleared room 4, 30 XP,\" but \"fought "
-        f"through the flooded gallery and left its guardians broken behind them.\" "
-        f"No headings, no bullet points, no preamble or sign-off — just the recap prose.\n\n"
-        f"--- SESSION NOTES ---\n{note_text}\n--- END NOTES ---\n\n"
-        f"Write only the recap."
-    )
-    import urllib.request as _urlreq
-    import urllib.error as _urlerr
-
-    def _call(model):
-        payload = json.dumps({
-            'model': model,
-            'max_tokens': 800,
-            'messages': [{'role': 'user', 'content': prompt}],
-        }).encode('utf-8')
-        req = _urlreq.Request(
-            'https://api.anthropic.com/v1/messages',
-            data=payload,
-            headers={
-                'content-type': 'application/json',
-                'x-api-key': api_key,
-                'anthropic-version': '2023-06-01',
-            },
-            method='POST',
-        )
-        try:
-            with _urlreq.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-            blocks = data.get('content') or []
-            text = ''.join(b.get('text', '') for b in blocks if b.get('type') == 'text').strip()
-            return (text, None) if text else (None, 'empty_response')
-        except _urlerr.HTTPError as e:
-            try:
-                err_body = e.read().decode('utf-8', 'replace')[:300]
-            except Exception:
-                err_body = ''
-            print(f"[SESSION] Claude recap HTTP {e.code} (model={model}): {err_body}")
-            return None, f'api_http_{e.code}: {err_body[:200]}'
-        except (_urlerr.URLError, TimeoutError) as e:
-            print(f"[SESSION] Claude recap network error: {e}")
-            return None, f'network: {getattr(e, "reason", e)}'
-        except (ValueError, KeyError) as e:
-            print(f"[SESSION] Claude recap parse error: {e}")
-            return None, f'parse_error: {e}'
-
-    SAFE_MODEL = 'claude-3-5-haiku-latest'
-    model = (os.environ.get('ANTHROPIC_RECAP_MODEL') or SAFE_MODEL).strip()
-    text, reason = _call(model)
-    # Self-heal: a misconfigured ANTHROPIC_RECAP_MODEL (404 model_not_found)
-    # shouldn't kill AI recaps — retry once with the known-good default so the
-    # GM still gets a written recap instead of silently falling back to extract.
-    if text is None and model != SAFE_MODEL and reason and reason.startswith('api_http_404'):
-        print(f"[SESSION] model '{model}' not found — retrying with {SAFE_MODEL}")
-        text, reason2 = _call(SAFE_MODEL)
-        if text:
-            return text, None
-        reason = f'{reason} (fallback model also failed: {reason2})'
-    return text, reason
 
 
-@app.route('/api/session/models')
-@gm_required
-def api_session_models():
-    """Diagnostic: ask the Anthropic API which models THIS key can use, so the
-    GM can set ANTHROPIC_RECAP_MODEL to a value that actually resolves instead
-    of guessing. Also a quick key-validity check (401 = bad key)."""
-    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
-    if not api_key:
-        return jsonify({'success': False, 'key_present': False,
-                        'error': 'No ANTHROPIC_API_KEY reached the server.'}), 200
-    import urllib.request as _urlreq
-    import urllib.error as _urlerr
-    req = _urlreq.Request(
-        'https://api.anthropic.com/v1/models?limit=100',
-        headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01'},
-        method='GET',
-    )
-    try:
-        with _urlreq.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        models = [{'id': m.get('id'), 'name': m.get('display_name', '')}
-                  for m in (data.get('data') or []) if m.get('id')]
-        current = (os.environ.get('ANTHROPIC_RECAP_MODEL') or 'claude-3-5-haiku-latest').strip()
-        return jsonify({'success': True, 'key_present': True, 'current_model': current, 'models': models})
-    except _urlerr.HTTPError as e:
-        try:
-            body = e.read().decode('utf-8', 'replace')[:300]
-        except Exception:
-            body = ''
-        msg = 'API rejected the key (401 — wrong/revoked/no credit).' if e.code == 401 else f'Anthropic API HTTP {e.code}: {body[:160]}'
-        return jsonify({'success': False, 'key_present': True, 'http': e.code, 'error': msg}), 200
-    except (_urlerr.URLError, TimeoutError) as e:
-        return jsonify({'success': False, 'key_present': True, 'error': f'Could not reach the API: {getattr(e, "reason", e)}'}), 200
 
 
 def _anthropic_complete(prompt, max_tokens=800):
@@ -5663,562 +5478,63 @@ def _anthropic_complete(prompt, max_tokens=800):
     return text, reason
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# SESSION COMPLETE — scrapbook (Chunk 6)
-# Auto-mined highlights + GM-authored RP moments + a Claude narrative, pushed
-# to every screen at session end and saved on the volume to revisit.
-# ══════════════════════════════════════════════════════════════════════════
-# SCRAPBOOK_FILE / SCRAPBOOK_DIR are bound to the active campaign in _bind_campaign_paths().
 
 
-def _persist_session_highlights():
-    try:
-        with SESSION_HIGHLIGHTS_LOCK:
-            snap = copy.deepcopy(SESSION_HIGHLIGHTS)
-        with open(SCRAPBOOK_FILE, 'w', encoding='utf-8') as f:
-            json.dump(snap, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"[SCRAPBOOK] persist failed: {e}")
 
 
-def _load_session_highlights():
-    """Restore the in-flight accumulator on startup so a mid-session reload
-    doesn't lose the wrap-up. A fresh session resets it via /api/session/begin."""
-    try:
-        if not os.path.exists(SCRAPBOOK_FILE):
-            return
-        data, err = safe_load_json_file(SCRAPBOOK_FILE)
-        if data and isinstance(data, dict):
-            with SESSION_HIGHLIGHTS_LOCK:
-                for k in SESSION_HIGHLIGHTS:
-                    if k in data:
-                        SESSION_HIGHLIGHTS[k] = data[k]
-    except Exception as e:
-        print(f"[SCRAPBOOK] load failed: {e}")
 
 
-def _reset_session_highlights(session_number):
-    with SESSION_HIGHLIGHTS_LOCK:
-        SESSION_HIGHLIGHTS['session_number'] = int(session_number or 1)
-        SESSION_HIGHLIGHTS['started_at'] = time.strftime('%Y-%m-%d %H:%M')
-        SESSION_HIGHLIGHTS['crits'] = []
-        SESSION_HIGHLIGHTS['fumbles'] = []
-        SESSION_HIGHLIGHTS['big_hits'] = []
-        SESSION_HIGHLIGHTS['loot'] = []
-        SESSION_HIGHLIGHTS['rp_moments'] = []
-        SESSION_HIGHLIGHTS['narrative'] = ''
-        SESSION_HIGHLIGHTS['mvp_votes'] = {}
-        SESSION_HIGHLIGHTS['mvp_winner'] = ''
-    _persist_session_highlights()
 
 
-def _party_level():
-    """Best guess at the party level for the campaign log: the max PC level."""
-    try:
-        levels = [int(getattr(p, 'level', 1) or 1) for p in PARTY_LIBRARY.values()]
-        return max(levels) if levels else 1
-    except Exception:
-        return 1
 
 
-def _active_party_names():
-    """The player-character roster for the active campaign's system -- PF2e's
-    PARTY_LIBRARY or the Cosmere PC store. The session scrapbook's highlights,
-    MVP poll, and per-PC cards follow whichever system is live, so the same
-    capture hooks + assembly work for both."""
-    if _active_system() == 'cosmere':
-        names = []
-        for d in _list_cosmere_pcs():
-            nm = d.get('name') or (d.get('build') or {}).get('name')
-            if nm:
-                names.append(nm)
-        return names
-    return list(PARTY_LIBRARY.keys())
 
 
-def _scrapbook_party_level(system=None, roster=None):
-    """Average party level for the scrapbook header, per active system."""
-    system = system or _active_system()
-    if system == 'cosmere':
-        levels = []
-        for d in _list_cosmere_pcs():
-            try:
-                levels.append(int((d.get('build') or {}).get('level', 1)))
-            except (TypeError, ValueError):
-                pass
-        return round(sum(levels) / len(levels)) if levels else 1
-    return _party_level()
 
 
-def _record_crit_fumble(name, action, detail, degree):
-    """Hook from /api/log_roll (PF2e) + /api/cosmere/roll (Cosmere nat-20/nat-1).
-    Records a crit / nat-1 for a PARTY PC only — NPC and GM rolls are ignored.
-    Trusts the degree when present; otherwise sniffs the marker text the sheets
-    stamp on the roll detail."""
-    if not name or name not in _active_party_names():
-        return
-    blob = (str(detail or '') + ' ' + str(degree or '')).upper()
-    is_crit = (degree == 'crit_success') or ('[CRIT 20]' in blob) or ('NAT 20' in blob) or ('CRIT SUCCESS' in blob)
-    is_fumble = (degree == 'crit_failure') or ('[NAT 1]' in blob) or ('CRIT FAIL' in blob) or bool(re.search(r'\bNAT 1\b', blob))
-    if not (is_crit or is_fumble):
-        return
-    rec = {'pc': name, 'action': str(action or '')[:60], 'detail': str(detail or '')[:160], 'round': ROUND_NUMBER}
-    with SESSION_HIGHLIGHTS_LOCK:
-        bucket = SESSION_HIGHLIGHTS['crits'] if is_crit else SESSION_HIGHLIGHTS['fumbles']
-        bucket.append(rec)
-        SESSION_HIGHLIGHTS['crits'] = SESSION_HIGHLIGHTS['crits'][-120:]
-        SESSION_HIGHLIGHTS['fumbles'] = SESSION_HIGHLIGHTS['fumbles'][-120:]
-    _persist_session_highlights()
 
 
-def _record_loot(target, items, coins):
-    """Hook from /api/send_loot. Records loot per recipient PC."""
-    if not target:
-        return
-    norm_items = []
-    for it in (items or []):
-        if isinstance(it, dict) and (it.get('name') or '').strip():
-            norm_items.append({'name': str(it['name']).strip()[:80], 'qty': int(it.get('qty', 1) or 1)})
-    coins = coins or {}
-    norm_coins = {k: int(coins.get(k, 0) or 0) for k in ('pp', 'gp', 'sp', 'cp')}
-    if not norm_items and not any(norm_coins.values()):
-        return
-    with SESSION_HIGHLIGHTS_LOCK:
-        SESSION_HIGHLIGHTS['loot'].append({'pc': target, 'items': norm_items, 'coins': norm_coins})
-        SESSION_HIGHLIGHTS['loot'] = SESSION_HIGHLIGHTS['loot'][-120:]
-    _persist_session_highlights()
 
 
-def _record_big_hit(target, amount, is_pc):
-    """Hook from /api/adjust_hp. Records the biggest blows STRUCK (damage dealt
-    to non-PCs). This app applies monster damage GM-side without attacker
-    attribution, so big hits are a party-level highlight, not per-PC."""
-    try:
-        amount = int(amount)
-    except (TypeError, ValueError):
-        return
-    if amount <= 0 or is_pc:
-        return
-    with SESSION_HIGHLIGHTS_LOCK:
-        SESSION_HIGHLIGHTS['big_hits'].append({'target': str(target or '?')[:60], 'amount': amount, 'round': ROUND_NUMBER})
-        # Keep only the heaviest dozen so the file stays small.
-        SESSION_HIGHLIGHTS['big_hits'] = sorted(SESSION_HIGHLIGHTS['big_hits'], key=lambda h: h['amount'], reverse=True)[:12]
-    _persist_session_highlights()
 
 
-def _build_session_log_text():
-    """Flatten the recent combat log into plain lines for the narrator."""
-    with ENCOUNTER_LOCK:
-        logs = list(COMBAT_LOGS)
-    lines = []
-    for e in logs:
-        if not isinstance(e, dict):
-            continue
-        rnd = e.get('round', '?')
-        if 'msg' in e:
-            lines.append(f"[R{rnd}] {e.get('msg', '')}")
-        elif 'name' in e:
-            lines.append(f"[R{rnd}] {e.get('name', '')}: {e.get('action', '')} -> {e.get('result', '')} ({e.get('detail', '')})")
-    return '\n'.join(lines)[-9000:]
 
 
-def _generate_scrapbook_narrative():
-    """Write a short dramatic recap of THIS session from the combat log via the
-    Anthropic API. Returns (text, reason)."""
-    log_text = _build_session_log_text()
-    if not log_text.strip():
-        return None, 'empty_log'
-    cfg = _load_campaign_config()
-    prompt = (
-        f"You are the narrator wrapping up tonight's session of the tabletop campaign "
-        f"\"{cfg.get('name', 'the campaign')}\". Below is the session's combat / event log.\n\n"
-        f"Write a short, vivid recap of what happened this session — 2 short paragraphs of "
-        f"dramatic narrator prose, like the closing montage of a TV episode. Tell it as a STORY: "
-        f"the battles fought, the turning points, the triumphs and the narrow escapes, and the "
-        f"mood the party leaves on. Use the characters' names where they appear.\n\n"
-        f"IMPORTANT — the log is mechanical, so IGNORE and never mention dice rolls, degrees of "
-        f"success, DCs, initiative, HP/damage numbers, instance ids, or stat-block labels. "
-        f"Translate it into the fiction. No headings, no bullet points, no preamble or sign-off — "
-        f"just the recap prose.\n\n"
-        f"--- SESSION LOG ---\n{log_text}\n--- END LOG ---\n\nWrite only the recap."
-    )
-    return _anthropic_complete(prompt, max_tokens=700)
 
 
-def _assemble_scrapbook():
-    """Build the full scrapbook payload: party-wide totals + per-PC cards.
-    System-aware: the roster is the active system's party and loot totals are
-    spheres (Cosmere) or coins (PF2e)."""
-    with SESSION_HIGHLIGHTS_LOCK:
-        h = copy.deepcopy(SESSION_HIGHLIGHTS)
-    cfg = _load_campaign_config()
-    system = _active_system()
-    roster = _active_party_names()
-    biggest = max(h['big_hits'], key=lambda x: x['amount']) if h['big_hits'] else None
-    total_coins = {'pp': 0, 'gp': 0, 'sp': 0, 'cp': 0}
-    total_spheres = {'chip': 0, 'mark': 0, 'broam': 0}
-    for l in h['loot']:
-        for k in total_coins:
-            total_coins[k] += int((l.get('coins') or {}).get(k, 0) or 0)
-        for k in total_spheres:
-            total_spheres[k] += int((l.get('spheres') or {}).get(k, 0) or 0)
-    party = {
-        'crit_count': len(h['crits']),
-        'fumble_count': len(h['fumbles']),
-        'biggest_hit': biggest,
-        'total_coins': total_coins,
-        'total_spheres': total_spheres,
-        'loot_count': sum(len(l.get('items', [])) for l in h['loot']),
-        'rp_moments': [m['text'] for m in h['rp_moments'] if m.get('scope') == 'party'],
-    }
-    players = {}
-    for pc in roster:
-        players[pc] = {
-            'crits':   [c for c in h['crits'] if c['pc'] == pc],
-            'fumbles': [f for f in h['fumbles'] if f['pc'] == pc],
-            'loot':    [l for l in h['loot'] if l['pc'] == pc],
-            'rp_moments': [m['text'] for m in h['rp_moments'] if m.get('scope') == pc],
-        }
-    # MVP poll: anonymous counts only (party member -> votes), plus the roster
-    # of who can win, so the overlay can render the vote buttons + tally.
-    mvp_counts = {}
-    for choice in h.get('mvp_votes', {}).values():
-        mvp_counts[choice] = mvp_counts.get(choice, 0) + 1
-    return {
-        'session_number': h.get('session_number', cfg.get('session_number', 1)),
-        'campaign_name': cfg.get('name', 'The Campaign'),
-        'crest_image': cfg.get('crest_image', ''),
-        'narrative': h.get('narrative', ''),
-        'started_at': h.get('started_at', ''),
-        'party_level': _scrapbook_party_level(system, roster),
-        'mvp_winner': h.get('mvp_winner', ''),
-        'system': system,
-        'party': party,
-        'players': players,
-        'mvp': {'tally': mvp_counts, 'total': sum(mvp_counts.values()),
-                'candidates': roster},
-    }
 
 
-@app.route('/api/session/scrapbook/draft')
-@gm_required
-def api_scrapbook_draft():
-    """The GM review draft: assembled scrapbook + the raw RP moments (with
-    scope) so the editor can list / remove them."""
-    with SESSION_HIGHLIGHTS_LOCK:
-        rps = list(SESSION_HIGHLIGHTS['rp_moments'])
-    return jsonify({'success': True, 'scrapbook': _assemble_scrapbook(),
-                    'rp_moments': rps, 'party_members': _active_party_names()})
 
 
-@app.route('/api/session/scrapbook/vote', methods=['POST'])
-def api_scrapbook_vote():
-    """Cast / change an MVP vote. Players vote as their own character (pinned
-    to the session); the GM may pass an explicit voter. Broadcasts only the
-    anonymous tally so the open scrapbook updates live without revealing who
-    voted for whom. One vote per voter (re-voting overwrites)."""
-    data = request.get_json(silent=True) or {}
-    choice = str(data.get('choice', '') or '').strip()
-    if choice not in _active_party_names():
-        return jsonify({'success': False, 'error': 'unknown choice'}), 400
-    if _is_gm():
-        voter = (str(data.get('voter') or '').strip() or 'GM')
-    else:
-        voter = session.get('player_name') or ''
-        if not voter:
-            return jsonify({'success': False, 'error': 'join as a character to vote'}), 403
-    with SESSION_HIGHLIGHTS_LOCK:
-        SESSION_HIGHLIGHTS['mvp_votes'][voter] = choice
-    _persist_session_highlights()
-    tally = _mvp_tally()
-    sse_broadcast('mvp_vote', {'tally': tally, 'total': sum(tally.values())})
-    return jsonify({'success': True, 'your_vote': choice, 'tally': tally})
 
 
-@app.route('/api/session/scrapbook/grant_hero/<pc_name>', methods=['POST'])
-@gm_required
-def api_scrapbook_grant_hero(pc_name):
-    """GM names the session MVP. PF2e also grants a Hero Point (caps at 3, via
-    apply_pc_delta which persists + broadcasts pc_update so the winner's sheet
-    lights up); Cosmere has no Hero Points, so it just crowns the winner in the
-    session record."""
-    if pc_name not in _active_party_names():
-        return jsonify({'success': False, 'error': 'unknown PC'}), 404
-    hero_points = None
-    if _active_system() != 'cosmere':
-        def _mut(pc):
-            before = int(getattr(pc, 'hero_points', 0) or 0)
-            if before < 3:
-                pc.hero_points = before + 1
-            return True
-        try:
-            _, pc = apply_pc_delta(pc_name, _mut)
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e)}), 500
-        hero_points = pc.hero_points
-        _combat_log(f"{pc_name} named session MVP — +1 Hero Point (now {hero_points})", 'system')
-    else:
-        _combat_log(f"{pc_name} named session MVP", 'system')
-    # Crown the MVP in the session record so the campaign timeline shows it.
-    with SESSION_HIGHLIGHTS_LOCK:
-        SESSION_HIGHLIGHTS['mvp_winner'] = pc_name
-    _persist_session_highlights()
-    try:
-        _save_scrapbook_record(_assemble_scrapbook())
-    except Exception:
-        pass
-    return jsonify({'success': True, 'pc': pc_name, 'hero_points': hero_points})
 
 
-@app.route('/api/session/scrapbook/rp_moment', methods=['POST'])
-@gm_required
-def api_scrapbook_add_rp():
-    """GM adds a role-play moment before pushing the scrapbook. scope is
-    'party' (shows in the shared section) or a PC name (their card)."""
-    data = request.get_json(silent=True) or {}
-    text = str(data.get('text', '') or '').strip()[:400]
-    scope = str(data.get('scope', 'party') or 'party').strip()
-    if not text:
-        return jsonify({'success': False, 'error': 'empty moment'}), 400
-    if scope != 'party' and scope not in _active_party_names():
-        scope = 'party'
-    with SESSION_HIGHLIGHTS_LOCK:
-        SESSION_HIGHLIGHTS['rp_moments'].append({'text': text, 'scope': scope})
-        rps = list(SESSION_HIGHLIGHTS['rp_moments'])
-    _persist_session_highlights()
-    return jsonify({'success': True, 'rp_moments': rps})
 
 
-@app.route('/api/session/scrapbook/rp_moment/remove', methods=['POST'])
-@gm_required
-def api_scrapbook_remove_rp():
-    data = request.get_json(silent=True) or {}
-    with SESSION_HIGHLIGHTS_LOCK:
-        try:
-            i = int(data.get('index'))
-            if 0 <= i < len(SESSION_HIGHLIGHTS['rp_moments']):
-                SESSION_HIGHLIGHTS['rp_moments'].pop(i)
-        except (TypeError, ValueError):
-            pass
-        rps = list(SESSION_HIGHLIGHTS['rp_moments'])
-    _persist_session_highlights()
-    return jsonify({'success': True, 'rp_moments': rps})
 
 
-@app.route('/api/session/scrapbook/narrative', methods=['POST'])
-@gm_required
-def api_scrapbook_narrative():
-    """Set the scrapbook narrative. {text} sets it manually; otherwise it's
-    generated from the session log via Claude."""
-    data = request.get_json(silent=True) or {}
-    manual = data.get('text')
-    if manual is not None:
-        text = str(manual or '').strip()[:4000]
-        with SESSION_HIGHLIGHTS_LOCK:
-            SESSION_HIGHLIGHTS['narrative'] = text
-        _persist_session_highlights()
-        return jsonify({'success': True, 'narrative': text, 'source': 'manual'})
-    text, reason = _generate_scrapbook_narrative()
-    if text:
-        with SESSION_HIGHLIGHTS_LOCK:
-            SESSION_HIGHLIGHTS['narrative'] = text
-        _persist_session_highlights()
-        return jsonify({'success': True, 'narrative': text, 'source': 'ai'})
-    notes = {
-        'no_key': 'No ANTHROPIC_API_KEY set — type the recap yourself, or set the key on Railway.',
-        'empty_log': 'The combat log is empty, so there is nothing to summarize yet.',
-        'empty_response': 'The model returned nothing — try again.',
-    }
-    note = notes.get(reason, f'Could not generate the narrative ({reason}).')
-    return jsonify({'success': False, 'reason': reason, 'note': note,
-                    'key_present': bool(os.environ.get('ANTHROPIC_API_KEY', '').strip())}), 200
 
 
-def _save_scrapbook_record(sb):
-    """Write a session scrapbook to the volume (campaign log). Returns the
-    session number used as the filename stem."""
-    n = sb.get('session_number', 1)
-    try:
-        os.makedirs(SCRAPBOOK_DIR, exist_ok=True)
-        with open(os.path.join(SCRAPBOOK_DIR, f'session_{n}.json'), 'w', encoding='utf-8') as f:
-            json.dump(sb, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"[SCRAPBOOK] save failed: {e}")
-    return n
 
 
-@app.route('/api/session/scrapbook/push', methods=['POST'])
-@gm_required
-def api_scrapbook_push():
-    """Finalize: save the scrapbook to the volume, optionally feed the next
-    'Previously on...', and broadcast it to every screen."""
-    sb = _assemble_scrapbook()
-    _save_scrapbook_record(sb)
-    data = request.get_json(silent=True) or {}
-    if data.get('feed_recap') and sb.get('narrative'):
-        _save_campaign_config({'last_recap': sb['narrative']})
-    sse_broadcast('session_scrapbook', sb)
-    return jsonify({'success': True, 'scrapbook': sb})
 
 
-@app.route('/api/session/scrapbook/list')
-@gm_required
-def api_scrapbook_list():
-    out = []
-    try:
-        if os.path.isdir(SCRAPBOOK_DIR):
-            for fn in sorted(os.listdir(SCRAPBOOK_DIR)):
-                if fn.endswith('.json'):
-                    out.append(fn[:-5])
-    except Exception:
-        pass
-    return jsonify({'success': True, 'scrapbooks': out})
 
 
-@app.route('/api/session/scrapbook/saved/<name>')
-@gm_required
-def api_scrapbook_saved(name):
-    name = re.sub(r'[^A-Za-z0-9_-]', '', name or '')[:60]
-    p = os.path.join(SCRAPBOOK_DIR, name + '.json')
-    if not name or not os.path.exists(p):
-        return jsonify({'success': False, 'error': 'not found'}), 404
-    data, err = safe_load_json_file(p)
-    if not data:
-        return jsonify({'success': False, 'error': err or 'unreadable'}), 404
-    return jsonify({'success': True, 'scrapbook': data})
 
 
-@app.route('/api/session/timeline')
-@gm_required
-def api_session_timeline():
-    """Campaign continuity: a rich, newest-first list of saved sessions for
-    the timeline view — number, date, party level, MVP, and a narrative
-    teaser. The full scrapbook for any entry loads via /scrapbook/saved."""
-    out = []
-    try:
-        if os.path.isdir(SCRAPBOOK_DIR):
-            for fn in os.listdir(SCRAPBOOK_DIR):
-                if not fn.endswith('.json'):
-                    continue
-                data, _err = safe_load_json_file(os.path.join(SCRAPBOOK_DIR, fn))
-                if not isinstance(data, dict):
-                    continue
-                narr = (data.get('narrative') or '').strip().replace('\n', ' ')
-                teaser = (narr[:220] + '…') if len(narr) > 220 else narr
-                party = data.get('party') or {}
-                out.append({
-                    'name': fn[:-5],
-                    'session_number': data.get('session_number', 0),
-                    'date': data.get('started_at', ''),
-                    'party_level': data.get('party_level'),
-                    'mvp_winner': data.get('mvp_winner', ''),
-                    'teaser': teaser,
-                    'crit_count': party.get('crit_count', 0),
-                    'fumble_count': party.get('fumble_count', 0),
-                })
-    except Exception as e:
-        print(f"[TIMELINE] {e}")
-    out.sort(key=lambda s: s.get('session_number', 0), reverse=True)
-    return jsonify({'success': True, 'sessions': out})
 
 
-# Restore any in-flight highlights on import (crash/reload recovery).
-_load_session_highlights()
 
 
-@app.route('/api/session/notes')
-@gm_required
-def api_session_notes():
-    """List the sessions-folder notes (newest-first) for the recap picker."""
-    return jsonify({'success': True, 'notes': _session_notes(), 'folder': _load_campaign_config().get('sessions_folder', 'Sessions')})
 
 
-@app.route('/api/session/recap/generate', methods=['POST'])
-@gm_required
-def api_session_recap_generate():
-    """Generate a 'Previously on...' blurb from a chosen session note.
-    Tries the Claude API (if ANTHROPIC_API_KEY set); falls back to extracting
-    a recap section from the note. Does NOT save — the GM reviews/edits first."""
-    data = request.json or {}
-    rel = (data.get('note') or '').strip()
-    if not rel:
-        return jsonify({'success': False, 'error': 'note path required'}), 400
-    try:
-        body = _read_session_note_raw(rel)
-    except (FileNotFoundError, ValueError) as e:
-        return jsonify({'success': False, 'error': f'could not read note: {e}'}), 404
-    ai_text, reason = _generate_recap_via_claude(body)
-    if ai_text:
-        return jsonify({'success': True, 'recap': ai_text, 'source': 'ai'})
-    extracted = _extract_recap_section(body)
-    key_present = bool(os.environ.get('ANTHROPIC_API_KEY', '').strip())
-    # Human-readable explanation of why we fell back, so the GM can fix it.
-    if reason == 'no_key':
-        note = 'No ANTHROPIC_API_KEY reached the server. On Railway, add it under Variables and redeploy; locally, put it in .env.'
-    elif reason and reason.startswith('api_http_401'):
-        note = 'API rejected the key (401). The key is wrong, revoked, or has no credit — check console.anthropic.com.'
-    elif reason and reason.startswith('api_http_404'):
-        note = 'API model not found (404). Set ANTHROPIC_RECAP_MODEL to a valid id (e.g. claude-3-5-haiku-latest).'
-    elif reason and reason.startswith('api_http_'):
-        note = 'Anthropic API error: ' + reason.replace('api_http_', 'HTTP ')
-    elif reason and reason.startswith('network'):
-        note = 'Could not reach the Anthropic API (network/egress). Showing a section from the note instead.'
-    else:
-        note = 'Pulled a section from the note (' + (reason or 'fallback') + '). Edit & save.'
-    return jsonify({
-        'success': True,
-        'recap': extracted,
-        'source': 'extract',
-        'reason': reason,
-        'key_present': key_present,
-        'note': note,
-    })
 
 
-@app.route('/api/session/recap', methods=['POST'])
-@gm_required
-def api_session_recap_save():
-    """Persist the (possibly GM-edited) recap text to the campaign config."""
-    data = request.json or {}
-    text = (data.get('recap') or '').strip()
-    cfg = _save_campaign_config({'last_recap': text})
-    return jsonify({'success': True, 'last_recap': cfg.get('last_recap', '')})
 
 
-@app.route('/api/session/begin', methods=['POST'])
-@gm_required
-def api_session_begin():
-    """Broadcast the session-start curtain to every connected screen.
-    Optionally bumps the session number. Carries the campaign name, crest,
-    and saved recap so clients can render the curtain without a refetch."""
-    data = request.json or {}
-    cfg = _load_campaign_config()
-    if data.get('bump_session'):
-        cfg = _save_campaign_config({'session_number': int(cfg.get('session_number', 1)) + 1})
-    # Fresh session → wipe the highlights accumulator so the wrap-up scrapbook
-    # only reflects tonight (Chunk 6).
-    _reset_session_highlights(cfg.get('session_number', 1))
-    # Campaign stats hook (Tier 4, feature 30)
-    try:
-        _bump_campaign_stat('sessions_started')
-    except Exception:
-        pass
-    payload = {
-        'campaign_name': cfg.get('name', 'The Campaign'),
-        'crest_image': cfg.get('crest_image', ''),
-        'recap': cfg.get('last_recap', ''),
-        'session_number': cfg.get('session_number', 1),
-    }
-    sse_broadcast('session_start', payload)
-    return jsonify({'success': True, **payload})
 
-
-@app.route('/api/session/dismiss', methods=['POST'])
-@gm_required
-def api_session_dismiss():
-    """Part the curtain on every screen at once (GM clicks Enter)."""
-    sse_broadcast('session_dismiss', {'t': int(time.time())})
-    return jsonify({'success': True})
 
 
 @app.route('/api/session/mood', methods=['GET', 'POST'])
@@ -7357,15 +6673,6 @@ def api_cosmere_loot_add():
             except Exception:
                 pass
             break
-    # Also feed the session scrapbook's loot highlights -- the ledger is the
-    # permanent wealth record; this is tonight's haul for the Session Complete recap.
-    try:
-        with SESSION_HIGHLIGHTS_LOCK:
-            SESSION_HIGHLIGHTS['loot'].append({'pc': recipient[:60], 'items': norm_items, 'spheres': norm_spheres})
-            SESSION_HIGHLIGHTS['loot'] = SESSION_HIGHLIGHTS['loot'][-120:]
-        _persist_session_highlights()
-    except Exception:
-        pass
     return jsonify({'success': True})
 
 
@@ -7515,60 +6822,6 @@ def api_threads_upload():
     return jsonify(success=True, beats=beats, count=len(beats))
 
 
-@app.route('/api/session/export', methods=['POST'])
-@gm_required
-def api_session_export():
-    """Build a session recap (party state + active encounter + combat log) and
-    return it as text. The GM downloads it as a .txt and pastes it into Claude /
-    Obsidian. No vault write — the site no longer hosts an Obsidian vault."""
-    from datetime import datetime as _dt
-    data = request.get_json(silent=True) or {}
-    title = (data.get('title') or '').strip() or f"Session - {_dt.now().strftime('%Y-%m-%d')}"
-    include_log = bool(data.get('include_log', True))
-    campaign = _load_campaign_config() or {}
-    md = [f"# {title}", ""]
-    if campaign.get('name'):
-        md.append(f"_Campaign: {campaign['name']}_")
-    if campaign.get('session_number'):
-        md.append(f"_Session number: {campaign['session_number']}_")
-    if _active_system() == 'cosmere':
-        # Cosmere party table — read from the Cosmere PC store (PARTY_LIBRARY is
-        # PF2e-only and empty here), with Injuries instead of Hero points.
-        md += ["", "## Party State", "", "| PC | Path | Health | Injuries | Conditions |",
-               "|----|------|--------|----------|------------|"]
-        for row in _cosmere_status_party(_list_cosmere_pcs()):
-            conds = [k for k, v in (row.get('conditions') or {}).items() if v]
-            md.append(f"| {row['name']} | {row.get('class_name', '')} | "
-                      f"{row['current_hp']}/{row['max_hp']} | {row.get('injuries', 0)} | "
-                      f"{', '.join(conds) if conds else '—'} |")
-    else:
-        md += ["", "## Party State", "", "| PC | Class | HP | Hero | Conditions |",
-               "|----|-------|----|------|------------|"]
-        for name, pc in sorted(PARTY_LIBRARY.items()):
-            cls = (getattr(pc, 'class_name', '') or '').strip()
-            conds = []
-            try:
-                for k, v in (pc.conditions or {}).items():
-                    if v and v != 0 and v is not False:
-                        conds.append(f"{k}{(' ' + str(v)) if isinstance(v, int) and v > 0 else ''}")
-            except Exception:
-                pass
-            md.append(f"| {name} | {cls} | {getattr(pc, 'current_hp', 0)}/{getattr(pc, 'hp', 0)} | "
-                      f"{getattr(pc, 'hero_points', 0)} | {', '.join(conds) if conds else '—'} |")
-    md.append("")
-    if ACTIVE_ENCOUNTER:
-        md += ["## Active Encounter at Export", ""]
-        for c in ACTIVE_ENCOUNTER:
-            md.append(f"- **{c.name}** ({'PC' if c.is_pc else 'Enemy'}, init {c.initiative}) — HP {c.current_hp}/{c.hp}")
-        md.append("")
-    if include_log and COMBAT_LOGS:
-        md += ["## Combat Log", ""]
-        for e in COMBAT_LOGS:
-            md.append(f"- `{e.get('time', '')}` R{e.get('round', '')} {e.get('type', '')} — {e.get('msg', '')}")
-        md.append("")
-    md += ["## GM Notes", "", "_Paste this into Claude / Obsidian and flesh out the prose recap._", ""]
-    body = "\n".join(md)
-    return jsonify({"success": True, "markdown": body, "byte_count": len(body.encode("utf-8")), "title": title})
 
 @app.route('/tracker')
 def tracker_view():
@@ -8219,7 +7472,6 @@ def cosmere_gm_hub():
         adv_count=adv_count,
         encounter_count=len(ACTIVE_ENCOUNTER),
         active_cid=ACTIVE_CAMPAIGN_ID,
-        last_recap=cfg.get('last_recap', ''),
         session_number=cfg.get('session_number', 1),
     )
 
@@ -9142,13 +8394,6 @@ def api_cosmere_roll():
         # None so it's dropped for every player connection.
         pf = (lambda _d: None) if vis == 'gm' else None
         sse_broadcast('player_roll', payload, player_filter=pf)
-    except Exception:
-        pass
-    # Feed the session scrapbook: a nat-20 (Opportunity) / nat-1 (Complication)
-    # is Cosmere's crit / fumble. The sheet stamps "(nat 20)" / "(nat 1)" into the
-    # detail, which _record_crit_fumble sniffs (gated to the active party roster).
-    try:
-        _record_crit_fumble(entry['name'], entry['action'], entry['detail'], None)
     except Exception:
         pass
     return jsonify({'ok': True})
@@ -10115,7 +9360,6 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
     c.current_hp = new_hp
     try:
         _bump_campaign_stat('total_damage_dealt', taken)
-        _record_big_hit(c.name, taken, c.is_pc)
     except Exception:
         pass
     note = f"{c.name} takes {taken} {dtype} damage"
@@ -10175,12 +9419,6 @@ def adjust_hp(instance_id):
                 wri_notes = []
                 if action == 'damage':
                     was_above_zero = c.current_hp > 0
-                    # Session-scrapbook hook (Chunk 6): track the biggest blow
-                    # struck (damage dealt to a non-PC foe).
-                    try:
-                        _record_big_hit(c.name, amount, c.is_pc)
-                    except Exception:
-                        pass
                     # Campaign stats hook (Tier 4, feature 30)
                     try:
                         _bump_campaign_stat('total_damage_dealt', amount)
@@ -12841,11 +12079,6 @@ def log_roll():
     COMBAT_LOGS.append(log_entry)
     if len(COMBAT_LOGS) > 200: COMBAT_LOGS.pop(0)
 
-    # Session-scrapbook hook (Chunk 6): tally crits / nat-1s for party PCs.
-    try:
-        _record_crit_fumble(actor_name, log_entry['action'], log_entry['detail'], degree)
-    except Exception:
-        pass
 
     # Campaign stats hook (Tier 4, feature 30)
     try:
@@ -13686,11 +12919,6 @@ def send_loot_to_player():
         # Persist coins
         build['pp'] = pc.pp; build['gp'] = pc.gp; build['sp'] = pc.sp; build['cp'] = pc.cp
         save_and_reload_character(target, pc_json, file_path)
-    # Session-scrapbook hook (Chunk 6): record loot per recipient.
-    try:
-        _record_loot(target, items, coins)
-    except Exception:
-        pass
     # Persistent loot ledger: append a timestamped entry for wealth tracking.
     try:
         from datetime import datetime as _dt_loot
@@ -14787,155 +14015,16 @@ def _audio_root():
         return CAMPAIGN_AUDIO_DIR
 
 
-@app.route('/campaign_audio/<path:filename>')
-def serve_campaign_audio(filename):
-    """Serve soundscape audio from CAMPAIGN_AUDIO_DIR. GM-device-only feature,
-    but the route is open (no secret URLs) — files are non-sensitive ambience.
-    send_from_directory handles HTTP range requests so large .ogg tracks stream."""
-    root = _audio_root()
-    if not os.path.isdir(root):
-        return ('audio directory not available', 404)
-    return send_from_directory(root, filename, max_age=3600, conditional=True)
 
 
-@app.route('/api/audio/list')
-@gm_required
-def api_audio_list():
-    """List playable audio files under CAMPAIGN_AUDIO_DIR (recursive), grouped
-    by their top-level subfolder (Ambience / Loop / SFX / ...)."""
-    root = _audio_root()
-    if not os.path.isdir(root):
-        return jsonify({'success': False, 'available': False, 'error': 'No campaign audio directory found.', 'files': []})
-    files = []
-    for dirpath, _dirs, names in os.walk(root):
-        for n in names:
-            if os.path.splitext(n)[1].lower() not in _AUDIO_EXTS:
-                continue
-            full = os.path.join(dirpath, n)
-            rel = os.path.relpath(full, root).replace(os.sep, '/')
-            top = rel.split('/', 1)[0] if '/' in rel else ''
-            try:
-                size = os.path.getsize(full)
-            except OSError:
-                size = 0
-            files.append({'path': rel, 'name': n, 'group': top, 'size': size})
-    files.sort(key=lambda f: (f['group'].lower(), f['name'].lower()))
-    return jsonify({'success': True, 'available': True, 'files': files,
-                    'soundscapes': _load_campaign_config().get('soundscapes', {})})
 
 
-@app.route('/api/audio/soundscapes', methods=['GET', 'POST'])
-def api_audio_soundscapes():
-    """GET the soundscape->file mapping (used by the audio engine on every GM
-    page); POST (GM-only) to save the GM's assignments."""
-    if request.method == 'GET':
-        return jsonify({'success': True, 'soundscapes': _load_campaign_config().get('soundscapes', {})})
-    if not _is_gm():
-        return jsonify({'success': False, 'error': 'GM authentication required'}), 403
-    data = request.json or {}
-    incoming = data.get('soundscapes') or {}
-    # Whitelist the three known scenes; values are relative paths (or '').
-    current = dict(_load_campaign_config().get('soundscapes') or {})
-    for scene in ('tavern', 'dungeon', 'combat'):
-        if scene in incoming:
-            current[scene] = str(incoming[scene] or '')
-    cfg = _save_campaign_config({'soundscapes': current})
-    return jsonify({'success': True, 'soundscapes': cfg.get('soundscapes', {})})
 
 
-@app.route('/api/audio/storage')
-@gm_required
-def api_audio_storage():
-    """Report where soundscape audio is stored and whether it's durable — so
-    the GM can confirm, before a session, that uploads land on the Railway
-    persistent volume (and survive redeploys) rather than ephemeral disk."""
-    root = CAMPAIGN_AUDIO_DIR
-    # "Persistent" = a volume was explicitly configured via env (DATA_DIR on
-    # Railway, or PF2E_AUDIO_DIR), not the local default that DATA_DIR falls
-    # back to. On Railway without DATA_DIR set, uploads would vanish on deploy.
-    persistent = bool(os.environ.get('DATA_DIR') or os.environ.get('PF2E_AUDIO_DIR'))
-    writable = False
-    try:
-        os.makedirs(root, exist_ok=True)
-        probe = os.path.join(root, '.write_probe')
-        with open(probe, 'w') as fp:
-            fp.write('ok')
-        os.remove(probe)
-        writable = True
-    except OSError:
-        writable = False
-    count = 0
-    try:
-        rr = os.path.realpath(root)
-        if os.path.isdir(rr):
-            for _d, _s, names in os.walk(rr):
-                count += sum(1 for n in names if os.path.splitext(n)[1].lower() in _AUDIO_EXTS)
-    except OSError:
-        pass
-    return jsonify({
-        'success': True,
-        'dir': root,
-        'persistent': persistent,
-        'writable': writable,
-        'data_dir': DATA_DIR,
-        'file_count': count,
-    })
 
 
-@app.route('/api/audio/upload', methods=['POST'])
-@gm_required
-def api_audio_upload():
-    """Upload one soundscape track to CAMPAIGN_AUDIO_DIR (the Railway volume in
-    production). One file per request keeps each POST under MAX_CONTENT_LENGTH.
-    Returns the saved relative path so the GM can map it to a scene."""
-    f = request.files.get('audio')
-    if not f or not f.filename:
-        return jsonify({'success': False, 'error': 'audio field required'}), 400
-    ext = os.path.splitext(f.filename)[1].lower()
-    if ext not in _AUDIO_EXTS:
-        return jsonify({'success': False, 'error': f"unsupported type '{ext}' — ogg / mp3 / wav / m4a / opus / flac only"}), 400
-    f.seek(0, os.SEEK_END); size = f.tell(); f.seek(0)
-    if size > 48 * 1024 * 1024:
-        return jsonify({'success': False, 'error': f'file too large ({size // (1024*1024)} MB); max 48 MB per file'}), 413
-    # Sanitize to a safe flat filename (strip directories + odd chars).
-    base = os.path.basename(f.filename).replace('\\', '/').split('/')[-1]
-    safe = re.sub(r'[^A-Za-z0-9._ -]', '_', base).strip() or ('track' + ext)
-    root = CAMPAIGN_AUDIO_DIR  # write target (not realpath — we own this dir)
-    try:
-        os.makedirs(root, exist_ok=True)
-    except OSError as e:
-        return jsonify({'success': False, 'error': f'could not create audio dir: {e}'}), 500
-    dest = os.path.join(root, safe)
-    # Avoid clobbering: if a same-named file exists, suffix with a counter.
-    if os.path.exists(dest):
-        stem, x = os.path.splitext(safe)
-        i = 2
-        while os.path.exists(os.path.join(root, f'{stem}-{i}{x}')):
-            i += 1
-        safe = f'{stem}-{i}{x}'
-        dest = os.path.join(root, safe)
-    f.save(dest)
-    return jsonify({'success': True, 'path': safe, 'name': safe, 'byte_count': size})
 
 
-@app.route('/api/audio/delete', methods=['POST'])
-@gm_required
-def api_audio_delete():
-    """Delete an uploaded track (path relative to CAMPAIGN_AUDIO_DIR). Path-safe."""
-    data = request.json or {}
-    rel = (data.get('path') or '').strip().lstrip('/')
-    if not rel:
-        return jsonify({'success': False, 'error': 'path required'}), 400
-    root = os.path.realpath(CAMPAIGN_AUDIO_DIR)
-    target = os.path.realpath(os.path.join(root, rel))
-    if not target.startswith(root + os.sep) and target != root:
-        return jsonify({'success': False, 'error': 'path escapes audio dir'}), 400
-    try:
-        if os.path.isfile(target):
-            os.remove(target)
-        return jsonify({'success': True})
-    except OSError as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/campaign/hero_image', methods=['POST'])
@@ -16536,98 +15625,6 @@ def api_chat_send():
 #  scrapbook, combat log, and loot ledger into a formatted recap.
 # =====================================================================
 
-@app.route('/api/session_recap')
-@gm_required
-def api_session_recap():
-    """Compile a formatted session recap from available session data."""
-    with SESSION_HIGHLIGHTS_LOCK:
-        sh = copy.deepcopy(SESSION_HIGHLIGHTS)
-
-    started = sh.get('started_at', '')
-    session_num = sh.get('session_number', '?')
-
-    duration_str = ''
-    if started:
-        try:
-            st = time.strptime(started, '%Y-%m-%d %H:%M')
-            start_epoch = time.mktime(st)
-            elapsed_min = int((time.time() - start_epoch) / 60)
-            hours, mins = divmod(elapsed_min, 60)
-            duration_str = f"{hours}h {mins}m" if hours else f"{mins}m"
-        except Exception:
-            pass
-
-    encounter_count = len(ACTIVE_ENCOUNTER)
-    crits = sh.get('crits', [])
-    fumbles = sh.get('fumbles', [])
-    big_hits = sh.get('big_hits', [])
-    big_hits_sorted = sorted(big_hits, key=lambda x: x.get('amount', 0), reverse=True)[:5]
-    loot = sh.get('loot', [])
-
-    hp_events = []
-    for log_e in COMBAT_LOGS:
-        action_str = str(log_e.get('action', ''))
-        if 'Dying' in action_str or 'damage' in action_str.lower() or 'heal' in action_str.lower():
-            hp_events.append({'name': log_e.get('name', ''), 'action': action_str, 'time': log_e.get('time', '')})
-
-    lines = []
-    lines.append(f"SESSION {session_num} RECAP")
-    lines.append(f"Date: {started or 'Unknown'}")
-    if duration_str:
-        lines.append(f"Duration: {duration_str}")
-    lines.append("")
-
-    if crits:
-        lines.append(f"CRITICAL HITS ({len(crits)}):")
-        for c in crits[:10]:
-            lines.append(f"  - {c.get('pc', '?')}: {c.get('action', '')} (Round {c.get('round', '?')})")
-        lines.append("")
-
-    if fumbles:
-        lines.append(f"CRITICAL FAILURES ({len(fumbles)}):")
-        for f_entry in fumbles[:10]:
-            lines.append(f"  - {f_entry.get('pc', '?')}: {f_entry.get('action', '')} (Round {f_entry.get('round', '?')})")
-        lines.append("")
-
-    if big_hits_sorted:
-        lines.append("BIGGEST HITS:")
-        for bh in big_hits_sorted:
-            lines.append(f"  - {bh.get('target', '?')} took {bh.get('amount', 0)} damage (Round {bh.get('round', '?')})")
-        lines.append("")
-
-    if loot:
-        lines.append("LOOT AWARDED:")
-        for lt in loot:
-            items_str = ', '.join(f"{i['name']} x{i['qty']}" for i in lt.get('items', []))
-            coins = lt.get('coins', {})
-            coins_parts = [f"{coins.get(d, 0)} {d}" for d in ('pp', 'gp', 'sp', 'cp') if coins.get(d, 0)]
-            coins_str = ', '.join(coins_parts)
-            parts = [p for p in [items_str, coins_str] if p]
-            lines.append(f"  - {lt.get('pc', '?')}: {'; '.join(parts) if parts else '(empty)'}")
-        lines.append("")
-
-    if hp_events:
-        lines.append(f"NOTABLE HP EVENTS ({len(hp_events)}):")
-        for he in hp_events[:15]:
-            lines.append(f"  - [{he.get('time', '')}] {he.get('name', '')}: {he.get('action', '')}")
-        lines.append("")
-
-    lines.append(f"Total combat log entries: {len(COMBAT_LOGS)}")
-    lines.append(f"Current round: {ROUND_NUMBER}")
-    lines.append(f"Combatants in encounter: {encounter_count}")
-
-    recap_text = '\n'.join(lines)
-    return jsonify({
-        'success': True,
-        'recap': recap_text,
-        'session_number': session_num,
-        'started_at': started,
-        'duration': duration_str,
-        'crits': len(crits),
-        'fumbles': len(fumbles),
-        'loot_count': len(loot),
-        'log_entries': len(COMBAT_LOGS),
-    })
 
 
 # =====================================================================

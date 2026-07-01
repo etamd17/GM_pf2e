@@ -455,16 +455,6 @@
                     var d = null; try { d = JSON.parse(e.data); } catch(_) {}
                     try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
                 });
-                // Session Complete scrapbook (Chunk 6): GM sees the whole party.
-                _toastSSE.addEventListener('session_scrapbook', function(e) {
-                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
-                    try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, null); } catch(_) {}
-                });
-                // MVP poll live tally (Chunk 6 / hero-point vote).
-                _toastSSE.addEventListener('mvp_vote', function(e) {
-                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
-                    try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
-                });
                 // Combat_log events exist for tracker log sync but aren't shown as toasts
                 // (they have a different shape — msg/type instead of name/action/detail).
             } catch(_) {}
@@ -750,14 +740,6 @@
 
     {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
     {% include "_scene_mood.html" %}
-
-    {# Session Complete scrapbook (shared overlay + window.pf2eScrapbook). #}
-    {% include "_session_scrapbook.html" %}
-
-    {# Session-start curtain — GM variant (this page is a GM screen, so it
-       gets the "Enter the Session" control that parts the curtain for all). #}
-    {% set curtain_role = 'gm' %}
-    {% include "_session_curtain.html" %}
 
     {# Player bottom nav bar + turn notifications + roll feed.
        Only renders for joined players (not GM). The active tab is inferred

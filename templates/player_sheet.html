@@ -10560,17 +10560,9 @@
     {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
     {% include "_scene_mood.html" %}
 
-    {# Session Complete scrapbook (shared overlay + window.pf2eScrapbook). #}
-    {% include "_session_scrapbook.html" %}
-
     {# Death's door — ruby edge-bleed + heartbeat when this PC is at 0/dying.
        Activated by body.at-deaths-door (see _paintDeathsDoor). #}
     <div id="deaths-door" class="no-print" aria-hidden="true"></div>
-
-    {# Session-start curtain — player variant (no dismiss control; parts when
-       the GM broadcasts session_dismiss). #}
-    {% set curtain_role = 'player' %}
-    {% include "_session_curtain.html" %}
 
     {# Player bottom nav bar #}
     {% set active_player_tab = 'sheet' %}

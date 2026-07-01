@@ -11,8 +11,8 @@ Multi-campaign data layout (under DATA_DIR -- the Railway volume in prod):
         party_data/*.json              # character envelopes (name-based files)
         saved_encounters/*.json        # + _autosave.json
         campaign_stats.json  loot_ledger.json  story_threads.json
-        calendar.json  pinned_generators.json  session_highlights.json
-        journals/  scrapbooks/  campaign_assets/  campaign_audio/
+        calendar.json  pinned_generators.json
+        journals/  campaign_assets/  campaign_audio/
         uploads/handouts/
       systems/<system>/                # shipped read-only content (pf2e, cosmere)
 
@@ -79,10 +79,8 @@ def campaign_assets_dir(cid):      return os.path.join(campaign_dir(cid), 'campa
 def handouts_dir(cid):             return os.path.join(campaign_dir(cid), 'uploads', 'handouts')
 def campaign_audio_dir(cid):       return os.path.join(campaign_dir(cid), 'campaign_audio')
 def journal_dir(cid):              return os.path.join(campaign_dir(cid), 'journals')
-def scrapbook_dir(cid):            return os.path.join(campaign_dir(cid), 'scrapbooks')
 def loot_ledger_file(cid):         return os.path.join(campaign_dir(cid), 'loot_ledger.json')
 def campaign_stats_file(cid):      return os.path.join(campaign_dir(cid), 'campaign_stats.json')
-def session_highlights_file(cid):  return os.path.join(campaign_dir(cid), 'session_highlights.json')
 def story_threads_file(cid):       return os.path.join(campaign_dir(cid), 'story_threads.json')
 def pinned_generators_file(cid):   return os.path.join(campaign_dir(cid), 'pinned_generators.json')
 def calendar_file(cid):            return os.path.join(campaign_dir(cid), 'calendar.json')
@@ -170,7 +168,6 @@ CAMPAIGN_SUBDIRS = (
     os.path.join('uploads', 'handouts'),
     'campaign_audio',
     'journals',
-    'scrapbooks',
     'cosmere_pcs',
 )
 

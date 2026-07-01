@@ -30,13 +30,11 @@ DIR_ITEMS = [
     ('saved_encounters', os.path.join(DATA_DIR, 'saved_encounters'),    storage.encounter_dir),
     ('campaign_assets',  os.path.join(DATA_DIR, 'campaign_assets'),     storage.campaign_assets_dir),
     ('journals',         os.path.join(DATA_DIR, 'journals'),            storage.journal_dir),
-    ('scrapbooks',       os.path.join(DATA_DIR, 'scrapbooks'),          storage.scrapbook_dir),
     ('uploads/handouts', os.path.join(DATA_DIR, 'uploads', 'handouts'), storage.handouts_dir),
 ]
 FILE_ITEMS = [
     ('loot_ledger.json',        os.path.join(DATA_DIR, 'loot_ledger.json'),        storage.loot_ledger_file),
     ('campaign_stats.json',     os.path.join(DATA_DIR, 'campaign_stats.json'),     storage.campaign_stats_file),
-    ('session_highlights.json', os.path.join(DATA_DIR, 'session_highlights.json'), storage.session_highlights_file),
     ('pinned_generators.json',  os.path.join(DATA_DIR, 'pinned_generators.json'),  storage.pinned_generators_file),
     ('calendar.json',           os.path.join(DATA_DIR, 'calendar.json'),           storage.calendar_file),
     # story_threads.json currently lives at BASE_DIR (a known misplacement); fixed here.
