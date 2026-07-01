@@ -77,10 +77,10 @@
        the new card color", which is light-cream. */
     --text-on-cream:   #ede4cf;                /* primary on warm-dark card */
     --text-on-cream-2: #c8bd9e;                /* secondary on card */
-    --text-on-cream-3: #8e8369;                /* muted on card */
+    --text-on-cream-3: #a79d88;                /* muted on card */
     --text-on-dark:    #f0ead7;                /* primary on the page floor */
     --text-on-dark-2:  #c9bfa3;                /* secondary on page */
-    --text-on-dark-3:  #8e8369;                /* muted on page */
+    --text-on-dark-3:  #a79d88;                /* muted on page */
 
     --border-card:    rgba(201, 163, 78, 0.14);  /* warm gilt-tinted hairline */
     --border-rule:    rgba(201, 163, 78, 0.28);  /* slightly stronger section divider */
@@ -2409,10 +2409,10 @@ button[onclick^="rollInitiative"],
     --border-strong: rgba(255, 255, 255, 0.12) !important;
     --text-on-cream:   #e8e6df !important;     /* primary text on cards */
     --text-on-cream-2: #b8b4a6 !important;
-    --text-on-cream-3: #807c70 !important;
+    --text-on-cream-3: #a79d88 !important;
     --text-on-dark:    #ebe9df !important;
     --text-on-dark-2:  #b8b4a6 !important;
-    --text-on-dark-3:  #807c70 !important;
+    --text-on-dark-3:  #a79d88 !important;
 }
 body { background: var(--bg-page) !important; }
 
@@ -4495,10 +4495,10 @@ body.system-cosmere {
     --bg-input:  #0e141c;
     --text-on-dark:    #e7eef6;
     --text-on-dark-2:  #9fb2c6;
-    --text-on-dark-3:  #6f8298;
+    --text-on-dark-3:  #96a9bf;
     --text-on-cream:   #e7eef6;
     --text-on-cream-2: #b9c6d6;
-    --text-on-cream-3: #8295a8;
+    --text-on-cream-3: #9fb1c4;
     /* An elegant inscriptional serif for headings — distinct from PF2e's Cinzel. */
     --font-display: 'Cormorant Garamond', 'Cinzel', Georgia, serif;
 }
@@ -4536,10 +4536,10 @@ body.system-cosmere.cosmere-mistborn {
     --bg-input:  #100f12;
     --text-on-dark:    #e9e7e2;
     --text-on-dark-2:  #b3b2aa;
-    --text-on-dark-3:  #87867d;
+    --text-on-dark-3:  #a9a89e;
     --text-on-cream:   #e9e7e2;
     --text-on-cream-2: #b3b2aa;
-    --text-on-cream-3: #87867d;
+    --text-on-cream-3: #a9a89e;
     --font-display: 'Playfair Display', 'Cinzel', Georgia, serif;
 }
 
