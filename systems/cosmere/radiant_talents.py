@@ -26,6 +26,7 @@ import re
 
 from systems.cosmere import load_pack, SKILL_NAMES
 from systems.cosmere.radiant import SURGES, RADIANT_ORDERS
+from systems.cosmere.enrich import enrich
 
 
 def _uuid_id(uuid):
@@ -146,7 +147,11 @@ def _effect(value) -> str:
     if not m:
         # No flavour <em>: drop the "Radiant Orders: ... Activation: <glyph>" lead-in.
         txt = re.sub(r'^\s*(Radiant Orders:.*?)?Activation:\s*[^A-Za-z]*', '', txt).strip()
-    return _first_sentence(txt)
+    # Clean any Foundry enrichers that survive into the flavour sentence
+    # ([[lookup @actor.name]], @UUID links, [[damage ...]]) so talent summaries
+    # on the sheet/builder read as prose. (Today's content is already clean here;
+    # this makes it a guaranteed invariant -- see tests/test_cosmere_enrich.py.)
+    return enrich(_first_sentence(txt))
 
 
 def _prereq_from_node(node) -> dict:

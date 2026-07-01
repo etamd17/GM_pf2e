@@ -11,7 +11,8 @@ import tempfile
 os.environ.setdefault('DATA_DIR', tempfile.mkdtemp())
 os.environ.setdefault('GM_PASSWORD', '')
 
-from systems.cosmere.actor import CosmereActor, _enrich
+from systems.cosmere.actor import CosmereActor
+from systems.cosmere.enrich import enrich as _enrich
 
 
 def test_damage_enricher_drops_average_keeps_formula_and_type():
@@ -57,3 +58,31 @@ def test_actor_action_descriptions_are_enriched_at_the_source():
     joined = ' '.join(by.values())
     for token in ('[[', ']]', '@UUID', 'lookup @actor', 'average'):
         assert token not in joined, ('residual enricher markup: %s' % token)
+
+
+def test_player_talent_summaries_are_enricher_clean():
+    """Every Radiant talent / power effect summary shown on the player sheet +
+    builder must be free of raw Foundry enrichers (radiant_talents._effect runs
+    them through enrich())."""
+    import re
+    import systems.cosmere.radiant_talents as rt
+
+    def _walk(d):
+        if isinstance(d, dict):
+            if isinstance(d.get('effect'), str):
+                yield d['effect']
+            for v in d.values():
+                yield from _walk(v)
+        elif isinstance(d, list):
+            for v in d:
+                yield from _walk(v)
+
+    bad = re.compile(r'\[\[|@UUID|@Compendium|lookup @actor|average\]\]|skill=\w+\s+dc=')
+    offenders, total = [], 0
+    for fn in ('_build_surge_talents', '_build_order_talents', '_build_surge_powers'):
+        for eff in _walk(getattr(rt, fn)()):
+            total += 1
+            if bad.search(eff):
+                offenders.append(eff[:120])
+    assert total > 0, 'no talent summaries were scanned'
+    assert not offenders, ('talent summaries still carry enricher markup:\n' + '\n'.join(offenders[:8]))
