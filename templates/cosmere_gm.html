@@ -111,30 +111,15 @@ function cosWorld(w){
     </a>
     {% endif %}
     <div class="tile" style="cursor:default;">
-        <div class="tile__glyph">&#9788;</div>
-        <h2 class="tile__title">Rest &amp; Recovery</h2>
-        <p class="tile__desc">Resolve a rest for the whole party &mdash; long rest restores health &amp; focus and reduces Exhausted; short rest heals a recovery die and refills focus.</p>
-        <div style="display:flex; gap:var(--sp-2); margin-top:var(--sp-3); flex-wrap:wrap;">
-            <button type="button" class="btn btn--sm" onclick="cosmereRest('short')">Short Rest</button>
-            <button type="button" class="btn btn--sm" onclick="cosmereRest('long')">Long Rest</button>
-            <button type="button" class="btn btn--sm" onclick="cosMarkReady()" title="Flag the whole party ready to advance — the badge links each player to the builder level-up">Mark ready to level</button>
+        <div class="tile__glyph">&#9733;</div>
+        <h2 class="tile__title">Advancement</h2>
+        <p class="tile__desc">Flag the whole party ready to advance &mdash; each player&rsquo;s badge then links to the builder level-up.</p>
+        <div style="margin-top:var(--sp-3);">
+            <button type="button" class="btn btn--sm" onclick="cosMarkReady()">Mark party ready to level</button>
         </div>
     </div>
 </div>
 <script>
-function cosmereRest(mode) {
-    var label = mode === 'long' ? 'Long' : 'Short';
-    if (!confirm(label + ' rest for the whole party? This updates every Cosmere PC’s sheet.')) return;
-    var fd = new FormData(); fd.append('mode', mode);
-    fetch('/api/cosmere/rest', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: fd})
-        .then(function(r){ return r.json(); })
-        .then(function(d){
-            var n = (d && d.rested) ? d.rested.length : 0;
-            if (window.pf2eToast) window.pf2eToast(label + ' rest applied to ' + n + ' character(s).', 'success');
-            else alert(label + ' rest applied to ' + n + ' character(s).');
-        })
-        .catch(function(){ if (window.pf2eToast) window.pf2eToast('Rest failed', 'danger'); });
-}
 function cosMarkReady(){
     if(!confirm('Mark the whole party ready to level up?')) return;
     fetch('/api/gm/mark_ready', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ready:1})})
