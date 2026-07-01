@@ -15092,11 +15092,19 @@ def import_pathbuilder():
     to update abilities/feats/spells/proficiencies from Pathbuilder while preserving
     HP, conditions, notes, custom weapons, pets, shield stats, expended slots, and session data."""
     try:
-        # Accept either file upload or JSON body
+        # Accept a Pathbuilder JSON export (file or body) OR an official Paizo
+        # fillable PF2e character-sheet PDF, which we convert to a Pathbuilder
+        # build (Character then re-derives the sheet's exact stats).
         if 'file' in request.files:
             file = request.files['file']
-            raw = file.read().decode('utf-8')
-            pc_json = json.loads(raw)
+            raw_bytes = file.read()
+            fname = (getattr(file, 'filename', '') or '').lower()
+            if fname.endswith('.pdf') or raw_bytes[:5] == b'%PDF-':
+                import pf2e_pdf_import
+                _pdf_build, _pdf_play = pf2e_pdf_import.build_from_pdf(raw_bytes, character_factory=Character)
+                pc_json = {"success": True, "build": _pdf_build}
+            else:
+                pc_json = json.loads(raw_bytes.decode('utf-8'))
         elif request.json:
             pc_json = request.json
         else:
