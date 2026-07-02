@@ -5262,8 +5262,16 @@ def _save_campaign_config(updates):
         full = {}
         if os.path.exists(CAMPAIGN_FILE):
             data, _err = safe_load_json_file(CAMPAIGN_FILE)
-            if isinstance(data, dict):
-                full = data
+            if not isinstance(data, dict):
+                # The doc exists but can't be parsed (e.g. truncated by a
+                # SIGKILL mid-write on redeploy). Rebuilding it from {} would
+                # wipe id/system/members -- the bug that silently turned a
+                # Cosmere campaign into PF2e. Drop this config write; the doc's
+                # remaining bytes stay recoverable and identity is never lost.
+                print(f"[CAMPAIGN] REFUSING config write: {CAMPAIGN_FILE} exists "
+                      f"but failed to parse ({_err}); doc left untouched")
+                return _load_campaign_config()
+            full = data
         for k in CAMPAIGN_DEFAULT:
             if k in updates and updates[k] is not None:
                 full[k] = updates[k]
@@ -5273,8 +5281,10 @@ def _save_campaign_config(updates):
             except (TypeError, ValueError):
                 full['session_number'] = 1
         try:
-            with open(CAMPAIGN_FILE, 'w', encoding='utf-8') as fp:
-                json.dump(full, fp, indent=2, ensure_ascii=False)
+            # Atomic replace: a redeploy SIGKILL mid-write must never leave a
+            # truncated campaign.json (which is what fed the parse-failure
+            # branch above in the first place).
+            _atomic_write_json(CAMPAIGN_FILE, full, indent=2)
         except OSError as e:
             print(f"[CAMPAIGN] Failed to write {CAMPAIGN_FILE}: {e}")
     return _load_campaign_config()
@@ -16182,9 +16192,15 @@ def api_campaign_stats():
 
 @app.route('/sw.js')
 def service_worker():
-    """Serve the service worker from the root path (scope requirement)."""
-    return send_from_directory(os.path.join(BASE_DIR, 'static'), 'sw.js',
+    """Serve the service worker from the root path (scope requirement).
+
+    no-cache so browsers re-check this script on every navigation instead of
+    up to 24h later -- a service-worker fix (like the v2 cache purge) must
+    reach stuck clients on their next page load, not tomorrow."""
+    resp = send_from_directory(os.path.join(BASE_DIR, 'static'), 'sw.js',
                                mimetype='application/javascript')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
 
 
 @app.route('/manifest.json')
