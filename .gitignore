@@ -63,3 +63,6 @@ session_notes/
 
 # Persisted Flask session secret (stable across restarts; never commit)
 .secret_key
+
+# Brainstorming visual-companion session artifacts
+.superpowers/
