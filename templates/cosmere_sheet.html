@@ -279,9 +279,41 @@
   .cs-result.flare-comp, #cs-toast.flare-comp { animation:flarecomp 1.1s ease-out; }
   @keyframes flareopp { 0%{ text-shadow:none; } 25%{ text-shadow:0 0 16px var(--order-accent,#5fa8e0); } 100%{ text-shadow:none; } }
   @keyframes flarecomp { 0%,100%{ filter:none; } 30%{ filter:grayscale(.55) brightness(.72); } }
+
+  /* ===== Stormlight motion: sphere change-pulses + spend-motes ===== */
+  .orb-w { position:relative; }
+  .orb.pulse-up { animation:orbPulseUp .8s ease-out; }
+  .orb.pulse-down { animation:orbPulseDown .8s ease-out; }
+  #orb-health.pulse-down { animation:orbWound .8s ease-out; }
+  @keyframes orbPulseUp { 0%,100%{ } 25%{ box-shadow:0 0 26px var(--orb-glow), 0 0 60px var(--orb-glow); filter:brightness(1.28); } }
+  @keyframes orbPulseDown { 0%,100%{ } 30%{ filter:brightness(.68) saturate(.7); } }
+  @keyframes orbWound { 0%,100%{ } 25%{ box-shadow:0 0 22px rgba(220,60,60,.6); filter:brightness(.8) saturate(1.3) hue-rotate(-18deg); } }
+
+  .orb-mote { position:absolute; left:50%; top:42%; width:4px; height:4px; border-radius:50%;
+    opacity:0; pointer-events:none; z-index:5; }
+  .orb-mote.focus { background:#fff3d6; box-shadow:0 0 7px 2px rgba(242,200,121,.85); }
+  .orb-mote.inv { background:#f4fbff; box-shadow:0 0 7px 2px var(--order-accent,#7ec7ff); }
+  .orb-mote.rise { animation:orbMoteRise 1.2s ease-out forwards; }
+  .orb-mote.fall { animation:orbMoteFall 1.0s ease-in forwards; }
+  @keyframes orbMoteRise {
+    0%{ opacity:0; transform:translate(-50%,-50%); } 12%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%) translate(var(--dx,0px),-64px) scale(.4); } }
+  @keyframes orbMoteFall {
+    0%{ opacity:0; transform:translate(-50%,-50%) translate(var(--dx,0px),-64px) scale(.5); } 15%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%); } }
+
+  /* Order crest breathes on the highstorm cadence (Radiant header glyph). */
+  .cs-crest { animation:crestBreathe 10s ease-in-out infinite; }
+  @keyframes crestBreathe {
+    0%,100%{ filter:drop-shadow(0 0 2px transparent); opacity:.92; }
+    50%{ filter:drop-shadow(0 0 9px var(--order-accent,#5fa8e0)); opacity:1; } }
+
   @media (prefers-reduced-motion: reduce){
     .orb-fill, .orb-arc .prg { transition:none; }
     .orb.low .orb-fill { animation:none; }
+    .orb.pulse-up, .orb.pulse-down, #orb-health.pulse-down { animation:none; }
+    .orb-mote { display:none; }
+    .cs-crest { animation:none; }
     .cs-result.flare-opp, #cs-toast.flare-opp, .cs-result.flare-comp, #cs-toast.flare-comp { animation:none; }
     .cs-vbar { transition:none; }
   }
@@ -326,6 +358,7 @@
     /* spheres -> plain ringed circles with the value (gradients/arcs don't print well) */
     .orb { border: 1.5px solid #333 !important; }
     .orb-fill, .orb-spec, .orb-arc { display: none !important; }
+    .orb-mote { display:none; } .cs-crest { animation:none; filter:none; }
     /* keep sections + cards from splitting across pages */
     .cs-section-h, .orb-w, .cs-ability, .cs-card, .cs-facet, .cs-rad-plate { break-inside: avoid; }
     a { color: #111 !important; text-decoration: none !important; }
@@ -944,6 +977,33 @@
       post('uses '+name, total, parts.join(' · ')+' (dice only; add modifiers)');
     };
 
+    const _RM_SHEET = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+    const _prevOrb = {};
+    function _orbMotes(key, kind){
+      if(_RM_SHEET && _RM_SHEET.matches) return;
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const w = o.closest('.orb-w'); if(!w) return;
+      const cls = key === 'focus' ? 'focus' : 'inv';
+      for(let i = 0; i < 5; i++){
+        const m = document.createElement('div');
+        m.className = 'orb-mote ' + cls;
+        m.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
+        w.appendChild(m);
+        setTimeout(() => m.classList.add(kind), i * 60);
+        m.addEventListener('animationend', () => m.remove());
+        setTimeout(() => m.remove(), 2200 + i * 60);
+      }
+    }
+    function _orbFlourish(key, prev, val){
+      if(_RM_SHEET && _RM_SHEET.matches) return;
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const cls = val > prev ? 'pulse-up' : 'pulse-down';
+      o.classList.remove('pulse-up', 'pulse-down'); void o.offsetWidth;
+      o.classList.add(cls);
+      o.addEventListener('animationend', () => o.classList.remove(cls), { once:true });
+      if(val < prev && (key === 'focus' || key === 'investiture')) _orbMotes(key, 'rise');
+    }
+
     // Drive one sphere gauge: fill height (light from the bottom), rim arc,
     // value, and the dun (empty) / low (ember-pulse) states.
     const _ORBC = 2 * Math.PI * 46;   // arc circumference (r=46)
@@ -955,6 +1015,8 @@
       const num = document.getElementById('rv-' + key); if(num) num.textContent = val;
       o.classList.toggle('dun', val <= 0);
       o.classList.toggle('low', max > 0 && val > 0 && pct <= 0.25);
+      if(_prevOrb[key] !== undefined && _prevOrb[key] !== val) _orbFlourish(key, _prevOrb[key], val);
+      _prevOrb[key] = val;
     }
     window.condFoldToggle = function(){
       var box = document.getElementById('cos-conditions'),
@@ -1011,7 +1073,7 @@
       if(!Number.isFinite(amt) || amt < 1) amt = 1;
       cosAdjust(key, sign * amt);
     };
-    window.cosBreathe = function(){ cur.investiture=MAX.investiture; paint(); pending.investiture=cur.investiture; flush();
+    window.cosBreathe = function(){ cur.investiture=MAX.investiture; _orbMotes('investiture', 'fall'); paint(); pending.investiture=cur.investiture; flush();
       res('<span class="opp">Breathe Stormlight</span> — Investiture restored to '+MAX.investiture); };
 
     // --- Stormlight actions (Radiant) ---
