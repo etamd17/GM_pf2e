@@ -58,6 +58,10 @@
   .cs-chips.folded .cs-cond:not(.on) { display:none; }
   #cond-none { display:none; }
   .cs-chips.folded.none-active #cond-none { display:inline; }
+  /* WebKit renders the native disclosure triangle even with list-style:none,
+     doubling the summary's own arrow glyph -- suppress it (same treatment as
+     the workshop summary). */
+  .cs-buildnotes > summary::-webkit-details-marker { display:none; }
   .cs-chip { font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,.05);
              border:1px solid var(--border-card); }
   .cs-chip.df { color:var(--cs-accent); border-color:rgba(95,168,224,.4); }
@@ -421,7 +425,9 @@
   {% if pc and warnings %}
   <details class="cs-buildnotes" style="margin-bottom:1rem;">
     <summary style="cursor:pointer; padding:.4rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px; list-style:none;"><b>Build notes</b> ({{ warnings|length }}) <span style="opacity:.65;">&#9656; tap to review</span></summary>
-    <div style="padding:.5rem .8rem; color:#fbbf24; font-size:12.5px; border:1px solid rgba(245,158,11,.25); border-top:none; border-radius:0 0 8px 8px;">{{ warnings|join(' &middot; ') }}</div>
+    {# Literal U+00B7 in the separator — an entity inside the auto-escaped join
+       expression would double-escape and render as visible "&middot;" text. #}
+    <div style="padding:.5rem .8rem; color:#fbbf24; font-size:12.5px; border:1px solid rgba(245,158,11,.25); border-top:none; border-radius:0 0 8px 8px;">{{ warnings|join(' · ') }}</div>
   </details>
   {% endif %}
   {% if interactive %}
