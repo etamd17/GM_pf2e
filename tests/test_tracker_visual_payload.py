@@ -75,3 +75,46 @@ def test_sheet_save_mirrors_investiture_to_live_combatant(pc):
     assert r.get_json()['ok']
     me = next(x for x in app.ACTIVE_ENCOUNTER if x.name == 'Kaladin')
     assert me.tracker_block()['investiture_current'] == 0
+
+
+class _PF2ePC:
+    """Minimal PF2e PC stand-in carrying only what _get_tracker_state reads
+    directly (plus a class_name for the rune-watermark regression below)."""
+    def __init__(self, name, class_name):
+        self.instance_id = name + '-1'
+        self.name = name
+        self.is_pc = True
+        self.system = 'pf2e'
+        self.initiative = 15
+        self.level = 3
+        self.ac = 18
+        self.current_hp = 30
+        self.hp = 30
+        self.fort = 8
+        self.ref = 6
+        self.will = 7
+        self.perception = 9
+        self.conditions = {}
+        self.class_name = class_name
+
+
+@pytest.fixture
+def pf2e_pc(monkeypatch):
+    monkeypatch.setattr(app, '_persist_encounter_state', lambda *a, **k: None)
+    monkeypatch.setattr(app, '_broadcast_encounter_state', lambda *a, **k: None)
+    app.ACTIVE_ENCOUNTER[:] = [_PF2ePC('Go’el', 'Cleric')]
+    app.TURN_INDEX = 0
+    app._invalidate_tracker_cache()
+    yield
+    app.ACTIVE_ENCOUNTER[:] = []
+    app.TURN_INDEX = 0
+    app._invalidate_tracker_cache()
+
+
+def test_pf2e_pc_tracker_entry_carries_class_name(pf2e_pc):
+    """The tracker row template gates the class-rune portrait watermark on
+    c.class_name (templates/tracker.html classRuneId usage). If the server
+    payload never ships class_name, the watermark silently never renders."""
+    state = app._get_tracker_state()
+    entry = next(e for e in state['combatants'] if e['name'] == 'Go’el')
+    assert entry.get('class_name') == 'Cleric'
