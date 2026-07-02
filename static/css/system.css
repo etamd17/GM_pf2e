@@ -4737,6 +4737,7 @@ body.system-cosmere .trk .grid-wrap::after {
    State changes land instantly; information is never motion-only. */
 @media (prefers-reduced-motion: reduce) {
     .trk .grid-wrap::after,
+    body.system-cosmere .trk .grid-wrap::after,
     .trk .hero-flame.active svg,
     .trk .cos-sphere,
     .trk .combatant.trk-row-hit,
