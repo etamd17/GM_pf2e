@@ -6986,6 +6986,7 @@ def _get_tracker_state():
                 entry['focus_current'] = getattr(c, 'current_focus', 0)
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
                 entry['hero_points'] = int(getattr(c, 'hero_points', 0) or 0)
+                entry['class_name'] = getattr(c, 'class_name', '')
                 # Raw structured persistent-damage entries — the active panel
                 # uses this to render per-entry roll/remove buttons. The
                 # `persistent_damage` field above remains the joined string
@@ -7125,6 +7126,16 @@ def _cosmere_combatant(actor_id):
             _cb.CosmereBuild(pc.get('build') or {}, homebrew=_cosmere_homebrew_store()).to_actor_doc())
         actor.name = pc.get('name') or actor.name
         actor.restore_id = actor_id        # so the encounter autosave can rehydrate it
+        # Tracker visual identity: the order-glyph watermark + Investiture
+        # sphere need the PC's order and CURRENT investiture at add time —
+        # otherwise the sphere shows full until the player's next sheet save.
+        actor.radiant_order = str((pc.get('build') or {}).get('radiant_order') or '').lower()
+        _ps = pc.get('play_state') or {}
+        if 'investiture' in _ps:
+            try:
+                actor.current_investiture = max(0, int(_ps['investiture']))
+            except (TypeError, ValueError):
+                pass
         return actor
     return None
 
@@ -8105,6 +8116,9 @@ def _sync_cosmere_combatant_state(name, ps):
                 except (TypeError, ValueError): pass
             if 'injuries' in ps:
                 try: c.injuries = max(0, int(ps['injuries']))
+                except (TypeError, ValueError): pass
+            if 'investiture' in ps:
+                try: c.current_investiture = max(0, int(ps['investiture']))
                 except (TypeError, ValueError): pass
             if isinstance(ps.get('conditions'), dict):
                 c.conditions = {k: v for k, v in ps['conditions'].items() if v}

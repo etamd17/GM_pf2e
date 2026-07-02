@@ -261,6 +261,13 @@ class CosmereActor:
             'health': {'value': self.current_hp, 'max': self.health_max},
             'focus_max': self.focus_max,
             'investiture_max': self.investiture_max,
+            # Live Investiture + Radiant order for the tracker's sphere and
+            # order-glyph watermark. current defaults to max (a fresh
+            # combatant is fully Invested); order is set by _cosmere_combatant
+            # for PCs and stays '' for adversaries.
+            'investiture_current': int(getattr(self, 'current_investiture',
+                                               self.investiture_max) or 0),
+            'radiant_order': str(getattr(self, 'radiant_order', '') or ''),
             'attributes': dict(self.attributes),
             'injuries': int(getattr(self, 'injuries', 0) or 0),
             'speed_choice': getattr(self, 'speed_choice', 'slow'),

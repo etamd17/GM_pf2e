@@ -1330,6 +1330,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 {% block content %}
 
+{% include "_pf2e_class_glyphs.html" %}
+{% include "_cosmere_glyphs.html" %}
+
 {% if not is_gm %}
 <style>
     /* Player mode: hide GM-only controls.
@@ -2117,6 +2120,7 @@ function _renderNow() {
     renderSessionTimer();
     renderTurnTimer();
     syncMultiDamageTypes();
+    applyCombatFlourishes();
 }
 
 // The multi-target damage modal's type selector is static HTML; rebuild it to
@@ -2203,6 +2207,54 @@ function render() {
         _renderScheduled = false;
         _renderNow();
     });
+}
+
+// Class -> carved-rune sprite id (see _pf2e_class_glyphs.html). Key on the
+// first word lowercased so "Cleric (Warpriest)" and "Champion" both map.
+const CLASS_RUNES = { champion:'rn-champion', kineticist:'rn-kineticist',
+                      cleric:'rn-cleric', druid:'rn-druid' };
+function classRuneId(className) {
+    const key = String(className || '').trim().toLowerCase().split(/[\s(]/)[0];
+    return '#' + (CLASS_RUNES[key] || 'rn-adventurer');
+}
+
+// Hero Point flame cluster (PF2e PCs, cap 3). Purely display — award/spend
+// stays on party view / the inspector; the row just reflects state.
+function heroFlamesHtml(c) {
+    const pts = Math.max(0, Math.min(3, c.hero_points || 0));
+    if (!c.is_pc || c.system === 'cosmere') return '';
+    let out = '<div class="hero-flames" title="Hero Points: ' + pts + '">';
+    for (let i = 0; i < 3; i++) {
+        out += '<span class="hero-flame ' + (i < pts ? 'active' : 'spent') + '">' +
+               '<svg viewBox="0 0 14 16"><use href="#rn-flame"></use></svg></span>';
+    }
+    return out + '</div>';
+}
+
+// Investiture sphere (Cosmere PCs). Dim when empty.
+function investitureSphereHtml(c) {
+    if (!c.is_pc || c.system !== 'cosmere' || !c.cosmere) return '';
+    const cur = c.cosmere.investiture_current;
+    const mx = c.cosmere.investiture_max || 0;
+    const dim = (typeof cur === 'number' ? cur : mx) <= 0;
+    return '<div class="cos-sphere-wrap" title="Investiture: ' +
+           (typeof cur === 'number' ? cur : mx) + ' / ' + mx + '">' +
+           '<div class="cos-sphere' + (dim ? ' dim' : '') + '"></div></div>';
+}
+
+// Action-COST pip cluster from a cost string ('1','2','3','r','f', or the
+// glyph forms). Returns '' for unknown so rows never show a wrong cost.
+function costPips(cost) {
+    const s = String(cost == null ? '' : cost).trim().toLowerCase();
+    if (s === 'r' || s === 'reaction' || s.indexOf('⟳') >= 0)
+        return '<span class="action-pips"><span class="action-pip reaction">⟳</span></span>';
+    if (s === 'f' || s === 'free' || s.indexOf('◈') >= 0 || s.indexOf('◇') >= 0)
+        return '<span class="action-pips"><span class="action-pip free"></span></span>';
+    const n = (s.match(/◆/g) || []).length || parseInt(s, 10);
+    if (!(n >= 1 && n <= 3)) return '';
+    let out = '<span class="action-pips">';
+    for (let i = 0; i < n; i++) out += '<span class="action-pip"></span>';
+    return out + '</span>';
 }
 
 /* PCs and monsters get different HP-gauge thresholds. A PC at 50% is still
@@ -2451,7 +2503,13 @@ function renderInitList() {
                        onblur="updateInit('${c.instance_id}',this.value)">
             </div>
             <div class="c-name">
-                <div class="port ${portCls}">${initials(c.name)}</div>
+                <div class="port ${portCls}">${
+                    (c.is_pc && c.system !== 'cosmere' && c.class_name)
+                        ? `<svg class="port-glyph" viewBox="0 0 24 24"><use href="${classRuneId(c.class_name)}"></use></svg>`
+                    : (c.is_pc && c.system === 'cosmere' && c.cosmere && c.cosmere.radiant_order)
+                        ? `<svg class="port-glyph" viewBox="0 0 24 24"><use href="#cg-order-${c.cosmere.radiant_order}"></use></svg>`
+                    : ''
+                }<span class="port-init">${initials(c.name)}</span></div>
                 <div class="nm-wrap">
                     <button class="nm" onclick="inspectCombatant('${c.instance_id}')" title="Preview this combatant in the inspector">${c.name}${c.elite_weak === 1 ? ' (E)' : ''}${c.elite_weak === -1 ? ' (W)' : ''}</button>
                     <div class="nm-sub">${subText}</div>
@@ -2459,6 +2517,7 @@ function renderInitList() {
                     ${(c.system === 'cosmere' && c.cosmere && COSMERE_INIT_MODE === 'phases') ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
                     ${(!c.is_pc && !c.is_hazard && (isActive || (c.epithet && c.epithet.trim()))) ? `<input class="epithet-in" type="text" data-id="${c.instance_id}" value="${escapeHtml(c.epithet || '')}" placeholder="epithet…" maxlength="80" title="Boss-reveal title shown on the cinematic name card (e.g. The Caged Wrath). Set one, then Reveal or Announce." onkeydown="if(event.key==='Enter'){this.blur()}" onblur="setEpithet('${c.instance_id}', this.value)" onclick="event.stopPropagation()">` : ''}
                 </div>
+                ${heroFlamesHtml(c)}${investitureSphereHtml(c)}
             </div>
             <div class="c-ac" title="${(c.system === 'cosmere' && c.cosmere) ? 'Physical Defense' : 'Armor Class'}">${(c.system === 'cosmere' && c.cosmere) ? c.cosmere.defenses.phy : c.ac}</div>
             <div class="c-hp">
@@ -2466,7 +2525,7 @@ function renderInitList() {
                     <span class="cur ${hpTextClass(hpPct, c.is_pc)}">${c.current_hp}<span class="max">/${c.max_hp}</span></span>
                     <span class="pct" style="color:${hpPctColor(hpPct, c.is_pc)};">${hpPct}%</span>
                 </div>
-                <div class="c-hp-bar"><div class="c-hp-fill ${hpBarClass(hpPct, c.is_pc)}" style="width:${hpPct}%"></div></div>
+                <div class="c-hp-bar"><div class="c-hp-ghost" style="width:0"></div><div class="c-hp-fill ${hpBarClass(hpPct, c.is_pc)}" style="width:${hpPct}%"></div></div>
             </div>
             <div class="c-cond">
                 ${condsHtml}
@@ -2921,7 +2980,9 @@ function renderActivePanel() {
             html += `<div class="abl-row">
                 <div class="abl-nm">${sc.name || 'Spellcaster'}${subtitle ? ` <span style="font-size:10px;font-weight:400;color:var(--t-t3);letter-spacing:.4px;">— ${subtitle}</span>` : ''}</div>`;
             (sc.levels || []).forEach(lvl => {
-                const spells = (lvl.spells || []).map(s => s.name).filter(Boolean);
+                const spells = (lvl.spells || [])
+                    .filter(s => s.name)
+                    .map(s => s.name + (costPips(s.actions) ? ' ' + costPips(s.actions) : ''));
                 if (!spells.length && !lvl.slots) return;
                 const slotTag = (lvl.slots > 0 && lvl.level > 0)
                     ? `<span style="color:var(--t-gold);font-size:10px;font-weight:400;letter-spacing:.4px;">[${lvl.slots} slot${lvl.slots===1?'':'s'}]</span> `
@@ -4314,6 +4375,123 @@ function saveTactics(instanceId) {
 }
 
 
+/* ── Combat flourishes ─────────────────────────────────────────────────
+   renderInitList() rebuilds rows wholesale (innerHTML), so CSS transitions
+   can't observe changes. Instead: keep a vitals snapshot per instance_id,
+   diff it against STATE after every render, and animate the deltas onto
+   the freshly-built nodes. First render only seeds the snapshot (no
+   flourish storm on page load); combatants added mid-fight seed silently
+   the same way. Reduced-motion users get none of it. */
+const _REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+let _prevVitals = null;   // Map<instance_id, {hp, max, conds:Set, hero, inv}>
+
+function _vitalsOf(c) {
+    return {
+        hp: c.current_hp, max: c.max_hp,
+        conds: new Set(Object.entries(c.conditions || {})
+            .filter(([, v]) => v && v !== 0 && v !== false).map(([k]) => k)),
+        hero: (typeof c.hero_points === 'number') ? c.hero_points : null,
+        inv: (c.cosmere && typeof c.cosmere.investiture_current === 'number')
+            ? c.cosmere.investiture_current : null,
+    };
+}
+
+/* Burst up to n particles (spark|mote) from el. Nodes remove themselves. */
+function spawnParticles(el, className, n) {
+    if (!el || (_REDUCED_MOTION && _REDUCED_MOTION.matches)) return;
+    const count = Math.min(6, n || 5);
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = className;
+        p.style.setProperty('--dx', (Math.random() * 28 - 14).toFixed(1) + 'px');
+        el.appendChild(p);
+        setTimeout(() => p.classList.add('rise'), i * 55);
+        p.addEventListener('animationend', () => p.remove());
+        setTimeout(() => p.remove(), 2400);   // backstop if animationend never fires
+    }
+}
+
+function _popDamage(row, delta) {
+    if (_REDUCED_MOTION && _REDUCED_MOTION.matches) return;
+    const cell = row.querySelector('.c-hp');
+    if (!cell) return;
+    const pop = document.createElement('div');
+    pop.className = 'trk-dmgpop' + (delta > 0 ? ' heal' : '');
+    pop.textContent = (delta > 0 ? '+' : '') + delta;
+    cell.appendChild(pop);
+    void pop.offsetWidth;
+    pop.classList.add('pop');
+    pop.addEventListener('animationend', () => pop.remove());
+    setTimeout(() => pop.remove(), 2400);
+}
+
+function _ghostDrain(row, oldPct, newPct) {
+    if (_REDUCED_MOTION && _REDUCED_MOTION.matches) return;
+    const ghost = row.querySelector('.c-hp-ghost');
+    if (!ghost) return;
+    ghost.style.transition = 'none';
+    ghost.style.width = oldPct + '%';
+    void ghost.offsetWidth;
+    ghost.style.transition = '';
+    setTimeout(() => { ghost.style.width = newPct + '%'; }, 120);
+}
+
+function applyCombatFlourishes() {
+    const cs = (STATE && STATE.combatants) || [];
+    const next = new Map();
+    cs.forEach(c => next.set(c.instance_id, _vitalsOf(c)));
+    const prev = _prevVitals;
+    _prevVitals = next;
+    if (!prev) return;                         // first render: seed only
+    if (_REDUCED_MOTION && _REDUCED_MOTION.matches) return;
+
+    cs.forEach(c => {
+        const was = prev.get(c.instance_id);
+        if (!was) return;                      // newly added: seed silently
+        const now = next.get(c.instance_id);
+        const row = document.querySelector('.combatant[data-id="' + c.instance_id + '"]');
+        if (!row) return;
+
+        // HP delta — skip when max changed too (elite/weak adjustment, not a hit).
+        if (typeof was.hp === 'number' && typeof now.hp === 'number'
+            && now.hp !== was.hp && was.max === now.max) {
+            const delta = now.hp - was.hp;
+            const oldPct = was.max > 0 ? Math.round(was.hp / was.max * 100) : 0;
+            const newPct = now.max > 0 ? Math.round(now.hp / now.max * 100) : 0;
+            _popDamage(row, delta);
+            if (delta < 0) {
+                _ghostDrain(row, oldPct, newPct);
+                row.classList.remove('trk-row-hit');
+                void row.offsetWidth;
+                row.classList.add('trk-row-hit');
+                row.addEventListener('animationend',
+                    () => row.classList.remove('trk-row-hit'), { once: true });
+            }
+        }
+
+        // New conditions pulse in (only chips that weren't there before).
+        now.conds.forEach(k => {
+            if (was.conds.has(k)) return;
+            const chip = row.querySelector('.cp[data-cond-name="' + k.replace(/_/g, '-') + '"]');
+            if (chip) chip.classList.add('trk-cond-in');
+        });
+
+        // Hero Point spent: sparks from the flame that just went out.
+        if (was.hero !== null && now.hero !== null && now.hero < was.hero) {
+            const flames = row.querySelectorAll('.hero-flame');
+            const snuffed = flames[Math.max(0, Math.min(flames.length - 1, now.hero))];
+            spawnParticles(snuffed, 'spark', 5);
+        }
+
+        // Investiture spent: light motes off the sphere.
+        if (was.inv !== null && now.inv !== null && now.inv < was.inv) {
+            spawnParticles(row.querySelector('.cos-sphere-wrap'), 'mote', 5);
+        }
+    });
+}
+window.__trkFlourishReady = true;
+
+
 /* ═══════════════════ SSE + TIMER INIT ═══════════════════ */
 
 let evtSource = null;
@@ -4371,6 +4549,7 @@ function connectSSE() {
                 if (typeof src.max_actions === 'number')  dst.max_actions  = src.max_actions;
                 if (typeof src.epithet === 'string')      dst.epithet      = src.epithet;
                 if (typeof src.visible_to_players === 'boolean') dst.visible_to_players = src.visible_to_players;
+                if (src.cosmere && typeof src.cosmere === 'object') dst.cosmere = src.cosmere;
             });
             STATE.round = sse.round ?? STATE.round;
             STATE.turn_index = sse.turn_index ?? STATE.turn_index;
