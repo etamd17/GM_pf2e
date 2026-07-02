@@ -2120,6 +2120,7 @@ function _renderNow() {
     renderSessionTimer();
     renderTurnTimer();
     syncMultiDamageTypes();
+    applyCombatFlourishes();
 }
 
 // The multi-target damage modal's type selector is static HTML; rebuild it to
@@ -4370,6 +4371,123 @@ function saveTactics(instanceId) {
         if (c) c.tactics = text;
     }, 600);
 }
+
+
+/* ── Combat flourishes ─────────────────────────────────────────────────
+   renderInitList() rebuilds rows wholesale (innerHTML), so CSS transitions
+   can't observe changes. Instead: keep a vitals snapshot per instance_id,
+   diff it against STATE after every render, and animate the deltas onto
+   the freshly-built nodes. First render only seeds the snapshot (no
+   flourish storm on page load); combatants added mid-fight seed silently
+   the same way. Reduced-motion users get none of it. */
+const _REDUCED_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+let _prevVitals = null;   // Map<instance_id, {hp, max, conds:Set, hero, inv}>
+
+function _vitalsOf(c) {
+    return {
+        hp: c.current_hp, max: c.max_hp,
+        conds: new Set(Object.entries(c.conditions || {})
+            .filter(([, v]) => v && v !== 0 && v !== false).map(([k]) => k)),
+        hero: (typeof c.hero_points === 'number') ? c.hero_points : null,
+        inv: (c.cosmere && typeof c.cosmere.investiture_current === 'number')
+            ? c.cosmere.investiture_current : null,
+    };
+}
+
+/* Burst up to n particles (spark|mote) from el. Nodes remove themselves. */
+function spawnParticles(el, className, n) {
+    if (!el || (_REDUCED_MOTION && _REDUCED_MOTION.matches)) return;
+    const count = Math.min(6, n || 5);
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = className;
+        p.style.setProperty('--dx', (Math.random() * 28 - 14).toFixed(1) + 'px');
+        el.appendChild(p);
+        setTimeout(() => p.classList.add('rise'), i * 55);
+        p.addEventListener('animationend', () => p.remove());
+        setTimeout(() => p.remove(), 2400);   // backstop if animationend never fires
+    }
+}
+
+function _popDamage(row, delta) {
+    if (_REDUCED_MOTION && _REDUCED_MOTION.matches) return;
+    const cell = row.querySelector('.c-hp');
+    if (!cell) return;
+    const pop = document.createElement('div');
+    pop.className = 'trk-dmgpop' + (delta > 0 ? ' heal' : '');
+    pop.textContent = (delta > 0 ? '+' : '') + delta;
+    cell.appendChild(pop);
+    void pop.offsetWidth;
+    pop.classList.add('pop');
+    pop.addEventListener('animationend', () => pop.remove());
+    setTimeout(() => pop.remove(), 2400);
+}
+
+function _ghostDrain(row, oldPct, newPct) {
+    if (_REDUCED_MOTION && _REDUCED_MOTION.matches) return;
+    const ghost = row.querySelector('.c-hp-ghost');
+    if (!ghost) return;
+    ghost.style.transition = 'none';
+    ghost.style.width = oldPct + '%';
+    void ghost.offsetWidth;
+    ghost.style.transition = '';
+    setTimeout(() => { ghost.style.width = newPct + '%'; }, 120);
+}
+
+function applyCombatFlourishes() {
+    const cs = (STATE && STATE.combatants) || [];
+    const next = new Map();
+    cs.forEach(c => next.set(c.instance_id, _vitalsOf(c)));
+    const prev = _prevVitals;
+    _prevVitals = next;
+    if (!prev) return;                         // first render: seed only
+    if (_REDUCED_MOTION && _REDUCED_MOTION.matches) return;
+
+    cs.forEach(c => {
+        const was = prev.get(c.instance_id);
+        if (!was) return;                      // newly added: seed silently
+        const now = next.get(c.instance_id);
+        const row = document.querySelector('.combatant[data-id="' + c.instance_id + '"]');
+        if (!row) return;
+
+        // HP delta — skip when max changed too (elite/weak adjustment, not a hit).
+        if (typeof was.hp === 'number' && typeof now.hp === 'number'
+            && now.hp !== was.hp && was.max === now.max) {
+            const delta = now.hp - was.hp;
+            const oldPct = was.max > 0 ? Math.round(was.hp / was.max * 100) : 0;
+            const newPct = now.max > 0 ? Math.round(now.hp / now.max * 100) : 0;
+            _popDamage(row, delta);
+            if (delta < 0) {
+                _ghostDrain(row, oldPct, newPct);
+                row.classList.remove('trk-row-hit');
+                void row.offsetWidth;
+                row.classList.add('trk-row-hit');
+                row.addEventListener('animationend',
+                    () => row.classList.remove('trk-row-hit'), { once: true });
+            }
+        }
+
+        // New conditions pulse in (only chips that weren't there before).
+        now.conds.forEach(k => {
+            if (was.conds.has(k)) return;
+            const chip = row.querySelector('.cp[data-cond-name="' + k.replace(/_/g, '-') + '"]');
+            if (chip) chip.classList.add('trk-cond-in');
+        });
+
+        // Hero Point spent: sparks from the flame that just went out.
+        if (was.hero !== null && now.hero !== null && now.hero < was.hero) {
+            const flames = row.querySelectorAll('.hero-flame');
+            const snuffed = flames[Math.max(0, Math.min(flames.length - 1, now.hero))];
+            spawnParticles(snuffed, 'spark', 5);
+        }
+
+        // Investiture spent: light motes off the sphere.
+        if (was.inv !== null && now.inv !== null && now.inv < was.inv) {
+            spawnParticles(row.querySelector('.cos-sphere-wrap'), 'mote', 5);
+        }
+    });
+}
+window.__trkFlourishReady = true;
 
 
 /* ═══════════════════ SSE + TIMER INIT ═══════════════════ */
