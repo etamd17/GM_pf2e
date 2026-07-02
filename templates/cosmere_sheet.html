@@ -52,6 +52,16 @@
   .cs-skill .mod { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--cs-accent-2); }
   .cs-skill .rk { font-size:9px; color:var(--cs-accent); }
   .cs-chips { display:flex; gap:.35rem; flex-wrap:wrap; }
+  /* Folded conditions: show only ACTIVE chips; the full picker expands via
+     the edit toggle. Purely display -- chip DOM and cosCond() are unchanged,
+     so GM-pushed condition updates keep painting. */
+  .cs-chips.folded .cs-cond:not(.on) { display:none; }
+  #cond-none { display:none; }
+  .cs-chips.folded.none-active #cond-none { display:inline; }
+  /* WebKit renders the native disclosure triangle even with list-style:none,
+     doubling the summary's own arrow glyph -- suppress it (same treatment as
+     the workshop summary). */
+  .cs-buildnotes > summary::-webkit-details-marker { display:none; }
   .cs-chip { font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,.05);
              border:1px solid var(--border-card); }
   .cs-chip.df { color:var(--cs-accent); border-color:rgba(95,168,224,.4); }
@@ -149,6 +159,7 @@
   .goal-add:hover { opacity:1; }
   .cs-goals { display:flex; flex-direction:column; gap:.4rem; }
   .goal-empty { font-size:11.5px; color:var(--text-on-dark-3); font-style:italic; }
+  .cs-goals-wrap.empty { margin-bottom:.4rem; }
   .goal-row { border:1px solid rgba(255,255,255,.10); border-radius:8px; padding:.5rem .65rem;
     background:rgba(255,255,255,.025); }
   .goal-row.done { border-color:var(--order-accent,var(--accent)); background:rgba(126,199,255,.06); }
@@ -257,7 +268,11 @@
   .cs-vbar { position:sticky; top:6px; z-index:40; display:flex; align-items:center; gap:.85rem; flex-wrap:wrap;
     margin:0 0 1rem; padding:.45rem .85rem; border-radius:12px;
     background:rgba(9,14,21,.93); border:1px solid var(--border-card); box-shadow:0 6px 18px rgba(0,0,0,.45); }
-  .cs-vbar .vb-name { font-family:var(--font-display,serif); color:var(--order-accent,var(--accent)); font-weight:700; font-size:14px; margin-right:auto; }
+  /* Scroll-reveal: the bar duplicates the header + spheres at rest, so JS
+     gates it to appear only once the sphere bank leaves the viewport. With
+     no IntersectionObserver (or JS dead) it stays always-visible as before. */
+  .cs-vbar { transition:opacity .25s ease, transform .25s ease; }
+  .cs-vbar.gated { opacity:0; transform:translateY(-8px); pointer-events:none; }
   .cs-vb { display:inline-flex; align-items:center; gap:.32rem; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-on-dark-2); }
   .cs-vb .d { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .cs-vb b { font-weight:700; color:var(--text-on-dark); }
@@ -268,10 +283,43 @@
   .cs-result.flare-comp, #cs-toast.flare-comp { animation:flarecomp 1.1s ease-out; }
   @keyframes flareopp { 0%{ text-shadow:none; } 25%{ text-shadow:0 0 16px var(--order-accent,#5fa8e0); } 100%{ text-shadow:none; } }
   @keyframes flarecomp { 0%,100%{ filter:none; } 30%{ filter:grayscale(.55) brightness(.72); } }
+
+  /* ===== Stormlight motion: sphere change-pulses + spend-motes ===== */
+  .orb-w { position:relative; }
+  .orb.pulse-up { animation:orbPulseUp .8s ease-out; }
+  .orb.pulse-down { animation:orbPulseDown .8s ease-out; }
+  #orb-health.pulse-down { animation:orbWound .8s ease-out; }
+  @keyframes orbPulseUp { 0%,100%{ } 25%{ box-shadow:0 0 26px var(--orb-glow), 0 0 60px var(--orb-glow); filter:brightness(1.28); } }
+  @keyframes orbPulseDown { 0%,100%{ } 30%{ filter:brightness(.68) saturate(.7); } }
+  @keyframes orbWound { 0%,100%{ } 25%{ box-shadow:0 0 22px rgba(220,60,60,.6); filter:brightness(.8) saturate(1.3) hue-rotate(-18deg); } }
+
+  .orb-mote { position:absolute; left:50%; top:42%; width:4px; height:4px; border-radius:50%;
+    opacity:0; pointer-events:none; z-index:5; }
+  .orb-mote.focus { background:#fff3d6; box-shadow:0 0 7px 2px rgba(242,200,121,.85); }
+  .orb-mote.inv { background:#f4fbff; box-shadow:0 0 7px 2px var(--order-accent,#7ec7ff); }
+  .orb-mote.rise { animation:orbMoteRise 1.2s ease-out forwards; }
+  .orb-mote.fall { animation:orbMoteFall 1.0s ease-in forwards; }
+  @keyframes orbMoteRise {
+    0%{ opacity:0; transform:translate(-50%,-50%); } 12%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%) translate(var(--dx,0px),-64px) scale(.4); } }
+  @keyframes orbMoteFall {
+    0%{ opacity:0; transform:translate(-50%,-50%) translate(var(--dx,0px),-64px) scale(.5); } 15%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%); } }
+
+  /* Order crest breathes on the highstorm cadence (Radiant header glyph). */
+  .cs-crest { animation:crestBreathe 10s ease-in-out infinite; }
+  @keyframes crestBreathe {
+    0%,100%{ filter:drop-shadow(0 0 2px transparent); opacity:.92; }
+    50%{ filter:drop-shadow(0 0 9px var(--order-accent,#5fa8e0)); opacity:1; } }
+
   @media (prefers-reduced-motion: reduce){
     .orb-fill, .orb-arc .prg { transition:none; }
     .orb.low .orb-fill { animation:none; }
+    .orb.pulse-up, .orb.pulse-down, #orb-health.pulse-down { animation:none; }
+    .orb-mote { display:none; }
+    .cs-crest { animation:none; }
     .cs-result.flare-opp, #cs-toast.flare-opp, .cs-result.flare-comp, #cs-toast.flare-comp { animation:none; }
+    .cs-vbar { transition:none; }
   }
   /* Ambient highstorm: a faint, slow-breathing light leaking in from the right
      edge (the world's storm just out of frame). Very restrained; off when the
@@ -314,6 +362,7 @@
     /* spheres -> plain ringed circles with the value (gradients/arcs don't print well) */
     .orb { border: 1.5px solid #333 !important; }
     .orb-fill, .orb-spec, .orb-arc { display: none !important; }
+    .orb-mote { display:none; } .cs-crest { animation:none; filter:none; }
     /* keep sections + cards from splitting across pages */
     .cs-section-h, .orb-w, .cs-ability, .cs-card, .cs-facet, .cs-rad-plate { break-inside: avoid; }
     a { color: #111 !important; text-decoration: none !important; }
@@ -334,18 +383,25 @@
       <div>
       <div class="cs-name">{{ a.name }}</div>
       <div class="cs-sub">
+        {% if not pc %}
         <span class="cs-tag">{{ a.type|capitalize }}</span>
         {% if a.tier is not none %}<span class="cs-tag">Tier {{ a.tier }}</span>{% endif %}
         {% if a.role %}<span class="cs-tag">{{ a.role|capitalize }}</span>{% endif %}
         {% if a.size %}<span class="cs-tag">{{ a.size|capitalize }}</span>{% endif %}
-        {% if pc and build %}
+        {% else %}
+        {# PC tag diet: identity that matters at a glance. Type/role are implied
+           by the page; size only when rules-relevant (non-Medium); the system
+           tag is implied by the campaign. #}
+        {% if a.tier is not none %}<span class="cs-tag">Tier {{ a.tier }}</span>{% endif %}
+        {% if a.size and a.size|lower != 'medium' %}<span class="cs-tag">{{ a.size|capitalize }}</span>{% endif %}
+        {% if build %}
           {% if build.path %}<span class="cs-tag">{{ build.path|capitalize }}</span>{% endif %}
           {% if build.culture %}<span class="cs-tag">{{ build.culture }}</span>{% endif %}
           {% if build.ancestry %}<span class="cs-tag">{{ build.ancestry }}</span>{% endif %}
           {% if singer_form %}<span class="cs-tag" title="{{ singer_form.note }}">Form: {{ singer_form.name }}</span>{% endif %}
           {% if build.is_radiant %}<span class="cs-tag">Radiant</span>{% endif %}
         {% endif %}
-        <span class="cs-tag">Cosmere RPG</span>
+        {% endif %}
         {% if pc and ready_to_level %}<a class="cs-tag" href="{{ edit_url }}" style="background:rgba(110,231,168,.16); border-color:rgba(110,231,168,.5); color:#6ee7a8; text-decoration:none;">&#9650; Ready to level up</a>{% endif %}
       </div>
       </div>
@@ -367,14 +423,16 @@
     </div>
   </div>
   {% if pc and warnings %}
-  <div style="margin-bottom:1rem; padding:.55rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px;">
-    <b>Build notes:</b> {{ warnings|join(' · ') }}
-  </div>
+  <details class="cs-buildnotes" style="margin-bottom:1rem;">
+    <summary style="cursor:pointer; padding:.4rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px; list-style:none;"><b>Build notes</b> ({{ warnings|length }}) <span style="opacity:.65;">&#9656; tap to review</span></summary>
+    {# Literal U+00B7 in the separator — an entity inside the auto-escaped join
+       expression would double-escape and render as visible "&middot;" text. #}
+    <div style="padding:.5rem .8rem; color:#fbbf24; font-size:12.5px; border:1px solid rgba(245,158,11,.25); border-top:none; border-radius:0 0 8px 8px;">{{ warnings|join(' · ') }}</div>
+  </details>
   {% endif %}
   {% if interactive %}
   {# Sticky quick-vitals: manage the three resources mid-combat without scrolling. #}
   <div class="cs-vbar" id="cs-vbar">
-    <span class="vb-name">{{ a.name }}</span>
     <span class="cs-vb" title="Health"><span class="d" style="background:#5fe6b0;"></span>HP&nbsp;<b id="vb-health">{{ cur.health }}</b><span style="color:#5e7790;">/{{ a.health.max }}</span></span>
     {% if a.investiture_max %}<span class="cs-vb" title="Investiture"><span class="d" style="background:var(--order-accent,#7ec7ff);"></span>Inv&nbsp;<b id="vb-investiture">{{ cur.investiture }}</b><span style="color:#5e7790;">/{{ a.investiture_max }}</span></span>{% endif %}
     <span class="cs-vb" title="Focus"><span class="d" style="background:#f2c879;"></span>Foc&nbsp;<b id="vb-focus">{{ cur.focus }}</b><span style="color:#5e7790;">/{{ a.focus_max }}</span></span>
@@ -395,8 +453,11 @@
 
   {# --- Conditions (self-manage) --- #}
   <div style="margin-bottom:1rem;">
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions <span style="text-transform:none; letter-spacing:0;">(tap to toggle)</span></div>
-    <div class="cs-chips" id="cos-conditions">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions
+      <button type="button" id="cond-fold-btn" onclick="condFoldToggle()" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.05em; text-transform:none; padding:0 .2rem;">edit</button>
+    </div>
+    <div class="cs-chips folded" id="cos-conditions">
+      <span id="cond-none" style="font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No conditions</span>
       {% for code, info in conditions.items() %}
       <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" onclick='cosCond({{ code|tojson }})' title="{{ info }}">{{ code|capitalize }}</span>
       {% endfor %}
@@ -922,6 +983,33 @@
       post('uses '+name, total, parts.join(' · ')+' (dice only; add modifiers)');
     };
 
+    const _RM_SHEET = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+    const _prevOrb = {};
+    function _orbMotes(key, kind){
+      if(_RM_SHEET && _RM_SHEET.matches) return;
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const w = o.closest('.orb-w'); if(!w) return;
+      const cls = key === 'focus' ? 'focus' : 'inv';
+      for(let i = 0; i < 5; i++){
+        const m = document.createElement('div');
+        m.className = 'orb-mote ' + cls;
+        m.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
+        w.appendChild(m);
+        setTimeout(() => m.classList.add(kind), i * 60);
+        m.addEventListener('animationend', () => m.remove());
+        setTimeout(() => m.remove(), 2200 + i * 60);
+      }
+    }
+    function _orbFlourish(key, prev, val){
+      if(_RM_SHEET && _RM_SHEET.matches) return;
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const cls = val > prev ? 'pulse-up' : 'pulse-down';
+      o.classList.remove('pulse-up', 'pulse-down'); void o.offsetWidth;
+      o.classList.add(cls);
+      o.addEventListener('animationend', () => o.classList.remove(cls), { once:true });
+      if(val < prev && (key === 'focus' || key === 'investiture')) _orbMotes(key, 'rise');
+    }
+
     // Drive one sphere gauge: fill height (light from the bottom), rim arc,
     // value, and the dun (empty) / low (ember-pulse) states.
     const _ORBC = 2 * Math.PI * 46;   // arc circumference (r=46)
@@ -933,6 +1021,22 @@
       const num = document.getElementById('rv-' + key); if(num) num.textContent = val;
       o.classList.toggle('dun', val <= 0);
       o.classList.toggle('low', max > 0 && val > 0 && pct <= 0.25);
+      if(_prevOrb[key] !== undefined && _prevOrb[key] !== val) _orbFlourish(key, _prevOrb[key], val);
+      _prevOrb[key] = val;
+    }
+    window.condFoldToggle = function(){
+      var box = document.getElementById('cos-conditions'),
+          btn = document.getElementById('cond-fold-btn');
+      if(!box) return;
+      var folded = box.classList.toggle('folded');
+      if(btn) btn.textContent = folded ? 'edit' : 'done';
+      syncCondFold();
+    };
+    function syncCondFold(){
+      var box = document.getElementById('cos-conditions');
+      if(!box) return;
+      var any = !!box.querySelector('.cs-cond.on');
+      box.classList.toggle('none-active', !any);
     }
     function syncVbar(){
       const set = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
@@ -940,6 +1044,7 @@
       const c = cur.conditions || {}, act = Object.keys(c).filter(k => c[k]);
       const vc = document.getElementById('vb-cond');
       if(vc) vc.textContent = act.length ? (act.length + ' condition' + (act.length > 1 ? 's' : '')) : '';
+      syncCondFold();
     }
     function paint(){
       _orb('health', cur.health, MAX.health);
@@ -948,6 +1053,16 @@
       const ij = document.getElementById('rv-injuries'); if(ij) ij.textContent = cur.injuries;
       syncVbar();
     }
+    // Scroll-reveal for the vitals bar: hidden while the sphere bank is on
+    // screen (it would duplicate the spheres), revealed once scrolled past.
+    (function(){
+      var vbar = document.getElementById('cs-vbar'),
+          orbs = document.querySelector('.cs-orbs');
+      if(!vbar || !orbs || !('IntersectionObserver' in window)) return;
+      new IntersectionObserver(function(entries){
+        vbar.classList.toggle('gated', entries[0].isIntersecting);
+      }, { rootMargin: '-40px 0px 0px 0px' }).observe(orbs);
+    })();
     let saveT=null, pending={};
     function flush(){ const body=Object.assign({}, pending); pending={};
       fetch('/cosmere/pc/'+PID+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(()=>{}); }
@@ -964,7 +1079,7 @@
       if(!Number.isFinite(amt) || amt < 1) amt = 1;
       cosAdjust(key, sign * amt);
     };
-    window.cosBreathe = function(){ cur.investiture=MAX.investiture; paint(); pending.investiture=cur.investiture; flush();
+    window.cosBreathe = function(){ cur.investiture=MAX.investiture; _orbMotes('investiture', 'fall'); paint(); pending.investiture=cur.investiture; flush();
       res('<span class="opp">Breathe Stormlight</span> — Investiture restored to '+MAX.investiture); };
 
     // --- Stormlight actions (Radiant) ---
@@ -1263,7 +1378,9 @@
     function paintGoals(){
       const box = document.getElementById('cos-goals'); if(!box) return;
       const gs = cur.goals || [];
-      if(!gs.length){ box.innerHTML = '<div class="goal-empty">No goals yet. Add one to start working toward a reward.</div>'; return; }
+      const wrap = box.closest('.cs-goals-wrap');
+      if (wrap) wrap.classList.toggle('empty', !gs.length);
+      if(!gs.length){ box.innerHTML = ''; return; }
       box.innerHTML = gs.map(g => {
         const ms = g.milestones || [false,false,false];
         const boxes = ms.map((m,i) => '<span class="goal-ms' + (m?' on':'') + '" onclick="cosGoalMilestone(\'' + g.id + '\',' + i + ')" title="Milestone ' + (i+1) + '"></span>').join('');
