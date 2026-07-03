@@ -1326,7 +1326,12 @@
             background: var(--bg-raised);
             color: var(--gilt);
             box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            /* Class-rune watermark (sheet-port-glyph) sits BEHIND the monogram
+               text -- needs its own stacking context + clip so the rune never
+               spills past the badge's rounded-pill shape. */
+            overflow: hidden;
         }
+        .portrait-badge .badge-monogram { position: relative; z-index: 1; }
         .portrait-circle .font-header { color: var(--gilt) !important; }
 
         /* Spell Rank Borders */
@@ -2880,6 +2885,8 @@
       {%- endif -%}
     {%- endmacro %}
 
+{% include "_pf2e_class_glyphs.html" %}
+
 {% include "_pc_sheet/_header.html" %}
 
 {% include "_pc_sheet/_status_bars.html" %}
@@ -2953,6 +2960,68 @@
         const SPELL_ATTACK = parseInt("{{ pc.spell_attack }}") || 0;
         const SPELL_DC = parseInt("{{ pc.spell_dc }}") || 0;
         const CANTRIP_RANK = parseInt("{{ pc.cantrip_rank }}") || 1;
+
+        // ── COMBAT IDENTITY sheet ports: HP ghost-bar/damage-pop + hero-point
+        // spark flourishes. Ports the tracker's exact vocabulary (system.css
+        // "COMBAT IDENTITY" section) onto the sheet's HP/hero-point paint
+        // sites. First paint always seeds silently (_prev* starts null).
+        const _RM_PS = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+        let _prevHp = null, _prevHero = null;
+        function sheetHpFlourish(cur, max){
+            if(_prevHp !== null && cur !== _prevHp && !(_RM_PS && _RM_PS.matches)){
+                const bar = document.querySelector('.hp-gauge-bar');
+                const anchor = bar && bar.closest('.hp-wrap-anchor') || (bar && bar.parentElement);
+                if(bar){
+                    const delta = cur - _prevHp;
+                    const pop = document.createElement('div');
+                    pop.className = 'sheet-dmgpop' + (delta > 0 ? ' heal' : '');
+                    pop.textContent = (delta > 0 ? '+' : '') + delta;
+                    (anchor || bar).appendChild(pop);
+                    void pop.offsetWidth; pop.classList.add('pop');
+                    pop.addEventListener('animationend', () => pop.remove());
+                    setTimeout(() => pop.remove(), 2400);
+                    if(delta < 0 && max > 0){
+                        let ghost = bar.querySelector('.hp-ghost');
+                        if(!ghost){ ghost = document.createElement('div'); ghost.className = 'hp-ghost'; bar.prepend(ghost); }
+                        ghost.style.transition = 'none';
+                        ghost.style.width = Math.round(_prevHp / max * 100) + '%';
+                        void ghost.offsetWidth; ghost.style.transition = '';
+                        setTimeout(() => { ghost.style.width = Math.round(cur / max * 100) + '%'; }, 120);
+                    }
+                }
+            }
+            _prevHp = cur;
+        }
+        function sheetHeroFlourish(cur){
+            if(_prevHero !== null && cur < _prevHero && !(_RM_PS && _RM_PS.matches)){
+                const flames = document.querySelectorAll('.sheet-hero-flames .hero-flame');
+                const snuffed = flames[Math.max(0, Math.min(flames.length - 1, cur))];
+                if(snuffed){
+                    for(let i = 0; i < 5; i++){
+                        const s = document.createElement('div');
+                        s.className = 'spark';
+                        s.style.setProperty('--dx', (Math.random() * 26 - 13).toFixed(1) + 'px');
+                        snuffed.appendChild(s);
+                        setTimeout(() => s.classList.add('rise'), i * 50);
+                        s.addEventListener('animationend', () => s.remove());
+                        setTimeout(() => s.remove(), 2000);
+                    }
+                }
+            }
+            _prevHero = cur;
+        }
+        // Seed _prev* silently from the server-rendered first paint (the DOM
+        // above this script) so the FIRST real change flourishes instead of
+        // being swallowed as the seed. NaN-guarded: if either element is
+        // missing we fall back to null = seed-on-first-call.
+        (function(){
+            const hp0 = document.getElementById('current-hp');
+            const hpSeed = hp0 ? parseInt(hp0.textContent, 10) : NaN;
+            if (Number.isFinite(hpSeed)) _prevHp = hpSeed;
+            const hero0 = document.getElementById('current-hero');
+            const heroSeed = hero0 ? parseInt(hero0.textContent, 10) : NaN;
+            if (Number.isFinite(heroSeed)) _prevHero = heroSeed;
+        })();
 
         // ==========================================
         // PORTRAIT UPLOAD
@@ -5031,10 +5100,14 @@
                     const pipsWrap = document.getElementById('hero-pips');
                     if (pipsWrap) {
                         pipsWrap.dataset.current = n;
-                        // Cheap redraw: flip filled class on 3 pips. O(3), no layout thrash.
-                        const pips = pipsWrap.querySelectorAll('.hero-pip');
-                        pips.forEach((p, i) => p.classList.toggle('filled', i < n));
+                        // Cheap redraw: flip lit-state on 3 flames. O(3), no layout thrash.
+                        const pips = pipsWrap.querySelectorAll('.hero-flame');
+                        pips.forEach((p, i) => {
+                            p.classList.toggle('active', i < n);
+                            p.classList.toggle('spent', i >= n);
+                        });
                     }
+                    sheetHeroFlourish(n);
                 }
             } catch (error) {}
         }
@@ -5202,8 +5275,9 @@
                         currentTempHp = data.temp_hp;
                         _paintTempHpChip();
                     }
-                    
+
                     const maxHp = parseInt("{{ pc.hp }}");
+                    sheetHpFlourish(newHp, maxHp);
                     const pct = data.current_hp / maxHp;
                     hpEl.className = 'text-4xl font-bold leading-none ' + 
                         (data.current_hp === 0 ? 'text-red-600' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-orange-400' : 'text-green-400');
@@ -5255,6 +5329,7 @@
             currentHp = newHp;
             const hpEl = document.getElementById('current-hp');
             if (!hpEl) return;
+            sheetHpFlourish(newHp, maxHp);
             hpEl.innerText = currentHp;
             const pct = currentHp / maxHp;
             hpEl.className = 'text-2xl font-bold leading-none font-header ' +
@@ -5544,6 +5619,24 @@
                             }
                             el.innerHTML = html;
                         });
+                    }
+                    // Update hero-point flames — mirrors modifyHero()'s local
+                    // repaint so a GM-side hero-point award/spend (e.g. via
+                    // nomination or the tracker) flourishes here too.
+                    if (typeof data.hero_points === 'number') {
+                        const n = data.hero_points;
+                        const heroEl = document.getElementById('current-hero');
+                        if (heroEl) heroEl.innerText = n;
+                        const pipsWrap = document.getElementById('hero-pips');
+                        if (pipsWrap) {
+                            pipsWrap.dataset.current = n;
+                            const pips = pipsWrap.querySelectorAll('.hero-flame');
+                            pips.forEach((p, i) => {
+                                p.classList.toggle('active', i < n);
+                                p.classList.toggle('spent', i >= n);
+                            });
+                        }
+                        sheetHeroFlourish(n);
                     }
                     // Active Effects panel — server now broadcasts the
                     // full effect list + post-stacking breakdown on every

@@ -34,7 +34,9 @@
                            Cinzel heading hierarchy. Fighter-family classes
                            keep the  dingbat (typographic, not emoji). #}
                         <div class="portrait-badge" style="font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.08em;">
-                            {% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}
+                            {% set _rune = {'champion':'rn-champion','kineticist':'rn-kineticist','cleric':'rn-cleric','druid':'rn-druid'}.get((pc.class_name or '').split(' ')[0].split('(')[0].lower(), 'rn-adventurer') %}
+                            <svg class="sheet-port-glyph" viewBox="0 0 24 24" aria-hidden="true"><use href="#{{ _rune }}"></use></svg>
+                            <span class="badge-monogram">{% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}</span>
                         </div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -62,8 +64,8 @@
                     <span class="resource-chip no-print" title="Hero Points (max 3) — spend to reroll or stave off death">
                         <span class="resource-chip-lbl">Hero</span>
                         <button onclick="modifyHero('decrease')" class="resource-chip-btn" aria-label="Lose hero point">−</button>
-                        <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips">
-                            {% for i in range(3) %}<span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>{% endfor %}
+                        <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips sheet-hero-flames">
+                            {% for i in range(3) %}<span class="hero-flame {{ 'active' if i < pc.hero_points else 'spent' }}"><svg viewBox="0 0 14 16"><use href="#rn-flame"></use></svg></span>{% endfor %}
                         </span>
                         <span id="current-hero" style="display:none;">{{ pc.hero_points }}</span>
                         <button onclick="modifyHero('increase')" class="resource-chip-btn" aria-label="Gain hero point">+</button>
@@ -260,7 +262,9 @@
                        32×32 buttons clear the touch-target threshold for
                        in-person play with shaking hands / cold pizza grease. #}
                     <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:32px; height:32px; padding:0; font-size:16px;">−</button>
-                    <div style="text-align:center; min-width:96px;">
+                    {# hp-wrap-anchor: positioned anchor for the floating
+                       damage/heal pop (.sheet-dmgpop) — COMBAT IDENTITY port. #}
+                    <div class="hp-wrap-anchor" style="text-align:center; min-width:96px;">
                         <div>
                             <span id="current-hp" class="hp-current" style="font-size:36px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
                             <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
