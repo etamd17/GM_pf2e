@@ -80,7 +80,7 @@ def test_sheet_save_mirrors_investiture_to_live_combatant(pc):
 class _PF2ePC:
     """Minimal PF2e PC stand-in carrying only what _get_tracker_state reads
     directly (plus a class_name for the rune-watermark regression below)."""
-    def __init__(self, name, class_name):
+    def __init__(self, name, class_name, ancestry='Orc', subclass='Warpriest'):
         self.instance_id = name + '-1'
         self.name = name
         self.is_pc = True
@@ -96,6 +96,8 @@ class _PF2ePC:
         self.perception = 9
         self.conditions = {}
         self.class_name = class_name
+        self.ancestry = ancestry
+        self.subclass = subclass
 
 
 @pytest.fixture
@@ -118,3 +120,15 @@ def test_pf2e_pc_tracker_entry_carries_class_name(pf2e_pc):
     state = app._get_tracker_state()
     entry = next(e for e in state['combatants'] if e['name'] == 'Go’el')
     assert entry.get('class_name') == 'Cleric'
+
+
+def test_pf2e_pc_tracker_entry_carries_ancestry_and_subclass(pf2e_pc):
+    """The inspector's role line renders [c.ancestry, c.class_name,
+    c.subclass] (tracker.html renderActivePanel) and falls back to flavor
+    text when they're missing -- which was ALWAYS, because the payload never
+    shipped ancestry/subclass. Guard that they're present so the role line
+    shows 'Orc · Cleric · Warpriest' instead of the placeholder."""
+    state = app._get_tracker_state()
+    entry = next(e for e in state['combatants'] if e['name'] == 'Go’el')
+    assert entry.get('ancestry') == 'Orc'
+    assert entry.get('subclass') == 'Warpriest'

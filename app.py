@@ -6997,6 +6997,10 @@ def _get_tracker_state():
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
                 entry['hero_points'] = int(getattr(c, 'hero_points', 0) or 0)
                 entry['class_name'] = getattr(c, 'class_name', '')
+                # The inspector's role line renders ancestry · class · subclass;
+                # without these it always fell back to placeholder flavor text.
+                entry['ancestry'] = getattr(c, 'ancestry', '')
+                entry['subclass'] = getattr(c, 'subclass', '')
                 # Raw structured persistent-damage entries — the active panel
                 # uses this to render per-entry roll/remove buttons. The
                 # `persistent_damage` field above remains the joined string
