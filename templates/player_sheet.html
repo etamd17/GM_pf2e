@@ -3000,14 +3000,16 @@
         // above this script) so the FIRST real change flourishes instead of
         // being swallowed as the seed. NaN-guarded: if either element is
         // missing we fall back to null = seed-on-first-call.
-        (function(){
-            const hp0 = document.getElementById('current-hp');
-            const hpSeed = hp0 ? parseInt(hp0.textContent, 10) : NaN;
-            if (Number.isFinite(hpSeed)) _prevHp = hpSeed;
-            const hero0 = document.getElementById('current-hero');
-            const heroSeed = hero0 ? parseInt(hero0.textContent, 10) : NaN;
-            if (Number.isFinite(heroSeed)) _prevHero = heroSeed;
-        })();
+        try {
+            (function(){
+                const hp0 = document.getElementById('current-hp');
+                const hpSeed = hp0 ? parseInt(hp0.textContent, 10) : NaN;
+                if (Number.isFinite(hpSeed)) _prevHp = hpSeed;
+                const hero0 = document.getElementById('current-hero');
+                const heroSeed = hero0 ? parseInt(hero0.textContent, 10) : NaN;
+                if (Number.isFinite(heroSeed)) _prevHero = heroSeed;
+            })();
+        } catch(e) { console.error('hp/hero seed init:', e); }
 
         // ==========================================
         // PORTRAIT UPLOAD
@@ -4752,15 +4754,17 @@
             if (btnEl) btnEl.classList.toggle('open', !!state.gates[element]);
         }
         // Restore Aura + Overflow on load.
-        (function _kiInit() {
-            const state = _kiLoad(pcName);
-            document.querySelectorAll('.kineticist-state-bar').forEach(bar => {
-                const cIdx = bar.getAttribute('data-caster-idx');
-                _paintKineticAuraBtn(bar.querySelector('.ki-aura-toggle'), !!state.auraOn);
-                const v = document.getElementById('ki-overflow-val-' + cIdx);
-                if (v) v.textContent = state.overflow || 0;
-            });
-        })();
+        try {
+            (function _kiInit() {
+                const state = _kiLoad(pcName);
+                document.querySelectorAll('.kineticist-state-bar').forEach(bar => {
+                    const cIdx = bar.getAttribute('data-caster-idx');
+                    _paintKineticAuraBtn(bar.querySelector('.ki-aura-toggle'), !!state.auraOn);
+                    const v = document.getElementById('ki-overflow-val-' + cIdx);
+                    if (v) v.textContent = state.overflow || 0;
+                });
+            })();
+        } catch(e) { console.error('kineticist state init:', e); }
         window.toggleKineticAura = toggleKineticAura;
         window.adjustKineticOverflow = adjustKineticOverflow;
         window.renderKineticGatePills = renderKineticGatePills;
@@ -4796,28 +4800,30 @@
         //     core last on wide where it's hidden).
         // Without this fallback, .tab-content's default display:none can
         // leave the page blank if the saved tab is hidden by media query.
-        (function initTab() {
-            const wide = window.innerWidth >= 1280;
-            const order = ['combat', 'magic', 'feats', 'inventory', 'pets', 'core'];
-            function btnVisible(id) {
-                const b = document.getElementById(`btn-tab-${id}`);
-                return b && getComputedStyle(b).display !== 'none';
-            }
-            const savedTab = localStorage.getItem(`pf2e_tab_${pcName}`);
-            // On wide, core is hidden — never restore it.
-            const candidate = (wide && savedTab === 'core') ? null : savedTab;
-            if (candidate && document.getElementById(`tab-${candidate}`) && btnVisible(candidate)) {
-                switchTab(candidate);
-                return;
-            }
-            for (const id of order) {
-                if (document.getElementById(`tab-${id}`) && btnVisible(id)) {
-                    switchTab(id);
+        try {
+            (function initTab() {
+                const wide = window.innerWidth >= 1280;
+                const order = ['combat', 'magic', 'feats', 'inventory', 'pets', 'core'];
+                function btnVisible(id) {
+                    const b = document.getElementById(`btn-tab-${id}`);
+                    return b && getComputedStyle(b).display !== 'none';
+                }
+                const savedTab = localStorage.getItem(`pf2e_tab_${pcName}`);
+                // On wide, core is hidden — never restore it.
+                const candidate = (wide && savedTab === 'core') ? null : savedTab;
+                if (candidate && document.getElementById(`tab-${candidate}`) && btnVisible(candidate)) {
+                    switchTab(candidate);
                     return;
                 }
-            }
-            switchTab('combat');
-        })();
+                for (const id of order) {
+                    if (document.getElementById(`tab-${id}`) && btnVisible(id)) {
+                        switchTab(id);
+                        return;
+                    }
+                }
+                switchTab('combat');
+            })();
+        } catch(e) { console.error('tab init:', e); }
 
         // === Custom parchment tooltip (D12) ===
         // Delegated listener: walks up from the event target to find the
@@ -4825,56 +4831,58 @@
         // reused. Position computed one-shot on open. No rAF, no resize
         // watcher — if the target moves while hovered, nothing breaks:
         // the tooltip disappears on mouseleave anyway.
-        (function setupParchmentTooltip() {
-            let tipEl = null;
-            function ensure() {
-                if (tipEl) return tipEl;
-                tipEl = document.createElement('div');
-                tipEl.className = 'pf-tooltip';
-                tipEl.setAttribute('role', 'tooltip');
-                document.body.appendChild(tipEl);
-                return tipEl;
-            }
-            function open(target) {
-                const raw = target.getAttribute('data-pf-tip');
-                if (!raw) return;
-                const tip = ensure();
-                // Optional title line syntax: "TITLE :: body text"
-                const idx = raw.indexOf(' :: ');
-                if (idx > -1) {
-                    tip.innerHTML = '<span class="pf-tip-title"></span>';
-                    tip.querySelector('.pf-tip-title').textContent = raw.slice(0, idx);
-                    tip.appendChild(document.createTextNode(raw.slice(idx + 4)));
-                } else {
-                    tip.textContent = raw;
+        try {
+            (function setupParchmentTooltip() {
+                let tipEl = null;
+                function ensure() {
+                    if (tipEl) return tipEl;
+                    tipEl = document.createElement('div');
+                    tipEl.className = 'pf-tooltip';
+                    tipEl.setAttribute('role', 'tooltip');
+                    document.body.appendChild(tipEl);
+                    return tipEl;
                 }
-                // Position: anchor above the target, fall below if no room.
-                const r = target.getBoundingClientRect();
-                tip.style.visibility = 'hidden';
-                tip.classList.add('open');
-                const tr = tip.getBoundingClientRect();
-                let top = r.top - tr.height - 8;
-                if (top < 8) top = r.bottom + 8;
-                let left = r.left + r.width / 2 - tr.width / 2;
-                left = Math.max(8, Math.min(left, window.innerWidth - tr.width - 8));
-                tip.style.top = top + 'px';
-                tip.style.left = left + 'px';
-                tip.style.visibility = '';
-            }
-            function close() {
-                if (tipEl) tipEl.classList.remove('open');
-            }
-            document.addEventListener('pointerover', e => {
-                const t = e.target.closest && e.target.closest('[data-pf-tip]');
-                if (t) open(t);
-            });
-            document.addEventListener('pointerout', e => {
-                const t = e.target.closest && e.target.closest('[data-pf-tip]');
-                if (t) close();
-            });
-            // Close on any scroll (positions would stale otherwise)
-            document.addEventListener('scroll', close, { passive: true, capture: true });
-        })();
+                function open(target) {
+                    const raw = target.getAttribute('data-pf-tip');
+                    if (!raw) return;
+                    const tip = ensure();
+                    // Optional title line syntax: "TITLE :: body text"
+                    const idx = raw.indexOf(' :: ');
+                    if (idx > -1) {
+                        tip.innerHTML = '<span class="pf-tip-title"></span>';
+                        tip.querySelector('.pf-tip-title').textContent = raw.slice(0, idx);
+                        tip.appendChild(document.createTextNode(raw.slice(idx + 4)));
+                    } else {
+                        tip.textContent = raw;
+                    }
+                    // Position: anchor above the target, fall below if no room.
+                    const r = target.getBoundingClientRect();
+                    tip.style.visibility = 'hidden';
+                    tip.classList.add('open');
+                    const tr = tip.getBoundingClientRect();
+                    let top = r.top - tr.height - 8;
+                    if (top < 8) top = r.bottom + 8;
+                    let left = r.left + r.width / 2 - tr.width / 2;
+                    left = Math.max(8, Math.min(left, window.innerWidth - tr.width - 8));
+                    tip.style.top = top + 'px';
+                    tip.style.left = left + 'px';
+                    tip.style.visibility = '';
+                }
+                function close() {
+                    if (tipEl) tipEl.classList.remove('open');
+                }
+                document.addEventListener('pointerover', e => {
+                    const t = e.target.closest && e.target.closest('[data-pf-tip]');
+                    if (t) open(t);
+                });
+                document.addEventListener('pointerout', e => {
+                    const t = e.target.closest && e.target.closest('[data-pf-tip]');
+                    if (t) close();
+                });
+                // Close on any scroll (positions would stale otherwise)
+                document.addEventListener('scroll', close, { passive: true, capture: true });
+            })();
+        } catch(e) { console.error('parchment tooltip init:', e); }
 
         // INIT SLOT TRACKERS — full server-side persistence
         document.addEventListener("DOMContentLoaded", async () => {
@@ -4993,16 +5001,18 @@
             root.innerHTML = html || '<span class="text-[10px]" style="color:var(--text-muted);">none</span>';
         }
         // Refresh the strip whenever spell state changes.
-        (function watchSpellState() {
-            const _origSave = window._saveSpellState;
-            if (typeof _origSave === 'function') {
-                window._saveSpellState = async function() {
-                    const r = await _origSave.apply(this, arguments);
-                    try { renderSpellsTodayStrip(); } catch(_) {}
-                    return r;
-                };
-            }
-        })();
+        try {
+            (function watchSpellState() {
+                const _origSave = window._saveSpellState;
+                if (typeof _origSave === 'function') {
+                    window._saveSpellState = async function() {
+                        const r = await _origSave.apply(this, arguments);
+                        try { renderSpellsTodayStrip(); } catch(_) {}
+                        return r;
+                    };
+                }
+            })();
+        } catch(e) { console.error('spell state watcher init:', e); }
 
         async function _migrateLocalStorageSpellState() {
             let migrated = false;
@@ -6289,23 +6299,26 @@
         // ==========================================
         const _spellDescCache = {};
         // Pre-populate from template data
-        (function() {
-            const casters = {{ pc.spell_casters | tojson | safe }};
-            casters.forEach(c => {
-                (c.levels || []).forEach(lvl => {
-                    (lvl.spells || []).forEach(sp => {
-                        _spellDescCache[sp.name.toLowerCase()] = {
-                            name: sp.name,
-                            desc: sp.desc || '',
-                            actions: sp.actions || '',
-                            level: lvl.level,
-                            tradition: c.tradition || '',
-                            type: c.type || ''
-                        };
+        try {
+            (function() {
+                const casters = {{ pc.spell_casters | tojson | safe }};
+                casters.forEach(c => {
+                    (c.levels || []).forEach(lvl => {
+                        (lvl.spells || []).forEach(sp => {
+                            if (!sp || !sp.name) return;
+                            _spellDescCache[sp.name.toLowerCase()] = {
+                                name: sp.name,
+                                desc: sp.desc || '',
+                                actions: sp.actions || '',
+                                level: lvl.level,
+                                tradition: c.tradition || '',
+                                type: c.type || ''
+                            };
+                        });
                     });
                 });
-            });
-        })();
+            })();
+        } catch(e) { console.error('spell desc cache init:', e); }
 
         function openSpellCard(spellName, level, tradition, castType) {
             const cached = _spellDescCache[spellName.toLowerCase()];
@@ -6393,7 +6406,12 @@
         }
 
         
-        // Input contract today: every caller passes '1'. Keep both builders' semantics identical (see buildActionPips/_standaloneActionPips).
+        // Input contract today: every caller passes '1'. Single builder now —
+        // the standalone duplicate pip builder (a workaround for an upstream
+        // throw abandoning this script's IIFE chain) was removed once the
+        // individual init phases below were isolated in their own try/catch,
+        // so a throw in one phase can no longer kill this or any other
+        // unrelated builder.
         function buildActionPips(actionStr) {
             const s = (actionStr || '').trim().toLowerCase();
             // Glyphs encoded as unicode escapes so a future emoji-strip pass
@@ -6620,12 +6638,14 @@
 
         // Init: wait briefly for dice-engine.js to register window.diceRoller,
         // then sync the 3D engine's enabled flag and paint the button state.
-        (function _initDiceMode() {
-            setTimeout(() => {
-                _syncDiceEngine();
-                updateDiceButtons();
-            }, 1000);
-        })();
+        try {
+            (function _initDiceMode() {
+                setTimeout(() => {
+                    _syncDiceEngine();
+                    updateDiceButtons();
+                }, 1000);
+            })();
+        } catch(e) { console.error('dice mode init:', e); }
         window.toggle3DDice = toggleDiceMode;
         window.toggleDiceRender = toggleDiceRender;
         window.toggleDiceStyle = toggleDiceStyle;
@@ -7838,13 +7858,15 @@
         // Three cycle states: default (no attr) → parchment → hi-contrast.
         // Persist in localStorage under a per-user key so each player on
         // the same browser can set their own preference.
-        (function initTheme() {
-            const key = 'pf2e_theme_v1';
-            const saved = localStorage.getItem(key);
-            if (saved && saved !== 'default') {
-                document.documentElement.setAttribute('data-theme', saved);
-            }
-        })();
+        try {
+            (function initTheme() {
+                const key = 'pf2e_theme_v1';
+                const saved = localStorage.getItem(key);
+                if (saved && saved !== 'default') {
+                    document.documentElement.setAttribute('data-theme', saved);
+                }
+            })();
+        } catch(e) { console.error('theme init:', e); }
         function cyclePlayerTheme() {
             const cur = document.documentElement.getAttribute('data-theme') || 'default';
             const next = cur === 'default' ? 'parchment' : cur === 'parchment' ? 'hi-contrast' : 'default';
@@ -7913,76 +7935,82 @@
         // the sticky header. Reset the class after the animation so a
         // re-trigger in the same turn won't replay it (it won't unless
         // the GM toggles turns, which is rare).
-        (function wireTurnFlash() {
-            let lastActive = null;
-            window.addEventListener('pf2e-encounter-update', (e) => {
-                try {
-                    const enc = e.detail && e.detail.encounter;
-                    if (!Array.isArray(enc)) return;
-                    const active = enc.find(c => c.is_active);
-                    if (!active) { lastActive = null; return; }
-                    if (active.name === pcName && lastActive !== pcName) {
-                        const h = document.querySelector('.char-header');
-                        if (h) {
-                            h.classList.remove('your-turn');
-                            // force reflow so the animation restarts
-                            void h.offsetWidth;
-                            h.classList.add('your-turn');
-                            // Gentle bell if the page was hidden
-                            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-                                try { new Notification(`${pcName} — your turn!`); } catch(_) {}
+        try {
+            (function wireTurnFlash() {
+                let lastActive = null;
+                window.addEventListener('pf2e-encounter-update', (e) => {
+                    try {
+                        const enc = e.detail && e.detail.encounter;
+                        if (!Array.isArray(enc)) return;
+                        const active = enc.find(c => c.is_active);
+                        if (!active) { lastActive = null; return; }
+                        if (active.name === pcName && lastActive !== pcName) {
+                            const h = document.querySelector('.char-header');
+                            if (h) {
+                                h.classList.remove('your-turn');
+                                // force reflow so the animation restarts
+                                void h.offsetWidth;
+                                h.classList.add('your-turn');
+                                // Gentle bell if the page was hidden
+                                if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                                    try { new Notification(`${pcName} — your turn!`); } catch(_) {}
+                                }
                             }
                         }
-                    }
-                    lastActive = active.name;
-                } catch(_) {}
-            });
-        })();
+                        lastActive = active.name;
+                    } catch(_) {}
+                });
+            })();
+        } catch(e) { console.error('turn flash init:', e); }
         // Patch the existing SSE handler to dispatch the synthetic event.
         // We do this by wrapping EventSource's addEventListener — simpler:
         // monkey-patch nothing, just re-wire by reading the DOM after the
         // existing handler has painted, but that's brittle. Instead, emit
         // the event from the existing handler via a MutationObserver on
         // #encounter-initiative-bar (single node, very cheap).
-        (function observeEncounterBar() {
-            const bar = document.getElementById('encounter-initiative-bar');
-            if (!bar) return;
-            const mo = new MutationObserver(() => {
-                const spans = bar.querySelectorAll('span');
-                const enc = [];
-                spans.forEach(s => {
-                    const text = (s.textContent || '').trim();
-                    if (!text || text.startsWith('Round')) return;
-                    const isActive = text.endsWith('▶');
-                    const name = text.replace(/\s*▶$/, '').trim();
-                    enc.push({ name, is_active: isActive });
+        try {
+            (function observeEncounterBar() {
+                const bar = document.getElementById('encounter-initiative-bar');
+                if (!bar) return;
+                const mo = new MutationObserver(() => {
+                    const spans = bar.querySelectorAll('span');
+                    const enc = [];
+                    spans.forEach(s => {
+                        const text = (s.textContent || '').trim();
+                        if (!text || text.startsWith('Round')) return;
+                        const isActive = text.endsWith('▶');
+                        const name = text.replace(/\s*▶$/, '').trim();
+                        enc.push({ name, is_active: isActive });
+                    });
+                    window.dispatchEvent(new CustomEvent('pf2e-encounter-update', { detail: { encounter: enc } }));
                 });
-                window.dispatchEvent(new CustomEvent('pf2e-encounter-update', { detail: { encounter: enc } }));
-            });
-            mo.observe(bar, { childList: true, subtree: true });
-        })();
+                mo.observe(bar, { childList: true, subtree: true });
+            })();
+        } catch(e) { console.error('encounter bar observer init:', e); }
 
         // --- PER-FEAT NOTES ---------------------------------------------
         // localStorage key is scoped to pc name so multiple PCs on the
         // same browser don't clobber each other. No backend change.
-        (function initFeatNotes() {
-            const storeKey = `pf2e_feat_notes_${pcName}`;
-            let notes = {};
-            try { notes = JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch(_) { notes = {}; }
-            const inputs = document.querySelectorAll('[data-feat-note]');
-            inputs.forEach(inp => {
-                const name = inp.getAttribute('data-feat-note');
-                if (notes[name]) inp.value = notes[name];
-                let t;
-                inp.addEventListener('input', () => {
-                    clearTimeout(t);
-                    t = setTimeout(() => {
-                        notes[name] = inp.value;
-                        try { localStorage.setItem(storeKey, JSON.stringify(notes)); } catch(_) {}
-                    }, 400);
+        try {
+            (function initFeatNotes() {
+                const storeKey = `pf2e_feat_notes_${pcName}`;
+                let notes = {};
+                try { notes = JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch(_) { notes = {}; }
+                const inputs = document.querySelectorAll('[data-feat-note]');
+                inputs.forEach(inp => {
+                    const name = inp.getAttribute('data-feat-note');
+                    if (notes[name]) inp.value = notes[name];
+                    let t;
+                    inp.addEventListener('input', () => {
+                        clearTimeout(t);
+                        t = setTimeout(() => {
+                            notes[name] = inp.value;
+                            try { localStorage.setItem(storeKey, JSON.stringify(notes)); } catch(_) {}
+                        }, 400);
+                    });
                 });
-            });
-        })();
+            })();
+        } catch(e) { console.error('feat notes init:', e); }
 
         // --- INVENTORY LIVE FILTER --------------------------------------
         function filterInventory(q) {
@@ -7997,83 +8025,87 @@
         // Hooks broadcastToGM to collect the last 8 rolls into memory
         // and localStorage (so a reload doesn't wipe them). Panel only
         // builds its DOM when opened — zero idle render cost.
-        (function initRollHistory() {
-            const storeKey = `pf2e_roll_history_${pcName}`;
-            let history = [];
-            try { history = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch(_) { history = []; }
-            const MAX = 8;
-            function push(entry) {
-                history.unshift(entry);
-                history = history.slice(0, MAX);
-                try { localStorage.setItem(storeKey, JSON.stringify(history)); } catch(_) {}
-                const panel = document.getElementById('roll-history-panel');
-                if (panel && panel.classList.contains('open')) render();
-            }
-            function render() {
-                const panel = document.getElementById('roll-history-panel');
-                if (!panel) return;
-                if (!history.length) {
-                    panel.innerHTML = '<div class="roll-history-empty">No rolls yet this session.</div>';
-                    return;
+        try {
+            (function initRollHistory() {
+                const storeKey = `pf2e_roll_history_${pcName}`;
+                let history = [];
+                try { history = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch(_) { history = []; }
+                const MAX = 8;
+                function push(entry) {
+                    history.unshift(entry);
+                    history = history.slice(0, MAX);
+                    try { localStorage.setItem(storeKey, JSON.stringify(history)); } catch(_) {}
+                    const panel = document.getElementById('roll-history-panel');
+                    if (panel && panel.classList.contains('open')) render();
                 }
-                panel.innerHTML = history.map(h => `
-                    <div class="roll-history-item${h.crit ? ' crit' : ''}${h.fumble ? ' fumble' : ''}">
-                        <span class="rh-total">${h.total}</span>
-                        <div class="rh-title">${h.title}</div>
-                        <div class="rh-detail">${h.detail || ''}</div>
-                    </div>`).join('');
-            }
-            window.toggleRollHistory = function() {
-                const panel = document.getElementById('roll-history-panel');
-                if (!panel) return;
-                const open = panel.classList.toggle('open');
-                if (open) render();
-            };
-            // Close on outside click
-            document.addEventListener('click', (e) => {
-                const panel = document.getElementById('roll-history-panel');
-                const btn = document.getElementById('roll-history-btn');
-                if (!panel || !panel.classList.contains('open')) return;
-                if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
-                panel.classList.remove('open');
-            });
-            // Wrap broadcastToGM to collect entries
-            const origBroadcast = window.broadcastToGM;
-            if (typeof origBroadcast === 'function') {
-                window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
-                    try {
-                        const crit = /CRIT[\s_]?SUCCESS|\bCRIT\b/i.test(detailText || '') && !/CRIT[\s_]?FAIL/i.test(detailText || '');
-                        const fumble = /CRIT[\s_]?FAIL|\bMISS\b/i.test(detailText || '');
-                        push({ title: actionName, total: rollResult, detail: detailText || '', crit, fumble, t: Date.now() });
-                    } catch(_) {}
-                    return origBroadcast.apply(this, arguments);
+                function render() {
+                    const panel = document.getElementById('roll-history-panel');
+                    if (!panel) return;
+                    if (!history.length) {
+                        panel.innerHTML = '<div class="roll-history-empty">No rolls yet this session.</div>';
+                        return;
+                    }
+                    panel.innerHTML = history.map(h => `
+                        <div class="roll-history-item${h.crit ? ' crit' : ''}${h.fumble ? ' fumble' : ''}">
+                            <span class="rh-total">${h.total}</span>
+                            <div class="rh-title">${h.title}</div>
+                            <div class="rh-detail">${h.detail || ''}</div>
+                        </div>`).join('');
+                }
+                window.toggleRollHistory = function() {
+                    const panel = document.getElementById('roll-history-panel');
+                    if (!panel) return;
+                    const open = panel.classList.toggle('open');
+                    if (open) render();
                 };
-            }
-        })();
+                // Close on outside click
+                document.addEventListener('click', (e) => {
+                    const panel = document.getElementById('roll-history-panel');
+                    const btn = document.getElementById('roll-history-btn');
+                    if (!panel || !panel.classList.contains('open')) return;
+                    if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+                    panel.classList.remove('open');
+                });
+                // Wrap broadcastToGM to collect entries
+                const origBroadcast = window.broadcastToGM;
+                if (typeof origBroadcast === 'function') {
+                    window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+                        try {
+                            const crit = /CRIT[\s_]?SUCCESS|\bCRIT\b/i.test(detailText || '') && !/CRIT[\s_]?FAIL/i.test(detailText || '');
+                            const fumble = /CRIT[\s_]?FAIL|\bMISS\b/i.test(detailText || '');
+                            push({ title: actionName, total: rollResult, detail: detailText || '', crit, fumble, t: Date.now() });
+                        } catch(_) {}
+                        return origBroadcast.apply(this, arguments);
+                    };
+                }
+            })();
+        } catch(e) { console.error('roll history init:', e); }
 
         // --- CONDITION PENALTY NOTE IN ROLL BROADCASTS ------------------
         // Status penalties are already baked into pc.skills totals by the
         // backend, but the chat line never tells the player *why* the
         // number dipped. Wrap broadcastToGM once more to append a note
         // listing the active conditions with non-zero values.
-        (function wireConditionPenaltyNote() {
-            const prev = window.broadcastToGM;
-            if (typeof prev !== 'function') return;
-            window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
-                try {
-                    const c = (typeof currentConditions !== 'undefined') ? currentConditions : {};
-                    const notes = [];
-                    ['frightened', 'sickened', 'enfeebled', 'clumsy', 'stupefied', 'drained'].forEach(k => {
-                        const v = c[k];
-                        if (typeof v === 'number' && v > 0) notes.push(`${k} ${v}`);
-                    });
-                    if (notes.length) {
-                        detailText = (detailText || '') + `  [cond: ${notes.join(', ')}]`;
-                    }
-                } catch(_) {}
-                return prev(actionName, rollResult, detailText, degree);
-            };
-        })();
+        try {
+            (function wireConditionPenaltyNote() {
+                const prev = window.broadcastToGM;
+                if (typeof prev !== 'function') return;
+                window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+                    try {
+                        const c = (typeof currentConditions !== 'undefined') ? currentConditions : {};
+                        const notes = [];
+                        ['frightened', 'sickened', 'enfeebled', 'clumsy', 'stupefied', 'drained'].forEach(k => {
+                            const v = c[k];
+                            if (typeof v === 'number' && v > 0) notes.push(`${k} ${v}`);
+                        });
+                        if (notes.length) {
+                            detailText = (detailText || '') + `  [cond: ${notes.join(', ')}]`;
+                        }
+                    } catch(_) {}
+                    return prev(actionName, rollResult, detailText, degree);
+                };
+            })();
+        } catch(e) { console.error('condition penalty note init:', e); }
 
         // --- SUSTAINED-SPELL TRACKER ------------------------------------
         // When a spell is cast, prompt for "sustain?" only if the spell's
@@ -8081,110 +8113,114 @@
         // spell. Conservative — false negatives are better than nagging
         // on every cantrip. Decrements on round advance (via the
         // encounter MutationObserver above).
-        (function initSustain() {
-            const storeKey = `pf2e_sustain_${pcName}`;
-            let sustained = [];
-            try { sustained = JSON.parse(sessionStorage.getItem(storeKey) || '[]'); } catch(_) { sustained = []; }
-            function render() {
-                const chip = document.getElementById('sustain-chip');
-                const items = document.getElementById('sustain-items');
-                if (!chip || !items) return;
-                if (!sustained.length) { chip.classList.remove('active'); items.innerHTML = ''; return; }
-                chip.classList.add('active');
-                items.innerHTML = sustained.map((s, i) => `
-                    <span class="sustain-chip-item" title="Round ${s.round} of sustaining ${s.name} — click name to jump to spell in Magic tab">
-                        <button type="button" class="sustain-jump" onclick="jumpToSustainedSpell('${(s.name || '').replace(/'/g, "\\'")}')" aria-label="Show ${s.name} in Magic tab" style="background:transparent;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;">${s.name}</button><button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">×</button>
-                    </span>`).join(' ');
-            }
-            function save() {
-                try { sessionStorage.setItem(storeKey, JSON.stringify(sustained)); } catch(_) {}
-            }
-            window.addSustain = function(name) {
-                if (!name) return;
-                if (sustained.find(s => s.name === name)) return;
-                sustained.push({ name, round: 1 });
-                save(); render();
-            };
-            window.endSustain = function(i) {
-                sustained.splice(i, 1);
-                save(); render();
-            };
-            // Round-tick: observe the encounter bar text for "Round N"
-            let lastRound = null;
-            window.addEventListener('pf2e-encounter-update', () => {
-                const bar = document.getElementById('encounter-initiative-bar');
-                if (!bar) return;
-                const m = /Round\s*(\d+)/.exec(bar.textContent || '');
-                if (!m) return;
-                const r = parseInt(m[1], 10);
-                if (lastRound !== null && r > lastRound && sustained.length) {
-                    sustained.forEach(s => s.round += (r - lastRound));
-                    save(); render();
+        try {
+            (function initSustain() {
+                const storeKey = `pf2e_sustain_${pcName}`;
+                let sustained = [];
+                try { sustained = JSON.parse(sessionStorage.getItem(storeKey) || '[]'); } catch(_) { sustained = []; }
+                function render() {
+                    const chip = document.getElementById('sustain-chip');
+                    const items = document.getElementById('sustain-items');
+                    if (!chip || !items) return;
+                    if (!sustained.length) { chip.classList.remove('active'); items.innerHTML = ''; return; }
+                    chip.classList.add('active');
+                    items.innerHTML = sustained.map((s, i) => `
+                        <span class="sustain-chip-item" title="Round ${s.round} of sustaining ${s.name} — click name to jump to spell in Magic tab">
+                            <button type="button" class="sustain-jump" onclick="jumpToSustainedSpell('${(s.name || '').replace(/'/g, "\\'")}')" aria-label="Show ${s.name} in Magic tab" style="background:transparent;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;">${s.name}</button><button type="button" onclick="endSustain(${i})" aria-label="End sustaining ${s.name}">×</button>
+                        </span>`).join(' ');
                 }
-                lastRound = r;
-            });
-            // Hook rollSpell — on cast, optionally prompt to track sustain.
-            // We do NOT auto-detect which spells are sustainable (that list
-            // is huge). Instead we surface a tiny non-blocking affordance:
-            // the roll toast will include a "Sustain" button via a wrapper.
-            const origRollSpell = window.rollSpell;
-            if (typeof origRollSpell === 'function') {
-                window.rollSpell = function(spellName, e, slotInfo) {
-                    const ret = origRollSpell.apply(this, arguments);
-                    // After the toast renders, slip a small "Track sustain" button in.
-                    setTimeout(() => {
-                        const toast = document.querySelector('.roll-toast');
-                        if (!toast || toast.dataset.susPatched) return;
-                        toast.dataset.susPatched = '1';
-                        const btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.className = 'px-2 py-0.5 text-[10px] rounded border ml-2';
-                        btn.style.cssText = 'border-color:rgba(167,139,250,0.35); color:#c4b5fd; background:rgba(167,139,250,0.08);';
-                        btn.textContent = '+Sustain';
-                        btn.title = `Track ${spellName} as sustained (round counter in header)`;
-                        btn.onclick = () => { addSustain(spellName); btn.disabled = true; btn.textContent = 'Tracking '; };
-                        toast.appendChild(btn);
-                    }, 50);
-                    return ret;
+                function save() {
+                    try { sessionStorage.setItem(storeKey, JSON.stringify(sustained)); } catch(_) {}
+                }
+                window.addSustain = function(name) {
+                    if (!name) return;
+                    if (sustained.find(s => s.name === name)) return;
+                    sustained.push({ name, round: 1 });
+                    save(); render();
                 };
-            }
-            render();
-        })();
+                window.endSustain = function(i) {
+                    sustained.splice(i, 1);
+                    save(); render();
+                };
+                // Round-tick: observe the encounter bar text for "Round N"
+                let lastRound = null;
+                window.addEventListener('pf2e-encounter-update', () => {
+                    const bar = document.getElementById('encounter-initiative-bar');
+                    if (!bar) return;
+                    const m = /Round\s*(\d+)/.exec(bar.textContent || '');
+                    if (!m) return;
+                    const r = parseInt(m[1], 10);
+                    if (lastRound !== null && r > lastRound && sustained.length) {
+                        sustained.forEach(s => s.round += (r - lastRound));
+                        save(); render();
+                    }
+                    lastRound = r;
+                });
+                // Hook rollSpell — on cast, optionally prompt to track sustain.
+                // We do NOT auto-detect which spells are sustainable (that list
+                // is huge). Instead we surface a tiny non-blocking affordance:
+                // the roll toast will include a "Sustain" button via a wrapper.
+                const origRollSpell = window.rollSpell;
+                if (typeof origRollSpell === 'function') {
+                    window.rollSpell = function(spellName, e, slotInfo) {
+                        const ret = origRollSpell.apply(this, arguments);
+                        // After the toast renders, slip a small "Track sustain" button in.
+                        setTimeout(() => {
+                            const toast = document.querySelector('.roll-toast');
+                            if (!toast || toast.dataset.susPatched) return;
+                            toast.dataset.susPatched = '1';
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'px-2 py-0.5 text-[10px] rounded border ml-2';
+                            btn.style.cssText = 'border-color:rgba(167,139,250,0.35); color:#c4b5fd; background:rgba(167,139,250,0.08);';
+                            btn.textContent = '+Sustain';
+                            btn.title = `Track ${spellName} as sustained (round counter in header)`;
+                            btn.onclick = () => { addSustain(spellName); btn.disabled = true; btn.textContent = 'Tracking '; };
+                            toast.appendChild(btn);
+                        }, 50);
+                        return ret;
+                    };
+                }
+                render();
+            })();
+        } catch(e) { console.error('sustain tracker init:', e); }
 
         // --- USABLE ITEMS ROW (Combat tab) ------------------------------
         // Scan equipment for common consumables/tools and surface them
         // as a compact action row so the player doesn't tab-switch mid-
         // combat. Sends a simple "Used X" message to the GM on click.
-        (function initUsableItems() {
-            const row = document.getElementById('usable-items-row');
-            if (!row) return;
-            const equipment = {{ pc.equipment | tojson | safe }};
-            if (!Array.isArray(equipment) || !equipment.length) return;
-            const keywords = [
-                { match: /healing potion|healer/i, label: 'Heal' },
-                { match: /antidote|antiplague|elixir of life/i, label: 'Drink' },
-                { match: /thunderstone|alchemist['’]?s fire|acid flask|liquid ice/i, label: 'Throw' },
-                { match: /bandolier|scroll of/i, label: 'Use' },
-                { match: /healer['’]?s tools|repair kit|thieves['’]? tools/i, label: 'Use' },
-                { match: /torch|lantern/i, label: 'Light' },
-                { match: /wand of/i, label: 'Activate' },
-            ];
-            const hits = [];
-            equipment.forEach(it => {
-                if (!it || !it.name) return;
-                for (const k of keywords) {
-                    if (k.match.test(it.name)) { hits.push({ item: it, label: k.label }); break; }
-                }
-            });
-            if (!hits.length) return;
-            let html = '<span class="usable-items-label">At hand</span>';
-            hits.slice(0, 8).forEach(h => {
-                const safe = (h.item.name || '').replace(/'/g, "&#39;");           // HTML-safe: title + visible text
-                const safeJs = (h.item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); // JS-safe: the onclick arg
-                html += `<button type="button" class="usable-item-btn" onclick="useItem('${safeJs}', '${h.label}')" title="${h.label} ${safe}">${h.label}: ${safe}<span class="ui-qty">×${h.item.qty || 1}</span></button>`;
-            });
-            row.innerHTML = html;
-        })();
+        try {
+            (function initUsableItems() {
+                const row = document.getElementById('usable-items-row');
+                if (!row) return;
+                const equipment = {{ pc.equipment | tojson | safe }};
+                if (!Array.isArray(equipment) || !equipment.length) return;
+                const keywords = [
+                    { match: /healing potion|healer/i, label: 'Heal' },
+                    { match: /antidote|antiplague|elixir of life/i, label: 'Drink' },
+                    { match: /thunderstone|alchemist['’]?s fire|acid flask|liquid ice/i, label: 'Throw' },
+                    { match: /bandolier|scroll of/i, label: 'Use' },
+                    { match: /healer['’]?s tools|repair kit|thieves['’]? tools/i, label: 'Use' },
+                    { match: /torch|lantern/i, label: 'Light' },
+                    { match: /wand of/i, label: 'Activate' },
+                ];
+                const hits = [];
+                equipment.forEach(it => {
+                    if (!it || !it.name) return;
+                    for (const k of keywords) {
+                        if (k.match.test(it.name)) { hits.push({ item: it, label: k.label }); break; }
+                    }
+                });
+                if (!hits.length) return;
+                let html = '<span class="usable-items-label">At hand</span>';
+                hits.slice(0, 8).forEach(h => {
+                    const safe = (h.item.name || '').replace(/'/g, "&#39;");           // HTML-safe: title + visible text
+                    const safeJs = (h.item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); // JS-safe: the onclick arg
+                    html += `<button type="button" class="usable-item-btn" onclick="useItem('${safeJs}', '${h.label}')" title="${h.label} ${safe}">${h.label}: ${safe}<span class="ui-qty">×${h.item.qty || 1}</span></button>`;
+                });
+                row.innerHTML = html;
+            })();
+        } catch(e) { console.error('usable items init:', e); }
         window.useItem = function(name, verb) {
             try { broadcastToGM(`${verb} ${name}`, '—', `Item used from inventory`); } catch(_) {}
             try { showRollToast(`${verb}: ${name}`, '', 'Item used — GM notified. Reduce qty on Inventory tab if consumed.', false, false, [], null); } catch(_) {}
@@ -8193,19 +8229,21 @@
         // Re-evaluate on resize: if the user crosses the wide breakpoint
         // while on Core (only valid on narrow), flip to Combat so they
         // don't end up staring at a hidden panel.
-        (function watchTabBreakpoint() {
-            let lastWide = window.innerWidth >= 1280;
-            window.addEventListener('resize', () => {
-                const nowWide = window.innerWidth >= 1280;
-                if (nowWide && !lastWide) {
-                    const coreBtn = document.getElementById('btn-tab-core');
-                    if (coreBtn && coreBtn.classList.contains('active')) {
-                        switchTab('combat');
+        try {
+            (function watchTabBreakpoint() {
+                let lastWide = window.innerWidth >= 1280;
+                window.addEventListener('resize', () => {
+                    const nowWide = window.innerWidth >= 1280;
+                    if (nowWide && !lastWide) {
+                        const coreBtn = document.getElementById('btn-tab-core');
+                        if (coreBtn && coreBtn.classList.contains('active')) {
+                            switchTab('combat');
+                        }
                     }
-                }
-                lastWide = nowWide;
-            });
-        })();
+                    lastWide = nowWide;
+                });
+            })();
+        } catch(e) { console.error('tab breakpoint watcher init:', e); }
 
         // Header HP chip is updated directly by applyHpUpdate / modifyHP —
         // no MutationObserver needed. Initial value is set by Jinja.
@@ -8226,120 +8264,126 @@
         // Hook into the existing _sheetMarkSseAlive heartbeat to set live
         // state. Independently watch for "no heartbeat in 12s" → stale,
         // 30s → dead. Cheap interval (1Hz). Click the dead pip to reload.
-        (function initConnPip() {
-            const pip = document.getElementById('conn-pip');
-            const lbl = document.getElementById('conn-pip-label');
-            if (!pip || !lbl) return;
-            let lastBeat = Date.now();
-            // Wrap _sheetMarkSseAlive if defined
-            if (typeof window._sheetMarkSseAlive === 'function') {
-                const orig = window._sheetMarkSseAlive;
-                window._sheetMarkSseAlive = function() { lastBeat = Date.now(); return orig.apply(this, arguments); };
-            } else {
-                // Fallback: tap into pf2e-encounter-update too.
-                window.addEventListener('pf2e-encounter-update', () => { lastBeat = Date.now(); });
-            }
-            setInterval(() => {
-                const age = Date.now() - lastBeat;
-                let state = 'alive', text = 'live';
-                if (age > 30000) { state = 'dead'; text = 'offline — click to reload'; }
-                else if (age > 12000) { state = 'stale'; text = 'reconnecting'; }
-                if (pip.dataset.state !== state) {
-                    pip.dataset.state = state;
-                    lbl.textContent = text;
+        try {
+            (function initConnPip() {
+                const pip = document.getElementById('conn-pip');
+                const lbl = document.getElementById('conn-pip-label');
+                if (!pip || !lbl) return;
+                let lastBeat = Date.now();
+                // Wrap _sheetMarkSseAlive if defined
+                if (typeof window._sheetMarkSseAlive === 'function') {
+                    const orig = window._sheetMarkSseAlive;
+                    window._sheetMarkSseAlive = function() { lastBeat = Date.now(); return orig.apply(this, arguments); };
+                } else {
+                    // Fallback: tap into pf2e-encounter-update too.
+                    window.addEventListener('pf2e-encounter-update', () => { lastBeat = Date.now(); });
                 }
-            }, 1000);
-            pip.addEventListener('click', () => {
-                if (pip.dataset.state === 'dead') window.location.reload();
-            });
-        })();
+                setInterval(() => {
+                    const age = Date.now() - lastBeat;
+                    let state = 'alive', text = 'live';
+                    if (age > 30000) { state = 'dead'; text = 'offline — click to reload'; }
+                    else if (age > 12000) { state = 'stale'; text = 'reconnecting'; }
+                    if (pip.dataset.state !== state) {
+                        pip.dataset.state = state;
+                        lbl.textContent = text;
+                    }
+                }, 1000);
+                pip.addEventListener('click', () => {
+                    if (pip.dataset.state === 'dead') window.location.reload();
+                });
+            })();
+        } catch(e) { console.error('connection pip init:', e); }
 
         // ----- Reaction auto-reset on round tick --------------------------
         // The reaction chip already exists in markup — just listen for
         // round changes via the encounter MutationObserver and call
         // /api/set_reaction with used=false when a new round begins.
-        (function wireReactionReset() {
-            let lastRound = null;
-            window.addEventListener('pf2e-encounter-update', () => {
-                const bar = document.getElementById('encounter-initiative-bar');
-                if (!bar) return;
-                const m = /Round\s*(\d+)/.exec(bar.textContent || '');
-                if (!m) return;
-                const r = parseInt(m[1], 10);
-                if (lastRound !== null && r > lastRound && typeof reactionUsed !== 'undefined' && reactionUsed) {
-                    fetch(`/api/set_reaction/${pcNameEncoded}`, {
-                        method: 'POST', headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({used: false})
-                    }).then(r => r.json()).then(d => {
-                        if (d && d.success) {
-                            window.reactionUsed = false;
-                            if (typeof _paintReactionChip === 'function') _paintReactionChip();
-                        }
-                    }).catch(() => {});
-                }
-                lastRound = r;
-            });
-        })();
+        try {
+            (function wireReactionReset() {
+                let lastRound = null;
+                window.addEventListener('pf2e-encounter-update', () => {
+                    const bar = document.getElementById('encounter-initiative-bar');
+                    if (!bar) return;
+                    const m = /Round\s*(\d+)/.exec(bar.textContent || '');
+                    if (!m) return;
+                    const r = parseInt(m[1], 10);
+                    if (lastRound !== null && r > lastRound && typeof reactionUsed !== 'undefined' && reactionUsed) {
+                        fetch(`/api/set_reaction/${pcNameEncoded}`, {
+                            method: 'POST', headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({used: false})
+                        }).then(r => r.json()).then(d => {
+                            if (d && d.success) {
+                                window.reactionUsed = false;
+                                if (typeof _paintReactionChip === 'function') _paintReactionChip();
+                            }
+                        }).catch(() => {});
+                    }
+                    lastRound = r;
+                });
+            })();
+        } catch(e) { console.error('reaction reset init:', e); }
 
         // ----- Strike chain auto-progression ------------------------------
         // After clicking 1st Strike, dim it and add the "next" highlight to
         // 2nd. After 2nd, highlight 3rd. Reset on round/turn change. We do
         // NOT touch what rollAttack does; we just paint state.
-        (function wireStrikeChain() {
-            // Tag the 1st/2nd/3rd buttons within each weapon row so we can
-            // step through them. Each weapon's row has three buttons in
-            // order: identify by sibling index inside the same flex.
-            function getStrikeRows() {
-                const rows = [];
-                document.querySelectorAll('button[onclick^="rollAttack"]').forEach(btn => {
-                    const flex = btn.parentElement;
-                    if (!flex) return;
-                    if (!flex.dataset.strikeRow) {
-                        flex.dataset.strikeRow = '1';
-                        const buttons = Array.from(flex.querySelectorAll('button[onclick^="rollAttack"]'));
-                        buttons.forEach((b, i) => b.dataset.strikeIdx = i);
-                        rows.push({ flex, buttons });
-                    }
-                });
-                return rows;
-            }
-            function dimSpent(flex, idx) {
-                const buttons = Array.from(flex.querySelectorAll('button[onclick^="rollAttack"]'));
-                buttons.forEach((b, i) => {
-                    b.classList.remove('strike-spent', 'strike-next');
-                    if (i <= idx) b.classList.add('strike-spent');
-                    if (i === idx + 1) b.classList.add('strike-next');
-                });
-            }
-            function resetAll() {
-                document.querySelectorAll('button[onclick^="rollAttack"]').forEach(b => {
-                    b.classList.remove('strike-spent', 'strike-next');
-                });
-            }
-            // Delegate click capture
-            document.addEventListener('click', (e) => {
-                const btn = e.target.closest && e.target.closest('button[onclick^="rollAttack"]');
-                if (!btn) return;
-                getStrikeRows();  // ensure tagged
-                const flex = btn.parentElement;
-                const idx = parseInt(btn.dataset.strikeIdx || '0', 10);
-                if (flex) dimSpent(flex, idx);
-            }, true);
-            // Reset on round tick (or turn change)
-            let lastRound = null, lastActive = null;
-            window.addEventListener('pf2e-encounter-update', (e) => {
-                const enc = (e.detail && e.detail.encounter) || [];
-                const active = enc.find(c => c.is_active);
-                const bar = document.getElementById('encounter-initiative-bar');
-                const m = bar ? /Round\s*(\d+)/.exec(bar.textContent || '') : null;
-                const r = m ? parseInt(m[1], 10) : null;
-                const aName = active ? active.name : null;
-                if ((lastRound !== null && r !== lastRound) || (lastActive !== null && aName !== lastActive)) {
-                    resetAll();
+        try {
+            (function wireStrikeChain() {
+                // Tag the 1st/2nd/3rd buttons within each weapon row so we can
+                // step through them. Each weapon's row has three buttons in
+                // order: identify by sibling index inside the same flex.
+                function getStrikeRows() {
+                    const rows = [];
+                    document.querySelectorAll('button[onclick^="rollAttack"]').forEach(btn => {
+                        const flex = btn.parentElement;
+                        if (!flex) return;
+                        if (!flex.dataset.strikeRow) {
+                            flex.dataset.strikeRow = '1';
+                            const buttons = Array.from(flex.querySelectorAll('button[onclick^="rollAttack"]'));
+                            buttons.forEach((b, i) => b.dataset.strikeIdx = i);
+                            rows.push({ flex, buttons });
+                        }
+                    });
+                    return rows;
                 }
-                lastRound = r; lastActive = aName;
-            });
-        })();
+                function dimSpent(flex, idx) {
+                    const buttons = Array.from(flex.querySelectorAll('button[onclick^="rollAttack"]'));
+                    buttons.forEach((b, i) => {
+                        b.classList.remove('strike-spent', 'strike-next');
+                        if (i <= idx) b.classList.add('strike-spent');
+                        if (i === idx + 1) b.classList.add('strike-next');
+                    });
+                }
+                function resetAll() {
+                    document.querySelectorAll('button[onclick^="rollAttack"]').forEach(b => {
+                        b.classList.remove('strike-spent', 'strike-next');
+                    });
+                }
+                // Delegate click capture
+                document.addEventListener('click', (e) => {
+                    const btn = e.target.closest && e.target.closest('button[onclick^="rollAttack"]');
+                    if (!btn) return;
+                    getStrikeRows();  // ensure tagged
+                    const flex = btn.parentElement;
+                    const idx = parseInt(btn.dataset.strikeIdx || '0', 10);
+                    if (flex) dimSpent(flex, idx);
+                }, true);
+                // Reset on round tick (or turn change)
+                let lastRound = null, lastActive = null;
+                window.addEventListener('pf2e-encounter-update', (e) => {
+                    const enc = (e.detail && e.detail.encounter) || [];
+                    const active = enc.find(c => c.is_active);
+                    const bar = document.getElementById('encounter-initiative-bar');
+                    const m = bar ? /Round\s*(\d+)/.exec(bar.textContent || '') : null;
+                    const r = m ? parseInt(m[1], 10) : null;
+                    const aName = active ? active.name : null;
+                    if ((lastRound !== null && r !== lastRound) || (lastActive !== null && aName !== lastActive)) {
+                        resetAll();
+                    }
+                    lastRound = r; lastActive = aName;
+                });
+            })();
+        } catch(e) { console.error('strike chain init:', e); }
 
         // ----- Dying widget (Wave 2 #4) -----------------------------------
         // Driven by pc.conditions.dying / wounded already coming from the
@@ -8379,28 +8423,30 @@
         }
         // Hook into the existing applyHpUpdate / applyConditionUpdate so the
         // widget + edge-bleed update whenever HP or conditions change.
-        (function patchHpAndConditions() {
-            const origHp = window.applyHpUpdate;
-            if (typeof origHp === 'function') {
-                window.applyHpUpdate = function() {
-                    const r = origHp.apply(this, arguments);
-                    try { _refreshDyingWidget(); } catch(_) {}
-                    try { _paintDeathsDoor(); } catch(_) {}
-                    return r;
-                };
-            }
-            const origCond = window.applyConditionUpdate;
-            if (typeof origCond === 'function') {
-                window.applyConditionUpdate = function() {
-                    const r = origCond.apply(this, arguments);
-                    try { _refreshDyingWidget(); } catch(_) {}
-                    try { _paintDeathsDoor(); } catch(_) {}
-                    return r;
-                };
-            }
-            _refreshDyingWidget();
-            _paintDeathsDoor();
-        })();
+        try {
+            (function patchHpAndConditions() {
+                const origHp = window.applyHpUpdate;
+                if (typeof origHp === 'function') {
+                    window.applyHpUpdate = function() {
+                        const r = origHp.apply(this, arguments);
+                        try { _refreshDyingWidget(); } catch(_) {}
+                        try { _paintDeathsDoor(); } catch(_) {}
+                        return r;
+                    };
+                }
+                const origCond = window.applyConditionUpdate;
+                if (typeof origCond === 'function') {
+                    window.applyConditionUpdate = function() {
+                        const r = origCond.apply(this, arguments);
+                        try { _refreshDyingWidget(); } catch(_) {}
+                        try { _paintDeathsDoor(); } catch(_) {}
+                        return r;
+                    };
+                }
+                _refreshDyingWidget();
+                _paintDeathsDoor();
+            })();
+        } catch(e) { console.error('hp/conditions patch init:', e); }
         function rollRecoveryCheck() {
             const dying = (currentConditions || {}).dying || 1;
             const dc = 10 + dying;
@@ -9735,98 +9781,7 @@
 
 {% include "_pc_sheet/_context_menu.html" %}
 
-    {# ── Standalone skill-actions builder ─────────────────────────────
-       Lives in its own <script> tag at the END of body so an upstream
-       throw in the giant in-line script block (1.1 MB) cannot kill it.
-       Players were missing Grapple/Trip/etc because the original IIFE
-       was buried in that giant block and never ran. This is the safety
-       net that always fires regardless. #}
     <script>
-    (function buildSkillActionsStandalone() {
-        const row = document.getElementById('skill-actions-row');
-        if (!row || row.children.length > 0) return;
-        // Local, self-contained pip builder — deliberately NOT calling the
-        // main script's buildActionPips(), since this whole script tag
-        // exists to survive an upstream throw in that block (see comment
-        // above). Mirrors its '1'/'2'/'3'/reaction/free -> .action-pips
-        // markup so Skill Actions still match the unified diamond-pip
-        // language (audit N5/F3) even in the degraded-safety-net path.
-        // Input contract today: every caller passes '1'. Keep both builders' semantics identical (see buildActionPips/_standaloneActionPips).
-        function _standaloneActionPips(cost) {
-            const s = String(cost || '').trim().toLowerCase();
-            const ACTION_DIAMOND = '◆';
-            const FREE_DIAMOND   = '◇';
-            const REACTION_GLYPH = '⟳';
-            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>';
-            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>';
-
-            let count = 0;
-            if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
-                count = parseInt(s, 10);
-            } else {
-                count = (String(cost).match(new RegExp(ACTION_DIAMOND, 'g')) || []).length;
-            }
-            if (count === 0 && String(cost).indexOf(ACTION_DIAMOND) >= 0) count = 1;
-            if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${cost || ''}</span>`;
-
-            const _pipTitle = ['One Action', 'Two Actions', 'Three Actions'][count - 1] || (count + ' Actions');
-            let pips = '';
-            for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
-            return `<span class="action-pips" title="${_pipTitle}">${pips}</span>`;
-        }
-        const skills = {{ pc.skills | tojson | safe }};
-        const mods   = {{ pc.mods   | tojson | safe }};
-        const SKILL_ABILITY = {
-            'acrobatics':'dex','arcana':'int','athletics':'str','crafting':'int',
-            'deception':'cha','diplomacy':'cha','intimidation':'cha','medicine':'wis',
-            'nature':'wis','occultism':'int','performance':'cha','religion':'wis',
-            'society':'int','stealth':'dex','survival':'wis','thievery':'dex',
-        };
-        function getMod(name) {
-            const s = skills.find(s => s.name && s.name.toLowerCase() === name.toLowerCase());
-            if (s && s.total !== undefined) {
-                const v = typeof s.total === 'string' ? parseInt(s.total, 10) : s.total;
-                if (!isNaN(v)) return { mod: v, trained: true };
-            }
-            const ab = SKILL_ABILITY[name.toLowerCase()];
-            if (ab && typeof mods[ab] === 'number') return { mod: mods[ab], trained: false };
-            return { mod: 0, trained: false };
-        }
-        const ACTIONS = [
-            { name: 'Demoralize',     skill: 'Intimidation', cost: '1', vs: 'Will DC',       hint: 'Frightened 1 (crit: 2). −10 if you don\'t share a language.' },
-            { name: 'Trip',           skill: 'Athletics',    cost: '1', vs: 'Reflex DC',     hint: 'Crit: prone + 1d6 dmg.' },
-            { name: 'Grapple',        skill: 'Athletics',    cost: '1', vs: 'Fortitude DC',  hint: 'Success: Grabbed. Crit: Restrained.' },
-            { name: 'Shove',          skill: 'Athletics',    cost: '1', vs: 'Fortitude DC',  hint: 'Success: 5 ft push. Crit: 10 ft + prone.' },
-            { name: 'Tumble Through', skill: 'Acrobatics',   cost: '1', vs: 'Reflex DC',     hint: 'Move through enemy\'s square (and avoid Reactive Strike).' },
-            { name: 'Feint',          skill: 'Deception',    cost: '1', vs: 'Perception DC', hint: 'Success: target Off-Guard until end of your next turn.' },
-            { name: 'Bon Mot',        skill: 'Diplomacy',    cost: '1', vs: 'Will DC',       hint: 'Skill feat. Crit: −3 Perception/Will.' },
-            { name: 'Recall Knowledge', skill: 'Arcana',     cost: '1', vs: 'Lore DC',       hint: 'Pick the relevant Lore skill (Arcana/Religion/Nature/etc).' },
-        ];
-        const html = [];
-        ACTIONS.forEach(a => {
-            let info = getMod(a.skill);
-            let skillToUse = a.skill;
-            if (a.name === 'Recall Knowledge') {
-                const candidates = ['Arcana','Religion','Nature','Occultism','Society','Crafting','Medicine'];
-                let best = null, bestInfo = null;
-                candidates.forEach(c => {
-                    const m = getMod(c);
-                    if (m && (bestInfo === null || m.mod > bestInfo.mod)) { best = c; bestInfo = m; }
-                });
-                if (best && bestInfo) { skillToUse = best; info = bestInfo; }
-            }
-            const mod = info.mod;
-            const sign = mod >= 0 ? '+' : '';
-            const untTag = !info.trained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
-            const handler = `(typeof rollSkillAction === 'function' ? rollSkillAction : function(n,s,m,v){alert(n+' '+s+' '+m+' vs '+v);})('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')`;
-            html.push(`<button type="button" class="skill-action-btn" onclick="${handler}" title="${a.hint}${!info.trained ? ' [Untrained]' : ''}">
-                <span class="skill-action-btn-name">${a.name} ${_standaloneActionPips(a.cost)}</span>
-                <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
-            </button>`);
-        });
-        row.innerHTML = html.join('');
-    })();
-
     // ═════════════════════════════════════════════════════════════════
     // TIER 4 FEATURE #16 — FAVORITE ACTIONS BAR
     // Pin up to 4 most-used rolls to a sticky bar below the stats strip.
