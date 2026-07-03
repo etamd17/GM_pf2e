@@ -3563,6 +3563,10 @@
                 }
                 const data = await res.json();
                 if (data.success) {
+                    // Adopt the server-echoed map BEFORE painting so readers of
+                    // currentConditions (e.g. _refreshDyingWidget) see the new
+                    // state immediately, and the later SSE echo self-suppresses.
+                    currentConditions = data.conditions || {};
                     _refreshConditionStrip();
                     _paintMetaQuickConds(data.conditions || {});
                     var _v = (data.conditions || {})[cond];
@@ -3617,9 +3621,10 @@
                 const n = Object.values(conds || {}).filter(v => v && v !== 0).length;
                 countEl.textContent = n > 0 ? `(${n} active)` : '';
             }
-            // Local condition edits must also refresh the dying widget (and its
-            // dying-active HP-card pulse) -- the SSE echo is suppressed as a
-            // same-value repaint, so this local paint path is the only trigger.
+            // Refresh the dying widget (and its dying-active HP-card pulse) on
+            // every quick-conditions repaint. The local adjustCondition path now
+            // adopts the server-echoed map into currentConditions before calling
+            // this, so the read here is fresh for local edits and SSE alike.
             try { _refreshDyingWidget(); } catch(_) {}
         }
 
@@ -6396,8 +6401,8 @@
             const ACTION_DIAMOND = '◆';
             const FREE_DIAMOND   = '◇';
             const REACTION_GLYPH = '⟳';
-            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
-            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips"><span class="action-pip free"></span></span>';
+            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>';
 
             let count = 0;
             if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
@@ -6409,9 +6414,10 @@
             if (count === 0 && actionStr.indexOf(ACTION_DIAMOND) >= 0) count = 1;
             if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${actionStr || ''}</span>`;
 
+            const _pipTitle = ['One Action', 'Two Actions', 'Three Actions'][count - 1] || (count + ' Actions');
             let pips = '';
             for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
-            return `<span class="action-pips">${pips}</span>`;
+            return `<span class="action-pips" title="${_pipTitle}">${pips}</span>`;
         }
         
         function parseSpellMeta(desc, actions) {
@@ -9749,8 +9755,8 @@
             const ACTION_DIAMOND = '◆';
             const FREE_DIAMOND   = '◇';
             const REACTION_GLYPH = '⟳';
-            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
-            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips"><span class="action-pip free"></span></span>';
+            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>';
 
             let count = 0;
             if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
@@ -9761,9 +9767,10 @@
             if (count === 0 && String(cost).indexOf(ACTION_DIAMOND) >= 0) count = 1;
             if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${cost || ''}</span>`;
 
+            const _pipTitle = ['One Action', 'Two Actions', 'Three Actions'][count - 1] || (count + ' Actions');
             let pips = '';
             for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
-            return `<span class="action-pips">${pips}</span>`;
+            return `<span class="action-pips" title="${_pipTitle}">${pips}</span>`;
         }
         const skills = {{ pc.skills | tojson | safe }};
         const mods   = {{ pc.mods   | tojson | safe }};

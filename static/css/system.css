@@ -4752,7 +4752,7 @@ body.system-cosmere .trk .grid-wrap::after {
 /* ── COMBAT IDENTITY: player-sheet ports ─────────────────────────────
    The tracker rules above are .trk-scoped. The PF2e sheet reuses the SAME
    keyframes with sheet-scoped selectors -- keep keyframes single-sourced. */
-.hp-gauge-bar { position:relative; overflow:visible; }
+.hp-gauge-bar { position:relative; }
 .hp-gauge-bar .hp-ghost {
     position:absolute; left:0; top:0; bottom:0; border-radius:inherit;
     background:var(--ruby-200); opacity:.55; z-index:0;
@@ -4803,6 +4803,11 @@ body.system-cosmere .trk .grid-wrap::after {
     width:auto; height:auto; display:inline-block;
 }
 .action-pip.reaction::after { content:"\27F3"; color:var(--t-red-b, #c85a5a); font-weight:700; font-size:11px; line-height:1; }
+/* The tracker's reaction pips carry the glyph as INNER TEXT (tracker.html's
+   costPips), so the unscoped ::after above would render a SECOND arrow
+   there. Reset it inside .trk -- the sheet emits an empty span and needs
+   the ::after; the tracker does not. */
+.trk .action-pip.reaction::after { content:none; }
 
 /* Ember ambient — quiet, sheet-scoped reuse of the tracker's trkEmber
    keyframe at reduced intensity. Added to the sheet's main content
