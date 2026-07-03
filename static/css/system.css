@@ -4780,6 +4780,9 @@ body.system-cosmere .trk .grid-wrap::after {
 
 .sheet-port-glyph { position:absolute; inset:0; width:100%; height:100%; opacity:.26; color:var(--gilt-300); }
 
+/* Level-up pop-in animation (matches tracker's trkCondIn). */
+#ready-to-level-banner.trk-cond-in { animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+
 /* Action-COST pips, sheet-scoped (audit N5/F3/N6). The sheet previously ran
    THREE competing "how many actions does this cost" visual languages: a
    flat blue-square .action-pip, a red-gules .action-cost badge, and dead

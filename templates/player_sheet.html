@@ -6375,6 +6375,7 @@
         }
 
         
+        // Input contract today: every caller passes '1'. Keep both builders' semantics identical (see buildActionPips/_standaloneActionPips).
         function buildActionPips(actionStr) {
             const s = (actionStr || '').trim().toLowerCase();
             // Glyphs encoded as unicode escapes so a future emoji-strip pass
@@ -9729,13 +9730,26 @@
         // above). Mirrors its '1'/'2'/'3'/reaction/free -> .action-pips
         // markup so Skill Actions still match the unified diamond-pip
         // language (audit N5/F3) even in the degraded-safety-net path.
+        // Input contract today: every caller passes '1'. Keep both builders' semantics identical (see buildActionPips/_standaloneActionPips).
         function _standaloneActionPips(cost) {
             const s = String(cost || '').trim().toLowerCase();
-            if (s === 'r' || s === 'reaction') return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
-            if (s === 'f' || s === 'free')     return '<span class="action-pips"><span class="action-pip free"></span></span>';
-            const n = parseInt(s, 10) || 1;
+            const ACTION_DIAMOND = '◆';
+            const FREE_DIAMOND   = '◇';
+            const REACTION_GLYPH = '⟳';
+            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips"><span class="action-pip free"></span></span>';
+
+            let count = 0;
+            if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
+                count = parseInt(s, 10);
+            } else {
+                count = (String(cost).match(new RegExp(ACTION_DIAMOND, 'g')) || []).length;
+            }
+            if (count === 0 && String(cost).indexOf(ACTION_DIAMOND) >= 0) count = 1;
+            if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${cost || ''}</span>`;
+
             let pips = '';
-            for (let i = 0; i < n; i++) pips += '<span class="action-pip"></span>';
+            for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
             return `<span class="action-pips">${pips}</span>`;
         }
         const skills = {{ pc.skills | tojson | safe }};
