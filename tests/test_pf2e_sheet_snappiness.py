@@ -47,10 +47,10 @@ def test_persistent_damage_handlers_dropped_the_reload(kyle):
 
 # ── Derived-stat payload + in-place toggle painters (PR #29) ──────────────
 # A condition / feature / two-hand change ripples into strike mods, save totals,
-# skill totals, AC and the Conditions Matrix. The sheet repaints those in place
-# from the pc_update `derived` block instead of a full-page reload. These guard
-# the data contract between the server payload and the client painters so a
-# future shape change to pc.fort/pc.skills/pc.attacks can't silently break them.
+# skill totals and AC. The sheet repaints those in place from the pc_update
+# `derived` block instead of a full-page reload. These guard the data contract
+# between the server payload and the client painters so a future shape change
+# to pc.fort/pc.skills/pc.attacks can't silently break them.
 
 def test_pc_update_derived_payload_matches_pc(kyle, monkeypatch):
     pc = app_module.PARTY_LIBRARY['Kyle']
@@ -102,21 +102,25 @@ def _fn_block(body, decl, end_anchor):
 
 def test_combat_hot_toggles_paint_in_place(kyle):
     body = app_module.app.test_client().get('/player/sheet/Kyle').data.decode()
-    # painters are defined
-    for fn in ('_paintDerived', '_paintConditionsMatrix', '_paintFeatureToggle',
+    # painters are defined. _paintConditionsMatrix was removed along with the
+    # Combat-tab Conditions Matrix card (PF2e sheet de-noise pass) — the top
+    # condition-strip and the folded left-rail Quick Conditions editor are
+    # now the only two condition-editing surfaces, both painted via
+    # _paintMetaQuickConds / applyConditionUpdate instead.
+    for fn in ('_paintDerived', '_paintFeatureToggle',
                '_paintSavesBlock', '_paintSkills', '_paintAttacks'):
         assert f'function {fn}' in body, f'{fn} painter missing'
-    # the pc_update handler applies the derived block + conditions matrix in place
+    assert 'function _paintConditionsMatrix' not in body
+    # the pc_update handler applies the derived block in place
     assert '_paintDerived(data.derived)' in body
-    assert '_paintConditionsMatrix(data.conditions' in body
 
     # the three combat-hot handlers dropped the reload and paint instead
     upd = _fn_block(body, 'async function updateCondition',
                     'window.updateCondition = updateCondition')
     assert 'location.reload' not in upd
-    assert '_paintConditionsMatrix(data.conditions' in upd
+    assert '_paintMetaQuickConds(data.conditions' in upd
 
-    feat = _fn_block(body, 'async function toggleFeature', 'function openConditionAdder')
+    feat = _fn_block(body, 'async function toggleFeature', 'async function dailyPrep')
     assert 'location.reload' not in feat
     assert '_paintFeatureToggle(featureName' in feat
 

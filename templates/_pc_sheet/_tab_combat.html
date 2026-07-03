@@ -38,62 +38,6 @@
                         </div>
                     </div>
 
-                    <div class="panel-card">
-                        <h3 class="section-header">Conditions Matrix</h3>
-                        
-                        {% set condition_tips = {
-                            'frightened': '−X to all checks, DCs, saves, and attack rolls',
-                            'sickened': '−X to all checks, DCs, saves, and attack rolls. Must retch (Fort DC) to reduce.',
-                            'enfeebled': '−X to Str-based attacks, damage, and Athletics checks',
-                            'clumsy': '−X to Dex-based checks, AC, and Reflex saves',
-                            'drained': '−X to Con-based checks and max HP reduced by X × level',
-                            'stupefied': '−X to Int/Wis/Cha-based checks and spell DCs. Flat check X to cast spells.'
-                        } %}
-                        
-                        <div class="text-[9px] font-bold uppercase tracking-widest mb-1.5" style="color:var(--text-faint); letter-spacing:0.18em;">Numeric Conditions</div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                            {% for cond in ['Frightened', 'Sickened', 'Enfeebled', 'Clumsy', 'Drained', 'Stupefied'] %}
-                            {% set c_lower = cond|lower %}
-                            {% set c_val = pc.conditions.get(c_lower, 0) %}
-                            <div data-cm-num="{{ c_lower }}" class="cond-numeric bg-gray-900 px-3 py-2 rounded-lg border border-gray-700 flex flex-col shadow-inner group {{ 'is-on' if c_val > 0 else '' }}" title="{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}">
-                                <div class="cond-row">
-                                    <span class="cond-name text-[10px] font-bold uppercase {{ 'text-red-400' if c_val > 0 else 'text-gray-400' }}">{{ cond }}</span>
-                                    <div class="cond-ctrl">
-                                        {# Delta-based so the onclick is static — the painter only refreshes
-                                           the displayed value/styling, never the handler (server clamps 0–4). #}
-                                        <button onclick="adjustCondition('{{ c_lower }}', -1)" class="cond-step text-gray-300 hover:text-white" aria-label="Decrease {{ cond }}">−</button>
-                                        <span class="cond-val {{ 'text-red-400' if c_val > 0 else 'text-gray-500' }}">{{ c_val }}</span>
-                                        <button onclick="adjustCondition('{{ c_lower }}', 1)" class="cond-step text-gray-300 hover:text-white" aria-label="Increase {{ cond }}">+</button>
-                                    </div>
-                                </div>
-                                <div data-cm-desc class="text-[10px] text-red-300/80 mt-1 leading-tight"{% if not c_val or c_val <= 0 %} style="display:none;"{% endif %}>{% if c_val > 0 %}{{ condition_tips.get(c_lower, '') | replace('X', c_val|string) }}{% endif %}</div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        
-                        {% set toggle_tips = {
-                            'prone': 'Off-Guard (−2 AC). Standing costs an action. −2 to attacks.',
-                            'off_guard': '−2 AC. Vulnerable to Sneak Attack and precision damage.',
-                            'concealed': 'Attackers must succeed at DC 5 flat check to target you.',
-                            'hidden': 'Must Seek to find. Attackers need DC 11 flat check even if they guess your space.'
-                        } %}
-                        
-                        <div class="text-[9px] font-bold uppercase tracking-widest mb-1.5" style="color:var(--text-faint); letter-spacing:0.18em;">Toggle Conditions</div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {% for cond in ['Prone', 'Off_Guard', 'Concealed', 'Hidden'] %}
-                            {% set c_lower = cond|lower %}
-                            {% set c_val = pc.conditions.get(c_lower, False) %}
-                            <div class="flex flex-col">
-                                <button data-cm-bool="{{ c_lower }}" onclick="adjustCondition('{{ c_lower }}', 'toggle')" class="cond-toggle rounded-lg border flex justify-between items-center shadow-inner transition-colors {{ 'border-red-900/50 bg-red-900/20' if c_val else 'bg-gray-900 border-gray-700 hover:border-gray-500' }}" title="{{ toggle_tips.get(c_lower, '') }}">
-                                    <span class="cm-bool-name text-[11px] font-bold uppercase tracking-wider {{ 'text-red-400' if c_val else 'text-gray-400' }}">{{ cond|replace('_', ' ') }}</span>
-                                    <span class="cm-bool-state text-[10px] font-bold {{ 'text-red-400' if c_val else 'text-gray-600' }}">{% if c_val %}ON{% else %}OFF{% endif %}</span>
-                                </button>
-                                <div data-cm-bool-desc class="text-[10px] text-red-300/80 mt-1 px-1 leading-tight"{% if not c_val %} style="display:none;"{% endif %}>{{ toggle_tips.get(c_lower, '') }}</div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
                     {# Active Effects — sheet-level spell/feat/item buffs.
                        The list is server-rendered on first paint so a
                        slow SSE reconnect doesn't show an empty card; the
@@ -141,16 +85,20 @@
 
                         {# PF2e core reminder — new players routinely forget the
                            ±10 crit rule and the −5 / −10 MAP penalties. Pathbuilder
-                           exposes the same reference on the attacks panel. #}
-                        <div class="mb-3 px-3 py-2 rounded flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px]"
-                             style="background:var(--bg-raised); border:1px dashed var(--border-subtle); color:var(--text-muted);"
-                             title="Critical hit: roll exceeds target DC by 10, OR a nat 20 that hits. Critical miss: roll falls 10 below DC, OR a nat 1 that misses. Multiple Attack Penalty stacks each Strike.">
-                            <span class="font-header tracking-wider uppercase">Rules</span>
-                            <span><span style="color:#FBBF24;">Crit</span> = beat target DC by 10 (or nat 20 on hit)</span>
-                            <span><span style="color:#F87171;">Crit Fail</span> = miss DC by 10 (or nat 1 on miss)</span>
-                            <span><span style="color:var(--accent-gold);">MAP</span> −5 / −10 (−4 / −8 on agile)</span>
-                        </div>
-                        
+                           exposes the same reference on the attacks panel. Folded
+                           behind the same class-cheatsheet <details> pattern used
+                           on the Feats tab — closed by default so it stops eating
+                           space for players who already know the math. #}
+                        <details class="class-cheatsheet mb-3">
+                            <summary>Crit &amp; MAP Rules Reminder</summary>
+                            <div class="class-cheatsheet-body flex flex-wrap items-center gap-x-4 gap-y-1"
+                                 title="Critical hit: roll exceeds target DC by 10, OR a nat 20 that hits. Critical miss: roll falls 10 below DC, OR a nat 1 that misses. Multiple Attack Penalty stacks each Strike.">
+                                <span><span style="color:#FBBF24;">Crit</span> = beat target DC by 10 (or nat 20 on hit)</span>
+                                <span><span style="color:#F87171;">Crit Fail</span> = miss DC by 10 (or nat 1 on miss)</span>
+                                <span><span style="color:var(--accent-gold);">MAP</span> −5 / −10 (−4 / −8 on agile)</span>
+                            </div>
+                        </details>
+
                         <div id="forge-ui" class="hidden bg-gray-900 border border-amber-500/30 rounded p-4 mb-6">
                             <h4 class="text-amber-400 font-bold mb-3">Weapon Forge</h4>
                             <p class="text-xs text-gray-400 mb-3 italic">ABP is enabled. Matrix attack potency applies automatically.</p>

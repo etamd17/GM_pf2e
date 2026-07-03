@@ -116,6 +116,12 @@
                                 <button onclick="rollCustomDice()" class="tb" style="padding:4px 10px; font-size:11px;">Roll</button>
                             </div>
                             <button onclick="rollInitiativeFromSheet(); closePlayerOverflow();" role="menuitem">Roll initiative</button>
+                            {# Daily Prep — full reset (spells, focus, HP to full, combat
+                               conditions cleared). Was the sole button inside the hidden
+                               #cond-adder panel (removed as dead/orphaned chrome); moved
+                               here so the action stays reachable. Distinct from Long Rest
+                               (Con-mod partial heal) in the main toolbar. #}
+                            <button onclick="dailyPrep(); closePlayerOverflow();" role="menuitem" title="Reset spell slots, restore focus, clear combat conditions, and heal to full HP">Daily Prep</button>
                             <div class="sep"></div>
                             {% if pc.level > 1 %}<button onclick="revertLevel(); closePlayerOverflow();" id="btn-revert" role="menuitem">Undo last level-up</button>{% endif %}
                             <button onclick="window.print(); closePlayerOverflow();" role="menuitem">Print sheet</button>
@@ -177,6 +183,13 @@
                 <div class="ss-lbl">Perception</div>
                 <div class="ss-val">+{{ pc.perception }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
+                {# Initiative — same number by default in PF2e (Perception-based).
+                   Was a standalone left-rail row; merged here since it duplicated
+                   this tile's value. Stop propagation so the roll doesn't also
+                   fire the tile's own Perception rollable-element handler. #}
+                <div class="ss-sub" style="margin-top:2px;">
+                    <button onclick="event.stopPropagation(); rollInitiativeFromSheet()" style="background:transparent; border:none; cursor:pointer; padding:0; font:inherit; font-size:9px; color:var(--accent); letter-spacing:0.04em;" title="Roll initiative (+{{ pc.initiative_mod }})">Init +{{ pc.initiative_mod }}</button>
+                </div>
             </div>
 
             <!-- Class DC -->

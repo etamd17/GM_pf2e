@@ -60,7 +60,14 @@
                                     <h3 class="text-xl font-header" style="color:var(--color-spell);">{{ caster.name }}</h3>
                                     <span class="font-header text-[9px] tracking-wider uppercase px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.2); color:var(--color-spell);" title="Spell Tradition">{{ caster.tradition }}</span>
                                 </div>
-                                <div class="caster-mental-model">{{ _model | safe }}</div>
+                                {# Caster "mental model" prose — explains what Prepared/Spontaneous/
+                                   Focus/etc casting means. Onboarding content a returning player has
+                                   already read; folded behind the same class-cheatsheet <details>
+                                   pattern used on the Feats tab, closed by default. #}
+                                <details class="class-cheatsheet" style="margin-bottom:0;">
+                                    <summary>How {{ _chip_label }} Casting Works</summary>
+                                    <div class="class-cheatsheet-body caster-mental-model">{{ _model | safe }}</div>
+                                </details>
                                 <div class="flex gap-3 items-center text-xs flex-wrap mt-2">
                                     {% if pc.spell_attack > 0 and caster.type != 'Alchemical' %}
                                     <span class="font-header text-[10px] px-2 py-0.5 rounded" style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); color:var(--color-spell);">{% if 'impulse' in c_type_lower %}Class{% else %}Atk{% endif %} +{{ pc.spell_attack }}</span>

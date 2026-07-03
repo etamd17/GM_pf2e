@@ -32,10 +32,6 @@
                 <span class="meta-card-lbl">Size</span>
                 <span class="meta-card-val">{{ pc.size }}</span>
             </div>
-            <div class="meta-card-row">
-                <span class="meta-card-lbl">Speed</span>
-                <span class="meta-card-val">{{ pc.active_speed }} ft</span>
-            </div>
         </div>
         {% if pc.languages %}
         <div class="meta-card">
@@ -49,52 +45,51 @@
             <div class="meta-card-body">{{ pc.senses | join(', ') }}</div>
         </div>
         {% endif %}
-        {# Initiative — small inline row, kept on the rail because it's a
-           one-shot start-of-combat roll. #}
-        <div class="meta-card" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <span class="meta-card-lbl">Initiative</span>
-            <button onclick="rollInitiativeFromSheet()" class="meta-card-val accent" style="background:transparent; border:none; cursor:pointer; padding:0; font:inherit; color:var(--accent);" title="Roll initiative (+{{ pc.initiative_mod }})">+{{ pc.initiative_mod }}</button>
-        </div>
 
         {# Quick conditions — the most-used subset, one click each. The full
            PF2e condition list still lives behind the "+ Condition" button in
            the header overflow; this rail surfaces the eight that fire most.
            Numeric conditions (Frightened/Sickened/Wounded/Dying) +/− here;
-           toggle conditions (Off-Guard/Prone/Concealed/Hidden) flip. #}
+           toggle conditions (Off-Guard/Prone/Concealed/Hidden) flip.
+           Folded by default (qc-fold) — the active-count badge in the
+           summary syncs from the same paint path as the rows themselves. #}
+        {% set _qc_active_count = pc.conditions.values() | select | list | length %}
         <div class="meta-card no-print">
-            <div class="meta-card-head">Quick Conditions</div>
-            <div id="meta-quick-conds" style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                {% set _qc_num = [
-                    ('frightened', 'Frightened'),
-                    ('sickened', 'Sickened'),
-                    ('wounded', 'Wounded'),
-                    ('dying', 'Dying'),
-                ] %}
-                {% set _qc_bool = [
-                    ('off_guard', 'Off-Guard'),
-                    ('prone', 'Prone'),
-                    ('concealed', 'Concealed'),
-                    ('hidden', 'Hidden'),
-                ] %}
-                {% for c, lbl in _qc_num %}
-                {% set cv = pc.conditions.get(c, 0) %}
-                <div class="qc-row" data-qc-num="{{ c }}" style="display:grid; grid-template-columns: 1fr auto auto auto; align-items:center; gap:4px; font-size:11px;">
-                    <span class="qc-lbl" style="color:var(--text-on-dark-2); letter-spacing:0.04em;">{{ lbl }}</span>
-                    <button onclick="adjustCondition('{{ c }}', -1)" aria-label="Decrease {{ lbl }}" style="width:22px; height:22px; padding:0; border-radius:3px; background:transparent; border:1px solid var(--border-strong); color:var(--text-on-dark-2); font-size:12px; cursor:pointer;">−</button>
-                    <span class="qc-val" data-qc-val="{{ c }}" style="min-width:18px; text-align:center; font-weight:700; color:{% if cv > 0 %}var(--ruby-200){% else %}var(--text-on-dark-3){% endif %};">{{ cv }}</span>
-                    <button onclick="adjustCondition('{{ c }}', 1)" aria-label="Increase {{ lbl }}" style="width:22px; height:22px; padding:0; border-radius:3px; background:transparent; border:1px solid var(--border-strong); color:var(--text-on-dark-2); font-size:12px; cursor:pointer;">+</button>
+            <details class="qc-fold">
+                <summary>Conditions <span id="qc-active-count">{% if _qc_active_count > 0 %}({{ _qc_active_count }} active){% endif %}</span></summary>
+                <div id="meta-quick-conds" style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                    {% set _qc_num = [
+                        ('frightened', 'Frightened'),
+                        ('sickened', 'Sickened'),
+                        ('wounded', 'Wounded'),
+                        ('dying', 'Dying'),
+                    ] %}
+                    {% set _qc_bool = [
+                        ('off_guard', 'Off-Guard'),
+                        ('prone', 'Prone'),
+                        ('concealed', 'Concealed'),
+                        ('hidden', 'Hidden'),
+                    ] %}
+                    {% for c, lbl in _qc_num %}
+                    {% set cv = pc.conditions.get(c, 0) %}
+                    <div class="qc-row" data-qc-num="{{ c }}" style="display:grid; grid-template-columns: 1fr auto auto auto; align-items:center; gap:4px; font-size:11px;">
+                        <span class="qc-lbl" style="color:var(--text-on-dark-2); letter-spacing:0.04em;">{{ lbl }}</span>
+                        <button onclick="adjustCondition('{{ c }}', -1)" aria-label="Decrease {{ lbl }}" style="width:22px; height:22px; padding:0; border-radius:3px; background:transparent; border:1px solid var(--border-strong); color:var(--text-on-dark-2); font-size:12px; cursor:pointer;">−</button>
+                        <span class="qc-val" data-qc-val="{{ c }}" style="min-width:18px; text-align:center; font-weight:700; color:{% if cv > 0 %}var(--ruby-200){% else %}var(--text-on-dark-3){% endif %};">{{ cv }}</span>
+                        <button onclick="adjustCondition('{{ c }}', 1)" aria-label="Increase {{ lbl }}" style="width:22px; height:22px; padding:0; border-radius:3px; background:transparent; border:1px solid var(--border-strong); color:var(--text-on-dark-2); font-size:12px; cursor:pointer;">+</button>
+                    </div>
+                    {% endfor %}
+                    <div style="height:1px; background:var(--border-card); margin:4px 0;"></div>
+                    {% for c, lbl in _qc_bool %}
+                    {% set cv = pc.conditions.get(c, false) %}
+                    <button class="qc-toggle" data-qc-bool="{{ c }}" onclick="adjustCondition('{{ c }}', 'toggle')"
+                            style="display:flex; align-items:center; justify-content:space-between; padding:4px 8px; border-radius:3px; background:{% if cv %}rgba(196,60,60,0.18){% else %}transparent{% endif %}; border:1px solid {% if cv %}rgba(196,60,60,0.4){% else %}var(--border-strong){% endif %}; color:{% if cv %}#fca5a5{% else %}var(--text-on-dark-2){% endif %}; font-size:11px; letter-spacing:0.04em; font-family:var(--font-ui); cursor:pointer; text-align:left;">
+                        <span>{{ lbl }}</span>
+                        <span data-qc-bool-state="{{ c }}" style="font-size:10px; opacity:0.7;">{% if cv %}ON{% else %}—{% endif %}</span>
+                    </button>
+                    {% endfor %}
                 </div>
-                {% endfor %}
-                <div style="height:1px; background:var(--border-card); margin:4px 0;"></div>
-                {% for c, lbl in _qc_bool %}
-                {% set cv = pc.conditions.get(c, false) %}
-                <button class="qc-toggle" data-qc-bool="{{ c }}" onclick="adjustCondition('{{ c }}', 'toggle')"
-                        style="display:flex; align-items:center; justify-content:space-between; padding:4px 8px; border-radius:3px; background:{% if cv %}rgba(196,60,60,0.18){% else %}transparent{% endif %}; border:1px solid {% if cv %}rgba(196,60,60,0.4){% else %}var(--border-strong){% endif %}; color:{% if cv %}#fca5a5{% else %}var(--text-on-dark-2){% endif %}; font-size:11px; letter-spacing:0.04em; font-family:var(--font-ui); cursor:pointer; text-align:left;">
-                    <span>{{ lbl }}</span>
-                    <span data-qc-bool-state="{{ c }}" style="font-size:10px; opacity:0.7;">{% if cv %}ON{% else %}—{% endif %}</span>
-                </button>
-                {% endfor %}
-            </div>
-            <button onclick="openConditionPicker()" style="margin-top:6px; width:100%; padding:4px 8px; border-radius:3px; background:transparent; border:1px dashed var(--border-strong); color:var(--text-on-dark-3); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;">More…</button>
+                <button onclick="openConditionPicker()" style="margin-top:6px; width:100%; padding:4px 8px; border-radius:3px; background:transparent; border:1px dashed var(--border-strong); color:var(--text-on-dark-3); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;">More…</button>
+            </details>
         </div>
     </aside>
