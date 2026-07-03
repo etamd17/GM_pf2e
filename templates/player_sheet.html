@@ -3567,9 +3567,14 @@
                     _paintMetaQuickConds(data.conditions || {});
                     var _v = (data.conditions || {})[cond];
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
-                    if (typeof _v === 'number' && _v > 0) window.pf2eToast(_label + ' ' + _v, 'danger');
-                    else if (_v) window.pf2eToast(_label + ' applied', 'danger');
-                    else window.pf2eToast(_label + ' removed', 'success');
+                    // pf2eToast lives in _player_nav / base chrome -- absent in some
+                    // render contexts (e.g. GM view). Guard like the older call sites,
+                    // or the throw aborts the rest of this handler's try block.
+                    if (window.pf2eToast) {
+                        if (typeof _v === 'number' && _v > 0) window.pf2eToast(_label + ' ' + _v, 'danger');
+                        else if (_v) window.pf2eToast(_label + ' applied', 'danger');
+                        else window.pf2eToast(_label + ' removed', 'success');
+                    }
                 } else if (typeof showRollToast === 'function') {
                     showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond} ${delta})`, false, true);
                 }
@@ -3612,6 +3617,10 @@
                 const n = Object.values(conds || {}).filter(v => v && v !== 0).length;
                 countEl.textContent = n > 0 ? `(${n} active)` : '';
             }
+            // Local condition edits must also refresh the dying widget (and its
+            // dying-active HP-card pulse) -- the SSE echo is suppressed as a
+            // same-value repaint, so this local paint path is the only trigger.
+            try { _refreshDyingWidget(); } catch(_) {}
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -3986,8 +3995,10 @@
                     _refreshConditionStrip();
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
                     var _active = (data.conditions || {})[cond];
-                    if (_active) window.pf2eToast(_label + ' applied', 'danger');
-                    else window.pf2eToast(_label + ' removed', 'success');
+                    if (window.pf2eToast) {
+                        if (_active) window.pf2eToast(_label + ' applied', 'danger');
+                        else window.pf2eToast(_label + ' removed', 'success');
+                    }
                 }
             } catch(e) { console.error(e); }
         }
@@ -4413,12 +4424,14 @@
                 const data = await res.json();
                 if (data.success) {
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
-                    if (typeof val === 'boolean') {
-                        window.pf2eToast(_label + (val ? ' applied' : ' removed'), val ? 'danger' : 'success');
-                    } else if (typeof val === 'number' && val > 0) {
-                        window.pf2eToast(_label + ' ' + val, 'danger');
-                    } else {
-                        window.pf2eToast(_label + ' removed', 'success');
+                    if (window.pf2eToast) {
+                        if (typeof val === 'boolean') {
+                            window.pf2eToast(_label + (val ? ' applied' : ' removed'), val ? 'danger' : 'success');
+                        } else if (typeof val === 'number' && val > 0) {
+                            window.pf2eToast(_label + ' ' + val, 'danger');
+                        } else {
+                            window.pf2eToast(_label + ' removed', 'success');
+                        }
                     }
                     // Paint conditions in place from the server-echoed map; the
                     // derived numbers (saves/skills/strikes) ride the pc_update
