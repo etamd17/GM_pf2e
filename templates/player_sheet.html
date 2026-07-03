@@ -911,20 +911,6 @@
         .fp:hover { background: var(--bg-overlay); color: var(--t2); }
         .fp.on, .fp.active { background: var(--red); color: #fff; border-color: var(--red); }
 
-        /* Action cost badges (Design C) */
-        .action-badge-1, .action-badge-2, .action-badge-3, .action-badge-reaction, .action-badge-free {
-            display: inline-flex; align-items: center;
-            font-size: 10px; font-weight: 700;
-            padding: 2px 8px; border-radius: 4px;
-            text-transform: uppercase; letter-spacing: 0.03em;
-            border: 1px solid;
-        }
-        .action-badge-1 { background: var(--teal-glow); color: var(--teal); border-color: rgba(74,150,150,0.2); }
-        .action-badge-2 { background: var(--red-glow); color: var(--red-b); border-color: rgba(196,60,60,0.2); }
-        .action-badge-3 { background: rgba(155,126,222,0.10); color: var(--purple); border-color: rgba(155,126,222,0.2); }
-        .action-badge-reaction { background: var(--gold-glow); color: var(--gold); border-color: rgba(200,168,78,0.2); }
-        .action-badge-free { background: rgba(90,142,232,0.10); color: var(--blue); border-color: rgba(90,142,232,0.2); }
-
         /* Button variants (Design C) */
         .btn { display:inline-flex; align-items:center; gap:4px; padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--border-s); background: var(--bg-raised); color: var(--t2); cursor: pointer; transition: all 0.15s; font-family: var(--font-ui); }
         .btn:hover { background: var(--bg-overlay); color: var(--t1); }
@@ -1340,7 +1326,12 @@
             background: var(--bg-raised);
             color: var(--gilt);
             box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            /* Class-rune watermark (sheet-port-glyph) sits BEHIND the monogram
+               text -- needs its own stacking context + clip so the rune never
+               spills past the badge's rounded-pill shape. */
+            overflow: hidden;
         }
+        .portrait-badge .badge-monogram { position: relative; z-index: 1; }
         .portrait-circle .font-header { color: var(--gilt) !important; }
 
         /* Spell Rank Borders */
@@ -1436,38 +1427,13 @@
             justify-content: flex-end;
             gap: 8px;
         }
-        .action-pips { display:inline-flex; gap:2px; vertical-align:middle; }
-        .action-pip { display:inline-block; width:14px; height:14px; background:var(--color-ac); border-radius:3px; }
-        .action-pip.free { background:none; border:2px solid var(--color-ac); width:12px; height:12px; border-radius:50%; }
-        .action-pip.reaction { background:none; border:2px solid #F59E0B; width:14px; height:14px; border-radius:50%; position:relative; }
-        .action-pip.reaction::after { content:''; position:absolute; top:2px; left:5px; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:6px solid #F59E0B; transform:translateX(-2px); }
-
-        /* === Action-cost leading pill (Paizo-style) ===
-           Optional alternative to action-pips. Red-gules rounded square,
-           ivory glyph, sits at the leading edge of a strike/activity
-           block. Use .action-cost[data-cost="1|2|3|r|f"]. */
-        .action-cost {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 22px;
-            height: 22px;
-            padding: 0 6px;
-            background: #7c2222;
-            color: #f4ecd8;
-            border: 1px solid rgba(244,236,216,0.28);
-            border-radius: 3px;
-            font-family: var(--font-display);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            line-height: 1;
-            margin-right: 8px;
-            vertical-align: middle;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-        }
-        .action-cost[data-cost="r"], .action-cost.reaction { background: #8a5a14; }
-        .action-cost[data-cost="f"], .action-cost.free { background: #3a1818; }
+        /* .action-pips / .action-pip / (retired) .action-cost — moved to
+           static/css/system.css's "COMBAT IDENTITY: player-sheet ports"
+           section (audit N5/F3: unify the sheet's three competing
+           action-cost visual systems onto one diamond-pip cluster styled
+           like the tracker's .trk .action-pip, sheet-scoped so .trk rules
+           stay untouched). Kept single-sourced there rather than here so
+           this inline <style> block doesn't drift from the tracker look. */
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
@@ -2015,78 +1981,6 @@
             width: auto; height: auto;
         }
 
-        /* === LEVEL-UP DRAWER OVERLAY (Proposal 6) === */
-        .levelup-drawer-backdrop {
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.55);
-            z-index: 600;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-        }
-        .levelup-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
-        .levelup-drawer {
-            position: fixed; top: 0; right: 0; bottom: 0;
-            width: 520px; max-width: 100vw;
-            z-index: 601;
-            background: var(--bg-base);
-            /* Gilt edge where the "scroll" meets the viewport edge */
-            border-left: 2px solid #7a5a10;
-            box-shadow:
-                -8px 0 40px rgba(0,0,0,0.6),
-                inset 12px 0 18px -10px rgba(224,182,90,0.14);
-            transform: translateX(100%);
-            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-            display: flex; flex-direction: column;
-        }
-        .levelup-drawer.open { transform: translateX(0); }
-        .levelup-drawer-header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 14px 18px;
-            /* Banner header: ruby field with gilt top + bottom rules to evoke
-               a medieval proclamation banner. */
-            background:
-                linear-gradient(180deg, #3a0f0f 0%, #5a1717 55%, #3a0f0f 100%);
-            border-top: 1px solid #c49a2e;
-            border-bottom: 1px solid #c49a2e;
-            box-shadow:
-                inset 0 1px 0 rgba(224,182,90,0.35),
-                inset 0 -1px 0 rgba(224,182,90,0.35);
-            flex-shrink: 0;
-            position: relative;
-        }
-        /* Decorative gilt rosettes at each end of the banner */
-        .levelup-drawer-header::before,
-        .levelup-drawer-header::after {
-            content: "";
-            color: #e0b65a;
-            font-size: 14px;
-            opacity: 0.75;
-        }
-        .levelup-drawer-header h3 {
-            font-family: var(--font-display);
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: #f5e5b8;
-            margin: 0;
-            text-shadow: 0 1px 0 rgba(0,0,0,0.6);
-            flex: 1;
-            text-align: center;
-        }
-        .levelup-drawer-close {
-            width: 28px; height: 28px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            background: var(--bg-raised); border: 1px solid var(--border-s);
-            color: var(--t3); cursor: pointer; font-size: 14px;
-            transition: all 0.15s;
-        }
-        .levelup-drawer-close:hover { background: var(--bg-overlay); color: var(--t1); }
-        .levelup-drawer iframe {
-            flex: 1; width: 100%; border: none; background: var(--bg-base);
-        }
-
         /* === RIGHT-CLICK CONTEXT MENU === */
         .roll-context-menu {
             position: fixed;
@@ -2146,7 +2040,6 @@
             .sheet-page .grid.grid-cols-1.lg\\:grid-cols-3 { grid-template-columns:1fr !important; }
             .sheet-page .grid.gap-x-6.gap-y-2 { grid-template-columns:1fr !important; }
             .sheet-page .flex.flex-col.md\\:flex-row { flex-direction:column !important; }
-            .levelup-drawer { width: 100vw; }
             .focus-pip { width:10px; height:10px; }
             h1.font-header { font-size:20px !important; }
             .tab-bar-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
@@ -2474,7 +2367,9 @@
         .skill-action-btn:hover { border-color: var(--gilt); background: var(--bg-overlay); color: var(--gilt); }
         .skill-action-btn-name { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
         .skill-action-btn-meta { font-size: 9px; color: var(--t3); letter-spacing: 0.04em; }
-        .skill-action-btn .action-cost { float: right; opacity: 0.7; }
+        /* (retired .action-cost float rule) — the pip cluster now emitted
+           by buildActionPips()/action_pips() sits inline after the action
+           name, same as every other action_pips() use on the sheet. */
 
         /* Heighten-rank picker — small inline popover after spell click. */
         .heighten-picker {
@@ -2540,6 +2435,13 @@
         .class-cheatsheet-body ul { padding-left: 18px; margin: 4px 0; }
         .class-cheatsheet-body li { margin: 3px 0; }
         .class-cheatsheet-body strong { color: var(--gilt); font-family: var(--font-display); font-weight: 700; }
+
+        /* Left-rail Quick Conditions fold — collapsible, mirrors the Cosmere
+           sheet's conditions fold. Closed by default; summary shows an
+           active-count badge synced from the conditions paint path. */
+        .qc-fold > summary { cursor:pointer; list-style:none; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); }
+        .qc-fold > summary::-webkit-details-marker { display:none; }
+        #qc-active-count { color: var(--accent); }
 
         /* Invested chip on Inventory */
         .invested-chip {
@@ -2642,17 +2544,6 @@
         .whisper-panel-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
         .whisper-panel-status { font-size: 10px; color: var(--t3); font-style: italic; }
 
-        /* Build validator chips on level-up drawer */
-        .lvl-validator { margin: 12px 0; padding: 10px 12px; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.25); border-radius: 6px; }
-        .lvl-validator h4 { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #fbbf24; margin: 0 0 6px 0; }
-        .lvl-validator ul { list-style: none; padding: 0; margin: 0; font-size: 12px; color: #fde68a; }
-        .lvl-validator li { padding: 2px 0 2px 16px; position: relative; }
-        .lvl-validator li::before { content: '!'; position: absolute; left: 0; color: #fbbf24; font-weight: 700; }
-        .lvl-validator.ok { background: rgba(74,222,128,0.06); border-color: rgba(74,222,128,0.25); }
-        .lvl-validator.ok h4 { color: #4ade80; }
-        .lvl-validator.ok li { color: #bbf7d0; }
-        .lvl-validator.ok li::before { content: ''; color: #4ade80; }
-
         @media print {
             /* === Parchment-ink print stylesheet ===
                Cream paper, dark ink, serif body. Cascades through
@@ -2674,7 +2565,7 @@
             body { background: var(--paper) !important; color: var(--ink) !important; font-family: 'Alegreya', Georgia, serif !important; font-size: 10.5pt; }
             body::before { display: none; }
             .no-print, #dice-widget, #roll-toast-container, #equip-modal, #roll-context-menu,
-            #condition-adder, #levelup-drawer, #floating-actions, .tab-btn,
+            #floating-actions, .tab-btn,
             [onclick*="switchTab"], button[onclick] { display: none !important; }
             .sheet-page, .panel-card, .stat-box, .ability-block,
             .bg-gray-800, .bg-gray-900, .bg-gray-950, .bg-gray-700 {
@@ -2736,58 +2627,6 @@
            minimum of ~28px on the short axis. Class names are scoped
            so we don't inflate every button on the page.
            ═══════════════════════════════════════════════════════════ */
-        /* Condition tile: name on the left, [−][val][+] on the right.
-           Use grid for the inner row so the value column is fixed-width
-           and the +/- pips can't shove against the tile border. */
-        .cond-row {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-        }
-        .cond-name {
-            letter-spacing: 0.06em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            min-width: 0;
-        }
-        .cond-ctrl {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            flex-shrink: 0;
-        }
-        .cond-step {
-            width: 26px; height: 26px;
-            display: inline-flex; align-items: center; justify-content: center;
-            border-radius: 6px;
-            background: var(--bg-base);
-            border: 1px solid var(--border-s);
-            font-family: var(--font-display);
-            font-size: 13px; font-weight: 800;
-            cursor: pointer;
-            transition: background .12s, border-color .12s, color .12s, transform .08s;
-            line-height: 1;
-            padding: 0;
-            flex-shrink: 0;
-        }
-        .cond-step:hover { background: var(--bg-raised); border-color: rgba(255,255,255,0.25); }
-        .cond-step:active { transform: scale(0.93); }
-        .cond-numeric .cond-val {
-            width: 18px;
-            display: inline-block;
-            text-align: center;
-            font-family: var(--font-display);
-            font-variant-numeric: tabular-nums;
-            font-size: 14px;
-            font-weight: 700;
-        }
-        .cond-numeric.is-on { border-color: rgba(220,38,38,0.40); }
-        .cond-toggle {
-            min-height: 38px; padding: 8px 12px;
-        }
 
         /* Invested toggle on inventory rows — was ~14px, now full-width tap zone */
         .invested-toggle, .inv-invested-toggle {
@@ -3023,6 +2862,8 @@
       {%- endif -%}
     {%- endmacro %}
 
+{% include "_pf2e_class_glyphs.html" %}
+
 {% include "_pc_sheet/_header.html" %}
 
 {% include "_pc_sheet/_status_bars.html" %}
@@ -3033,10 +2874,19 @@
 
     <!-- SHEET BODY                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20">
+    {# sheet-ember-host: quiet ambient glow (COMBAT IDENTITY port). Chosen
+       because this wrapper sits BELOW the sticky .char-header (a separate
+       earlier sibling, not a descendant) and closes before _modals.html is
+       included, so its overflow:hidden/position:relative can't clip the
+       sticky header or any position:fixed modal/FAB. #}
+    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20 sheet-ember-host">
 
-        <!-- Ready-to-level banner (GM XP/milestone award) -->
-        <div id="ready-to-level-banner" class="no-print" style="display:{{ '' if pc.ready_to_level else 'none' }}; margin:0 0 .6rem;">
+        <!-- Ready-to-level banner (GM XP/milestone award). Level-up pop-in
+             (COMBAT IDENTITY port, audit F7): server-rendered-visible case
+             gets the pop-in class baked into markup so it plays once on
+             load; the SSE-toggled case (false->true mid-session) is handled
+             in applyPcUpdate below, which adds the same class at reveal. #}
+        <div id="ready-to-level-banner" class="no-print{{ ' trk-cond-in' if pc.ready_to_level else '' }}" style="display:{{ '' if pc.ready_to_level else 'none' }}; margin:0 0 .6rem;">
             <a href="/player/levelup/{{ pc.name|urlencode }}" style="display:flex; align-items:center; gap:10px; padding:.65rem 1rem; border-radius:10px; border:1px solid rgba(74,222,128,.5); background:rgba(74,222,128,.12); color:#86EFAC; text-decoration:none; font-size:14px;">
                 <span style="font-size:16px;">&#9650;</span><b>Ready to level up!</b>
                 <span style="opacity:.8;">Open the level-up wizard.</span>
@@ -3055,30 +2905,6 @@
             <div class="max-w-6xl mx-auto px-4 md:px-6 py-2 flex items-center gap-2">
                 <span class="font-header text-[11px] tracking-widest uppercase" style="color:var(--text-muted);"> Combat</span>
                 <div id="encounter-initiative-bar" class="flex flex-wrap gap-1 flex-1"></div>
-            </div>
-        </div>
-        
-        <!-- Hidden condition controls (shown via + Condition button) -->
-        <div id="cond-adder" class="hidden no-print" style="background:var(--bg-surface); border-bottom:1px solid var(--border-default);">
-            <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap gap-2 items-center">
-                <span style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-right:4px;">Manage</span>
-                {% for cond in ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'stunned', 'slowed', 'wounded', 'doomed'] %}
-                {% set cval = pc.conditions.get(cond, 0) %}
-                <div class="condition-pill" style="{% if cval == 0 %}background:transparent; border-color:var(--border-subtle); color:var(--text-muted);{% endif %}">
-                    <button onclick="adjustCondition('{{ cond }}', -1)">-</button>
-                    <span style="font-size:11px;">{{ cond[:4]|upper }} {{ cval }}</span>
-                    <button onclick="adjustCondition('{{ cond }}', 1)">+</button>
-                </div>
-                {% endfor %}
-                {% for cond in ['prone', 'off_guard', 'concealed', 'hidden'] %}
-                {% set cval = pc.conditions.get(cond, false) %}
-                <button onclick="toggleBoolCondition('{{ cond }}')" class="condition-toggle {% if cval %}active{% endif %}">
-                    {{ cond|replace('_','-')|upper }}
-                </button>
-                {% endfor %}
-                <div style="width:1px; height:20px; background:var(--border-default); margin:0 4px;"></div>
-                <button onclick="dailyPrep()" class="action-btn" style="font-size:11px; padding:3px 10px;">Daily Prep</button>
-                <button onclick="document.getElementById('cond-adder').classList.add('hidden')" class="action-btn ml-auto" style="font-size:11px; padding:3px 10px;">Close</button>
             </div>
         </div>
         
@@ -3120,6 +2946,68 @@
         const SPELL_ATTACK = parseInt("{{ pc.spell_attack }}") || 0;
         const SPELL_DC = parseInt("{{ pc.spell_dc }}") || 0;
         const CANTRIP_RANK = parseInt("{{ pc.cantrip_rank }}") || 1;
+
+        // ── COMBAT IDENTITY sheet ports: HP ghost-bar/damage-pop + hero-point
+        // spark flourishes. Ports the tracker's exact vocabulary (system.css
+        // "COMBAT IDENTITY" section) onto the sheet's HP/hero-point paint
+        // sites. First paint always seeds silently (_prev* starts null).
+        const _RM_PS = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+        let _prevHp = null, _prevHero = null;
+        function sheetHpFlourish(cur, max){
+            if(_prevHp !== null && cur !== _prevHp && !(_RM_PS && _RM_PS.matches)){
+                const bar = document.querySelector('.hp-gauge-bar');
+                const anchor = bar && bar.closest('.hp-wrap-anchor') || (bar && bar.parentElement);
+                if(bar){
+                    const delta = cur - _prevHp;
+                    const pop = document.createElement('div');
+                    pop.className = 'sheet-dmgpop' + (delta > 0 ? ' heal' : '');
+                    pop.textContent = (delta > 0 ? '+' : '') + delta;
+                    (anchor || bar).appendChild(pop);
+                    void pop.offsetWidth; pop.classList.add('pop');
+                    pop.addEventListener('animationend', () => pop.remove());
+                    setTimeout(() => pop.remove(), 2400);
+                    if(delta < 0 && max > 0){
+                        let ghost = bar.querySelector('.hp-ghost');
+                        if(!ghost){ ghost = document.createElement('div'); ghost.className = 'hp-ghost'; bar.prepend(ghost); }
+                        ghost.style.transition = 'none';
+                        ghost.style.width = Math.round(_prevHp / max * 100) + '%';
+                        void ghost.offsetWidth; ghost.style.transition = '';
+                        setTimeout(() => { ghost.style.width = Math.round(cur / max * 100) + '%'; }, 120);
+                    }
+                }
+            }
+            _prevHp = cur;
+        }
+        function sheetHeroFlourish(cur){
+            if(_prevHero !== null && cur < _prevHero && !(_RM_PS && _RM_PS.matches)){
+                const flames = document.querySelectorAll('.sheet-hero-flames .hero-flame');
+                const snuffed = flames[Math.max(0, Math.min(flames.length - 1, cur))];
+                if(snuffed){
+                    for(let i = 0; i < 5; i++){
+                        const s = document.createElement('div');
+                        s.className = 'spark';
+                        s.style.setProperty('--dx', (Math.random() * 26 - 13).toFixed(1) + 'px');
+                        snuffed.appendChild(s);
+                        setTimeout(() => s.classList.add('rise'), i * 50);
+                        s.addEventListener('animationend', () => s.remove());
+                        setTimeout(() => s.remove(), 2000);
+                    }
+                }
+            }
+            _prevHero = cur;
+        }
+        // Seed _prev* silently from the server-rendered first paint (the DOM
+        // above this script) so the FIRST real change flourishes instead of
+        // being swallowed as the seed. NaN-guarded: if either element is
+        // missing we fall back to null = seed-on-first-call.
+        (function(){
+            const hp0 = document.getElementById('current-hp');
+            const hpSeed = hp0 ? parseInt(hp0.textContent, 10) : NaN;
+            if (Number.isFinite(hpSeed)) _prevHp = hpSeed;
+            const hero0 = document.getElementById('current-hero');
+            const heroSeed = hero0 ? parseInt(hero0.textContent, 10) : NaN;
+            if (Number.isFinite(heroSeed)) _prevHero = heroSeed;
+        })();
 
         // ==========================================
         // PORTRAIT UPLOAD
@@ -3570,13 +3458,6 @@
             } catch(e) { console.error('Toggle error:', e); }
         }
 
-        // ==========================================
-        // PLAYER CONDITION MATRIX
-        // ==========================================
-        function openConditionAdder() {
-            document.getElementById('cond-adder').classList.toggle('hidden');
-        }
-        
         async function dailyPrep() {
             if (!confirm('Daily Preparations: This will reset all spell slots, restore focus points, clear combat conditions, and heal to full HP. Continue?')) return;
             try {
@@ -3682,14 +3563,22 @@
                 }
                 const data = await res.json();
                 if (data.success) {
+                    // Adopt the server-echoed map BEFORE painting so readers of
+                    // currentConditions (e.g. _refreshDyingWidget) see the new
+                    // state immediately, and the later SSE echo self-suppresses.
+                    currentConditions = data.conditions || {};
                     _refreshConditionStrip();
                     _paintMetaQuickConds(data.conditions || {});
-                    _paintConditionsMatrix(data.conditions || {});
                     var _v = (data.conditions || {})[cond];
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
-                    if (typeof _v === 'number' && _v > 0) window.pf2eToast(_label + ' ' + _v, 'danger');
-                    else if (_v) window.pf2eToast(_label + ' applied', 'danger');
-                    else window.pf2eToast(_label + ' removed', 'success');
+                    // pf2eToast lives in _player_nav / base chrome -- absent in some
+                    // render contexts (e.g. GM view). Guard like the older call sites,
+                    // or the throw aborts the rest of this handler's try block.
+                    if (window.pf2eToast) {
+                        if (typeof _v === 'number' && _v > 0) window.pf2eToast(_label + ' ' + _v, 'danger');
+                        else if (_v) window.pf2eToast(_label + ' applied', 'danger');
+                        else window.pf2eToast(_label + ' removed', 'success');
+                    }
                 } else if (typeof showRollToast === 'function') {
                     showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond} ${delta})`, false, true);
                 }
@@ -3724,6 +3613,19 @@
                 btn.style.color = on ? '#fca5a5' : 'var(--text-on-dark-2)';
                 lbl.textContent = on ? 'ON' : '—';
             });
+            // Active-count badge on the qc-fold summary — counts every active
+            // condition (numeric > 0 or boolean true), not just the 8 quick rows,
+            // so it agrees with the top strip's has_any_condition concept.
+            const countEl = document.getElementById('qc-active-count');
+            if (countEl) {
+                const n = Object.values(conds || {}).filter(v => v && v !== 0).length;
+                countEl.textContent = n > 0 ? `(${n} active)` : '';
+            }
+            // Refresh the dying widget (and its dying-active HP-card pulse) on
+            // every quick-conditions repaint. The local adjustCondition path now
+            // adopts the server-echoed map into currentConditions before calling
+            // this, so the read here is fresh for local edits and SSE alike.
+            try { _refreshDyingWidget(); } catch(_) {}
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -4098,8 +4000,10 @@
                     _refreshConditionStrip();
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
                     var _active = (data.conditions || {})[cond];
-                    if (_active) window.pf2eToast(_label + ' applied', 'danger');
-                    else window.pf2eToast(_label + ' removed', 'success');
+                    if (window.pf2eToast) {
+                        if (_active) window.pf2eToast(_label + ' applied', 'danger');
+                        else window.pf2eToast(_label + ' removed', 'success');
+                    }
                 }
             } catch(e) { console.error(e); }
         }
@@ -4525,21 +4429,20 @@
                 const data = await res.json();
                 if (data.success) {
                     var _label = cond.charAt(0).toUpperCase() + cond.slice(1).replace('_', ' ');
-                    if (typeof val === 'boolean') {
-                        window.pf2eToast(_label + (val ? ' applied' : ' removed'), val ? 'danger' : 'success');
-                    } else if (typeof val === 'number' && val > 0) {
-                        window.pf2eToast(_label + ' ' + val, 'danger');
-                    } else {
-                        window.pf2eToast(_label + ' removed', 'success');
+                    if (window.pf2eToast) {
+                        if (typeof val === 'boolean') {
+                            window.pf2eToast(_label + (val ? ' applied' : ' removed'), val ? 'danger' : 'success');
+                        } else if (typeof val === 'number' && val > 0) {
+                            window.pf2eToast(_label + ' ' + val, 'danger');
+                        } else {
+                            window.pf2eToast(_label + ' removed', 'success');
+                        }
                     }
                     // Paint conditions in place from the server-echoed map; the
                     // derived numbers (saves/skills/strikes) ride the pc_update
-                    // broadcast the route fires. No reload. (The Conditions
-                    // Matrix is delta-driven via adjustCondition now; this
-                    // absolute-set path is kept reload-free for any other caller.)
+                    // broadcast the route fires. No reload.
                     _refreshConditionStrip();
                     _paintMetaQuickConds(data.conditions || {});
-                    _paintConditionsMatrix(data.conditions || {});
                 } else if (typeof showRollToast === 'function') {
                     showRollToast('Condition', '!', (data.error || 'Update rejected by server') + ` (${cond}=${val})`, false, true);
                 }
@@ -4558,9 +4461,7 @@
            extension / cached older JS, this document-level handler still
            catches the click and dispatches the action. Inline onclick is
            left in place so behavior is unchanged when it works; this is
-           strictly a backstop. Covers four widgets:
-             • Matrix numeric +/-  → adjustCondition(cond, ±1)
-             • Matrix toggle       → adjustCondition(cond, 'toggle')
+           strictly a backstop. Covers:
              • Quick Conditions    → adjustCondition(cond, delta|'toggle')
              • Strip pills         → adjustCondition / toggleBoolCondition
         */
@@ -4571,32 +4472,15 @@
            onclick: it snapshots the token first, then in a microtask checks
            whether the inline moved it. Moved → inline did its job, bail.
            Unchanged → inline was swallowed, fire the parsed call as a fallback.
-           Capture phase + monotonic token is deliberate: the matrix steppers
-           now call delta-based adjustCondition, where a spurious second fire
-           would DOUBLE the increment. The previous bubble-phase + timestamp
-           compare ran after the inline and mis-fired on a sub-ms boundary —
-           harmless under the old absolute updateCondition, a real double-step
-           under delta. */
+           Capture phase + monotonic token is deliberate: the steppers call
+           delta-based adjustCondition, where a spurious second fire would
+           DOUBLE the increment. */
         document.addEventListener('click', (e) => {
             const target = e.target;
             if (!target || !target.closest) return;
             // Identify which condition-control this click hit
             let match = null;
-            const numBtn = target.closest('.cond-numeric button.cond-step');
-            if (numBtn) {
-                const oc = numBtn.getAttribute('onclick') || '';
-                const m = oc.match(/adjustCondition\(\s*['"]([^'"]+)['"]\s*,\s*(-?\d+)\s*\)/);
-                if (m) match = { fn: 'adjustCondition', args: [m[1], parseInt(m[2], 10)] };
-            }
-            if (!match) {
-                const togBtn = target.closest('button.cond-toggle');
-                if (togBtn) {
-                    const oc = togBtn.getAttribute('onclick') || '';
-                    const m = oc.match(/adjustCondition\(\s*['"]([^'"]+)['"]\s*,\s*['"]toggle['"]\s*\)/);
-                    if (m) match = { fn: 'adjustCondition', args: [m[1], 'toggle'] };
-                }
-            }
-            if (!match) {
+            {
                 const qcNum = target.closest('.qc-row button[onclick^="adjustCondition"]');
                 if (qcNum) {
                     const oc = qcNum.getAttribute('onclick') || '';
@@ -5220,10 +5104,14 @@
                     const pipsWrap = document.getElementById('hero-pips');
                     if (pipsWrap) {
                         pipsWrap.dataset.current = n;
-                        // Cheap redraw: flip filled class on 3 pips. O(3), no layout thrash.
-                        const pips = pipsWrap.querySelectorAll('.hero-pip');
-                        pips.forEach((p, i) => p.classList.toggle('filled', i < n));
+                        // Cheap redraw: flip lit-state on 3 flames. O(3), no layout thrash.
+                        const pips = pipsWrap.querySelectorAll('.hero-flame');
+                        pips.forEach((p, i) => {
+                            p.classList.toggle('active', i < n);
+                            p.classList.toggle('spent', i >= n);
+                        });
                     }
+                    sheetHeroFlourish(n);
                 }
             } catch (error) {}
         }
@@ -5391,8 +5279,9 @@
                         currentTempHp = data.temp_hp;
                         _paintTempHpChip();
                     }
-                    
+
                     const maxHp = parseInt("{{ pc.hp }}");
+                    sheetHpFlourish(newHp, maxHp);
                     const pct = data.current_hp / maxHp;
                     hpEl.className = 'text-4xl font-bold leading-none ' + 
                         (data.current_hp === 0 ? 'text-red-600' : pct <= 0.25 ? 'text-red-400' : pct <= 0.5 ? 'text-orange-400' : 'text-green-400');
@@ -5444,6 +5333,7 @@
             currentHp = newHp;
             const hpEl = document.getElementById('current-hp');
             if (!hpEl) return;
+            sheetHpFlourish(newHp, maxHp);
             hpEl.innerText = currentHp;
             const pct = currentHp / maxHp;
             hpEl.className = 'text-2xl font-bold leading-none font-header ' +
@@ -5473,23 +5363,13 @@
                 const hasAny = Object.values(conditions).some(v => v && v !== 0 && v !== false);
                 strip.classList.toggle('active', hasAny);
             }
-            // Pulse the Conditions Matrix card so a GM-applied condition is noticed.
-            const matrix = document.querySelector('.panel-card .section-header')?.parentElement;
-            // Better: target by section title text. Fall back to the first matching panel.
-            const panels = document.querySelectorAll('.panel-card');
-            for (const p of panels) {
-                if (p.querySelector('.section-header')?.textContent?.trim() === 'Conditions Matrix') {
-                    sheetPulse(p, 'cond');
-                    break;
-                }
-            }
         }
         
         // ══════════════════════════════════════════════════════════════
         // DERIVED-STAT PAINTERS
         // Repaint the numbers a condition / feature toggle / two-hand swap
-        // ripples into — strike to-hit + damage, save totals, skill totals,
-        // the Conditions Matrix — IN PLACE from the pc_update `derived` block.
+        // ripples into — strike to-hit + damage, save totals, skill totals —
+        // IN PLACE from the pc_update `derived` block.
         // The server builds `derived` from the very same pc.fort/pc.skills/
         // pc.attacks the Jinja sheet renders, so a live paint and a hard
         // reload agree to the digit. This is what lets updateCondition /
@@ -5587,49 +5467,6 @@
             });
         }
 
-        // Conditions Matrix (Combat tab). Tips mirror the Jinja `condition_tips`
-        // map so the "−X to …" helper line stays correct as the value changes.
-        const _CM_NUM_TIPS = {
-            frightened: '−X to all checks, DCs, saves, and attack rolls',
-            sickened:   '−X to all checks, DCs, saves, and attack rolls. Must retch (Fort DC) to reduce.',
-            enfeebled:  '−X to Str-based attacks, damage, and Athletics checks',
-            clumsy:     '−X to Dex-based checks, AC, and Reflex saves',
-            drained:    '−X to Con-based checks and max HP reduced by X × level',
-            stupefied:  '−X to Int/Wis/Cha-based checks and spell DCs. Flat check X to cast spells.'
-        };
-        function _paintConditionsMatrix(conds) {
-            conds = conds || {};
-            document.querySelectorAll('[data-cm-num]').forEach(block => {
-                const key = block.getAttribute('data-cm-num');
-                const v = parseInt(conds[key] || 0, 10) || 0;
-                const on = v > 0;
-                block.classList.toggle('is-on', on);
-                const tip = (_CM_NUM_TIPS[key] || '').replace(/X/g, v);
-                block.setAttribute('title', tip);
-                const nameEl = block.querySelector('.cond-name');
-                if (nameEl) { nameEl.classList.toggle('text-red-400', on); nameEl.classList.toggle('text-gray-400', !on); }
-                const valEl = block.querySelector('.cond-val');
-                if (valEl) { valEl.textContent = v; valEl.classList.toggle('text-red-400', on); valEl.classList.toggle('text-gray-500', !on); }
-                const desc = block.querySelector('[data-cm-desc]');
-                if (desc) { desc.textContent = on ? tip : ''; desc.style.display = on ? '' : 'none'; }
-            });
-            document.querySelectorAll('[data-cm-bool]').forEach(btn => {
-                const key = btn.getAttribute('data-cm-bool');
-                const on = !!conds[key];
-                btn.classList.toggle('border-red-900/50', on);
-                btn.classList.toggle('bg-red-900/20', on);
-                btn.classList.toggle('bg-gray-900', !on);
-                btn.classList.toggle('border-gray-700', !on);
-                btn.classList.toggle('hover:border-gray-500', !on);
-                const nameEl = btn.querySelector('.cm-bool-name');
-                if (nameEl) { nameEl.classList.toggle('text-red-400', on); nameEl.classList.toggle('text-gray-400', !on); }
-                const stateEl = btn.querySelector('.cm-bool-state');
-                if (stateEl) { stateEl.textContent = on ? 'ON' : 'OFF'; stateEl.classList.toggle('text-red-400', on); stateEl.classList.toggle('text-gray-600', !on); }
-                const desc = btn.parentElement ? btn.parentElement.querySelector('[data-cm-bool-desc]') : null;
-                if (desc) desc.style.display = on ? '' : 'none';
-            });
-        }
-
         // Feats tab — flip a class-feature toggle's switch + ACTIVE badge +
         // effect pills in place. The combat numbers it changes (AC, strike
         // damage) ride the pc_update painters above; this is the local-only
@@ -5714,9 +5551,20 @@
             // used by the live SSE frame above AND the reconnect refetch below.
             window.applyPcUpdate = function(data) {
                     // GM XP/level award: show the ready banner + repaint XP live.
+                    // Pop-in (trk-cond-in) only on the false->true reveal edge —
+                    // re-adding the class every update would replay the animation
+                    // on every unrelated pc_update while the banner stays shown.
                     if (typeof data.ready_to_level === 'boolean') {
                         var _rb = document.getElementById('ready-to-level-banner');
-                        if (_rb) _rb.style.display = data.ready_to_level ? '' : 'none';
+                        if (_rb) {
+                            var _wasHidden = _rb.style.display === 'none';
+                            _rb.style.display = data.ready_to_level ? '' : 'none';
+                            if (data.ready_to_level && _wasHidden) {
+                                _rb.classList.remove('trk-cond-in');
+                                void _rb.offsetWidth; // restart animation
+                                _rb.classList.add('trk-cond-in');
+                            }
+                        }
                     }
                     if (typeof data.xp === 'number') {
                         var _rx = document.getElementById('ready-xp'); if (_rx) _rx.textContent = data.xp + ' / 1000 XP';
@@ -5726,10 +5574,9 @@
                     applyConditionUpdate(data.conditions || {});
                     _paintMetaQuickConds(data.conditions || {});
                     // Repaint the derived numbers a condition / toggle / two-hand
-                    // change ripples into (saves, skills, strikes, conditions
-                    // matrix) so updateCondition / toggleFeature / toggleTwoHand
-                    // never need a full page reload.
-                    _paintConditionsMatrix(data.conditions || {});
+                    // change ripples into (saves, skills, strikes) so
+                    // updateCondition / toggleFeature / toggleTwoHand never need
+                    // a full page reload.
                     _paintDerived(data.derived);
                     // Temp HP + shield gauge: mirror server truth so the
                     // Shield-Block confirm + +TMP button always see fresh state.
@@ -5787,6 +5634,24 @@
                             }
                             el.innerHTML = html;
                         });
+                    }
+                    // Update hero-point flames — mirrors modifyHero()'s local
+                    // repaint so a GM-side hero-point award/spend (e.g. via
+                    // nomination or the tracker) flourishes here too.
+                    if (typeof data.hero_points === 'number') {
+                        const n = data.hero_points;
+                        const heroEl = document.getElementById('current-hero');
+                        if (heroEl) heroEl.innerText = n;
+                        const pipsWrap = document.getElementById('hero-pips');
+                        if (pipsWrap) {
+                            pipsWrap.dataset.current = n;
+                            const pips = pipsWrap.querySelectorAll('.hero-flame');
+                            pips.forEach((p, i) => {
+                                p.classList.toggle('active', i < n);
+                                p.classList.toggle('spent', i >= n);
+                            });
+                        }
+                        sheetHeroFlourish(n);
                     }
                     // Active Effects panel — server now broadcasts the
                     // full effect list + post-stacking breakdown on every
@@ -6528,6 +6393,7 @@
         }
 
         
+        // Input contract today: every caller passes '1'. Keep both builders' semantics identical (see buildActionPips/_standaloneActionPips).
         function buildActionPips(actionStr) {
             const s = (actionStr || '').trim().toLowerCase();
             // Glyphs encoded as unicode escapes so a future emoji-strip pass
@@ -6535,8 +6401,8 @@
             const ACTION_DIAMOND = '◆';
             const FREE_DIAMOND   = '◇';
             const REACTION_GLYPH = '⟳';
-            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
-            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips"><span class="action-pip free"></span></span>';
+            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>';
 
             let count = 0;
             if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
@@ -6548,9 +6414,10 @@
             if (count === 0 && actionStr.indexOf(ACTION_DIAMOND) >= 0) count = 1;
             if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${actionStr || ''}</span>`;
 
+            const _pipTitle = ['One Action', 'Two Actions', 'Three Actions'][count - 1] || (count + ' Actions');
             let pips = '';
             for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
-            return `<span class="action-pips">${pips}</span>`;
+            return `<span class="action-pips" title="${_pipTitle}">${pips}</span>`;
         }
         
         function parseSpellMeta(desc, actions) {
@@ -6609,38 +6476,6 @@
                 }
             }
         }
-
-        // ==========================================
-        // LEVEL-UP DRAWER (Proposal 6)
-        // ==========================================
-        function openLevelUpDrawer() {
-            const backdrop = document.getElementById('levelup-backdrop');
-            const drawer = document.getElementById('levelup-drawer');
-            const iframe = document.getElementById('levelup-iframe');
-            // Load the level-up page with ?drawer=1 param so it renders in compact mode
-            iframe.src = `/player/levelup/${pcNameEncoded}?drawer=1`;
-            requestAnimationFrame(() => {
-                backdrop.classList.add('open');
-                drawer.classList.add('open');
-            });
-        }
-        function closeLevelUpDrawer() {
-            const backdrop = document.getElementById('levelup-backdrop');
-            const drawer = document.getElementById('levelup-drawer');
-            const iframe = document.getElementById('levelup-iframe');
-            backdrop.classList.remove('open');
-            drawer.classList.remove('open');
-            // Clear iframe after animation
-            setTimeout(() => { iframe.src = 'about:blank'; }, 350);
-        }
-        // Listen for postMessage from level-up iframe on successful submit
-        window.addEventListener('message', (e) => {
-            if (e.data && e.data.type === 'levelup_complete') {
-                closeLevelUpDrawer();
-                // Reload the page to show updated character data
-                setTimeout(() => window.location.reload(), 400);
-            }
-        });
 
         // ==========================================
         // PENALTY BREAKDOWN HELPER (Proposal 2)
@@ -8520,6 +8355,12 @@
             if (wvEl) wvEl.textContent = wounded;
             if (cur <= 0 || dying > 0) w.classList.add('active');
             else w.classList.remove('active');
+            // Dying pulse (COMBAT IDENTITY port) — pulse the Resources/HP card
+            // itself (.hp-area) whenever Dying > 0, independent of the 0-HP
+            // check above so it also lights up mid-recovery at e.g. Dying 1
+            // with temp HP keeping current_hp above 0.
+            const hpCard = document.querySelector('.hp-area');
+            if (hpCard) hpCard.classList.toggle('dying-active', dying > 0);
         }
         // ----- Death's door edge-bleed (Chunk 4b) -------------------------
         // When THIS player is at 0 HP or Dying > 0, bleed a ruby rim around
@@ -8651,7 +8492,7 @@
                 const sign = mod >= 0 ? '+' : '';
                 const untTag = untrained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
                 html.push(`<button type="button" class="skill-action-btn" onclick="rollSkillAction('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')" title="${a.hint}${untrained ? ' [Untrained — uses raw ability mod]' : ''}">
-                    <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
+                    <span class="skill-action-btn-name">${a.name} ${buildActionPips(a.cost)}</span>
                     <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
                 </button>`);
             });
@@ -9326,38 +9167,6 @@
             repaint();
         })();
 
-        // ----- Build validator on level-up drawer (Wave 2 #29) ------------
-        // Hook into openLevelUpDrawer if defined; show the validator at the
-        // top of the drawer body.
-        (function wireLevelUpValidator() {
-            const orig = window.openLevelUpDrawer;
-            if (typeof orig !== 'function') return;
-            window.openLevelUpDrawer = async function() {
-                const r = orig.apply(this, arguments);
-                try {
-                    const res = await fetch(`/api/levelup_validate/${pcNameEncoded}`);
-                    const d = await res.json();
-                    const drawer = document.querySelector('.levelup-drawer-body, .levelup-drawer-content, .levelup-drawer');
-                    if (!drawer) return r;
-                    let v = drawer.querySelector('#lvl-validator');
-                    if (!v) {
-                        v = document.createElement('div');
-                        v.id = 'lvl-validator';
-                        v.className = 'lvl-validator';
-                        drawer.insertBefore(v, drawer.firstChild);
-                    }
-                    if (!d.issues || !d.issues.length) {
-                        v.classList.add('ok');
-                        v.innerHTML = `<h4>Build looks complete for level ${d.level}</h4><ul><li>No missing choices detected.</li></ul>`;
-                    } else {
-                        v.classList.remove('ok');
-                        v.innerHTML = `<h4>Level ${d.level} — choices to make</h4><ul>${d.issues.map(i => `<li>${i}</li>`).join('')}</ul>`;
-                    }
-                } catch(_) {}
-                return r;
-            };
-        })();
-
         // ----- Session journal end-of-session prompt (Wave 2 #30) ---------
         // Surface a small button somewhere a player will see at session end.
         // We add it next to the existing PC notes Save button on the
@@ -9924,8 +9733,6 @@
 
 {% include "_pc_sheet/_context_menu.html" %}
 
-{% include "_pc_sheet/_levelup_drawer.html" %}
-
     {# ── Standalone skill-actions builder ─────────────────────────────
        Lives in its own <script> tag at the END of body so an upstream
        throw in the giant in-line script block (1.1 MB) cannot kill it.
@@ -9936,6 +9743,35 @@
     (function buildSkillActionsStandalone() {
         const row = document.getElementById('skill-actions-row');
         if (!row || row.children.length > 0) return;
+        // Local, self-contained pip builder — deliberately NOT calling the
+        // main script's buildActionPips(), since this whole script tag
+        // exists to survive an upstream throw in that block (see comment
+        // above). Mirrors its '1'/'2'/'3'/reaction/free -> .action-pips
+        // markup so Skill Actions still match the unified diamond-pip
+        // language (audit N5/F3) even in the degraded-safety-net path.
+        // Input contract today: every caller passes '1'. Keep both builders' semantics identical (see buildActionPips/_standaloneActionPips).
+        function _standaloneActionPips(cost) {
+            const s = String(cost || '').trim().toLowerCase();
+            const ACTION_DIAMOND = '◆';
+            const FREE_DIAMOND   = '◇';
+            const REACTION_GLYPH = '⟳';
+            if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>';
+            if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>';
+
+            let count = 0;
+            if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
+                count = parseInt(s, 10);
+            } else {
+                count = (String(cost).match(new RegExp(ACTION_DIAMOND, 'g')) || []).length;
+            }
+            if (count === 0 && String(cost).indexOf(ACTION_DIAMOND) >= 0) count = 1;
+            if (count === 0) return `<span class="text-[10px]" style="color:var(--color-spell);">${cost || ''}</span>`;
+
+            const _pipTitle = ['One Action', 'Two Actions', 'Three Actions'][count - 1] || (count + ' Actions');
+            let pips = '';
+            for (let i = 0; i < count; i++) pips += '<span class="action-pip"></span>';
+            return `<span class="action-pips" title="${_pipTitle}">${pips}</span>`;
+        }
         const skills = {{ pc.skills | tojson | safe }};
         const mods   = {{ pc.mods   | tojson | safe }};
         const SKILL_ABILITY = {
@@ -9982,7 +9818,7 @@
             const untTag = !info.trained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
             const handler = `(typeof rollSkillAction === 'function' ? rollSkillAction : function(n,s,m,v){alert(n+' '+s+' '+m+' vs '+v);})('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')`;
             html.push(`<button type="button" class="skill-action-btn" onclick="${handler}" title="${a.hint}${!info.trained ? ' [Untrained]' : ''}">
-                <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
+                <span class="skill-action-btn-name">${a.name} ${_standaloneActionPips(a.cost)}</span>
                 <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
             </button>`);
         });

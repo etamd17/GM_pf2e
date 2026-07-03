@@ -60,7 +60,7 @@
                     {{ cond|replace('_','-')|upper }}
                 </button>
                 {% endfor %}
-                <button onclick="openConditionAdder()" class="action-btn ml-auto" style="font-size:11px; padding:3px 10px; {% if has_any_condition %}color:#fca5a5; border-color:rgba(252,165,165,0.3);{% endif %}" title="Add/manage conditions">+ Condition</button>
+                <button onclick="openConditionPicker()" class="action-btn ml-auto" style="font-size:11px; padding:3px 10px; {% if has_any_condition %}color:#fca5a5; border-color:rgba(252,165,165,0.3);{% endif %}" title="Add/manage conditions">+ Condition</button>
             </div>
         </div>
     </div>

@@ -79,8 +79,18 @@ def test_no_html_escape_only_interpolation_in_inline_handlers():
 # trap.) Only |replace("'", "\\'") (JS-escape) survives. Names/titles/labels are
 # the apostrophe-prone fields ("Hunter's Edge", "Go'el", "Thieves' Tools").
 _HANDLER_ON_LINE = re.compile(r'\bon[a-z]+\s*=\s*"')
-# a Jinja interpolation used as a call argument: ( or , then '{{ ... }}'
-_JINJA_CALL_ARG = re.compile(r"[(,]\s*'\{\{\s*(.*?)\s*\}\}'")
+# a Jinja interpolation used as a call argument: ( or , then '{{ EXPR }}TRAILING'
+# up to the quote that actually closes the JS arg (next char is , or)).
+# NB: a naive r"[(,]\s*'\{\{\s*(.*?)\s*\}\}'" is too greedy across multiple
+# interpolations on the same line — when a LATER argument's expr contains its
+# own literal quotes (e.g. a Jinja |replace("'", "\\'") filter chain), the lazy
+# .*? backtracks past the first argument's closing quote and swallows both
+# arguments into one match. If that combined match happens to contain a
+# "safe" substring like "replace", the guard below silently skips a line that
+# actually has an unescaped EARLIER argument. Anchoring each match to ITS OWN
+# closing quote (lookahead for the following , or)) keeps interpolations
+# independent so an unescaped one adjacent to an escaped one is still caught.
+_JINJA_CALL_ARG = re.compile(r"[(,]\s*'\{\{\s*(.*?)\s*\}\}([^'\"]*)'(?=[,)])", re.S)
 _NAMELIKE = re.compile(r'\b(name|title|label)\b')
 
 

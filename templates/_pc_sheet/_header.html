@@ -34,7 +34,9 @@
                            Cinzel heading hierarchy. Fighter-family classes
                            keep the  dingbat (typographic, not emoji). #}
                         <div class="portrait-badge" style="font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.08em;">
-                            {% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}
+                            {% set _rune = {'champion':'rn-champion','kineticist':'rn-kineticist','cleric':'rn-cleric','druid':'rn-druid'}.get((pc.class_name or '').split(' ')[0].split('(')[0].lower(), 'rn-adventurer') %}
+                            <svg class="sheet-port-glyph" viewBox="0 0 24 24" aria-hidden="true"><use href="#{{ _rune }}"></use></svg>
+                            <span class="badge-monogram">{% if pc.class_name == 'Fighter' %}FGT{% elif pc.class_name == 'Cleric' %}CLR{% elif pc.class_name == 'Wizard' %}WIZ{% elif pc.class_name == 'Rogue' %}ROG{% elif pc.class_name == 'Druid' %}DRU{% elif pc.class_name == 'Champion' %}CHM{% elif pc.class_name == 'Monk' %}MNK{% elif pc.class_name == 'Barbarian' %}BBN{% elif pc.class_name == 'Bard' %}BRD{% elif pc.class_name == 'Ranger' %}RGR{% elif pc.class_name == 'Sorcerer' %}SOR{% elif pc.class_name == 'Kineticist' %}KIN{% elif pc.class_name == 'Oracle' %}ORC{% elif pc.class_name == 'Witch' %}WCH{% elif pc.class_name == 'Magus' %}MAG{% elif pc.class_name == 'Alchemist' %}ALC{% elif pc.class_name == 'Investigator' %}INV{% elif pc.class_name == 'Swashbuckler' %}SWB{% elif pc.class_name == 'Gunslinger' %}GUN{% elif pc.class_name == 'Psychic' %}PSY{% elif pc.class_name == 'Summoner' %}SUM{% elif pc.class_name == 'Thaumaturge' %}THA{% elif pc.class_name == 'Inventor' %}INT{% else %}PC{% endif %}</span>
                         </div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -62,8 +64,8 @@
                     <span class="resource-chip no-print" title="Hero Points (max 3) — spend to reroll or stave off death">
                         <span class="resource-chip-lbl">Hero</span>
                         <button onclick="modifyHero('decrease')" class="resource-chip-btn" aria-label="Lose hero point">−</button>
-                        <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips">
-                            {% for i in range(3) %}<span class="hero-pip {% if i < pc.hero_points %}filled{% endif %}"></span>{% endfor %}
+                        <span id="hero-pips" data-current="{{ pc.hero_points }}" class="resource-chip-pips sheet-hero-flames">
+                            {% for i in range(3) %}<span class="hero-flame {{ 'active' if i < pc.hero_points else 'spent' }}"><svg viewBox="0 0 14 16"><use href="#rn-flame"></use></svg></span>{% endfor %}
                         </span>
                         <span id="current-hero" style="display:none;">{{ pc.hero_points }}</span>
                         <button onclick="modifyHero('increase')" class="resource-chip-btn" aria-label="Gain hero point">+</button>
@@ -116,6 +118,12 @@
                                 <button onclick="rollCustomDice()" class="tb" style="padding:4px 10px; font-size:11px;">Roll</button>
                             </div>
                             <button onclick="rollInitiativeFromSheet(); closePlayerOverflow();" role="menuitem">Roll initiative</button>
+                            {# Daily Prep — full reset (spells, focus, HP to full, combat
+                               conditions cleared). Was the sole button inside the hidden
+                               #cond-adder panel (removed as dead/orphaned chrome); moved
+                               here so the action stays reachable. Distinct from Long Rest
+                               (Con-mod partial heal) in the main toolbar. #}
+                            <button onclick="dailyPrep(); closePlayerOverflow();" role="menuitem" title="Reset spell slots, restore focus, clear combat conditions, and heal to full HP">Daily Prep</button>
                             <div class="sep"></div>
                             {% if pc.level > 1 %}<button onclick="revertLevel(); closePlayerOverflow();" id="btn-revert" role="menuitem">Undo last level-up</button>{% endif %}
                             <button onclick="window.print(); closePlayerOverflow();" role="menuitem">Print sheet</button>
@@ -133,7 +141,7 @@
             {% set ab_keys = ['str','dex','con','int','wis','cha'] %}
             {% for stat in pc.ability_display %}
             {% set ab_key = ab_keys[loop.index0] if loop.index0 < 6 else '' %}
-            <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
+            <div onclick="logRoll('{{ stat.label|replace("'", "\\'") }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
                  class="ability-block group rollable-element"
                  data-ab="{{ ab_key }}"
                  data-roll-name="{{ stat.label }} Check"
@@ -177,6 +185,13 @@
                 <div class="ss-lbl">Perception</div>
                 <div class="ss-val">+{{ pc.perception }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
+                {# Initiative — same number by default in PF2e (Perception-based).
+                   Was a standalone left-rail row; merged here since it duplicated
+                   this tile's value. Stop propagation so the roll doesn't also
+                   fire the tile's own Perception rollable-element handler. #}
+                <div class="ss-sub" style="margin-top:2px;">
+                    <button onclick="event.stopPropagation(); rollInitiativeFromSheet()" style="background:transparent; border:none; cursor:pointer; padding:0; font:inherit; font-size:9px; color:var(--accent); letter-spacing:0.04em;" title="Roll initiative (+{{ pc.initiative_mod }})">Init +{{ pc.initiative_mod }}</button>
+                </div>
             </div>
 
             <!-- Class DC -->
@@ -247,7 +262,9 @@
                        32×32 buttons clear the touch-target threshold for
                        in-person play with shaking hands / cold pizza grease. #}
                     <button class="hp-btn damage" onclick="applyHPChange('damage')" title="Damage" style="width:32px; height:32px; padding:0; font-size:16px;">−</button>
-                    <div style="text-align:center; min-width:96px;">
+                    {# hp-wrap-anchor: positioned anchor for the floating
+                       damage/heal pop (.sheet-dmgpop) — COMBAT IDENTITY port. #}
+                    <div class="hp-wrap-anchor" style="text-align:center; min-width:96px;">
                         <div>
                             <span id="current-hp" class="hp-current" style="font-size:36px; font-weight:700; color:{% if pc.current_hp == 0 %}#ef4444{% elif pc.current_hp < pc.hp * 0.5 %}#eab308{% else %}var(--green){% endif %}; transition:transform 0.2s;">{{ pc.current_hp }}</span>
                             <span style="color:var(--t3); font-size:13px; font-weight:600;">/ {{ pc.hp }}</span>
