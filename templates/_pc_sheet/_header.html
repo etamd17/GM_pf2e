@@ -141,7 +141,7 @@
             {% set ab_keys = ['str','dex','con','int','wis','cha'] %}
             {% for stat in pc.ability_display %}
             {% set ab_key = ab_keys[loop.index0] if loop.index0 < 6 else '' %}
-            <div onclick="logRoll('{{ stat.label }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
+            <div onclick="logRoll('{{ stat.label|replace("'", "\\'") }} Check', '{{ stat.mod|replace('+', '')|replace(' (½)', '') }}')"
                  class="ability-block group rollable-element"
                  data-ab="{{ ab_key }}"
                  data-roll-name="{{ stat.label }} Check"

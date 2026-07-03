@@ -4780,16 +4780,62 @@ body.system-cosmere .trk .grid-wrap::after {
 
 .sheet-port-glyph { position:absolute; inset:0; width:100%; height:100%; opacity:.26; color:var(--gilt-300); }
 
+/* Action-COST pips, sheet-scoped (audit N5/F3/N6). The sheet previously ran
+   THREE competing "how many actions does this cost" visual languages: a
+   flat blue-square .action-pip, a red-gules .action-cost badge, and dead
+   .action-badge-1/2/3 CSS. All emitters (action_pips() macro, Strikes card,
+   skill-action buttons, and the standalone skill-actions safety-net script)
+   now converge on .action-pips/.action-pip; this restyles that shared class
+   pair to match the tracker's gilt-glow diamond look (.trk .action-pip,
+   above) without touching any .trk-scoped rule. */
+.action-pips { display:inline-flex; gap:3px; align-items:center; vertical-align:middle; }
+.action-pip {
+    width:9px; height:9px; transform:rotate(45deg); display:inline-block;
+    border:1.2px solid var(--t-gold, #c9a34e); background:var(--t-gold, #c9a34e);
+    box-shadow:0 0 4px rgba(201,163,78,.45);
+}
+.action-pip.free { background:transparent; box-shadow:none; }
+.action-pip.reaction {
+    transform:none; border:none; background:none; box-shadow:none;
+    width:auto; height:auto; display:inline-block;
+}
+.action-pip.reaction::after { content:"\27F3"; color:var(--t-red-b, #c85a5a); font-weight:700; font-size:11px; line-height:1; }
+
+/* Ember ambient — quiet, sheet-scoped reuse of the tracker's trkEmber
+   keyframe at reduced intensity. Added to the sheet's main content
+   wrapper (the max-w-6xl body div in player_sheet.html, NOT the sticky
+   header) so it never sits above interactive chrome. */
+.sheet-ember-host { position:relative; overflow:hidden; }
+.sheet-ember-host::after {
+    content:""; position:absolute; top:-30%; bottom:-20%; left:-6%; width:60%;
+    background:radial-gradient(ellipse at 30% 60%, rgba(232,153,58,0.55), transparent 62%);
+    opacity:.04; animation: trkEmber 3.4s steps(6) infinite; pointer-events:none; z-index:0;
+}
+.sheet-ember-host > * { position:relative; z-index:1; }
+
+/* Dying pulse (audit F6) — .hp-area is the Resources/HP card's real class
+   (_header.html's "ss-block hp-area"). dying-active is toggled by
+   _refreshDyingWidget() in player_sheet.html whenever Dying > 0. */
+.hp-area.dying-active { animation: sheetDying 2.4s ease-in-out infinite; }
+@keyframes sheetDying { 0%,100%{ box-shadow:0 0 0 rgba(220,60,60,0); } 50%{ box-shadow:0 0 22px rgba(220,60,60,.4); } }
+
 @media (prefers-reduced-motion: reduce) {
     .hp-gauge-bar .hp-ghost { transition:none; width:0 !important; }
     .sheet-dmgpop { display:none; }
     .sheet-hero-flames .hero-flame.active svg { animation:none; }
     .sheet-hero-flames .spark { display:none; }
+    .sheet-ember-host::after { animation:none; }
+    /* Dying must stay visible without motion — static red ring instead. */
+    .hp-area.dying-active { animation:none; box-shadow:0 0 0 2px rgba(220,60,60,.5); }
+    #ready-to-level-banner.trk-cond-in { animation:none; }
 }
 @media print {
     .hp-gauge-bar .hp-ghost, .sheet-dmgpop, .sheet-hero-flames .spark { display:none; }
     .sheet-hero-flames .hero-flame.active svg { animation:none; filter:none; }
     .sheet-port-glyph { display:none; }
+    .sheet-ember-host::after { display:none; }
+    .hp-area.dying-active { animation:none; box-shadow:none; }
+    #ready-to-level-banner.trk-cond-in { animation:none; }
 }
 
 /* End of system.css */

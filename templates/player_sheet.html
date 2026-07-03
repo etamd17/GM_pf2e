@@ -1427,38 +1427,13 @@
             justify-content: flex-end;
             gap: 8px;
         }
-        .action-pips { display:inline-flex; gap:2px; vertical-align:middle; }
-        .action-pip { display:inline-block; width:14px; height:14px; background:var(--color-ac); border-radius:3px; }
-        .action-pip.free { background:none; border:2px solid var(--color-ac); width:12px; height:12px; border-radius:50%; }
-        .action-pip.reaction { background:none; border:2px solid #F59E0B; width:14px; height:14px; border-radius:50%; position:relative; }
-        .action-pip.reaction::after { content:''; position:absolute; top:2px; left:5px; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:6px solid #F59E0B; transform:translateX(-2px); }
-
-        /* === Action-cost leading pill (Paizo-style) ===
-           Optional alternative to action-pips. Red-gules rounded square,
-           ivory glyph, sits at the leading edge of a strike/activity
-           block. Use .action-cost[data-cost="1|2|3|r|f"]. */
-        .action-cost {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 22px;
-            height: 22px;
-            padding: 0 6px;
-            background: #7c2222;
-            color: #f4ecd8;
-            border: 1px solid rgba(244,236,216,0.28);
-            border-radius: 3px;
-            font-family: var(--font-display);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            line-height: 1;
-            margin-right: 8px;
-            vertical-align: middle;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-        }
-        .action-cost[data-cost="r"], .action-cost.reaction { background: #8a5a14; }
-        .action-cost[data-cost="f"], .action-cost.free { background: #3a1818; }
+        /* .action-pips / .action-pip / (retired) .action-cost — moved to
+           static/css/system.css's "COMBAT IDENTITY: player-sheet ports"
+           section (audit N5/F3: unify the sheet's three competing
+           action-cost visual systems onto one diamond-pip cluster styled
+           like the tracker's .trk .action-pip, sheet-scoped so .trk rules
+           stay untouched). Kept single-sourced there rather than here so
+           this inline <style> block doesn't drift from the tracker look. */
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes turnBannerIn { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
@@ -2392,7 +2367,9 @@
         .skill-action-btn:hover { border-color: var(--gilt); background: var(--bg-overlay); color: var(--gilt); }
         .skill-action-btn-name { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
         .skill-action-btn-meta { font-size: 9px; color: var(--t3); letter-spacing: 0.04em; }
-        .skill-action-btn .action-cost { float: right; opacity: 0.7; }
+        /* (retired .action-cost float rule) — the pip cluster now emitted
+           by buildActionPips()/action_pips() sits inline after the action
+           name, same as every other action_pips() use on the sheet. */
 
         /* Heighten-rank picker — small inline popover after spell click. */
         .heighten-picker {
@@ -2897,10 +2874,19 @@
 
     <!-- SHEET BODY                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20">
+    {# sheet-ember-host: quiet ambient glow (COMBAT IDENTITY port). Chosen
+       because this wrapper sits BELOW the sticky .char-header (a separate
+       earlier sibling, not a descendant) and closes before _modals.html is
+       included, so its overflow:hidden/position:relative can't clip the
+       sticky header or any position:fixed modal/FAB. #}
+    <div class="max-w-6xl mx-auto w-full flex-1 px-4 md:px-6 pt-2 pb-20 sheet-ember-host">
 
-        <!-- Ready-to-level banner (GM XP/milestone award) -->
-        <div id="ready-to-level-banner" class="no-print" style="display:{{ '' if pc.ready_to_level else 'none' }}; margin:0 0 .6rem;">
+        <!-- Ready-to-level banner (GM XP/milestone award). Level-up pop-in
+             (COMBAT IDENTITY port, audit F7): server-rendered-visible case
+             gets the pop-in class baked into markup so it plays once on
+             load; the SSE-toggled case (false->true mid-session) is handled
+             in applyPcUpdate below, which adds the same class at reveal. #}
+        <div id="ready-to-level-banner" class="no-print{{ ' trk-cond-in' if pc.ready_to_level else '' }}" style="display:{{ '' if pc.ready_to_level else 'none' }}; margin:0 0 .6rem;">
             <a href="/player/levelup/{{ pc.name|urlencode }}" style="display:flex; align-items:center; gap:10px; padding:.65rem 1rem; border-radius:10px; border:1px solid rgba(74,222,128,.5); background:rgba(74,222,128,.12); color:#86EFAC; text-decoration:none; font-size:14px;">
                 <span style="font-size:16px;">&#9650;</span><b>Ready to level up!</b>
                 <span style="opacity:.8;">Open the level-up wizard.</span>
@@ -5547,9 +5533,20 @@
             // used by the live SSE frame above AND the reconnect refetch below.
             window.applyPcUpdate = function(data) {
                     // GM XP/level award: show the ready banner + repaint XP live.
+                    // Pop-in (trk-cond-in) only on the false->true reveal edge —
+                    // re-adding the class every update would replay the animation
+                    // on every unrelated pc_update while the banner stays shown.
                     if (typeof data.ready_to_level === 'boolean') {
                         var _rb = document.getElementById('ready-to-level-banner');
-                        if (_rb) _rb.style.display = data.ready_to_level ? '' : 'none';
+                        if (_rb) {
+                            var _wasHidden = _rb.style.display === 'none';
+                            _rb.style.display = data.ready_to_level ? '' : 'none';
+                            if (data.ready_to_level && _wasHidden) {
+                                _rb.classList.remove('trk-cond-in');
+                                void _rb.offsetWidth; // restart animation
+                                _rb.classList.add('trk-cond-in');
+                            }
+                        }
                     }
                     if (typeof data.xp === 'number') {
                         var _rx = document.getElementById('ready-xp'); if (_rx) _rx.textContent = data.xp + ' / 1000 XP';
@@ -8338,6 +8335,12 @@
             if (wvEl) wvEl.textContent = wounded;
             if (cur <= 0 || dying > 0) w.classList.add('active');
             else w.classList.remove('active');
+            // Dying pulse (COMBAT IDENTITY port) — pulse the Resources/HP card
+            // itself (.hp-area) whenever Dying > 0, independent of the 0-HP
+            // check above so it also lights up mid-recovery at e.g. Dying 1
+            // with temp HP keeping current_hp above 0.
+            const hpCard = document.querySelector('.hp-area');
+            if (hpCard) hpCard.classList.toggle('dying-active', dying > 0);
         }
         // ----- Death's door edge-bleed (Chunk 4b) -------------------------
         // When THIS player is at 0 HP or Dying > 0, bleed a ruby rim around
@@ -8469,7 +8472,7 @@
                 const sign = mod >= 0 ? '+' : '';
                 const untTag = untrained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
                 html.push(`<button type="button" class="skill-action-btn" onclick="rollSkillAction('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')" title="${a.hint}${untrained ? ' [Untrained — uses raw ability mod]' : ''}">
-                    <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
+                    <span class="skill-action-btn-name">${a.name} ${buildActionPips(a.cost)}</span>
                     <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
                 </button>`);
             });
@@ -9720,6 +9723,21 @@
     (function buildSkillActionsStandalone() {
         const row = document.getElementById('skill-actions-row');
         if (!row || row.children.length > 0) return;
+        // Local, self-contained pip builder — deliberately NOT calling the
+        // main script's buildActionPips(), since this whole script tag
+        // exists to survive an upstream throw in that block (see comment
+        // above). Mirrors its '1'/'2'/'3'/reaction/free -> .action-pips
+        // markup so Skill Actions still match the unified diamond-pip
+        // language (audit N5/F3) even in the degraded-safety-net path.
+        function _standaloneActionPips(cost) {
+            const s = String(cost || '').trim().toLowerCase();
+            if (s === 'r' || s === 'reaction') return '<span class="action-pips"><span class="action-pip reaction"></span></span>';
+            if (s === 'f' || s === 'free')     return '<span class="action-pips"><span class="action-pip free"></span></span>';
+            const n = parseInt(s, 10) || 1;
+            let pips = '';
+            for (let i = 0; i < n; i++) pips += '<span class="action-pip"></span>';
+            return `<span class="action-pips">${pips}</span>`;
+        }
         const skills = {{ pc.skills | tojson | safe }};
         const mods   = {{ pc.mods   | tojson | safe }};
         const SKILL_ABILITY = {
@@ -9766,7 +9784,7 @@
             const untTag = !info.trained ? ' <span class="sa-untr" style="font-size:9px; color:#9b9baf; margin-left:3px;">U</span>' : '';
             const handler = `(typeof rollSkillAction === 'function' ? rollSkillAction : function(n,s,m,v){alert(n+' '+s+' '+m+' vs '+v);})('${a.name}', '${skillToUse}', ${mod}, '${a.vs}')`;
             html.push(`<button type="button" class="skill-action-btn" onclick="${handler}" title="${a.hint}${!info.trained ? ' [Untrained]' : ''}">
-                <span class="skill-action-btn-name">${a.name} <span class="action-cost">${a.cost}A</span></span>
+                <span class="skill-action-btn-name">${a.name} ${_standaloneActionPips(a.cost)}</span>
                 <span class="skill-action-btn-meta">${skillToUse} ${sign}${mod}${untTag} · vs ${a.vs}</span>
             </button>`);
         });

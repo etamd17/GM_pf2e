@@ -138,7 +138,12 @@
                                 <div class="ds-surface-sunken p-4 group" style="border-radius:var(--radius-md);" data-weapon-card data-attack-name="{{ attack.name }}">
                                 <div class="flex justify-between items-start mb-2">
                                     <div class="flex items-center gap-2">
-                                        <span class="action-cost" data-cost="1" title="One Action — Strike">&#9670;</span>
+                                        {# Strike action cost — unified onto the shared action_pips()
+                                           diamond-pip macro (audit N5/F3) instead of the retired
+                                           .action-cost badge, so Strikes read the same glyph
+                                           language as Feats/Magic. A PF2e Strike always costs
+                                           exactly 1 action (MAP applies within it), so '◆'. #}
+                                        {{ action_pips('◆') }}
                                         <span class="font-header font-bold block leading-none" style="font-size:17px; letter-spacing:0.02em; color:var(--gilt);">{{ attack.name }}</span>
                                         {% if attack.has_two_hand %}
                                         <button data-twohand-btn onclick="toggleTwoHand('{{ attack.name|replace("'", "\\'") }}')" class="px-2 py-0.5 rounded font-bold uppercase tracking-wider border transition-colors {% if attack.is_two_handed %}bg-amber-600 text-white border-amber-500{% else %}text-gray-400 border-gray-600 hover:text-white{% endif %}" style="font-size:var(--text-2xs); background:{% if not attack.is_two_handed %}var(--surface-overlay){% endif %};">
