@@ -6823,37 +6823,39 @@
             equipMode = 'armor'; equipCat = 'all'; equipSelected = null;
             document.getElementById('equip-modal-title').innerText = 'Armor Browser';
             document.getElementById('equip-cat-btns').innerHTML = `
-                <button onclick="setEquipCat('all')" class="equip-cat bg-amber-900/40 text-amber-400 border-amber-700 px-2 py-1 rounded text-[10px] font-bold border">All</button>
-                <button onclick="setEquipCat('light')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Light</button>
-                <button onclick="setEquipCat('medium')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Medium</button>
-                <button onclick="setEquipCat('heavy')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Heavy</button>
-                <button onclick="equipArmor('Unarmored')" class="bg-gray-900 text-red-400 border-red-900/50 px-2 py-1 rounded text-[10px] font-bold border hover:border-red-500 ml-2">× Unarmored</button>`;
+                <button onclick="setEquipCat('all')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:rgba(201,163,78,0.18); color:var(--gilt-200); border-color:var(--accent);">All</button>
+                <button onclick="setEquipCat('light')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Light</button>
+                <button onclick="setEquipCat('medium')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Medium</button>
+                <button onclick="setEquipCat('heavy')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Heavy</button>
+                <button onclick="equipArmor('Unarmored')" class="px-2 py-1 rounded text-[10px] font-bold border ml-2" style="background:var(--bg-card-2); color:var(--ruby-200); border-color:rgba(168,58,58,0.4);">× Unarmored</button>`;
             document.getElementById('equip-search').value = '';
-            document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select armor to view details.</div>';
+            document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center italic text-sm" style="color:var(--text-on-cream-3);">Select armor to view details.</div>';
             renderEquipList();
             document.getElementById('equip-modal').classList.remove('hidden');
         }
-        
+
         function openWeaponBrowser() {
             equipMode = 'weapon'; equipCat = 'all'; equipSelected = null;
             document.getElementById('equip-modal-title').innerText = 'Weapon Browser';
             document.getElementById('equip-cat-btns').innerHTML = `
-                <button onclick="setEquipCat('all')" class="equip-cat bg-amber-900/40 text-amber-400 border-amber-700 px-2 py-1 rounded text-[10px] font-bold border">All</button>
-                <button onclick="setEquipCat('simple')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Simple</button>
-                <button onclick="setEquipCat('martial')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Martial</button>
-                <button onclick="setEquipCat('advanced')" class="equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500">Advanced</button>`;
+                <button onclick="setEquipCat('all')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:rgba(201,163,78,0.18); color:var(--gilt-200); border-color:var(--accent);">All</button>
+                <button onclick="setEquipCat('simple')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Simple</button>
+                <button onclick="setEquipCat('martial')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Martial</button>
+                <button onclick="setEquipCat('advanced')" class="equip-cat px-2 py-1 rounded text-[10px] font-bold border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Advanced</button>`;
             document.getElementById('equip-search').value = '';
-            document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center text-gray-600 italic text-sm">Select a weapon to view details.</div>';
+            document.getElementById('equip-detail').innerHTML = '<div class="flex h-full items-center justify-center italic text-sm" style="color:var(--text-on-cream-3);">Select a weapon to view details.</div>';
             renderEquipList();
             document.getElementById('equip-modal').classList.remove('hidden');
         }
-        
+
         function setEquipCat(cat) {
             equipCat = cat;
             document.querySelectorAll('.equip-cat').forEach(b => {
-                b.className = 'equip-cat bg-gray-900 text-gray-400 border-gray-700 px-2 py-1 rounded text-[10px] font-bold border hover:border-gray-500';
+                b.className = 'equip-cat px-2 py-1 rounded text-[10px] font-bold border';
+                b.style.background = 'var(--bg-card-2)'; b.style.color = 'var(--text-on-cream-3)'; b.style.borderColor = 'var(--border-strong)';
             });
-            event.target.className = 'equip-cat bg-amber-900/40 text-amber-400 border-amber-700 px-2 py-1 rounded text-[10px] font-bold border';
+            event.target.className = 'equip-cat px-2 py-1 rounded text-[10px] font-bold border';
+            event.target.style.background = 'rgba(201,163,78,0.18)'; event.target.style.color = 'var(--gilt-200)'; event.target.style.borderColor = 'var(--accent)';
             renderEquipList();
         }
         
@@ -6884,27 +6886,27 @@
                 container.innerHTML = '<div class="text-center italic py-8" style="color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">The quartermaster finds no such wares.</div>';
                 return;
             }
-            
+
             container.innerHTML = items.slice(0, 500).map((item, idx) => {
                 let cat = item.category || (equipMode === 'armor' ? 'light' : 'simple');
                 let usable = equipMode === 'armor' ? canUseArmor(cat) : canUseWeapon(cat);
                 let opacity = usable ? '' : 'opacity-40';
-                let profBadge = usable 
-                    ? `<span class="text-[9px] bg-green-900/30 text-green-400 px-1 py-0.5 rounded border border-green-800/50">Proficient</span>`
-                    : `<span class="text-[9px] bg-red-900/30 text-red-400 px-1 py-0.5 rounded border border-red-800/50">Untrained</span>`;
-                let catBadge = `<span class="text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700 uppercase">${cat}</span>`;
-                
+                let profBadge = usable
+                    ? `<span class="text-[9px] px-1 py-0.5 rounded border" style="background:rgba(74,124,42,0.18); color:#8fc35a; border-color:rgba(74,124,42,0.4);">Proficient</span>`
+                    : `<span class="text-[9px] px-1 py-0.5 rounded border" style="background:rgba(168,58,58,0.18); color:var(--ruby-200); border-color:rgba(168,58,58,0.4);">Untrained</span>`;
+                let catBadge = `<span class="text-[9px] px-1 py-0.5 rounded border uppercase" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">${cat}</span>`;
+
                 let statsHtml = '';
                 if (equipMode === 'armor') {
-                    statsHtml = `<span class="text-sky-400">AC +${item.ac}</span> · <span class="text-gray-400">Dex +${item.dex_cap}</span>`;
-                    if (item.penalty) statsHtml += ` · <span class="text-red-400">Chk ${item.penalty}</span>`;
+                    statsHtml = `<span style="color:var(--gilt-200);">AC +${item.ac}</span> · <span style="color:var(--text-on-cream-3);">Dex +${item.dex_cap}</span>`;
+                    if (item.penalty) statsHtml += ` · <span style="color:var(--ruby-200);">Chk ${item.penalty}</span>`;
                 } else {
-                    statsHtml = `<span class="text-red-300">${item.damage}</span>`;
+                    statsHtml = `<span style="color:var(--ruby-200);">${item.damage}</span>`;
                 }
-                
-                return `<button onclick="showEquipDetail(${idx}, '${equipMode}')" data-idx="${idx}" class="equip-item w-full text-left bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/30 rounded p-2.5 transition-colors ${opacity}">
+
+                return `<button onclick="showEquipDetail(${idx}, '${equipMode}')" data-idx="${idx}" class="equip-item w-full text-left rounded p-2.5 transition-colors ${opacity}" style="background:var(--bg-input); border:1px solid var(--border-card);" onmouseover="this.style.background='rgba(201,163,78,0.08)'; this.style.borderColor='rgba(201,163,78,0.3)';" onmouseout="this.style.background='var(--bg-input)'; this.style.borderColor='var(--border-card)';">
                     <div class="flex justify-between items-center">
-                        <span class="font-bold text-gray-200 text-sm truncate">${escapeHtml(item.name)}</span>
+                        <span class="font-bold text-sm truncate" style="color:var(--text-on-cream);">${escapeHtml(item.name)}</span>
                         <div class="flex gap-1 shrink-0 ml-2">${catBadge} ${profBadge}</div>
                     </div>
                     <div class="text-[10px] mt-1">${statsHtml}</div>
@@ -6938,36 +6940,36 @@
             let profKey = mode === 'armor' ? cat : cat;
             let profRank = pcProfs[profKey] || 0;
             
-            let html = `<h3 class="text-xl font-header text-amber-400 mb-1">${escapeHtml(item.name)}</h3>`;
+            let html = `<h3 class="text-xl font-header mb-1" style="color:var(--gilt-200);">${escapeHtml(item.name)}</h3>`;
             html += `<div class="flex flex-wrap gap-1 mb-3">`;
-            html += `<span class="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700 uppercase">${cat}</span>`;
-            if (item.level) html += `<span class="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${item.level}</span>`;
-            if (usable) html += `<span class="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded border border-green-800/50">${profRankName[profRank] || 'Trained'}</span>`;
-            else html += `<span class="text-[10px] bg-red-900/30 text-red-400 px-1.5 py-0.5 rounded border border-red-800/50">Untrained — cannot use effectively</span>`;
+            html += `<span class="text-[10px] px-1.5 py-0.5 rounded border uppercase" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">${cat}</span>`;
+            if (item.level) html += `<span class="text-[10px] px-1.5 py-0.5 rounded border" style="background:var(--bg-card-2); color:var(--text-on-cream-3); border-color:var(--border-strong);">Lv ${item.level}</span>`;
+            if (usable) html += `<span class="text-[10px] px-1.5 py-0.5 rounded border" style="background:rgba(74,124,42,0.18); color:#8fc35a; border-color:rgba(74,124,42,0.4);">${profRankName[profRank] || 'Trained'}</span>`;
+            else html += `<span class="text-[10px] px-1.5 py-0.5 rounded border" style="background:rgba(168,58,58,0.18); color:var(--ruby-200); border-color:rgba(168,58,58,0.4);">Untrained — cannot use effectively</span>`;
             if (item.traits && item.traits.length) {
-                item.traits.forEach(t => { html += `<span class="text-[10px] bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded border border-gray-700">${escapeHtml(t)}</span>`; });
+                item.traits.forEach(t => { html += `<span class="text-[10px] px-1.5 py-0.5 rounded border" style="background:var(--bg-input); color:var(--text-on-cream-3); border-color:var(--border-card);">${escapeHtml(t)}</span>`; });
             }
             html += `</div>`;
-            
+
             if (mode === 'armor') {
                 html += `<div class="grid grid-cols-2 gap-2 mb-4">
-                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">AC Bonus</div><div class="font-bold text-sky-400 text-lg">+${item.ac}</div></div>
-                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">Dex Cap</div><div class="font-bold text-white text-lg">+${item.dex_cap}</div></div>
-                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">Check Penalty</div><div class="font-bold ${item.penalty ? 'text-red-400' : 'text-gray-400'} text-lg">${item.penalty || '0'}</div></div>
-                    <div class="bg-gray-900 p-2 rounded border border-gray-700 text-center"><div class="text-[10px] text-gray-500 uppercase">Speed Penalty</div><div class="font-bold ${item.speed_penalty ? 'text-red-400' : 'text-gray-400'} text-lg">${item.speed_penalty || '0'}</div></div>
+                    <div class="p-2 rounded text-center" style="background:var(--bg-input); border:1px solid var(--border-card);"><div class="text-[10px] uppercase" style="color:var(--text-on-cream-3);">AC Bonus</div><div class="font-bold text-lg" style="color:var(--gilt-200);">+${item.ac}</div></div>
+                    <div class="p-2 rounded text-center" style="background:var(--bg-input); border:1px solid var(--border-card);"><div class="text-[10px] uppercase" style="color:var(--text-on-cream-3);">Dex Cap</div><div class="font-bold text-lg" style="color:var(--text-on-cream);">+${item.dex_cap}</div></div>
+                    <div class="p-2 rounded text-center" style="background:var(--bg-input); border:1px solid var(--border-card);"><div class="text-[10px] uppercase" style="color:var(--text-on-cream-3);">Check Penalty</div><div class="font-bold text-lg" style="color:${item.penalty ? 'var(--ruby-200)' : 'var(--text-on-cream-3)'};">${item.penalty || '0'}</div></div>
+                    <div class="p-2 rounded text-center" style="background:var(--bg-input); border:1px solid var(--border-card);"><div class="text-[10px] uppercase" style="color:var(--text-on-cream-3);">Speed Penalty</div><div class="font-bold text-lg" style="color:${item.speed_penalty ? 'var(--ruby-200)' : 'var(--text-on-cream-3)'};">${item.speed_penalty || '0'}</div></div>
                 </div>`;
-                if (item.str_req) html += `<div class="text-xs text-gray-400 mb-3">Strength Requirement: <span class="text-white font-bold">${item.str_req}</span></div>`;
-                html += `<button onclick="equipArmorFromBrowser('${escapeHtml(item.name).replace(/'/g, "\\'")}')" class="w-full ${usable ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'} font-bold py-2 rounded text-sm transition-colors mb-4">${usable ? 'Equip This Armor' : 'Cannot Equip (Untrained)'}</button>`;
+                if (item.str_req) html += `<div class="text-xs mb-3" style="color:var(--text-on-cream-3);">Strength Requirement: <span class="font-bold" style="color:var(--text-on-cream);">${item.str_req}</span></div>`;
+                html += `<button onclick="equipArmorFromBrowser('${escapeHtml(item.name).replace(/'/g, "\\'")}')" class="w-full font-bold py-2 rounded text-sm transition-colors mb-4" style="${usable ? 'background:var(--accent); color:var(--ink-950); cursor:pointer;' : 'background:var(--bg-card-2); color:var(--text-on-cream-3); cursor:not-allowed;'}">${usable ? 'Equip This Armor' : 'Cannot Equip (Untrained)'}</button>`;
             } else {
-                html += `<div class="bg-gray-900 p-3 rounded border border-gray-700 mb-4">
-                    <div class="text-[10px] text-gray-500 uppercase mb-1">Damage</div>
-                    <div class="font-bold text-red-300 text-lg font-mono">${escapeHtml(item.damage)}</div>
+                html += `<div class="p-3 rounded mb-4" style="background:var(--bg-input); border:1px solid var(--border-card);">
+                    <div class="text-[10px] uppercase mb-1" style="color:var(--text-on-cream-3);">Damage</div>
+                    <div class="font-bold text-lg font-mono" style="color:var(--ruby-200);">${escapeHtml(item.damage)}</div>
                 </div>`;
-                html += `<button onclick="forgeWeaponFromBrowser('${escapeHtml(item.name).replace(/'/g, "\\'")}')" class="w-full ${usable ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-gray-700 text-gray-400'} font-bold py-2 rounded text-sm transition-colors mb-4">${usable ? 'Equip This Weapon' : 'Equip (Untrained — penalties apply)'}</button>`;
+                html += `<button onclick="forgeWeaponFromBrowser('${escapeHtml(item.name).replace(/'/g, "\\'")}')" class="w-full font-bold py-2 rounded text-sm transition-colors mb-4" style="${usable ? 'background:var(--accent); color:var(--ink-950); cursor:pointer;' : 'background:var(--bg-card-2); color:var(--text-on-cream-3); cursor:pointer;'}">${usable ? 'Equip This Weapon' : 'Equip (Untrained — penalties apply)'}</button>`;
             }
-            
+
             if (item.description) {
-                html += `<div class="border-t border-gray-700 pt-3 text-sm text-gray-400 leading-relaxed foundry-content">${item.description}</div>`;
+                html += `<div class="pt-3 text-sm leading-relaxed foundry-content" style="border-top:1px solid var(--border-card); color:var(--text-on-cream-3);">${item.description}</div>`;
             }
             
             document.getElementById('equip-detail').innerHTML = html;

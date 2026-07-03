@@ -19,21 +19,21 @@
                     </div>
                     
                     <div class="grid grid-cols-4 gap-3 mb-6">
-                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
-                            <label class="block text-[10px] text-cyan-200 font-bold uppercase mb-1">PP</label>
-                            <input type="number" id="coin-pp" value="{{ pc.pp }}" class="w-full bg-gray-950 text-cyan-100 font-mono text-center rounded border border-cyan-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        <div class="rounded p-2 text-center shadow-inner" style="background:var(--bg-card-2); border:1px solid var(--border-card);">
+                            <label class="block text-[10px] font-bold uppercase mb-1" style="color:var(--gilt-50);">PP</label>
+                            <input type="number" id="coin-pp" value="{{ pc.pp }}" class="w-full font-mono text-center rounded py-1 outline-none" style="background:var(--bg-input); color:var(--gilt-50); border:1px solid var(--border-card);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" onchange="saveWealth()">
                         </div>
-                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
-                            <label class="block text-[10px] text-yellow-400 font-bold uppercase mb-1">GP</label>
-                            <input type="number" id="coin-gp" value="{{ pc.gp }}" class="w-full bg-gray-950 text-yellow-200 font-mono text-center rounded border border-yellow-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        <div class="rounded p-2 text-center shadow-inner" style="background:var(--bg-card-2); border:1px solid var(--border-card);">
+                            <label class="block text-[10px] font-bold uppercase mb-1" style="color:var(--gilt-300);">GP</label>
+                            <input type="number" id="coin-gp" value="{{ pc.gp }}" class="w-full font-mono text-center rounded py-1 outline-none" style="background:var(--bg-input); color:var(--gilt-300); border:1px solid var(--border-card);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" onchange="saveWealth()">
                         </div>
-                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
-                            <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">SP</label>
-                            <input type="number" id="coin-sp" value="{{ pc.sp }}" class="w-full bg-gray-950 text-gray-300 font-mono text-center rounded border border-gray-600 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        <div class="rounded p-2 text-center shadow-inner" style="background:var(--bg-card-2); border:1px solid var(--border-card);">
+                            <label class="block text-[10px] font-bold uppercase mb-1" style="color:var(--ink-300);">SP</label>
+                            <input type="number" id="coin-sp" value="{{ pc.sp }}" class="w-full font-mono text-center rounded py-1 outline-none" style="background:var(--bg-input); color:var(--ink-300); border:1px solid var(--border-strong);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-strong)'" onchange="saveWealth()">
                         </div>
-                        <div class="bg-gray-900 rounded p-2 border border-gray-700 text-center shadow-inner">
-                            <label class="block text-[10px] text-orange-400 font-bold uppercase mb-1">CP</label>
-                            <input type="number" id="coin-cp" value="{{ pc.cp }}" class="w-full bg-gray-950 text-orange-300 font-mono text-center rounded border border-orange-900/50 py-1 outline-none focus:border-amber-500" onchange="saveWealth()">
+                        <div class="rounded p-2 text-center shadow-inner" style="background:var(--bg-card-2); border:1px solid var(--border-card);">
+                            <label class="block text-[10px] font-bold uppercase mb-1" style="color:var(--tint-ref);">CP</label>
+                            <input type="number" id="coin-cp" value="{{ pc.cp }}" class="w-full font-mono text-center rounded py-1 outline-none" style="background:var(--bg-input); color:var(--tint-ref); border:1px solid var(--border-card);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" onchange="saveWealth()">
                         </div>
                     </div>
 
@@ -94,12 +94,12 @@
                         {% for item in pc.equipment %}
                         {% set raw_bulk = item.bulk|string|upper %}
                         {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
-                        <div class="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800 group inv-item" data-inv-name="{{ item.name|lower }}">
-                            <span class="text-sm font-bold text-gray-300 truncate flex-1">{{ item.name }}</span>
+                        <div class="flex justify-between items-center p-3 rounded group inv-item" data-inv-name="{{ item.name|lower }}" style="background:var(--bg-input); border:1px solid var(--border-card);">
+                            <span class="text-sm font-bold truncate flex-1" style="color:var(--text-on-cream-2);">{{ item.name }}</span>
                             <button class="invested-toggle no-print mr-2" data-item-name="{{ item.name }}" title="Toggle: invested magic item (counts toward 10/day cap)" aria-label="Toggle invested for {{ item.name }}" style="background:transparent; color:var(--t4); font-size:14px; padding:0 4px; cursor:pointer;"></button>
-                            <span class="text-[9px] text-gray-500 font-mono uppercase tracking-widest mr-2 {% if display_bulk == 'L' %}text-amber-600{% elif display_bulk|int > 0 %}text-amber-500{% endif %}">{{ display_bulk }}B</span>
-                            <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-0.5 rounded border border-gray-700 mr-2">x{{ item.qty }}</span>
-                            <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Drop Item">×</button>
+                            <span class="text-[9px] font-mono uppercase tracking-widest mr-2" style="color:{% if display_bulk == 'L' %}var(--gilt-400){% elif display_bulk|int > 0 %}var(--gilt-200){% else %}var(--text-on-cream-3){% endif %};">{{ display_bulk }}B</span>
+                            <span class="text-xs font-mono px-2 py-0.5 rounded mr-2" style="color:var(--text-on-cream-3); background:var(--bg-card-2); border:1px solid var(--border-card);">x{{ item.qty }}</span>
+                            <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="transition-colors opacity-0 group-hover:opacity-100" style="color:var(--text-on-cream-3);" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-on-cream-3)'" title="Drop Item">×</button>
                         </div>
                         {% else %}
                         <div class="text-center italic p-4 rounded border" style="background:var(--bg-input); border-color:var(--border-subtle); color:var(--text-muted); font-family:var(--font-flavor); font-size:14px;">The pack hangs light — no burden carried here.</div>
@@ -107,9 +107,9 @@
                     </div>
 
                     <div class="flex gap-2 mb-3">
-                        <input type="text" id="add-item-name" placeholder="Item Name" class="flex-1 bg-gray-950 border border-gray-700 rounded p-2 text-sm text-gray-200 focus:border-amber-500 outline-none">
-                        <input type="number" id="add-item-qty" value="1" class="w-16 bg-gray-950 border border-gray-700 rounded p-2 text-sm text-gray-200 text-center focus:border-amber-500 outline-none" title="Quantity">
-                        <button onclick="addInvItem()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-4 py-2 rounded shadow-lg transition-colors text-sm">Add</button>
+                        <input type="text" id="add-item-name" placeholder="Item Name" class="flex-1 rounded p-2 text-sm outline-none" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--text-on-cream);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'">
+                        <input type="number" id="add-item-qty" value="1" class="w-16 rounded p-2 text-sm text-center outline-none" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--text-on-cream);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" title="Quantity">
+                        <button onclick="addInvItem()" class="font-bold px-4 py-2 rounded shadow-lg transition-colors text-sm" style="background:var(--accent); color:var(--ink-950);" onmouseover="this.style.background='var(--accent-hover)'" onmouseout="this.style.background='var(--accent)'">Add</button>
                     </div>
                     <details class="group">
                         <summary class="text-[9px] font-header tracking-wider uppercase cursor-pointer" style="color:var(--text-muted);">▸ Quick Add Common Items</summary>
@@ -142,11 +142,11 @@
                             </button>
                         </div>
                     </div>
-                    <textarea id="pc-notes" class="w-full flex-1 min-h-[300px] bg-gray-950 border border-gray-700 rounded p-4 text-gray-300 text-sm focus:outline-none focus:border-amber-500 custom-scrollbar leading-relaxed" placeholder="Jot down important names, loot, or lore here..." oninput="scheduleAutoSave()">{{ pc.notes }}</textarea>
-                    
-                    <div class="mt-4 pt-3 border-t border-gray-700 flex justify-between items-center">
-                        <span class="text-[10px] text-gray-600">Auto-saves after you stop typing</span>
-                        <button onclick="exportCharacter()" class="bg-gray-900 hover:bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1.5">
+                    <textarea id="pc-notes" class="w-full flex-1 min-h-[300px] rounded p-4 text-sm outline-none custom-scrollbar leading-relaxed" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--text-on-cream-2);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" placeholder="Jot down important names, loot, or lore here..." oninput="scheduleAutoSave()">{{ pc.notes }}</textarea>
+
+                    <div class="mt-4 pt-3 flex justify-between items-center" style="border-top:1px solid var(--border-card);">
+                        <span class="text-[10px]" style="color:var(--text-on-cream-3);">Auto-saves after you stop typing</span>
+                        <button onclick="exportCharacter()" class="px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center gap-1.5" style="background:var(--bg-card-2); color:var(--text-on-cream-2); border:1px solid var(--border-strong);" onmouseover="this.style.background='rgba(201,163,78,0.08)'" onmouseout="this.style.background='var(--bg-card-2)'">
                             Export Character JSON
                         </button>
                     </div>
