@@ -9862,10 +9862,14 @@ def adjust_hp(instance_id):
     try:
         amount = int(request.form.get('amount', 0))
     except ValueError:
-        amount = 0
+        # Pre-extraction behavior: a malformed amount no-op'd the whole
+        # handler (no log line, no persist, no broadcast) -- the parse sat
+        # inside the same try as the mutation body. Keep that: skip the
+        # apply entirely and return the normal response (review T1 finding).
+        amount = None
     action = request.form.get('action')
     damage_type = request.form.get('damage_type', 'untyped').strip()
-    old_hp = _apply_hp_delta(instance_id, amount, action, damage_type)
+    old_hp = _apply_hp_delta(instance_id, amount, action, damage_type) if amount is not None else None
     if _is_ajax():
         # Report the ACTUAL hp-pool change (after Deflect / resistances /
         # weaknesses / temp HP / clamping) so the client toast says the net

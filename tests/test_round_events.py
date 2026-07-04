@@ -18,6 +18,8 @@ right site with the right (settled, once-only) round number.
 """
 from __future__ import annotations
 
+import os
+
 import json
 
 import pytest
@@ -43,6 +45,7 @@ class _Combatant:
         self.condition_expiry = {}
         self.file_path = name + '.json'
         self.delaying = False
+        self.initiative = 10   # save_encounter serializes this directly
         # Monster-only fields some tracker code paths getattr() defensively.
         self.immunities = []
         self.resistances = []
@@ -564,3 +567,42 @@ def test_tracker_state_carries_round_events(monkeypatch):
         app_module.ROUND_EVENTS[:] = []
         app_module.TURN_INDEX = 0
         app_module._invalidate_tracker_cache()
+
+
+def test_named_saved_encounter_round_trips_round_events(encounter, tmp_path, monkeypatch):
+    """The spec requires events to travel with SAVED encounters, not just the
+    autosave (review T1 finding: this path was implemented but untested)."""
+    monkeypatch.setattr(app_module, 'ENCOUNTER_DIR', str(tmp_path))
+    app_module.ROUND_EVENTS[:] = [_event(round=3, title='Cave-in', repeat_every=2,
+                                         last_fired_round=3, show_on_table=True)]
+    client = app_module.app.test_client()
+    r = client.post('/api/save_encounter', data={'encounter_name': 'trip test'})
+    assert r.status_code in (200, 302)
+
+    # Wipe live state, then load the saved encounter back.
+    app_module.ROUND_EVENTS[:] = []
+    saved = [f for f in os.listdir(str(tmp_path)) if f.endswith('.json')]
+    assert saved, 'save_encounter wrote no file'
+    r2 = client.post('/api/load_encounter', data={'encounter_name': saved[0][:-5]})
+    assert r2.status_code in (200, 302)
+    assert len(app_module.ROUND_EVENTS) == 1
+    ev = app_module.ROUND_EVENTS[0]
+    assert ev['title'] == 'Cave-in'
+    assert ev['round'] == 3 and ev['repeat_every'] == 2
+    assert ev['last_fired_round'] == 3
+    assert ev['show_on_table'] is True
+
+
+def test_malformed_amount_no_ops_adjust_hp(encounter):
+    """Pre-extraction, a non-numeric amount aborted the whole handler; the
+    thin wrapper must preserve that (review T1 finding) -- no HP change, no
+    persist, no broadcast, no spurious 'took 0 damage' log."""
+    goel = encounter['goel']
+    before_hp = goel.current_hp
+    before_persists = len(encounter['persisted'])
+    r = app_module.app.test_client().post(
+        '/api/adjust_hp/' + goel.instance_id,
+        data={'amount': 'not-a-number', 'action': 'damage'})
+    assert r.status_code in (200, 302)
+    assert goel.current_hp == before_hp
+    assert len(encounter['persisted']) == before_persists
