@@ -1485,6 +1485,253 @@ BUILDER_FEATS = { 'class': [], 'skill': [], 'general': [], 'ancestry': [] }
 BUILDER_SPELLS = []
 BUILDER_WEAPONS = []
 
+# Canonical PF2e skill list (lowercase) — matches the set already used by the
+# compendium loader's ability/skill prereq regex below and by
+# class_matrix.SKILL_FEAT_PREREQS.
+_PREREQ_SKILL_NAMES = [
+    'acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy',
+    'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion',
+    'society', 'stealth', 'survival', 'thievery',
+]
+_PREREQ_ABILITY_MAP = {
+    'strength': 'str', 'dexterity': 'dex', 'constitution': 'con',
+    'intelligence': 'int', 'wisdom': 'wis', 'charisma': 'cha',
+}
+_PREREQ_RANK_WORDS = ('trained', 'expert', 'master', 'legendary')
+
+_PREREQ_LEVEL_RE = re.compile(r'^level\s+(\d+)$', re.IGNORECASE)
+_PREREQ_ABILITY_RE = re.compile(
+    r'^(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+(\d+)$', re.IGNORECASE)
+_PREREQ_SKILL_RANK_RE = re.compile(
+    r'^(trained|expert|master|legendary)\s+in\s+([a-z]+)$', re.IGNORECASE)
+
+
+def _empty_prereqs_struct(raw=''):
+    return {'level': None, 'abilities': {}, 'skills': {}, 'feats': [], 'features': [], 'raw': raw}
+
+
+def _classify_prereq_clause(clause, feat_names, result):
+    """Classify ONE already-segmented prereq clause (no comma-splitting, no
+    "or"-detection -- callers own that) into `result`'s structured fields.
+
+    Shared by `parse_feat_prereqs` (which segments a free-text string into
+    clauses itself) and `parse_feat_prereq_clauses` (which takes an
+    already-clean clause list straight from the Foundry pack's
+    `system.prerequisites.value`). Mutates `result` in place; unclassifiable
+    clauses are silently skipped (advisory only, via the caller's `raw`).
+    """
+    clause = clause.strip().rstrip('.').strip()
+    if not clause:
+        return
+
+    m = _PREREQ_LEVEL_RE.match(clause)
+    if m:
+        result['level'] = int(m.group(1))
+        return
+
+    m = _PREREQ_ABILITY_RE.match(clause)
+    if m:
+        ability = _PREREQ_ABILITY_MAP[m.group(1).lower()]
+        result['abilities'][ability] = int(m.group(2))
+        return
+
+    m = _PREREQ_SKILL_RANK_RE.match(clause)
+    if m:
+        rank = m.group(1).lower()
+        skill = m.group(2).lower()
+        if skill in _PREREQ_SKILL_NAMES:
+            result['skills'][skill] = rank
+            return
+
+    if feat_names and clause.lower() in feat_names:
+        result['feats'].append(feat_names[clause.lower()])
+        return
+
+    # Unclassifiable clause -- advisory only, already captured in `raw`.
+
+
+def parse_feat_prereqs(text, _feat_names=None):
+    """Pure, additive structured parse of a feat's free-text prerequisite
+    string (spec 2026-07-03, audit E1/E2/G4).
+
+    Splits on commas/semicolons into clauses and classifies each clause as an
+    ability score, a skill rank, a character level, or a feat-chain reference
+    (exact case-insensitive match against BUILDER_FEATS' name set). Any text
+    containing an "or" alternative (ambiguous -- which branch would be
+    recorded?), more than 3 clauses (a signature of run-on narrative prose
+    rather than a real short prereq list), or a clause that doesn't cleanly
+    match one of those shapes, is left OUT of the structured fields entirely
+    -- the unbendable contract is that unclassifiable text is advisory only
+    (via `raw`) and never produces a false blocking field.
+
+    `_feat_names` is an optional pre-built {lowercase_name: canonical_name}
+    map for feat-chain matching; the load-time stamping loop in
+    load_compendium() builds it once and passes it in to avoid rebuilding it
+    per-feat. Callers (including tests) that omit it get a freshly-built
+    lookup from the current BUILDER_FEATS contents.
+
+    Runs once per feat at data-load time; cheap and side-effect-free.
+    """
+    if not text or not str(text).strip():
+        return _empty_prereqs_struct()
+
+    raw = str(text).strip()
+    result = _empty_prereqs_struct(raw)
+
+    clauses_all = [c.strip() for c in re.split(r'[,;]', raw) if c.strip()]
+    # Real PF2e prereq strings are short lists (every clean-boundary sample in
+    # the compendium is <=3 clauses, matching the brief's own 3-clause compound
+    # example). Longer clause counts are the signature of run-on narrative
+    # prose caught by the (pre-existing, upstream) label-detection regex
+    # matching an unrelated in-sentence mention of "prerequisite" -- e.g.
+    # "Verduran Shadow Dedication"'s extracted text is 10 comma-separated
+    # fragments of flavor text, two of which ("Hide", "Sneak") happen to
+    # collide with real feat/action names. Bail to raw-only rather than risk
+    # a false feat-chain/skill hit on prose fragments.
+    if len(clauses_all) > 3:
+        return result
+
+    # "or"-joined alternatives are ambiguous -- never guess which single
+    # branch to record, so skip structured classification entirely (advisory
+    # `raw` still carries the full text). Checked against the WHOLE raw string
+    # rather than per-clause: English lists like "trained in Diplomacy,
+    # Intimidation, or Performance" only carry the literal word "or" in the
+    # last comma-split fragment, so a per-clause check alone would still let
+    # the first fragment ("trained in Diplomacy") slip through as a false
+    # single-skill requirement when the real prereq is any ONE of three.
+    if re.search(r'\bor\b', raw, re.IGNORECASE):
+        return result
+
+    feat_names = _feat_chain_lookup() if _feat_names is None else _feat_names
+
+    for clause in clauses_all:
+        _classify_prereq_clause(clause, feat_names, result)
+
+    return result
+
+
+def parse_feat_prereq_clauses(clauses, lookup=None):
+    """Structured parse of a feat's prerequisites when the source already
+    ships them as a list of clean, pre-segmented clauses (T1b -- the Foundry
+    feats pack's `system.prerequisites.value`, e.g.
+    `['Battle Medicine', 'master in Medicine']`).
+
+    Same output shape and classification rules as `parse_feat_prereqs`, but
+    since each list entry is ALREADY one clause there is no comma-splitting
+    and no clause-count cap (a pack clause list is never run-on narrative
+    prose the way a regex-scraped description fragment can be). A clause that
+    is itself a whole-clause "X or Y" alternative (e.g. Exemplar Dedication's
+    'Strength +2 or Dexterity +2') is still skipped for structured
+    classification per-clause -- the never-false-block contract applies the
+    same "or" check to that one clause's text, so it lands in raw only
+    without blocking the other clauses in the list.
+
+    `lookup` is the optional pre-built {lowercase_name: canonical_name} feat
+    map (same as `parse_feat_prereqs`' `_feat_names`); omitted callers get a
+    freshly-built lookup from current BUILDER_FEATS contents.
+    """
+    clause_list = [str(c).strip() for c in (clauses or []) if c and str(c).strip()]
+    if not clause_list:
+        return _empty_prereqs_struct()
+
+    raw = '; '.join(clause_list)
+    result = _empty_prereqs_struct(raw)
+
+    feat_names = _feat_chain_lookup() if lookup is None else lookup
+
+    for clause in clause_list:
+        # Same ambiguity guard as parse_feat_prereqs, applied per-clause here
+        # since the caller already segmented the list -- one OR'd clause must
+        # not block classification of the other clauses in the same list.
+        if re.search(r'\bor\b', clause, re.IGNORECASE):
+            continue
+        _classify_prereq_clause(clause, feat_names, result)
+
+    return result
+
+
+def _feat_chain_lookup():
+    """Build a lowercase-name -> canonical-name map from every feat already
+    loaded into BUILDER_FEATS, for feat-chain prereq matching. Cheap: called
+    once per feat during the load-time stamping pass in load_compendium()."""
+    lookup = {}
+    for cat_feats in BUILDER_FEATS.values():
+        for f in cat_feats:
+            name = f.get('name')
+            if name:
+                lookup[name.lower()] = name
+    return lookup
+
+
+_FEATS_PACK_DIR = os.path.join(BASE_DIR, 'compendium_data', 'feats')
+
+
+def _build_feat_pack_prereq_index(pack_dir=_FEATS_PACK_DIR):
+    """Walk the local Foundry feats pack once and build a prereq-clause index
+    for the T1b join (spec 2026-07-03).
+
+    The compiled pf2e_database.db dropped `system.prerequisites.value` during
+    compilation (no column), so feat-chain/Dedication prereqs are ~0% covered
+    by the description-regex scrape T1 relies on. The repo already ships the
+    source Foundry pack this DB was compiled from
+    (`compendium_data/feats/**/*.json`), and most of its docs still carry that
+    prerequisites list as clean, pre-segmented single clauses.
+
+    Returns {by_id: {doc_id: [clause, ...]}, by_name: {lowercase_name:
+    [clause, ...]}} so the stamping loop can join by Foundry doc id first
+    (exact, collision-free -- DB ids ARE these docs' `_id`s) and fall back to
+    a case-insensitive name match for anything not id-matched. Runs once at
+    boot; O(pack size), no per-request work.
+    """
+    by_id = {}
+    by_name = {}
+    ambiguous_names = set()   # lowercased names carried by 2+ DIFFERENT pack docs
+    seen_name_ids = {}        # lowercased name -> first doc _id seen
+    if not os.path.isdir(pack_dir):
+        return {'by_id': by_id, 'by_name': by_name}
+
+    for path in glob.glob(os.path.join(pack_dir, '**', '*.json'), recursive=True):
+        if os.path.basename(path) == '_folders.json':
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as fh:
+                doc = json.load(fh)
+        except Exception:
+            continue
+
+        doc_id = doc.get('_id')
+        name = doc.get('name')
+        if name:
+            # Ambiguity must be tracked across EVERY doc, including ones with
+            # no prereqs at all -- the real "Keep Up the Good Fight" collision
+            # is a no-prereq class feat shadowed by a prereq-carrying
+            # archetype feat of the same name. If only clause-carrying docs
+            # were considered, that pair would never register as ambiguous
+            # and the name fallback would bleed the archetype's Dedication
+            # prereq onto the class feat (a false block once prereqs gate
+            # picks). Ambiguous names drop out of the fallback entirely;
+            # affected feats keep the T1 description-scrape path.
+            key = name.lower()
+            prev = seen_name_ids.get(key)
+            if prev is not None and prev != doc_id:
+                ambiguous_names.add(key)
+            else:
+                seen_name_ids[key] = doc_id
+
+        prereqs = ((doc.get('system') or {}).get('prerequisites') or {}).get('value') or []
+        clauses = [p.get('value', '') for p in prereqs if isinstance(p, dict) and p.get('value')]
+        if not clauses:
+            continue
+
+        if doc_id:
+            by_id[doc_id] = clauses
+        if name:
+            by_name.setdefault(name.lower(), clauses)
+
+    for key in ambiguous_names:
+        by_name.pop(key, None)
+    return {'by_id': by_id, 'by_name': by_name}
+
 # A few rituals ship with empty descriptions in the Foundry compendium data
 # (the raw per-spell JSON is blank too). Backfilled from Archives of Nethys —
 # the official PF2e SRD (2e.aonprd.com) — so the sheet isn't blank for them.
@@ -4573,8 +4820,9 @@ def load_compendium():
                     try:
                         cols = r.keys()
                         name = get_col(r, 'name', 'Unknown')
+                        feat_id = get_col(r, 'id', '')
                         sys_data = safe_json_load(r, 'system', {})
-                        
+
                         desc = get_col(r, 'description', '')
                         if not desc and isinstance(sys_data, dict):
                             d_obj = sys_data.get('description', {})
@@ -4582,7 +4830,7 @@ def load_compendium():
 
                         cat = get_col(r, 'category', 'general')
                         lvl = get_col(r, 'level', 1)
-                        
+
                         traits_raw = get_col(r, 'traits', '[]')
                         traits = extract_traits(traits_raw)
                         if not traits and isinstance(sys_data, dict):
@@ -4590,12 +4838,12 @@ def load_compendium():
 
                         prereq_raw = ""
                         prereq_parsed = {"stats": {}, "skills": {}}
-                        
+
                         prereq_match = re.search(r'(?:<strong>)?Prerequisites(?:</strong>)?\s*(?:</[a-z]+>)?\s*(.*?)</p>', desc, re.IGNORECASE)
                         if prereq_match:
                             prereq_raw = prereq_match.group(1)
                             prereq_raw = re.sub(r'@\w+\[.*?\]\{(.*?)\}', r'\1', prereq_raw)
-                            
+
                             s_lower = prereq_raw.lower()
                             stat_map = {"strength": "str", "dexterity": "dex", "constitution": "con", "intelligence": "int", "wisdom": "wis", "charisma": "cha"}
                             for full_stat, short_stat in stat_map.items():
@@ -4606,16 +4854,16 @@ def load_compendium():
                                 match_mod = re.search(fr'{full_stat}\s*\+(\d+)', s_lower)
                                 if match_mod:
                                     prereq_parsed["stats"][short_stat] = int(match_mod.group(1))
-                                    
+
                             rank_map = {"trained": 2, "expert": 4, "master": 6, "legendary": 8}
                             skill_names = ['acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery']
                             for rank_str, rank_val in rank_map.items():
                                 for sk in skill_names:
                                     if re.search(fr'{rank_str}\s*(?:in)?\s*{sk}', s_lower):
                                         prereq_parsed["skills"][sk] = max(prereq_parsed["skills"].get(sk, 0), rank_val)
-                        
-                        if cat in BUILDER_FEATS: 
-                            BUILDER_FEATS[cat].append({'name': name, 'level': lvl, 'traits': traits, 'prerequisites_raw': prereq_raw, 'prereqs_parsed': prereq_parsed, 'description': clean_foundry_text(desc)})
+
+                        if cat in BUILDER_FEATS:
+                            BUILDER_FEATS[cat].append({'name': name, 'level': lvl, 'traits': traits, 'prerequisites_raw': prereq_raw, 'prereqs_parsed': prereq_parsed, 'description': clean_foundry_text(desc), '_id': feat_id})
                         COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
                         # Load rules from rule_elements column (direct) or system.rules (Foundry format)
                         feat_rules = safe_json_load(r, 'rule_elements', [])
@@ -4972,6 +5220,34 @@ def load_compendium():
                     desc = f"<p>Specialization for {c_key.capitalize()}.</p>"
                 updated_subs.append({"name": s_name, "desc": desc})
             c_data['subclasses'] = updated_subs
+
+    # Stamp structured prereqs onto every feat now that all categories are
+    # fully loaded (feat-chain matching needs the complete name set). Additive
+    # field only -- never touches existing keys (audit E1/E2/G4, Task 1). The
+    # feat-name lookup is built once here (not per-call) since BUILDER_FEATS
+    # runs into the thousands of entries.
+    #
+    # T1b: prefer the local Foundry feats pack's structured
+    # `system.prerequisites.value` clause list over T1's description-HTML
+    # regex scrape, joined by Foundry doc id first (exact -- the DB's
+    # feats.id column IS these docs' `_id`) then case-insensitive name as a
+    # fallback. Feats absent from the pack (e.g. ancestry/class features that
+    # live in separate compendium_data/ dirs outside this join's scope) keep
+    # the T1 fallback path unchanged.
+    _feat_name_lookup = _feat_chain_lookup()
+    _pack_index = _build_feat_pack_prereq_index()
+    _pack_by_id = _pack_index['by_id']
+    _pack_by_name = _pack_index['by_name']
+    for cat_feats in BUILDER_FEATS.values():
+        for f in cat_feats:
+            clauses = _pack_by_id.get(f.get('_id')) if f.get('_id') else None
+            if clauses is None:
+                name = f.get('name')
+                clauses = _pack_by_name.get(name.lower()) if name else None
+            if clauses is not None:
+                f['prereqs_struct'] = parse_feat_prereq_clauses(clauses, _feat_name_lookup)
+            else:
+                f['prereqs_struct'] = parse_feat_prereqs(f.get('prerequisites_raw', ''), _feat_name_lookup)
 
 def load_libraries():
     load_compendium()
@@ -13313,7 +13589,8 @@ def player_builder():
         builder_data=BUILDER_DATA,
         subclass_descriptions=SUBCLASS_DESCRIPTIONS,
         weapons=starting_weapons,
-        armor=starting_armor
+        armor=starting_armor,
+        skill_feat_prereqs=SKILL_FEAT_PREREQS
     )
 
 @app.route('/api/toggle_feature/<pc_name>/<feature_name>', methods=['POST'])
@@ -14373,9 +14650,79 @@ def import_pathbuilder():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _validate_new_character_feats(data):
+    """Levelup-parity soft validation for character creation (spec 2026-07-03).
+
+    Read-only over the submitted picks; returns a list of human-readable
+    violations (empty = clean). Checks the gates that are unambiguous
+    server-side for a level-1 character: feat level gates, feat-chain
+    prerequisites (satisfiable by sibling picks in the same submission), and
+    skill-rank prerequisites (only 'trained' is reachable at level 1).
+    Ability-score prereqs are deliberately NOT checked here -- the payload's
+    ability values are boost-derived and scale-ambiguous, and the client
+    picker already greys those. Unknown feat names are skipped (homebrew).
+    """
+    violations = []
+    picked = [f.get('name') for f in (data.get('feats') or []) if f.get('name')]
+    picked_set = {n.lower() for n in picked}
+    trained = {s.lower() for s in (data.get('skills') or [])}
+    start_level = 1
+    try:
+        start_level = max(1, int(data.get('starting_level') or 1))
+    except (TypeError, ValueError):
+        pass
+
+    lookup = {}
+    for feat_list in BUILDER_FEATS.values():
+        if not isinstance(feat_list, list):
+            continue
+        for f in feat_list:
+            if isinstance(f, dict) and f.get('name'):
+                lookup.setdefault(f['name'].lower(), f)
+
+    _rank_vals = {'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8}
+    for name in picked:
+        feat = lookup.get(name.lower())
+        if not feat:
+            continue
+        ps = feat.get('prereqs_struct') or {}
+        try:
+            feat_level = int(feat.get('level') or 0)
+        except (TypeError, ValueError):
+            feat_level = 0
+        gate_level = ps.get('level') or feat_level
+        if gate_level and gate_level > start_level:
+            violations.append(f"{feat['name']} requires level {gate_level}")
+        for req in ps.get('feats') or []:
+            if req.lower() not in picked_set:
+                violations.append(f"{feat['name']} requires the feat {req}")
+        # Skill-rank checks only hold at level 1, where 'trained' is the
+        # ceiling and the trained set equals the submitted skills. A
+        # mid-campaign join (starting_level > 1) can legitimately reach
+        # expert+ via skill increases the payload doesn't itemize -- checking
+        # would false-block, so those builds rely on the client picker's
+        # greying instead (final-review Minor 1).
+        if start_level == 1:
+            for skill, rank in (ps.get('skills') or {}).items():
+                need = _rank_vals.get(str(rank).lower(), 2)
+                if need > 2:
+                    violations.append(f"{feat['name']} requires {rank} in {skill.title()} (unreachable at level {start_level})")
+                elif skill.lower() not in trained:
+                    violations.append(f"{feat['name']} requires training in {skill.title()}")
+    return violations
+
+
 @app.route('/api/save_new_character', methods=['POST'])
 def save_new_character():
     data = request.json
+    # Soft backstop, mirroring the levelup flow's validate + force pattern:
+    # violations block with a warning payload unless the GM-override force
+    # flag is set; a clean build proceeds through the UNCHANGED save path.
+    if not (data.get('force') or data.get('force_save')):
+        _violations = _validate_new_character_feats(data)
+        if _violations:
+            return jsonify({'success': False, 'needs_force': True,
+                            'violations': _violations}), 409
     char_name = data.get('name', 'Unknown')
     safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', char_name)
     

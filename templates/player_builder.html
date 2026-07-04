@@ -13,6 +13,14 @@
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }
         body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(92,75,60,0.06) 0%,transparent 55%),#1C1917; }
+        /* GM override switch -- armed = the app's amber warning vocabulary
+           (matches the levelup rail's switch). */
+        #gm-override-switch.armed { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.55) !important; color: #fbbf24 !important; }
+        /* Sidebar tick pop on incomplete->complete transitions (diffed in JS
+           so constant revalidation can't re-trigger it). trkCondIn lives in
+           system.css's COMBAT IDENTITY section. */
+        .chk-pop { display: inline-block; animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+        @media (prefers-reduced-motion: reduce) { .chk-pop { animation: none; } }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3228; border-radius: 10px; }
@@ -117,6 +125,15 @@
             <button onclick="navTo('review')" id="nav-review" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
                 <span>7. Review</span> <span id="chk-review" class="text-xs"></span>
             </button>
+        </div>
+        {# GM override — same vocabulary as the levelup rail's switch: arms
+           window.ignorePrereqs for the shared picker AND the save's force
+           flag. Amber = the app's established warning styling. #}
+        <div class="px-6 py-3 border-t border-gray-800">
+            <label id="gm-override-switch" for="chk-gm-override" style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-size:10.5px; letter-spacing:0.04em; color:#78716c; padding:3px 8px; border-radius:999px; border:1px solid #44403c; transition: background .2s, border-color .2s, color .2s;">
+                <input type="checkbox" id="chk-gm-override" onchange="toggleGmOverride(this.checked)" style="accent-color:#f59e0b; margin:0;">
+                <span>GM override: ignore prerequisites</span>
+            </label>
         </div>
         <div class="p-6 border-t border-gray-800 bg-gray-900">
             <button id="btn-finish" onclick="finalizeCharacter()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
@@ -418,33 +435,7 @@
         </div>
     </div>
 
-    <div id="uni-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 md:p-8 opacity-0 transition-opacity duration-200">
-        <div class="bg-gray-900 w-full max-w-6xl h-full max-h-[85vh] rounded-xl shadow-2xl border border-gray-700 flex flex-col md:flex-row overflow-hidden transform scale-95 transition-transform duration-200" id="uni-window">
-            
-            <div class="w-full md:w-1/3 bg-gray-950 border-r border-gray-800 flex flex-col h-1/2 md:h-full shrink-0">
-                <div class="p-6 border-b border-gray-800 bg-gray-900 flex flex-col">
-                    <div class="flex justify-between items-center mb-3">
-                        <h3 id="mod-title" class="font-bold text-amber-500 uppercase tracking-wider text-sm">Select...</h3>
-                        <label class="text-xs text-gray-400 flex items-center cursor-pointer">
-                            <input type="checkbox" id="chk-ignore-reqs" class="mr-1 accent-amber-500" onchange="filterModal()"> Ignore Pre-Reqs
-                        </label>
-                    </div>
-                    <input type="text" id="mod-search" placeholder="Search to filter..." class="w-full bg-gray-950 border border-gray-700 rounded p-3 text-sm text-white focus:border-amber-500 outline-none" onkeyup="filterModal()">
-                    
-                    <div id="mod-tabs" class="flex gap-2 mt-3 overflow-x-auto custom-scrollbar hidden"></div>
-                </div>
-                <div id="mod-list" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1"></div>
-            </div>
-
-            <div class="w-full md:w-2/3 bg-gray-900 flex flex-col relative h-1/2 md:h-full">
-                <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">×</button>
-                <div class="p-8 md:p-12 flex-1 overflow-y-auto custom-scrollbar relative" id="mod-preview"></div>
-                <div class="p-6 border-t border-gray-800 bg-gray-950 flex justify-end shrink-0">
-                    <button id="btn-lock" class="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg hidden transition-transform transform hover:scale-105" onclick="lockModal()">Lock In Choice</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include "_choice_picker.html" %}
 
     <script>
         const dbClasses = {{ classes | tojson | safe }};
@@ -570,25 +561,6 @@
             
             granted.forEach(g => { profs[g] = (profs[g] || 0) + 2; });
             return profs;
-        }
-
-        function meetsPrereqs(feat) {
-            if (!feat.prereqs_parsed) return true; 
-            let p = feat.prereqs_parsed;
-            let cStats = getTempFinalStats();
-            let cSkills = getTempFinalSkills();
-            
-            if (p.stats) {
-                for (let stat in p.stats) {
-                    if ((cStats[stat] || 0) < p.stats[stat]) return false;
-                }
-            }
-            if (p.skills) {
-                for (let skill in p.skills) {
-                    if ((cSkills[skill] || 0) < p.skills[skill]) return false;
-                }
-            }
-            return true;
         }
 
         function parseDeepBoosts(raw) {
@@ -783,78 +755,6 @@
             } catch (error) {
                 console.error("Modal Error:", error);
             }
-        }
-
-        function renderModalList() {
-            const term = document.getElementById('mod-search').value.toLowerCase();
-            const ignoreReqs = document.getElementById('chk-ignore-reqs').checked;
-            const list = document.getElementById('mod-list'); list.innerHTML = "";
-            
-            let filtered = mCtx.data.filter(d => {
-                let n = typeof d.name === 'string' ? d.name : String(d.name);
-                let matchesSearch = n.toLowerCase().includes(term);
-                let matchesTab = true;
-                
-                if (mCtx.activeTabs && mCtx.tab !== 'all') {
-                    if (mCtx.type === 'ancestry') matchesTab = (d.rarity || 'common').toLowerCase() === mCtx.tab;
-                    else if (mCtx.type === 'heritage') {
-                        if (mCtx.tab === 'base') matchesTab = !d.isVersatile;
-                        else if (mCtx.tab === 'versatile') matchesTab = d.isVersatile;
-                    }
-                    else if (mCtx.type === 'background') matchesTab = (d.category || 'general').toLowerCase() === mCtx.tab;
-                    else if (mCtx.type === 'class') matchesTab = (d.category || 'expanded').toLowerCase() === mCtx.tab;
-                }
-                
-                return matchesSearch && matchesTab;
-            }).sort((a,b) => {
-                let aName = typeof a.name === 'string' ? a.name : String(a.name);
-                let bName = typeof b.name === 'string' ? b.name : String(b.name);
-                return aName.localeCompare(bName);
-            });
-            
-            if(filtered.length === 0) { list.innerHTML = "<div class='text-gray-500 p-4 text-sm italic text-center'>No options found for this category.</div>"; return; }
-
-            filtered.forEach(d => {
-                let n = typeof d.name === 'string' ? d.name : String(d.name);
-                
-                let locked = false; let reqHtml = "";
-                if(d.prerequisites_raw) {
-                    let meets = meetsPrereqs(d);
-                    if (!meets && !ignoreReqs) {
-                        locked = true; 
-                        reqHtml = `<div class="bg-red-900/30 border border-red-900 text-red-400 p-2 rounded text-xs mb-4 font-bold">Unmet Requirement: ${d.prerequisites_raw}</div>`;
-                    } else if (!meets && ignoreReqs) {
-                        reqHtml = `<div class="bg-amber-900/30 border border-amber-900 text-amber-500 p-2 rounded text-xs mb-4 font-bold">Ignored Req: ${d.prerequisites_raw}</div>`;
-                    } else if (meets) {
-                        reqHtml = `<div class="bg-green-900/30 border border-green-900 text-green-400 p-2 rounded text-xs mb-4 font-bold">Requirement Met: ${d.prerequisites_raw}</div>`;
-                    }
-                }
-
-                let btn = document.createElement('button');
-                btn.className = `w-full text-left p-4 border-b border-gray-800/50 flex justify-between items-center transition-colors outline-none ${locked ? 'opacity-40 cursor-not-allowed bg-gray-950' : 'hover:bg-gray-800 focus:bg-gray-800'}`;
-                let badge = d.level !== undefined ? `<span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-1 rounded shrink-0 ml-2">Lv ${d.level}</span>` : "";
-                let ui_badge = d.ui_badge ? d.ui_badge : "";
-                
-                btn.innerHTML = `<div class="flex items-center"><span class="text-sm font-bold text-gray-200">${n}</span>${ui_badge}</div> ${badge}`;
-                
-                btn.onclick = () => {
-                    mCtx.active = locked ? null : d;
-                    let pHtml = `<h2 class="text-4xl font-header text-white mb-4">${n}</h2>`;
-                    if(d.traits && d.traits.length > 0) pHtml += `<div class="flex flex-wrap gap-2 mb-6">` + d.traits.map(t=>`<span class="bg-gray-800 border border-gray-700 text-gray-300 text-xs px-2 py-1 uppercase font-bold tracking-wider rounded">${t}</span>`).join('') + `</div>`;
-                    pHtml += reqHtml;
-                    pHtml += `<div class="text-base text-gray-300 foundry-content leading-relaxed">${d.desc || d.description || 'No description available.'}</div>`;
-                    document.getElementById('mod-preview').innerHTML = pHtml;
-                    
-                    if(!locked) document.getElementById('btn-lock').classList.remove('hidden');
-                    else document.getElementById('btn-lock').classList.add('hidden');
-                };
-                list.appendChild(btn);
-            });
-        }
-        function filterModal() { renderModalList(); }
-        function closeModal() {
-            const m = document.getElementById('uni-modal'); m.classList.add('opacity-0'); document.getElementById('uni-window').classList.add('scale-95');
-            setTimeout(() => { m.classList.add('hidden'); }, 200);
         }
 
         function lockModal() {
@@ -1471,6 +1371,33 @@
             runValidation();
         }
 
+        // GM override -- same contract as the levelup rail's switch: arms the
+        // shared picker's global and re-renders any open picker. The save's
+        // force flag reads window.ignorePrereqs at submit time.
+        window.toggleGmOverride = function(on) {
+            window.ignorePrereqs = !!on;
+            const sw = document.getElementById('gm-override-switch');
+            if (sw) sw.classList.toggle('armed', !!on);
+            if (typeof window.refreshChoicePicker === 'function') window.refreshChoicePicker();
+        };
+
+        // Tick-pop: when a sidebar step flips incomplete -> complete, pop its
+        // check via the shared trkCondIn keyframe (system.css). Diffed against
+        // the previous paint so runValidation's constant repaints can't
+        // re-trigger the animation.
+        const _prevChk = {};
+        function _popFreshTicks() {
+            ['start','ancestry','background','class','abilities','skills'].forEach(k => {
+                const el = document.getElementById('chk-' + k);
+                if (!el) return;
+                const done = el.innerText === "" && el.className.indexOf('green') >= 0;
+                if (done && _prevChk[k] === false) {
+                    el.classList.remove('chk-pop'); void el.offsetWidth; el.classList.add('chk-pop');
+                }
+                _prevChk[k] = done;
+            });
+        }
+
         function runValidation() {
             state.name = document.getElementById('inp-name').value;
             
@@ -1559,6 +1486,7 @@
                 btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
                 btnF.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
             }
+            _popFreshTicks();
         }
 
         function populateEquipment() {
@@ -1894,9 +1822,29 @@
             };
 
             try {
+                // Armed GM override pre-authorizes the force flag (mirrors
+                // the levelup submit's force_save behavior).
+                if (window.ignorePrereqs) payload.force = true;
                 const res = await fetch('/api/save_new_character', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 const data = await res.json();
-                if(data.success) window.location.href = '/player';
+                if(data.success) { window.location.href = '/player'; return; }
+                // Server backstop rejected the picks (soft block): show the
+                // violations and offer the GM-override re-post, matching the
+                // levelup flow's validate + force pattern.
+                if (data.needs_force && Array.isArray(data.violations)) {
+                    const msg = 'Some picks do not meet their prerequisites:\n\n- '
+                        + data.violations.join('\n- ')
+                        + '\n\nSave anyway (GM override)?';
+                    if (window.confirm(msg)) {
+                        payload.force = true;
+                        const res2 = await fetch('/api/save_new_character', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                        const data2 = await res2.json();
+                        if (data2.success) { window.location.href = '/player'; return; }
+                    }
+                    btn.innerText = "Forge Character"; btn.disabled = false;
+                    return;
+                }
+                btn.innerText = "Error"; btn.disabled = false;
             } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
         }
     </script>
