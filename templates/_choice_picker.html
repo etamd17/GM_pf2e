@@ -1,0 +1,368 @@
+<!--
+    Shared choice-picker partial (levelup/builder T2, spec 2026-07-03).
+
+    Extracted from player_levelup.html's #uni-modal (the newer copy — it has
+    the spell-heightening fix at the old line ~1965-1975 that the builder's
+    copy lacked). Included by BOTH templates/player_levelup.html and
+    templates/player_builder.html; each template keeps its OWN openModal()/
+    lockModal()/setModalTab() (the type branches genuinely diverge — see
+    .superpowers/sdd/levelup-builder-audit.md B3) and its own `mCtx`/`state`
+    globals, declared in the template's main <script> block. This partial's
+    script tag runs BEFORE that block (it sits where #uni-modal used to live)
+    but only ever *executes* its function bodies later, on click/openModal —
+    by then `mCtx`, `state`, `pc` (levelup only), `esc()` and `dbFeats` are
+    already initialized. Do not add any top-level statement here that reads
+    those globals eagerly.
+
+    Public functions kept byte-for-byte call-compatible with pre-T2 call
+    sites: meetsPrereqs(feat), renderModalList(), filterModal(), closeModal().
+    New: window.ignorePrereqs (default false) + window.refreshChoicePicker()
+    replace the old per-modal "Ignore Pre-Reqs" checkbox (removed — T3 wires
+    a visible wizard-level toggle to the global).
+-->
+<div id="uni-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 md:p-8 opacity-0 transition-opacity duration-200">
+    <div class="bg-gray-900 w-full max-w-6xl h-full max-h-[85vh] rounded-xl shadow-2xl border border-gray-700 flex flex-col md:flex-row overflow-hidden transform scale-95 transition-transform duration-200" id="uni-window">
+
+        <div class="w-full md:w-1/3 bg-gray-950 border-r border-gray-800 flex flex-col h-1/2 md:h-full shrink-0">
+            <div class="p-6 border-b border-gray-800 bg-gray-900 flex flex-col">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 id="mod-title" class="font-bold text-amber-500 uppercase tracking-wider text-sm">Select...</h3>
+                </div>
+                <input type="text" id="mod-search" placeholder="Search to filter..." class="w-full bg-gray-950 border border-gray-700 rounded p-3 text-sm text-white focus:border-amber-500 outline-none" onkeyup="filterModal()">
+
+                <div id="mod-tabs" class="flex gap-2 mt-3 overflow-x-auto custom-scrollbar hidden"></div>
+            </div>
+            <div id="mod-list" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1"></div>
+        </div>
+
+        <div class="w-full md:w-2/3 bg-gray-900 flex flex-col relative h-1/2 md:h-full">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center z-10 transition-colors">×</button>
+            <div class="p-8 md:p-12 flex-1 overflow-y-auto custom-scrollbar relative" id="mod-preview"></div>
+            <div class="p-6 border-t border-gray-800 bg-gray-950 flex justify-end shrink-0">
+                <button id="btn-lock" class="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg hidden transition-transform transform hover:scale-105" onclick="lockModal()">Lock In Choice</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Grey-out-with-reason chip + advisory line (new in T2). Kept here
+       rather than each template's own <style> block since it's picker-
+       structural, not page-chrome. Opacity floor of .55 keeps a locked
+       row's text legibly readable per spec ("locked = readable, never
+       invisible") while still reading as visually de-emphasized next to
+       eligible rows. No hover-lift on locked rows: the eligible-row hover
+       classes (hover:bg-gray-800) are simply omitted at render time rather
+       than overridden here. */
+    .cp-opt-locked { opacity: 0.55; cursor: not-allowed; background: rgba(0,0,0,0.2); }
+    .cp-opt-locked:hover { background: rgba(0,0,0,0.2); }
+    .cp-reason-chip {
+        display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px; margin-left: 8px;
+        background: rgba(220,38,38,0.15); border: 1px solid rgba(220,38,38,0.35); color: #f87171;
+        white-space: nowrap; vertical-align: middle;
+    }
+    .cp-reason-chip.cp-reason-known {
+        background: rgba(107,114,128,0.18); border-color: rgba(156,163,175,0.35); color: #9ca3af;
+    }
+    /* window.ignorePrereqs ON: ineligible rows become selectable, marked with
+       an amber border instead of red, chip persists (spec point 6). */
+    .cp-opt-override { opacity: 1; cursor: pointer; border-color: rgba(245,158,11,0.6) !important; background: rgba(245,158,11,0.06); }
+    .cp-opt-override:hover { background: rgba(245,158,11,0.12); }
+    .cp-opt-override .cp-reason-chip {
+        background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #f59e0b;
+    }
+    .cp-advisory { font-size: 10px; color: #9ca3af; font-style: italic; margin-top: 2px; }
+    /* Clicking a locked row: shake the row + flash its reason chip. Scoped
+       to this partial (cp- prefix) rather than reusing static/css/system.css's
+       tracker-only trkShake, so the picker has no cross-file CSS coupling. */
+    @keyframes cp-shake {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-4px); }
+        40% { transform: translateX(4px); }
+        60% { transform: translateX(-3px); }
+        80% { transform: translateX(2px); }
+    }
+    .cp-shake { animation: cp-shake 0.32s ease; }
+    @keyframes cp-chip-flash {
+        0%, 100% { filter: brightness(1); }
+        50% { filter: brightness(1.6); }
+    }
+    .cp-chip-flash { animation: cp-chip-flash 0.32s ease; }
+</style>
+
+<script>
+    // ── Choice-picker eligibility engine (T2) ──────────────────────────
+    // window.ignorePrereqs replaces the old per-modal #chk-ignore-reqs
+    // checkbox (removed). Defaults false; T3 wires a visible wizard-level
+    // toggle to it. window.refreshChoicePicker() lets that toggle re-render
+    // the currently-open list without duplicating renderModalList's logic.
+    if (typeof window.ignorePrereqs === 'undefined') window.ignorePrereqs = false;
+    window.refreshChoicePicker = function () {
+        if (typeof renderModalList === 'function') renderModalList();
+    };
+
+    // Skill-rank word -> numeric rank, same scale as class_matrix.py's
+    // RANK_VALUES / the wizards' own getTempFinalSkills() (0/2/4/6/8).
+    // Named distinctly (not RANK_MAP) because player_levelup.html already
+    // declares a top-level `const RANK_MAP` in the same script realm this
+    // partial's <script> shares — a same-name const would be a
+    // SyntaxError (redeclaration) across the two <script> tags.
+    const _CP_RANK_VALUES = { untrained: 0, trained: 2, expert: 4, master: 6, legendary: 8 };
+
+    // Best-effort "what level is the PC targeting" for the defensive level
+    // gate (source E: both wizards already pre-filter mCtx.data by level in
+    // their own openModal() before this picker ever sees the list, so this
+    // is a no-op safety net today, not a live filter).
+    function _cpCurrentLevel() {
+        if (typeof targetLevel !== 'undefined' && targetLevel) return targetLevel;
+        if (typeof state !== 'undefined' && state && state.level) return state.level;
+        return 999;
+    }
+
+    // Names of feats the PC already knows or has picked in this wizard
+    // session, lowercased. Tries every shape either wizard uses; each probe
+    // is optional-chained so the picker degrades gracefully rather than
+    // throwing when a given wizard has none of a particular shape (e.g. the
+    // builder has no `pc` object at all — it's a from-scratch build).
+    function _cpKnownFeatNames() {
+        const names = new Set();
+        try {
+            if (typeof pc !== 'undefined' && pc && Array.isArray(pc.feats)) {
+                pc.feats.forEach(f => { if (f && f.name) names.add(String(f.name).toLowerCase()); });
+            }
+        } catch (e) { /* pc undefined in this wizard — fine */ }
+        try {
+            if (typeof state !== 'undefined' && state) {
+                if (state.feats_selected) {
+                    Object.values(state.feats_selected).forEach(f => { if (f && f.name) names.add(String(f.name).toLowerCase()); });
+                }
+                if (state.clsFeats) {
+                    Object.values(state.clsFeats).forEach(f => { if (f && f.name) names.add(String(f.name).toLowerCase()); });
+                }
+                if (state.ancFeat && state.ancFeat.name) names.add(String(state.ancFeat.name).toLowerCase());
+            }
+        } catch (e) { /* ignore */ }
+        return names;
+    }
+
+    // Evaluate one option's eligibility. Returns:
+    //   { locked, reasons: [str,...], advisory: str|null, alreadyKnown: bool }
+    // reasons[0] is the compact chip text; the full list backs the title
+    // attribute. Eligibility sources, in priority order (spec):
+    //   1. already-taken   2. level gate   3. prereqs_struct (structured)
+    //   4. legacy prereqs_parsed regex fallback (only when prereqs_struct is
+    //      entirely absent from the option — defensive; every server-loaded
+    //      feat has prereqs_struct stamped as of Task 1/1b).
+    // raw-only prereqs (structured fields all empty, raw non-empty) NEVER
+    // grey — they produce an advisory-only line instead (spec point 3).
+    function _cpEvaluate(d) {
+        const reasons = [];
+        let advisory = null;
+
+        // 1. Already-known dedup (feats only — spells/ancestries/etc. don't
+        // carry this concept the same way, and their own openModal() pools
+        // already handle "can't pick past your slot count" at lock-time).
+        const nameLc = (typeof d.name === 'string' ? d.name : String(d.name)).toLowerCase();
+        const alreadyKnown = _cpKnownFeatNames().has(nameLc);
+        if (alreadyKnown) reasons.push('Already known');
+
+        // 2. Level gate (defensive — see _cpCurrentLevel).
+        if (typeof d.level === 'number' && d.level > _cpCurrentLevel()) {
+            reasons.push(`Lv ${d.level}+`);
+        }
+
+        // 3 & 4. Structured prereqs first, legacy regex fallback only when
+        // prereqs_struct is missing entirely from this option.
+        const ps = d.prereqs_struct;
+        if (ps && (Object.keys(ps.abilities || {}).length || Object.keys(ps.skills || {}).length || (ps.feats || []).length)) {
+            const cStats = (typeof getTempFinalStats === 'function') ? getTempFinalStats() : {};
+            const cSkills = (typeof getTempFinalSkills === 'function') ? getTempFinalSkills() : {};
+            const knownFeats = _cpKnownFeatNames();
+
+            for (const ability in (ps.abilities || {})) {
+                const reqScore = ps.abilities[ability];
+                const reqMod = Math.floor((reqScore - 10) / 2);
+                if ((cStats[ability] || 0) < reqMod) {
+                    reasons.push(`Requires ${ability.toUpperCase()} ${reqScore}`);
+                }
+            }
+            for (const skill in (ps.skills || {})) {
+                const reqRankWord = ps.skills[skill];
+                const reqRank = _CP_RANK_VALUES[reqRankWord] !== undefined ? _CP_RANK_VALUES[reqRankWord] : 2;
+                if ((cSkills[skill] || 0) < reqRank) {
+                    const skillLabel = skill.charAt(0).toUpperCase() + skill.slice(1);
+                    const rankLabel = reqRankWord.charAt(0).toUpperCase() + reqRankWord.slice(1);
+                    reasons.push(`Requires ${rankLabel} ${skillLabel}`);
+                }
+            }
+            for (const featName of (ps.feats || [])) {
+                if (!knownFeats.has(String(featName).toLowerCase())) {
+                    reasons.push(`Requires ${featName}`);
+                }
+            }
+        } else if (!ps && d.prereqs_parsed) {
+            // Legacy fallback path — only reachable for an option that has
+            // prereqs_parsed but no prereqs_struct key at all (a client-
+            // synthesized object; every server-loaded feat gets both as of
+            // Task 1/1b's stamping pass). Reuses meetsPrereqs' own logic so
+            // there is exactly one prereq-matching behavior, not two.
+            if (typeof meetsPrereqs === 'function' && !meetsPrereqs(d)) {
+                reasons.push(d.prerequisites_raw ? `Requires ${d.prerequisites_raw}` : 'Prerequisite not met');
+            }
+        } else if ((!ps || (!Object.keys(ps.abilities || {}).length && !Object.keys(ps.skills || {}).length && !(ps.feats || []).length)) && ps && ps.raw) {
+            // raw-only prereq text with nothing structured to check — never
+            // grey, just show a quiet "verify this yourself" line (spec 3).
+            advisory = ps.raw;
+        }
+
+        return { locked: reasons.length > 0, reasons, advisory, alreadyKnown };
+    }
+
+    function meetsPrereqs(feat) {
+        if (!feat.prereqs_parsed) return true;
+        let p = feat.prereqs_parsed;
+        let cStats = getTempFinalStats();
+        let cSkills = getTempFinalSkills();
+
+        if (p.stats) {
+            for (let stat in p.stats) {
+                if ((cStats[stat] || 0) < p.stats[stat]) return false;
+            }
+        }
+        if (p.skills) {
+            for (let skill in p.skills) {
+                if ((cSkills[skill] || 0) < p.skills[skill]) return false;
+            }
+        }
+        return true;
+    }
+
+    function renderModalList() {
+        const term = document.getElementById('mod-search').value.toLowerCase();
+        const list = document.getElementById('mod-list'); list.innerHTML = "";
+
+        let filtered = mCtx.data.filter(d => {
+            let n = typeof d.name === 'string' ? d.name : String(d.name);
+            let matchesSearch = n.toLowerCase().includes(term);
+            let matchesTab = true;
+
+            if (mCtx.activeTabs && mCtx.tab !== 'all') {
+                if (mCtx.type === 'ancestry' || mCtx.type === 'heritage') {
+                    if (mCtx.type === 'heritage' && (mCtx.tab === 'base' || mCtx.tab === 'versatile')) {
+                        matchesTab = mCtx.tab === 'base' ? !d.isVersatile : d.isVersatile;
+                    } else {
+                        matchesTab = (d.rarity || 'common').toLowerCase() === mCtx.tab;
+                    }
+                }
+                else if (mCtx.type === 'background') matchesTab = (d.category || 'general').toLowerCase() === mCtx.tab;
+                else if (mCtx.type === 'class') matchesTab = (d.category || 'expanded').toLowerCase() === mCtx.tab;
+            }
+
+            return matchesSearch && matchesTab;
+        });
+
+        // Evaluate eligibility once per option up front so sort + render
+        // share one result (avoids double-computing prereqs per row).
+        const evaluated = filtered.map(d => ({ d, ev: _cpEvaluate(d) }));
+
+        // Sort: eligible first, then ineligible; alphabetical within each
+        // group (spec point 5). Domain-specific ordering (e.g. the spell
+        // picker's exact-rank-first sort applied in openModal() before this
+        // function ever runs) is intentionally NOT re-sorted here — mCtx.data
+        // may already carry a deliberate order; we only need to keep eligible/
+        // ineligible grouped, so a stable partition (not a full name-sort)
+        // preserves any upstream domain ordering within each group.
+        const eligible = evaluated.filter(x => !x.ev.locked);
+        const ineligible = evaluated.filter(x => x.ev.locked);
+        const nameOf = x => (typeof x.d.name === 'string' ? x.d.name : String(x.d.name));
+        // Only alphabetize when the upstream data wasn't already given a
+        // deliberate non-alphabetical order (the spell picker sorts by rank
+        // first, e.g.). Detect that by checking mCtx.type — spells keep
+        // their own order; every other type sorts alphabetically per spec.
+        if (mCtx.type !== 'spell') {
+            eligible.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+            ineligible.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+        }
+        const ordered = eligible.concat(ineligible);
+
+        if (ordered.length === 0) { list.innerHTML = "<div class='text-gray-500 p-4 text-sm italic text-center'>No options found.</div>"; return; }
+
+        ordered.forEach(({ d, ev }) => {
+            let n = typeof d.name === 'string' ? d.name : String(d.name);
+
+            // locked (hard-blocked) vs override-selectable (ignorePrereqs on).
+            const hardLocked = ev.locked && !window.ignorePrereqs;
+            const overrideSelectable = ev.locked && window.ignorePrereqs;
+
+            let reqHtml = "";
+            if (ev.reasons.length > 0) {
+                const chipClass = ev.alreadyKnown && ev.reasons.length === 1 ? 'cp-reason-chip cp-reason-known' : 'cp-reason-chip';
+                const bannerClass = hardLocked ? 'bg-red-900/30 border border-red-900 text-red-400'
+                    : overrideSelectable ? 'bg-amber-900/30 border border-amber-900 text-amber-500'
+                    : 'bg-green-900/30 border border-green-900 text-green-400';
+                const label = hardLocked ? 'Unmet Requirement' : overrideSelectable ? 'Ignored Req' : 'Requirement Met';
+                reqHtml = `<div class="${bannerClass} p-2 rounded text-xs mb-4 font-bold">${label}: ${ev.reasons.join('; ')}</div>`;
+            } else if (d.prerequisites_raw) {
+                // Legacy path: an eligible option that still has raw prereq
+                // text worth showing as confirmation (mirrors the old
+                // "Requirement Met" banner behavior for prereqs_parsed-only
+                // options that _cpEvaluate didn't need to gate on).
+                reqHtml = `<div class="bg-green-900/30 border border-green-900 text-green-400 p-2 rounded text-xs mb-4 font-bold">Requirement Met: ${d.prerequisites_raw}</div>`;
+            }
+            if (ev.advisory) {
+                reqHtml += `<div class="cp-advisory">Verify: ${ev.advisory}</div>`;
+            }
+
+            let btn = document.createElement('button');
+            let btnClass = `w-full text-left p-4 border-b border-gray-800/50 flex justify-between items-center transition-colors outline-none `;
+            if (hardLocked) btnClass += 'cp-opt-locked';
+            else if (overrideSelectable) btnClass += 'cp-opt-override';
+            else btnClass += 'hover:bg-gray-800 focus:bg-gray-800';
+            btn.className = btnClass;
+
+            if (ev.reasons.length > 0) btn.title = ev.reasons.join('; ');
+
+            let badge = d.level !== undefined ? `<span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-1 rounded shrink-0 ml-2">Lv ${d.level}</span>` : "";
+            let ui_badge = d.ui_badge ? d.ui_badge : "";
+            let chipHtml = (hardLocked && ev.reasons.length > 0) ? `<span class="${ev.alreadyKnown && ev.reasons.length === 1 ? 'cp-reason-chip cp-reason-known' : 'cp-reason-chip'}">${ev.reasons[0]}</span>` : "";
+            if (overrideSelectable && ev.reasons.length > 0) chipHtml = `<span class="cp-reason-chip">${ev.reasons[0]}</span>`;
+
+            btn.innerHTML = `<div class="flex items-center"><span class="text-sm font-bold text-gray-200">${n}</span>${ui_badge}${chipHtml}</div> ${badge}`;
+
+            const selectable = !hardLocked;
+
+            btn.onclick = () => {
+                if (hardLocked) {
+                    // Clicking a greyed option never selects — shake the row
+                    // + flash its reason chip instead (spec point 4).
+                    btn.classList.remove('cp-shake');
+                    void btn.offsetWidth; // restart the animation if clicked twice quickly
+                    btn.classList.add('cp-shake');
+                    const chip = btn.querySelector('.cp-reason-chip');
+                    if (chip) {
+                        chip.classList.remove('cp-chip-flash');
+                        void chip.offsetWidth;
+                        chip.classList.add('cp-chip-flash');
+                    }
+                    return;
+                }
+
+                mCtx.active = d;
+                let pHtml = `<h2 class="text-4xl font-header text-white mb-4">${n}</h2>`;
+                if (d.traits && d.traits.length > 0) pHtml += `<div class="flex flex-wrap gap-2 mb-6">` + d.traits.map(t => `<span class="bg-gray-800 border border-gray-700 text-gray-300 text-xs px-2 py-1 uppercase font-bold tracking-wider rounded">${t}</span>`).join('') + `</div>`;
+                pHtml += reqHtml;
+                pHtml += `<div class="text-base text-gray-300 foundry-content leading-relaxed">${d.desc || d.description || 'No description available.'}</div>`;
+                document.getElementById('mod-preview').innerHTML = pHtml;
+
+                document.getElementById('btn-lock').classList.remove('hidden');
+            };
+            list.appendChild(btn);
+        });
+    }
+    function filterModal() { renderModalList(); }
+    function closeModal() {
+        const m = document.getElementById('uni-modal'); m.classList.add('opacity-0'); document.getElementById('uni-window').classList.add('scale-95');
+        setTimeout(() => { m.classList.add('hidden'); }, 200);
+    }
+</script>
