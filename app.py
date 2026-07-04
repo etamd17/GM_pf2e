@@ -14650,9 +14650,72 @@ def import_pathbuilder():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _validate_new_character_feats(data):
+    """Levelup-parity soft validation for character creation (spec 2026-07-03).
+
+    Read-only over the submitted picks; returns a list of human-readable
+    violations (empty = clean). Checks the gates that are unambiguous
+    server-side for a level-1 character: feat level gates, feat-chain
+    prerequisites (satisfiable by sibling picks in the same submission), and
+    skill-rank prerequisites (only 'trained' is reachable at level 1).
+    Ability-score prereqs are deliberately NOT checked here -- the payload's
+    ability values are boost-derived and scale-ambiguous, and the client
+    picker already greys those. Unknown feat names are skipped (homebrew).
+    """
+    violations = []
+    picked = [f.get('name') for f in (data.get('feats') or []) if f.get('name')]
+    picked_set = {n.lower() for n in picked}
+    trained = {s.lower() for s in (data.get('skills') or [])}
+    start_level = 1
+    try:
+        start_level = max(1, int(data.get('starting_level') or 1))
+    except (TypeError, ValueError):
+        pass
+
+    lookup = {}
+    for feat_list in BUILDER_FEATS.values():
+        if not isinstance(feat_list, list):
+            continue
+        for f in feat_list:
+            if isinstance(f, dict) and f.get('name'):
+                lookup.setdefault(f['name'].lower(), f)
+
+    _rank_vals = {'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8}
+    for name in picked:
+        feat = lookup.get(name.lower())
+        if not feat:
+            continue
+        ps = feat.get('prereqs_struct') or {}
+        try:
+            feat_level = int(feat.get('level') or 0)
+        except (TypeError, ValueError):
+            feat_level = 0
+        gate_level = ps.get('level') or feat_level
+        if gate_level and gate_level > start_level:
+            violations.append(f"{feat['name']} requires level {gate_level}")
+        for req in ps.get('feats') or []:
+            if req.lower() not in picked_set:
+                violations.append(f"{feat['name']} requires the feat {req}")
+        for skill, rank in (ps.get('skills') or {}).items():
+            need = _rank_vals.get(str(rank).lower(), 2)
+            if need > 2:
+                violations.append(f"{feat['name']} requires {rank} in {skill.title()} (unreachable at level {start_level})")
+            elif skill.lower() not in trained:
+                violations.append(f"{feat['name']} requires training in {skill.title()}")
+    return violations
+
+
 @app.route('/api/save_new_character', methods=['POST'])
 def save_new_character():
     data = request.json
+    # Soft backstop, mirroring the levelup flow's validate + force pattern:
+    # violations block with a warning payload unless the GM-override force
+    # flag is set; a clean build proceeds through the UNCHANGED save path.
+    if not (data.get('force') or data.get('force_save')):
+        _violations = _validate_new_character_feats(data)
+        if _violations:
+            return jsonify({'success': False, 'needs_force': True,
+                            'violations': _violations}), 409
     char_name = data.get('name', 'Unknown')
     safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', char_name)
     

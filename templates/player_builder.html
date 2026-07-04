@@ -13,6 +13,14 @@
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }
         body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(92,75,60,0.06) 0%,transparent 55%),#1C1917; }
+        /* GM override switch -- armed = the app's amber warning vocabulary
+           (matches the levelup rail's switch). */
+        #gm-override-switch.armed { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.55) !important; color: #fbbf24 !important; }
+        /* Sidebar tick pop on incomplete->complete transitions (diffed in JS
+           so constant revalidation can't re-trigger it). trkCondIn lives in
+           system.css's COMBAT IDENTITY section. */
+        .chk-pop { display: inline-block; animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+        @media (prefers-reduced-motion: reduce) { .chk-pop { animation: none; } }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3228; border-radius: 10px; }
@@ -117,6 +125,15 @@
             <button onclick="navTo('review')" id="nav-review" class="nav-item w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
                 <span>7. Review</span> <span id="chk-review" class="text-xs"></span>
             </button>
+        </div>
+        {# GM override — same vocabulary as the levelup rail's switch: arms
+           window.ignorePrereqs for the shared picker AND the save's force
+           flag. Amber = the app's established warning styling. #}
+        <div class="px-6 py-3 border-t border-gray-800">
+            <label id="gm-override-switch" for="chk-gm-override" style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-size:10.5px; letter-spacing:0.04em; color:#78716c; padding:3px 8px; border-radius:999px; border:1px solid #44403c; transition: background .2s, border-color .2s, color .2s;">
+                <input type="checkbox" id="chk-gm-override" onchange="toggleGmOverride(this.checked)" style="accent-color:#f59e0b; margin:0;">
+                <span>GM override: ignore prerequisites</span>
+            </label>
         </div>
         <div class="p-6 border-t border-gray-800 bg-gray-900">
             <button id="btn-finish" onclick="finalizeCharacter()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
@@ -1354,6 +1371,33 @@
             runValidation();
         }
 
+        // GM override -- same contract as the levelup rail's switch: arms the
+        // shared picker's global and re-renders any open picker. The save's
+        // force flag reads window.ignorePrereqs at submit time.
+        window.toggleGmOverride = function(on) {
+            window.ignorePrereqs = !!on;
+            const sw = document.getElementById('gm-override-switch');
+            if (sw) sw.classList.toggle('armed', !!on);
+            if (typeof window.refreshChoicePicker === 'function') window.refreshChoicePicker();
+        };
+
+        // Tick-pop: when a sidebar step flips incomplete -> complete, pop its
+        // check via the shared trkCondIn keyframe (system.css). Diffed against
+        // the previous paint so runValidation's constant repaints can't
+        // re-trigger the animation.
+        const _prevChk = {};
+        function _popFreshTicks() {
+            ['start','ancestry','background','class','abilities','skills'].forEach(k => {
+                const el = document.getElementById('chk-' + k);
+                if (!el) return;
+                const done = el.innerText === "" && el.className.indexOf('green') >= 0;
+                if (done && _prevChk[k] === false) {
+                    el.classList.remove('chk-pop'); void el.offsetWidth; el.classList.add('chk-pop');
+                }
+                _prevChk[k] = done;
+            });
+        }
+
         function runValidation() {
             state.name = document.getElementById('inp-name').value;
             
@@ -1442,6 +1486,7 @@
                 btnF.classList.add('bg-gray-700', 'text-gray-400', 'cursor-not-allowed');
                 btnF.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-500', 'shadow-lg', 'shadow-green-900/50');
             }
+            _popFreshTicks();
         }
 
         function populateEquipment() {
@@ -1777,9 +1822,29 @@
             };
 
             try {
+                // Armed GM override pre-authorizes the force flag (mirrors
+                // the levelup submit's force_save behavior).
+                if (window.ignorePrereqs) payload.force = true;
                 const res = await fetch('/api/save_new_character', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 const data = await res.json();
-                if(data.success) window.location.href = '/player';
+                if(data.success) { window.location.href = '/player'; return; }
+                // Server backstop rejected the picks (soft block): show the
+                // violations and offer the GM-override re-post, matching the
+                // levelup flow's validate + force pattern.
+                if (data.needs_force && Array.isArray(data.violations)) {
+                    const msg = 'Some picks do not meet their prerequisites:\n\n- '
+                        + data.violations.join('\n- ')
+                        + '\n\nSave anyway (GM override)?';
+                    if (window.confirm(msg)) {
+                        payload.force = true;
+                        const res2 = await fetch('/api/save_new_character', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                        const data2 = await res2.json();
+                        if (data2.success) { window.location.href = '/player'; return; }
+                    }
+                    btn.innerText = "Forge Character"; btn.disabled = false;
+                    return;
+                }
+                btn.innerText = "Error"; btn.disabled = false;
             } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
         }
     </script>
