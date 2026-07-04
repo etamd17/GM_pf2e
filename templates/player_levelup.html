@@ -125,6 +125,79 @@
             z-index: 30;
         }
         .drawer-mode .drawer-submit-bar { display: block !important; }
+
+        /* ── Gains checklist rail (T3) ──────────────────────────────
+           One entry per requirement slot in `reqs` (Class Feat, Skill
+           Increase, ...). Horizontal strip above the steps by default;
+           becomes a left sidebar at >=900px so it stays visible while
+           the player works through the card. Tick pop-in reuses the
+           tracker's trkCondIn keyframe (static/css/system.css) rather
+           than redefining it. */
+        .gains-item {
+            display: flex; align-items: center; gap: 7px;
+            font-family: var(--font-ui); font-size: 12px; color: var(--text-on-dark-2);
+            background: var(--bg-card-2); border: 1px solid var(--border-strong);
+            border-radius: 999px; padding: 5px 12px 5px 8px; cursor: pointer;
+            transition: border-color .2s, background .2s;
+        }
+        .gains-item:hover { border-color: var(--accent); }
+        .gains-item .gains-ring {
+            width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+            border: 2px solid var(--text-on-dark-3); box-sizing: border-box;
+            display: flex; align-items: center; justify-content: center;
+            transition: border-color .2s, background .2s;
+        }
+        .gains-item.gains-done { border-color: rgba(201,163,78,0.4); color: var(--text-on-dark); }
+        .gains-item.gains-done .gains-ring {
+            border-color: var(--gilt-200); background: var(--gilt-300);
+            color: #1c1813; font-size: 10px; font-weight: 800; line-height: 1;
+        }
+        .gains-item.gains-done .gains-ring.trk-cond-in { animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+        /* Responsive rail layout lives entirely in stylesheet rules (not
+           inline styles) so the media query below can actually win the
+           cascade — an inline style="" attribute always beats a stylesheet
+           rule regardless of media query, so #lvl-layout/#gains-rail/etc.
+           carry NO conflicting layout properties in their inline style. */
+        #lvl-layout { display: flex; flex-direction: column; }
+        /* position+z-index here (not just on #gains-rail-header) — a
+           z-index on a static-flow descendant can't win against a later,
+           positioned sibling of an ancestor (#uni-modal is z-index:50,
+           fixed, and a body-level sibling of #lvl-layout); #lvl-layout
+           and its #gains-rail child were `position:static` so the whole
+           subtree painted as one layer beneath the modal regardless of
+           any descendant's own z-index. Promoting #gains-rail itself
+           into the stacking arena fixes it without touching #lvl-layout
+           (which must stay in normal flow for the sidebar/strip switch). */
+        #gains-rail { width: 100%; flex-shrink: 0; position: relative; z-index: 55; }
+        #gains-rail-body { display: flex; flex-wrap: wrap; }
+        #lvl-page-main { width: 100%; }
+        @media (min-width: 900px) {
+            #lvl-layout { flex-direction: row; align-items: flex-start; }
+            #gains-rail { width: 240px; position: sticky; top: calc(var(--sp-5) + 64px); }
+            #gains-rail-body { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+            #lvl-page-main { flex: 1; }
+        }
+
+        /* GM override toggle — amber warning styling once armed, matching
+           the app's established amber-warning convention (e.g. Cosmere
+           builder's .gm-override, build-notes banners: #fbbf24 / rgba(245,158,11,*)). */
+        #gm-override-switch.armed {
+            background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.55); color: #fbbf24;
+        }
+
+        /* ── Confirm ceremony overlay (T3) ── */
+        .lvl-ceremony-hidden { display: none !important; }
+        #lvl-ceremony-card { animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+        #lvl-ceremony-card .lvl-cer-spark {
+            position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%;
+            pointer-events: none; opacity: 0; background: #ffd79a; box-shadow: 0 0 6px 1px rgba(255,180,90,.9);
+        }
+        #lvl-ceremony-card .lvl-cer-spark.rise { animation: trkSparkRise 1.1s ease-out forwards; }
+        @media (prefers-reduced-motion: reduce) {
+            .gains-item.gains-done .gains-ring.trk-cond-in { animation: none; }
+            #lvl-ceremony-card { animation: none; }
+            #lvl-ceremony-card .lvl-cer-spark { display: none; }
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
 </head>
@@ -173,7 +246,31 @@
         </div>
     </header>
 
-    <main id="lvl-page-main" class="custom-scrollbar" style="max-width: 720px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) var(--sp-8);">
+    <div id="lvl-layout" style="max-width: 980px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) 0; gap:var(--sp-4); align-items:flex-start;">
+        {# Gains checklist rail — this level's requirement slots (from the
+           route's `reqs`), each ticking off as its step is completed.
+           Sidebar at >=900px (CSS below), horizontal strip above the
+           steps at narrower widths. Same markup either way; buildGainsRail()
+           fills #gains-rail-body, paintGainsRail() re-paints tick state from
+           the SAME per-step completion signals runValidation() already
+           computes (see paintGainsRail below) — one completion source. #}
+        <aside id="gains-rail" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
+            {# The whole rail (see #gains-rail's position/z-index above) is
+               deliberately raised ABOVE the choice-picker modal's z-50
+               overlay — the GM-override switch in this header must stay
+               reachable while a picker is open (that's the whole point:
+               flip it to unlock a greyed option without closing the modal
+               first). #}
+            <div id="gains-rail-header" style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap; margin-bottom:var(--sp-2);">
+                <h3 style="margin:0; font-family:var(--font-display); font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-2);">This Level's Gains</h3>
+                <label id="gm-override-switch" for="chk-gm-override" style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-family:var(--font-ui); font-size:10.5px; letter-spacing:0.04em; color:var(--text-on-dark-3); padding:3px 8px; border-radius:999px; border:1px solid var(--border-strong); transition: background .2s, border-color .2s, color .2s;">
+                    <input type="checkbox" id="chk-gm-override" onchange="toggleGmOverride(this.checked)" style="accent-color:#f59e0b; margin:0;">
+                    GM override: ignore prerequisites
+                </label>
+            </div>
+            <div id="gains-rail-body" style="gap:var(--sp-2);"></div>
+        </aside>
+    <main id="lvl-page-main" class="custom-scrollbar" style="max-width: 720px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-8);">
         {# Pathbuilder-style "Level N" banner header — small red label
            centered above the unified pick card. #}
         <div id="lvl-banner" style="text-align:center; margin: var(--sp-2) 0 var(--sp-3);">
@@ -323,6 +420,15 @@
         </div>
         </div> {# /lvl-card #}
     </main>
+    </div> {# /lvl-layout #}
+
+    {# Confirm ceremony overlay — built by showLevelUpCeremony() in the
+       submit success handler, before the redirect. Empty until then. #}
+    <div id="lvl-ceremony-overlay" class="lvl-ceremony-hidden" style="position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(8,9,13,0.78); backdrop-filter: blur(2px);">
+        <div id="lvl-ceremony-card" style="position:relative; max-width:420px; width:calc(100% - 48px); background: var(--bg-card); border:1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-6) var(--sp-5); box-shadow: 0 24px 64px rgba(0,0,0,0.55); cursor:pointer;" onclick="dismissLevelUpCeremony()">
+            <div id="lvl-ceremony-body"></div>
+        </div>
+    </div>
 
     {% include "_choice_picker.html" %}
 
@@ -932,6 +1038,118 @@
                 else p.classList.add('complete');
             });
         }
+
+        // ── Gains checklist rail (T3) ──────────────────────────────────
+        // One entry per requirement slot in `reqs` (the exact
+        // {class_feat:1, skill_feat:1, ...} object class_matrix's
+        // base_prog produces for this level — see levelup-builder-audit.md
+        // G1). Loops the keys generically so any class's reqs shape
+        // renders correctly with no hardcoded class list. Each entry's
+        // done-state is read from the SAME signals runValidation() already
+        // writes (chk-abilities/chk-skills text, and _featTypeSlotKeys()
+        // for per-feat-slot state) — no second completion algorithm.
+        const GAINS_LABELS = {
+            ability_boosts: 'Ability Boosts',
+            skill_increase: 'Skill Increase',
+            class_feat: 'Class Feat',
+            general_feat: 'General Feat',
+            skill_feat: 'Skill Feat',
+            ancestry_feat: 'Ancestry Feat',
+        };
+        // Keys rendered as ONE rail entry each, in this display order, with
+        // the step they jump to. Any reqs key not listed here still renders
+        // (label-cased from its key) so a future class_matrix addition
+        // doesn't silently vanish from the rail.
+        const GAINS_STEP_FOR_KEY = {
+            ability_boosts: 'abilities',
+            skill_increase: 'skills',
+            class_feat: 'feats',
+            general_feat: 'feats',
+            skill_feat: 'feats',
+            ancestry_feat: 'feats',
+        };
+        function _gainsEntries() {
+            if (!reqs) return [];
+            const order = ['class_feat', 'ancestry_feat', 'general_feat', 'skill_feat', 'skill_increase', 'ability_boosts'];
+            const keys = Object.keys(reqs).filter(k => reqs[k]);
+            keys.sort((a, b) => {
+                const ia = order.indexOf(a), ib = order.indexOf(b);
+                return (ia === -1 ? order.length : ia) - (ib === -1 ? order.length : ib);
+            });
+            return keys.map(key => ({
+                key,
+                label: GAINS_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                step: GAINS_STEP_FOR_KEY[key] || 'review',
+            }));
+        }
+        function _gainsEntryDone(key) {
+            // Feat-type slots: every expanded slot key must have a pick —
+            // identical predicate to runValidation()'s fValid loop via the
+            // shared _featTypeSlotKeys() helper.
+            if (['class_feat', 'ancestry_feat', 'general_feat', 'skill_feat'].includes(key)) {
+                return _featTypeSlotKeys(key).every(k => !!state.feats_selected[k]);
+            }
+            if (key === 'ability_boosts') {
+                return (state.free_boosts_selected || []).length >= (reqs.ability_boosts || 4);
+            }
+            if (key === 'skill_increase') {
+                const max = (reqs.skill_increase || 0) + (state.retro_int_skills || 0);
+                return (state.skill_increases_selected || []).length >= max;
+            }
+            return false;
+        }
+        function buildGainsRail() {
+            const body = document.getElementById('gains-rail-body');
+            const rail = document.getElementById('gains-rail');
+            if (!body || !rail) return;
+            const entries = _gainsEntries();
+            if (!entries.length) { rail.style.display = 'none'; return; }
+            rail.style.display = '';
+            body.innerHTML = entries.map(e =>
+                `<div class="gains-item" data-gains-key="${e.key}" data-gains-step="${e.step}" title="Jump to ${esc(e.label)}">` +
+                    `<span class="gains-ring"></span><span>${esc(e.label)}</span>` +
+                `</div>`
+            ).join('');
+            body.querySelectorAll('.gains-item').forEach(el => {
+                el.addEventListener('click', () => navTo(el.dataset.gainsStep));
+            });
+        }
+        function paintGainsRail() {
+            const body = document.getElementById('gains-rail-body');
+            if (!body) return;
+            body.querySelectorAll('.gains-item').forEach(el => {
+                const done = _gainsEntryDone(el.dataset.gainsKey);
+                const ring = el.querySelector('.gains-ring');
+                const wasDone = el.classList.contains('gains-done');
+                el.classList.toggle('gains-done', done);
+                if (done) {
+                    ring.textContent = '✓';
+                    if (!wasDone) {
+                        // Pop the tick in via the shared trkCondIn keyframe,
+                        // same treatment as the tracker's condition chips.
+                        ring.classList.remove('trk-cond-in');
+                        void ring.offsetWidth;
+                        ring.classList.add('trk-cond-in');
+                    }
+                } else {
+                    ring.textContent = '';
+                    ring.classList.remove('trk-cond-in');
+                }
+            });
+        }
+
+        // GM override — one visible wizard-level switch, replacing the old
+        // per-modal "Ignore Pre-Reqs" checkbox (removed in T2). Sets the
+        // shared window.ignorePrereqs global the choice picker already
+        // reads, re-renders any open picker in place, and (per submitLevelUp,
+        // T3 contract) implies force_save on the final submit so the
+        // reactive force_save-retry path and this toggle are one mechanism.
+        window.toggleGmOverride = function(on) {
+            window.ignorePrereqs = !!on;
+            const sw = document.getElementById('gm-override-switch');
+            if (sw) sw.classList.toggle('armed', !!on);
+            if (typeof window.refreshChoicePicker === 'function') window.refreshChoicePicker();
+        };
         // The actual run-validation hook is at the BOTTOM of the file
         // (after runValidation is defined), via a microtask wrapper.
 
@@ -1811,6 +2029,121 @@
             ui.innerHTML = html || "<div class='text-gray-500 italic text-center'>No changes recorded yet.</div>";
         }
 
+        // ── Confirm ceremony (T3) ───────────────────────────────────────
+        // Fires from submitLevelUp()'s success handler, BEFORE the
+        // redirect. Every field below is already assembled client-side
+        // from `state`/`pc`/`reqs` — the exact same values renderReview()
+        // already displays on the Review step — so this adds no new
+        // backend response fields; the POST to /api/submit_levelup is
+        // unchanged (it's fired first; this only decorates what happens
+        // after `data.success` is already true).
+        const _RM_LVL = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+        function _ceremonyPicksList() {
+            const lines = [];
+            if (reqs.ability_boosts) {
+                const boosts = state.free_boosts_selected || [];
+                if (boosts.length) lines.push(`Ability Boosts: ${boosts.map(s => s.toUpperCase()).join(', ')}`);
+            }
+            if (reqs.skill_increase) {
+                const incs = state.skill_increases_selected || [];
+                if (incs.length) lines.push(`Skill Increase: ${incs.map(s => s.replace('lore:', 'Lore: ')).join(', ')}`);
+            }
+            const fKeys = Object.keys(state.feats_selected || {});
+            fKeys.forEach(k => {
+                const f = state.feats_selected[k];
+                if (f && f.name) lines.push(f.name);
+            });
+            if (state.monk_path_choice) {
+                lines.push(`${state.monk_path_choice.charAt(0).toUpperCase() + state.monk_path_choice.slice(1)} save upgraded`);
+            }
+            Object.entries(state.class_picks_selected || {}).forEach(([slot, pick]) => {
+                if (pick) lines.push(`${slot}: ${pick}`);
+            });
+            if (state.new_spells && state.new_spells.length) {
+                lines.push(`Learned: ${state.new_spells.map(s => s.name).join(', ')}`);
+            }
+            return lines;
+        }
+        function _ceremonyHpDelta() {
+            let classHp = (pc.attributes || {}).classhp || 8;
+            let conMod = (pc.mods || {}).con || 0;
+            if (state.free_boosts_selected.includes('con')) {
+                const tempStats = getTempFinalStats();
+                conMod = tempStats.con !== undefined ? tempStats.con : conMod;
+            }
+            let hpPerLevel = classHp + conMod + ((pc.attributes || {}).bonushpPerLevel || 0);
+            if (hpPerLevel < 1) hpPerLevel = 1;
+            const oldHp = pc.hp || 0;
+            return { oldHp, newHp: oldHp + hpPerLevel, gain: hpPerLevel };
+        }
+        // Ember spark burst — mirrors the sheet's _orbMotes spawner pattern
+        // (cosmere_sheet.html): spawn N absolutely-positioned nodes off a
+        // shared anchor, stagger the .rise class, remove on animationend.
+        // Capped at 6 particles per the T3 contract; skipped entirely under
+        // reduced motion.
+        function _ceremonySparkBurst(anchorEl) {
+            if (_RM_LVL && _RM_LVL.matches) return;
+            if (!anchorEl) return;
+            const COUNT = 6;
+            for (let i = 0; i < COUNT; i++) {
+                const s = document.createElement('div');
+                s.className = 'lvl-cer-spark';
+                s.style.setProperty('--dx', (Math.random() * 44 - 22).toFixed(1) + 'px');
+                anchorEl.appendChild(s);
+                setTimeout(() => s.classList.add('rise'), i * 55);
+                s.addEventListener('animationend', () => s.remove());
+                setTimeout(() => s.remove(), 2000 + i * 55);
+            }
+        }
+        let _ceremonyDismissTimer = null;
+        window.dismissLevelUpCeremony = function() {
+            if (_ceremonyDismissTimer) { clearTimeout(_ceremonyDismissTimer); _ceremonyDismissTimer = null; }
+            const overlay = document.getElementById('lvl-ceremony-overlay');
+            if (overlay) overlay.classList.add('lvl-ceremony-hidden');
+            if (typeof window._lvlCeremonyOnDone === 'function') {
+                const fn = window._lvlCeremonyOnDone;
+                window._lvlCeremonyOnDone = null;
+                fn();
+            }
+        };
+        window.showLevelUpCeremony = function(onDone) {
+            const overlay = document.getElementById('lvl-ceremony-overlay');
+            const card = document.getElementById('lvl-ceremony-card');
+            const body = document.getElementById('lvl-ceremony-body');
+            if (!overlay || !card || !body) { onDone(); return; }
+            window._lvlCeremonyOnDone = onDone;
+
+            const hp = _ceremonyHpDelta();
+            const picks = _ceremonyPicksList();
+            const reduced = _RM_LVL && _RM_LVL.matches;
+
+            body.innerHTML = `
+                <div style="text-align:center; margin-bottom:var(--sp-4);">
+                    <div style="font-family:var(--font-display); font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:4px;">${esc(pc.name)}</div>
+                    <div style="font-family:var(--font-display); font-size:22px; color:var(--accent); letter-spacing:0.05em;">Level ${targetLevel}</div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:var(--sp-4); font-family:var(--font-ui);">
+                    <span style="font-size:18px; font-weight:700; color:var(--text-on-dark-3);">${hp.oldHp} HP</span>
+                    <span style="color:var(--text-on-dark-3);">&rarr;</span>
+                    <span style="font-size:18px; font-weight:700; color:var(--gilt-200);">${hp.newHp} HP</span>
+                    <span style="font-size:11px; color:var(--text-on-dark-3);">(+${hp.gain})</span>
+                </div>
+                ${picks.length ? `<ul style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;">` +
+                    picks.map(p => `<li style="display:flex; align-items:baseline; gap:8px; font-size:13px; color:var(--text-on-dark-2);"><span style="color:var(--gilt-200);">&#10003;</span><span>${esc(p)}</span></li>`).join('') +
+                    `</ul>` : `<div style="text-align:center; font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No picks recorded.</div>`}
+                <div style="text-align:center; margin-top:var(--sp-4); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-on-dark-3);">Click to continue</div>
+            `;
+
+            overlay.classList.remove('lvl-ceremony-hidden');
+            // Force reflow so the pop-in animation restarts on repeat opens.
+            card.classList.remove('lvl-ceremony-hidden');
+            void card.offsetWidth;
+            if (!reduced) _ceremonySparkBurst(card);
+
+            if (_ceremonyDismissTimer) clearTimeout(_ceremonyDismissTimer);
+            _ceremonyDismissTimer = setTimeout(() => { window.dismissLevelUpCeremony(); }, 2500);
+        };
+
         function setModalTab(tabName) {
             mCtx.tab = tabName;
             document.querySelectorAll('.mod-tab-btn').forEach(b => {
@@ -1960,6 +2293,21 @@
             }
         }
 
+        // Shared by runValidation() and the gains rail (buildGainsRail/
+        // paintGainsRail) — the ONLY place that knows how a feat-type req
+        // ("class_feat": 2, say) expands into per-slot state keys
+        // ("class_feat", "class_feat_0", "class_feat_1", ...). Extracted
+        // so the rail's per-slot tick state can never drift from the
+        // Finish-button gate's own count (single completion source, per
+        // the T3 contract).
+        function _featTypeSlotKeys(ft) {
+            let count = reqs[ft] || 0;
+            if (ft === 'class_feat') count += state.bonus_feats_added;
+            const keys = [];
+            for (let i = 0; i < count; i++) keys.push(count > 1 ? `${ft}_${i}` : ft);
+            return keys;
+        }
+
         function runValidation() {
             // --- Monk Path to Perfection validation ---
             let monkPathNeeded = pcClass === 'monk' && monkPathConfig[targetLevel];
@@ -1980,13 +2328,10 @@
             }
 
             let fValid = true;
-            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat'].forEach(ft => { 
-                let count = reqs[ft] || 0;
-                if (ft === 'class_feat') count += state.bonus_feats_added;
-                for(let i=0; i<count; i++) {
-                    let key = count > 1 ? `${ft}_${i}` : ft;
+            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat'].forEach(ft => {
+                _featTypeSlotKeys(ft).forEach(key => {
                     if(!state.feats_selected[key]) fValid = false;
-                }
+                });
             });
             if(fValid && (reqs.ancestry_feat || reqs.class_feat || reqs.general_feat || reqs.skill_feat)) { 
                 document.getElementById('chk-feats').innerText = ""; document.getElementById('chk-feats').className = "text-green-400 text-lg font-bold leading-none"; 
@@ -2189,6 +2534,13 @@
                 divine_ally: divineAllyChoice,
                 chosen_domain: domainChoice
             };
+            // The GM-override rail toggle IS the wizard-level force_save
+            // switch (T3 contract) — when armed, send force_save on the
+            // FIRST attempt too, so the reactive retry-on-rejection flow
+            // below and the visible toggle collapse into one mechanism.
+            // Server-side behavior (submit_levelup's force_save branch) is
+            // unchanged; this only changes when the flag is set.
+            if (window.ignorePrereqs) payload.force_save = true;
 
             try {
                 const res = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
@@ -2198,7 +2550,9 @@
                         window.parent.postMessage({ type: 'levelup_complete', name: pc.name }, '*');
                         return;
                     }
-                    window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                    showLevelUpCeremony(() => {
+                        window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                    });
                     return;
                 }
                 // Validator rejected the save: either required slots are
@@ -2218,7 +2572,9 @@
                         const r2 = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.assign({}, payload, {force_save: true})) });
                         const d2 = await r2.json();
                         if (d2.success) {
-                            window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                            showLevelUpCeremony(() => {
+                                window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                            });
                             return;
                         }
                         alert(d2.error || 'Save failed.');
@@ -2230,18 +2586,21 @@
         }
 
         // Wrap runValidation to also paint the section-progress strip in
-        // the sticky top bar. Done AFTER all functions are defined.
+        // the sticky top bar, and the gains rail (same completion signals,
+        // see paintGainsRail). Done AFTER all functions are defined.
         (function wrapRunValidation() {
             const orig = runValidation;
             runValidation = function() {
                 const r = orig.apply(this, arguments);
                 try { paintSectionProgress(); } catch(_) {}
+                try { paintGainsRail(); } catch(_) {}
                 return r;
             };
         })();
 
         init();
         try { buildSectionProgress(); paintSectionProgress(); } catch(_) {}
+        try { buildGainsRail(); paintGainsRail(); } catch(_) {}
     </script>
 </body>
 </html>
