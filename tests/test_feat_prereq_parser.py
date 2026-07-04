@@ -5,9 +5,13 @@ only caught ability scores + skill ranks -- feat-chain and class-feature
 prereqs silently passed eligibility. This parser runs ONCE at data load and
 ships a structured field; anything unclassifiable lands in raw only (advisory,
 never a false block)."""
+import glob
+import json
+import os
+
 import pytest
 
-from app import parse_feat_prereqs, BUILDER_FEATS
+from app import parse_feat_prereqs, parse_feat_prereq_clauses, BUILDER_FEATS
 
 
 def test_empty_and_none():
@@ -207,3 +211,151 @@ def test_all_builder_feats_have_prereqs_struct_after_load():
         assert 'prereqs_struct' in f
         struct = f['prereqs_struct']
         assert set(struct.keys()) == {'level', 'abilities', 'skills', 'feats', 'features', 'raw'}
+
+
+# --- T1b: join structured prerequisites from the local Foundry feats pack ---
+#
+# T1's regex scrape of `description` HTML only recovers a clean prereq clause
+# for ~21 of the DB's 8,590 feats (feat-chains/Dedications largely 0%
+# coverage) because the compiled pf2e_database.db dropped the source pack's
+# `system.prerequisites.value` column during compilation. The pack itself
+# (compendium_data/feats/**/*.json, 5,845 docs, 3,610 with a structured
+# `system.prerequisites.value` list of clean single clauses) still has it.
+# `parse_feat_prereq_clauses` takes that list directly -- no comma-splitting,
+# no clause-count cap needed, since each list entry is already one clause --
+# and shares classification internals with `parse_feat_prereqs`.
+#
+# Verified against the real pack on 2026-07-03 (see lvl-task-1b-report.md):
+#   - compendium_data/feats/skill/level-1/battle-medicine.json
+#     (_id wYerMk6F1RZb0Fwt): prerequisites.value == [{'value': 'trained in Medicine'}]
+#   - compendium_data/feats/skill/level-7/paragon-battle-medicine.json
+#     (_id xOMwuKCf02aFzyp3): prerequisites.value ==
+#     [{'value': 'Battle Medicine'}, {'value': 'master in Medicine'}]
+#     -- this is the real feat-chain-onto-Battle-Medicine example (NOT
+#     Continual Recovery, whose only prereq is 'expert in Medicine' with no
+#     feat-chain clause at all; swapped per the brief's own instruction to
+#     verify real shapes and adjust to the actual dataset).
+#   - compendium_data/feats/archetype/exemplar/exemplar-dedication.json
+#     (_id qvWmW5JWpVBDyGqe, traits include 'dedication'): prerequisites.value
+#     == [{'value': 'Strength +2 or Dexterity +2'}] -- single whole-clause OR
+#     ability prereq, must stay raw-only.
+
+
+def test_parse_feat_prereq_clauses_empty():
+    assert parse_feat_prereq_clauses([]) == {
+        'level': None, 'abilities': {}, 'skills': {}, 'feats': [], 'features': [], 'raw': ''}
+    assert parse_feat_prereq_clauses(None) == {
+        'level': None, 'abilities': {}, 'skills': {}, 'feats': [], 'features': [], 'raw': ''}
+
+
+def test_parse_feat_prereq_clauses_single_skill_rank():
+    p = parse_feat_prereq_clauses(['trained in Medicine'])
+    assert p['skills'] == {'medicine': 'trained'}
+    assert p['raw'] == 'trained in Medicine'
+
+
+def test_parse_feat_prereq_clauses_feat_chain_plus_skill_rank():
+    # Paragon Battle Medicine's real clause list: a feat-chain reference to
+    # Battle Medicine plus a skill-rank clause. No comma-splitting occurs --
+    # each list entry is already one clause -- so this must classify both,
+    # unlike a raw comma-joined string which T1's clause-count/">3 clauses"
+    # guard is not designed to reason about here.
+    lookup = {'battle medicine': 'Battle Medicine'}
+    p = parse_feat_prereq_clauses(['Battle Medicine', 'master in Medicine'], lookup)
+    assert p['feats'] == ['Battle Medicine']
+    assert p['skills'] == {'medicine': 'master'}
+    assert p['raw'] == 'Battle Medicine; master in Medicine'
+
+
+def test_parse_feat_prereq_clauses_whole_clause_or_stays_raw_only():
+    # Exemplar Dedication's real clause: a single list entry that itself
+    # contains an "X or Y" alternative. The never-false-block contract means
+    # this clause is skipped for structured classification entirely (advisory
+    # raw only) -- NOT split or guessed at.
+    p = parse_feat_prereq_clauses(['Strength +2 or Dexterity +2'])
+    assert p['abilities'] == {}
+    assert p['skills'] == {}
+    assert p['feats'] == []
+    assert p['raw'] == 'Strength +2 or Dexterity +2'
+
+
+def test_parse_feat_prereq_clauses_no_clause_count_cap():
+    # Unlike parse_feat_prereqs' raw-string ">3 clauses" run-on-prose guard,
+    # a pack clause list has no such cap -- every entry is already a single,
+    # pre-segmented clause (never narrative prose), so a real feat with more
+    # than 3 structured prereqs must still classify all of them.
+    p = parse_feat_prereq_clauses([
+        'Level 8', 'Strength 16', 'expert in Athletics', 'trained in Acrobatics',
+    ])
+    assert p['level'] == 8
+    assert p['abilities'] == {'str': 16}
+    assert p['skills'] == {'athletics': 'expert', 'acrobatics': 'trained'}
+
+
+def _load_pack_feat_docs():
+    """Walk the real Foundry feats pack and return {lowercase name: doc}."""
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'compendium_data', 'feats')
+    docs = {}
+    for path in glob.glob(os.path.join(root, '**', '*.json'), recursive=True):
+        if os.path.basename(path) == '_folders.json':
+            continue
+        with open(path, 'r', encoding='utf-8') as fh:
+            doc = json.load(fh)
+        name = doc.get('name')
+        if name:
+            docs[name.lower()] = doc
+
+
+    return docs
+
+
+def test_verified_pack_feats_exist_and_have_expected_clauses():
+    # Sanity-check the fixtures this whole section leans on are real, so the
+    # test doesn't silently pass against stale assumptions if the pack changes.
+    docs = _load_pack_feat_docs()
+    battle_medicine = docs['battle medicine']
+    assert battle_medicine['_id'] == 'wYerMk6F1RZb0Fwt'
+    assert [c['value'] for c in battle_medicine['system']['prerequisites']['value']] == ['trained in Medicine']
+
+    paragon = docs['paragon battle medicine']
+    assert paragon['_id'] == 'xOMwuKCf02aFzyp3'
+    assert [c['value'] for c in paragon['system']['prerequisites']['value']] == [
+        'Battle Medicine', 'master in Medicine']
+
+    exemplar_dedication = docs['exemplar dedication']
+    assert exemplar_dedication['_id'] == 'qvWmW5JWpVBDyGqe'
+    assert 'dedication' in exemplar_dedication['system']['traits']['value']
+    assert [c['value'] for c in exemplar_dedication['system']['prerequisites']['value']] == [
+        'Strength +2 or Dexterity +2']
+
+
+def test_integration_battle_medicine_has_trained_medicine_skill():
+    all_feats = BUILDER_FEATS['class'] + BUILDER_FEATS['skill'] + BUILDER_FEATS['general'] + BUILDER_FEATS['ancestry']
+    if not all_feats:
+        pytest.skip('BUILDER_FEATS not populated in this test environment (no compendium DB load)')
+    battle_medicine = next((f for f in all_feats if f['name'] == 'Battle Medicine'), None)
+    assert battle_medicine is not None, 'Battle Medicine missing from loaded BUILDER_FEATS'
+    assert battle_medicine['prereqs_struct']['skills'] == {'medicine': 'trained'}
+
+
+def test_integration_paragon_battle_medicine_has_feat_chain_to_battle_medicine():
+    all_feats = BUILDER_FEATS['class'] + BUILDER_FEATS['skill'] + BUILDER_FEATS['general'] + BUILDER_FEATS['ancestry']
+    if not all_feats:
+        pytest.skip('BUILDER_FEATS not populated in this test environment (no compendium DB load)')
+    paragon = next((f for f in all_feats if f['name'] == 'Paragon Battle Medicine'), None)
+    assert paragon is not None, 'Paragon Battle Medicine missing from loaded BUILDER_FEATS'
+    assert 'Battle Medicine' in paragon['prereqs_struct']['feats']
+    assert paragon['prereqs_struct']['skills'] == {'medicine': 'master'}
+
+
+def test_integration_dedication_with_or_ability_prereq_stays_raw_only():
+    all_feats = BUILDER_FEATS['class'] + BUILDER_FEATS['skill'] + BUILDER_FEATS['general'] + BUILDER_FEATS['ancestry']
+    if not all_feats:
+        pytest.skip('BUILDER_FEATS not populated in this test environment (no compendium DB load)')
+    exemplar = next((f for f in all_feats if f['name'] == 'Exemplar Dedication'), None)
+    assert exemplar is not None, 'Exemplar Dedication missing from loaded BUILDER_FEATS'
+    struct = exemplar['prereqs_struct']
+    assert struct['abilities'] == {}
+    assert struct['skills'] == {}
+    assert struct['feats'] == []
+    assert 'Strength +2 or Dexterity +2' in struct['raw']
