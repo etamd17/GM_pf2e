@@ -1345,48 +1345,38 @@
         // The class feat picker EXCLUDES archetype/dedication feats so
         // a player can't accidentally take an archetype feat as a class
         // feat. The Archetype-Feat picker is the path for them.
-        // _knownDedications() walks the build's existing feats and
-        // returns the archetypes the PC has dedicated to, plus the
-        // count of feats they have from each.
+        // _knownDedications() walks the PC's existing feats (pc.feats,
+        // normalized server-side into {name, desc, level, type} dicts —
+        // see Character.__init__ in app.py) plus any archetype/class feats
+        // picked so far THIS level-up session (state.feats_selected, a
+        // dict of slot-key -> feat object), and returns the archetypes the
+        // PC has dedicated to, plus the count of feats they have from each.
         function _knownDedications() {
-            const feats = (build && build.feats) || [];
-            // feats are arrays in Pathbuilder format: [name, ?, category, level]
-            // OR our internal builder format: [name, type, level, desc]
+            const feats = (pc && pc.feats) || [];
             const seen = {};
-            feats.forEach(f => {
-                if (!Array.isArray(f) || f.length === 0) return;
-                const name = (f[0] || '').toString();
+            const scan = (name) => {
                 if (!name) return;
-                const lname = name.toLowerCase();
+                const lname = name.toString().toLowerCase();
                 if (lname.endsWith(' dedication')) {
                     const arch = lname.replace(/ dedication$/,'').trim();
                     if (!seen[arch]) seen[arch] = { archetype: arch, feat_count: 0 };
                     seen[arch].feat_count++;  // dedication itself counts
                 } else {
                     // Match this feat against known archetypes — by checking
-                    // any descriptor or by name-token overlap. We don't have
-                    // structural archetype data on the feat array itself, so
-                    // count any non-dedication feat that's also tagged with
-                    // an archetype trait we've already seen.
+                    // name-token overlap. We don't have structural archetype
+                    // data on the feat object itself, so count any non-
+                    // dedication feat that's also tagged with an archetype
+                    // trait we've already seen.
                     for (const arch of Object.keys(seen)) {
                         if (lname.includes(arch)) seen[arch].feat_count++;
                     }
                 }
-            });
-            // Also scan state.feats for in-progress level-up picks
-            (state.feats || []).forEach(f => {
-                if (!f || !f.name) return;
-                const lname = f.name.toLowerCase();
-                if (lname.endsWith(' dedication')) {
-                    const arch = lname.replace(/ dedication$/,'').trim();
-                    if (!seen[arch]) seen[arch] = { archetype: arch, feat_count: 0 };
-                    seen[arch].feat_count++;
-                } else {
-                    for (const arch of Object.keys(seen)) {
-                        if (lname.includes(arch)) seen[arch].feat_count++;
-                    }
-                }
-            });
+            };
+            feats.forEach(f => scan(f && f.name));
+            // Also scan state.feats_selected for in-progress level-up picks
+            // (e.g. picking a dedication and then an archetype feat in the
+            // same level-up session before saving).
+            Object.values(state.feats_selected || {}).forEach(f => scan(f && f.name));
             return Object.values(seen);
         }
 

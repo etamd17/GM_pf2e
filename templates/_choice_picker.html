@@ -267,24 +267,26 @@
         const evaluated = filtered.map(d => ({ d, ev: _cpEvaluate(d) }));
 
         // Sort: eligible first, then ineligible; alphabetical within each
-        // group (spec point 5). Domain-specific ordering (e.g. the spell
-        // picker's exact-rank-first sort applied in openModal() before this
-        // function ever runs) is intentionally NOT re-sorted here — mCtx.data
-        // may already carry a deliberate order; we only need to keep eligible/
-        // ineligible grouped, so a stable partition (not a full name-sort)
-        // preserves any upstream domain ordering within each group.
-        const eligible = evaluated.filter(x => !x.ev.locked);
-        const ineligible = evaluated.filter(x => x.ev.locked);
-        const nameOf = x => (typeof x.d.name === 'string' ? x.d.name : String(x.d.name));
-        // Only alphabetize when the upstream data wasn't already given a
-        // deliberate non-alphabetical order (the spell picker sorts by rank
-        // first, e.g.). Detect that by checking mCtx.type — spells keep
-        // their own order; every other type sorts alphabetically per spec.
-        if (mCtx.type !== 'spell') {
+        // group (spec point 5). EXCEPT the spell picker: spells carry a
+        // deliberate upstream domain order (rank-first, applied in
+        // openModal() before this function ever runs) that MUST be
+        // preserved exactly — a locked (ineligible) spell greys in place
+        // rather than sinking to the bottom of the list. Partitioning by
+        // eligibility would tear it out of its rank slot, so for spells we
+        // skip the eligible/ineligible split entirely and render
+        // `evaluated` in its original order; the grey/advisory/override
+        // styling below is still applied per-row from `ev`.
+        let ordered;
+        if (mCtx.type === 'spell') {
+            ordered = evaluated;
+        } else {
+            const eligible = evaluated.filter(x => !x.ev.locked);
+            const ineligible = evaluated.filter(x => x.ev.locked);
+            const nameOf = x => (typeof x.d.name === 'string' ? x.d.name : String(x.d.name));
             eligible.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
             ineligible.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+            ordered = eligible.concat(ineligible);
         }
-        const ordered = eligible.concat(ineligible);
 
         if (ordered.length === 0) { list.innerHTML = "<div class='text-gray-500 p-4 text-sm italic text-center'>No options found.</div>"; return; }
 
