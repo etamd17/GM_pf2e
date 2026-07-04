@@ -367,4 +367,18 @@
         const m = document.getElementById('uni-modal'); m.classList.add('opacity-0'); document.getElementById('uni-window').classList.add('scale-95');
         setTimeout(() => { m.classList.add('hidden'); }, 200);
     }
+
+    // body.picker-open mirrors the modal's REAL visibility, driven off its
+    // class attribute -- one place covers every open/close path (the three
+    // wizard open sites, closeModal, lockModal, and any future ones). The
+    // levelup gains rail sits above the modal overlay (z-55 > z-50) so it
+    // gates its body's pointer-events off this class; without it the rail's
+    // step-jump rows intercept clicks meant for the picker header.
+    (function () {
+        const m = document.getElementById('uni-modal');
+        if (!m || !('MutationObserver' in window)) return;
+        const sync = () => document.body.classList.toggle('picker-open', !m.classList.contains('hidden'));
+        new MutationObserver(sync).observe(m, { attributes: true, attributeFilter: ['class'] });
+        sync();
+    })();
 </script>

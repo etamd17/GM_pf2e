@@ -170,6 +170,13 @@
            (which must stay in normal flow for the sidebar/strip switch). */
         #gains-rail { width: 100%; flex-shrink: 0; position: relative; z-index: 55; }
         #gains-rail-body { display: flex; flex-wrap: wrap; }
+        /* While a picker modal is open (body.picker-open, set by the shared
+           partial's visibility observer) the rail sits ABOVE the overlay, so
+           its step-jump rows would intercept clicks meant for the modal
+           header. Gate the BODY only -- the GM-override switch lives in
+           #gains-rail-header and must stay reachable mid-pick. */
+        body.picker-open #gains-rail-body { pointer-events: none; opacity: .45; transition: opacity .2s ease; }
+        @media (prefers-reduced-motion: reduce) { body.picker-open #gains-rail-body { transition: none; } }
         #lvl-page-main { width: 100%; }
         @media (min-width: 900px) {
             #lvl-layout { flex-direction: row; align-items: flex-start; }
@@ -1082,19 +1089,33 @@
                 step: GAINS_STEP_FOR_KEY[key] || 'review',
             }));
         }
+        // Single-source completion predicates: BOTH runValidation() (the
+        // step-nav gate) and _gainsEntryDone() (the rail ticks) call these,
+        // so the two surfaces can never drift. Bodies are runValidation()'s
+        // original logic verbatim -- do not "improve" one without the other
+        // seeing it.
+        function _abilityBoostsDone() {
+            return (state.free_boosts_selected || []).length === 4;
+        }
+        function _skillIncreasesDone() {
+            const max = (reqs.skill_increase || 0) + (state.retro_int_skills || 0);
+            return (state.skill_increases_selected || []).length === max;
+        }
+
         function _gainsEntryDone(key) {
             // Feat-type slots: every expanded slot key must have a pick —
             // identical predicate to runValidation()'s fValid loop via the
-            // shared _featTypeSlotKeys() helper.
+            // shared _featTypeSlotKeys() helper. Boost/skill completion
+            // shares _abilityBoostsDone()/_skillIncreasesDone() with
+            // runValidation() the same way.
             if (['class_feat', 'ancestry_feat', 'general_feat', 'skill_feat'].includes(key)) {
                 return _featTypeSlotKeys(key).every(k => !!state.feats_selected[k]);
             }
             if (key === 'ability_boosts') {
-                return (state.free_boosts_selected || []).length >= (reqs.ability_boosts || 4);
+                return _abilityBoostsDone();
             }
             if (key === 'skill_increase') {
-                const max = (reqs.skill_increase || 0) + (state.retro_int_skills || 0);
-                return (state.skill_increases_selected || []).length >= max;
+                return _skillIncreasesDone();
             }
             return false;
         }
@@ -2318,12 +2339,11 @@
             }
             
             if(reqs.ability_boosts) {
-                if(state.free_boosts_selected.length === 4) { document.getElementById('chk-abilities').innerText = ""; document.getElementById('chk-abilities').className = "text-green-400 text-lg font-bold leading-none"; }
+                if(_abilityBoostsDone()) { document.getElementById('chk-abilities').innerText = ""; document.getElementById('chk-abilities').className = "text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-abilities').innerText = "!"; document.getElementById('chk-abilities').className = "text-red-500 font-bold"; }
             }
             if(reqs.skill_increase) {
-                let max = reqs.skill_increase + state.retro_int_skills;
-                if(state.skill_increases_selected.length === max) { document.getElementById('chk-skills').innerText = ""; document.getElementById('chk-skills').className = "text-green-400 text-lg font-bold leading-none"; }
+                if(_skillIncreasesDone()) { document.getElementById('chk-skills').innerText = ""; document.getElementById('chk-skills').className = "text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-skills').innerText = "!"; document.getElementById('chk-skills').className = "text-red-500 font-bold"; }
             }
 
@@ -2547,6 +2567,9 @@
                 const data = await res.json();
                 if (data.success) {
                     if (isDrawerMode && window.parent !== window) {
+                        // Drawer mode intentionally skips the ceremony: the
+                        // parent page owns the post-levelup flow (there is no
+                        // redirect here for the ceremony to gate).
                         window.parent.postMessage({ type: 'levelup_complete', name: pc.name }, '*');
                         return;
                     }
