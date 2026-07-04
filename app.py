@@ -1381,6 +1381,12 @@ def _do_broadcast_encounter_state():
             'active_id': active_id,
             'turn_index': TURN_INDEX,
             'session_timer_start': SESSION_TIMER_START,
+            # Round-events lane (feature 7): GM-only, so the payload only
+            # needs to survive the player_filter strip below — the lane's
+            # own SSE (`round_event`) handles the live-fire tick/banner; this
+            # is what lets the GM tracker's lane repaint in place on every
+            # encounter_update instead of waiting for a manual re-GET.
+            'round_events': copy.deepcopy(ROUND_EVENTS),
             # Flag used by the player filter below — avoids re-reading globals
             # inside the filter, which runs after ENCOUNTER_LOCK is released.
             '_active_visible': getattr(active_c, 'visible_to_players', True) if active_c else True,
@@ -1389,6 +1395,7 @@ def _do_broadcast_encounter_state():
     def _player_filter(p):
         # Strip any GM-only side-channel flags before the payload goes out.
         active_visible = p.pop('_active_visible', True)
+        p.pop('round_events', None)
         filtered_enc = []
         for entry in p.get('encounter', []):
             if entry.get('is_pc') or entry.get('visible_to_players', True):
