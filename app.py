@@ -1485,6 +1485,126 @@ BUILDER_FEATS = { 'class': [], 'skill': [], 'general': [], 'ancestry': [] }
 BUILDER_SPELLS = []
 BUILDER_WEAPONS = []
 
+# Canonical PF2e skill list (lowercase) — matches the set already used by the
+# compendium loader's ability/skill prereq regex below and by
+# class_matrix.SKILL_FEAT_PREREQS.
+_PREREQ_SKILL_NAMES = [
+    'acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy',
+    'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion',
+    'society', 'stealth', 'survival', 'thievery',
+]
+_PREREQ_ABILITY_MAP = {
+    'strength': 'str', 'dexterity': 'dex', 'constitution': 'con',
+    'intelligence': 'int', 'wisdom': 'wis', 'charisma': 'cha',
+}
+_PREREQ_RANK_WORDS = ('trained', 'expert', 'master', 'legendary')
+
+_PREREQ_LEVEL_RE = re.compile(r'^level\s+(\d+)$', re.IGNORECASE)
+_PREREQ_ABILITY_RE = re.compile(
+    r'^(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+(\d+)$', re.IGNORECASE)
+_PREREQ_SKILL_RANK_RE = re.compile(
+    r'^(trained|expert|master|legendary)\s+in\s+([a-z]+)$', re.IGNORECASE)
+
+
+def parse_feat_prereqs(text, _feat_names=None):
+    """Pure, additive structured parse of a feat's free-text prerequisite
+    string (spec 2026-07-03, audit E1/E2/G4).
+
+    Splits on commas/semicolons into clauses and classifies each clause as an
+    ability score, a skill rank, a character level, or a feat-chain reference
+    (exact case-insensitive match against BUILDER_FEATS' name set). Any text
+    containing an "or" alternative (ambiguous -- which branch would be
+    recorded?), more than 3 clauses (a signature of run-on narrative prose
+    rather than a real short prereq list), or a clause that doesn't cleanly
+    match one of those shapes, is left OUT of the structured fields entirely
+    -- the unbendable contract is that unclassifiable text is advisory only
+    (via `raw`) and never produces a false blocking field.
+
+    `_feat_names` is an optional pre-built {lowercase_name: canonical_name}
+    map for feat-chain matching; the load-time stamping loop in
+    load_compendium() builds it once and passes it in to avoid rebuilding it
+    per-feat. Callers (including tests) that omit it get a freshly-built
+    lookup from the current BUILDER_FEATS contents.
+
+    Runs once per feat at data-load time; cheap and side-effect-free.
+    """
+    if not text or not str(text).strip():
+        return {'level': None, 'abilities': {}, 'skills': {}, 'feats': [], 'features': [], 'raw': ''}
+
+    raw = str(text).strip()
+    result = {'level': None, 'abilities': {}, 'skills': {}, 'feats': [], 'features': [], 'raw': raw}
+
+    clauses_all = [c.strip() for c in re.split(r'[,;]', raw) if c.strip()]
+    # Real PF2e prereq strings are short lists (every clean-boundary sample in
+    # the compendium is <=3 clauses, matching the brief's own 3-clause compound
+    # example). Longer clause counts are the signature of run-on narrative
+    # prose caught by the (pre-existing, upstream) label-detection regex
+    # matching an unrelated in-sentence mention of "prerequisite" -- e.g.
+    # "Verduran Shadow Dedication"'s extracted text is 10 comma-separated
+    # fragments of flavor text, two of which ("Hide", "Sneak") happen to
+    # collide with real feat/action names. Bail to raw-only rather than risk
+    # a false feat-chain/skill hit on prose fragments.
+    if len(clauses_all) > 3:
+        return result
+
+    # "or"-joined alternatives are ambiguous -- never guess which single
+    # branch to record, so skip structured classification entirely (advisory
+    # `raw` still carries the full text). Checked against the WHOLE raw string
+    # rather than per-clause: English lists like "trained in Diplomacy,
+    # Intimidation, or Performance" only carry the literal word "or" in the
+    # last comma-split fragment, so a per-clause check alone would still let
+    # the first fragment ("trained in Diplomacy") slip through as a false
+    # single-skill requirement when the real prereq is any ONE of three.
+    if re.search(r'\bor\b', raw, re.IGNORECASE):
+        return result
+
+    feat_names = _feat_chain_lookup() if _feat_names is None else _feat_names
+
+    for clause in clauses_all:
+        clause = clause.strip().rstrip('.').strip()
+        if not clause:
+            continue
+
+        m = _PREREQ_LEVEL_RE.match(clause)
+        if m:
+            result['level'] = int(m.group(1))
+            continue
+
+        m = _PREREQ_ABILITY_RE.match(clause)
+        if m:
+            ability = _PREREQ_ABILITY_MAP[m.group(1).lower()]
+            result['abilities'][ability] = int(m.group(2))
+            continue
+
+        m = _PREREQ_SKILL_RANK_RE.match(clause)
+        if m:
+            rank = m.group(1).lower()
+            skill = m.group(2).lower()
+            if skill in _PREREQ_SKILL_NAMES:
+                result['skills'][skill] = rank
+                continue
+
+        if feat_names and clause.lower() in feat_names:
+            result['feats'].append(feat_names[clause.lower()])
+            continue
+
+        # Unclassifiable clause -- advisory only, already captured in `raw`.
+
+    return result
+
+
+def _feat_chain_lookup():
+    """Build a lowercase-name -> canonical-name map from every feat already
+    loaded into BUILDER_FEATS, for feat-chain prereq matching. Cheap: called
+    once per feat during the load-time stamping pass in load_compendium()."""
+    lookup = {}
+    for cat_feats in BUILDER_FEATS.values():
+        for f in cat_feats:
+            name = f.get('name')
+            if name:
+                lookup[name.lower()] = name
+    return lookup
+
 # A few rituals ship with empty descriptions in the Foundry compendium data
 # (the raw per-spell JSON is blank too). Backfilled from Archives of Nethys —
 # the official PF2e SRD (2e.aonprd.com) — so the sheet isn't blank for them.
@@ -4972,6 +5092,16 @@ def load_compendium():
                     desc = f"<p>Specialization for {c_key.capitalize()}.</p>"
                 updated_subs.append({"name": s_name, "desc": desc})
             c_data['subclasses'] = updated_subs
+
+    # Stamp structured prereqs onto every feat now that all categories are
+    # fully loaded (feat-chain matching needs the complete name set). Additive
+    # field only -- never touches existing keys (audit E1/E2/G4, Task 1). The
+    # feat-name lookup is built once here (not per-call) since BUILDER_FEATS
+    # runs into the thousands of entries.
+    _feat_name_lookup = _feat_chain_lookup()
+    for cat_feats in BUILDER_FEATS.values():
+        for f in cat_feats:
+            f['prereqs_struct'] = parse_feat_prereqs(f.get('prerequisites_raw', ''), _feat_name_lookup)
 
 def load_libraries():
     load_compendium()
@@ -13313,7 +13443,8 @@ def player_builder():
         builder_data=BUILDER_DATA,
         subclass_descriptions=SUBCLASS_DESCRIPTIONS,
         weapons=starting_weapons,
-        armor=starting_armor
+        armor=starting_armor,
+        skill_feat_prereqs=SKILL_FEAT_PREREQS
     )
 
 @app.route('/api/toggle_feature/<pc_name>/<feature_name>', methods=['POST'])
