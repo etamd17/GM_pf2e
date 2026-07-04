@@ -123,3 +123,21 @@ def test_unknown_feat_names_ignored(builder_env):
     r = app.app.test_client().post(
         '/api/save_new_character', json=_payload(['Totally Homebrew Feat']))
     assert r.status_code == 200
+
+
+def test_higher_level_join_skips_skill_rank_checks(builder_env):
+    """A mid-campaign join (starting_level > 1) can legitimately hold expert+
+    ranks via skill increases the payload doesn't itemize -- the backstop must
+    not false-block those (final-review Minor 1). Level gates still apply."""
+    payload = _payload(['Test Skill Gate'], skills=['Athletics'])
+    payload['starting_level'] = 3
+    r = app.app.test_client().post('/api/save_new_character', json=payload)
+    assert r.status_code == 200
+
+    # But the LEVEL gate still applies relative to the join level.
+    payload2 = _payload(['Test High Gate'])
+    payload2['name'] = 'Join Gate PC'
+    payload2['starting_level'] = 3
+    r2 = app.app.test_client().post('/api/save_new_character', json=payload2)
+    assert r2.status_code == 409
+    assert any('level 8' in v.lower() for v in r2.get_json()['violations'])

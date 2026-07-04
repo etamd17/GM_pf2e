@@ -14696,12 +14696,19 @@ def _validate_new_character_feats(data):
         for req in ps.get('feats') or []:
             if req.lower() not in picked_set:
                 violations.append(f"{feat['name']} requires the feat {req}")
-        for skill, rank in (ps.get('skills') or {}).items():
-            need = _rank_vals.get(str(rank).lower(), 2)
-            if need > 2:
-                violations.append(f"{feat['name']} requires {rank} in {skill.title()} (unreachable at level {start_level})")
-            elif skill.lower() not in trained:
-                violations.append(f"{feat['name']} requires training in {skill.title()}")
+        # Skill-rank checks only hold at level 1, where 'trained' is the
+        # ceiling and the trained set equals the submitted skills. A
+        # mid-campaign join (starting_level > 1) can legitimately reach
+        # expert+ via skill increases the payload doesn't itemize -- checking
+        # would false-block, so those builds rely on the client picker's
+        # greying instead (final-review Minor 1).
+        if start_level == 1:
+            for skill, rank in (ps.get('skills') or {}).items():
+                need = _rank_vals.get(str(rank).lower(), 2)
+                if need > 2:
+                    violations.append(f"{feat['name']} requires {rank} in {skill.title()} (unreachable at level {start_level})")
+                elif skill.lower() not in trained:
+                    violations.append(f"{feat['name']} requires training in {skill.title()}")
     return violations
 
 
