@@ -1685,6 +1685,8 @@ def _build_feat_pack_prereq_index(pack_dir=_FEATS_PACK_DIR):
     """
     by_id = {}
     by_name = {}
+    ambiguous_names = set()   # lowercased names carried by 2+ DIFFERENT pack docs
+    seen_name_ids = {}        # lowercased name -> first doc _id seen
     if not os.path.isdir(pack_dir):
         return {'by_id': by_id, 'by_name': by_name}
 
@@ -1699,6 +1701,23 @@ def _build_feat_pack_prereq_index(pack_dir=_FEATS_PACK_DIR):
 
         doc_id = doc.get('_id')
         name = doc.get('name')
+        if name:
+            # Ambiguity must be tracked across EVERY doc, including ones with
+            # no prereqs at all -- the real "Keep Up the Good Fight" collision
+            # is a no-prereq class feat shadowed by a prereq-carrying
+            # archetype feat of the same name. If only clause-carrying docs
+            # were considered, that pair would never register as ambiguous
+            # and the name fallback would bleed the archetype's Dedication
+            # prereq onto the class feat (a false block once prereqs gate
+            # picks). Ambiguous names drop out of the fallback entirely;
+            # affected feats keep the T1 description-scrape path.
+            key = name.lower()
+            prev = seen_name_ids.get(key)
+            if prev is not None and prev != doc_id:
+                ambiguous_names.add(key)
+            else:
+                seen_name_ids[key] = doc_id
+
         prereqs = ((doc.get('system') or {}).get('prerequisites') or {}).get('value') or []
         clauses = [p.get('value', '') for p in prereqs if isinstance(p, dict) and p.get('value')]
         if not clauses:
@@ -1709,6 +1728,8 @@ def _build_feat_pack_prereq_index(pack_dir=_FEATS_PACK_DIR):
         if name:
             by_name.setdefault(name.lower(), clauses)
 
+    for key in ambiguous_names:
+        by_name.pop(key, None)
     return {'by_id': by_id, 'by_name': by_name}
 
 # A few rituals ship with empty descriptions in the Foundry compendium data

@@ -359,3 +359,50 @@ def test_integration_dedication_with_or_ability_prereq_stays_raw_only():
     assert struct['skills'] == {}
     assert struct['feats'] == []
     assert 'Strength +2 or Dexterity +2' in struct['raw']
+
+
+def test_pack_index_drops_ambiguous_duplicate_names():
+    """Two pack docs sharing a lowercased name with DIFFERENT prereq clauses
+    must vanish from the name-fallback index (first-glob-wins would let a
+    sibling's prereqs bleed onto the wrong feat -- the real 'Keep Up the Good
+    Fight' collision). Identical-clause duplicates may stay."""
+    import json as _json
+    import app as _app
+
+    def _write(dirpath, fname, doc):
+        with open(dirpath / fname, 'w', encoding='utf-8') as fh:
+            _json.dump(doc, fh)
+
+    import tempfile, pathlib
+    with tempfile.TemporaryDirectory() as td:
+        d = pathlib.Path(td)
+        _write(d, 'a.json', {'_id': 'AAAA', 'name': 'Same Name',
+                             'system': {'prerequisites': {'value': [{'value': 'Feat One'}]}}})
+        _write(d, 'b.json', {'_id': 'BBBB', 'name': 'Same Name',
+                             'system': {'prerequisites': {'value': [{'value': 'Feat Two'}]}}})
+        _write(d, 'c.json', {'_id': 'CCCC', 'name': 'Unique Name',
+                             'system': {'prerequisites': {'value': [{'value': 'Feat Three'}]}}})
+        idx = _app._build_feat_pack_prereq_index(pack_dir=str(d))
+    assert 'same name' not in idx['by_name']          # ambiguous -> dropped
+    assert idx['by_name']['unique name'] == ['Feat Three']
+    assert idx['by_id']['AAAA'] == ['Feat One']        # id index unaffected
+    assert idx['by_id']['BBBB'] == ['Feat Two']
+
+
+def test_real_pack_collision_not_misattributed():
+    """The one real duplicate-name pair in the shipped pack: the Guardian
+    class feat 'Keep Up the Good Fight' has no prereqs and must NOT inherit
+    the same-named Knight Vigilant archetype feat's Dedication prereq."""
+    import pytest as _pytest
+    from app import BUILDER_FEATS
+    all_feats = []
+    for v in BUILDER_FEATS.values():
+        if isinstance(v, list):
+            all_feats.extend(v)
+    if not all_feats:
+        _pytest.skip('BUILDER_FEATS not populated in this environment')
+    kutgf = [f for f in all_feats if f.get('name') == 'Keep Up the Good Fight']
+    if not kutgf:
+        _pytest.skip('feat not present in this build of the DB')
+    for f in kutgf:
+        assert 'Knight Vigilant Dedication' not in (f.get('prereqs_struct') or {}).get('feats', [])
