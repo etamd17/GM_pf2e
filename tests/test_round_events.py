@@ -606,3 +606,172 @@ def test_malformed_amount_no_ops_adjust_hp(encounter):
     assert r.status_code in (200, 302)
     assert goel.current_hp == before_hp
     assert len(encounter['persisted']) == before_persists
+
+
+def test_round_events_global_declared_before_boot_rehydrate():
+    """Import-order guard (found live in the T4 walk): app.py calls
+    load_libraries() at module scope, which rehydrates the encounter autosave
+    -- including ROUND_EVENTS -- while the module is still executing. The
+    `ROUND_EVENTS = []` declaration must therefore appear BEFORE that call;
+    a later declaration re-runs after the restore and silently wipes the
+    restored events on every boot (round/HP survive, the lane comes up
+    empty). Post-import unit tests cannot catch this, so we assert the
+    source order directly."""
+    import ast
+
+    src_path = os.path.join(os.path.dirname(app_module.__file__), 'app.py')
+    with open(src_path, 'r', encoding='utf-8') as f:
+        tree = ast.parse(f.read())
+
+    decl_line = None
+    boot_call_line = None
+    for node in tree.body:  # module scope only
+        if isinstance(node, ast.Assign) and decl_line is None:
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id == 'ROUND_EVENTS':
+                    decl_line = node.lineno
+        if (isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == 'load_libraries'):
+            boot_call_line = node.lineno
+
+    assert decl_line is not None, 'module-level ROUND_EVENTS declaration missing'
+    assert boot_call_line is not None, 'module-level load_libraries() boot call missing'
+    assert decl_line < boot_call_line, (
+        f'ROUND_EVENTS declared at line {decl_line}, after the '
+        f'load_libraries() boot call at line {boot_call_line} -- the boot '
+        f'rehydrate would be wiped')
+
+
+# ---------------------------------------------------------------------------
+# Cosmere condition payloads (found live in the T4 walk): the engine must
+# route Cosmere combatants through the Cosmere condition path -- the PF2e
+# helper's hardcoded condition lists silently no-op on e.g. 'exhausted'.
+# ---------------------------------------------------------------------------
+
+def _cosmere_combatant(name, hp=23, instance_id=None):
+    c = _Combatant(name, hp=hp, instance_id=instance_id)
+    c.system = 'cosmere'
+    return c
+
+
+def test_cosmere_condition_payload_applies(encounter):
+    kal = _cosmere_combatant('Kaladin')
+    app_module.ACTIVE_ENCOUNTER.append(kal)
+    ev = _event(round=2, payload={'conditions': [
+        {'target_ids': [kal.instance_id], 'condition': 'exhausted', 'value': 1}]})
+    app_module.ROUND_EVENTS.append(ev)
+    app_module._fire_round_events(2)
+    assert kal.conditions.get('exhausted'), (
+        'Cosmere condition payload must land on the combatant (the PF2e '
+        'helper silently no-ops on Cosmere condition names)')
+
+
+def test_cosmere_condition_payload_negative_value_removes(encounter):
+    kal = _cosmere_combatant('Kaladin')
+    kal.conditions['exhausted'] = True
+    app_module.ACTIVE_ENCOUNTER.append(kal)
+    ev = _event(round=2, payload={'conditions': [
+        {'target_ids': [kal.instance_id], 'condition': 'exhausted', 'value': -1}]})
+    app_module.ROUND_EVENTS.append(ev)
+    app_module._fire_round_events(2)
+    assert 'exhausted' not in kal.conditions
+
+
+def test_cosmere_condition_payload_unknown_condition_skipped(encounter):
+    kal = _cosmere_combatant('Kaladin')
+    app_module.ACTIVE_ENCOUNTER.append(kal)
+    ev = _event(round=2, payload={'conditions': [
+        {'target_ids': [kal.instance_id], 'condition': 'frightened', 'value': 1}]})
+    app_module.ROUND_EVENTS.append(ev)
+    app_module._fire_round_events(2)  # must not raise
+    assert not kal.conditions.get('frightened')
+
+
+def test_cosmere_condition_route_still_applies(encounter, monkeypatch):
+    """The tracker route must keep working after extract-and-share. The
+    route's AJAX response path renders full tracker state (monster-only
+    computed properties the _Combatant stub doesn't model), so stub the
+    response builder -- the assertions target the mutation + status codes."""
+    monkeypatch.setattr(app_module, '_tracker_json_response',
+                        lambda *a, **k: app_module.jsonify({'ok': True}))
+    kal = _cosmere_combatant('Kaladin')
+    app_module.ACTIVE_ENCOUNTER.append(kal)
+    client = app_module.app.test_client()
+    r = client.post('/api/cosmere/combatant/%s/condition' % kal.instance_id,
+                    json={'condition': 'exhausted', 'action': 'add'})
+    assert r.status_code == 200
+    assert kal.conditions.get('exhausted') is True
+    r = client.post('/api/cosmere/combatant/%s/condition' % kal.instance_id,
+                    json={'condition': 'exhausted', 'action': 'remove'})
+    assert r.status_code == 200
+    assert 'exhausted' not in kal.conditions
+    r = client.post('/api/cosmere/combatant/%s/condition' % kal.instance_id,
+                    json={'condition': 'no-such-cond', 'action': 'add'})
+    assert r.status_code == 400
+
+
+def test_mixed_encounter_routes_conditions_per_system(encounter):
+    """One event targeting 'all' with a PF2e condition: applies to PF2e
+    combatants via the PF2e helper, silently skips Cosmere combatants."""
+    goel = encounter['goel']
+    kal = _cosmere_combatant('Kaladin')
+    app_module.ACTIVE_ENCOUNTER.append(kal)
+    ev = _event(round=2, payload={'conditions': [
+        {'target_ids': 'all', 'condition': 'frightened', 'value': 1}]})
+    app_module.ROUND_EVENTS.append(ev)
+    app_module._fire_round_events(2)
+    assert goel.conditions.get('frightened') == 1
+    assert not kal.conditions.get('frightened')
+
+
+def test_boot_restore_survives_cosmere_autosave():
+    """Full-boot regression guard (both T4-walk boot-order bugs): import app
+    in a subprocess with a live-campaign Cosmere autosave seeded on disk.
+    The old code (a) wiped restored ROUND_EVENTS when the late module-level
+    declaration re-ran after the mid-import restore, and (b) NameError'd on
+    _restore_cosmere_combatant (defined later in the file), aborting the
+    restore -- after which the next persist deleted the autosave (the
+    'restart wipes a live Cosmere fight' data-loss bug). Post-import unit
+    tests can't catch either: only a real import replays the boot order."""
+    import subprocess
+    import sys
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    body = '''
+import json, os, sys, tempfile
+sys.path.insert(0, os.getcwd())
+TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
+cid = 'cafecafecafecafecafecafecafecafe'
+camp = os.path.join(TMP, 'campaigns', cid)
+enc = os.path.join(camp, 'saved_encounters')
+os.makedirs(enc)
+json.dump({'live_campaign_id': cid}, open(os.path.join(TMP, 'server_state.json'), 'w'))
+json.dump({'schema_version': 1, 'id': cid, 'slug': 'storm', 'name': 'Storm',
+           'system': 'cosmere', 'members': [], 'system_config': {}},
+          open(os.path.join(camp, 'campaign.json'), 'w'))
+json.dump({'round': 4, 'turn_index': 0, 'notes': '', 'session_timer_start': None,
+           'round_events': [{'id': 'ev1', 'round': 2, 'repeat_every': None,
+                             'title': 'Highstorm', 'text': 'It hits.',
+                             'show_on_table': True, 'payload': None,
+                             'last_fired_round': 2}],
+           'combatants': [{'system': 'cosmere', 'type': 'pc', 'cosmere_id': 'missing-pc',
+                           'path': 'Kaladin', 'instance_id': 'k1', 'initiative': 12,
+                           'current_hp': 19, 'conditions': {}}]},
+          open(os.path.join(enc, '_autosave.json'), 'w'))
+
+import app as A
+assert A.ROUND_NUMBER == 4, 'round not restored: %r' % A.ROUND_NUMBER
+assert len(A.ROUND_EVENTS) == 1, 'ROUND_EVENTS wiped at boot: %r' % A.ROUND_EVENTS
+assert A.ROUND_EVENTS[0]['title'] == 'Highstorm'
+assert A.ROUND_EVENTS[0]['last_fired_round'] == 2
+assert os.path.exists(os.path.join(enc, '_autosave.json')), 'autosave deleted'
+print('BOOT-RESTORE-OK')
+'''
+    r = subprocess.run([sys.executable, '-c', body],
+                       capture_output=True, text=True, cwd=repo, timeout=300)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out[-3000:]
+    assert 'BOOT-RESTORE-OK' in out
+    assert 'Failed to restore autosave' not in out, (
+        'boot restore raised (the pre-fix NameError class): %s' % out[-2000:])

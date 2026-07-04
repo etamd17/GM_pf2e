@@ -631,6 +631,12 @@ ACTIVE_ENCOUNTER = []
 TURN_INDEX = 0
 ROUND_NUMBER = 1
 ENCOUNTER_NOTES = ''
+# Round-events lane store (engine + endpoints live near TURN_REMINDERS).
+# Must be declared here with its sibling encounter globals: the module-scope
+# load_libraries() call rehydrates the autosave (including ROUND_EVENTS)
+# during import, so a declaration after that call wipes the restored events
+# on every boot.
+ROUND_EVENTS = []
 COMBAT_LOGS = []
 # Session timer: epoch timestamp (seconds) when the current encounter started.
 # None means timer not running. Set by /api/session_timer/start, cleared on
@@ -5261,7 +5267,13 @@ def load_compendium():
             else:
                 f['prereqs_struct'] = parse_feat_prereqs(f.get('prerequisites_raw', ''), _feat_name_lookup)
 
-def load_libraries():
+def load_libraries(restore_autosave=True):
+    """Load campaign-scoped libraries (monsters/party/compendium) and, by
+    default, rehydrate the encounter autosave. The module-scope boot call
+    passes restore_autosave=False and the restore runs once at the module
+    tail instead: restoring mid-import NameErrors on helpers defined later
+    in the file (e.g. _restore_cosmere_combatant), which silently wiped a
+    live Cosmere fight on every server restart."""
     load_compendium()
     
     # --- POST-LOAD CORRECTION: Fix weapon damage from known table ---
@@ -5323,9 +5335,12 @@ def load_libraries():
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
     _build_pc_file_cache()
-    
+
     # --- AUTO-RESTORE ENCOUNTER FROM AUTOSAVE ---
-    _restore_encounter_autosave()
+    # Skipped for the module-scope boot call (see docstring); runtime
+    # campaign switches (load_campaign) restore here as before.
+    if restore_autosave:
+        _restore_encounter_autosave()
 
 def _restore_encounter_autosave():
     """Restore the active encounter from autosave file on startup."""
@@ -5399,7 +5414,12 @@ def _restore_encounter_autosave():
     except Exception as e:
         print(f"[ENCOUNTER] Failed to restore autosave: {e}")
 
-load_libraries()
+# Boot-time library load. The encounter-autosave restore is deferred to the
+# module tail (search: BOOT-TIME AUTOSAVE RESTORE) — running it here, mid-
+# import, NameErrors on restore helpers defined later in the file, which
+# aborted the restore and let the next persist delete the autosave (a live
+# Cosmere fight was wiped on every restart).
+load_libraries(restore_autosave=False)
 
 @app.route('/health')
 def health_check():
@@ -8794,22 +8814,21 @@ def api_cosmere_my_initiative():
     return jsonify({'ok': True, 'initiative': c.initiative, 'detail': f'd20({d20}) + {spd}'})
 
 
-@app.route('/api/cosmere/combatant/<instance_id>/condition', methods=['POST'])
-@gm_required
-def api_cosmere_combatant_condition(instance_id):
-    """GM applies / removes a Cosmere condition on a tracker combatant. For a
-    player's PC it also writes the condition through to their saved play_state and
-    pushes it to their open sheet (the `cosmere_player_state` listener), so a
-    GM-applied condition shows up live on the player's character sheet."""
-    data = request.get_json(silent=True) or {}
-    cond = (data.get('condition') or '').strip().lower()
-    action = (data.get('action') or 'toggle').lower()
+def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
+    """Core Cosmere condition mutation shared by the tracker route below and
+    the round-events payload engine (feature 7) -- Cosmere conditions are
+    boolean on/off (not PF2e valued stacks) and carry their own PC
+    write-through (play_state + `cosmere_player_state` SSE), so they cannot
+    go through `_apply_condition_change`. Returns the mutated combatant, or
+    None if `instance_id` doesn't name a live Cosmere combatant or the
+    condition isn't in the Cosmere set."""
+    cond = (condition or '').strip().lower()
     if cond not in systems.cosmere.CONDITION_INFO:
-        return jsonify({'ok': False, 'error': 'unknown condition'}), 400
+        return None
     target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id
                    and getattr(c, 'system', 'pf2e') == 'cosmere'), None)
     if target is None:
-        return jsonify({'ok': False, 'error': 'not a Cosmere combatant'}), 404
+        return None
     if not isinstance(getattr(target, 'conditions', None), dict):
         target.conditions = {}
     on = bool(target.conditions.get(cond))
@@ -8838,6 +8857,26 @@ def api_cosmere_combatant_condition(instance_id):
                 break
     _persist_encounter_state()
     _broadcast_encounter_state()
+    return target
+
+
+@app.route('/api/cosmere/combatant/<instance_id>/condition', methods=['POST'])
+@gm_required
+def api_cosmere_combatant_condition(instance_id):
+    """GM applies / removes a Cosmere condition on a tracker combatant. For a
+    player's PC it also writes the condition through to their saved play_state and
+    pushes it to their open sheet (the `cosmere_player_state` listener), so a
+    GM-applied condition shows up live on the player's character sheet.
+    Thin wrapper over `_apply_cosmere_condition_change` (shared with the
+    round-events payload engine)."""
+    data = request.get_json(silent=True) or {}
+    cond = (data.get('condition') or '').strip().lower()
+    action = (data.get('action') or 'toggle').lower()
+    if cond not in systems.cosmere.CONDITION_INFO:
+        return jsonify({'ok': False, 'error': 'unknown condition'}), 400
+    target = _apply_cosmere_condition_change(instance_id, cond, action)
+    if target is None:
+        return jsonify({'ok': False, 'error': 'not a Cosmere combatant'}), 404
     if _is_ajax():
         return _tracker_json_response()
     return jsonify({'ok': True, 'conditions': dict(target.conditions)})
@@ -11092,7 +11131,9 @@ TURN_REMINDERS = []  # List of reminder dicts for active combatant
 #    payload (None | {conditions: [{target_ids|'all', condition, value}...],
 #    damage: [{target_ids|'all', dice, kind: 'damage'|'heal'}...]}),
 #    last_fired_round (int|None)}
-ROUND_EVENTS = []
+# The ROUND_EVENTS global itself is declared with the other encounter globals
+# near ACTIVE_ENCOUNTER — it must exist before the module-scope
+# load_libraries() call rehydrates the autosave, or restored events get wiped.
 
 
 def _round_event_should_fire(ev, new_round):
@@ -11149,6 +11190,13 @@ def _fire_round_event_payload(payload):
             value = 1
         action = 'add' if value > 0 else 'decrease'
         for c in targets:
+            if getattr(c, 'system', 'pf2e') == 'cosmere':
+                # Cosmere conditions are boolean on/off with their own PC
+                # write-through -- route through the Cosmere helper (a PF2e
+                # condition name on a Cosmere combatant is skipped there).
+                _apply_cosmere_condition_change(
+                    c.instance_id, condition, 'add' if value > 0 else 'remove')
+                continue
             for _ in range(max(1, abs(value))):
                 _apply_condition_change(c.instance_id, condition, action)
     for row in (payload.get('damage') or []):
@@ -16833,6 +16881,13 @@ def web_manifest():
     """Serve the web app manifest from the root path."""
     return send_from_directory(os.path.join(BASE_DIR, 'static'), 'manifest.json',
                                mimetype='application/manifest+json')
+
+
+# --- BOOT-TIME AUTOSAVE RESTORE ---
+# Runs once at the module tail so every helper the restore path needs
+# (including the Cosmere rebuilders defined mid-file) exists. The boot
+# load_libraries(restore_autosave=False) call above intentionally skips it.
+_restore_encounter_autosave()
 
 
 if __name__ == '__main__':
