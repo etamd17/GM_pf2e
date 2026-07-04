@@ -1083,11 +1083,18 @@
                 const ia = order.indexOf(a), ib = order.indexOf(b);
                 return (ia === -1 ? order.length : ia) - (ib === -1 ? order.length : ib);
             });
-            return keys.map(key => ({
+            const entries = keys.map(key => ({
                 key,
                 label: GAINS_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                 step: GAINS_STEP_FOR_KEY[key] || 'review',
             }));
+            // Caster levels also gain spells -- driven by SPELL_SLOTS deltas,
+            // not class_matrix reqs, so it must be appended here or the rail
+            // shows all-ticks while chk-magic still gates the wizard.
+            if (_newSpellsRequiredTotal() > 0) {
+                entries.push({ key: 'new_spells', label: 'New Spells', step: 'magic' });
+            }
+            return entries;
         }
         // Single-source completion predicates: BOTH runValidation() (the
         // step-nav gate) and _gainsEntryDone() (the rail ticks) call these,
@@ -1100,6 +1107,39 @@
         function _skillIncreasesDone() {
             const max = (reqs.skill_increase || 0) + (state.retro_int_skills || 0);
             return (state.skill_increases_selected || []).length === max;
+        }
+        // New-spell requirements come from caster progression (SPELL_SLOTS
+        // deltas), NOT class_matrix reqs -- so without these the gains rail
+        // showed all ticks while the wizard still said INCOMPLETE for
+        // casters. Bodies are runValidation()'s original mValid logic
+        // verbatim, per-caster.
+        function _newSpellsRequired() {
+            const out = [];   // [{cIdx, lvl, req, added}]
+            (state.spellCasters || []).forEach((c, idx) => {
+                let tLower = (c.castingType || c.spellcastingType || c.type || "unknown").toLowerCase();
+                let cType = null;
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                if(cType && SPELL_SLOTS[cType]) {
+                    let oldS = SPELL_SLOTS[cType][currentLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    let newS = SPELL_SLOTS[cType][targetLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    for(let lvl=0; lvl<=10; lvl++) {
+                        let oldAmt = lvl===0 ? 5 : (oldS[lvl-1] || 0);
+                        let newAmt = lvl===0 ? 5 : (newS[lvl-1] || 0);
+                        let req = Math.max(0, newAmt - oldAmt);
+                        let added = state.new_spells.filter(s => s.cIdx === idx && s.lvl === lvl).length;
+                        if (req > 0 || added > 0) out.push({cIdx: idx, lvl: lvl, req: req, added: added});
+                    }
+                }
+            });
+            return out;
+        }
+        function _newSpellsDone() {
+            return _newSpellsRequired().every(e => e.added >= e.req);
+        }
+        function _newSpellsRequiredTotal() {
+            return _newSpellsRequired().reduce((n, e) => n + e.req, 0);
         }
 
         function _gainsEntryDone(key) {
@@ -1116,6 +1156,9 @@
             }
             if (key === 'skill_increase') {
                 return _skillIncreasesDone();
+            }
+            if (key === 'new_spells') {
+                return _newSpellsDone();
             }
             return false;
         }
@@ -2357,30 +2400,8 @@
                 document.getElementById('chk-feats').innerText = ""; document.getElementById('chk-feats').className = "text-green-400 text-lg font-bold leading-none"; 
             } else if (!fValid) { document.getElementById('chk-feats').innerText = "!"; document.getElementById('chk-feats').className = "text-red-500 font-bold"; }
 
-            let mValid = true;
-            state.spellCasters.forEach((c, idx) => {
-                let tLower = (c.castingType || c.spellcastingType || c.type || "unknown").toLowerCase();
-                let cType = null;
+            let mValid = _newSpellsDone();
 
-                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
-                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
-                
-                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
-                
-                if(cType && SPELL_SLOTS[cType]) {
-                    let oldS = SPELL_SLOTS[cType][currentLevel] || [0,0,0,0,0,0,0,0,0,0];
-                    let newS = SPELL_SLOTS[cType][targetLevel] || [0,0,0,0,0,0,0,0,0,0];
-                    
-                    for(let lvl=0; lvl<=10; lvl++) {
-                        let oldAmt = lvl===0 ? 5 : (oldS[lvl-1] || 0);
-                        let newAmt = lvl===0 ? 5 : (newS[lvl-1] || 0);
-                        let req = Math.max(0, newAmt - oldAmt);
-                        let added = state.new_spells.filter(s => s.cIdx === idx && s.lvl === lvl).length;
-                        if(added < req) mValid = false;
-                    }
-                }
-            });
-            
             if(state.spellCasters.length > 0) {
                 if(mValid) { document.getElementById('chk-magic').innerText = ""; document.getElementById('chk-magic').className = "text-green-400 text-lg font-bold leading-none"; }
                 else { document.getElementById('chk-magic').innerText = "!"; document.getElementById('chk-magic').className = "text-red-500 font-bold"; }
