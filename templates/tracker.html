@@ -352,6 +352,8 @@ body.system-cosmere .trk {
   font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--t-t3);
   border:1px solid var(--t-border); border-radius:99px; padding:1px 7px; flex:0 0 auto;
 }
+.trk .re-row.missed { opacity:.5; }
+.trk .re-row .re-missed { color:#b06a4a; border-color:rgba(176,106,74,0.5); }
 .trk .re-row .re-eye { flex:0 0 auto; opacity:.55; font-size:12px; cursor:default; }
 .trk .re-row .re-eye.on { opacity:1; color:var(--t-gold); }
 .trk .re-row .re-chips { display:flex; flex-wrap:wrap; gap:5px; flex:1 1 100%; margin-top:2px; }
@@ -4247,7 +4249,9 @@ function _renderCombatLog() {
     }
     el.innerHTML = _combatLogCache.map(e => {
         const color = LOG_COLORS[e.type] || 'var(--t-t2)';
-        return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${e.time}</span>${e.msg}</div>`;
+        // e.msg can carry GM free text (round-event titles) — escape at the
+        // sink so markup in a title can't render/execute in the log panel.
+        return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${escapeHtml(e.time || '')}</span>${escapeHtml(e.msg)}</div>`;
     }).join('');
     el.scrollTop = el.scrollHeight;
 }
@@ -5329,7 +5333,12 @@ let _rePayloadConditions = [];  // [{condition, value, target_ids: 'all'|[ids]}]
 let _rePayloadDamage = [];      // [{dice, kind: 'damage'|'heal', target_ids: 'all'|[ids]}]
 
 function _reConditionList() {
-    const isCos = (STATE.combatants || []).some(c => c.system === 'cosmere');
+    // The ACTIVE system decides the picker set — the body class is stamped
+    // server-side, so a Cosmere GM pre-authoring events on an EMPTY tracker
+    // still gets Cosmere conditions (combatant sniffing alone fell back to
+    // the PF2e list until the fight was staged).
+    const isCos = document.body.classList.contains('system-cosmere')
+        || (STATE.combatants || []).some(c => c.system === 'cosmere');
     return isCos ? COSMERE_CONDITIONS : CONDITIONS_LIST;
 }
 
@@ -5406,6 +5415,7 @@ function renderRoundEventsLane() {
 
     if (countEl) countEl.textContent = events.length ? `(${events.length})` : '';
 
+    let poppedJustFired = false;
     if (!events.length) {
         rowsEl.innerHTML = '<div class="re-empty">No round events yet — the GM can add reminders and auto-apply payloads below.</div>';
     } else {
@@ -5413,17 +5423,23 @@ function renderRoundEventsLane() {
         rowsEl.innerHTML = sorted.map(ev => {
             const fired = _reHasFired(ev);
             const nextRound = _reNextFireRound(ev);
+            // A never-fired one-shot for the current or a past round can no
+            // longer fire (the engine only fires on the transition INTO its
+            // round) — show it as missed instead of perpetually "upcoming".
+            const missed = !fired && !ev.repeat_every && nextRound <= (STATE.round || 1);
             const repeatBadge = ev.repeat_every ? `<span class="re-repeat">every ${escapeHtml(String(ev.repeat_every))}</span>` : '';
+            const missedBadge = missed ? '<span class="re-repeat re-missed">missed</span>' : '';
             const eyeCls = ev.show_on_table ? 'on' : '';
             const eyeTitle = ev.show_on_table ? 'Shown on the table (ember banner)' : 'GM-only (not shown on table)';
             const chips = _rePayloadChips(ev.payload).map(c => `<span class="re-chip">${escapeHtml(c)}</span>`).join('');
             const justFired = fired && _reJustFiredRound !== null && ev.last_fired_round === _reJustFiredRound;
-            return `<div class="re-row ${fired ? 'fired' : ''}" data-event-id="${escapeHtml(ev.id)}">
+            if (justFired) poppedJustFired = true;
+            return `<div class="re-row ${fired ? 'fired' : ''} ${missed ? 'missed' : ''}" data-event-id="${escapeHtml(ev.id)}">
                 <span class="re-tick ${justFired ? 'trk-cond-in' : ''}" title="Fired">&#10022;</span>
                 <div class="re-head">
                     <span class="re-when">R${escapeHtml(String(nextRound))}</span>
                     <span class="re-title">${escapeHtml(ev.title || '(untitled event)')}</span>
-                    ${repeatBadge}
+                    ${repeatBadge}${missedBadge}
                     <span class="re-eye ${eyeCls}" title="${eyeTitle}">&#9679;</span>
                 </div>
                 <div class="re-actions">
@@ -5434,8 +5450,24 @@ function renderRoundEventsLane() {
             </div>`;
         }).join('');
     }
-    _reJustFiredRound = null;
+    // Clear the just-fired flag only once a row actually consumed it: the
+    // round_event SSE arrives BEFORE the encounter_update that merges the
+    // new last_fired_round into STATE, so the first render after a fire
+    // matches nothing — clearing unconditionally here killed the gilt-tick
+    // pop on every live fire.
+    if (poppedJustFired) _reJustFiredRound = null;
 }
+
+// A GM click on the lane's summary is a deliberate open/collapse — record it
+// so the auto-open in renderRoundEventsLane stops fighting the choice.
+// (Previously only the add-event form set userToggled, so every SSE-driven
+// re-render forced a collapsed lane back open for the rest of the fight.)
+document.addEventListener('click', function (e) {
+    if (e.target.closest('#re-lane > summary')) {
+        const lane = document.getElementById('re-lane');
+        if (lane) lane.dataset.userToggled = '1';
+    }
+});
 
 // Single delegated listener for the lane's per-row buttons — the row markup
 // above never puts an event id or GM-authored title into an onclick="..."
@@ -5606,7 +5638,10 @@ function _reBuildPayload() {
     return {conditions, damage};
 }
 
+let _reSubmitting = false;  // double-click on Save must not create two events
+
 function submitRoundEventForm() {
+    if (_reSubmitting) return;
     const editingId = document.getElementById('re-form-editing-id').value;
     const round = parseInt(document.getElementById('re-f-round').value, 10);
     if (!round) { toast('Round is required', 'error'); return; }
@@ -5620,13 +5655,15 @@ function submitRoundEventForm() {
         payload: _reBuildPayload(),
     };
     const url = editingId ? `/api/round_events/${encodeURIComponent(editingId)}/update` : '/api/round_events';
+    _reSubmitting = true;
     apiAction(url, body).then(res => {
+        _reSubmitting = false;
         if (!res) return;
         toggleRoundEventForm(false);
         // Render ONLY from server-refreshed state — never trust the local
         // form values as the source of truth for the lane.
         apiGet('/api/tracker_state').then(applyState).catch(() => {});
-    });
+    }).catch(() => { _reSubmitting = false; });
 }
 
 /* ── INITIAL RENDER ──────────────────────────────────────────────────────────

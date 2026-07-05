@@ -632,10 +632,11 @@ TURN_INDEX = 0
 ROUND_NUMBER = 1
 ENCOUNTER_NOTES = ''
 # Round-events lane store (engine + endpoints live near TURN_REMINDERS).
-# Must be declared here with its sibling encounter globals: the module-scope
-# load_libraries() call rehydrates the autosave (including ROUND_EVENTS)
-# during import, so a declaration after that call wipes the restored events
-# on every boot.
+# Must be declared here with its sibling encounter globals, BEFORE the boot
+# autosave restore runs (the module-tail _restore_encounter_autosave() call
+# -- see BOOT-TIME AUTOSAVE RESTORE): a declaration that executes after the
+# restore wipes the restored events on every boot. Guarded by
+# test_round_events_global_declared_before_boot_rehydrate.
 ROUND_EVENTS = []
 COMBAT_LOGS = []
 # Session timer: epoch timestamp (seconds) when the current encounter started.
@@ -7151,6 +7152,13 @@ def tracker_view():
     encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
     diff_label, diff_color = get_difficulty_label(encounter_xp)
     initial_state = _get_tracker_state()
+    if not _is_gm():
+        # Round events are GM-secret (hidden ones carry spoilers + payloads);
+        # the SSE player frames and /api/tracker_state already strip them, but
+        # this page embed renders for player viewers too -- shallow-copy so
+        # the shared state dict isn't polluted for GM requests.
+        initial_state = dict(initial_state)
+        initial_state['round_events'] = []
     # In Cosmere mode, feed the tool strip Cosmere adversaries + party so a GM
     # can build a Stormlight encounter from the tracker (the PF2e monster search
     # + party picker are gated off in the template). PF2e mode is unchanged.
@@ -10558,6 +10566,12 @@ def _apply_condition_change(instance_id, condition, action, rounds=0):
                         if not hasattr(combatant, 'condition_expiry') or combatant.condition_expiry is None:
                             combatant.condition_expiry = {}
                         combatant.condition_expiry[condition] = rounds
+                elif action in ('decrease', 'remove'):
+                    # Boolean conditions have no stack to decrement -- a
+                    # negative-value round-event payload row means "remove".
+                    # Without this arm the row silently no-ops and the
+                    # fall-through logging reports 'gained'.
+                    combatant.conditions[condition] = False
                 if combatant.conditions.get(condition, False) is False:
                     _exp = getattr(combatant, 'condition_expiry', None)
                     if isinstance(_exp, dict) and condition in _exp:
@@ -11132,16 +11146,20 @@ TURN_REMINDERS = []  # List of reminder dicts for active combatant
 #    damage: [{target_ids|'all', dice, kind: 'damage'|'heal'}...]}),
 #    last_fired_round (int|None)}
 # The ROUND_EVENTS global itself is declared with the other encounter globals
-# near ACTIVE_ENCOUNTER — it must exist before the module-scope
-# load_libraries() call rehydrates the autosave, or restored events get wiped.
+# near ACTIVE_ENCOUNTER — its assignment must execute before the boot-time
+# autosave restore (the module-tail _restore_encounter_autosave() call), or
+# the restored events get wiped as the import continues.
 
 
 def _round_event_should_fire(ev, new_round):
     """True if event `ev` is due to fire now that the encounter has reached
-    `new_round`. Idempotent: an event whose last_fired_round already equals
-    new_round never fires twice for the same round (backward-then-forward
-    cycling through the same round must not re-fire)."""
-    if ev.get('last_fired_round') == new_round:
+    `new_round`. Idempotent: last_fired_round is a HIGH-WATER MARK -- any
+    round at or below it never fires again, so backward cycling and then
+    re-advancing through already-traversed rounds can't double-apply a
+    repeating event's payload (an equality check alone only protects
+    one-shot events)."""
+    lf = ev.get('last_fired_round')
+    if isinstance(lf, (int, float)) and new_round <= lf:
         return False
     try:
         base_round = int(ev.get('round', 0) or 0)
@@ -11221,9 +11239,22 @@ def _fire_round_events(new_round):
         if not _round_event_should_fire(ev, new_round):
             continue
         ev['last_fired_round'] = new_round
-        _fire_round_event_payload(ev.get('payload'))
+        try:
+            _fire_round_event_payload(ev.get('payload'))
+        except Exception as _ex:
+            # One malformed payload (bad dice string, corrupt row shape from
+            # an old save or crafted API call) must not abort the remaining
+            # due events or skip the tail persist/broadcast -- the reminder
+            # (log + banner) still goes out for the broken event.
+            print(f"[ROUND EVENTS] payload error for {ev.get('id')}: {_ex}")
         title = ev.get('title') or 'Round event'
-        _combat_log(f"Round {new_round}: {title}", 'system')
+        if ev.get('show_on_table'):
+            _combat_log(f"Round {new_round}: {title}", 'system')
+        else:
+            # The combat log is player-visible (open /api/combat_log + the
+            # combat_log SSE player frame) -- keep hidden events' titles out
+            # of it. The GM still sees the title on the lane and GM banner.
+            _combat_log(f"Round {new_round}: GM event fired", 'system')
         _broadcast_round_event(ev, new_round)
     _persist_encounter_state()
     _broadcast_encounter_state()
@@ -11250,6 +11281,50 @@ def _broadcast_round_event(ev, new_round):
     sse_broadcast('round_event', gm_payload, player_filter=_player_filter)
 
 
+def _sanitize_round_event_payload(payload):
+    """Validate + normalize a round-event payload at authoring time so fire
+    time can trust the shape. Returns (clean_payload_or_None, error_or_None).
+    Structurally bad rows and unusable dice are rejected here with a message
+    (a 400 at the CRUD endpoint) rather than blowing up mid-combat: the dice
+    regex accepts '2d0', which makes randint(1, 0) raise at fire time, and a
+    silly '99999999d6' would stall the single gevent worker."""
+    if not isinstance(payload, dict):
+        return None, None
+    clean = {}
+    conditions = payload.get('conditions')
+    if conditions:
+        if not isinstance(conditions, list) or any(not isinstance(r, dict) for r in conditions):
+            return None, 'payload.conditions must be a list of objects'
+        rows = []
+        for r in conditions:
+            if not r.get('condition'):
+                continue
+            rows.append(r)
+        if rows:
+            clean['conditions'] = rows
+    damage = payload.get('damage')
+    if damage:
+        if not isinstance(damage, list) or any(not isinstance(r, dict) for r in damage):
+            return None, 'payload.damage must be a list of objects'
+        rows = []
+        for r in damage:
+            dice = r.get('dice')
+            if not dice or not isinstance(dice, str):
+                continue
+            m = re.search(r'(\d+)d(\d+)', dice)
+            if not m:
+                return None, f'unrecognized dice expression: {dice!r}'
+            qty, sides = int(m.group(1)), int(m.group(2))
+            if qty < 1 or sides < 2:
+                return None, f'invalid dice expression: {dice!r}'
+            if qty > 100 or sides > 1000:
+                return None, f'dice expression too large: {dice!r}'
+            rows.append(r)
+        if rows:
+            clean['damage'] = rows
+    return (clean or None), None
+
+
 @app.route('/api/round_events', methods=['POST'])
 def create_round_event():
     """GM-only: author a new round-event. Body (JSON): round (int, required),
@@ -11266,6 +11341,9 @@ def create_round_event():
         repeat_every = int(repeat_every) if repeat_every not in (None, '') else None
     except (TypeError, ValueError):
         repeat_every = None
+    payload, perr = _sanitize_round_event_payload(data.get('payload'))
+    if perr:
+        return jsonify({'success': False, 'error': perr}), 400
     ev = {
         'id': str(uuid.uuid4())[:8],
         'round': round_num,
@@ -11273,7 +11351,7 @@ def create_round_event():
         'title': str(data.get('title', '') or ''),
         'text': str(data.get('text', '') or ''),
         'show_on_table': bool(data.get('show_on_table')),
-        'payload': data.get('payload') if isinstance(data.get('payload'), dict) else None,
+        'payload': payload,
         'last_fired_round': None,
     }
     ROUND_EVENTS.append(ev)
@@ -11309,7 +11387,10 @@ def update_round_event(event_id):
     if 'show_on_table' in data:
         ev['show_on_table'] = bool(data['show_on_table'])
     if 'payload' in data:
-        ev['payload'] = data['payload'] if isinstance(data['payload'], dict) else None
+        payload, perr = _sanitize_round_event_payload(data['payload'])
+        if perr:
+            return jsonify({'success': False, 'error': perr}), 400
+        ev['payload'] = payload
     _persist_encounter_state()
     _broadcast_encounter_state()
     return jsonify({'success': True, 'event': ev})
@@ -11507,12 +11588,23 @@ def delay_turn(instance_id):
                     if c.is_pc and c.name in PARTY_LIBRARY: PARTY_LIBRARY[c.name].conditions['frightened'] = c.conditions['frightened']
                 # Move to next non-delaying combatant
                 old_index = TURN_INDEX
+                _round_before_advance = ROUND_NUMBER
                 for _ in range(len(ACTIVE_ENCOUNTER)):
                     TURN_INDEX = (TURN_INDEX + 1) % len(ACTIVE_ENCOUNTER)
                     if TURN_INDEX <= old_index: ROUND_NUMBER += 1
                     if not getattr(ACTIVE_ENCOUNTER[TURN_INDEX], 'delaying', False):
                         break
                     old_index = TURN_INDEX
+                # Round-events lane (feature 7): delaying the last combatant
+                # in initiative order crosses a round boundary through THIS
+                # advance loop, not cycle_turn's -- without the same fire
+                # gate, one-shot events due that round are silently lost
+                # (there is no catch-up on later rounds).
+                if ROUND_NUMBER > _round_before_advance:
+                    try:
+                        _fire_round_events(ROUND_NUMBER)
+                    except Exception as _ex:
+                        print('[ROUND EVENTS] fire error:', _ex)
                 _generate_turn_reminders()
             _persist_encounter_state()
             _broadcast_encounter_state()

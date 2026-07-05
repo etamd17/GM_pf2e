@@ -26,16 +26,17 @@
 </div>
 
 <style>
-    /* Sits above ordinary page content/docks but below every modal overlay
-       used across the app's pages (spell-card/daily-prep/import modals
-       start at z-index 500; the tracker's own passive docks top out at
-       ~900 in its own stacking context). Fully independent of the
-       boss-reveal / initiative-flourish cinematic layer (99990/99991),
-       which is a non-interactive full-bleed takeover, not a modal. */
+    /* Sits above ordinary page content/docks but BELOW every modal overlay:
+       the tracker's .trk-modal backdrops are z-index 150 (the lowest modal
+       layer anywhere in the app; sheet modals start at 500), so the banner
+       stays under them all — the spec forbids intercepting clicks over an
+       open modal. Fully independent of the boss-reveal /
+       initiative-flourish cinematic layer (99990/99991), which is a
+       non-interactive full-bleed takeover, not a modal. */
     .reb {
         position: fixed; top: 0; left: 50%;
         transform: translate(-50%, -100%);
-        z-index: 400;
+        z-index: 130;
         width: min(640px, 92vw);
         margin-top: 10px;
         pointer-events: none;
@@ -96,38 +97,65 @@
 </style>
 
 <script>
-window.pf2eRoundEvent = function(data) {
-    data = data || {};
-    var el = document.getElementById('round-event-banner');
-    if (!el) return;
-    var roundEl = document.getElementById('reb-round');
-    var titleEl = document.getElementById('reb-title');
-    var textEl  = document.getElementById('reb-text');
-    roundEl.textContent = (data.round !== undefined && data.round !== null && data.round !== '')
-                          ? ('Round ' + data.round + ' — ') : '';
-    titleEl.textContent = data.title || '';
-    textEl.textContent  = data.text || '';
-    // Restart cleanly even if a banner is already on screen (a fresh
-    // event wins) — same reflow-restart idiom as boss-reveal.
-    el.classList.remove('show', 'hide');
-    void el.offsetWidth;                 // reflow so the slide-in replays
-    el.classList.add('show');
-    el.setAttribute('aria-hidden', 'false');
-    clearTimeout(el._rebTimer);
-    el._rebTimer = setTimeout(function() { window.pf2eRoundEventDismiss(); }, 6000);
-};
-
-window.pf2eRoundEventDismiss = function() {
-    var el = document.getElementById('round-event-banner');
-    if (!el) return;
-    clearTimeout(el._rebTimer);
-    el.classList.remove('show');
-    el.classList.add('hide');
-    el.setAttribute('aria-hidden', 'true');
-    setTimeout(function() { el.classList.remove('hide'); }, 420);
-};
-
 (function() {
+    // Two or more events can fire on the SAME round boundary (a one-shot
+    // plus a repeat landing together): the frames arrive back-to-back, and
+    // the old restart idiom replaced banner 1 with banner 2 in ~0ms — the
+    // table never saw the first narrative. Queue them and play in order.
+    var queue = [];
+    var active = false;
+
+    function show(data) {
+        var el = document.getElementById('round-event-banner');
+        if (!el) return;
+        var roundEl = document.getElementById('reb-round');
+        var titleEl = document.getElementById('reb-title');
+        var textEl  = document.getElementById('reb-text');
+        var hasRound = (data.round !== undefined && data.round !== null && data.round !== '');
+        // The em dash belongs to the title — a title-less event otherwise
+        // reads "Round 4 — " with nothing after it.
+        roundEl.textContent = hasRound
+            ? ('Round ' + data.round + (data.title ? ' — ' : '')) : '';
+        titleEl.textContent = data.title || '';
+        textEl.textContent  = data.text || '';
+        // Restart cleanly even if a banner is mid-hide — same
+        // reflow-restart idiom as boss-reveal.
+        el.classList.remove('show', 'hide');
+        void el.offsetWidth;             // reflow so the slide-in replays
+        el.classList.add('show');
+        el.setAttribute('aria-hidden', 'false');
+        active = true;
+        clearTimeout(el._rebTimer);
+        el._rebTimer = setTimeout(function() { window.pf2eRoundEventDismiss(); }, 6000);
+    }
+
+    window.pf2eRoundEvent = function(data) {
+        data = data || {};
+        // Payload-only events (no title, no text) have nothing to say —
+        // don't pop an empty "Round 4 — " shell.
+        if (!data.title && !data.text) return;
+        if (active) {
+            if (queue.length < 4) queue.push(data);
+            return;
+        }
+        show(data);
+    };
+
+    window.pf2eRoundEventDismiss = function() {
+        var el = document.getElementById('round-event-banner');
+        if (!el) return;
+        clearTimeout(el._rebTimer);
+        el.classList.remove('show');
+        el.classList.add('hide');
+        el.setAttribute('aria-hidden', 'true');
+        setTimeout(function() {
+            el.classList.remove('hide');
+            active = false;
+            var next = queue.shift();
+            if (next) show(next);
+        }, 420);
+    };
+
     var el = document.getElementById('round-event-banner');
     if (el) el.addEventListener('click', function() { window.pf2eRoundEventDismiss(); });
     // Subscribe directly through the shared SSE hub (window.appSSE) rather
