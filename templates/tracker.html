@@ -314,6 +314,78 @@ body.system-cosmere .trk {
 .trk .layout { display:grid; grid-template-columns: 1fr; gap:14px; align-items:start; }
 @media (min-width:1280px) { .trk .layout.has-active { grid-template-columns: 1fr 380px; } }
 
+/* ═══ ROUND-EVENTS LANE (feature 7) ═══
+   Collapsible <details> sitting in normal document flow between the round
+   header and the initiative grid — deliberately NO z-index promotion (the
+   levelup rail shipped a z-55 overlay that ate clicks meant for a modal;
+   this lane must never repeat that). */
+.trk .re-lane {
+  background:linear-gradient(180deg, rgba(26,30,41,0.7), rgba(19,22,31,0.75));
+  border:1px solid var(--t-border); border-radius:12px;
+  margin-bottom:12px; padding:0;
+  box-shadow:0 6px 20px rgba(0,0,0,0.2);
+}
+.trk .re-lane > summary {
+  cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px;
+  padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--t-t3); font-weight:700; user-select:none;
+}
+.trk .re-lane > summary::-webkit-details-marker { display:none; }
+.trk .re-lane > summary::before { content:'▸ '; color:var(--t-gold); transition:transform .15s; display:inline-block; }
+.trk .re-lane[open] > summary::before { transform:rotate(90deg); }
+.trk .re-lane .re-lane-title { color:var(--t-gold); }
+.trk .re-lane .re-lane-count { color:var(--t-t2); font-weight:400; text-transform:none; letter-spacing:0; }
+.trk .re-lane-body { padding:2px 14px 12px; border-top:1px solid var(--t-border); }
+.trk .re-row {
+  display:flex; align-items:flex-start; gap:10px; padding:9px 4px;
+  border-bottom:1px solid rgba(255,255,255,0.05); flex-wrap:wrap;
+}
+.trk .re-row:last-child { border-bottom:0; }
+.trk .re-row.fired { opacity:.5; }
+.trk .re-row .re-head { display:flex; align-items:center; gap:6px; flex:1 1 220px; min-width:0; }
+.trk .re-row .re-tick { color:var(--t-gold); font-size:13px; flex:0 0 auto; visibility:hidden; }
+.trk .re-row.fired .re-tick { visibility:visible; }
+.trk .re-row .re-tick.trk-cond-in { animation:trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+.trk .re-row .re-when { font-family:'JetBrains Mono', monospace; color:var(--t-gold); font-weight:700; font-size:12px; flex:0 0 auto; }
+.trk .re-row .re-title { color:var(--t-t1); font-size:12.5px; overflow-wrap:anywhere; }
+.trk .re-row .re-repeat {
+  font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--t-t3);
+  border:1px solid var(--t-border); border-radius:99px; padding:1px 7px; flex:0 0 auto;
+}
+.trk .re-row.missed { opacity:.5; }
+.trk .re-row .re-missed { color:#b06a4a; border-color:rgba(176,106,74,0.5); }
+.trk .re-row .re-eye { flex:0 0 auto; opacity:.55; font-size:12px; cursor:default; }
+.trk .re-row .re-eye.on { opacity:1; color:var(--t-gold); }
+.trk .re-row .re-chips { display:flex; flex-wrap:wrap; gap:5px; flex:1 1 100%; margin-top:2px; }
+.trk .re-chip {
+  font-size:10.5px; padding:2px 8px; border-radius:99px;
+  background:rgba(200,168,78,0.08); border:1px solid rgba(200,168,78,0.25); color:var(--t-t2);
+}
+.trk .re-row .re-actions { display:flex; gap:4px; flex:0 0 auto; margin-left:auto; }
+.trk .re-row .re-actions button {
+  background:transparent; border:1px solid var(--t-border); color:var(--t-t3);
+  border-radius:6px; padding:2px 8px; font-size:10.5px; cursor:pointer;
+}
+.trk .re-row .re-actions button:hover { color:var(--t-t1); border-color:var(--t-t4); }
+.trk .re-empty { font-size:11.5px; color:var(--t-t3); padding:8px 4px; font-style:italic; }
+.trk .re-form { margin-top:10px; padding-top:10px; border-top:1px dashed var(--t-border); }
+.trk .re-form-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin-bottom:8px; }
+.trk .re-form label.tlabel { margin-top:2px; }
+.trk .re-form textarea.tinput { resize:vertical; min-height:44px; font-family:inherit; }
+.trk .re-payload-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; padding:8px; background:rgba(0,0,0,0.15); border-radius:8px; }
+.trk .re-payload-row select, .trk .re-payload-row input { min-width:0; }
+.trk .re-target-chip {
+  display:inline-flex; align-items:center; gap:4px; font-size:10.5px; padding:2px 7px;
+  border-radius:99px; border:1px solid var(--t-border); color:var(--t-t2); cursor:pointer; user-select:none;
+}
+.trk .re-target-chip.sel { background:var(--t-accent-soft); border-color:var(--t-accent-line); color:var(--t-accent); }
+.trk .re-payload-remove { background:transparent; border:none; color:var(--t-t3); cursor:pointer; font-size:13px; padding:0 4px; }
+.trk .re-payload-remove:hover { color:var(--t-red); }
+.trk .re-form-actions { display:flex; gap:8px; margin-top:8px; }
+@media (prefers-reduced-motion: reduce) {
+  .trk .re-row .re-tick.trk-cond-in { animation:none; }
+}
+
 /* ═══ DATA GRID ═══ */
 .trk .grid-wrap {
   background:linear-gradient(180deg, rgba(26,30,41,0.8), rgba(19,22,31,0.85));
@@ -1747,6 +1819,64 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
     {# ── LEFT: Data Grid ── #}
     <div style="min-width:0;">
+        {% if is_gm %}
+        {# ═══ ROUND-EVENTS LANE (feature 7) ═══ GM-only. Collapsible, open by
+           default when events exist (toggled via JS once STATE hydrates —
+           see renderRoundEventsLane). Sits in normal flow above the grid,
+           no z-index promotion (levelup-rail lesson: never let a passive
+           lane eat clicks meant for a modal). #}
+        <details class="re-lane" id="re-lane">
+            <summary>
+                <span class="re-lane-title">Round Events</span>
+                <span class="re-lane-count" id="re-lane-count"></span>
+            </summary>
+            <div class="re-lane-body">
+                <div id="re-rows"></div>
+                <div class="re-form-actions">
+                    <button class="hb-btn gold" type="button" id="re-add-toggle" onclick="toggleRoundEventForm()">+ Add Round Event</button>
+                </div>
+                <div class="re-form hidden" id="re-form">
+                    <input type="hidden" id="re-form-editing-id" value="">
+                    <div class="re-form-grid">
+                        <div>
+                            <label class="tlabel">Round</label>
+                            <input type="number" id="re-f-round" class="tinput" min="1" style="width:100%;">
+                        </div>
+                        <div>
+                            <label class="tlabel">Repeat Every</label>
+                            <input type="number" id="re-f-repeat" class="tinput" min="1" placeholder="(none)" style="width:100%;">
+                        </div>
+                        <div style="display:flex; align-items:flex-end; gap:6px; padding-bottom:6px;">
+                            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--t-t2);">
+                                <input type="checkbox" id="re-f-show">Show on table
+                            </label>
+                        </div>
+                    </div>
+                    <div class="re-form-grid" style="grid-template-columns:1fr;">
+                        <div>
+                            <label class="tlabel">Title</label>
+                            <input id="re-f-title" class="tinput" placeholder="The ceiling groans" style="width:100%;">
+                        </div>
+                        <div>
+                            <label class="tlabel">Narrative text</label>
+                            <textarea id="re-f-text" class="tinput" placeholder="Read this aloud when it fires..." style="width:100%;"></textarea>
+                        </div>
+                    </div>
+                    <div class="tlabel" style="margin-top:6px;">Payload (optional)</div>
+                    <div id="re-payload-conditions"></div>
+                    <div id="re-payload-damage"></div>
+                    <div style="display:flex; gap:8px; margin:4px 0 8px;">
+                        <button class="hb-btn" type="button" onclick="reAddConditionRow()">+ Condition</button>
+                        <button class="hb-btn" type="button" onclick="reAddDamageRow()">+ Damage/Heal</button>
+                    </div>
+                    <div class="re-form-actions">
+                        <button class="hb-btn gold" type="button" onclick="submitRoundEventForm()">Save Event</button>
+                        <button class="hb-btn" type="button" onclick="toggleRoundEventForm(false)">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </details>
+        {% endif %}
         <div class="grid-wrap">
             <div class="grid-head">
                 <div></div>
@@ -1920,7 +2050,8 @@ let STATE = {
     party_size: {{ initial_state.party_size | default(4) }},
     xp_thresholds: {{ initial_state.xp_thresholds | default({}) | tojson }},
     encounter_notes: {{ (initial_state.encounter_notes or '') | tojson }},
-    session_timer_start: {{ (initial_state.session_timer_start or 'null') | tojson }}
+    session_timer_start: {{ (initial_state.session_timer_start or 'null') | tojson }},
+    round_events: {{ (initial_state.round_events or []) | tojson }}
 };
 
 /* Bootstrap initial state from Jinja server render */
@@ -1939,6 +2070,7 @@ let STATE = {
         STATE.xp_thresholds = initial.xp_thresholds || STATE.xp_thresholds;
         STATE.encounter_notes = initial.encounter_notes || '';
         STATE.session_timer_start = initial.session_timer_start || null;
+        STATE.round_events = Array.isArray(initial.round_events) ? initial.round_events : [];
     }
     // NB: the initial render is intentionally deferred to the END of this
     // <script> (search "INITIAL RENDER"). Calling _renderNow() HERE threw a
@@ -2098,6 +2230,7 @@ function applyState(data) {
     STATE.xp_thresholds = data.xp_thresholds ?? STATE.xp_thresholds;
     STATE.encounter_notes = data.encounter_notes ?? STATE.encounter_notes;
     STATE.session_timer_start = data.session_timer_start ?? STATE.session_timer_start;
+    if (Array.isArray(data.round_events)) STATE.round_events = data.round_events;
     render();
     renderEncounterNotes();
 }
@@ -2121,6 +2254,7 @@ function _renderNow() {
     renderTurnTimer();
     syncMultiDamageTypes();
     applyCombatFlourishes();
+    renderRoundEventsLane();
 }
 
 // The multi-target damage modal's type selector is static HTML; rebuild it to
@@ -4115,7 +4249,9 @@ function _renderCombatLog() {
     }
     el.innerHTML = _combatLogCache.map(e => {
         const color = LOG_COLORS[e.type] || 'var(--t-t2)';
-        return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${e.time}</span>${e.msg}</div>`;
+        // e.msg can carry GM free text (round-event titles) — escape at the
+        // sink so markup in a title can't render/execute in the log panel.
+        return `<div style="color:${color};"><span style="color:var(--t-t4);font-size:10px;margin-right:6px;">${escapeHtml(e.time || '')}</span>${escapeHtml(e.msg)}</div>`;
     }).join('');
     el.scrollTop = el.scrollHeight;
 }
@@ -4555,10 +4691,26 @@ function connectSSE() {
             STATE.turn_index = sse.turn_index ?? STATE.turn_index;
             STATE.active_name = sse.active_name ?? null;
             if (sse.session_timer_start !== undefined) STATE.session_timer_start = sse.session_timer_start;
+            if (Array.isArray(sse.round_events)) STATE.round_events = sse.round_events;
             render();
         } catch(_) {
             apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
         }
+    });
+    // round_event (feature 7): fired once per due event from the server-side
+    // firing engine (cycle_turn crossing a round boundary). The GM frame
+    // always carries title/text/show_on_table regardless of the toggle — the
+    // player-vs-GM split for the banner happens server-side in _broadcast_round_event.
+    // Here we just pop the fired row's gilt tick live; the lane's own state
+    // (last_fired_round) arrives via the encounter_update round_events merge
+    // above, so this listener never needs to mutate STATE itself.
+    evtSource.addEventListener('round_event', function(e) {
+        _trackerMarkSseAlive();
+        try {
+            const d = JSON.parse(e.data);
+            _reJustFiredRound = (typeof d.round === 'number') ? d.round : null;
+            renderRoundEventsLane();
+        } catch(_) {}
     });
     // New combat events stream directly into the log panel — replaces 5s polling
     evtSource.addEventListener('combat_log', function(e) {
@@ -5161,6 +5313,358 @@ async function sendCheckRequest() {
         });
     } catch(e) { console.error('GM inbox SSE failed:', e); }
 })();
+
+/* ══════════════════════ ROUND-EVENTS LANE (feature 7) ══════════════════════
+   GM-only collapsible lane between the round header and the initiative grid.
+   Renders entirely from STATE.round_events (server-refreshed via the
+   tracker_state GET, the encounter_update SSE merge, and the round_event SSE
+   live-fire tick — never local-only state). GM free text (title/text) goes
+   through escapeHtml() at every render sink; buttons are wired via a single
+   delegated listener keyed by data-event-id/data-action so no event id or
+   title is ever interpolated into an inline onclick="..." string (the
+   apostrophe-breaks-onclick bug class). */
+
+// Set by the round_event SSE handler to the round that just fired, so the
+// next renderRoundEventsLane() pass knows which row to pop the gilt tick on.
+// Cleared after one paint so it doesn't re-pop on every unrelated re-render.
+let _reJustFiredRound = null;
+let _reFormOpen = false;
+let _rePayloadConditions = [];  // [{condition, value, target_ids: 'all'|[ids]}]
+let _rePayloadDamage = [];      // [{dice, kind: 'damage'|'heal', target_ids: 'all'|[ids]}]
+
+function _reConditionList() {
+    // The ACTIVE system decides the picker set — the body class is stamped
+    // server-side, so a Cosmere GM pre-authoring events on an EMPTY tracker
+    // still gets Cosmere conditions (combatant sniffing alone fell back to
+    // the PF2e list until the fight was staged).
+    const isCos = document.body.classList.contains('system-cosmere')
+        || (STATE.combatants || []).some(c => c.system === 'cosmere');
+    return isCos ? COSMERE_CONDITIONS : CONDITIONS_LIST;
+}
+
+function _reNextFireRound(ev) {
+    // "Next fire round" for sorting/display: for a never-fired event it's
+    // just its configured round. For a repeating event, it's the next
+    // multiple of repeat_every that is STRICTLY AFTER whatever the event has
+    // already fired for (last_fired_round, if set) and at/after the current
+    // round — mirrors the firing engine's own due-check
+    // (_round_event_should_fire) plus its last_fired_round idempotence gate,
+    // so a just-fired "every 2" event shows R4, not the R2 it already rang.
+    const base = parseInt(ev.round, 10) || 0;
+    const repeat = ev.repeat_every ? parseInt(ev.repeat_every, 10) : 0;
+    const cur = STATE.round || 1;
+    const lastFired = (ev.last_fired_round != null) ? parseInt(ev.last_fired_round, 10) : null;
+    if (!repeat || repeat <= 0) return base;
+    // Floor for "next" candidate: must be after both the current round's
+    // already-fired state and after last_fired_round.
+    let floor = (lastFired != null) ? Math.max(cur, lastFired) : (cur - 1);
+    if (base > floor) return base;
+    const steps = Math.floor((floor - base) / repeat) + 1;
+    return base + steps * repeat;
+}
+
+function _reHasFired(ev) {
+    return ev.last_fired_round != null;
+}
+
+function _reTargetLabel(target_ids) {
+    if (target_ids === 'all') return 'all';
+    if (!Array.isArray(target_ids) || !target_ids.length) return '(no targets)';
+    const byId = {};
+    (STATE.combatants || []).forEach(c => { byId[c.instance_id] = c.name; });
+    return target_ids.map(id => byId[id] || '?').join(', ');
+}
+
+// Summarize a payload into human-readable chips, one per condition/damage
+// ROW (never per-unit — T1's firing loop calls _apply_condition_change once
+// per unit of abs(value) internally, but the chip must show the total, e.g.
+// "Frightened 2 → Go'el", not two separate "Frightened 1" lines).
+function _rePayloadChips(payload) {
+    const chips = [];
+    if (payload && Array.isArray(payload.conditions)) {
+        payload.conditions.forEach(row => {
+            const val = parseInt(row.value, 10) || 1;
+            const name = String(row.condition || '').replace(/_/g, ' ');
+            const label = name.charAt(0).toUpperCase() + name.slice(1);
+            const sign = val > 0 ? '+' : '';
+            chips.push(`${label} ${sign}${val} → ${_reTargetLabel(row.target_ids)}`);
+        });
+    }
+    if (payload && Array.isArray(payload.damage)) {
+        payload.damage.forEach(row => {
+            const kind = row.kind === 'heal' ? 'heal' : 'dmg';
+            chips.push(`${row.dice || '?'} ${kind} → ${_reTargetLabel(row.target_ids)}`);
+        });
+    }
+    return chips;
+}
+
+function renderRoundEventsLane() {
+    const lane = document.getElementById('re-lane');
+    const rowsEl = document.getElementById('re-rows');
+    const countEl = document.getElementById('re-lane-count');
+    if (!lane || !rowsEl) return;   // non-GM view has no lane markup
+
+    const events = Array.isArray(STATE.round_events) ? STATE.round_events : [];
+
+    // Open by default when events exist (only auto-toggle the FIRST time we
+    // see any events, so it doesn't fight a GM who deliberately collapsed it).
+    if (!lane.dataset.userToggled) {
+        if (events.length && !lane.open) lane.open = true;
+    }
+
+    if (countEl) countEl.textContent = events.length ? `(${events.length})` : '';
+
+    let poppedJustFired = false;
+    if (!events.length) {
+        rowsEl.innerHTML = '<div class="re-empty">No round events yet — the GM can add reminders and auto-apply payloads below.</div>';
+    } else {
+        const sorted = events.slice().sort((a, b) => _reNextFireRound(a) - _reNextFireRound(b));
+        rowsEl.innerHTML = sorted.map(ev => {
+            const fired = _reHasFired(ev);
+            const nextRound = _reNextFireRound(ev);
+            // A never-fired one-shot for the current or a past round can no
+            // longer fire (the engine only fires on the transition INTO its
+            // round) — show it as missed instead of perpetually "upcoming".
+            const missed = !fired && !ev.repeat_every && nextRound <= (STATE.round || 1);
+            const repeatBadge = ev.repeat_every ? `<span class="re-repeat">every ${escapeHtml(String(ev.repeat_every))}</span>` : '';
+            const missedBadge = missed ? '<span class="re-repeat re-missed">missed</span>' : '';
+            const eyeCls = ev.show_on_table ? 'on' : '';
+            const eyeTitle = ev.show_on_table ? 'Shown on the table (ember banner)' : 'GM-only (not shown on table)';
+            const chips = _rePayloadChips(ev.payload).map(c => `<span class="re-chip">${escapeHtml(c)}</span>`).join('');
+            const justFired = fired && _reJustFiredRound !== null && ev.last_fired_round === _reJustFiredRound;
+            if (justFired) poppedJustFired = true;
+            return `<div class="re-row ${fired ? 'fired' : ''} ${missed ? 'missed' : ''}" data-event-id="${escapeHtml(ev.id)}">
+                <span class="re-tick ${justFired ? 'trk-cond-in' : ''}" title="Fired">&#10022;</span>
+                <div class="re-head">
+                    <span class="re-when">R${escapeHtml(String(nextRound))}</span>
+                    <span class="re-title">${escapeHtml(ev.title || '(untitled event)')}</span>
+                    ${repeatBadge}${missedBadge}
+                    <span class="re-eye ${eyeCls}" title="${eyeTitle}">&#9679;</span>
+                </div>
+                <div class="re-actions">
+                    <button type="button" data-action="edit">Edit</button>
+                    <button type="button" data-action="delete">Delete</button>
+                </div>
+                ${chips ? `<div class="re-chips">${chips}</div>` : ''}
+            </div>`;
+        }).join('');
+    }
+    // Clear the just-fired flag only once a row actually consumed it: the
+    // round_event SSE arrives BEFORE the encounter_update that merges the
+    // new last_fired_round into STATE, so the first render after a fire
+    // matches nothing — clearing unconditionally here killed the gilt-tick
+    // pop on every live fire.
+    if (poppedJustFired) _reJustFiredRound = null;
+}
+
+// A GM click on the lane's summary is a deliberate open/collapse — record it
+// so the auto-open in renderRoundEventsLane stops fighting the choice.
+// (Previously only the add-event form set userToggled, so every SSE-driven
+// re-render forced a collapsed lane back open for the rest of the fight.)
+document.addEventListener('click', function (e) {
+    if (e.target.closest('#re-lane > summary')) {
+        const lane = document.getElementById('re-lane');
+        if (lane) lane.dataset.userToggled = '1';
+    }
+});
+
+// Single delegated listener for the lane's per-row buttons — the row markup
+// above never puts an event id or GM-authored title into an onclick="..."
+// string (an apostrophe in a GM-typed title would otherwise break the
+// handler, per the inline-handler-escaping rule in CLAUDE.md).
+document.addEventListener('click', function (e) {
+    const btn = e.target.closest('#re-rows [data-action]');
+    if (!btn) return;
+    const row = btn.closest('.re-row');
+    const id = row && row.dataset.eventId;
+    if (!id) return;
+    const action = btn.dataset.action;
+    if (action === 'delete') {
+        if (!confirm('Delete this round event?')) return;
+        apiAction(`/api/round_events/${encodeURIComponent(id)}/delete`, null).then(() => {
+            apiGet('/api/tracker_state').then(applyState).catch(() => {});
+        });
+    } else if (action === 'edit') {
+        openRoundEventFormForEdit(id);
+    }
+});
+
+function toggleRoundEventForm(forceOpen) {
+    const form = document.getElementById('re-form');
+    const lane = document.getElementById('re-lane');
+    if (!form) return;
+    if (lane) lane.dataset.userToggled = '1';
+    const willOpen = (forceOpen !== undefined) ? forceOpen : form.classList.contains('hidden');
+    if (willOpen) {
+        form.classList.remove('hidden');
+        if (!document.getElementById('re-form-editing-id').value) _reResetForm();
+    } else {
+        form.classList.add('hidden');
+        _reResetForm();
+    }
+}
+
+function _reResetForm() {
+    document.getElementById('re-form-editing-id').value = '';
+    document.getElementById('re-f-round').value = (STATE.round || 1) + 1;
+    document.getElementById('re-f-repeat').value = '';
+    document.getElementById('re-f-title').value = '';
+    document.getElementById('re-f-text').value = '';
+    document.getElementById('re-f-show').checked = false;
+    _rePayloadConditions = [];
+    _rePayloadDamage = [];
+    _reRenderPayloadBuilder();
+}
+
+function openRoundEventFormForEdit(id) {
+    const ev = (STATE.round_events || []).find(e => e.id === id);
+    if (!ev) return;
+    toggleRoundEventForm(true);
+    document.getElementById('re-form-editing-id').value = ev.id;
+    document.getElementById('re-f-round').value = ev.round;
+    document.getElementById('re-f-repeat').value = ev.repeat_every || '';
+    document.getElementById('re-f-title').value = ev.title || '';
+    document.getElementById('re-f-text').value = ev.text || '';
+    document.getElementById('re-f-show').checked = !!ev.show_on_table;
+    _rePayloadConditions = ((ev.payload && ev.payload.conditions) || []).map(r => ({...r}));
+    _rePayloadDamage = ((ev.payload && ev.payload.damage) || []).map(r => ({...r}));
+    _reRenderPayloadBuilder();
+}
+
+// Target multi-select chips (combatants + "all"). Kept as small toggle-chip
+// rows rather than a <select multiple> so the GM can see who's targeted at a
+// glance; state lives in the row object, never in the DOM alone.
+function _reTargetChipsHtml(row, rowIndex, kind) {
+    const combatants = STATE.combatants || [];
+    const isAll = row.target_ids === 'all';
+    const selectedSet = new Set(Array.isArray(row.target_ids) ? row.target_ids : []);
+    const allChip = `<span class="re-target-chip ${isAll ? 'sel' : ''}" data-re-kind="${kind}" data-re-row="${rowIndex}" data-re-target="all">all</span>`;
+    const chips = combatants.map(c => {
+        const sel = !isAll && selectedSet.has(c.instance_id);
+        return `<span class="re-target-chip ${sel ? 'sel' : ''}" data-re-kind="${kind}" data-re-row="${rowIndex}" data-re-target="${escapeHtml(c.instance_id)}">${escapeHtml(c.name)}</span>`;
+    }).join('');
+    return allChip + chips;
+}
+
+function _reRenderPayloadBuilder() {
+    const condWrap = document.getElementById('re-payload-conditions');
+    const dmgWrap = document.getElementById('re-payload-damage');
+    if (!condWrap || !dmgWrap) return;
+    const condList = _reConditionList();
+    condWrap.innerHTML = _rePayloadConditions.map((row, i) => `
+        <div class="re-payload-row" data-re-row-kind="conditions" data-re-row-index="${i}">
+            <select data-re-field="condition" data-re-kind="conditions" data-re-row="${i}" class="tselect">
+                ${condList.map(c => `<option value="${c}" ${row.condition === c ? 'selected' : ''}>${c.replace(/_/g,' ')}</option>`).join('')}
+            </select>
+            <input type="number" data-re-field="value" data-re-kind="conditions" data-re-row="${i}" class="tinput" style="width:60px;" value="${row.value != null ? escapeHtml(String(row.value)) : 1}" min="-9" max="9" title="Positive = add, negative = decrease">
+            <div class="re-target-list">${_reTargetChipsHtml(row, i, 'conditions')}</div>
+            <button type="button" class="re-payload-remove" data-re-remove="conditions" data-re-row="${i}" title="Remove this condition row">&times;</button>
+        </div>`).join('');
+    dmgWrap.innerHTML = _rePayloadDamage.map((row, i) => `
+        <div class="re-payload-row" data-re-row-kind="damage" data-re-row-index="${i}">
+            <input data-re-field="dice" data-re-kind="damage" data-re-row="${i}" class="tinput" style="width:90px;" placeholder="2d6+1" value="${escapeHtml(row.dice || '')}">
+            <select data-re-field="kind" data-re-kind="damage" data-re-row="${i}" class="tselect">
+                <option value="damage" ${row.kind !== 'heal' ? 'selected' : ''}>damage</option>
+                <option value="heal" ${row.kind === 'heal' ? 'selected' : ''}>heal</option>
+            </select>
+            <div class="re-target-list">${_reTargetChipsHtml(row, i, 'damage')}</div>
+            <button type="button" class="re-payload-remove" data-re-remove="damage" data-re-row="${i}" title="Remove this damage row">&times;</button>
+        </div>`).join('');
+}
+
+function reAddConditionRow() {
+    _rePayloadConditions.push({condition: _reConditionList()[0], value: 1, target_ids: 'all'});
+    _reRenderPayloadBuilder();
+}
+
+function reAddDamageRow() {
+    _rePayloadDamage.push({dice: '2d6', kind: 'damage', target_ids: 'all'});
+    _reRenderPayloadBuilder();
+}
+
+// Delegated listeners for the payload builder's dynamic rows (field edits,
+// target-chip toggles, row removal) — same rationale as the row-action
+// listener above: no per-row id/value ever gets baked into an inline handler.
+document.addEventListener('change', function (e) {
+    const el = e.target.closest('[data-re-field]');
+    if (!el) return;
+    const kind = el.dataset.reKind;
+    const idx = parseInt(el.dataset.reRow, 10);
+    const list = kind === 'conditions' ? _rePayloadConditions : _rePayloadDamage;
+    const row = list[idx];
+    if (!row) return;
+    row[el.dataset.reField] = el.value;
+});
+
+document.addEventListener('click', function (e) {
+    const chip = e.target.closest('.re-target-chip');
+    if (chip) {
+        const kind = chip.dataset.reKind;
+        const idx = parseInt(chip.dataset.reRow, 10);
+        const list = kind === 'conditions' ? _rePayloadConditions : _rePayloadDamage;
+        const row = list[idx];
+        if (!row) return;
+        const target = chip.dataset.reTarget;
+        if (target === 'all') {
+            row.target_ids = 'all';
+        } else {
+            let ids = Array.isArray(row.target_ids) ? row.target_ids.slice() : [];
+            if (ids.includes(target)) ids = ids.filter(t => t !== target);
+            else ids.push(target);
+            row.target_ids = ids;
+        }
+        _reRenderPayloadBuilder();
+        return;
+    }
+    const rm = e.target.closest('[data-re-remove]');
+    if (rm) {
+        const kind = rm.dataset.reRemove;
+        const idx = parseInt(rm.dataset.reRow, 10);
+        if (kind === 'conditions') _rePayloadConditions.splice(idx, 1);
+        else _rePayloadDamage.splice(idx, 1);
+        _reRenderPayloadBuilder();
+    }
+});
+
+function _reBuildPayload() {
+    const conditions = _rePayloadConditions
+        .filter(r => r.condition)
+        .map(r => ({condition: r.condition, value: parseInt(r.value, 10) || 1, target_ids: r.target_ids || 'all'}));
+    const damage = _rePayloadDamage
+        .filter(r => r.dice)
+        .map(r => ({dice: r.dice, kind: r.kind === 'heal' ? 'heal' : 'damage', target_ids: r.target_ids || 'all'}));
+    if (!conditions.length && !damage.length) return null;
+    return {conditions, damage};
+}
+
+let _reSubmitting = false;  // double-click on Save must not create two events
+
+function submitRoundEventForm() {
+    if (_reSubmitting) return;
+    const editingId = document.getElementById('re-form-editing-id').value;
+    const round = parseInt(document.getElementById('re-f-round').value, 10);
+    if (!round) { toast('Round is required', 'error'); return; }
+    const repeatRaw = document.getElementById('re-f-repeat').value;
+    const body = {
+        round: round,
+        repeat_every: repeatRaw ? parseInt(repeatRaw, 10) : null,
+        title: document.getElementById('re-f-title').value,
+        text: document.getElementById('re-f-text').value,
+        show_on_table: document.getElementById('re-f-show').checked,
+        payload: _reBuildPayload(),
+    };
+    const url = editingId ? `/api/round_events/${encodeURIComponent(editingId)}/update` : '/api/round_events';
+    _reSubmitting = true;
+    apiAction(url, body).then(res => {
+        _reSubmitting = false;
+        if (!res) return;
+        toggleRoundEventForm(false);
+        // Render ONLY from server-refreshed state — never trust the local
+        // form values as the source of truth for the lane.
+        apiGet('/api/tracker_state').then(applyState).catch(() => {});
+    }).catch(() => { _reSubmitting = false; });
+}
 
 /* ── INITIAL RENDER ──────────────────────────────────────────────────────────
    Paint the tracker once on first load. This MUST be the last thing the script

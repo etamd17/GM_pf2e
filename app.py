@@ -441,6 +441,10 @@ GM_API_PREFIXES = (
     '/api/loot_ledger',
     '/api/session_timer/',
     '/api/set_combatant_tactics/',
+    # Round-events lane (feature 7): GM-authored round-triggered reminders +
+    # payloads. CRUD is GM-only like every other tracker mutation; the list
+    # itself rides the already-gated /api/tracker_state payload.
+    '/api/round_events',
 )
 
 @app.before_request
@@ -627,6 +631,13 @@ ACTIVE_ENCOUNTER = []
 TURN_INDEX = 0
 ROUND_NUMBER = 1
 ENCOUNTER_NOTES = ''
+# Round-events lane store (engine + endpoints live near TURN_REMINDERS).
+# Must be declared here with its sibling encounter globals, BEFORE the boot
+# autosave restore runs (the module-tail _restore_encounter_autosave() call
+# -- see BOOT-TIME AUTOSAVE RESTORE): a declaration that executes after the
+# restore wipes the restored events on every boot. Guarded by
+# test_round_events_global_declared_before_boot_rehydrate.
+ROUND_EVENTS = []
 COMBAT_LOGS = []
 # Session timer: epoch timestamp (seconds) when the current encounter started.
 # None means timer not running. Set by /api/session_timer/start, cleared on
@@ -858,6 +869,7 @@ def _do_persist_encounter_state():
             "turn_index": TURN_INDEX,
             "notes": ENCOUNTER_NOTES,
             "session_timer_start": SESSION_TIMER_START,
+            "round_events": copy.deepcopy(ROUND_EVENTS),
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -1376,6 +1388,12 @@ def _do_broadcast_encounter_state():
             'active_id': active_id,
             'turn_index': TURN_INDEX,
             'session_timer_start': SESSION_TIMER_START,
+            # Round-events lane (feature 7): GM-only, so the payload only
+            # needs to survive the player_filter strip below — the lane's
+            # own SSE (`round_event`) handles the live-fire tick/banner; this
+            # is what lets the GM tracker's lane repaint in place on every
+            # encounter_update instead of waiting for a manual re-GET.
+            'round_events': copy.deepcopy(ROUND_EVENTS),
             # Flag used by the player filter below — avoids re-reading globals
             # inside the filter, which runs after ENCOUNTER_LOCK is released.
             '_active_visible': getattr(active_c, 'visible_to_players', True) if active_c else True,
@@ -1384,6 +1402,7 @@ def _do_broadcast_encounter_state():
     def _player_filter(p):
         # Strip any GM-only side-channel flags before the payload goes out.
         active_visible = p.pop('_active_visible', True)
+        p.pop('round_events', None)
         filtered_enc = []
         for entry in p.get('encounter', []):
             if entry.get('is_pc') or entry.get('visible_to_players', True):
@@ -5249,7 +5268,13 @@ def load_compendium():
             else:
                 f['prereqs_struct'] = parse_feat_prereqs(f.get('prerequisites_raw', ''), _feat_name_lookup)
 
-def load_libraries():
+def load_libraries(restore_autosave=True):
+    """Load campaign-scoped libraries (monsters/party/compendium) and, by
+    default, rehydrate the encounter autosave. The module-scope boot call
+    passes restore_autosave=False and the restore runs once at the module
+    tail instead: restoring mid-import NameErrors on helpers defined later
+    in the file (e.g. _restore_cosmere_combatant), which silently wiped a
+    live Cosmere fight on every server restart."""
     load_compendium()
     
     # --- POST-LOAD CORRECTION: Fix weapon damage from known table ---
@@ -5311,13 +5336,16 @@ def load_libraries():
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
     _build_pc_file_cache()
-    
+
     # --- AUTO-RESTORE ENCOUNTER FROM AUTOSAVE ---
-    _restore_encounter_autosave()
+    # Skipped for the module-scope boot call (see docstring); runtime
+    # campaign switches (load_campaign) restore here as before.
+    if restore_autosave:
+        _restore_encounter_autosave()
 
 def _restore_encounter_autosave():
     """Restore the active encounter from autosave file on startup."""
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
     autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
     if not os.path.exists(autosave_path):
         return
@@ -5328,6 +5356,7 @@ def _restore_encounter_autosave():
         ROUND_NUMBER = raw.get('round', 1)
         TURN_INDEX = raw.get('turn_index', 0)
         ENCOUNTER_NOTES = raw.get('notes', '')
+        ROUND_EVENTS = list(raw.get('round_events', []) or [])
         SESSION_TIMER_START = raw.get('session_timer_start', None)
         ACTIVE_ENCOUNTER.clear()
         for item in combatants:
@@ -5386,7 +5415,12 @@ def _restore_encounter_autosave():
     except Exception as e:
         print(f"[ENCOUNTER] Failed to restore autosave: {e}")
 
-load_libraries()
+# Boot-time library load. The encounter-autosave restore is deferred to the
+# module tail (search: BOOT-TIME AUTOSAVE RESTORE) — running it here, mid-
+# import, NameErrors on restore helpers defined later in the file, which
+# aborted the restore and let the next persist delete the autosave (a live
+# Cosmere fight was wiped on every restart).
+load_libraries(restore_autosave=False)
 
 @app.route('/health')
 def health_check():
@@ -7118,6 +7152,13 @@ def tracker_view():
     encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
     diff_label, diff_color = get_difficulty_label(encounter_xp)
     initial_state = _get_tracker_state()
+    if not _is_gm():
+        # Round events are GM-secret (hidden ones carry spoilers + payloads);
+        # the SSE player frames and /api/tracker_state already strip them, but
+        # this page embed renders for player viewers too -- shallow-copy so
+        # the shared state dict isn't polluted for GM requests.
+        initial_state = dict(initial_state)
+        initial_state['round_events'] = []
     # In Cosmere mode, feed the tool strip Cosmere adversaries + party so a GM
     # can build a Stormlight encounter from the tracker (the PF2e monster search
     # + party picker are gated off in the template). PF2e mode is unchanged.
@@ -7316,6 +7357,7 @@ def _get_tracker_state():
             'party_size': party_size, 'xp_thresholds': xp_thresholds,
             'encounter_notes': ENCOUNTER_NOTES,
             'session_timer_start': SESSION_TIMER_START,
+            'round_events': copy.deepcopy(ROUND_EVENTS),
         }
     _TRACKER_STATE_CACHE = result
     _TRACKER_STATE_CACHE_TIME = now
@@ -8780,22 +8822,21 @@ def api_cosmere_my_initiative():
     return jsonify({'ok': True, 'initiative': c.initiative, 'detail': f'd20({d20}) + {spd}'})
 
 
-@app.route('/api/cosmere/combatant/<instance_id>/condition', methods=['POST'])
-@gm_required
-def api_cosmere_combatant_condition(instance_id):
-    """GM applies / removes a Cosmere condition on a tracker combatant. For a
-    player's PC it also writes the condition through to their saved play_state and
-    pushes it to their open sheet (the `cosmere_player_state` listener), so a
-    GM-applied condition shows up live on the player's character sheet."""
-    data = request.get_json(silent=True) or {}
-    cond = (data.get('condition') or '').strip().lower()
-    action = (data.get('action') or 'toggle').lower()
+def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
+    """Core Cosmere condition mutation shared by the tracker route below and
+    the round-events payload engine (feature 7) -- Cosmere conditions are
+    boolean on/off (not PF2e valued stacks) and carry their own PC
+    write-through (play_state + `cosmere_player_state` SSE), so they cannot
+    go through `_apply_condition_change`. Returns the mutated combatant, or
+    None if `instance_id` doesn't name a live Cosmere combatant or the
+    condition isn't in the Cosmere set."""
+    cond = (condition or '').strip().lower()
     if cond not in systems.cosmere.CONDITION_INFO:
-        return jsonify({'ok': False, 'error': 'unknown condition'}), 400
+        return None
     target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id
                    and getattr(c, 'system', 'pf2e') == 'cosmere'), None)
     if target is None:
-        return jsonify({'ok': False, 'error': 'not a Cosmere combatant'}), 404
+        return None
     if not isinstance(getattr(target, 'conditions', None), dict):
         target.conditions = {}
     on = bool(target.conditions.get(cond))
@@ -8824,6 +8865,26 @@ def api_cosmere_combatant_condition(instance_id):
                 break
     _persist_encounter_state()
     _broadcast_encounter_state()
+    return target
+
+
+@app.route('/api/cosmere/combatant/<instance_id>/condition', methods=['POST'])
+@gm_required
+def api_cosmere_combatant_condition(instance_id):
+    """GM applies / removes a Cosmere condition on a tracker combatant. For a
+    player's PC it also writes the condition through to their saved play_state and
+    pushes it to their open sheet (the `cosmere_player_state` listener), so a
+    GM-applied condition shows up live on the player's character sheet.
+    Thin wrapper over `_apply_cosmere_condition_change` (shared with the
+    round-events payload engine)."""
+    data = request.get_json(silent=True) or {}
+    cond = (data.get('condition') or '').strip().lower()
+    action = (data.get('action') or 'toggle').lower()
+    if cond not in systems.cosmere.CONDITION_INFO:
+        return jsonify({'ok': False, 'error': 'unknown condition'}), 400
+    target = _apply_cosmere_condition_change(instance_id, cond, action)
+    if target is None:
+        return jsonify({'ok': False, 'error': 'not a Cosmere combatant'}), 404
     if _is_ajax():
         return _tracker_json_response()
     return jsonify({'ok': True, 'conditions': dict(target.conditions)})
@@ -9110,12 +9171,13 @@ def set_combatant_tactics(instance_id):
 
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
-    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
+    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
     if ACTIVE_ENCOUNTER:
         names = [c.name for c in ACTIVE_ENCOUNTER]
         _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
     ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
     SESSION_TIMER_START = None
+    ROUND_EVENTS = []
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -9695,16 +9757,18 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
     _combat_log(note, 'critical')
 
 
-@app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
-@require_live_combatant
-def adjust_hp(instance_id):
+def _apply_hp_delta(instance_id, amount, action, damage_type='untyped'):
+    """Core HP-mutation logic shared by the `/api/adjust_hp` route and the
+    round-events payload engine (feature 7): PC temp-HP/dying math, Cosmere
+    Deflect routing, W/R/I resist/weakness, sheet mirroring, combat-log, and
+    reaction-trigger side effects all live here so both callers inherit them
+    identically. The route thin-wraps this by pulling amount/action/
+    damage_type from request.form; round-events calls it directly.
+    Returns old_hp (the combatant's HP before the change) or None if no
+    combatant with this instance_id is in the live encounter."""
     old_hp = None
-    action = None
-    amount = 0
+    damage_type = (damage_type or 'untyped').strip()
     try:
-        amount = int(request.form.get('amount', 0))
-        action = request.form.get('action')
-        damage_type = request.form.get('damage_type', 'untyped').strip()
         for c in ACTIVE_ENCOUNTER:
             if c.instance_id == instance_id:
                 old_hp = c.current_hp
@@ -9841,7 +9905,25 @@ def adjust_hp(instance_id):
                 _persist_encounter_state()
                 _broadcast_encounter_state()
                 break
-    except ValueError: pass
+    except ValueError:
+        pass
+    return old_hp
+
+
+@app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
+@require_live_combatant
+def adjust_hp(instance_id):
+    try:
+        amount = int(request.form.get('amount', 0))
+    except ValueError:
+        # Pre-extraction behavior: a malformed amount no-op'd the whole
+        # handler (no log line, no persist, no broadcast) -- the parse sat
+        # inside the same try as the mutation body. Keep that: skip the
+        # apply entirely and return the normal response (review T1 finding).
+        amount = None
+    action = request.form.get('action')
+    damage_type = request.form.get('damage_type', 'untyped').strip()
+    old_hp = _apply_hp_delta(instance_id, amount, action, damage_type) if amount is not None else None
     if _is_ajax():
         # Report the ACTUAL hp-pool change (after Deflect / resistances /
         # weaknesses / temp HP / clamping) so the client toast says the net
@@ -9854,6 +9936,23 @@ def adjust_hp(instance_id):
                                  'net': int(max(0, net)), 'raw': int(amount or 0)}}
         return _tracker_json_response(extra)
     return redirect(url_for('tracker_view'))
+
+
+def _roll_dice_expr(expr):
+    """Roll a free-text dice expression like '2d6', '2d6 fire', or '1d8+3'.
+    Returns the integer total, or None if `expr` has no recognizable NdM
+    term. Shared by the monster persistent-damage auto-roll and the
+    round-events damage payload engine (feature 7) so both use the same
+    parsing/rolling behavior."""
+    if not expr or not isinstance(expr, str):
+        return None
+    m = re.search(r'(\d+)d(\d+)(?:\s*\+\s*(\d+))?', expr)
+    if not m:
+        return None
+    qty = int(m.group(1))
+    sides = int(m.group(2))
+    bonus = int(m.group(3)) if m.group(3) else 0
+    return sum(random.randint(1, sides) for _ in range(qty)) + bonus
 
 
 # ── Basic-save AOE resolver ────────────────────────────────────────────────
@@ -10434,19 +10533,13 @@ def update_pc_condition(pc_name):
                                        if v and v != 0 and v is not False}})
     return jsonify({"success": False})
 
-@app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
-@require_live_combatant
-def toggle_condition(instance_id):
-    condition = request.form.get('condition')
-    action = request.form.get('action')
-    # Optional rounds value sets a GM-defined auto-expiry timer that ticks
-    # at the end of this combatant's turn. Only honored on add/increase;
-    # decrease/toggle leaves any existing timer alone unless the condition
-    # value reaches 0 (in which case the timer is cleared as a side effect).
-    try:
-        rounds = int(request.form.get('rounds', '') or 0)
-    except ValueError:
-        rounds = 0
+def _apply_condition_change(instance_id, condition, action, rounds=0):
+    """Core condition-mutation logic shared by the `/api/toggle_condition`
+    route and the round-events payload engine (feature 7), so both inherit
+    the same PC-mirroring, combat-log, and campaign-stat side effects. The
+    route thin-wraps this by pulling condition/action/rounds from
+    request.form; round-events calls it directly with explicit args.
+    Returns True if a matching combatant was found and mutated."""
     for combatant in ACTIVE_ENCOUNTER:
         if combatant.instance_id == instance_id:
             if condition in ['frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned', 'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied']:
@@ -10473,11 +10566,17 @@ def toggle_condition(instance_id):
                         if not hasattr(combatant, 'condition_expiry') or combatant.condition_expiry is None:
                             combatant.condition_expiry = {}
                         combatant.condition_expiry[condition] = rounds
+                elif action in ('decrease', 'remove'):
+                    # Boolean conditions have no stack to decrement -- a
+                    # negative-value round-event payload row means "remove".
+                    # Without this arm the row silently no-ops and the
+                    # fall-through logging reports 'gained'.
+                    combatant.conditions[condition] = False
                 if combatant.conditions.get(condition, False) is False:
                     _exp = getattr(combatant, 'condition_expiry', None)
                     if isinstance(_exp, dict) and condition in _exp:
                         del _exp[condition]
-            if combatant.is_pc and combatant.name in PARTY_LIBRARY: 
+            if combatant.is_pc and combatant.name in PARTY_LIBRARY:
                 PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
                 _broadcast_pc_state(combatant.name)
                 _persist_pc_combat_state(combatant.name)
@@ -10498,7 +10597,24 @@ def toggle_condition(instance_id):
                         pass
             _persist_encounter_state()
             _broadcast_encounter_state()
-            break
+            return True
+    return False
+
+
+@app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
+@require_live_combatant
+def toggle_condition(instance_id):
+    condition = request.form.get('condition')
+    action = request.form.get('action')
+    # Optional rounds value sets a GM-defined auto-expiry timer that ticks
+    # at the end of this combatant's turn. Only honored on add/increase;
+    # decrease/toggle leaves any existing timer alone unless the condition
+    # value reaches 0 (in which case the timer is cleared as a side effect).
+    try:
+        rounds = int(request.form.get('rounds', '') or 0)
+    except ValueError:
+        rounds = 0
+    _apply_condition_change(instance_id, condition, action, rounds)
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
@@ -10879,6 +10995,7 @@ def cycle_turn(direction):
             _persist_pc_combat_state(current_c.name)
         
         # Advance turn index, skipping delaying combatants
+        _round_before_advance = ROUND_NUMBER
         old_index = TURN_INDEX
         for _ in range(len(ACTIVE_ENCOUNTER)):
             TURN_INDEX = (TURN_INDEX + 1) % len(ACTIVE_ENCOUNTER)
@@ -10891,6 +11008,19 @@ def cycle_turn(direction):
             if not getattr(ACTIVE_ENCOUNTER[TURN_INDEX], 'delaying', False):
                 break
             old_index = TURN_INDEX
+
+        # Round-events lane (feature 7): fire once the round number has
+        # fully settled for this forward cycle (the loop above can only
+        # ever bump ROUND_NUMBER by exactly 1 per cycle_turn call — the
+        # `TURN_INDEX <= old_index` branch fires at most once per call
+        # since old_index is monotonically non-decreasing across
+        # iterations — but we still gate on an actual increase so a
+        # same-round re-entry into this branch never double-fires).
+        if ROUND_NUMBER > _round_before_advance:
+            try:
+                _fire_round_events(ROUND_NUMBER)
+            except Exception as _ex:
+                print('[ROUND EVENTS] fire error:', _ex)
 
         # Expire any token-active-effects whose round-based duration
         # elapsed this turn. Shield (1 round), Inspire Courage (1
@@ -10963,13 +11093,8 @@ def cycle_turn(direction):
         if pd and not (new_c.is_pc and new_c.name in PARTY_LIBRARY):
             # Monster path: keep the old auto-roll behavior.
             if isinstance(pd, str):
-                import re as _re
-                pd_match = _re.search(r'(\d+)d(\d+)(?:\s*\+\s*(\d+))?', pd)
-                if pd_match:
-                    pd_qty = int(pd_match.group(1))
-                    pd_sides = int(pd_match.group(2))
-                    pd_bonus = int(pd_match.group(3)) if pd_match.group(3) else 0
-                    pd_total = sum(random.randint(1, pd_sides) for _ in range(pd_qty)) + pd_bonus
+                pd_total = _roll_dice_expr(pd)
+                if pd_total is not None:
                     old_hp = new_c.current_hp
                     new_c.current_hp = max(0, new_c.current_hp - pd_total)
                     _combat_log(f"{new_c.name}: Persistent {pd} dealt {pd_total} ({old_hp}→{new_c.current_hp})", 'damage')
@@ -11008,6 +11133,281 @@ def cycle_turn(direction):
     return redirect(url_for('tracker_view'))
 
 TURN_REMINDERS = []  # List of reminder dicts for active combatant
+
+# ── Round-events lane (tracker feature 7) ──────────────────────────────────
+# GM-authored timeline of round-triggered events on the combat tracker: a
+# reminder that fires when combat reaches its round, with an optional
+# auto-apply payload. Encounter-scoped (joins ACTIVE_ENCOUNTER/ROUND_NUMBER/
+# TURN_INDEX as a global cleared/persisted/rehydrated alongside them).
+#
+# Shape (spec: docs/superpowers/specs/2026-07-04-round-events-lane-design.md):
+#   {id, round, repeat_every (int|None), title, text, show_on_table (bool),
+#    payload (None | {conditions: [{target_ids|'all', condition, value}...],
+#    damage: [{target_ids|'all', dice, kind: 'damage'|'heal'}...]}),
+#    last_fired_round (int|None)}
+# The ROUND_EVENTS global itself is declared with the other encounter globals
+# near ACTIVE_ENCOUNTER — its assignment must execute before the boot-time
+# autosave restore (the module-tail _restore_encounter_autosave() call), or
+# the restored events get wiped as the import continues.
+
+
+def _round_event_should_fire(ev, new_round):
+    """True if event `ev` is due to fire now that the encounter has reached
+    `new_round`. Idempotent: last_fired_round is a HIGH-WATER MARK -- any
+    round at or below it never fires again, so backward cycling and then
+    re-advancing through already-traversed rounds can't double-apply a
+    repeating event's payload (an equality check alone only protects
+    one-shot events)."""
+    lf = ev.get('last_fired_round')
+    if isinstance(lf, (int, float)) and new_round <= lf:
+        return False
+    try:
+        base_round = int(ev.get('round', 0) or 0)
+    except (TypeError, ValueError):
+        return False
+    if new_round == base_round:
+        return True
+    repeat_every = ev.get('repeat_every')
+    if repeat_every:
+        try:
+            repeat_every = int(repeat_every)
+        except (TypeError, ValueError):
+            return False
+        if repeat_every > 0 and new_round > base_round and (new_round - base_round) % repeat_every == 0:
+            return True
+    return False
+
+
+def _round_event_resolve_targets(target_ids):
+    """Resolve a payload row's target spec ('all' or a list of instance_ids)
+    to the live combatants currently in ACTIVE_ENCOUNTER. Unknown ids are
+    skipped silently (the encounter may have moved on since the event was
+    authored)."""
+    if target_ids == 'all':
+        return list(ACTIVE_ENCOUNTER)
+    if not isinstance(target_ids, (list, tuple)):
+        return []
+    by_id = {c.instance_id: c for c in ACTIVE_ENCOUNTER}
+    return [by_id[tid] for tid in target_ids if tid in by_id]
+
+
+def _fire_round_event_payload(payload):
+    """Execute one event's payload through the EXISTING condition/HP mutation
+    internals (`_apply_condition_change` / `_apply_hp_delta`) so sheet-sync,
+    SSE, and combat-log behavior are inherited rather than reimplemented."""
+    if not isinstance(payload, dict):
+        return
+    for row in (payload.get('conditions') or []):
+        targets = _round_event_resolve_targets(row.get('target_ids'))
+        condition = row.get('condition')
+        if not condition:
+            continue
+        try:
+            value = int(row.get('value', 1) or 1)
+        except (TypeError, ValueError):
+            value = 1
+        action = 'add' if value > 0 else 'decrease'
+        for c in targets:
+            if getattr(c, 'system', 'pf2e') == 'cosmere':
+                # Cosmere conditions are boolean on/off with their own PC
+                # write-through -- route through the Cosmere helper (a PF2e
+                # condition name on a Cosmere combatant is skipped there).
+                _apply_cosmere_condition_change(
+                    c.instance_id, condition, 'add' if value > 0 else 'remove')
+                continue
+            for _ in range(max(1, abs(value))):
+                _apply_condition_change(c.instance_id, condition, action)
+    for row in (payload.get('damage') or []):
+        targets = _round_event_resolve_targets(row.get('target_ids'))
+        dice = row.get('dice')
+        kind = row.get('kind') if row.get('kind') in ('damage', 'heal') else 'damage'
+        amount = _roll_dice_expr(dice)
+        if amount is None:
+            continue
+        for c in targets:
+            _apply_hp_delta(c.instance_id, amount, kind)
+
+
+def _fire_round_events(new_round):
+    """Called once from cycle_turn (feature 7) with the settled new round
+    number. Fires any due ROUND_EVENTS entries: executes the payload (if
+    any) through the shared mutation internals, logs a combat-log entry
+    naming the event, broadcasts SSE `round_event`, and advances
+    last_fired_round (which only ever advances -- backward turn-cycling
+    never re-fires or un-fires an event)."""
+    for ev in ROUND_EVENTS:
+        if not _round_event_should_fire(ev, new_round):
+            continue
+        ev['last_fired_round'] = new_round
+        try:
+            _fire_round_event_payload(ev.get('payload'))
+        except Exception as _ex:
+            # One malformed payload (bad dice string, corrupt row shape from
+            # an old save or crafted API call) must not abort the remaining
+            # due events or skip the tail persist/broadcast -- the reminder
+            # (log + banner) still goes out for the broken event.
+            print(f"[ROUND EVENTS] payload error for {ev.get('id')}: {_ex}")
+        title = ev.get('title') or 'Round event'
+        if ev.get('show_on_table'):
+            _combat_log(f"Round {new_round}: {title}", 'system')
+        else:
+            # The combat log is player-visible (open /api/combat_log + the
+            # combat_log SSE player frame) -- keep hidden events' titles out
+            # of it. The GM still sees the title on the lane and GM banner.
+            _combat_log(f"Round {new_round}: GM event fired", 'system')
+        _broadcast_round_event(ev, new_round)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+
+
+def _broadcast_round_event(ev, new_round):
+    """SSE `round_event`: GM frame always carries title/text; the player
+    frame carries text ONLY when show_on_table (the ember banner partial
+    renders nothing for a hidden event -- the client just renders what
+    arrives, so the split happens server-side here)."""
+    show_on_table = bool(ev.get('show_on_table'))
+    gm_payload = {
+        'title': ev.get('title') or '',
+        'text': ev.get('text') or '',
+        'round': new_round,
+        'show_on_table': show_on_table,
+    }
+
+    def _player_filter(p):
+        if not show_on_table:
+            return None
+        return {'title': p.get('title', ''), 'text': p.get('text', ''), 'round': p.get('round')}
+
+    sse_broadcast('round_event', gm_payload, player_filter=_player_filter)
+
+
+def _sanitize_round_event_payload(payload):
+    """Validate + normalize a round-event payload at authoring time so fire
+    time can trust the shape. Returns (clean_payload_or_None, error_or_None).
+    Structurally bad rows and unusable dice are rejected here with a message
+    (a 400 at the CRUD endpoint) rather than blowing up mid-combat: the dice
+    regex accepts '2d0', which makes randint(1, 0) raise at fire time, and a
+    silly '99999999d6' would stall the single gevent worker."""
+    if not isinstance(payload, dict):
+        return None, None
+    clean = {}
+    conditions = payload.get('conditions')
+    if conditions:
+        if not isinstance(conditions, list) or any(not isinstance(r, dict) for r in conditions):
+            return None, 'payload.conditions must be a list of objects'
+        rows = []
+        for r in conditions:
+            if not r.get('condition'):
+                continue
+            rows.append(r)
+        if rows:
+            clean['conditions'] = rows
+    damage = payload.get('damage')
+    if damage:
+        if not isinstance(damage, list) or any(not isinstance(r, dict) for r in damage):
+            return None, 'payload.damage must be a list of objects'
+        rows = []
+        for r in damage:
+            dice = r.get('dice')
+            if not dice or not isinstance(dice, str):
+                continue
+            m = re.search(r'(\d+)d(\d+)', dice)
+            if not m:
+                return None, f'unrecognized dice expression: {dice!r}'
+            qty, sides = int(m.group(1)), int(m.group(2))
+            if qty < 1 or sides < 2:
+                return None, f'invalid dice expression: {dice!r}'
+            if qty > 100 or sides > 1000:
+                return None, f'dice expression too large: {dice!r}'
+            rows.append(r)
+        if rows:
+            clean['damage'] = rows
+    return (clean or None), None
+
+
+@app.route('/api/round_events', methods=['POST'])
+def create_round_event():
+    """GM-only: author a new round-event. Body (JSON): round (int, required),
+    repeat_every (int|null), title, text, show_on_table (bool), payload
+    (null | {conditions: [...], damage: [...]}) per the spec shape. Returns
+    the created event (server-assigned id)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        round_num = int(data.get('round'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'round is required and must be an integer'}), 400
+    repeat_every = data.get('repeat_every')
+    try:
+        repeat_every = int(repeat_every) if repeat_every not in (None, '') else None
+    except (TypeError, ValueError):
+        repeat_every = None
+    payload, perr = _sanitize_round_event_payload(data.get('payload'))
+    if perr:
+        return jsonify({'success': False, 'error': perr}), 400
+    ev = {
+        'id': str(uuid.uuid4())[:8],
+        'round': round_num,
+        'repeat_every': repeat_every,
+        'title': str(data.get('title', '') or ''),
+        'text': str(data.get('text', '') or ''),
+        'show_on_table': bool(data.get('show_on_table')),
+        'payload': payload,
+        'last_fired_round': None,
+    }
+    ROUND_EVENTS.append(ev)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'success': True, 'event': ev})
+
+
+@app.route('/api/round_events/<event_id>/update', methods=['POST'])
+def update_round_event(event_id):
+    """GM-only: edit an existing round-event's fields. Body: any subset of
+    round/repeat_every/title/text/show_on_table/payload. last_fired_round is
+    never client-settable -- it only advances from the firing engine."""
+    data = request.get_json(silent=True) or {}
+    ev = next((e for e in ROUND_EVENTS if e.get('id') == event_id), None)
+    if ev is None:
+        return jsonify({'success': False, 'error': 'round event not found'}), 404
+    if 'round' in data:
+        try:
+            ev['round'] = int(data['round'])
+        except (TypeError, ValueError):
+            pass
+    if 'repeat_every' in data:
+        repeat_every = data['repeat_every']
+        try:
+            ev['repeat_every'] = int(repeat_every) if repeat_every not in (None, '') else None
+        except (TypeError, ValueError):
+            ev['repeat_every'] = None
+    if 'title' in data:
+        ev['title'] = str(data['title'] or '')
+    if 'text' in data:
+        ev['text'] = str(data['text'] or '')
+    if 'show_on_table' in data:
+        ev['show_on_table'] = bool(data['show_on_table'])
+    if 'payload' in data:
+        payload, perr = _sanitize_round_event_payload(data['payload'])
+        if perr:
+            return jsonify({'success': False, 'error': perr}), 400
+        ev['payload'] = payload
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'success': True, 'event': ev})
+
+
+@app.route('/api/round_events/<event_id>/delete', methods=['POST'])
+def delete_round_event(event_id):
+    """GM-only: remove a round-event from the lane."""
+    global ROUND_EVENTS
+    before = len(ROUND_EVENTS)
+    ROUND_EVENTS = [e for e in ROUND_EVENTS if e.get('id') != event_id]
+    if len(ROUND_EVENTS) == before:
+        return jsonify({'success': False, 'error': 'round event not found'}), 404
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({'success': True})
+
 
 def _generate_turn_reminders():
     """Generate start-of-turn reminders for the active combatant."""
@@ -11188,12 +11588,23 @@ def delay_turn(instance_id):
                     if c.is_pc and c.name in PARTY_LIBRARY: PARTY_LIBRARY[c.name].conditions['frightened'] = c.conditions['frightened']
                 # Move to next non-delaying combatant
                 old_index = TURN_INDEX
+                _round_before_advance = ROUND_NUMBER
                 for _ in range(len(ACTIVE_ENCOUNTER)):
                     TURN_INDEX = (TURN_INDEX + 1) % len(ACTIVE_ENCOUNTER)
                     if TURN_INDEX <= old_index: ROUND_NUMBER += 1
                     if not getattr(ACTIVE_ENCOUNTER[TURN_INDEX], 'delaying', False):
                         break
                     old_index = TURN_INDEX
+                # Round-events lane (feature 7): delaying the last combatant
+                # in initiative order crosses a round boundary through THIS
+                # advance loop, not cycle_turn's -- without the same fire
+                # gate, one-shot events due that round are silently lost
+                # (there is no catch-up on later rounds).
+                if ROUND_NUMBER > _round_before_advance:
+                    try:
+                        _fire_round_events(ROUND_NUMBER)
+                    except Exception as _ex:
+                        print('[ROUND EVENTS] fire error:', _ex)
                 _generate_turn_reminders()
             _persist_encounter_state()
             _broadcast_encounter_state()
@@ -11308,6 +11719,7 @@ def save_encounter():
             "turn_index": TURN_INDEX,
             "notes": request.form.get('encounter_notes', ENCOUNTER_NOTES),
             "session_timer_start": SESSION_TIMER_START,
+            "round_events": copy.deepcopy(ROUND_EVENTS),
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -11341,7 +11753,7 @@ def save_encounter():
 
 @app.route('/api/load_encounter', methods=['POST'])
 def load_encounter():
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
     name = _sanitize_encounter_name(request.form.get('encounter_name') or '')
     if not name:
         return jsonify({"success": False, "error": "encounter_name required"}), 400
@@ -11356,7 +11768,7 @@ def load_encounter():
     except (OSError, json.JSONDecodeError) as e:
         return jsonify({"success": False, "error": f"encounter file is unreadable or corrupt: {e}"}), 500
     if name and os.path.exists(enc_path):
-        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
+        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''; ROUND_EVENTS = []
 
         # Support both old format (list) and new format (dict with metadata)
         if isinstance(raw, list):
@@ -11369,6 +11781,7 @@ def load_encounter():
             TURN_INDEX = raw.get('turn_index', 0)
             ENCOUNTER_NOTES = raw.get('notes', '')
             SESSION_TIMER_START = raw.get('session_timer_start', None)
+            ROUND_EVENTS = list(raw.get('round_events', []) or [])
         else:
             combatants = []
 
@@ -11784,7 +12197,7 @@ def api_monster_details():
 @app.route('/api/stage_encounter', methods=['POST'])
 def api_stage_encounter():
     """Load a staged encounter directly into the active tracker."""
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER
+    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ROUND_EVENTS
     data = request.json
     monsters = data.get('monsters', [])
     add_party = data.get('add_party', False)
@@ -11794,6 +12207,7 @@ def api_stage_encounter():
         ACTIVE_ENCOUNTER.clear()
         TURN_INDEX = 0
         ROUND_NUMBER = 1
+        ROUND_EVENTS = []
 
     # Add monsters + hazards. Hazards arrive with is_hazard=True and a
     # path of '__hazard__<name>'; they're constructed inline rather than
@@ -16559,6 +16973,13 @@ def web_manifest():
     """Serve the web app manifest from the root path."""
     return send_from_directory(os.path.join(BASE_DIR, 'static'), 'manifest.json',
                                mimetype='application/manifest+json')
+
+
+# --- BOOT-TIME AUTOSAVE RESTORE ---
+# Runs once at the module tail so every helper the restore path needs
+# (including the Cosmere rebuilders defined mid-file) exists. The boot
+# load_libraries(restore_autosave=False) call above intentionally skips it.
+_restore_encounter_autosave()
 
 
 if __name__ == '__main__':
