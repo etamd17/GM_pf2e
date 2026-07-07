@@ -8399,6 +8399,13 @@
             const wvEl = document.getElementById('wounded-val');
             if (dvEl) dvEl.textContent = dying;
             if (wvEl) wvEl.textContent = wounded;
+            // Guided DC readout (dying automation): visible text, not just a
+            // tooltip. Only meaningful while actually dying -- the widget can
+            // also show at 0 HP with dying 0 (stabilized but unconscious).
+            const dcWrap = document.getElementById('recovery-dc-wrap');
+            const dcEl = document.getElementById('recovery-dc-val');
+            if (dcEl) dcEl.textContent = 10 + dying;
+            if (dcWrap) dcWrap.style.display = dying > 0 ? '' : 'none';
             if (cur <= 0 || dying > 0) w.classList.add('active');
             else w.classList.remove('active');
             // Dying pulse (COMBAT IDENTITY port) — pulse the Resources/HP card
@@ -8447,18 +8454,41 @@
                 _paintDeathsDoor();
             })();
         } catch(e) { console.error('hp/conditions patch init:', e); }
-        function rollRecoveryCheck() {
-            const dying = (currentConditions || {}).dying || 1;
-            const dc = 10 + dying;
-            const d20 = Math.floor(Math.random() * 20) + 1;
-            let outcome = '';
-            if (d20 === 20) outcome = `CRIT SUCCESS — Dying reduced by 2 (or to 0 if Dying 2)`;
-            else if (d20 >= dc) outcome = `Success — Dying −1`;
-            else if (d20 === 1) outcome = `CRIT FAIL — Dying +2`;
-            else outcome = `Failure — Dying +1`;
-            const detail = `1d20 (${d20}) vs DC ${dc} flat — ${outcome}`;
-            try { broadcastToGM('Recovery Check', d20.toString(), detail, null); } catch(_) {}
-            try { showRollToast('Recovery Check', d20, detail, d20 === 20, d20 === 1, [{sides:20,value:d20}], dc); } catch(_) {}
+        // Server-backed recovery check (dying automation): the SERVER rolls
+        // (or applies a physical d20 passed in), runs the full Remaster
+        // degree ladder, and auto-applies dying/wounded/death. This replaced
+        // a client-side Math.random copy that had divergent math and applied
+        // nothing -- the toast now reports what actually happened; the
+        // widget's Dying/Wounded values repaint via the pc_update SSE.
+        async function rollRecoveryCheck(d20) {
+            let j = null;
+            try {
+                const body = (d20 >= 1 && d20 <= 20) ? {d20: d20} : {};
+                const r = await fetch(`/api/pc/${pcNameEncoded}/recovery_check`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                j = await r.json();
+                if (!r.ok || !j.success) {
+                    try { showRollToast('Recovery Check', '—', (j && j.error) || 'Recovery check failed', false, false, [], null); } catch(_) {}
+                    return;
+                }
+            } catch(_) { return; }
+            const labels = {crit_success: 'CRIT SUCCESS', success: 'Success', failure: 'Failure', crit_failure: 'CRIT FAIL'};
+            let outcome;
+            if (j.died) outcome = 'DEAD';
+            else if (j.dying === 0) outcome = `Recovered — Dying 0, Wounded ${j.wounded}`;
+            else outcome = `Dying ${j.dying}`;
+            const detail = `1d20 (${j.d20}) vs DC ${j.dc} flat — ${labels[j.degree] || j.degree} → ${outcome}`;
+            try { broadcastToGM('Recovery Check', j.d20.toString(), detail, null); } catch(_) {}
+            try { showRollToast('Recovery Check', j.d20, detail, j.degree === 'crit_success', j.degree === 'crit_failure', [{sides: 20, value: j.d20}], j.dc); } catch(_) {}
+        }
+        function applyPhysicalRecovery() {
+            const input = document.getElementById('recovery-d20-input');
+            const v = parseInt(input && input.value, 10);
+            if (!v || v < 1 || v > 20) { if (input) input.focus(); return; }
+            if (input) input.value = '';
+            rollRecoveryCheck(v);
         }
         async function adjustDying(delta) {
             const cur = (currentConditions || {}).dying || 0;

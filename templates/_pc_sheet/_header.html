@@ -243,14 +243,19 @@
             <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}">
                 <div class="rubric" data-tint="verdigris" style="margin-bottom:6px;">Resources</div>
                 <div class="ss-lbl">Hit Points</div>
-                {# Dying widget (Wave 2 #4) — only renders when current_hp == 0,
-                   driven by the dying/wounded values that already exist in the
-                   condition tracker. Shows the recovery DC and a one-click
-                   recovery flat-check button. #}
+                {# Dying widget (Wave 2 #4; guided recovery = dying automation).
+                   Driven by the dying/wounded values that already exist in the
+                   condition tracker. The Recovery Check button rolls SERVER-side
+                   and auto-applies the outcome; the d20 input lets the player
+                   roll physical dice instead (parity with the GM tracker
+                   widget). DC readout is kept live by _refreshDyingWidget. #}
                 <div id="dying-widget" class="dying-widget no-print {% if pc.current_hp == 0 %}active{% endif %}" aria-live="polite">
-                    <div class="dying-widget-title"> Dying <span id="dying-val">{{ pc.conditions.get('dying', 0) }}</span> · Wounded <span id="wounded-val">{{ pc.conditions.get('wounded', 0) }}</span></div>
+                    {% set _dying0 = pc.conditions.get('dying', 0) %}
+                    <div class="dying-widget-title"> Dying <span id="dying-val">{{ _dying0 }}</span> · Wounded <span id="wounded-val">{{ pc.conditions.get('wounded', 0) }}</span><span id="recovery-dc-wrap"{% if _dying0 == 0 %} style="display:none;"{% endif %}> · Recovery DC <span id="recovery-dc-val">{{ 10 + _dying0 }}</span></span></div>
                     <div class="dying-widget-row">
-                        <button onclick="rollRecoveryCheck()" class="recovery" title="Recovery flat check: DC 10 + Dying value. Success: Dying −1. Crit success: Dying −2 + conscious. Failure: Dying +1. Crit failure: Dying +2.">Recovery Check</button>
+                        <button onclick="rollRecoveryCheck()" class="recovery" title="Recovery flat check: DC 10 + Dying value. Rolls on the server and applies the result. Success: Dying −1. Crit success: Dying −2. Failure: Dying +1. Crit failure: Dying +2. Reaching Dying 0 adds 1 Wounded.">Recovery Check</button>
+                        <input type="number" id="recovery-d20-input" min="1" max="20" placeholder="d20" title="Rolled physical dice? Enter your d20 here and Apply — the server applies the same outcome math." style="width:52px; background:rgba(0,0,0,0.35); border:1px solid rgba(239,68,68,0.4); border-radius:5px; color:inherit; padding:3px 6px; font-size:11px;">
+                        <button onclick="applyPhysicalRecovery()" class="recovery" title="Apply the entered physical d20">Apply</button>
                         <button onclick="adjustDying(-1)" title="Reduce Dying (e.g., after taking 2 actions to remove)">−1 Dying</button>
                         <button onclick="adjustDying(1)" title="Increase Dying (took damage while dying, or failed save)">+1 Dying</button>
                         <button onclick="callForHeal()" title="Broadcast 'I need healing!' to the GM">Call for Help</button>
