@@ -10659,71 +10659,133 @@ def use_action(instance_id):
         "reaction_used": reaction_used,
     })
 
-@app.route('/api/recovery_check/<instance_id>', methods=['POST'])
-@gm_required
-def recovery_check(instance_id):
-    """PF2e Remaster recovery check: flat check vs DC 10 + current dying value.
-    The site never forces a roll — players can roll physical dice and POST
-    {"d20": <result>}; we apply the degree-of-success math. POST without a d20
-    rolls server-side. Crit success/fail bumps dying by 2; nat 1 / nat 20
-    shift degree by one step. Dying 0 clears unconscious and adds wounded."""
+def _resolve_recovery_check(target, d20_raw=None):
+    """Shared PF2e Remaster recovery-check core (dying automation): flat
+    check vs DC 10 + current dying, degree ladder with nat 1 / nat 20
+    one-step shifts, ±1/±2 dying deltas, death at max(1, 4 - doomed) with
+    dying clamped there, wounded +1 on recovery to dying 0. Mutates
+    `target.conditions` in place and returns (result_dict, None), or
+    (None, error) with error in ('not_dying', 'dead') — callers 400 both.
+    The dead check matters: death is DERIVED (dying >= threshold, no flag),
+    so without it a dead PC could keep rolling and a nat 20 would un-kill
+    the corpse. One core, two thin routes — the GM tracker route and the
+    player sheet route — so the math can never fork again (the sheet's old
+    client-side copy diverged and applied nothing)."""
     import random as _r
-    data = request.get_json(silent=True) or {}
     try:
-        d20 = int(data.get('d20')) if data.get('d20') not in (None, '', 0) else _r.randint(1, 20)
+        d20 = int(d20_raw) if d20_raw not in (None, '', 0) else _r.randint(1, 20)
     except (TypeError, ValueError):
         d20 = _r.randint(1, 20)
     d20 = max(1, min(20, d20))
-    with ENCOUNTER_LOCK:
-        target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
-        if not target:
-            return jsonify({"success": False, "error": "Combatant not found"}), 404
-        dying = int(target.conditions.get('dying', 0) or 0)
-        if dying <= 0:
-            return jsonify({"success": False, "error": "Not dying"}), 400
-        dc = 10 + dying
-        # Degree-of-success ladder, with nat 1 / nat 20 stepping by one
-        if d20 >= dc + 10: degree = 'crit_success'
-        elif d20 >= dc:    degree = 'success'
-        elif d20 <= dc - 10: degree = 'crit_failure'
-        else:              degree = 'failure'
-        # Step by 1 for natural 1/20
-        order = ['crit_failure', 'failure', 'success', 'crit_success']
-        if d20 == 20: degree = order[min(len(order) - 1, order.index(degree) + 1)]
-        elif d20 == 1: degree = order[max(0, order.index(degree) - 1)]
-        delta = {'crit_success': -2, 'success': -1, 'failure': 1, 'crit_failure': 2}[degree]
-        new_dying = max(0, dying + delta)
-        doomed = int(target.conditions.get('doomed', 0) or 0)
-        death_threshold = max(1, 4 - doomed)
-        died = new_dying >= death_threshold
-        if died:
-            new_dying = death_threshold
-        target.conditions['dying'] = new_dying
-        if new_dying == 0 and dying > 0:
-            target.conditions['wounded'] = int(target.conditions.get('wounded', 0) or 0) + 1
-        is_pc = target.is_pc
-        target_name = target.name
-        new_wounded = target.conditions['wounded']
-    if is_pc and target_name in PARTY_LIBRARY:
-        PARTY_LIBRARY[target_name].conditions['dying'] = new_dying
-        PARTY_LIBRARY[target_name].conditions['wounded'] = new_wounded
-        _broadcast_pc_state(target_name)
-        _persist_pc_combat_state(target_name)
-    label = degree.replace('_', ' ').title()
-    msg = f"{target_name}: Recovery DC {dc} → rolled {d20} → {label} ({'died' if died else f'Dying {new_dying}'})"
-    _combat_log(msg, 'condition', degree=degree)
-    _persist_encounter_state()
-    _broadcast_encounter_state()
-    return jsonify({
-        "success": True,
+    dying = int(target.conditions.get('dying', 0) or 0)
+    if dying <= 0:
+        return None, 'not_dying'
+    doomed = int(target.conditions.get('doomed', 0) or 0)
+    if dying >= max(1, 4 - doomed):
+        return None, 'dead'
+    dc = 10 + dying
+    if d20 >= dc + 10: degree = 'crit_success'
+    elif d20 >= dc:    degree = 'success'
+    elif d20 <= dc - 10: degree = 'crit_failure'
+    else:              degree = 'failure'
+    order = ['crit_failure', 'failure', 'success', 'crit_success']
+    if d20 == 20: degree = order[min(len(order) - 1, order.index(degree) + 1)]
+    elif d20 == 1: degree = order[max(0, order.index(degree) - 1)]
+    delta = {'crit_success': -2, 'success': -1, 'failure': 1, 'crit_failure': 2}[degree]
+    new_dying = max(0, dying + delta)
+    death_threshold = max(1, 4 - doomed)
+    died = new_dying >= death_threshold
+    if died:
+        new_dying = death_threshold
+    target.conditions['dying'] = new_dying
+    if new_dying == 0 and dying > 0:
+        target.conditions['wounded'] = int(target.conditions.get('wounded', 0) or 0) + 1
+    return {
         "d20": d20,
         "dc": dc,
         "degree": degree,
         "delta": delta,
         "dying": new_dying,
         "died": died,
-        "wounded": new_wounded,
-    })
+        "wounded": int(target.conditions.get('wounded', 0) or 0),
+    }, None
+
+
+_RECOVERY_ERRORS = {
+    'not_dying': 'Not dying',
+    'dead': 'Already dead — a recovery check cannot help',
+}
+
+
+def _log_recovery_result(target_name, result):
+    label = result['degree'].replace('_', ' ').title()
+    outcome = 'died' if result['died'] else f"Dying {result['dying']}"
+    _combat_log(f"{target_name}: Recovery DC {result['dc']} → rolled "
+                f"{result['d20']} → {label} ({outcome})", 'condition')
+
+
+@app.route('/api/recovery_check/<instance_id>', methods=['POST'])
+@gm_required
+def recovery_check(instance_id):
+    """GM tracker recovery check (thin wrapper over the shared core). The
+    site never forces a roll — players can roll physical dice and the GM
+    POSTs {"d20": <result>}; POST without a d20 rolls server-side."""
+    data = request.get_json(silent=True) or {}
+    with ENCOUNTER_LOCK:
+        target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
+        if not target:
+            return jsonify({"success": False, "error": "Combatant not found"}), 404
+        result, rc_err = _resolve_recovery_check(target, data.get('d20'))
+        if rc_err:
+            return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
+        is_pc = target.is_pc
+        target_name = target.name
+    if is_pc and target_name in PARTY_LIBRARY:
+        PARTY_LIBRARY[target_name].conditions['dying'] = result['dying']
+        PARTY_LIBRARY[target_name].conditions['wounded'] = result['wounded']
+        _broadcast_pc_state(target_name)
+        _persist_pc_combat_state(target_name)
+    _log_recovery_result(target_name, result)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return jsonify({"success": True, **result})
+
+
+@app.route('/api/pc/<pc_name>/recovery_check', methods=['POST'])
+@require_pc_self_or_gm
+def pc_recovery_check(pc_name):
+    """Player self-serve recovery check from their own sheet (dying
+    automation): same shared core as the GM tracker route, gated by the
+    same owner-or-GM rule as the sheet's other mutations. Resolves the
+    PC's live combatant when an encounter is running (so tracker state,
+    combat log, and encounter SSE stay in sync) and falls back to the
+    library PC otherwise (GM set dying outside a fight)."""
+    data = request.get_json(silent=True) or {}
+    d20_raw = data.get('d20')
+    with ENCOUNTER_LOCK:
+        live = next((c for c in ACTIVE_ENCOUNTER
+                     if getattr(c, 'is_pc', False) and c.name == pc_name), None)
+        if live is not None:
+            result, rc_err = _resolve_recovery_check(live, d20_raw)
+            if rc_err:
+                return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
+    if live is None:
+        pc = PARTY_LIBRARY.get(pc_name)
+        if pc is None:
+            return jsonify({"success": False, "error": "Character not found"}), 404
+        result, rc_err = _resolve_recovery_check(pc, d20_raw)
+        if rc_err:
+            return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
+    if pc_name in PARTY_LIBRARY:
+        PARTY_LIBRARY[pc_name].conditions['dying'] = result['dying']
+        PARTY_LIBRARY[pc_name].conditions['wounded'] = result['wounded']
+        _broadcast_pc_state(pc_name)
+        _persist_pc_combat_state(pc_name)
+    _log_recovery_result(pc_name, result)
+    if live is not None:
+        _persist_encounter_state()
+        _broadcast_encounter_state()
+    return jsonify({"success": True, **result})
 
 @app.route('/api/set_persistent_damage/<instance_id>', methods=['POST'])
 @require_live_combatant
