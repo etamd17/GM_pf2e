@@ -234,6 +234,9 @@ def test_gm_tracker_route_still_works_via_shared_core(kyle, client):
 # ==========================================================================
 
 def test_other_player_gets_403(kyle, client, monkeypatch):
+    # require_pc_self_or_gm reads the GM_PASSWORD module global at call time
+    # (not a captured value) and _account_mode() is off in this fixture setup,
+    # so patching the global exercises the legacy player_name branch exactly.
     monkeypatch.setattr(app_module, 'GM_PASSWORD', 'sekrit')
     pc = app_module.PARTY_LIBRARY[kyle]
     _set_dying(pc, 1)
@@ -255,3 +258,58 @@ def test_owning_player_allowed(kyle, client, monkeypatch):
     r = _pc_roll(client, kyle, d20=11)
     assert r.status_code == 200
     assert pc.conditions['dying'] == 0
+
+
+# ==========================================================================
+# Final-review fixes: dead targets must be rejected (a recovery check can't
+# un-kill), and the in-encounter mirror must hold for DISTINCT objects.
+# ==========================================================================
+
+def test_dead_pc_cannot_roll_recovery(kyle, client):
+    """Dead is derived as dying >= max(1, 4 - doomed); a dead PC passing the
+    old dying<=0-only guard could be revived by a nat 20 from the sheet."""
+    pc = app_module.PARTY_LIBRARY[kyle]
+    _set_dying(pc, 4)
+    r = _pc_roll(client, kyle, d20=20)
+    assert r.status_code == 400
+    assert pc.conditions['dying'] == 4, 'dead PC was mutated'
+    assert pc.conditions['wounded'] == 0
+
+
+def test_doomed_dead_pc_cannot_roll_recovery(kyle, client):
+    """Doomed lowers the threshold: dying 2 + doomed 2 IS dead, even though
+    dying < 4."""
+    pc = app_module.PARTY_LIBRARY[kyle]
+    _set_dying(pc, 2, doomed=2)
+    r = _pc_roll(client, kyle, d20=20)
+    assert r.status_code == 400
+    assert pc.conditions['dying'] == 2
+
+
+def test_gm_route_also_rejects_dead(kyle, client):
+    pc = app_module.PARTY_LIBRARY[kyle]
+    _set_dying(pc, 4)
+    with _Encounter(pc) as enc:
+        r = client.post(f'/api/recovery_check/{enc.instance_id}',
+                        json={'d20': 20}, headers=_AJAX)
+        assert r.status_code == 400
+        assert pc.conditions['dying'] == 4
+
+
+def test_in_encounter_mirror_with_distinct_objects(kyle, client):
+    """Production reality: the tracker holds a DEEPCOPY of the library PC
+    (add_party deepcopies), so the mirror must copy values across two
+    distinct objects — the same-object test above can't prove that."""
+    import copy as _copy
+    pc = app_module.PARTY_LIBRARY[kyle]
+    live = _copy.deepcopy(pc)
+    _set_dying(live, 1)
+    pc.conditions['dying'] = 1      # library agrees he is dying
+    pc.current_hp = 0
+    with _Encounter(live) as enc:
+        j = _pc_roll(client, kyle, d20=11).get_json()   # DC 11 -> success
+        assert j['degree'] == 'success' and j['dying'] == 0
+        assert live.conditions['dying'] == 0, 'live combatant not mutated'
+        assert live is not pc
+        assert pc.conditions['dying'] == 0, 'library PC not mirrored'
+        assert pc.conditions['wounded'] == 1, 'wounded not mirrored'

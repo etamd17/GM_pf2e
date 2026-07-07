@@ -10664,11 +10664,13 @@ def _resolve_recovery_check(target, d20_raw=None):
     check vs DC 10 + current dying, degree ladder with nat 1 / nat 20
     one-step shifts, ±1/±2 dying deltas, death at max(1, 4 - doomed) with
     dying clamped there, wounded +1 on recovery to dying 0. Mutates
-    `target.conditions` in place and returns the result dict, or None when
-    the target isn't dying (callers 400). One core, two thin routes — the
-    GM tracker route and the player sheet route — so the math can never
-    fork again (the sheet's old client-side copy diverged and applied
-    nothing)."""
+    `target.conditions` in place and returns (result_dict, None), or
+    (None, error) with error in ('not_dying', 'dead') — callers 400 both.
+    The dead check matters: death is DERIVED (dying >= threshold, no flag),
+    so without it a dead PC could keep rolling and a nat 20 would un-kill
+    the corpse. One core, two thin routes — the GM tracker route and the
+    player sheet route — so the math can never fork again (the sheet's old
+    client-side copy diverged and applied nothing)."""
     import random as _r
     try:
         d20 = int(d20_raw) if d20_raw not in (None, '', 0) else _r.randint(1, 20)
@@ -10677,7 +10679,10 @@ def _resolve_recovery_check(target, d20_raw=None):
     d20 = max(1, min(20, d20))
     dying = int(target.conditions.get('dying', 0) or 0)
     if dying <= 0:
-        return None
+        return None, 'not_dying'
+    doomed = int(target.conditions.get('doomed', 0) or 0)
+    if dying >= max(1, 4 - doomed):
+        return None, 'dead'
     dc = 10 + dying
     if d20 >= dc + 10: degree = 'crit_success'
     elif d20 >= dc:    degree = 'success'
@@ -10688,7 +10693,6 @@ def _resolve_recovery_check(target, d20_raw=None):
     elif d20 == 1: degree = order[max(0, order.index(degree) - 1)]
     delta = {'crit_success': -2, 'success': -1, 'failure': 1, 'crit_failure': 2}[degree]
     new_dying = max(0, dying + delta)
-    doomed = int(target.conditions.get('doomed', 0) or 0)
     death_threshold = max(1, 4 - doomed)
     died = new_dying >= death_threshold
     if died:
@@ -10704,7 +10708,13 @@ def _resolve_recovery_check(target, d20_raw=None):
         "dying": new_dying,
         "died": died,
         "wounded": int(target.conditions.get('wounded', 0) or 0),
-    }
+    }, None
+
+
+_RECOVERY_ERRORS = {
+    'not_dying': 'Not dying',
+    'dead': 'Already dead — a recovery check cannot help',
+}
 
 
 def _log_recovery_result(target_name, result):
@@ -10725,9 +10735,9 @@ def recovery_check(instance_id):
         target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
         if not target:
             return jsonify({"success": False, "error": "Combatant not found"}), 404
-        result = _resolve_recovery_check(target, data.get('d20'))
-        if result is None:
-            return jsonify({"success": False, "error": "Not dying"}), 400
+        result, rc_err = _resolve_recovery_check(target, data.get('d20'))
+        if rc_err:
+            return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
         is_pc = target.is_pc
         target_name = target.name
     if is_pc and target_name in PARTY_LIBRARY:
@@ -10756,16 +10766,16 @@ def pc_recovery_check(pc_name):
         live = next((c for c in ACTIVE_ENCOUNTER
                      if getattr(c, 'is_pc', False) and c.name == pc_name), None)
         if live is not None:
-            result = _resolve_recovery_check(live, d20_raw)
-            if result is None:
-                return jsonify({"success": False, "error": "Not dying"}), 400
+            result, rc_err = _resolve_recovery_check(live, d20_raw)
+            if rc_err:
+                return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
     if live is None:
         pc = PARTY_LIBRARY.get(pc_name)
         if pc is None:
             return jsonify({"success": False, "error": "Character not found"}), 404
-        result = _resolve_recovery_check(pc, d20_raw)
-        if result is None:
-            return jsonify({"success": False, "error": "Not dying"}), 400
+        result, rc_err = _resolve_recovery_check(pc, d20_raw)
+        if rc_err:
+            return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
     if pc_name in PARTY_LIBRARY:
         PARTY_LIBRARY[pc_name].conditions['dying'] = result['dying']
         PARTY_LIBRARY[pc_name].conditions['wounded'] = result['wounded']
