@@ -8405,7 +8405,9 @@
             const dcWrap = document.getElementById('recovery-dc-wrap');
             const dcEl = document.getElementById('recovery-dc-val');
             if (dcEl) dcEl.textContent = 10 + dying;
-            if (dcWrap) dcWrap.style.display = dying > 0 ? '' : 'none';
+            // Show the DC only while a recovery roll is possible: not at
+            // dying 0 (stabilized) and not at dying 4 (dead at any doomed).
+            if (dcWrap) dcWrap.style.display = (dying > 0 && dying < 4) ? '' : 'none';
             if (cur <= 0 || dying > 0) w.classList.add('active');
             else w.classList.remove('active');
             // Dying pulse (COMBAT IDENTITY port) — pulse the Resources/HP card
