@@ -56,6 +56,9 @@ def duo(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, 'get_pc_file_path', lambda n: files.get(n))
     monkeypatch.setattr(app_module, '_persist_encounter_state', lambda *a, **k: None)
     monkeypatch.setattr(app_module, '_broadcast_encounter_state', lambda *a, **k: None)
+    # The healing log writes session_state.json, whose local-dev fallback is
+    # the REPO directory -- point it at tmp so tests don't pollute the repo.
+    monkeypatch.setattr(app_module, '_SESSION_STATE_PATH', str(tmp_path / 'session_state.json'))
     return {'kyle': kyle, 'goel': goel, 'files': files}
 
 

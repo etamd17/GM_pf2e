@@ -7108,12 +7108,13 @@
         // under key '0' as a deduped name array (same shape as ranked spells but
         // no per-slot semantics).
         function _getCantripSelection(cIdx) {
-            const ps = window._preparedSpells[cIdx] || {};
+            const ps = (window._preparedSpells || {})[cIdx] || {};
             const arr = ps['0'] || [];
             // Dedupe + drop nulls — cantrips are a set, not a slot list (R4).
             return Array.from(new Set(arr.filter(Boolean)));
         }
         function _setCantripSelection(cIdx, names) {
+            if (!window._preparedSpells) window._preparedSpells = {};
             if (!window._preparedSpells[cIdx]) window._preparedSpells[cIdx] = {};
             window._preparedSpells[cIdx]['0'] = Array.from(new Set(names));
             _saveSpellState();
@@ -7279,10 +7280,15 @@
             // opens the modal which already calls openDailyPrepModal().
         }
 
-        function _getPrepState(cIdx) { return window._preparedSpells[cIdx] || {}; }
-        function _setPrepState(cIdx, state) { window._preparedSpells[cIdx] = state; _saveSpellState(); }
-        function _isCastPrep(key) { const short = key.replace(`cast_prep_${pcName}_`, ''); return !!window._castPrep[short]; }
-        function _setCastPrep(key, val) { const short = key.replace(`cast_prep_${pcName}_`, ''); if(val) window._castPrep[short] = true; else delete window._castPrep[short]; _saveSpellState(); }
+        // Guarded: the synchronous initDailyPrep() at the script tail runs
+        // BEFORE the DOMContentLoaded loader ever assigns _preparedSpells
+        // (a DCL handler can never beat a sync statement), so an unguarded
+        // read here crashed the whole script tail on every prepared-caster
+        // sheet -- killing every top-level initialization after it.
+        function _getPrepState(cIdx) { return (window._preparedSpells || {})[cIdx] || {}; }
+        function _setPrepState(cIdx, state) { if (!window._preparedSpells) window._preparedSpells = {}; window._preparedSpells[cIdx] = state; _saveSpellState(); }
+        function _isCastPrep(key) { const short = key.replace(`cast_prep_${pcName}_`, ''); return !!(window._castPrep || {})[short]; }
+        function _setCastPrep(key, val) { const short = key.replace(`cast_prep_${pcName}_`, ''); if (!window._castPrep) window._castPrep = {}; if(val) window._castPrep[short] = true; else delete window._castPrep[short]; _saveSpellState(); }
 
         function renderPrepUI(cIdx, caster) {
             const ui = document.getElementById(`prep-ui-${cIdx}`);
@@ -7757,9 +7763,11 @@
             });
         });
 
-        // Close menu on click anywhere else
+        // Close menu on click anywhere else. Guarded: #roll-context-menu is
+        // not rendered in every sheet state, and an unguarded read here
+        // threw on EVERY document click (found in the ten-minute-rest walk).
         document.addEventListener('click', function() {
-            ctxMenu.classList.remove('visible');
+            if (ctxMenu) ctxMenu.classList.remove('visible');
         });
 
         function contextRoll(mode) {
@@ -9005,15 +9013,17 @@
         // 1-hour immunity. Physical dice supported via the d20 field. The
         // old client-side Math.random roll (divergent math, applied
         // nothing) is gone.
-        const _TW_RANKS = {'': 0, 'U': 0, 'T': 1, 'E': 2, 'M': 3, 'L': 4};
-        let _twInFlight = false;
         async function openTreatWounds() {
             const medicine = ({{ pc.skills | tojson | safe }}).find(s => s.name.toLowerCase() === 'medicine');
             if (!medicine) {
                 alert('You don\'t have Medicine listed.');
                 return;
             }
-            const medRank = _TW_RANKS[String(medicine.prof_letter || '').toUpperCase()] || 0;
+            // Rank map lives inside the function on purpose: this script has
+            // a history of top-level tail crashes leaving later consts in
+            // the TDZ while hoisted functions stay callable.
+            const ranks = {'U': 0, 'T': 1, 'E': 2, 'M': 3, 'L': 4};
+            const medRank = ranks[String(medicine.prof_letter || '').toUpperCase()] || 0;
             if (medRank < 1) {
                 if (typeof showRollToast === 'function') showRollToast('Treat Wounds', '—', 'Treat Wounds requires trained Medicine.', false, false, [], null);
                 return;
@@ -9038,7 +9048,7 @@
                         <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Target</label>
                         <select id="tw-target" class="hp-input" style="width:100%; padding:6px 8px; margin-top:4px;">
                             ${party.map(p => `<option value="${p.name}">${p.name}</option>`).join('')}
-                            ${party.length ? '' : `<option value="${pcName}">${pcName} (self)</option>`}
+                            <option value="${pcName}">${pcName} (self)</option>
                         </select>
                     </div>
                     <div style="margin-bottom:10px;">
@@ -9072,8 +9082,8 @@
         }
 
         async function _postTreatWounds(target, tier, d20, override) {
-            if (_twInFlight) return;
-            _twInFlight = true;
+            if (window._twInFlight) return;
+            window._twInFlight = true;
             let j = null;
             try {
                 const body = {target: target, tier: tier};
@@ -9084,7 +9094,7 @@
                     body: JSON.stringify(body)
                 });
                 j = await r.json().catch(() => null);
-                _twInFlight = false;
+                window._twInFlight = false;
                 if (r.status === 409 && j && j.needs_override) {
                     // 1-hour immunity: the table can override (continued-care
                     // feats, GM fiat) — confirm, then repost with the flag.
@@ -9098,7 +9108,7 @@
                     return;
                 }
             } catch(_) {
-                _twInFlight = false;
+                window._twInFlight = false;
                 try { showRollToast('Treat Wounds', '—', 'Connection failed — nothing was applied. Try again.', false, false, [], null); } catch(_) {}
                 return;
             }

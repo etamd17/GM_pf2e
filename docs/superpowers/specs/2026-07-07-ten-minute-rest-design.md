@@ -31,21 +31,28 @@ NOT a GM party-wide button — each player drives their own activity.
 - Party HP mutation for arbitrary targets: the tested
   `/api/adjust_party_hp` internals (test_dying_state.py contracts).
 
-## RAW being implemented (Player Core; verify text against
-~/Downloads + AoN during build)
+## RAW being implemented (verified 2026-07-07 against the local Foundry
+pack: compendium_data/actions/skill/treat-wounds.json + repair.json)
 
 - **Treat Wounds** (Medicine, 10 min, target any living creature incl.
-  self): DC 15 trained / 20 expert (+10 healing) / 30 master (+30) /
-  40 legendary (+50). Success 2d8 + bonus; crit success 4d8 + bonus;
-  failure nothing; crit failure target takes 1d8. Nat 20/1 step the
-  degree one (general check rules). Target then IMMUNE for 1 hour.
-  Healer's tools are required by RAW — advisory text only, not enforced.
+  self): base DC 15; a healer who is expert/master/legendary may INSTEAD
+  attempt DC 20/30/40 for +10/+30/+50 healing — the tier picker must be
+  gated by the healer's actual Medicine rank (the old modal offered all
+  four to anyone). Success: 2d8 + bonus AND the target loses the
+  WOUNDED condition; crit success: 4d8 + bonus AND loses wounded;
+  failure: nothing; crit failure: target takes 1d8 (unmodified by tier).
+  Nat 20/1 step the degree one (general check rules). Target then immune
+  for 1 hour (interval overlaps the treatment time). Healer's toolkit is
+  required by RAW — advisory text only, not enforced.
 - **Refocus**: 10 min, regain 1 Focus Point up to max.
-- **Repair** (Crafting, 10 min): vs the item's level-based DC (fallback
-  DC 15 when the shield's item level is unknown to the build). Success:
-  restore 5 HP per Crafting proficiency rank; crit: 10 per rank; crit
-  failure: 2d6 damage to the item. Nat 20/1 step. Cannot repair a
-  destroyed shield (hp 0).
+- **Repair** (Crafting, 10 min): the GM sets the DC ("usually about the
+  same DC as to Craft it") — the panel exposes a DC field defaulting
+  to 15. Success: restore 5 HP + 5 per Crafting proficiency rank
+  (trained 10 / expert 15 / master 20 / legendary 25; untrained 5);
+  crit success: 10 + 10 per rank; crit failure: 2d6 damage to the item
+  REDUCED BY the item's Hardness (the PC model tracks shield hardness).
+  Nat 20/1 step. You can't Repair a destroyed item (shield at 0 HP).
+  Repair kit required by RAW — advisory only.
 
 ## Design
 
