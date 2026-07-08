@@ -10437,32 +10437,65 @@ def shield_block(pc_name):
 @app.route('/api/repair_shield/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def repair_shield(pc_name):
-    """Repair a shield (Crafting check during daily prep or Repair action)."""
-    pc_json, file_path, err = require_pc_json(pc_name)
-    if err: return err
-    build = pc_json.get('build', pc_json)
-    
-    data = request.json or {}
-    amount = safe_int(data.get('amount'), 0)
-    full_repair = data.get('full_repair', False)
-    
-    shield_max_hp = safe_int(build.get('shield_max_hp'), 20)
-    shield_hp = safe_int(build.get('shield_hp'), shield_max_hp)
-    
-    if full_repair:
-        build['shield_hp'] = shield_max_hp
-    else:
-        build['shield_hp'] = min(shield_max_hp, shield_hp + amount)
+    """RAW Repair (Crafting, 10 min) on the PC's shield — replaces the old
+    free full-repair (user-locked fork, ten-minute activities). GM-set DC
+    (default 15; RAW says "usually about the same DC as to Craft it").
+    Success restores 5 + 5/Crafting rank; crit success 10 + 10/rank; crit
+    failure deals 2d6 minus the shield's Hardness. A destroyed shield
+    (0 HP) can't be Repaired per RAW."""
+    import random as _rand
+    pc = PARTY_LIBRARY.get(pc_name)
+    if pc is None:
+        return jsonify({"success": False, "error": "unknown character"}), 404
+    shield_max = int(getattr(pc, 'shield_max_hp', 0) or 0)
+    shield_hp = int(getattr(pc, 'shield_hp', 0) or 0)
+    if shield_max <= 0:
+        return jsonify({"success": False, "error": "no shield"}), 400
+    if shield_hp <= 0:
+        return jsonify({"success": False, "error": "destroyed — a destroyed item can't be Repaired"}), 400
+    if shield_hp >= shield_max:
+        return jsonify({"success": False, "error": "shield is not damaged"}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        dc = int(data.get('dc') or 15)
+    except (TypeError, ValueError):
+        dc = 15
+    mod, rank = _pc_skill_mod_rank(pc, 'crafting')
+    d20 = _activity_d20(data.get('d20'))
+    total = d20 + mod
+    degree = _degree_of_success(total, dc, d20)
+    restored = 0
+    damage = 0
+    if degree == 'success':
+        restored = 5 + 5 * rank
+    elif degree == 'crit_success':
+        restored = 10 + 10 * rank
+    elif degree == 'crit_failure':
+        hardness = int(getattr(pc, 'shield_hardness', 0) or 0)
+        damage = max(0, _rand.randint(1, 6) + _rand.randint(1, 6) - hardness)
 
-    save_and_reload_character(pc_name, pc_json, file_path)
-    # Mirror onto in-memory PC so the next pc_update payload picks it up,
-    # then broadcast so party_view + GM screen repaint the shield gauge.
-    if pc_name in PARTY_LIBRARY:
-        PARTY_LIBRARY[pc_name].shield_hp = build['shield_hp']
-        PARTY_LIBRARY[pc_name].shield_broken = build['shield_hp'] <= safe_int(build.get('shield_bt'), shield_max_hp // 2)
-        PARTY_LIBRARY[pc_name].shield_destroyed = build['shield_hp'] <= 0
-    _broadcast_pc_state(pc_name)
-    return jsonify({"success": True, "shield_hp": build['shield_hp'], "shield_max_hp": shield_max_hp})
+    def _mutate(p):
+        new_hp = min(shield_max, max(0, int(getattr(p, 'shield_hp', 0) or 0) + restored - damage))
+        p.shield_hp = new_hp
+        bt = int(getattr(p, 'shield_bt', 0) or 0)
+        p.shield_broken = new_hp <= bt
+        p.shield_destroyed = new_hp <= 0
+        return True
+
+    apply_pc_delta(pc_name, _mutate)
+    label = degree.replace('_', ' ')
+    sign = '+' if mod >= 0 else ''
+    _combat_log(
+        f"{pc_name} Repairs their shield: Crafting {sign}{mod}, rolled {d20} "
+        f"= {total} vs DC {dc} — {label} "
+        f"({'+' + str(restored) if restored else '-' + str(damage)} shield HP)", 'action')
+    return jsonify({
+        "success": True, "d20": d20, "total": total, "dc": dc,
+        "degree": degree, "restored": restored, "damage": damage,
+        "shield_hp": pc.shield_hp, "shield_max_hp": shield_max,
+        "shield_broken": bool(getattr(pc, 'shield_broken', False)),
+        "shield_destroyed": bool(getattr(pc, 'shield_destroyed', False)),
+    })
 
 @app.route('/api/set_shield_stats/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
@@ -13547,88 +13580,10 @@ def pc_treat_wounds(pc_name):
     })
 
 
-@app.route('/api/pc/<pc_name>/refocus', methods=['POST'])
-@require_pc_self_or_gm
-def pc_refocus(pc_name):
-    """10-minute Refocus: regain 1 Focus Point up to the pool max."""
-    pc = PARTY_LIBRARY.get(pc_name)
-    if pc is None:
-        return jsonify({"success": False, "error": "unknown character"}), 404
-    focus_max = int(getattr(pc, 'focus_max', 0) or 0)
-    if focus_max <= 0:
-        return jsonify({"success": False, "error": "no focus pool"}), 400
-    if int(getattr(pc, 'current_focus', 0) or 0) >= focus_max:
-        return jsonify({"success": False, "error": "focus already full"}), 400
-
-    def _mutate(p):
-        p.current_focus = min(focus_max, int(getattr(p, 'current_focus', 0) or 0) + 1)
-        return True
-
-    apply_pc_delta(pc_name, _mutate)
-    _combat_log(f"{pc_name} Refocuses (+1 Focus Point)", 'action')
-    return jsonify({"success": True, "current_focus": pc.current_focus,
-                    "focus_max": focus_max})
-
-
-@app.route('/api/pc/<pc_name>/repair_shield', methods=['POST'])
-@require_pc_self_or_gm
-def pc_repair_shield(pc_name):
-    """RAW Repair (Crafting, 10 min) on the PC's shield. GM-set DC
-    (default 15). Success restores 5 + 5/rank; crit 10 + 10/rank; crit
-    failure deals 2d6 minus the shield's Hardness. A destroyed shield
-    (0 HP) can't be Repaired."""
-    import random as _rand
-    pc = PARTY_LIBRARY.get(pc_name)
-    if pc is None:
-        return jsonify({"success": False, "error": "unknown character"}), 404
-    shield_max = int(getattr(pc, 'shield_max_hp', 0) or 0)
-    shield_hp = int(getattr(pc, 'shield_hp', 0) or 0)
-    if shield_max <= 0:
-        return jsonify({"success": False, "error": "no shield"}), 400
-    if shield_hp <= 0:
-        return jsonify({"success": False, "error": "destroyed — a destroyed item can't be Repaired"}), 400
-    if shield_hp >= shield_max:
-        return jsonify({"success": False, "error": "shield is not damaged"}), 400
-    data = request.get_json(silent=True) or {}
-    try:
-        dc = int(data.get('dc') or 15)
-    except (TypeError, ValueError):
-        dc = 15
-    mod, rank = _pc_skill_mod_rank(pc, 'crafting')
-    d20 = _activity_d20(data.get('d20'))
-    total = d20 + mod
-    degree = _degree_of_success(total, dc, d20)
-    restored = 0
-    damage = 0
-    if degree == 'success':
-        restored = 5 + 5 * rank
-    elif degree == 'crit_success':
-        restored = 10 + 10 * rank
-    elif degree == 'crit_failure':
-        hardness = int(getattr(pc, 'shield_hardness', 0) or 0)
-        damage = max(0, _rand.randint(1, 6) + _rand.randint(1, 6) - hardness)
-
-    def _mutate(p):
-        new_hp = min(shield_max, max(0, int(getattr(p, 'shield_hp', 0) or 0) + restored - damage))
-        p.shield_hp = new_hp
-        bt = int(getattr(p, 'shield_bt', 0) or 0)
-        p.shield_broken = new_hp <= bt
-        p.shield_destroyed = new_hp <= 0
-        return True
-
-    apply_pc_delta(pc_name, _mutate)
-    label = degree.replace('_', ' ')
-    sign = '+' if mod >= 0 else ''
-    _combat_log(
-        f"{pc_name} Repairs their shield: Crafting {sign}{mod}, rolled {d20} "
-        f"= {total} vs DC {dc} — {label} "
-        f"({'+' + str(restored) if restored else '-' + str(damage)} shield HP)", 'action')
-    return jsonify({
-        "success": True, "d20": d20, "total": total, "dc": dc,
-        "degree": degree, "restored": restored, "damage": damage,
-        "shield_hp": pc.shield_hp, "shield_max_hp": shield_max,
-        "shield_broken": bool(getattr(pc, 'shield_broken', False)),
-    })
+# Refocus already has a canonical route (/api/refocus/<pc_name>, wired to
+# the magic tab's per-caster button) and shield repair's canonical route is
+# /api/repair_shield/<pc_name> (now the RAW Repair check) — the ten-minute
+# panel reuses both rather than growing /api/pc/... duplicates.
 
 
 @app.route('/api/session_journal/<pc_name>', methods=['POST'])

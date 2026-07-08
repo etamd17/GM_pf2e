@@ -367,9 +367,10 @@
                                  {% else %}background:var(--bg-base); border:1px solid var(--border-s); color:var(--t2);{% endif %}">
                         {% if pc.shield_destroyed %}Destroyed{% elif pc.shield_broken %}Broken{% elif pc.shield_raised %}Raised · H{{ pc.shield_hardness }}{% else %}H{{ pc.shield_hardness }}{% endif %}
                     </span>
-                    {# Phase 11: Repair Shield — full repair on one click.
-                       Tooltip flags the 10-minute downtime cost so players
-                       don't fire this mid-combat thinking it's free. #}
+                    {# Repair Shield — now the RAW Repair check (ten-minute
+                       activities): server-rolled Crafting vs the DC in the
+                       exploration strip's input (default 15). Same
+                       repairShield() as the strip button. #}
                     <button id="shield-repair-btn" type="button" onclick="repairShield()" class="no-print"
                             title="Requires 10 min downtime (Repair activity — Crafting check)"
                             {% if pc.shield_hp >= pc.shield_max_hp %}disabled style="opacity:0.35; cursor:not-allowed;"{% endif %}

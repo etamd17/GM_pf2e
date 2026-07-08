@@ -3518,34 +3518,41 @@
             } catch(e) { console.error(e); }
         }
 
-        // Phase 11: Repair Shield — full repair of shield HP. The button's
-        // hover tooltip reminds the player this is a 10-min downtime action
-        // (Repair skill during exploration), not a combat move. We still let
-        // the player fire it whenever so they don't have to hand the GM a
-        // note just to zero-out a broken shield.
+        // RAW Repair (ten-minute activities): the server rolls Crafting vs
+        // the GM-set DC (panel input, default 15) and restores 5+5/rank on
+        // a success, 10+10/rank on a crit, or deals 2d6-minus-Hardness on a
+        // crit failure. Replaced the old free full-repair (user-locked
+        // fork) — same route, now an honest check.
+        let _repairInFlight = false;
         async function repairShield() {
+            if (_repairInFlight) return;
+            _repairInFlight = true;
             try {
+                const dcInput = document.getElementById('repair-dc-input');
+                const dc = dcInput ? (parseInt(dcInput.value, 10) || 15) : 15;
                 const res = await fetch(`/api/repair_shield/${pcNameEncoded}`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({full_repair: true})
+                    body: JSON.stringify({dc: dc})
                 });
-                const data = await res.json();
-                if (data.success) {
+                const data = await res.json().catch(() => null);
+                if (data && data.success) {
                     currentShield.hp        = data.shield_hp        ?? currentShield.hp;
                     currentShield.max_hp    = data.shield_max_hp    ?? currentShield.max_hp;
-                    currentShield.broken    = false;
-                    currentShield.destroyed = false;
+                    currentShield.broken    = !!data.shield_broken;
+                    currentShield.destroyed = !!data.shield_destroyed;
                     _paintShieldGauge();
+                    const label = String(data.degree || '').replace('_', ' ');
+                    const delta = data.restored ? `+${data.restored}` : (data.damage ? `-${data.damage}` : '±0');
                     if (typeof showRollToast === 'function') {
-                        showRollToast('Repair Shield',
-                            data.shield_hp,
-                            `Shield restored to ${data.shield_hp}/${data.shield_max_hp} HP (10 min downtime).`,
-                            false, false);
+                        showRollToast('Repair Shield', data.total,
+                            `Crafting 1d20 (${data.d20}) vs DC ${data.dc} — ${label} → ${delta} HP (now ${data.shield_hp}/${data.shield_max_hp})`,
+                            data.d20 === 20, data.d20 === 1, [{sides: 20, value: data.d20}], data.dc);
                     }
-                } else {
-                    alert(data.error || 'Repair failed');
+                } else if (typeof showRollToast === 'function') {
+                    showRollToast('Repair Shield', '—', (data && data.error) || 'Repair failed', false, false, [], null);
                 }
             } catch(e) { console.error(e); }
+            finally { _repairInFlight = false; }
         }
 
         async function adjustCondition(cond, delta) {
@@ -8991,14 +8998,24 @@
             body.innerHTML = html;
         })();
 
-        // ----- Treat Wounds button (Wave 2 #6) ----------------------------
-        // Open a small modal: pick a target party member, pick a DC tier
-        // (Trained DC 15 / Expert 20 / Master 30 / Legendary 40), roll
-        // Medicine, broadcast to GM with the proposed healing amount.
+        // ----- Treat Wounds (ten-minute activities) ------------------------
+        // Pick a target + DC tier (gated by YOUR Medicine rank per RAW),
+        // then the SERVER rolls and auto-applies: healing (or crit-fail
+        // damage through the real damage path), wounded removal, and the
+        // 1-hour immunity. Physical dice supported via the d20 field. The
+        // old client-side Math.random roll (divergent math, applied
+        // nothing) is gone.
+        const _TW_RANKS = {'': 0, 'U': 0, 'T': 1, 'E': 2, 'M': 3, 'L': 4};
+        let _twInFlight = false;
         async function openTreatWounds() {
             const medicine = ({{ pc.skills | tojson | safe }}).find(s => s.name.toLowerCase() === 'medicine');
             if (!medicine) {
                 alert('You don\'t have Medicine listed.');
+                return;
+            }
+            const medRank = _TW_RANKS[String(medicine.prof_letter || '').toUpperCase()] || 0;
+            if (medRank < 1) {
+                if (typeof showRollToast === 'function') showRollToast('Treat Wounds', '—', 'Treat Wounds requires trained Medicine.', false, false, [], null);
                 return;
             }
             // Fetch party list
@@ -9015,7 +9032,7 @@
                 <div class="parchment-frame" style="max-width:420px; width:100%; background:linear-gradient(180deg,#1a1613 0%,#120f0c 100%); border-radius:8px; padding:22px;">
                     <h3 style="font-family:'Cinzel',serif; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#f0d88a; margin:0 0 12px 0; text-align:center;"> Treat Wounds</h3>
                     <p style="font-family:var(--font-flavor); font-size:13px; color:#cfc4a8; line-height:1.45; margin:0 0 12px 0;">
-                        10 minutes. Roll Medicine vs DC of the proficiency tier you choose. Heal 2d8 (Trained), 4d8 (Expert), 6d8 (Master), 8d8 (Legendary). +10 to roll = DC +5; +20 = DC +10. Failure: no heal. Crit fail: target takes 1d8.
+                        10 minutes; requires a healer's toolkit. Roll Medicine vs the tier's DC — success heals 2d8 plus the tier bonus and clears Wounded; a crit doubles the dice; a crit fail deals 1d8. The result applies automatically, and the target is then immune to Treat Wounds for 1 hour.
                     </p>
                     <div style="margin-bottom:10px;">
                         <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Target</label>
@@ -9025,13 +9042,17 @@
                         </select>
                     </div>
                     <div style="margin-bottom:10px;">
-                        <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Tier (DC / heal die)</label>
+                        <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Tier (DC / healing)</label>
                         <select id="tw-tier" class="hp-input" style="width:100%; padding:6px 8px; margin-top:4px;">
-                            <option value="trained" data-dc="15" data-dice="2">Trained — DC 15, 2d8 heal</option>
-                            <option value="expert" data-dc="20" data-dice="4">Expert — DC 20, 4d8 heal</option>
-                            <option value="master" data-dc="30" data-dice="6">Master — DC 30, 6d8 heal</option>
-                            <option value="legendary" data-dc="40" data-dice="8">Legendary — DC 40, 8d8 heal</option>
+                            <option value="trained">Trained — DC 15, 2d8 heal</option>
+                            ${medRank >= 2 ? '<option value="expert">Expert — DC 20, 2d8+10 heal</option>' : ''}
+                            ${medRank >= 3 ? '<option value="master">Master — DC 30, 2d8+30 heal</option>' : ''}
+                            ${medRank >= 4 ? '<option value="legendary">Legendary — DC 40, 2d8+50 heal</option>' : ''}
                         </select>
+                    </div>
+                    <div style="margin-bottom:4px;">
+                        <label style="font-size:10px; font-family:var(--font-display); letter-spacing:0.16em; text-transform:uppercase; color:var(--gilt);">Physical d20 (optional)</label>
+                        <input type="number" id="tw-d20" min="1" max="20" placeholder="leave blank to roll on site" class="hp-input" style="width:100%; padding:6px 8px; margin-top:4px;">
                     </div>
                     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
                         <button class="tb" onclick="this.closest('div[style*=\\'inset:0\\']')?.remove()" style="padding:5px 12px; font-size:12px;">Cancel</button>
@@ -9043,43 +9064,49 @@
             overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
             overlay.querySelector('#tw-go').onclick = async () => {
                 const target = overlay.querySelector('#tw-target').value;
-                const tierSel = overlay.querySelector('#tw-tier');
-                const tier = tierSel.value;
-                const dc = parseInt(tierSel.selectedOptions[0].dataset.dc, 10);
-                const numDice = parseInt(tierSel.selectedOptions[0].dataset.dice, 10);
+                const tier = overlay.querySelector('#tw-tier').value;
+                const d20raw = parseInt(overlay.querySelector('#tw-d20').value, 10);
                 overlay.remove();
-                // Roll d20
-                const d20 = Math.floor(Math.random() * 20) + 1;
-                const total = d20 + med_total;
-                let success = 'failure', heal = 0;
-                if (d20 === 20) success = 'crit_success';
-                else if (d20 === 1) success = 'crit_failure';
-                else if (total >= dc + 10) success = 'crit_success';
-                else if (total >= dc) success = 'success';
-                else if (total <= dc - 10) success = 'crit_failure';
-                if (success === 'success') {
-                    for (let i = 0; i < numDice; i++) heal += Math.floor(Math.random() * 8) + 1;
-                } else if (success === 'crit_success') {
-                    for (let i = 0; i < numDice; i++) heal += Math.floor(Math.random() * 8) + 1;
-                    heal += 10;
-                } else if (success === 'crit_failure') {
-                    heal = -(Math.floor(Math.random() * 8) + 1);  // takes 1d8 dmg
-                }
-                const sign = med_total >= 0 ? '+' : '';
-                const detail = `Treat Wounds (${tier}, DC ${dc}): 1d20 (${d20}) ${sign}${med_total} = ${total} → ${success.replace('_',' ')} → ${heal >= 0 ? `+${heal}` : heal} HP to ${target}`;
-                try { broadcastToGM(`Treat Wounds → ${target}`, total.toString(), detail, success); } catch(_) {}
-                try { showRollToast(`Treat Wounds → ${target}`, total, detail, d20===20, d20===1, [{sides:20,value:d20}], dc); } catch(_) {}
-                // Server log so the GM can show "table time on healing"
-                try {
-                    await fetch(`/api/treat_wounds/${pcNameEncoded}`, {
-                        method: 'POST', headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({
-                            target, roll_total: total, healing: heal, dc,
-                            success, proficiency: tier
-                        })
-                    });
-                } catch(_) {}
+                await _postTreatWounds(target, tier, (d20raw >= 1 && d20raw <= 20) ? d20raw : null, false);
             };
+        }
+
+        async function _postTreatWounds(target, tier, d20, override) {
+            if (_twInFlight) return;
+            _twInFlight = true;
+            let j = null;
+            try {
+                const body = {target: target, tier: tier};
+                if (d20) body.d20 = d20;
+                if (override) body.override = true;
+                const r = await fetch(`/api/pc/${pcNameEncoded}/treat_wounds`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                j = await r.json().catch(() => null);
+                _twInFlight = false;
+                if (r.status === 409 && j && j.needs_override) {
+                    // 1-hour immunity: the table can override (continued-care
+                    // feats, GM fiat) — confirm, then repost with the flag.
+                    if (confirm(`${target} was treated within the last hour (immune for ~${j.remaining_minutes} more min).\n\nOverride and treat anyway?`)) {
+                        await _postTreatWounds(target, tier, d20, true);
+                    }
+                    return;
+                }
+                if (!r.ok || !j || !j.success) {
+                    try { showRollToast('Treat Wounds', '—', (j && j.error) || 'Treat Wounds failed', false, false, [], null); } catch(_) {}
+                    return;
+                }
+            } catch(_) {
+                _twInFlight = false;
+                try { showRollToast('Treat Wounds', '—', 'Connection failed — nothing was applied. Try again.', false, false, [], null); } catch(_) {}
+                return;
+            }
+            const label = String(j.degree || '').replace('_', ' ');
+            const hpBit = j.healing >= 0 ? `+${j.healing}` : `${j.healing}`;
+            const detail = `Treat Wounds (${tier}, DC ${j.dc}): 1d20 (${j.d20}) = ${j.total} → ${label} → ${hpBit} HP to ${j.target} (now ${j.target_hp})`;
+            try { broadcastToGM(`Treat Wounds → ${j.target}`, String(j.total), detail, j.degree); } catch(_) {}
+            try { showRollToast(`Treat Wounds → ${j.target}`, j.total, detail, j.d20 === 20, j.d20 === 1, [{sides: 20, value: j.d20}], j.dc); } catch(_) {}
         }
 
         // ----- Whisper to GM (Wave 2 #15) ---------------------------------

@@ -73,10 +73,11 @@ def _treat(client, healer, target=None, tier='trained', d20=None, override=False
 
 
 def _repair(client, name, d20=None, dc=None):
+    # Canonical route (was the free full-repair; now the RAW Repair check).
     body = {}
     if d20 is not None: body['d20'] = d20
     if dc is not None: body['dc'] = dc
-    return client.post(f'/api/pc/{name}/repair_shield', json=body, headers=_AJAX)
+    return client.post(f'/api/repair_shield/{name}', json=body, headers=_AJAX)
 
 
 # ==========================================================================
@@ -215,9 +216,11 @@ def test_other_player_cannot_act_as_healer(duo, client, monkeypatch):
 # ==========================================================================
 
 def test_refocus_adds_one_up_to_max(duo, client):
+    # Canonical pre-existing route -- the panel reuses it, so its cap
+    # semantics are pinned here alongside the other activities.
     kyle = duo['kyle']
     kyle.current_focus = 1
-    r = client.post(f'/api/pc/{kyle.name}/refocus', json={}, headers=_AJAX)
+    r = client.post(f'/api/refocus/{kyle.name}', json={}, headers=_AJAX)
     assert r.status_code == 200, r.data
     assert r.get_json()['current_focus'] == 2
     assert kyle.current_focus == 2
@@ -226,7 +229,7 @@ def test_refocus_adds_one_up_to_max(duo, client):
 def test_refocus_at_max_400(duo, client):
     kyle = duo['kyle']
     kyle.current_focus = kyle.focus_max
-    r = client.post(f'/api/pc/{kyle.name}/refocus', json={}, headers=_AJAX)
+    r = client.post(f'/api/refocus/{kyle.name}', json={}, headers=_AJAX)
     assert r.status_code == 400
     assert kyle.current_focus == kyle.focus_max
 
@@ -234,7 +237,7 @@ def test_refocus_at_max_400(duo, client):
 def test_refocus_without_pool_400(duo, client):
     goel = duo['goel']
     goel.focus_max = 0
-    r = client.post(f'/api/pc/{goel.name}/refocus', json={}, headers=_AJAX)
+    r = client.post(f'/api/refocus/{goel.name}', json={}, headers=_AJAX)
     assert r.status_code == 400
 
 
