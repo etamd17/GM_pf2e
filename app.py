@@ -2187,6 +2187,7 @@ def _do_persist_pc_combat_state(pc_name):
         persistent_damage = list(getattr(pc, 'persistent_damage', []) or [])
         # Exploration activity (Phase 10)
         exploration_activity = str(getattr(pc, 'exploration_activity', '') or '')
+        treat_wounds_immune_until = float(getattr(pc, 'treat_wounds_immune_until', 0) or 0)
         # Sheet-level Active Effects (engine schema). Survives a server
         # restart mid-buff so Heroism doesn't vanish after a deploy.
         pc_active_effects = list(getattr(pc, 'pc_active_effects', []) or [])
@@ -2208,6 +2209,9 @@ def _do_persist_pc_combat_state(pc_name):
         build['persistent_damage'] = persistent_damage
         build['exploration_activity'] = exploration_activity
         build['pc_active_effects'] = pc_active_effects
+        # Treat Wounds 1-hour immunity (ten-minute activities) — epoch
+        # seconds; survives restarts so a redeploy can't reset the clock.
+        build['treat_wounds_immune_until'] = treat_wounds_immune_until
         _atomic_write_json(file_path, pc_json, indent=2)
     except Exception as e:
         print(f"[PERSIST ERROR] {pc_name}: {e}")
@@ -3160,8 +3164,13 @@ class Character:
                 if "low-light vision" in lower_desc and "Low-Light vision" not in self.senses: self.senses.append("Low-Light Vision")
 
         self.current_focus = safe_int(build.get('current_focus'), self.focus_max)
-        self.focus_points = self.focus_max  
+        self.focus_points = self.focus_max
         self.hero_points = safe_int(build.get('hero_points'), 1)
+        # Treat Wounds 1-hour immunity (epoch seconds; 0 = not immune).
+        try:
+            self.treat_wounds_immune_until = float(build.get('treat_wounds_immune_until') or 0)
+        except (TypeError, ValueError):
+            self.treat_wounds_immune_until = 0.0
         
         self.deity = safe_str(build.get('deity'), 'None')
         self.sanctification = safe_str(build.get('sanctification'), 'Neutral')
@@ -10025,6 +10034,51 @@ def multi_save_damage():
     return jsonify({'results': results})
 
 
+def _party_hp_mutate(pc, amount, action):
+    """The party-HP damage/heal core (temp-HP drain order, dying entry at
+    0 HP with wounded/doomed math, heal-clears-dying-adds-wounded).
+    Extracted verbatim from adjust_party_hp's mutator so other 10-minute
+    activities (Treat Wounds crit-failure damage, its healing) inherit the
+    exact tested semantics instead of growing a second HP path. Runs
+    inside an apply_pc_delta mutator — callers own lock/persist/SSE."""
+    if action == 'damage':
+        was_above_zero = pc.current_hp > 0
+        remaining = amount
+        # PF2e: temporary HP absorbs damage before real HP.
+        # Drain the toggle (passive — re-grants from the toggle),
+        # then the manual pool, then real HP.
+        toggle_thp = 0
+        try:
+            toggle_thp = int(pc.toggle_effects_summary.get('temp_hp', 0) or 0)
+        except Exception:
+            toggle_thp = 0
+        if toggle_thp > 0 and remaining > 0:
+            remaining = max(0, remaining - toggle_thp)
+        manual_thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
+        if manual_thp > 0 and remaining > 0:
+            used = min(manual_thp, remaining)
+            pc.temp_hp_manual = manual_thp - used
+            remaining -= used
+        pc.temp_hp = int(getattr(pc, 'temp_hp_manual', 0) or 0) + toggle_thp
+        pc.current_hp = max(0, pc.current_hp - remaining)
+        if pc.current_hp == 0 and was_above_zero:
+            pc.conditions['dying'] = 1 + pc.conditions.get('wounded', 0)
+        elif pc.current_hp == 0 and not was_above_zero:
+            pc.conditions['dying'] = pc.conditions.get('dying', 0) + 1
+        # PF2e: dying death threshold is 4 - doomed.
+        doomed = int(pc.conditions.get('doomed', 0) or 0)
+        max_dying = max(1, 4 - doomed)
+        if pc.conditions.get('dying', 0) >= max_dying:
+            pc.conditions['dying'] = max_dying
+    elif action == 'heal':
+        was_dying = pc.conditions.get('dying', 0) > 0
+        pc.current_hp = min(pc.hp, pc.current_hp + amount)
+        if pc.current_hp > 0 and was_dying:
+            pc.conditions['dying'] = 0
+            pc.conditions['wounded'] = pc.conditions.get('wounded', 0) + 1
+    return True
+
+
 @app.route('/api/adjust_party_hp/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def adjust_party_hp(pc_name):
@@ -10034,45 +10088,7 @@ def adjust_party_hp(pc_name):
         if pc_name not in PARTY_LIBRARY:
             return redirect(url_for('party_view'))
 
-        def _mutate(pc):
-            if action == 'damage':
-                was_above_zero = pc.current_hp > 0
-                remaining = amount
-                # PF2e: temporary HP absorbs damage before real HP.
-                # Drain the toggle (passive — re-grants from the toggle),
-                # then the manual pool, then real HP.
-                toggle_thp = 0
-                try:
-                    toggle_thp = int(pc.toggle_effects_summary.get('temp_hp', 0) or 0)
-                except Exception:
-                    toggle_thp = 0
-                if toggle_thp > 0 and remaining > 0:
-                    remaining = max(0, remaining - toggle_thp)
-                manual_thp = int(getattr(pc, 'temp_hp_manual', 0) or 0)
-                if manual_thp > 0 and remaining > 0:
-                    used = min(manual_thp, remaining)
-                    pc.temp_hp_manual = manual_thp - used
-                    remaining -= used
-                pc.temp_hp = int(getattr(pc, 'temp_hp_manual', 0) or 0) + toggle_thp
-                pc.current_hp = max(0, pc.current_hp - remaining)
-                if pc.current_hp == 0 and was_above_zero:
-                    pc.conditions['dying'] = 1 + pc.conditions.get('wounded', 0)
-                elif pc.current_hp == 0 and not was_above_zero:
-                    pc.conditions['dying'] = pc.conditions.get('dying', 0) + 1
-                # PF2e: dying death threshold is 4 - doomed.
-                doomed = int(pc.conditions.get('doomed', 0) or 0)
-                max_dying = max(1, 4 - doomed)
-                if pc.conditions.get('dying', 0) >= max_dying:
-                    pc.conditions['dying'] = max_dying
-            elif action == 'heal':
-                was_dying = pc.conditions.get('dying', 0) > 0
-                pc.current_hp = min(pc.hp, pc.current_hp + amount)
-                if pc.current_hp > 0 and was_dying:
-                    pc.conditions['dying'] = 0
-                    pc.conditions['wounded'] = pc.conditions.get('wounded', 0) + 1
-            return True
-
-        _, pc = apply_pc_delta(pc_name, _mutate)
+        _, pc = apply_pc_delta(pc_name, lambda pc: _party_hp_mutate(pc, amount, action))
         # Reaction hint: damage path only — heal doesn't trigger
         # "when struck" effects (Heal action arguably could, but PF2e
         # core rules don't generally chain reactions off positive HP
@@ -10421,32 +10437,70 @@ def shield_block(pc_name):
 @app.route('/api/repair_shield/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def repair_shield(pc_name):
-    """Repair a shield (Crafting check during daily prep or Repair action)."""
-    pc_json, file_path, err = require_pc_json(pc_name)
-    if err: return err
-    build = pc_json.get('build', pc_json)
-    
-    data = request.json or {}
-    amount = safe_int(data.get('amount'), 0)
-    full_repair = data.get('full_repair', False)
-    
-    shield_max_hp = safe_int(build.get('shield_max_hp'), 20)
-    shield_hp = safe_int(build.get('shield_hp'), shield_max_hp)
-    
-    if full_repair:
-        build['shield_hp'] = shield_max_hp
-    else:
-        build['shield_hp'] = min(shield_max_hp, shield_hp + amount)
+    """RAW Repair (Crafting, 10 min) on the PC's shield — replaces the old
+    free full-repair (user-locked fork, ten-minute activities). GM-set DC
+    (default 15; RAW says "usually about the same DC as to Craft it").
+    Success restores 5 + 5/Crafting rank; crit success 10 + 10/rank; crit
+    failure deals 2d6 minus the shield's Hardness. A destroyed shield
+    (0 HP) can't be Repaired per RAW."""
+    import random as _rand
+    pc = PARTY_LIBRARY.get(pc_name)
+    if pc is None:
+        return jsonify({"success": False, "error": "unknown character"}), 404
+    shield_max = int(getattr(pc, 'shield_max_hp', 0) or 0)
+    shield_hp = int(getattr(pc, 'shield_hp', 0) or 0)
+    if shield_max <= 0:
+        return jsonify({"success": False, "error": "no shield"}), 400
+    if shield_hp <= 0:
+        return jsonify({"success": False, "error": "destroyed — a destroyed item can't be Repaired"}), 400
+    if shield_hp >= shield_max:
+        return jsonify({"success": False, "error": "shield is not damaged"}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        dc = int(data.get('dc') or 15)
+    except (TypeError, ValueError):
+        dc = 15
+    mod, rank = _pc_skill_mod_rank(pc, 'crafting')
+    d20 = _activity_d20(data.get('d20'))
+    total = d20 + mod
+    degree = _degree_of_success(total, dc, d20)
+    restored = 0
+    damage = 0
+    if degree == 'success':
+        restored = 5 + 5 * rank
+    elif degree == 'crit_success':
+        restored = 10 + 10 * rank
+    elif degree == 'crit_failure':
+        hardness = int(getattr(pc, 'shield_hardness', 0) or 0)
+        damage = max(0, _rand.randint(1, 6) + _rand.randint(1, 6) - hardness)
 
-    save_and_reload_character(pc_name, pc_json, file_path)
-    # Mirror onto in-memory PC so the next pc_update payload picks it up,
-    # then broadcast so party_view + GM screen repaint the shield gauge.
-    if pc_name in PARTY_LIBRARY:
-        PARTY_LIBRARY[pc_name].shield_hp = build['shield_hp']
-        PARTY_LIBRARY[pc_name].shield_broken = build['shield_hp'] <= safe_int(build.get('shield_bt'), shield_max_hp // 2)
-        PARTY_LIBRARY[pc_name].shield_destroyed = build['shield_hp'] <= 0
-    _broadcast_pc_state(pc_name)
-    return jsonify({"success": True, "shield_hp": build['shield_hp'], "shield_max_hp": shield_max_hp})
+    def _mutate(p):
+        new_hp = min(shield_max, max(0, int(getattr(p, 'shield_hp', 0) or 0) + restored - damage))
+        p.shield_hp = new_hp
+        bt = int(getattr(p, 'shield_bt', 0) or 0)
+        p.shield_broken = new_hp <= bt
+        p.shield_destroyed = new_hp <= 0
+        return True
+
+    apply_pc_delta(pc_name, _mutate)
+    label = degree.replace('_', ' ')
+    sign = '+' if mod >= 0 else ''
+    if restored:
+        outcome_bit = f"+{restored} shield HP"
+    elif damage:
+        outcome_bit = f"-{damage} shield HP"
+    else:
+        outcome_bit = "no change"
+    _combat_log(
+        f"{pc_name} Repairs their shield: Crafting {sign}{mod}, rolled {d20} "
+        f"= {total} vs DC {dc} — {label} ({outcome_bit})", 'action')
+    return jsonify({
+        "success": True, "d20": d20, "total": total, "dc": dc,
+        "degree": degree, "restored": restored, "damage": damage,
+        "shield_hp": pc.shield_hp, "shield_max_hp": shield_max,
+        "shield_broken": bool(getattr(pc, 'shield_broken', False)),
+        "shield_destroyed": bool(getattr(pc, 'shield_destroyed', False)),
+    })
 
 @app.route('/api/set_shield_stats/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
@@ -13356,35 +13410,19 @@ def player_whisper(pc_name):
     return jsonify({"success": True})
 
 
-@app.route('/api/treat_wounds/<pc_name>', methods=['POST'])
-@require_pc_self_or_gm
-def treat_wounds_dispatch(pc_name):
-    """Player rolled Treat Wounds — broadcast a GM-visible record so the
-    GM applies the healing (and we keep a session log of total healing
-    time + amounts for the optional 'how much table time on healing'
-    summary)."""
-    if pc_name not in PARTY_LIBRARY:
-        return jsonify({"success": False, "error": "unknown player"}), 404
-    data = request.get_json(silent=True) or {}
-    target = (data.get('target') or '').strip()
-    roll_total = data.get('roll_total')
-    healing = data.get('healing')
-    proficiency = (data.get('proficiency') or 'Trained').strip()
-    dc = data.get('dc')
-    success = data.get('success')  # crit_success / success / failure / crit_failure
-    if not target or healing is None:
-        return jsonify({"success": False, "error": "missing target or healing"}), 400
-    import time as _t
-    payload = {
-        'healer': pc_name,
-        'target': target,
-        'roll_total': roll_total,
-        'dc': dc,
-        'success': success,
-        'healing': healing,
-        'proficiency': proficiency,
-        'ts': _t.time(),
-    }
+# The old client-reported /api/treat_wounds/<pc_name> dispatch route was
+# removed with the ten-minute activities arc: its only caller was the sheet
+# modal's client-side roll (now server-rolled via /api/pc/<name>/treat_wounds),
+# and leaving it live let any authenticated player inject arbitrary rows
+# into the GM healing log. _record_treat_wounds below is fed the
+# server-authoritative result instead.
+
+
+def _record_treat_wounds(payload):
+    """Append a Treat Wounds record to the session healing log + notify the
+    GM over SSE. Shared by the legacy client-reported dispatch route above
+    and the server-rolled /api/pc/<name>/treat_wounds route (which feeds it
+    the authoritative result)."""
     with SESSION_STATE_LOCK:
         SESSION_HEALING_LOG.append(payload)
         # Cap log length so a long-running server doesn't grow unboundedly.
@@ -13392,13 +13430,149 @@ def treat_wounds_dispatch(pc_name):
             del SESSION_HEALING_LOG[:len(SESSION_HEALING_LOG) - 500]
     _save_session_state()
     sse_broadcast('treat_wounds', payload, player_filter=lambda d: None)
-    return jsonify({"success": True})
 
 
 @app.route('/api/healing_log')
 def healing_log_get():
     """GM-side fetch of the in-memory healing log."""
     return jsonify({"log": SESSION_HEALING_LOG})
+
+
+# ── Ten-minute activities (queue #2) ────────────────────────────────────────
+# Server-rolled exploration activities on the player sheet: Treat Wounds
+# (RAW tiers/healing, auto-applied, enforced 1-hour immunity with override),
+# Refocus, and shield Repair (RAW per-rank restore). All rolls happen HERE —
+# the old sheet buttons were client-side Math.random with divergent math.
+# Spec: docs/superpowers/specs/2026-07-07-ten-minute-rest-design.md
+
+_SKILL_RANK_LETTERS = {'T': 1, 'E': 2, 'M': 3, 'L': 4}
+
+# RAW tiers (compendium_data/actions/skill/treat-wounds.json): a healer of
+# rank >= min_rank may attempt the tier's DC for its flat healing bonus.
+_TREAT_WOUNDS_TIERS = {
+    'trained':   {'dc': 15, 'bonus': 0,  'min_rank': 1},
+    'expert':    {'dc': 20, 'bonus': 10, 'min_rank': 2},
+    'master':    {'dc': 30, 'bonus': 30, 'min_rank': 3},
+    'legendary': {'dc': 40, 'bonus': 50, 'min_rank': 4},
+}
+
+
+def _pc_skill_mod_rank(pc, skill_name):
+    """(modifier, proficiency rank 0-4) for a PC's derived skill entry."""
+    for s in getattr(pc, 'skills', []) or []:
+        if str(s.get('name', '')).lower() == skill_name:
+            try:
+                mod = int(str(s.get('total', '0')).replace('+', '') or 0)
+            except (TypeError, ValueError):
+                mod = 0
+            rank = _SKILL_RANK_LETTERS.get(str(s.get('prof_letter', '')).upper(), 0)
+            return mod, rank
+    return 0, 0
+
+
+def _activity_d20(d20_raw):
+    """Server roll unless a physical d20 was supplied (clamped 1..20)."""
+    import random as _r
+    try:
+        d20 = int(d20_raw) if d20_raw not in (None, '', 0) else _r.randint(1, 20)
+    except (TypeError, ValueError):
+        d20 = _r.randint(1, 20)
+    return max(1, min(20, d20))
+
+
+@app.route('/api/pc/<pc_name>/treat_wounds', methods=['POST'])
+@require_pc_self_or_gm
+def pc_treat_wounds(pc_name):
+    """Server-rolled Treat Wounds from the healer's sheet, auto-applied to
+    the target. RAW: success/crit heal 2d8/4d8 + the tier's flat bonus AND
+    clear the target's wounded condition; crit failure deals 1d8 through
+    the real damage path (dying-entry math applies); the target becomes
+    immune for 1 hour whatever the outcome. A repeat inside the hour 409s
+    with the remaining minutes unless {"override": true} (table's call —
+    continued-care feats, GM fiat)."""
+    import random as _rand
+    import time as _t
+    healer = PARTY_LIBRARY.get(pc_name)
+    if healer is None:
+        return jsonify({"success": False, "error": "unknown healer"}), 404
+    data = request.get_json(silent=True) or {}
+    target_name = (data.get('target') or '').strip() or pc_name
+    target = PARTY_LIBRARY.get(target_name)
+    if target is None:
+        return jsonify({"success": False, "error": "unknown target"}), 404
+    # Dead targets can't be treated (same derived-dead guard as the recovery
+    # check: death is dying >= max(1, 4 - doomed) with no flag, so without
+    # this a success would revive the corpse -- heal clears dying, and the
+    # wounded wipe below erases the bookkeeping too).
+    t_dying = int(target.conditions.get('dying', 0) or 0)
+    t_doomed = int(target.conditions.get('doomed', 0) or 0)
+    if t_dying > 0 and t_dying >= max(1, 4 - t_doomed):
+        return jsonify({"success": False, "error": "target is dead — Treat Wounds cannot help"}), 400
+    tier = _TREAT_WOUNDS_TIERS.get(str(data.get('tier') or 'trained').lower())
+    if tier is None:
+        return jsonify({"success": False, "error": "unknown tier"}), 400
+    mod, rank = _pc_skill_mod_rank(healer, 'medicine')
+    if rank < 1:
+        return jsonify({"success": False, "error": "Treat Wounds requires trained Medicine"}), 400
+    if rank < tier['min_rank']:
+        return jsonify({"success": False, "error": "Medicine proficiency too low for that DC tier"}), 400
+    now = _t.time()
+    immune_until = float(getattr(target, 'treat_wounds_immune_until', 0) or 0)
+    if immune_until > now and not data.get('override'):
+        return jsonify({
+            "success": False,
+            "error": "immune to Treat Wounds",
+            "needs_override": True,
+            "remaining_minutes": max(1, int((immune_until - now) // 60) + 1),
+        }), 409
+    d20 = _activity_d20(data.get('d20'))
+    total = d20 + mod
+    degree = _degree_of_success(total, tier['dc'], d20)
+    healing = 0
+    if degree == 'success':
+        healing = sum(_rand.randint(1, 8) for _ in range(2)) + tier['bonus']
+    elif degree == 'crit_success':
+        healing = sum(_rand.randint(1, 8) for _ in range(4)) + tier['bonus']
+    elif degree == 'crit_failure':
+        healing = -_rand.randint(1, 8)
+
+    def _mutate(pc):
+        # RAW: immunity applies after ANY treatment, success or not.
+        pc.treat_wounds_immune_until = now + 3600.0
+        if healing > 0:
+            _party_hp_mutate(pc, healing, 'heal')
+            # Success/crit also removes wounded (after any dying-clear
+            # bookkeeping the heal path did).
+            pc.conditions['wounded'] = 0
+        elif healing < 0:
+            _party_hp_mutate(pc, -healing, 'damage')
+        return True
+
+    apply_pc_delta(target_name, _mutate)
+    label = degree.replace('_', ' ')
+    sign = '+' if mod >= 0 else ''
+    _combat_log(
+        f"{pc_name} treats {target_name}: Medicine {sign}{mod}, "
+        f"rolled {d20} = {total} vs DC {tier['dc']} — {label} "
+        f"({'+' if healing >= 0 else ''}{healing} HP)", 'condition')
+    _record_treat_wounds({
+        'healer': pc_name, 'target': target_name, 'roll_total': total,
+        'dc': tier['dc'], 'success': degree, 'healing': healing,
+        'proficiency': str(data.get('tier') or 'trained').lower(), 'ts': now,
+    })
+    return jsonify({
+        "success": True, "d20": d20, "total": total, "dc": tier['dc'],
+        "degree": degree, "healing": healing, "target": target_name,
+        "target_hp": target.current_hp,
+        "wounded": target.conditions.get('wounded', 0),
+        "immune_until": getattr(target, 'treat_wounds_immune_until', 0),
+    })
+
+
+# Refocus already has a canonical route (/api/refocus/<pc_name>, wired to
+# the magic tab's per-caster button) and shield repair's canonical route is
+# /api/repair_shield/<pc_name> (now the RAW Repair check) — the ten-minute
+# panel reuses both rather than growing /api/pc/... duplicates.
 
 
 @app.route('/api/session_journal/<pc_name>', methods=['POST'])

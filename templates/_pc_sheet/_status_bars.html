@@ -127,13 +127,35 @@
                 <option value="">Loading…</option>
             </select>
             <span id="exploration-tip" style="font-size:10px; color:var(--t3); font-style:italic;"></span>
-            {# Treat Wounds quick-button (Wave 2 #6) — most-rolled exploration
-               skill. Picks a target party member, rolls Medicine, dispatches
-               to GM with the proposed healing amount. GM applies. #}
+            {# Ten-minute activities (queue #2) — the player-driven rest
+               block. All three roll SERVER-side and auto-apply: Treat
+               Wounds (RAW tiers + 1-hour immunity), Refocus (+1 Focus),
+               and the RAW shield Repair check (GM-set DC, default 15). #}
+            <span class="rubric no-print" data-tint="verdigris" style="margin-left:auto;" title="Exploration activities that each take 10 minutes">10-Min</span>
             <button id="treat-wounds-btn" class="tb no-print" onclick="openTreatWounds()"
-                    style="margin-left:auto; padding:3px 10px; font-size:11px;"
-                    title="Treat Wounds — roll Medicine to heal an ally (10 minutes per use)">
+                    style="padding:3px 10px; font-size:11px;"
+                    title="Treat Wounds — the server rolls your Medicine, applies the healing (and Wounded removal), and starts the target's 1-hour immunity">
                  Treat Wounds
             </button>
+            {% if pc.focus_max > 0 %}
+            {# class_name rides a data-attribute, never an inline JS string --
+               the recurring apostrophe-handler bug class (CLAUDE.md). #}
+            <button class="tb no-print" data-cls="{{ pc.class_name|lower }}"
+                    onclick="doRefocus(this.dataset.cls, '')"
+                    style="padding:3px 10px; font-size:11px;"
+                    title="Refocus — spend 10 minutes on your class's deeds to regain 1 Focus Point">
+                 Refocus
+            </button>
+            {% endif %}
+            {% if pc.shield_max_hp > 0 %}
+            <button class="tb no-print" onclick="repairShield()"
+                    style="padding:3px 10px; font-size:11px;"
+                    title="Repair — Crafting check vs the DC at right (GM sets it; usually the shield's Craft DC). Success restores 5 +5/rank; crit fail dings the shield">
+                 Repair Shield
+            </button>
+            <input type="number" id="repair-dc-input" class="no-print" value="15" min="5" max="50"
+                   title="Repair DC (GM's call — default 15)"
+                   style="width:46px; padding:3px 6px; font-size:11px; border-radius:4px; background:var(--bg-base); border:1px solid var(--border-s); color:var(--t1);">
+            {% endif %}
         </div>
     </div>
