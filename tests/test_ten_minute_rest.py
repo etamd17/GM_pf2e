@@ -126,7 +126,8 @@ def test_crit_failure_damages_through_real_path(duo, client):
     kyle, goel = duo['kyle'], duo['goel']
     goel.current_hp = 1
     goel.conditions['wounded'] = 0
-    # master DC 30, d20=1: total 22 <= 20 -> crit fail (nat-1 step keeps it)
+    # master DC 30, d20=1: total 22 is a plain failure band-wise (22 > DC-10),
+    # and the NATURAL 1 steps it down one degree to crit failure
     r = _treat(client, kyle.name, target=goel.name, tier='master', d20=1)
     j = r.get_json()
     assert j['degree'] == 'crit_failure'
@@ -304,3 +305,160 @@ def test_repair_custom_dc_honored(duo, client):
     j = r.get_json()
     assert j['degree'] == 'failure'
     assert goel.shield_hp == 10
+
+
+# ==========================================================================
+# Final-review fixes: dead targets, deterministic dice, immunity expiry,
+# higher-rank tiers, and the dying-target stabilize flow.
+# ==========================================================================
+
+def _fix_dice(monkeypatch, value):
+    """Pin every die the activities roll (healing d8s, repair 2d6) so the
+    RAW formulas are asserted EXACTLY -- range-only assertions let a
+    collapsed crit branch (the historical client-side bug) pass ~95% of
+    runs. The d20 stays injectable via the request body."""
+    import random as _random
+    monkeypatch.setattr(_random, 'randint', lambda a, b: value)
+
+
+def test_dead_target_cannot_be_treated(duo, client):
+    """Same derived-dead guard as the recovery check: a success on a dead
+    PC (heal clears dying, route clears wounded) would silently revive the
+    corpse through a player-driven auto-applied path."""
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 0
+    goel.conditions['dying'] = 4
+    goel.conditions['wounded'] = 2
+    r = _treat(client, kyle.name, target=goel.name, tier='trained', d20=20)
+    assert r.status_code == 400
+    assert goel.current_hp == 0
+    assert goel.conditions['dying'] == 4 and goel.conditions['wounded'] == 2
+
+
+def test_doomed_dead_target_cannot_be_treated(duo, client):
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 0
+    goel.conditions['dying'] = 2
+    goel.conditions['doomed'] = 2          # dead at threshold 2
+    r = _treat(client, kyle.name, target=goel.name, tier='trained', d20=20)
+    assert r.status_code == 400
+    assert goel.conditions['dying'] == 2
+
+
+def test_dying_but_alive_target_can_be_treated_and_stabilizes(duo, client):
+    """The standard stabilize flow: success on a dying-1 target heals
+    through the real heal path (dying cleared, wounded bumped) and then
+    RAW's success rider clears wounded entirely."""
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 0
+    goel.conditions['dying'] = 1
+    goel.conditions['wounded'] = 0
+    r = _treat(client, kyle.name, target=goel.name, tier='trained', d20=3)
+    assert r.status_code == 200, r.data
+    j = r.get_json()
+    assert j['degree'] == 'success'
+    assert goel.current_hp == j['healing'] and goel.current_hp > 0
+    assert goel.conditions['dying'] == 0
+    assert goel.conditions['wounded'] == 0, 'RAW: success removes wounded'
+
+
+def test_success_healing_exact_with_pinned_dice(duo, client, monkeypatch):
+    _fix_dice(monkeypatch, 8)
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 10
+    j = _treat(client, kyle.name, target=goel.name, tier='trained', d20=3).get_json()
+    assert j['degree'] == 'success'
+    assert j['healing'] == 16              # exactly 2d8, no tier bonus
+    assert goel.current_hp == 26
+
+
+def test_crit_doubles_dice_and_keeps_flat_bonus_exact(duo, client, monkeypatch):
+    """Crit = 4d8 + tier bonus. The old client-side copy rolled flat +10
+    instead of doubling -- with pinned dice a collapse to 2d8+30 (46) can
+    never pass this 62 assertion."""
+    _fix_dice(monkeypatch, 8)
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 10
+    j = _treat(client, kyle.name, target=goel.name, tier='master', d20=19).get_json()
+    assert j['degree'] == 'crit_success'
+    assert j['healing'] == 4 * 8 + 30      # 62
+    assert goel.current_hp == min(goel.hp, 10 + 62)
+
+
+def test_crit_failure_damage_exact_with_pinned_dice(duo, client, monkeypatch):
+    _fix_dice(monkeypatch, 8)
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 50
+    j = _treat(client, kyle.name, target=goel.name, tier='master', d20=1).get_json()
+    assert j['degree'] == 'crit_failure'
+    assert j['healing'] == -8              # exactly 1d8, tier-independent
+    assert goel.current_hp == 42
+
+
+def test_expert_and_legendary_tiers_with_injected_rank(duo, client, monkeypatch):
+    """Neither fixture has expert+ Medicine for the two untested tier rows,
+    so inject the rank source: expert DC 20 -> +10, legendary DC 40 -> +50."""
+    _fix_dice(monkeypatch, 8)
+    kyle, goel = duo['kyle'], duo['goel']
+    monkeypatch.setattr(app_module, '_pc_skill_mod_rank', lambda pc, skill: (21, 4))
+    goel.current_hp = 10
+    # expert success: DC 20, total 3+21=24 lands in the success band [20, 29]
+    j = _treat(client, kyle.name, target=goel.name, tier='expert', d20=3).get_json()
+    assert j['dc'] == 20 and j['degree'] == 'success'
+    assert j['healing'] == 16 + 10
+    # legendary: an out-of-range 25 clamps to 20, which IS a natural 20 --
+    # total 41 vs DC 40 is a plain success stepped up to crit: 4d8 + 50.
+    j = _treat(client, kyle.name, target=goel.name, tier='legendary', d20=25, override=True).get_json()
+    assert j['dc'] == 40
+    assert j['degree'] == 'crit_success'
+    assert j['healing'] == 32 + 50
+
+
+def test_expired_immunity_allows_retreat_without_override(duo, client):
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 50
+    goel.treat_wounds_immune_until = time.time() - 5    # expired
+    r = _treat(client, kyle.name, target=goel.name, tier='trained', d20=3)
+    assert r.status_code == 200
+    assert r.get_json()['degree'] == 'success'
+
+
+def test_lower_tier_always_allowed_for_high_rank(duo, client):
+    """RAW: higher ranks 'can instead' attempt higher DCs -- the trained
+    tier stays legal for a Master healer."""
+    kyle, goel = duo['kyle'], duo['goel']
+    goel.current_hp = 50
+    r = _treat(client, kyle.name, target=goel.name, tier='trained', d20=3)
+    assert r.status_code == 200
+
+
+def test_repair_rank_scaling_with_injected_rank(duo, client, monkeypatch):
+    """Both fixtures are Crafting Untrained, so the 5/rank term was never
+    exercised: expert (rank 2) success restores 15."""
+    goel = duo['goel']
+    goel.shield_hp = 2
+    monkeypatch.setattr(app_module, '_pc_skill_mod_rank', lambda pc, skill: (6, 2))
+    r = _repair(client, goel.name, d20=10)   # 16 vs DC 15 -> success
+    j = r.get_json()
+    assert j['degree'] == 'success'
+    assert j['restored'] == 5 + 5 * 2
+    assert goel.shield_hp == 17
+
+
+def test_repair_crit_failure_exact_minus_hardness(duo, client, monkeypatch):
+    _fix_dice(monkeypatch, 6)
+    goel = duo['goel']                      # hardness 5
+    goel.shield_hp = 10
+    j = _repair(client, goel.name, d20=1).get_json()
+    assert j['degree'] == 'crit_failure'
+    assert j['damage'] == 6 + 6 - 5         # 7
+    assert goel.shield_hp == 3
+
+
+def test_legacy_client_reported_dispatch_route_is_gone(duo, client):
+    """The old /api/treat_wounds/<name> accepted CLIENT-computed healing
+    and appended it to the GM log -- removed with the server-rolled route
+    so players can't inject bogus rows."""
+    r = client.post(f"/api/treat_wounds/{duo['kyle'].name}",
+                    json={'target': 'X', 'healing': 999}, headers=_AJAX)
+    assert r.status_code in (404, 405)

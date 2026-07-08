@@ -138,7 +138,10 @@
                  Treat Wounds
             </button>
             {% if pc.focus_max > 0 %}
-            <button class="tb no-print" onclick="doRefocus('{{ pc.class_name|lower }}', '')"
+            {# class_name rides a data-attribute, never an inline JS string --
+               the recurring apostrophe-handler bug class (CLAUDE.md). #}
+            <button class="tb no-print" data-cls="{{ pc.class_name|lower }}"
+                    onclick="doRefocus(this.dataset.cls, '')"
                     style="padding:3px 10px; font-size:11px;"
                     title="Refocus — spend 10 minutes on your class's deeds to regain 1 Focus Point">
                  Refocus

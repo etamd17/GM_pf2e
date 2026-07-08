@@ -7737,7 +7737,10 @@
         // RIGHT-CLICK CONTEXT MENU — Fortune/Misfortune rolls
         // ==========================================
         let pendingContextRoll = { name: '', mod: 0 };
-        const ctxMenu = document.getElementById('roll-context-menu');
+        // Lazy lookup: this script runs before #roll-context-menu exists in
+        // the DOM, so a load-time const was permanently null and the whole
+        // right-click roll menu was dead (found in the ten-minute-rest review).
+        function _ctxMenuEl() { return document.getElementById('roll-context-menu'); }
 
         // Attach right-click to all rollable elements
         document.querySelectorAll('.rollable-element').forEach(el => {
@@ -7745,6 +7748,8 @@
                 e.preventDefault();
                 pendingContextRoll.name = this.dataset.rollName || 'Check';
                 pendingContextRoll.mod = parseInt(this.dataset.rollMod) || 0;
+                const ctxMenu = _ctxMenuEl();
+                if (!ctxMenu) return;
                 ctxMenu.style.left = e.clientX + 'px';
                 ctxMenu.style.top = e.clientY + 'px';
                 ctxMenu.classList.add('visible');
@@ -7757,6 +7762,8 @@
                 e.preventDefault();
                 pendingContextRoll.name = this.dataset.rollName || 'Check';
                 pendingContextRoll.mod = parseInt(this.dataset.rollMod) || 0;
+                const ctxMenu = _ctxMenuEl();
+                if (!ctxMenu) return;
                 ctxMenu.style.left = e.clientX + 'px';
                 ctxMenu.style.top = e.clientY + 'px';
                 ctxMenu.classList.add('visible');
@@ -7767,11 +7774,11 @@
         // not rendered in every sheet state, and an unguarded read here
         // threw on EVERY document click (found in the ten-minute-rest walk).
         document.addEventListener('click', function() {
-            if (ctxMenu) ctxMenu.classList.remove('visible');
+            const m = _ctxMenuEl(); if (m) m.classList.remove('visible');
         });
 
         function contextRoll(mode) {
-            ctxMenu.classList.remove('visible');
+            const m2 = _ctxMenuEl(); if (m2) m2.classList.remove('visible');
             const name = pendingContextRoll.name;
             const mod = pendingContextRoll.mod;
 
@@ -9036,6 +9043,7 @@
                 party = (d.party || []).filter(p => p.name !== pcName);
             } catch(_) {}
             const overlay = document.createElement('div');
+            overlay.className = 'tw-overlay';
             overlay.style.cssText = 'position:fixed; inset:0; background:rgba(8,10,20,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px;';
             const med_total = parseInt(medicine.total, 10);
             const overlayHTML = `
@@ -9065,7 +9073,7 @@
                         <input type="number" id="tw-d20" min="1" max="20" placeholder="leave blank to roll on site" class="hp-input" style="width:100%; padding:6px 8px; margin-top:4px;">
                     </div>
                     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
-                        <button class="tb" onclick="this.closest('div[style*=\\'inset:0\\']')?.remove()" style="padding:5px 12px; font-size:12px;">Cancel</button>
+                        <button class="tb" onclick="this.closest('.tw-overlay')?.remove()" style="padding:5px 12px; font-size:12px;">Cancel</button>
                         <button class="tb gilt" id="tw-go" style="padding:5px 14px; font-size:12px;">Roll Medicine ${med_total >= 0 ? '+' : ''}${med_total}</button>
                     </div>
                 </div>`;
@@ -9075,9 +9083,19 @@
             overlay.querySelector('#tw-go').onclick = async () => {
                 const target = overlay.querySelector('#tw-target').value;
                 const tier = overlay.querySelector('#tw-tier').value;
-                const d20raw = parseInt(overlay.querySelector('#tw-d20').value, 10);
+                const d20Field = overlay.querySelector('#tw-d20');
+                const d20txt = (d20Field.value || '').trim();
+                const d20raw = parseInt(d20txt, 10);
+                // An entered-but-invalid physical d20 must not silently fall
+                // back to a server roll -- the player would believe their
+                // typo was used. Make them fix it.
+                if (d20txt && (!(d20raw >= 1 && d20raw <= 20) || String(d20raw) !== d20txt)) {
+                    d20Field.focus();
+                    d20Field.style.borderColor = 'rgba(239,68,68,0.8)';
+                    return;
+                }
                 overlay.remove();
-                await _postTreatWounds(target, tier, (d20raw >= 1 && d20raw <= 20) ? d20raw : null, false);
+                await _postTreatWounds(target, tier, d20txt ? d20raw : null, false);
             };
         }
 

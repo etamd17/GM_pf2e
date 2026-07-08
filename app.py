@@ -10485,10 +10485,15 @@ def repair_shield(pc_name):
     apply_pc_delta(pc_name, _mutate)
     label = degree.replace('_', ' ')
     sign = '+' if mod >= 0 else ''
+    if restored:
+        outcome_bit = f"+{restored} shield HP"
+    elif damage:
+        outcome_bit = f"-{damage} shield HP"
+    else:
+        outcome_bit = "no change"
     _combat_log(
         f"{pc_name} Repairs their shield: Crafting {sign}{mod}, rolled {d20} "
-        f"= {total} vs DC {dc} — {label} "
-        f"({'+' + str(restored) if restored else '-' + str(damage)} shield HP)", 'action')
+        f"= {total} vs DC {dc} — {label} ({outcome_bit})", 'action')
     return jsonify({
         "success": True, "d20": d20, "total": total, "dc": dc,
         "degree": degree, "restored": restored, "damage": damage,
@@ -13405,36 +13410,12 @@ def player_whisper(pc_name):
     return jsonify({"success": True})
 
 
-@app.route('/api/treat_wounds/<pc_name>', methods=['POST'])
-@require_pc_self_or_gm
-def treat_wounds_dispatch(pc_name):
-    """Player rolled Treat Wounds — broadcast a GM-visible record so the
-    GM applies the healing (and we keep a session log of total healing
-    time + amounts for the optional 'how much table time on healing'
-    summary)."""
-    if pc_name not in PARTY_LIBRARY:
-        return jsonify({"success": False, "error": "unknown player"}), 404
-    data = request.get_json(silent=True) or {}
-    target = (data.get('target') or '').strip()
-    roll_total = data.get('roll_total')
-    healing = data.get('healing')
-    proficiency = (data.get('proficiency') or 'Trained').strip()
-    dc = data.get('dc')
-    success = data.get('success')  # crit_success / success / failure / crit_failure
-    if not target or healing is None:
-        return jsonify({"success": False, "error": "missing target or healing"}), 400
-    import time as _t
-    _record_treat_wounds({
-        'healer': pc_name,
-        'target': target,
-        'roll_total': roll_total,
-        'dc': dc,
-        'success': success,
-        'healing': healing,
-        'proficiency': proficiency,
-        'ts': _t.time(),
-    })
-    return jsonify({"success": True})
+# The old client-reported /api/treat_wounds/<pc_name> dispatch route was
+# removed with the ten-minute activities arc: its only caller was the sheet
+# modal's client-side roll (now server-rolled via /api/pc/<name>/treat_wounds),
+# and leaving it live let any authenticated player inject arbitrary rows
+# into the GM healing log. _record_treat_wounds below is fed the
+# server-authoritative result instead.
 
 
 def _record_treat_wounds(payload):
@@ -13519,6 +13500,14 @@ def pc_treat_wounds(pc_name):
     target = PARTY_LIBRARY.get(target_name)
     if target is None:
         return jsonify({"success": False, "error": "unknown target"}), 404
+    # Dead targets can't be treated (same derived-dead guard as the recovery
+    # check: death is dying >= max(1, 4 - doomed) with no flag, so without
+    # this a success would revive the corpse -- heal clears dying, and the
+    # wounded wipe below erases the bookkeeping too).
+    t_dying = int(target.conditions.get('dying', 0) or 0)
+    t_doomed = int(target.conditions.get('doomed', 0) or 0)
+    if t_dying > 0 and t_dying >= max(1, 4 - t_doomed):
+        return jsonify({"success": False, "error": "target is dead — Treat Wounds cannot help"}), 400
     tier = _TREAT_WOUNDS_TIERS.get(str(data.get('tier') or 'trained').lower())
     if tier is None:
         return jsonify({"success": False, "error": "unknown tier"}), 400
