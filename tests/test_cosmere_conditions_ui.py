@@ -43,7 +43,11 @@ def test_exhausted_penalty_is_applied_to_tests():
 def test_empowered_advantage_and_disoriented_restrained_disadvantage():
     s = _sheet()
     assert 'c.empowered ? 1 : 0' in s
-    assert '(c.disoriented?1:0) + (c.restrained?1:0)' in s
+    # Disoriented's disadvantage is RAW-scoped to sense-based (Perception)
+    # tests only; Restrained's is blanket (all tests except escape).
+    assert '(c.disoriented && senseBased)?1:0) + (c.restrained?1:0)' in s
+    # Perception is the sense-based test the sheet flags for Disoriented.
+    assert 'perception' in s.lower() and 'senseBased' in s
 
 
 def test_advantage_and_disadvantage_cancel_one_to_one():

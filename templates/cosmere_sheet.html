@@ -840,17 +840,22 @@
        cancels a condition's disadvantage 1:1 exactly like the rulebook, and
        vice versa. Numeric penalties (Exhausted) always apply.  ───────────── */
     const COND_VAL = c => { const v=(cur.conditions||{})[c]; return (typeof v==='number') ? v : (v?1:0); };
-    function condRollFx(){
+    // `senseBased` = this roll is a Perception / sense-based test. Disoriented's
+    // disadvantage is RAW-scoped to those ONLY (Ch.9: "Perception and other
+    // sense-based tests have disadvantage") -- it must NOT drag down Athletics,
+    // Deception, attacks, etc. Restrained's disadvantage IS blanket (all tests
+    // except escape), so it always applies.
+    function condRollFx(senseBased){
       const c = cur.conditions || {};
       return {
         flat: -COND_VAL('exhausted'),                  // Exhausted [-X]: -X to EVERY test result
         adv:  c.empowered ? 1 : 0,                      // Empowered: advantage on all tests
-        dis:  (c.disoriented?1:0) + (c.restrained?1:0), // Disoriented / Restrained: disadvantage
+        dis:  ((c.disoriented && senseBased)?1:0) + (c.restrained?1:0),
       };
     }
     // Net the manual Adv/Dis toggles with the condition-driven ones (cancel 1:1).
-    function netAdvDis(){
-      const fx = condRollFx();
+    function netAdvDis(senseBased){
+      const fx = condRollFx(senseBased);
       const net = ((mods.adv?1:0) + fx.adv) - ((mods.dis?1:0) + fx.dis);
       return { adv: net > 0, dis: net < 0 };
     }
@@ -886,12 +891,14 @@
       if(typeof syncVbar === 'function') syncVbar();   // keep the sticky bar's condition count fresh
     }
     // Annotate a roll with the conditions that touched it (shown after the total).
-    function condTags(enh, roll){
+    function condTags(enh, roll, senseBased){
       const c = cur.conditions || {}, t = [];
       if(enh) t.push('Enhanced +' + enh);
       const ex = COND_VAL('exhausted'); if(ex) t.push('Exhausted −' + ex);
       if(roll.adv) t.push('advantage' + (c.empowered ? ' (Empowered)' : ''));
-      if(roll.dis){ const src = c.disoriented ? 'Disoriented' : (c.restrained ? 'Restrained' : ''); t.push('disadvantage' + (src ? ' ('+src+')' : '')); }
+      // Name the real source: Disoriented only contributed if this was a
+      // sense-based test; otherwise blanket Restrained is the cause.
+      if(roll.dis){ const src = (c.disoriented && senseBased) ? 'Disoriented' : (c.restrained ? 'Restrained' : ''); t.push('disadvantage' + (src ? ' ('+src+')' : '')); }
       return t.length ? ' <span class="opp">' + t.join(' · ') + '</span>' : '';
     }
     const d = n => 1 + Math.floor(Math.random()*n);
@@ -914,8 +921,8 @@
     // 'opp' (nat-20 Opportunity) or 'comp' (nat-1 Complication) — themed feedback.
     const res = (h, flare) => { const el=document.getElementById('cs-result'); if(el){ el.innerHTML=h; _flare(el, flare); } csToast(h, flare); };
 
-    function rollD20(){
-      const ad=netAdvDis();
+    function rollD20(senseBased){
+      const ad=netAdvDis(senseBased);
       let a=d(20), nat=a, note='d20('+a+')';
       if(ad.adv||ad.dis){ const b=d(20); nat=ad.adv?Math.max(a,b):Math.min(a,b); note='d20('+a+','+b+'→'+nat+')'; }
       return {v:nat, note, nat, adv:ad.adv, dis:ad.dis};
@@ -953,17 +960,21 @@
     };
     const enhBonus = attr => (cur.enhanced && (attr==='str'||attr==='spd')) ? 1 : 0;  // Enhance: +1 to physical
     window.cosRoll = function(name, mod, attr){
-      const e=enhBonus(attr), fx=condRollFx();
-      const m=mod+e+fx.flat, roll=rollD20(), f=flair(roll), sign=m>=0?'+':'';
-      const total=roll.v+m+f.bonus, tags=condTags(e, roll), plain=tags.replace(/<[^>]+>/g,'').trim();
+      // Perception is the sense-based test Disoriented penalizes (Ch.9). The
+      // GM can still hand-toggle Dis for any other test they rule sense-based.
+      const senseBased = /^\s*perception\s*$/i.test(name || '');
+      const e=enhBonus(attr), fx=condRollFx(senseBased);
+      const m=mod+e+fx.flat, roll=rollD20(senseBased), f=flair(roll), sign=m>=0?'+':'';
+      const total=roll.v+m+f.bonus, tags=condTags(e, roll, senseBased), plain=tags.replace(/<[^>]+>/g,'').trim();
       res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags, roll.nat===20?'opp':(roll.nat===1?'comp':''));
       post(name+' test', total, roll.note+' '+sign+m+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
     };
     window.cosStrike = function(name, mod, dmgFormula, dtype){
       // Exhausted + Adv/Dis hit the attack TEST; they don't modify damage (not a test).
-      const e=cur.enhanced?1:0, fx=condRollFx();
-      const atkMod=mod+e+fx.flat, dmgMod=mod+e, roll=rollD20(), f=flair(roll), sign=atkMod>=0?'+':'';
-      const atk=roll.v+atkMod+f.bonus, dmg=rollFormula(dmgFormula)+dmgMod, tags=condTags(e, roll), plain=tags.replace(/<[^>]+>/g,'').trim();
+      // An attack is not a sense-based test, so Disoriented never applies here.
+      const e=cur.enhanced?1:0, fx=condRollFx(false);
+      const atkMod=mod+e+fx.flat, dmgMod=mod+e, roll=rollD20(false), f=flair(roll), sign=atkMod>=0?'+':'';
+      const atk=roll.v+atkMod+f.bonus, dmg=rollFormula(dmgFormula)+dmgMod, tags=condTags(e, roll, false), plain=tags.replace(/<[^>]+>/g,'').trim();
       res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+tags, roll.nat===20?'opp':(roll.nat===1?'comp':''));
       post(name+' strike', 'atk '+atk+' / dmg '+dmg,
         roll.note+' '+sign+atkMod+' → hit '+atk+'; '+dmgFormula+(dmgMod>=0?'+':'')+dmgMod+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));

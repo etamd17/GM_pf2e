@@ -8848,12 +8848,33 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
         return None
     if not isinstance(getattr(target, 'conditions', None), dict):
         target.conditions = {}
-    on = bool(target.conditions.get(cond))
-    on = True if action == 'add' else (False if action == 'remove' else not on)
-    if on:
-        target.conditions[cond] = True
+    if cond in systems.cosmere._VALUED:
+        # Exhausted / Afflicted / Enhanced carry an integer magnitude and
+        # stack cumulatively (Ch.9) -- 'add' must INCREMENT, not overwrite an
+        # injury-set magnitude with boolean True (which silently reduced it).
+        _raw = target.conditions.get(cond, 0)
+        try:
+            cur_mag = int(_raw)
+        except (TypeError, ValueError):
+            cur_mag = 1 if _raw else 0
+        if action == 'add':
+            new_mag = cur_mag + 1
+        elif action == 'remove':
+            new_mag = 0
+        else:  # toggle
+            new_mag = 0 if cur_mag > 0 else 1
+        if new_mag > 0:
+            target.conditions[cond] = new_mag
+        else:
+            target.conditions.pop(cond, None)
+        on = new_mag > 0
     else:
-        target.conditions.pop(cond, None)
+        on = bool(target.conditions.get(cond))
+        on = True if action == 'add' else (False if action == 'remove' else not on)
+        if on:
+            target.conditions[cond] = True
+        else:
+            target.conditions.pop(cond, None)
     _combat_log(f"{target.name} {'gained' if on else 'lost'} {cond.capitalize()}", 'condition')
     if on:
         try: _bump_campaign_stat('conditions_applied')
@@ -11052,6 +11073,91 @@ def reorder_initiative():
     _persist_encounter_state()
     return jsonify({"success": True})
 
+def _apply_start_of_turn(new_c):
+    """Start-of-new-turn processing for the combatant `new_c` that just
+    became active. Shared by cycle_turn('next') AND delay_turn's advance
+    branch so both reach identical state (this used to live inline in
+    cycle_turn only, so a creature reached via Delay skipped all of it --
+    stale action pips, no Slowed/Stunned math, un-rolled persistent damage,
+    stale PC reaction / raised shield)."""
+    # PC turn refresh: (1) get your reaction back, (2) Raise a Shield
+    # expires (PF2e CRB: "until the start of your next turn"). We do this
+    # before applying new start-of-turn effects so conditions that hit
+    # you at turn-start can't accidentally be blocked by a stale shield.
+    if new_c.is_pc and new_c.name in PARTY_LIBRARY:
+        _pc = PARTY_LIBRARY[new_c.name]
+        _pc.reaction_used = False
+        if getattr(_pc, 'shield_raised', False):
+            _pc.shield_raised = False
+            _combat_log(f"{_pc.name}: Raise a Shield expired (start of turn)", 'condition')
+        _persist_pc_combat_state(new_c.name)
+        _broadcast_pc_state(new_c.name)
+    # Action economy reset.
+    if getattr(new_c, 'system', 'pf2e') == 'cosmere':
+        # Cosmere fast/slow ceiling, derived from the elected speed EACH turn
+        # so it survives turn advance (fast = 2 actions, slow = 3). No PF2e
+        # slowed/stunned integer math — Cosmere conditions are booleans.
+        new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
+        new_c.actions_used = 0
+        if not new_c.is_pc:
+            new_c.reaction_used = False
+    else:
+        # PF2e: Slowed lowers the action ceiling, Stunned then spends from
+        # what's left (PF2E Core p.448). Pip widget reads max_actions/
+        # actions_used directly, so both must reflect the condition math
+        # BEFORE the turn renders.
+        slowed_val = new_c.conditions.get('slowed', 0)
+        new_c.max_actions = max(0, min(4, 3 - int(slowed_val or 0)))
+        new_c.actions_used = 0
+        if not new_c.is_pc:
+            new_c.reaction_used = False
+
+        # Stunned: lose actions (cap at the remaining max), then decrement
+        # stunned by the number lost. We pre-fill actions_used so the pip
+        # widget shows the stunned cost already spent — otherwise the GM
+        # would see 3/3 actions on a stunned combatant's turn and have to
+        # remember to click them off manually.
+        stunned_val = new_c.conditions.get('stunned', 0)
+        if stunned_val > 0:
+            actions_lost = min(stunned_val, new_c.max_actions)
+            new_c.conditions['stunned'] = max(0, stunned_val - actions_lost)
+            new_c.actions_used = actions_lost
+            _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
+            if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
+
+    # Persistent damage (start of turn, PF2e Core p.451).
+    # Two representations coexist:
+    #   - Monsters / old tracker rows: `persistent_damage` is a dice string
+    #     like "2d6 fire". We still auto-roll for the GM's convenience.
+    #   - PCs: `persistent_damage` is a list of dicts (see Character.__init__).
+    #     The player asked to NOT auto-roll; we just surface a reminder and
+    #     let them click "Take N damage" + "Roll DC 15 Flat Check" on the sheet.
+    pd = getattr(new_c, 'persistent_damage', '')
+    if pd and not (new_c.is_pc and new_c.name in PARTY_LIBRARY):
+        # Monster path: keep the old auto-roll behavior.
+        if isinstance(pd, str):
+            pd_total = _roll_dice_expr(pd)
+            if pd_total is not None:
+                old_hp = new_c.current_hp
+                new_c.current_hp = max(0, new_c.current_hp - pd_total)
+                _combat_log(f"{new_c.name}: Persistent {pd} dealt {pd_total} ({old_hp}→{new_c.current_hp})", 'damage')
+                flat_roll = random.randint(1, 20)
+                if flat_roll >= 15:
+                    new_c.persistent_damage = ''
+                    _combat_log(f"{new_c.name}: Flat check {flat_roll} >= 15 — persistent damage ends!", 'heal')
+                else:
+                    _combat_log(f"{new_c.name}: Flat check {flat_roll} < 15 — persistent damage continues", 'damage')
+    elif new_c.is_pc and new_c.name in PARTY_LIBRARY:
+        # PC path: just log that it's pending. The reminder (and buttons on
+        # the sheet) drive resolution — the player rolls the DC 15 flat
+        # check themselves.
+        _pc = PARTY_LIBRARY[new_c.name]
+        pd_list = list(getattr(_pc, 'persistent_damage', []) or [])
+        if pd_list:
+            parts = [f"{e.get('damage','?')} {e.get('type','')}".strip() for e in pd_list]
+            _combat_log(f"{_pc.name}: Persistent damage pending — {', '.join(parts)} (player rolls)", 'condition')
+
+
 @app.route('/api/cycle_turn/<direction>', methods=['POST'])
 def cycle_turn(direction):
     global TURN_INDEX, ACTIVE_ENCOUNTER, ROUND_NUMBER, TURN_REMINDERS
@@ -11151,85 +11257,10 @@ def cycle_turn(direction):
             print('[EFFECTS] expire error:', _ex)
 
         # === START OF NEW TURN: auto-apply start-of-turn mechanics ===
-        new_c = ACTIVE_ENCOUNTER[TURN_INDEX]
+        # Shared with delay_turn so a combatant reached via Delay gets the
+        # SAME start-of-turn processing as one reached via Next Turn.
+        _apply_start_of_turn(ACTIVE_ENCOUNTER[TURN_INDEX])
 
-        # PC turn refresh: (1) get your reaction back, (2) Raise a Shield
-        # expires (PF2e CRB: "until the start of your next turn"). We do this
-        # before applying new start-of-turn effects so conditions that hit
-        # you at turn-start can't accidentally be blocked by a stale shield.
-        if new_c.is_pc and new_c.name in PARTY_LIBRARY:
-            _pc = PARTY_LIBRARY[new_c.name]
-            _pc.reaction_used = False
-            if getattr(_pc, 'shield_raised', False):
-                _pc.shield_raised = False
-                _combat_log(f"{_pc.name}: Raise a Shield expired (start of turn)", 'condition')
-            _persist_pc_combat_state(new_c.name)
-            _broadcast_pc_state(new_c.name)
-        # Action economy reset.
-        if getattr(new_c, 'system', 'pf2e') == 'cosmere':
-            # Cosmere fast/slow ceiling, derived from the elected speed EACH turn
-            # so it survives turn advance (fast = 2 actions, slow = 3). No PF2e
-            # slowed/stunned integer math — Cosmere conditions are booleans.
-            new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
-            new_c.actions_used = 0
-            if not new_c.is_pc:
-                new_c.reaction_used = False
-        else:
-            # PF2e: Slowed lowers the action ceiling, Stunned then spends from
-            # what's left (PF2E Core p.448). Pip widget reads max_actions/
-            # actions_used directly, so both must reflect the condition math
-            # BEFORE the turn renders.
-            slowed_val = new_c.conditions.get('slowed', 0)
-            new_c.max_actions = max(0, min(4, 3 - int(slowed_val or 0)))
-            new_c.actions_used = 0
-            if not new_c.is_pc:
-                new_c.reaction_used = False
-
-            # Stunned: lose actions (cap at the remaining max), then decrement
-            # stunned by the number lost. We pre-fill actions_used so the pip
-            # widget shows the stunned cost already spent — otherwise the GM
-            # would see 3/3 actions on a stunned combatant's turn and have to
-            # remember to click them off manually.
-            stunned_val = new_c.conditions.get('stunned', 0)
-            if stunned_val > 0:
-                actions_lost = min(stunned_val, new_c.max_actions)
-                new_c.conditions['stunned'] = max(0, stunned_val - actions_lost)
-                new_c.actions_used = actions_lost
-                _combat_log(f"{new_c.name}: Lost {actions_lost} action(s) to Stunned. Stunned reduced to {new_c.conditions['stunned']}", 'condition')
-                if new_c.is_pc and new_c.name in PARTY_LIBRARY: PARTY_LIBRARY[new_c.name].conditions['stunned'] = new_c.conditions['stunned']
-        
-        # Persistent damage (start of turn, PF2e Core p.451).
-        # Two representations coexist:
-        #   - Monsters / old tracker rows: `persistent_damage` is a dice string
-        #     like "2d6 fire". We still auto-roll for the GM's convenience.
-        #   - PCs: `persistent_damage` is a list of dicts (see Character.__init__).
-        #     The player asked to NOT auto-roll; we just surface a reminder and
-        #     let them click "Take N damage" + "Roll DC 15 Flat Check" on the sheet.
-        pd = getattr(new_c, 'persistent_damage', '')
-        if pd and not (new_c.is_pc and new_c.name in PARTY_LIBRARY):
-            # Monster path: keep the old auto-roll behavior.
-            if isinstance(pd, str):
-                pd_total = _roll_dice_expr(pd)
-                if pd_total is not None:
-                    old_hp = new_c.current_hp
-                    new_c.current_hp = max(0, new_c.current_hp - pd_total)
-                    _combat_log(f"{new_c.name}: Persistent {pd} dealt {pd_total} ({old_hp}→{new_c.current_hp})", 'damage')
-                    flat_roll = random.randint(1, 20)
-                    if flat_roll >= 15:
-                        new_c.persistent_damage = ''
-                        _combat_log(f"{new_c.name}: Flat check {flat_roll} >= 15 — persistent damage ends!", 'heal')
-                    else:
-                        _combat_log(f"{new_c.name}: Flat check {flat_roll} < 15 — persistent damage continues", 'damage')
-        elif new_c.is_pc and new_c.name in PARTY_LIBRARY:
-            # PC path: just log that it's pending. The reminder (and buttons on
-            # the sheet) drive resolution — the player rolls the DC 15 flat
-            # check themselves.
-            _pc = PARTY_LIBRARY[new_c.name]
-            pd_list = list(getattr(_pc, 'persistent_damage', []) or [])
-            if pd_list:
-                parts = [f"{e.get('damage','?')} {e.get('type','')}".strip() for e in pd_list]
-                _combat_log(f"{_pc.name}: Persistent damage pending — {', '.join(parts)} (player rolls)", 'condition')
-        
         _generate_turn_reminders()
         
     elif direction == 'prev':
@@ -11721,6 +11752,11 @@ def delay_turn(instance_id):
                         _fire_round_events(ROUND_NUMBER)
                     except Exception as _ex:
                         print('[ROUND EVENTS] fire error:', _ex)
+                # Start-of-turn processing for the combatant that becomes
+                # active — same helper cycle_turn('next') uses, so Delay and
+                # Next Turn reach identical state.
+                if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER):
+                    _apply_start_of_turn(ACTIVE_ENCOUNTER[TURN_INDEX])
                 _generate_turn_reminders()
             _persist_encounter_state()
             _broadcast_encounter_state()
