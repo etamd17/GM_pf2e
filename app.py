@@ -6794,6 +6794,7 @@ def gm_hub():
         monster_count=len(MONSTER_LIBRARY),
         encounter_count=len(ACTIVE_ENCOUNTER),
         campaign=_load_campaign_config(),
+        free_archetype=_free_archetype_enabled(),
         now_playing=now_playing,
     )
 
@@ -15733,7 +15734,7 @@ def player_levelup(pc_name):
         # Filter class-level features by the PC's subclass before passing
         # to the template — Storm Druid only sees Storm entries, etc.
         clf = _filter_class_level_features_for_pc(pc)
-        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf)
+        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf, free_archetype=_free_archetype_enabled())
     return redirect(url_for('player_view'))
 
 def _count_feats_at_level(feats, level, slot_type):

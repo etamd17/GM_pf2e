@@ -146,6 +146,17 @@
                         <button type="button" class="btn btn--sm" onclick="awardXp(true)">Award encounter XP</button>
                     </span>
                 </div>
+                {# ── Variant rules: Free Archetype (GM Core p.187) ── #}
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap; margin-top:var(--sp-3); padding-top:var(--sp-3); border-top:1px solid var(--border-card);">
+                    <div>
+                        <span style="font-family:var(--font-display); font-size:13px; font-weight:700; color:var(--gilt-100);">Free Archetype</span>
+                        <span style="font-size:11px; color:var(--text-on-dark-3);">&mdash; every PC gets an extra archetype feat slot at each even level. Applies on the next level-up.</span>
+                    </div>
+                    <button type="button" id="fa-toggle-btn" class="btn btn--sm" onclick="toggleCampaignFA()"
+                            style="{% if free_archetype %}background:var(--gilt-100); color:#1a1408;{% endif %}">
+                        {{ 'On' if free_archetype else 'Off' }}
+                    </button>
+                </div>
             </div>
             <script>
             function _advToast(m, t){ if(window.pf2eToast) window.pf2eToast(m, t||'success'); }
@@ -167,6 +178,20 @@
                 var body = fromEncounter ? {from_encounter:true} : {amount: parseInt(document.getElementById('adv-xp-amt').value)||0};
                 fetch('/api/gm/award_xp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
                   .then(function(r){return r.json();}).then(function(d){ _advToast(d.ok?('Awarded '+d.amount+' XP'):(d.error||'Failed'), d.ok?'success':'danger'); });
+            }
+            var _faOn = {{ 'true' if free_archetype else 'false' }};
+            function toggleCampaignFA(){
+                var next = !_faOn;
+                fetch('/api/campaign/free_archetype', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled:next})})
+                  .then(function(r){return r.json();}).then(function(d){
+                    if(!d.ok){ _advToast('Failed','danger'); return; }
+                    _faOn = d.enabled;
+                    var b = document.getElementById('fa-toggle-btn');
+                    b.textContent = _faOn ? 'On' : 'Off';
+                    b.style.background = _faOn ? 'var(--gilt-100)' : '';
+                    b.style.color = _faOn ? '#1a1408' : '';
+                    _advToast('Free Archetype ' + (_faOn ? 'enabled' : 'disabled') + ' for this campaign');
+                  });
             }
             </script>
 
