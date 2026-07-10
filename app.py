@@ -2357,6 +2357,15 @@ def _cosmere_world():
         return 'stormlight'
 
 
+def _free_archetype_enabled():
+    """Whether the active campaign runs the PF2e Free Archetype variant
+    (standard flavor: an archetype-only feat slot at every even level)."""
+    try:
+        return bool(_load_campaign_config().get('free_archetype', False))
+    except Exception:
+        return False
+
+
 def _sort_cosmere_phases():
     """Order a Cosmere encounter into the 4-phase queue (Ch.10): fast_pc ->
     fast_npc -> slow_pc -> slow_npc; within a phase, higher Speed first, then
@@ -5524,6 +5533,11 @@ CAMPAIGN_DEFAULT = {
     # XP math; default) or 'xp' (track XP per PC, auto-award the encounter total,
     # roll over at 1000). XP mode is PF2e-only; Cosmere always uses milestone.
     'advancement_mode': 'milestone',
+    # PF2e Free Archetype variant (GM Core, STANDARD flavor): every even
+    # level grants one extra feat slot restricted to archetype feats. The
+    # slot injection lives in required_slots_with_variants; the level-up
+    # save backstop and both pickers all read through it.
+    'free_archetype': False,
     # Table safety tools. 'lines' = hard "we don't go there" topics; 'veils' =
     # "happens off-screen, don't dwell"; 'notes' = free-text content agreement.
     # The X-Card (a one-tap, anonymous "pause the game" signal any member can
@@ -6780,6 +6794,7 @@ def gm_hub():
         monster_count=len(MONSTER_LIBRARY),
         encounter_count=len(ACTIVE_ENCOUNTER),
         campaign=_load_campaign_config(),
+        free_archetype=_free_archetype_enabled(),
         now_playing=now_playing,
     )
 
@@ -11021,6 +11036,17 @@ def cosmere_speed_choice(instance_id):
             break
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
+
+@app.route('/api/campaign/free_archetype', methods=['POST'])
+@gm_required
+def api_campaign_free_archetype():
+    """GM toggles the PF2e Free Archetype variant for this campaign
+    (standard flavor: archetype-only feat slot every even level). Takes
+    effect on the next level-up/builder load -- no live-state resort."""
+    enabled = bool((request.get_json(silent=True) or request.form or {}).get('enabled'))
+    _save_campaign_config({'free_archetype': enabled})
+    return jsonify({'ok': True, 'enabled': enabled})
+
 
 @app.route('/api/cosmere/initiative_mode', methods=['POST'])
 @gm_required
@@ -15366,6 +15392,20 @@ def _validate_new_character_feats(data):
             if isinstance(f, dict) and f.get('name'):
                 lookup.setdefault(f['name'].lower(), f)
 
+    # Free Archetype slot content check (builder parity with the level-up
+    # backstop): entries the client tagged as the FA slot must carry the
+    # archetype trait. Unknown names are homebrew -- never flagged.
+    if _free_archetype_enabled():
+        for f in (data.get('feats') or []):
+            if not isinstance(f, dict):
+                continue
+            if str(f.get('type') or '').strip().lower() == 'archetype feat':
+                known = lookup.get(str(f.get('name') or '').lower())
+                if known is not None and not _feat_is_archetype(known):
+                    violations.append(f'"{f.get("name")}" is not an archetype '
+                                      f'feat (the Free Archetype slot only '
+                                      f'takes archetype feats)')
+
     _rank_vals = {'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8}
     for name in picked:
         feat = lookup.get(name.lower())
@@ -15694,7 +15734,7 @@ def player_levelup(pc_name):
         # Filter class-level features by the PC's subclass before passing
         # to the template — Storm Druid only sees Storm entries, etc.
         clf = _filter_class_level_features_for_pc(pc)
-        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf)
+        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf, free_archetype=_free_archetype_enabled())
     return redirect(url_for('player_view'))
 
 def _count_feats_at_level(feats, level, slot_type):
@@ -15719,6 +15759,9 @@ def _count_feats_at_level(feats, level, slot_type):
         'ancestry_feat': {'ancestry feat', 'heritage'},
         'skill_feat':    {'skill feat'},
         'general_feat':  {'general feat'},
+        # Free Archetype variant slot (Pathbuilder exports use the same label
+        # for its FA column).
+        'archetype_feat': {'archetype feat'},
     }
     accepted = SLOT_TYPE_MAP.get(slot_type, set())
     n = 0
@@ -15759,13 +15802,80 @@ def _new_skill_increases_at_level(build, new_level):
             bumps += 1
     return bumps
 
+def _feat_traits(feat):
+    """The lowercase trait set of a BUILDER_FEATS entry. The compiled data
+    stores traits as a stringified list -- tolerate both shapes."""
+    t = feat.get('traits') if isinstance(feat, dict) else None
+    if isinstance(t, (list, tuple, set)):
+        return {str(x).strip().lower() for x in t}
+    if isinstance(t, str):
+        try:
+            import ast as _ast
+            v = _ast.literal_eval(t)
+            if isinstance(v, (list, tuple, set)):
+                return {str(x).strip().lower() for x in v}
+        except (ValueError, SyntaxError):
+            pass
+    return set()
+
+
+def _feat_is_archetype(feat):
+    """TRAIT-based, never name-based: 'Unassuming Dedication' is a halfling
+    ancestry feat with no archetype trait -- the classic name-match trap."""
+    return 'archetype' in _feat_traits(feat)
+
+
+def _feat_is_dedication(feat):
+    return 'dedication' in _feat_traits(feat) and _feat_is_archetype(feat)
+
+
+def _builder_feat_lookup():
+    """name-lowercase -> feat dict across every BUILDER_FEATS bucket."""
+    lookup = {}
+    for feat_list in BUILDER_FEATS.values():
+        if not isinstance(feat_list, list):
+            continue
+        for f in feat_list:
+            if isinstance(f, dict) and f.get('name'):
+                lookup.setdefault(f['name'].lower(), f)
+    return lookup
+
+
+def required_slots_with_variants(class_name, level):
+    """get_required_slots_at_level plus campaign variant rules -- currently
+    just Free Archetype (GM Core standard): one extra archetype-only feat
+    slot at every even level. SINGLE SOURCE: the level-up wizard payload,
+    the save backstop, and the builder all read slots through this wrapper
+    so the variant can never fork per surface. Returns a fresh dict (the
+    matrix tables must never be mutated)."""
+    slots = dict(get_required_slots_at_level(class_name, level))
+    if level > 0 and level % 2 == 0 and _free_archetype_enabled():
+        slots['archetype_feat'] = slots.get('archetype_feat', 0) + 1
+    return slots
+
+
 def _missing_progression_for_level(build, new_level):
     """Returns a list of human-readable strings describing required choices
     that haven't been made for this level. Empty list = ready to save."""
     cls = build.get('class', '')
-    expected = get_required_slots_at_level(cls, new_level)
+    expected = required_slots_with_variants(cls, new_level)
     feats = build.get('feats') or []
     missing = []
+    # Free Archetype slot content check: an entry TAGGED as the FA slot must
+    # actually be an archetype feat (trait-based; unknown names are homebrew
+    # and stay unflagged, per the never-false-block contract).
+    if _free_archetype_enabled():
+        lookup = _builder_feat_lookup()
+        for ft in feats:
+            if not isinstance(ft, list) or len(ft) < 4:
+                continue
+            if (str(ft[2] or '').strip().lower() == 'archetype feat'
+                    and ft[3] == new_level):
+                known = lookup.get(str(ft[0] or '').lower())
+                if known is not None and not _feat_is_archetype(known):
+                    missing.append(f'"{ft[0]}" is not an archetype feat '
+                                   f'(the Free Archetype slot only takes '
+                                   f'archetype feats)')
     for slot, count in expected.items():
         if slot == 'skill_increase':
             actual = _new_skill_increases_at_level(build, new_level)

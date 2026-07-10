@@ -459,6 +459,10 @@
         const dbSpells = {{ spells | tojson | safe }};
         const classMatrix = {{ class_matrix | tojson | safe }};
         const bData = {{ builder_data | tojson | safe }};
+        // Free Archetype is a PER-CAMPAIGN variant (GM toggles it on the GM
+        // Hub). When on, every PC's even-level level-up gets the archetype
+        // slot automatically -- the checkbox below just reflects/overrides it.
+        const CAMPAIGN_FREE_ARCHETYPE = {{ (free_archetype | default(false)) | tojson }};
         const classProgression = {{ class_progression | tojson | safe }};
         const subclassProgression = {{ subclass_progression | tojson | safe }};
         const monkPathConfig = {{ monk_path_config | tojson | safe }};
@@ -634,10 +638,16 @@
             if (reqs.ability_boosts) buildAbilitiesUI();
             buildSkillsUI();
             buildClassPicksUI();
-            // Restore Free-Archetype toggle from localStorage so it
-            // survives reload of the same level-up page.
+            // Free Archetype: the CAMPAIGN toggle (GM Hub) is the source of
+            // truth -- when the campaign runs FA, force it on for every PC.
+            // Otherwise fall back to a per-PC localStorage override so a table
+            // NOT using campaign-wide FA can still opt a single PC in.
             try {
-                if (localStorage.getItem(`pf2e_free_archetype_${pc.name}`) === '1') {
+                let faOn = !!CAMPAIGN_FREE_ARCHETYPE;
+                if (!faOn && localStorage.getItem(`pf2e_free_archetype_${pc.name}`) === '1') {
+                    faOn = true;
+                }
+                if (faOn) {
                     state.free_archetype = true;
                     state.free_archetype_slot = (targetLevel % 2 === 0) ? 1 : 0;
                     const cb = document.getElementById('chk-free-archetype');
