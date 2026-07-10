@@ -282,6 +282,28 @@
     border-color: var(--ruby-300);
     color: var(--ruby-200);
 }
+.history-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.history-award {
+    background: var(--gilt-100, #c9a34e);
+    border: 1px solid var(--gilt-100, #c9a34e);
+    border-radius: var(--r-sm);
+    color: #1a1408;
+    cursor: pointer;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: var(--font-ui);
+    white-space: nowrap;
+    transition: all var(--t-fast);
+}
+.history-award:hover { filter: brightness(1.08); }
+.history-award:disabled { opacity: 0.5; cursor: default; }
+.award-badge {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 99px;
+    background: rgba(120,180,90,0.16); border: 1px solid rgba(120,180,90,0.4);
+    color: #7db36a; white-space: nowrap;
+}
 .history-empty {
     text-align: center;
     padding: var(--sp-6);
@@ -481,6 +503,16 @@
             const cs = coinStr(e.coins || {});
             if (cs !== '--') details.push(cs);
 
+            // Award-to-sheet affordance: an un-awarded entry whose recipient
+            // is a real party PC can be deposited straight into their sheet.
+            const recipIsPC = _partyNames.has((e.recipient || '').toLowerCase());
+            let actions = '';
+            if (e.awarded_to) {
+                actions += '<span class="award-badge" title="Deposited to ' + esc(e.awarded_to) + '’s sheet">Awarded</span>';
+            } else if (recipIsPC) {
+                actions += '<button class="history-award" data-id="' + esc(e.id) + '">Award to sheet</button>';
+            }
+
             const row = document.createElement('div');
             row.className = 'history-entry';
             row.innerHTML =
@@ -492,7 +524,9 @@
                     '<div class="history-details">' + (details.join(' + ') || 'no items or coins') + '</div>' +
                     (e.note ? '<div class="history-note">' + esc(e.note) + '</div>' : '') +
                 '</div>' +
-                '<button class="history-delete" data-id="' + esc(e.id) + '">Delete</button>';
+                '<div class="history-actions">' + actions +
+                    '<button class="history-delete" data-id="' + esc(e.id) + '">Delete</button>' +
+                '</div>';
             list.appendChild(row);
         });
 
@@ -501,6 +535,26 @@
                 if (!confirm('Delete this ledger entry?')) return;
                 deleteEntry(btn.dataset.id);
             });
+        });
+        list.querySelectorAll('.history-award').forEach(function(btn) {
+            btn.addEventListener('click', function() { awardToSheet(btn.dataset.id, btn); });
+        });
+    }
+
+    // Deposit a logged entry into its recipient PC's sheet.
+    function awardToSheet(entryId, btn) {
+        if (btn) { btn.disabled = true; btn.textContent = 'Awarding...'; }
+        fetch('/api/loot_ledger/' + encodeURIComponent(entryId) + '/award', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
+        }).then(function(r) { return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+        .then(function(res) {
+            if (res.ok && res.d.success) { loadData(); }
+            else if (btn) {
+                btn.disabled = false; btn.textContent = 'Award to sheet';
+                alert(res.d.error || 'Award failed');
+            }
+        }).catch(function() {
+            if (btn) { btn.disabled = false; btn.textContent = 'Award to sheet'; }
         });
     }
 
@@ -527,13 +581,22 @@
             return inp.value.trim().length > 0;
         });
         document.getElementById('btn-award').disabled = !recipient || (!hasCoins && !hasItems);
+        // Label reflects the action: a real PC gets a sheet deposit; anyone
+        // else (e.g. "The Party") is log-only.
+        const depositsToSheet = recipient && _partyNames.has(recipient.toLowerCase());
+        document.getElementById('btn-award').textContent =
+            depositsToSheet ? 'Award to sheet' : 'Record Award';
     }
 
+    var _partyNames = new Set();   // lowercase PC names, for award-to-sheet eligibility
     function loadData() {
         fetch('/api/loot_ledger')
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 DATA = d;
+                _partyNames = new Set((d.party_wealth || []).map(function(p) {
+                    return (p.name || '').toLowerCase();
+                }));
                 renderWealth(d);
                 renderHistory(d.entries);
                 populateRecipients(d.party_wealth);
@@ -566,17 +629,25 @@
         if (!items.length && !coins.pp && !coins.gp && !coins.sp && !coins.cp) return;
 
         document.getElementById('btn-award').disabled = true;
-        document.getElementById('award-status').textContent = 'Saving...';
+        // When the recipient is a real PC, DEPOSIT to their sheet (send_loot
+        // adds the items+coins, logs the entry, and notifies the player).
+        // A non-PC recipient (e.g. "The Party") can only be logged.
+        const deposit = _partyNames.has(recipient.toLowerCase());
+        const url = deposit ? '/api/send_loot' : '/api/loot_ledger/add';
+        const body = deposit
+            ? {target: recipient, items: items, coins: coins, note: note}
+            : {recipient: recipient, items: items, coins: coins, note: note};
+        document.getElementById('award-status').textContent = deposit ? 'Awarding to sheet...' : 'Saving...';
 
-        fetch('/api/loot_ledger/add', {
+        fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({recipient: recipient, items: items, coins: coins, note: note})
+            body: JSON.stringify(body)
         })
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (d.success) {
-                document.getElementById('award-status').textContent = 'Saved!';
+                document.getElementById('award-status').textContent = deposit ? 'Awarded to sheet!' : 'Saved!';
                 // Reset form
                 document.getElementById('award-note').value = '';
                 ['pp','gp','sp','cp'].forEach(function(k) {

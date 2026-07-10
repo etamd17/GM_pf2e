@@ -13898,6 +13898,49 @@ def levelup_validate(pc_name):
     return jsonify({"success": True, "issues": issues, "level": L})
 
 
+def _deposit_loot_to_pc(pc_name, items, coins):
+    """Deposit loot into a PC: items -> build['equipment'] (stacking by name),
+    coins -> the PC's wallet (build['money'], the field Character actually
+    reads -- send_loot used to write build['gp'], which reload ignored, so
+    coins silently reverted). Persists + reloads the character. Returns True
+    if the PC exists. Shared by send_loot and the loot-ledger award."""
+    if pc_name not in PARTY_LIBRARY:
+        return False
+    coins = coins if isinstance(coins, dict) else {}
+    items = items if isinstance(items, list) else []
+    file_path = get_pc_file_path(pc_name)
+    if not (file_path and os.path.exists(file_path)):
+        return False
+    with open(file_path, 'r', encoding='utf-8') as f:
+        pc_json = json.load(f)
+    build = pc_json.get('build', pc_json)
+    # Items: stack onto an existing entry, else append (mirrors add_item).
+    equipment = build.get('equipment') or []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        nm = (it.get('name') or '').strip()
+        if not nm:
+            continue
+        qty = int(it.get('qty', 1) or 1)
+        found = False
+        for eq in equipment:
+            if isinstance(eq, list) and len(eq) >= 2 and str(eq[0]).lower() == nm.lower():
+                eq[1] = int(eq[1]) + qty; found = True; break
+            if isinstance(eq, dict) and (eq.get('name', '') or '').lower() == nm.lower():
+                eq['qty'] = int(eq.get('qty', 0)) + qty; found = True; break
+        if not found:
+            equipment.append([nm, qty])
+    build['equipment'] = equipment
+    # Coins into build['money'] (what Character.__init__ reads on reload).
+    money = build.get('money') if isinstance(build.get('money'), dict) else {}
+    for k in ('pp', 'gp', 'sp', 'cp'):
+        money[k] = int(money.get(k, 0) or 0) + int(coins.get(k, 0) or 0)
+    build['money'] = money
+    save_and_reload_character(pc_name, pc_json, file_path)
+    return True
+
+
 # GM → player loot dispatch (Wave 2 #26). The GM-side caller specifies
 # which player to send to; we broadcast a GM event AND emit a
 # player-targeted event the player sheet listens for.
@@ -13911,30 +13954,7 @@ def send_loot_to_player():
         return jsonify({"success": False, "error": "unknown target"}), 404
     if not isinstance(items, list):
         items = []
-    pc = PARTY_LIBRARY[target]
-    # Apply coins to the PC's wallet directly so the player just sees
-    # their wallet update without an extra "accept" step.
-    pc.pp = int(getattr(pc, 'pp', 0) or 0) + int(coins.get('pp', 0) or 0)
-    pc.gp = int(getattr(pc, 'gp', 0) or 0) + int(coins.get('gp', 0) or 0)
-    pc.sp = int(getattr(pc, 'sp', 0) or 0) + int(coins.get('sp', 0) or 0)
-    pc.cp = int(getattr(pc, 'cp', 0) or 0) + int(coins.get('cp', 0) or 0)
-    # Append items to the PC's inventory (build['equipment'] for persistence).
-    file_path = get_pc_file_path(target)
-    if file_path and os.path.exists(file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            pc_json = json.load(f)
-        build = pc_json.get('build', pc_json)
-        equipment = build.get('equipment') or []
-        for it in items:
-            if not isinstance(it, dict): continue
-            nm = (it.get('name') or '').strip()
-            if not nm: continue
-            qty = int(it.get('qty', 1) or 1)
-            equipment.append([nm, qty])
-        build['equipment'] = equipment
-        # Persist coins
-        build['pp'] = pc.pp; build['gp'] = pc.gp; build['sp'] = pc.sp; build['cp'] = pc.cp
-        save_and_reload_character(target, pc_json, file_path)
+    _deposit_loot_to_pc(target, items, coins)
     # Persistent loot ledger: append a timestamped entry for wealth tracking.
     try:
         from datetime import datetime as _dt_loot
@@ -13946,6 +13966,7 @@ def send_loot_to_player():
                       for it in items if isinstance(it, dict) and it.get('name')],
             'coins': {k: int(v or 0) for k, v in coins.items() if k in ('pp', 'gp', 'sp', 'cp')},
             'note': (data.get('note') or '').strip(),
+            'awarded_to': target, 'awarded_at': _dt_loot.now().isoformat(),
         }
         _mutate_loot_ledger(lambda l: l['entries'].append(entry))
     except Exception:
@@ -13955,6 +13976,42 @@ def send_loot_to_player():
         'target': target, 'items': items, 'coins': coins,
     })
     return jsonify({"success": True})
+
+
+@app.route('/api/loot_ledger/<entry_id>/award', methods=['POST'])
+@gm_required
+def api_loot_ledger_award(entry_id):
+    """Award an already-logged ledger entry to a PC's sheet: deposit its
+    items + coins, mark it awarded, notify the player. Target defaults to
+    the entry's recipient when that names a party PC; pass {target} to
+    override (e.g. a 'party' entry). Refuses to re-award unless force."""
+    data = request.get_json(silent=True) or {}
+    ledger = _load_loot_ledger()
+    entry = next((e for e in ledger.get('entries', []) if e.get('id') == entry_id), None)
+    if entry is None:
+        return jsonify({"success": False, "error": "entry not found"}), 404
+    if entry.get('awarded_to') and not data.get('force'):
+        return jsonify({"success": False, "error": "already awarded",
+                        "already_awarded": True,
+                        "awarded_to": entry.get('awarded_to')}), 409
+    target = (data.get('target') or entry.get('recipient') or '').strip()
+    if target not in PARTY_LIBRARY:
+        return jsonify({"success": False,
+                        "error": "target is not a party character"}), 400
+    items = entry.get('items') or []
+    coins = entry.get('coins') or {}
+    _deposit_loot_to_pc(target, items, coins)
+    from datetime import datetime as _dt_award
+
+    def _mark(l):
+        for e in l.get('entries', []):
+            if e.get('id') == entry_id:
+                e['awarded_to'] = target
+                e['awarded_at'] = _dt_award.now().isoformat()
+                break
+    _mutate_loot_ledger(_mark)
+    sse_broadcast('loot_received', {'target': target, 'items': items, 'coins': coins})
+    return jsonify({"success": True, "awarded_to": target})
 
 
 @app.route('/api/equip_armor/<pc_name>', methods=['POST'])
