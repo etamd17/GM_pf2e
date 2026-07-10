@@ -719,7 +719,9 @@ def test_cosmere_condition_route_still_applies(encounter, monkeypatch):
     r = client.post('/api/cosmere/combatant/%s/condition' % kal.instance_id,
                     json={'condition': 'exhausted', 'action': 'add'})
     assert r.status_code == 200
-    assert kal.conditions.get('exhausted') is True
+    # Exhausted is a VALUED condition -> integer magnitude, not boolean True
+    # (readiness fix: 'add' increments the magnitude so it stacks cumulatively).
+    assert kal.conditions.get('exhausted') == 1
     r = client.post('/api/cosmere/combatant/%s/condition' % kal.instance_id,
                     json={'condition': 'exhausted', 'action': 'remove'})
     assert r.status_code == 200
