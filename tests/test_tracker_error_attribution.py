@@ -27,7 +27,15 @@ def _tracker() -> str:
 
 def _js_fn(src: str, name: str) -> str:
     """Return the source of `async function <name>(...) { ... }` via brace match."""
-    marker = 'async function %s(' % name
+    return _fn_from(src, 'async function %s(' % name)
+
+
+def _plain_fn(src: str, name: str) -> str:
+    """Return the source of a plain `function <name>(...) { ... }` via brace match."""
+    return _fn_from(src, 'function %s(' % name)
+
+
+def _fn_from(src: str, marker: str) -> str:
     i = src.index(marker)
     depth = 0
     started = False
@@ -75,6 +83,32 @@ def test_apiaction_also_surfaces_status():
     fn = _js_fn(_tracker(), 'apiAction')
     assert 'server returned ' in fn
     assert 'never reached the server' in fn
+
+
+def test_ongoing_render_does_not_rely_solely_on_raf():
+    """A confirmed session-critical bug: the +/- HP buttons (and every other
+    control that repaints via applyState -> render()) looked dead in a
+    backgrounded / occluded / heavily-throttled tab.
+
+    render() coalesced repaints with requestAnimationFrame ONLY. rAF is PAUSED
+    while a tab is hidden, so after a click the server + STATE updated but the
+    rAF callback never fired -- the visible HP number never moved and no error
+    toast showed (the request SUCCEEDED). Reproduced live: click damage ->
+    STATE.current_hp dropped, DOM stayed stale, _renderNow ran 0 times until a
+    paint was forced. The initial render was already made synchronous for this
+    exact reason (see the INITIAL RENDER comment); the ONGOING debounce was the
+    remaining gap.
+
+    Invariant: render() must schedule a non-rAF fallback (a timer) so a throttled
+    tab still repaints. It may still use rAF to coalesce in the common visible
+    case -- but rAF must not be the SOLE scheduler.
+    """
+    fn = _plain_fn(_tracker(), 'render')
+    assert 'requestAnimationFrame' in fn, 'render() no longer coalesces with rAF'
+    assert 'setTimeout' in fn, (
+        'render() schedules the repaint via requestAnimationFrame only; a hidden/'
+        'throttled tab pauses rAF and silently drops the post-action repaint '
+        '(the HP +/- buttons look dead). Add a timer fallback.')
 
 
 def test_initial_render_runs_after_its_lexical_decls():
