@@ -10,10 +10,16 @@
 // look broken ("campaign won't switch"). Bumping CACHE_NAME evicts every
 // browser's poisoned v1 cache on its next service-worker update.
 
+// CACHE_NAME: the `pf2e-gm-v2` literal is REWRITTEN per deploy by the /sw.js
+// route, which injects the deploy version (-> pf2e-gm-<sha>). So this file's
+// bytes change on every deploy, the SW re-installs, and `activate` evicts the
+// prior deploy's cache automatically -- no more hand-bumping this constant.
 var CACHE_NAME = 'pf2e-gm-v2';
-var SHELL_URLS = [
-    '/static/css/system.css',
-];
+// Precache nothing by URL: a BARE (unversioned) asset URL cached here would be
+// pinned forever by the cache-first/SWR fetch handler and never pick up a
+// deploy's new bytes (the stale-forever trap). Assets are cached on first real
+// fetch under their versioned ?v= URLs instead.
+var SHELL_URLS = [];
 
 // Install: cache the app shell
 self.addEventListener('install', function(event) {
@@ -58,19 +64,31 @@ self.addEventListener('fetch', function(event) {
         return;
     }
 
-    // Static assets: cache-first, then network
+    // Static assets. A versioned URL (?v=<deploy>) is IMMUTABLE within a deploy,
+    // so serve it cache-first: zero network on a hit (a new deploy changes the
+    // URL, not the bytes). An UNversioned /static URL (there should be none after
+    // the url_for cleanup, but guard a future accident) uses stale-while-
+    // revalidate so it self-heals on the next load; event.waitUntil keeps the
+    // worker alive until that background cache write lands. respondWith always
+    // resolves to a Response/fetch (never undefined), so an offline cache-miss
+    // surfaces a normal failed-subresource, same as having no SW.
     if (url.pathname.startsWith('/static/')) {
+        var versioned = url.search.indexOf('v=') !== -1;
         event.respondWith(
-            caches.match(event.request).then(function(cached) {
-                if (cached) return cached;
-                return fetch(event.request).then(function(response) {
-                    if (response.ok) {
-                        var clone = response.clone();
-                        caches.open(CACHE_NAME).then(function(cache) {
-                            cache.put(event.request, clone);
-                        });
+            caches.open(CACHE_NAME).then(function(cache) {
+                return cache.match(event.request).then(function(cached) {
+                    if (cached && versioned) return cached;   // immutable hit: no revalidation
+                    var fetched = fetch(event.request).then(function(response) {
+                        if (response && response.ok) cache.put(event.request, response.clone());
+                        return response;
+                    });
+                    if (cached) {
+                        // Unversioned hit: serve cache now, refresh in the
+                        // background but keep the SW alive until the put finishes.
+                        event.waitUntil(fetched.catch(function() {}));
+                        return cached;
                     }
-                    return response;
+                    return fetched;   // cache miss -> network (offline -> normal error)
                 });
             })
         );

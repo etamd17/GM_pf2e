@@ -105,19 +105,60 @@ app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity 
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
 
 
-# Cache-bust static assets: append each file's mtime as `?v=` to every
-# url_for('static', ...) link. Browsers cache CSS/JS aggressively, so without
-# this a deploy that changes e.g. system.css can leave users staring at a stale
-# stylesheet until a manual hard refresh. The mtime changes whenever the file is
-# rewritten (including on each Railway deploy), so the version updates itself and
-# we never have to hand-bump a number. Never let this break rendering.
+# One per-deploy version token, read once at boot. Railway injects
+# RAILWAY_GIT_COMMIT_SHA into the container env; we prefer it (stable across a
+# worker recycle within one deploy, so the "new version" toast doesn't
+# false-fire), fall back to the deployment id, then the local git SHA, then this
+# file's mtime, then a sentinel. This single token drives BOTH the static-asset
+# ?v= (in production) AND the service-worker CACHE_NAME (see the /sw.js route)
+# AND the SSE 'connected' frame (so an open tab detects a new build) -- one
+# coherent identifier instead of three schemes that could drift.
+def _deploy_token():
+    v = (os.environ.get('RAILWAY_GIT_COMMIT_SHA')
+         or os.environ.get('RAILWAY_DEPLOYMENT_ID') or '').strip()
+    if v:
+        return v[:12]
+    try:
+        import subprocess
+        sha = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL, timeout=2).decode().strip()
+        if sha:
+            return sha
+    except Exception:
+        pass
+    try:
+        return 'm' + str(int(os.stat(os.path.abspath(__file__)).st_mtime))
+    except Exception:
+        return 'dev'
+
+
+# True when running on a real Railway deploy (a stable per-deploy token exists).
+_RAILWAY_DEPLOY = bool((os.environ.get('RAILWAY_GIT_COMMIT_SHA')
+                        or os.environ.get('RAILWAY_DEPLOYMENT_ID') or '').strip())
+DEPLOY_VERSION = _deploy_token()
+
+
+# Cache-bust static assets: append a `?v=` token to every url_for('static', ...)
+# link. Browsers (and the cache-first service worker, which keys on the full URL
+# incl. the query) cache CSS/JS aggressively, so without a changing token a
+# deploy that rewrites e.g. system.css leaves users on a stale asset until a hard
+# refresh -- or forever, under the SW. In PRODUCTION we stamp the single
+# per-deploy DEPLOY_VERSION so every asset flips together on each deploy and the
+# SW cache name (keyed to the same token) evicts in lockstep. In local dev (no
+# Railway token) we keep per-file mtime so an un-committed edit auto-busts on
+# save. Never let this break rendering.
 @app.url_defaults
 def _static_cache_bust(endpoint, values):
     if endpoint != 'static' or not values or not values.get('filename'):
         return
     try:
-        fpath = os.path.join(app.static_folder, values['filename'])
-        values['v'] = int(os.stat(fpath).st_mtime)
+        if _RAILWAY_DEPLOY:
+            values['v'] = DEPLOY_VERSION
+        else:
+            fpath = os.path.join(app.static_folder, values['filename'])
+            values['v'] = int(os.stat(fpath).st_mtime)
     except Exception:
         pass
 
@@ -6654,6 +6695,9 @@ def _inject_account_ctx():
         'cosmere_player_char': _cosmere_player_char_name(),
         'system_ui': _active_system_ui(),
         'advancement_mode': (_advancement_mode() if u else 'milestone'),
+        # The running deploy version, stamped into every page so the SSE hub can
+        # compare it against the version reported on (re)connect and offer a reload.
+        'app_version': DEPLOY_VERSION,
     }
 
 
@@ -12867,7 +12911,13 @@ def sse_stream():
             replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer if last_seen < i <= start_id]
                       if last_seen else [])
         try:
-            yield "event: connected\ndata: {}\n\n"
+            # Carry the running deploy version so an already-open tab can detect a
+            # new build after a deploy (the worker swap drops every SSE socket; the
+            # hub reconnects to the NEW process, whose 'connected' frame reports the
+            # new version -> the page compares and offers a reload). The reconnect
+            # IS the signal; no broadcast needed (the new version only exists in the
+            # new process, which has zero subscribers at boot).
+            yield "event: connected\ndata: " + json.dumps({"v": DEPLOY_VERSION}) + "\n\n"
             for (i, gm_frame, pl_frame) in replay:
                 frame = gm_frame if is_gm else pl_frame
                 if frame is not None:
@@ -17396,13 +17446,25 @@ def api_campaign_stats():
 
 @app.route('/sw.js')
 def service_worker():
-    """Serve the service worker from the root path (scope requirement).
+    """Serve the service worker from the root path (scope requirement), with the
+    deploy version injected into its CACHE_NAME.
 
     no-cache so browsers re-check this script on every navigation instead of
-    up to 24h later -- a service-worker fix (like the v2 cache purge) must
-    reach stuck clients on their next page load, not tomorrow."""
-    resp = send_from_directory(os.path.join(BASE_DIR, 'static'), 'sw.js',
-                               mimetype='application/javascript')
+    up to 24h later. Injecting DEPLOY_VERSION means the SW's BYTES change on
+    every deploy, so it re-installs -> its `activate` handler evicts the old
+    cache automatically -- no more hand-bumping the `pf2e-gm-vN` constant to
+    purge stale assets off stuck clients."""
+    try:
+        with open(os.path.join(BASE_DIR, 'static', 'sw.js'), 'r', encoding='utf-8') as f:
+            body = f.read()
+        body = body.replace('pf2e-gm-v2', 'pf2e-gm-' + DEPLOY_VERSION)
+    except OSError:
+        # Fall back to serving the file as-is rather than 500-ing the SW.
+        resp = send_from_directory(os.path.join(BASE_DIR, 'static'), 'sw.js',
+                                   mimetype='application/javascript')
+        resp.headers['Cache-Control'] = 'no-cache'
+        return resp
+    resp = app.response_class(body, mimetype='application/javascript')
     resp.headers['Cache-Control'] = 'no-cache'
     return resp
 

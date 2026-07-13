@@ -23,6 +23,14 @@
         var BACKOFF_MAX = 30000;
         var lastConnectAt = 0;
         var lastId = '';   // last server event id seen — replayed-from on reconnect
+        // Deploy-version signal: the version the CURRENTLY-LOADED page was served
+        // with. Each 'connected' frame reports the server's running version; a
+        // mismatch after a reconnect means a new build shipped → offer a reload.
+        // tojson (not a bare interpolation): encodes exactly like the connected
+        // frame's json.dumps, so the equality check can't false-mismatch on any
+        // character, and emits its own JS string quotes.
+        var LOADED_VERSION = {{ (app_version or '')|tojson }};
+        var _updateShown = false;
 
         // One recorder per event name tracks the latest id (separate from the
         // feature handlers, so unsubscribe(rawHandler) still works).
@@ -49,7 +57,7 @@
             try { es = new EventSource('/api/events' + (lastId ? ('?last_event_id=' + encodeURIComponent(lastId)) : '')); }
             catch (e) { es = null; scheduleReconnect(); return; }
             es.onopen = function () { backoff = 2000; };
-            es.addEventListener('connected', function () { backoff = 2000; });
+            es.addEventListener('connected', function (e) { backoff = 2000; checkVersion(e); });
             es.onerror = function () {
                 // Transient drop (WiFi blip, worker recycle). Close and
                 // reconnect on our own schedule rather than letting the
@@ -59,6 +67,52 @@
                 scheduleReconnect();
             };
             attachAll();
+        }
+
+        // A new deploy tears down the single worker; the hub reconnects to the
+        // NEW process, whose 'connected' frame reports its version. If that
+        // differs from the version this page loaded with, a new build shipped.
+        function checkVersion(e) {
+            var v = '';
+            try { v = (JSON.parse((e && e.data) || '{}') || {}).v || ''; } catch (x) {}
+            if (v && LOADED_VERSION && v !== LOADED_VERSION) showUpdateToast();
+        }
+        // Non-intrusive "New version — Reload" toast. NEVER auto-reload an
+        // interactive page (a GM mid-turn must not be yanked). Exception: the
+        // passive shared table screen (?audience=table) has no operator to click,
+        // so it refreshes itself. Self-contained (inline styles, DOM built with
+        // textContent) so it needs no possibly-stale CSS and can't inject markup.
+        function showUpdateToast() {
+            if (_updateShown) return;
+            _updateShown = true;
+            try {
+                if (new URLSearchParams(location.search).get('audience') === 'table') {
+                    setTimeout(function () { location.reload(); }, 4000);
+                    return;
+                }
+            } catch (x) {}
+            function mount() {
+                if (document.getElementById('app-update-toast')) return;
+                var bar = document.createElement('div');
+                bar.id = 'app-update-toast';
+                bar.setAttribute('role', 'status');
+                bar.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:100000;display:flex;align-items:center;gap:12px;background:#1b1712;color:#f0ead7;border:1px solid rgba(224,182,90,.55);border-radius:10px;padding:10px 14px;font:13px/1.3 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:92vw;';
+                var msg = document.createElement('span');
+                msg.textContent = 'A new version is available.';
+                var reload = document.createElement('button');
+                reload.type = 'button'; reload.textContent = 'Reload';
+                reload.style.cssText = 'padding:5px 12px;border-radius:6px;border:1px solid rgba(224,182,90,.6);background:rgba(224,182,90,.18);color:#f0d88a;font-weight:700;cursor:pointer;';
+                reload.onclick = function () { location.reload(); };
+                var dismiss = document.createElement('button');
+                dismiss.type = 'button'; dismiss.textContent = '×';
+                dismiss.setAttribute('aria-label', 'Dismiss');
+                dismiss.style.cssText = 'background:none;border:none;color:#8e8369;font-size:18px;line-height:1;cursor:pointer;';
+                dismiss.onclick = function () { try { bar.remove(); } catch (x) {} };
+                bar.appendChild(msg); bar.appendChild(reload); bar.appendChild(dismiss);
+                document.body.appendChild(bar);
+            }
+            if (document.body) mount();
+            else document.addEventListener('DOMContentLoaded', mount);
         }
 
         window.appSSE = function (eventName, handler) {
