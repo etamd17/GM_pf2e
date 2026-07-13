@@ -2334,13 +2334,28 @@ function closeTrkTools() {
     if (menu) menu.style.display = 'none';
     if (btn) btn.setAttribute('aria-expanded', 'false');
 }
+let _renderRaf = 0;
+let _renderTimer = 0;
+function _flushRender() {
+    if (!_renderScheduled) return;      // the other scheduler already flushed this batch
+    _renderScheduled = false;
+    cancelAnimationFrame(_renderRaf);
+    clearTimeout(_renderTimer);
+    _renderNow();
+}
 function render() {
     if (_renderScheduled) return;
     _renderScheduled = true;
-    requestAnimationFrame(() => {
-        _renderScheduled = false;
-        _renderNow();
-    });
+    // Coalesce bursts (SSE often fires several updates in quick succession) into
+    // one paint via rAF -- BUT rAF is PAUSED in a hidden / occluded / heavily-
+    // throttled tab, which would silently drop the repaint after an action: the
+    // server + STATE update yet the visible number never moves, so a working
+    // control (e.g. the HP +/- buttons) looks dead with no error. A timer still
+    // fires while hidden, so schedule BOTH and let whichever runs first flush the
+    // render exactly once. (The INITIAL RENDER below is synchronous for the same
+    // reason.)
+    _renderRaf = requestAnimationFrame(_flushRender);
+    _renderTimer = setTimeout(_flushRender, 150);
 }
 
 // Class -> carved-rune sprite id (see _pf2e_class_glyphs.html). Key on the
