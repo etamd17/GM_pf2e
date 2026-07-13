@@ -18,7 +18,7 @@
         })();
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module" src="/static/js/dice-engine.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/dice-engine.js') }}"></script>
     <script>
         tailwind.config = {
             theme: {
