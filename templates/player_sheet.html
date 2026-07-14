@@ -1762,6 +1762,9 @@
         .play-view-spell.expended { opacity: 0.45; background: rgba(18,17,26,0.5); }
         .play-view-spell .spell-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
         .play-view-spell.expended .spell-name { text-decoration: line-through; color: var(--text-muted); }
+        /* Spell names that open a detail card on click get a pointer + hover hint. */
+        .spell-clickable { cursor: pointer; }
+        .spell-clickable:hover { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
         .play-view-cast-btn { padding: 6px 14px; border-radius: 4px; font-family: var(--font-display); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; cursor: pointer; transition: background 0.15s; background: rgba(167,139,250,0.18); border: 1px solid rgba(167,139,250,0.45); color: var(--color-spell); }
         .play-view-cast-btn:hover { background: rgba(167,139,250,0.3); }
         .play-view-cast-btn.expended { background: var(--border-subtle); color: var(--text-muted); border-color: var(--border-default); cursor: default; }
@@ -7143,6 +7146,17 @@
             updatePrepStatusBadge(cIdx, caster);
         }
 
+        // Build the inline handler that opens a spell's detail card, matching the
+        // server-rendered rows in _tab_magic.html. openSpellCard reads the
+        // pre-cached description (damage dice + save DC/type), so a player can
+        // check a spell before casting. Escapes the name/tradition for the inline
+        // onclick — PC/spell names carry apostrophes (Go'el, Thieves' Tools),
+        // which otherwise close the JS string and kill the handler.
+        function _spellCardOnclick(name, rank, caster) {
+            const esc = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `openSpellCard('${esc(name)}', ${Number(rank) || 0}, '${esc(caster && caster.tradition)}', '${esc(caster && caster.type)}')`;
+        }
+
         // Play view (S1) — combat-focused: cantrips at-will + ranked prepared
         // spells with big Cast buttons + slot pips. The spellbook + drop-zones
         // are NOT here; they live in the Daily Prep modal.
@@ -7168,7 +7182,7 @@
                         const escName = name.replace(/'/g, "\\'");
                         html += `<div class="play-view-spell" data-cantrip="${escName}">
                             <div class="flex items-center gap-2">
-                                <span class="spell-name">${name}</span>
+                                <span class="spell-name spell-clickable" title="View spell details" onclick="event.stopPropagation(); ${_spellCardOnclick(name, 0, caster)}">${name}</span>
                             </div>
                             <button class="play-view-cast-btn" onclick="rollSpell('${escName}', event, null)">Cast</button>
                         </div>`;
@@ -7213,7 +7227,7 @@
                                               draggable="true"
                                               ondragstart="_onSpellDragStart(event, '${escName}', ${rank})">
                             <div class="flex items-center gap-2">
-                                <span class="spell-name" title="Drag onto a map token to apply">${spellName}</span>
+                                <span class="spell-name spell-clickable" title="View spell details · drag onto a map token to apply" onclick="event.stopPropagation(); ${_spellCardOnclick(spellName, rank, caster)}">${spellName}</span>
                                 ${heightenTag}
                                 ${isFont ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px]" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); color:#86EFAC;" title="Cleric Divine Font slot">Font</span>' : ''}
                             </div>
