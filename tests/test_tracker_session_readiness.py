@@ -216,6 +216,33 @@ def test_monster_parse_extracts_action_cost():
     assert 'foundry_action_cost' in line, 'monster action parse does not capture the action cost'
 
 
+def test_closed_modal_cannot_swallow_clicks():
+    """The invisible-dead-zone bug: the closed stat side-panel (#stat-modal) hid
+    via opacity+pointer-events:none, but its INNER .trk-modal-panel set an
+    unconditional pointer-events:auto -- and a descendant's `auto` overrides an
+    ancestor's `none`. The invisible 440px panel swallowed every click on the
+    right edge of the tracker (End button, inspector +/- HP, condition inputs).
+
+    Invariants: (1) the closed .trk-modal base state uses visibility:hidden so NO
+    descendant can hit-test; (2) the side-panel's inner pointer-events:auto is
+    scoped to the .open state only."""
+    css = open(os.path.join(_REPO, 'templates', 'tracker.html')).read()
+
+    def block(selector):
+        i = css.index(selector + ' {')
+        return css[i:css.index('}', i)]
+
+    base = block('.trk-modal')
+    assert 'visibility:hidden' in base.replace(' ', ''), \
+        'closed .trk-modal is not visibility:hidden -- a child with pointer-events:auto can eat clicks'
+    assert 'visibility:visible' in block('.trk-modal.open').replace(' ', '')
+    side_inner = block('.trk-modal.side-panel .trk-modal-panel')
+    assert 'pointer-events: auto' not in side_inner and 'pointer-events:auto' not in side_inner.replace(' ', ''), \
+        'closed side-panel inner still forces pointer-events:auto (the dead-zone bug)'
+    assert 'pointer-events: auto' in block('.trk-modal.side-panel.open .trk-modal-panel'), \
+        'open side-panel lost its pointer-events -- the stat panel would be uninteractable'
+
+
 def test_tracker_ability_render_shows_cost():
     html = open(os.path.join(_REPO, 'templates', 'tracker.html')).read()
     # The NPC "Abilities" render must pip the cost like strikes/spells already do.

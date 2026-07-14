@@ -1136,9 +1136,15 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk-modal {
   position:fixed; inset:0; background:rgba(0,0,0,0.72); backdrop-filter:blur(4px);
   z-index:150; display:flex; align-items:center; justify-content:center; padding:20px;
-  opacity:0; pointer-events:none; transition: opacity .2s;
+  /* visibility:hidden (not just opacity/pointer-events) when closed: a DESCENDANT
+     with its own `pointer-events:auto` overrides an ancestor's `none`, so an
+     invisible child can still swallow clicks. visibility:hidden disables
+     hit-testing for the whole subtree — the closed modal can never eat clicks
+     meant for the page under it (the "End/+/-/condition inputs do nothing"
+     dead-zone bug: the side-panel's inner panel blocked the right edge). */
+  opacity:0; visibility:hidden; pointer-events:none; transition: opacity .2s, visibility .2s;
 }
-.trk-modal.open { opacity:1; pointer-events:auto; }
+.trk-modal.open { opacity:1; visibility:visible; pointer-events:auto; }
 .trk-modal-panel {
   background:linear-gradient(180deg, var(--t-bg-surface), var(--t-bg-raised));
   border:1px solid var(--t-border); border-radius:14px;
@@ -1161,7 +1167,8 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   pointer-events: none; /* let clicks fall through outside the panel */
 }
 .trk-modal.side-panel .trk-modal-panel {
-  pointer-events: auto;
+  /* pointer-events scoped to .open below — an unconditional `auto` here made the
+     INVISIBLE closed panel swallow every click on the right edge of the page. */
   width: 440px; max-width: 95vw; height: 100%;
   max-height: none;
   border-radius: 14px 0 0 14px;
@@ -1169,7 +1176,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   transform: translateX(20px);
   box-shadow: -12px 0 36px rgba(0,0,0,0.5);
 }
-.trk-modal.side-panel.open .trk-modal-panel { transform: translateX(0); }
+.trk-modal.side-panel.open .trk-modal-panel { transform: translateX(0); pointer-events: auto; }
 .trk-modal.side-panel .trk-modal-head {
   gap: 8px; align-items: center;
 }
