@@ -6434,6 +6434,18 @@
             if (s === 'reaction' || s === REACTION_GLYPH) return '<span class="action-pips" title="Reaction"><span class="action-pip reaction"></span></span>';
             if (s === 'free' || s === FREE_DIAMOND)       return '<span class="action-pips" title="Free Action"><span class="action-pip free"></span></span>';
 
+            // Variable-action cost, e.g. "◆-◆◆◆" (Heal/Harm = 1 to 3 actions).
+            // Render the range, not a miscounted 4-diamond blob.
+            if (s.indexOf('-') >= 0 || s.indexOf('–') >= 0) {
+                const parts = actionStr.split(/[-–]/);
+                const lo = (parts[0].match(new RegExp(ACTION_DIAMOND, 'g')) || []).length;
+                const hi = parts[1] ? (parts[1].match(new RegExp(ACTION_DIAMOND, 'g')) || []).length : 0;
+                if (lo >= 1 && hi >= 1) {
+                    return `<span class="action-pips" title="${lo} to ${hi} actions" style="letter-spacing:1px;">`
+                         + ACTION_DIAMOND.repeat(lo) + '–' + ACTION_DIAMOND.repeat(hi) + '</span>';
+                }
+            }
+
             let count = 0;
             if (/^[123]$/.test(s) || /^[123]\s*action/i.test(s)) {
                 count = parseInt(s, 10);
@@ -7166,6 +7178,15 @@
             const prep = _getPrepState(cIdx);
             let html = '';
 
+            // Name -> action-cost glyph for THIS caster's spells, so both the
+            // cantrip rows (name-only) and the prepared slot rows can show each
+            // spell's action cost inline next to the name.
+            const playViewActions = {};
+            (caster.levels || []).forEach(lvl => (lvl.spells || []).forEach(sp => {
+                if (sp && sp.name && sp.actions) playViewActions[sp.name] = sp.actions;
+            }));
+            const spellCostPips = nm => (playViewActions[nm] ? ' ' + buildActionPips(playViewActions[nm]) : '');
+
             // Cantrips section — selected list, with At-Will pill and big Cast buttons.
             const cantrips = _getCantripSelection(cIdx);
             const cantripCap = _cantripCapacity(caster);
@@ -7183,6 +7204,7 @@
                         html += `<div class="play-view-spell" data-cantrip="${escName}">
                             <div class="flex items-center gap-2">
                                 <span class="spell-name spell-clickable" title="View spell details" onclick="event.stopPropagation(); ${_spellCardOnclick(name, 0, caster)}">${name}</span>
+                                ${spellCostPips(name)}
                             </div>
                             <button class="play-view-cast-btn" onclick="rollSpell('${escName}', event, null)">Cast</button>
                         </div>`;
@@ -7228,6 +7250,7 @@
                                               ondragstart="_onSpellDragStart(event, '${escName}', ${rank})">
                             <div class="flex items-center gap-2">
                                 <span class="spell-name spell-clickable" title="View spell details · drag onto a map token to apply" onclick="event.stopPropagation(); ${_spellCardOnclick(spellName, rank, caster)}">${spellName}</span>
+                                ${spellCostPips(spellName)}
                                 ${heightenTag}
                                 ${isFont ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px]" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); color:#86EFAC;" title="Cleric Divine Font slot">Font</span>' : ''}
                             </div>

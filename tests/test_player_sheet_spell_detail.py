@@ -73,3 +73,24 @@ def test_affordance_style_present():
     src = _sheet()
     assert re.search(r'\.spell-clickable\b[^}]*cursor\s*:\s*pointer', src), \
         'no cursor:pointer affordance for .spell-clickable'
+
+
+def test_play_view_rows_show_action_cost():
+    """The combat Play view's cantrip + prepared spell rows must show each spell's
+    action cost next to the name (built via buildActionPips from a per-caster
+    name->cost lookup) -- players cast from here and need to see 1/2/3-action /
+    reaction costs at a glance."""
+    fn = _fn(_sheet(), 'function renderPlayView(')
+    assert 'buildActionPips' in fn, 'renderPlayView never renders an action cost'
+    # A name->actions lookup so both cantrip (name-only) and prepared (slot name)
+    # rows can resolve the cost from the caster's spell data.
+    assert re.search(r'\bsp\.actions\b', fn), 'renderPlayView does not read per-spell action costs'
+
+
+def test_buildactionpips_handles_variable_range():
+    """A variable-cost spell (Heal/Harm = 1 to 3 actions) comes through as the
+    range glyph '◆-◆◆◆'; buildActionPips must render it as a 1-3 range, not
+    miscount it as four actions."""
+    fn = _fn(_sheet(), 'function buildActionPips(')
+    assert "indexOf('-')" in fn or 'split(/[-' in fn, \
+        'buildActionPips does not handle a variable/range action cost (Heal would show 4 pips)'
