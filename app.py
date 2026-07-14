@@ -442,6 +442,7 @@ def _user_owns_pc(user_id, pc_name):
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
     '/api/add_combatant', '/api/add_party', '/api/remove_combatant', '/api/clear_encounter',
+    '/api/restore_defeated/',  # Undo an auto-removal of a monster killed at 0 HP
     '/api/adjust_hp/',  # Encounter tracker HP (not adjust_party_hp which is player-facing)
     '/api/multi_save_damage',  # GM AOE basic-save resolver (compute+log only)
     '/api/toggle_condition/', '/api/set_persistent_damage/', '/api/toggle_elite_weak/',
@@ -672,6 +673,10 @@ ACTIVE_ENCOUNTER = []
 TURN_INDEX = 0
 ROUND_NUMBER = 1
 ENCOUNTER_NOTES = ''
+# Monsters auto-removed at 0 HP are stashed here (bounded) so the GM can Undo an
+# accidental over-kill from the tracker. Not persisted — an ephemeral session
+# convenience, cleared on restart. See _maybe_auto_remove_defeated / restore_defeated.
+_RECENT_DEFEATED = []
 # Round-events lane store (engine + endpoints live near TURN_REMINDERS).
 # Must be declared here with its sibling encounter globals, BEFORE the boot
 # autosave restore runs (the module-tail _restore_encounter_autosave() call
@@ -4563,7 +4568,7 @@ class Monster:
                 rec = {'name': name, 'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0), 'damage': damage}
                 (_weapon_fallback if item_type == 'weapon' else self.strikes).append(rec)
             elif item_type == 'action':
-                self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', ''))})
+                self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', '')), 'actions': foundry_action_cost(item.get('system', {}))})
         _real_strike_names = {s['name'] for s in self.strikes}
         self.strikes.extend(w for w in _weapon_fallback if w['name'] not in _real_strike_names)
 
@@ -7397,7 +7402,7 @@ def _get_tracker_state():
                 ]
             else:
                 entry['strikes'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in getattr(c, 'strikes', [])]
-                entry['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in getattr(c, 'actions', [])]
+                entry['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in getattr(c, 'actions', [])]
                 entry['immunities'] = getattr(c, 'immunities', [])
                 entry['resistances'] = getattr(c, 'resistances', [])
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
@@ -9267,6 +9272,7 @@ def clear_encounter():
     ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
     SESSION_TIMER_START = None
     ROUND_EVENTS = []
+    _RECENT_DEFEATED[:] = []   # drop pending Undos so a stale toast can't resurrect into the ended encounter
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -9999,6 +10005,41 @@ def _apply_hp_delta(instance_id, amount, action, damage_type='untyped'):
     return old_hp
 
 
+def _maybe_auto_remove_defeated(instance_id, old_hp, action):
+    """A non-PC combatant that just dropped to 0 HP from damage is removed from
+    the live encounter and stashed for a brief Undo (restore_defeated). PCs are
+    never removed here -- they enter the dying track. Adjusts TURN_INDEX so the
+    same combatant stays active. Returns {'instance_id','name'} on removal, else
+    None. Caller persists + broadcasts when a removal happened."""
+    global ACTIVE_ENCOUNTER, TURN_INDEX, _RECENT_DEFEATED
+    if action != 'damage' or old_hp is None or old_hp <= 0:
+        return None
+    idx = next((i for i, c in enumerate(ACTIVE_ENCOUNTER) if c.instance_id == instance_id), None)
+    if idx is None:
+        return None
+    c = ACTIVE_ENCOUNTER[idx]
+    # PF2e only: a Cosmere adversary at 0 HP enters the unconscious/injury
+    # death-spiral (Ch.9) and must STAY on the tracker to be managed, not vanish.
+    if getattr(c, 'system', 'pf2e') != 'pf2e' or getattr(c, 'is_pc', False) or c.current_hp > 0:
+        return None
+    ACTIVE_ENCOUNTER.pop(idx)
+    if not ACTIVE_ENCOUNTER:
+        TURN_INDEX = 0
+    elif idx < TURN_INDEX:
+        TURN_INDEX -= 1                 # earlier combatant gone -> keep same active
+    elif TURN_INDEX >= len(ACTIVE_ENCOUNTER):
+        TURN_INDEX = len(ACTIVE_ENCOUNTER) - 1
+    # Replace any prior stash for this same instance so a re-defeat can't leave a
+    # stale earlier entry that Undo would restore instead.
+    _RECENT_DEFEATED[:] = [e for e in _RECENT_DEFEATED if e['instance_id'] != instance_id]
+    _RECENT_DEFEATED.append({'combatant': c, 'index': idx, 'old_hp': old_hp,
+                             'name': c.name, 'instance_id': instance_id})
+    if len(_RECENT_DEFEATED) > 12:
+        _RECENT_DEFEATED.pop(0)
+    _combat_log(f"{c.name} drops to 0 HP — removed from combat.", 'system')
+    return {'instance_id': instance_id, 'name': c.name}
+
+
 @app.route('/api/adjust_hp/<instance_id>', methods=['POST'])
 @require_live_combatant
 def adjust_hp(instance_id):
@@ -10013,17 +10054,60 @@ def adjust_hp(instance_id):
     action = request.form.get('action')
     damage_type = request.form.get('damage_type', 'untyped').strip()
     old_hp = _apply_hp_delta(instance_id, amount, action, damage_type) if amount is not None else None
+    # Capture the post-damage HP BEFORE any auto-removal so the toast can still
+    # report the net that landed even for the killing blow.
+    _c = _find_active_combatant(instance_id)
+    new_hp = _c.current_hp if _c is not None else 0
+    defeated = _maybe_auto_remove_defeated(instance_id, old_hp, action) if amount is not None else None
+    if defeated:
+        _persist_encounter_state()
+        _broadcast_encounter_state()
     if _is_ajax():
         # Report the ACTUAL hp-pool change (after Deflect / resistances /
         # weaknesses / temp HP / clamping) so the client toast says the net
         # damage that landed, not the raw amount typed.
-        extra = None
-        _c = _find_active_combatant(instance_id)
-        if _c is not None and old_hp is not None and action in ('damage', 'heal'):
-            net = (old_hp - _c.current_hp) if action == 'damage' else (_c.current_hp - old_hp)
-            extra = {'applied': {'instance_id': instance_id, 'action': action,
-                                 'net': int(max(0, net)), 'raw': int(amount or 0)}}
-        return _tracker_json_response(extra)
+        extra = {}
+        if old_hp is not None and action in ('damage', 'heal'):
+            net = (old_hp - new_hp) if action == 'damage' else (new_hp - old_hp)
+            extra['applied'] = {'instance_id': instance_id, 'action': action,
+                                'net': int(max(0, net)), 'raw': int(amount or 0)}
+        if defeated:
+            extra['defeated'] = defeated
+        return _tracker_json_response(extra or None)
+    return redirect(url_for('tracker_view'))
+
+
+@app.route('/api/restore_defeated/<instance_id>', methods=['POST'])
+def restore_defeated(instance_id):
+    """Undo an auto-removal: re-insert a monster removed at 0 HP back at its prior
+    slot and HP (undoing the killing blow), so an accidental over-kill is one tap
+    to recover. 404 if nothing recent matches (already restored / evicted)."""
+    global ACTIVE_ENCOUNTER, TURN_INDEX, _RECENT_DEFEATED
+    entry = next((e for e in _RECENT_DEFEATED if e['instance_id'] == instance_id), None)
+    if entry is None:
+        return jsonify({'error': 'Nothing to restore — the defeat is no longer undoable.'}), 404
+    _RECENT_DEFEATED.remove(entry)
+    c = entry['combatant']
+    try:
+        c.current_hp = int(entry.get('old_hp', c.current_hp))
+    except (TypeError, ValueError):
+        pass
+    # Undo the death artifact: the 0-HP transition stamps 'dying' on the
+    # combatant (even a monster). Restoring at full HP should bring it back
+    # clean, not "Dying 1" at 100% HP.
+    try:
+        c.conditions.pop('dying', None)
+    except Exception:
+        pass
+    idx = max(0, min(int(entry.get('index', len(ACTIVE_ENCOUNTER))), len(ACTIVE_ENCOUNTER)))
+    ACTIVE_ENCOUNTER.insert(idx, c)
+    if idx <= TURN_INDEX:
+        TURN_INDEX += 1                 # keep the same combatant active
+    _combat_log(f"{c.name} restored to combat ({c.current_hp} HP).", 'system')
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    if _is_ajax():
+        return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
 
@@ -11991,6 +12075,7 @@ def load_encounter():
         return jsonify({"success": False, "error": f"encounter file is unreadable or corrupt: {e}"}), 500
     if name and os.path.exists(enc_path):
         ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''; ROUND_EVENTS = []
+        _RECENT_DEFEATED[:] = []   # new encounter context — drop stale Undos
 
         # Support both old format (list) and new format (dict with metadata)
         if isinstance(raw, list):
@@ -12427,6 +12512,7 @@ def api_stage_encounter():
 
     if clear_first:
         ACTIVE_ENCOUNTER.clear()
+        _RECENT_DEFEATED[:] = []   # new encounter context — drop stale Undos
         TURN_INDEX = 0
         ROUND_NUMBER = 1
         ROUND_EVENTS = []
@@ -12492,7 +12578,7 @@ def api_monster_statblock(instance_id):
                 'weaknesses': getattr(c, 'weaknesses', []),
                 'traits': getattr(c, 'traits', []),
                 'strikes': c.strikes,
-                'actions': [{'name': a['name'], 'description': a.get('description', '')} for a in c.actions],
+                'actions': [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in c.actions],
                 'conditions': {k: v for k, v in c.conditions.items() if v},
                 'persistent_damage': getattr(c, 'persistent_damage', ''),
                 'elite_weak': getattr(c, 'elite_weak', 0)
@@ -12968,7 +13054,7 @@ def combatant_stats(instance_id):
                 data['spell_casters'] = c.spell_casters
             else:
                 data['attacks'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in c.strikes]
-                data['actions'] = [{'name': a['name'], 'description': a.get('description', '')} for a in c.actions]
+                data['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in c.actions]
                 data['immunities'] = getattr(c, 'immunities', [])
                 data['resistances'] = getattr(c, 'resistances', [])
                 data['weaknesses'] = getattr(c, 'weaknesses', [])
