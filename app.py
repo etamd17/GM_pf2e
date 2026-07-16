@@ -9815,6 +9815,44 @@ def upload_handout_image():
     return jsonify({"success": True, "url": url})
 
 
+# ═════════════════════════════════════════════════════════════════════
+#  CHRONICLE — player campaign hub: publish pipeline (PR1)
+#  Ingest a player-vault zip, validate its manifest, RE-RUN the spoiler
+#  leak check (defense in depth under the vault-side firewall), render
+#  each page's markdown to an html fragment, and atomically repoint the
+#  `current` symlink (swap owned by the storage subsystem). GM-only via
+#  the '/api/chronicle' GM_API_PREFIXES gate.
+# ═════════════════════════════════════════════════════════════════════
+CHRONICLE_SCHEMA_VERSION = 1
+
+# Obsidian GM-only callouts that must NEVER reach a player vault. The vault-side
+# tools/chronicle_build.py strips them at generation; this is the server-side
+# backstop (a bad build, a hand-edited zip) — publish is refused if any survive.
+_CHRONICLE_LEAK_MARKERS = ('[!danger]', '[!secret]', '[!gm]')
+_CHRONICLE_SCAN_EXTS = ('.md', '.markdown', '.json', '.html', '.htm', '.txt')
+
+
+def _chronicle_leak_scan(root_dir):
+    """Walk root_dir; return a sorted list of 'relpath: marker' strings for every
+    text file containing a forbidden spoiler-callout marker. [] means clean."""
+    offenders = []
+    for base, _dirs, files in os.walk(root_dir):
+        for fn in files:
+            if not fn.lower().endswith(_CHRONICLE_SCAN_EXTS):
+                continue
+            full = os.path.join(base, fn)
+            try:
+                with open(full, encoding='utf-8', errors='ignore') as fp:
+                    low = fp.read().lower()
+            except OSError:
+                continue
+            rel = os.path.relpath(full, root_dir)
+            for marker in _CHRONICLE_LEAK_MARKERS:
+                if marker in low:
+                    offenders.append('%s: %s' % (rel, marker))
+    return sorted(offenders)
+
+
 def _parse_damage_type_value(entry_str):
     """Parse a resistance/weakness string like 'fire 5' or 'slashing 10 (except adamantine)' into (type, value, exceptions)."""
     entry_str = entry_str.strip().lower()

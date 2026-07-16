@@ -18,3 +18,19 @@ def test_chronicle_prefix_is_gm_gated():
     # /api/chronicle/* route is GM-only with no per-route decorator.
     import app as A  # imported in-process here is fine: pure constant check
     assert '/api/chronicle' in A.GM_API_PREFIXES
+
+
+def test_leak_scan_flags_forbidden_markers(tmp_path):
+    import app as A
+    (tmp_path / 'content').mkdir()
+    (tmp_path / 'content' / 'clean.md').write_text('# Recap\nThe party arrived.\n')
+    (tmp_path / 'content' / 'leaky.md').write_text('> [!danger] the lich is the mayor\n')
+    (tmp_path / 'manifest.json').write_text('{"note": "has a [!secret] in json too"}')
+    offenders = A._chronicle_leak_scan(str(tmp_path))
+    assert any('leaky.md' in o and '[!danger]' in o for o in offenders), offenders
+    assert any('manifest.json' in o and '[!secret]' in o for o in offenders), offenders
+    assert not any('clean.md' in o for o in offenders), offenders
+    # clean tree -> empty list
+    (tmp_path / 'content' / 'leaky.md').unlink()
+    (tmp_path / 'manifest.json').write_text('{"note": "ok"}')
+    assert A._chronicle_leak_scan(str(tmp_path)) == []
