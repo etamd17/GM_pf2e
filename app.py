@@ -9699,6 +9699,49 @@ def recall_knowledge_info(instance_id):
     return jsonify({"error": "Creature not found"}), 404
 
 
+# ── Chronicle: recipient (per-player secret) visibility ──────────────────
+# Recipients key on ACCOUNT OWNERSHIP, never the self-asserted
+# session['player_name'] (any non-GM can set that to any name, app.py:6050).
+# Chronicle PAGES address a pc SLUG (frontmatter `recipients:`); live HANDOUTS
+# predate slugs and address a pc NAME. Both resolve to the same owner_user_id
+# predicate as _user_owns_pc (app.py:426).
+def _chronicle_owned_pc_slugs(user_id):
+    """Slugs of the PCs `user_id` owns in the active campaign, for matching a
+    Chronicle page's `recipients`. Empty set if none / no active campaign."""
+    cid = _active_campaign_id()
+    slugs = set()
+    if not cid:
+        return slugs
+    for pdir in (_storage.party_dir(cid), _storage.cosmere_pc_dir(cid)):
+        if not os.path.isdir(pdir):
+            continue
+        for fn in os.listdir(pdir):
+            if not fn.endswith('.json'):
+                continue
+            doc = _storage.load_json(os.path.join(pdir, fn))
+            if isinstance(doc, dict) and doc.get('owner_user_id') == user_id:
+                slugs.add(_storage.slugify(_campaigns._character_name(doc)))
+    return slugs
+
+
+def _chronicle_page_visible(page_meta, *, user, is_gm):
+    """True if a Chronicle page should be shown to this caller.
+    `recipients` 'all' (or a list containing 'all', or absent) -> everyone.
+    Otherwise it is a per-player secret: the GM always sees it; in account mode a
+    player sees it iff they own a PC whose slug is in `recipients`; in legacy-open
+    (identity is unauthenticated) a non-'all' page is GM-only."""
+    recips = page_meta.get('recipients', 'all')
+    if recips == 'all' or (isinstance(recips, (list, tuple)) and 'all' in recips):
+        return True
+    if is_gm:
+        return True
+    if not _account_mode() or not user:
+        return False   # legacy-open: no trustworthy identity -> GM-only
+    recip_list = recips if isinstance(recips, (list, tuple)) else [recips]
+    owned = _chronicle_owned_pc_slugs(user['id'])
+    return any(r in owned for r in recip_list)
+
+
 # ──────────────────────────────────────────────────────────
 # PLAYER HANDOUTS
 # ──────────────────────────────────────────────────────────
