@@ -654,6 +654,27 @@ def _bind_campaign_paths(cid):
         CHRONICLE_DIR = os.path.join(DATA_DIR, 'chronicle')
 
 
+# --- Chronicle content resolution (empty-state gate keys on None) -----------
+def _chronicle_content_dir():
+    """Absolute path to the currently-published chronicle content dir, or None
+    if nothing has been published yet. Resolves the `current` symlink under
+    CHRONICLE_DIR; the empty-state nav gate keys on the None return."""
+    if not CHRONICLE_DIR:
+        return None
+    target = os.path.realpath(os.path.join(CHRONICLE_DIR, 'current'))
+    if os.path.isdir(target) and os.path.isfile(os.path.join(target, 'manifest.json')):
+        return target
+    return None
+
+
+def _chronicle_manifest():
+    """Load the live publish's manifest.json, or None if nothing is published."""
+    content = _chronicle_content_dir()
+    if not content:
+        return None
+    return _storage.load_json(os.path.join(content, 'manifest.json'))
+
+
 def load_campaign(cid):
     """Switch the active campaign: re-bind paths and reload all campaign-scoped
     in-memory state. `cid` may be None to fall back to the legacy flat layout."""
