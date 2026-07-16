@@ -9743,6 +9743,32 @@ def _chronicle_page_visible(page_meta, *, user, is_gm):
     return any(r in owned for r in recip_list)
 
 
+def _handout_visible_to_request(h):
+    """Whether live handout `h` is visible to the CURRENT request's caller.
+    GM sees all; 'all' is public; otherwise account-mode OWNERSHIP (recipient is
+    a pc NAME here, historically) or the legacy self-picked player_name."""
+    recips = h.get('recipients') or []
+    if 'all' in recips:
+        return True
+    if _is_gm():
+        return True
+    if _account_mode():
+        u = _auth.current_user()
+        return bool(u) and any(_user_owns_pc(u['id'], r) for r in recips)
+    pn = session.get('player_name')   # legacy-open self-picked identity
+    return bool(pn) and pn in recips
+
+
+def _handout_player_filter(h):
+    """SSE player-frame filter for the 'handout' broadcast. The player frame is
+    SHARED across all player subscribers (app.py:1106, no per-player identity),
+    so a targeted handout can't be safely fanned out live -- pushing it would
+    leak it to every player (the pre-existing bug, design C1). Only 'all'
+    handouts go out live; a targeted handout is dropped for players and its
+    recipients pick it up on the next per-caller GET /api/handouts."""
+    return h if 'all' in (h.get('recipients') or []) else None
+
+
 # ──────────────────────────────────────────────────────────
 # PLAYER HANDOUTS
 # ──────────────────────────────────────────────────────────
@@ -9772,13 +9798,13 @@ _load_handouts()
 
 @app.route('/api/handouts', methods=['GET'])
 def get_handouts():
-    """Get handouts. Players only see handouts addressed to them or 'all'."""
-    player_name = request.args.get('player', '').strip()
-    if not player_name:
-        # GM sees all handouts
+    """Handouts visible to the CALLER, decided server-side. GM sees all; a player
+    sees only 'all' handouts or ones addressed to a character they OWN. The
+    ?player= query param is NO LONGER trusted -- it let any client read another
+    player's handouts by naming them (the pre-existing leak, design C1)."""
+    if _is_gm():
         return jsonify({"handouts": HANDOUTS})
-    # Player: filter to their handouts
-    visible = [h for h in HANDOUTS if 'all' in h.get('recipients', []) or player_name in h.get('recipients', [])]
+    visible = [h for h in HANDOUTS if _handout_visible_to_request(h)]
     return jsonify({"handouts": visible})
 
 @app.route('/api/handouts', methods=['POST'])
@@ -9807,8 +9833,10 @@ def create_handout():
     if len(HANDOUTS) > 50: HANDOUTS.pop(0)
     _save_handouts()
 
-    # Broadcast to all clients (players filter client-side)
-    sse_broadcast('handout', handout)
+    # Broadcast: only 'all' handouts fan out live (the player SSE frame is shared
+    # across players, app.py:1106); a targeted handout is dropped for players and
+    # its recipients pick it up on the next per-caller GET /api/handouts.
+    sse_broadcast('handout', handout, player_filter=_handout_player_filter)
 
     return jsonify({"success": True, "handout": handout})
 

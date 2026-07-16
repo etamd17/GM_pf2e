@@ -75,3 +75,13 @@ def test_owned_pc_slugs_scans_both_dirs_by_owner(tmp_path, monkeypatch):
     assert app._chronicle_owned_pc_slugs('u1') == {'aria', 'shallan'}  # owns across BOTH dirs
     assert app._chronicle_owned_pc_slugs('u2') == {'bob'}
     assert app._chronicle_owned_pc_slugs('u3') == set()
+
+
+def test_handout_player_filter_drops_targeted():
+    # The player SSE frame is SHARED by every player (sse_broadcast has no
+    # per-player identity), so a targeted handout must NOT fan out live.
+    assert app._handout_player_filter({'recipients': ['all']}) is not None
+    assert app._handout_player_filter({'recipients': ['all', 'Aria']}) is not None
+    assert app._handout_player_filter({'recipients': ['Aria']}) is None
+    assert app._handout_player_filter({'recipients': []}) is None
+    assert app._handout_player_filter({}) is None
