@@ -9993,17 +9993,18 @@ def chronicle_publish():
         except zipfile.BadZipFile:
             return jsonify({'ok': False, 'error': 'not a valid .zip'}), 400
 
-        # Extract with the zip-slip guard (mirrors campaign_import, app.py:6631).
-        for n in zf.namelist():
-            if n.endswith('/'):
-                continue
-            target = os.path.normpath(os.path.join(staging_dir, n))
-            if target != staging_dir and not target.startswith(staging_dir + os.sep):
-                return jsonify({'ok': False, 'error': 'unsafe path in archive'}), 400
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with open(target, 'wb') as out:
-                out.write(zf.read(n))
-            _chronicle_coop_yield()
+        with zf:
+            # Extract with the zip-slip guard (mirrors campaign_import, app.py:6631).
+            for n in zf.namelist():
+                if n.endswith('/'):
+                    continue
+                target = os.path.normpath(os.path.join(staging_dir, n))
+                if target != staging_dir and not target.startswith(staging_dir + os.sep):
+                    return jsonify({'ok': False, 'error': 'unsafe path in archive'}), 400
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(target, 'wb') as out:
+                    out.write(zf.read(n))
+                _chronicle_coop_yield()
 
         manifest = _storage.load_json(os.path.join(staging_dir, 'manifest.json'))
         ok, err = _chronicle_validate_manifest(manifest)

@@ -174,3 +174,34 @@ print('PUBLISH_OK')
            slip=base64.b64encode(sb).decode())
     r = _run(body)
     assert 'PUBLISH_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_publish_missing_manifest_is_400_and_current_unchanged():
+    # A zip with no manifest.json at all: _storage.load_json returns None for
+    # the missing file, and _chronicle_validate_manifest(None) must reject it
+    # cleanly (400), not blow up with a 500 (e.g. a KeyError/AttributeError
+    # from code that assumed a dict).
+    nbuf = io.BytesIO()
+    with zipfile.ZipFile(nbuf, 'w') as z:
+        z.writestr('content/home.md', '# Just a page, no manifest.json\n')
+    nbuf.seek(0)
+    nb = nbuf.read()
+
+    import base64
+    body = '''
+import tempfile, base64, io, os
+TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
+import app as A
+c = A.app.test_client()
+
+no_manifest = base64.b64decode({no_manifest!r})
+
+r = c.post('/api/chronicle/publish',
+           data={{'archive': (io.BytesIO(no_manifest), 'no_manifest.zip')}},
+           content_type='multipart/form-data')
+assert r.status_code == 400, (r.status_code, r.data)
+assert A._chronicle_manifest() is None   # nothing was ever published
+print('MISSING_MANIFEST_OK')
+'''.format(no_manifest=base64.b64encode(nb).decode())
+    r = _run(body)
+    assert 'MISSING_MANIFEST_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
