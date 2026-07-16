@@ -9853,6 +9853,75 @@ def _chronicle_leak_scan(root_dir):
     return sorted(offenders)
 
 
+_CHRONICLE_MD_EXTENSIONS = ['tables', 'attr_list', 'footnotes', 'sane_lists']
+# A callout header line:  > [!quote] Optional title   /   > [!example]+ Title
+_CHRONICLE_CALLOUT_RE = re.compile(r'^>\s*\[!(\w+)\][+-]?\s*(.*)$')
+
+
+def _chronicle_coop_yield():
+    """Yield the gevent worker mid-publish so a long render can't monopolize the
+    single worker and trip the gunicorn --timeout 120 SIGKILL (which would drop
+    every player's SSE). Harmless no-op under the dev server / test client."""
+    try:
+        import gevent
+        gevent.sleep(0)
+    except Exception:
+        pass
+
+
+def _chronicle_safe_slug(slug):
+    """Filesystem-safe slug for an html fragment filename (no traversal)."""
+    return re.sub(r'[^a-z0-9]+', '-', str(slug or '').lower()).strip('-') or 'page'
+
+
+def _chronicle_callout_preprocess(md_text):
+    """Rewrite Obsidian callouts to block-level HTML BEFORE the markdown pass.
+    [!quote] -> div.callout-quote (read-aloud), [!example] -> div.doc-frame
+    (handout panel); anything else -> a plain <blockquote>. python-markdown
+    passes block-level HTML through untouched, so the inner body is rendered
+    with a nested markdown pass and the whole div survives the outer render."""
+    lines = (md_text or '').split('\n')
+    out, i = [], 0
+    while i < len(lines):
+        m = _CHRONICLE_CALLOUT_RE.match(lines[i])
+        if not m:
+            out.append(lines[i]); i += 1; continue
+        ctype = m.group(1).lower()
+        body = []
+        if m.group(2).strip():
+            body.append(m.group(2).strip())
+        i += 1
+        while i < len(lines) and lines[i].startswith('>'):
+            body.append(re.sub(r'^>\s?', '', lines[i])); i += 1
+        inner = markdown.markdown('\n'.join(body), extensions=_CHRONICLE_MD_EXTENSIONS)
+        if ctype == 'quote':
+            out.append('<div class="callout-quote">%s</div>' % inner)
+        elif ctype == 'example':
+            out.append('<div class="doc-frame">%s</div>' % inner)
+        else:
+            out.append('<blockquote>%s</blockquote>' % inner)
+        out.append('')  # blank line keeps the raw-HTML block isolated
+    return '\n'.join(out)
+
+
+def _chronicle_sanitize_html(html):
+    """Dependency-free defense-in-depth scrub (no bleach in requirements). The
+    content already passed the leak scan and is GM-authored, but fragments are
+    injected into player pages, so strip active-content vectors."""
+    html = re.sub(r'(?is)<(script|style|iframe|object|embed)\b.*?</\1\s*>', '', html)
+    html = re.sub(r'(?is)<(script|style|iframe|object|embed)\b[^>]*/?>', '', html)
+    html = re.sub(r'(?i)\s+on\w+\s*=\s*"[^"]*"', '', html)
+    html = re.sub(r"(?i)\s+on\w+\s*=\s*'[^']*'", '', html)
+    html = re.sub(r'(?i)(href|src)\s*=\s*(["\'])\s*javascript:[^"\']*\2', r'\1=\2#\2', html)
+    return html
+
+
+def _chronicle_render_markdown(md_text):
+    pre = _chronicle_callout_preprocess(md_text)
+    html = markdown.markdown(pre, extensions=_CHRONICLE_MD_EXTENSIONS)
+    return _chronicle_sanitize_html(html)
+
+
 def _parse_damage_type_value(entry_str):
     """Parse a resistance/weakness string like 'fire 5' or 'slashing 10 (except adamantine)' into (type, value, exceptions)."""
     entry_str = entry_str.strip().lower()

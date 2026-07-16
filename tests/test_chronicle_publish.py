@@ -34,3 +34,31 @@ def test_leak_scan_flags_forbidden_markers(tmp_path):
     (tmp_path / 'content' / 'leaky.md').unlink()
     (tmp_path / 'manifest.json').write_text('{"note": "ok"}')
     assert A._chronicle_leak_scan(str(tmp_path)) == []
+
+
+def test_render_markdown_callouts_and_sanitize():
+    import app as A
+    md = (
+        "# Session 3\n\n"
+        "The party met **Romi**.\n\n"
+        "> [!quote] Romi\n> We never had this conversation.\n\n"
+        "> [!example] Handout\n> A torn ledger page.\n\n"
+        "> [!note] table cue\n> keep this plain\n\n"
+        "<script>alert(1)</script>\n\n"
+        "[click](javascript:alert(2))\n"
+    )
+    html = A._chronicle_render_markdown(md)
+    assert '<h1' in html and '<strong>Romi</strong>' in html
+    assert 'class="callout-quote"' in html
+    assert 'class="doc-frame"' in html
+    assert '<blockquote>' in html          # unknown callout -> plain blockquote
+    assert '[!quote]' not in html and '[!note]' not in html   # markers consumed
+    assert '<script' not in html.lower()   # sanitized
+    assert 'javascript:' not in html.lower()
+
+
+def test_safe_slug():
+    import app as A
+    assert A._chronicle_safe_slug("Romi's Ledger") == 'romi-s-ledger'
+    assert A._chronicle_safe_slug('../etc/passwd') == 'etc-passwd'
+    assert A._chronicle_safe_slug('') == 'page'
