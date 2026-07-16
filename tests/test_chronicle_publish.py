@@ -90,3 +90,87 @@ def test_sample_fixture_is_valid_vault():
     # zips without error and manifest sits at the archive root
     z = zipfile.ZipFile(io.BytesIO(_zip_dir_bytes(_FIX)))
     assert 'manifest.json' in z.namelist()
+
+
+def test_validate_manifest_rejects_unsafe_slug():
+    # Reconciliation Contract §6: every page slug must match
+    # ^[a-z0-9][a-z0-9-]{0,80}$ so the html/<slug>.html fragment filename the
+    # publish route writes is the exact key the reading routes look up by.
+    import app as A
+    ok, err = A._chronicle_validate_manifest({
+        "schema_version": 1,
+        "pages": [{"slug": "Bad Slug", "source": "content/x.md"}],
+    })
+    assert not ok
+    assert 'slug' in err.lower()
+    # A safe slug with a valid source passes the manifest-shape check.
+    ok2, err2 = A._chronicle_validate_manifest({
+        "schema_version": 1,
+        "pages": [{"slug": "good-slug", "source": "content/x.md"}],
+    })
+    assert ok2, err2
+
+
+def test_publish_happy_path_and_leak_and_zipslip():
+    zb = _zip_dir_bytes(_FIX)
+    # leaky variant: same manifest, one page carrying a forbidden marker
+    lbuf = io.BytesIO()
+    with zipfile.ZipFile(lbuf, 'w') as z:
+        z.writestr('manifest.json', json.dumps({
+            "schema_version": 1, "session_number": 3,
+            "pages": [{"slug": "leak", "source": "content/leak.md", "recipients": "all"}]}))
+        z.writestr('content/leak.md', '> [!danger] the mayor is the lich\n')
+    lbuf.seek(0)
+    lb = lbuf.read()
+    # zip-slip variant
+    sbuf = io.BytesIO()
+    with zipfile.ZipFile(sbuf, 'w') as z:
+        z.writestr('manifest.json', json.dumps({
+            "schema_version": 1, "pages": [{"slug": "x", "source": "content/x.md", "recipients": "all"}]}))
+        z.writestr('../evil.md', 'pwned')
+    sbuf.seek(0)
+    sb = sbuf.read()
+
+    import base64
+    body = '''
+import tempfile, base64, io, os, json
+TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
+import app as A
+c = A.app.test_client()
+
+good = base64.b64decode({good!r})
+leak = base64.b64decode({leak!r})
+slip = base64.b64decode({slip!r})
+
+# happy path -> 200, fragments exist, current resolves
+r = c.post('/api/chronicle/publish',
+           data={{'archive': (io.BytesIO(good), 'chronicle.zip')}},
+           content_type='multipart/form-data')
+assert r.status_code == 200, (r.status_code, r.data)
+j = r.get_json(); assert j['ok'] and j['pages'] == 2, j
+content = A._chronicle_content_dir()
+assert content and os.path.isfile(os.path.join(content, 'html', 'home.html'))
+assert os.path.isfile(os.path.join(content, 'html', 'romi.html'))
+assert '<div class="callout-quote">' in open(os.path.join(content, 'html', 'home.html')).read()
+assert A._chronicle_manifest()['session_number'] == 3
+
+# leak -> 400, and `current` is UNCHANGED (still the good publish)
+r = c.post('/api/chronicle/publish',
+           data={{'archive': (io.BytesIO(leak), 'leak.zip')}},
+           content_type='multipart/form-data')
+assert r.status_code == 400 and r.get_json().get('leaks'), r.data
+assert A._chronicle_manifest()['session_number'] == 3   # not clobbered
+
+# zip-slip -> 400 and no escape file written
+r = c.post('/api/chronicle/publish',
+           data={{'archive': (io.BytesIO(slip), 'slip.zip')}},
+           content_type='multipart/form-data')
+assert r.status_code == 400, r.data
+assert not os.path.exists(os.path.join(TMP, 'evil.md'))
+assert not os.path.exists(os.path.join(TMP, 'chronicle', 'evil.md'))
+print('PUBLISH_OK')
+'''.format(good=base64.b64encode(zb).decode(),
+           leak=base64.b64encode(lb).decode(),
+           slip=base64.b64encode(sb).decode())
+    r = _run(body)
+    assert 'PUBLISH_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)

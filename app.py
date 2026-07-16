@@ -9922,6 +9922,136 @@ def _chronicle_render_markdown(md_text):
     return _chronicle_sanitize_html(html)
 
 
+# Reconciliation Contract §6 (slug<->route seam): every manifest.pages[].slug
+# MUST already match this pattern. The publish route writes the rendered
+# fragment to html/<slug>.html using the slug VERBATIM (it's already safe by
+# the time _chronicle_validate_manifest accepts it); Part 5's reading routes
+# look the fragment up by that same slug. If this drifted from that pattern,
+# a page could publish under one key and be unreachable (or collide with
+# another) at read time.
+_CHRONICLE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,80}$')
+
+
+def _chronicle_validate_manifest(manifest):
+    """Return (ok, error). Enforce the schema_version handshake, that pages[]
+    is a non-empty list of {slug, source} entries (the render contract), and
+    that every slug is already filesystem/route-safe (Reconciliation Contract
+    §6) -- NOT just non-empty. A slug like 'Bad Slug' would still write a
+    fragment (_chronicle_safe_slug would mangle it), but the reading routes
+    key on the raw manifest slug, so an unsafe slug here would publish a page
+    the read side can never find."""
+    if not isinstance(manifest, dict):
+        return False, 'manifest.json missing or not a JSON object'
+    if manifest.get('schema_version') != CHRONICLE_SCHEMA_VERSION:
+        return False, 'unsupported schema_version: %r' % manifest.get('schema_version')
+    pages = manifest.get('pages')
+    if not isinstance(pages, list) or not pages:
+        return False, 'manifest pages[] missing or empty'
+    for p in pages:
+        if not isinstance(p, dict) or not p.get('slug') or not p.get('source'):
+            return False, 'each page requires slug + source'
+        if not _CHRONICLE_SLUG_RE.match(str(p.get('slug'))):
+            return False, 'invalid slug: %r' % p.get('slug')
+    return True, None
+
+
+@app.route('/api/chronicle/publish', methods=['POST'])
+def chronicle_publish():
+    """Ingest a player-vault zip (manifest.json + content/**.md + assets/**),
+    validate + leak-scan + render markdown -> html/<slug>.html, then atomically
+    repoint `current`. GM-only via the '/api/chronicle' GM_API_PREFIXES gate."""
+    import zipfile, hashlib, shutil
+    if not CHRONICLE_DIR:
+        return jsonify({'ok': False, 'error': 'no chronicle storage bound'}), 400
+    f = request.files.get('archive')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'no archive uploaded (field "archive")'}), 400
+
+    staging_root = os.path.join(CHRONICLE_DIR, '.staging')
+    os.makedirs(staging_root, exist_ok=True)
+    # Stream the upload to disk (NOT BytesIO(f.read()) -- the campaign_import
+    # anti-pattern): a 48 MB read would balloon the single worker's RAM and the
+    # read+unzip must not pin the worker. FileStorage.save() streams in chunks.
+    fd, tmp_zip = tempfile.mkstemp(dir=staging_root, suffix='.zip')
+    os.close(fd)
+    staging_dir = None
+    try:
+        f.save(tmp_zip)
+        # Content-hash the bytes for a stable, dedup-friendly publish dir name.
+        h = hashlib.sha256()
+        with open(tmp_zip, 'rb') as zp:
+            for chunk in iter(lambda: zp.read(65536), b''):
+                h.update(chunk)
+        new_hash = h.hexdigest()[:16]
+        staging_dir = os.path.join(staging_root, new_hash)
+        if os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir)
+        os.makedirs(staging_dir)
+
+        try:
+            zf = zipfile.ZipFile(tmp_zip)
+        except zipfile.BadZipFile:
+            return jsonify({'ok': False, 'error': 'not a valid .zip'}), 400
+
+        # Extract with the zip-slip guard (mirrors campaign_import, app.py:6631).
+        for n in zf.namelist():
+            if n.endswith('/'):
+                continue
+            target = os.path.normpath(os.path.join(staging_dir, n))
+            if target != staging_dir and not target.startswith(staging_dir + os.sep):
+                return jsonify({'ok': False, 'error': 'unsafe path in archive'}), 400
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, 'wb') as out:
+                out.write(zf.read(n))
+            _chronicle_coop_yield()
+
+        manifest = _storage.load_json(os.path.join(staging_dir, 'manifest.json'))
+        ok, err = _chronicle_validate_manifest(manifest)
+        if not ok:
+            return jsonify({'ok': False, 'error': err}), 400
+
+        # Defense-in-depth spoiler re-check across the WHOLE staged tree.
+        leaks = _chronicle_leak_scan(staging_dir)
+        if leaks:
+            return jsonify({'ok': False, 'error': 'spoiler markers present in vault',
+                            'leaks': leaks[:50]}), 400
+
+        # Render each page markdown -> html/<slug>.html in bounded, yielding batches.
+        html_dir = os.path.join(staging_dir, 'html')
+        os.makedirs(html_dir, exist_ok=True)
+        for page in manifest['pages']:
+            src = os.path.normpath(os.path.join(staging_dir, str(page['source'])))
+            if not src.startswith(staging_dir + os.sep) or not os.path.isfile(src):
+                return jsonify({'ok': False,
+                                'error': 'missing page source: %s' % page.get('source')}), 400
+            with open(src, encoding='utf-8') as sp:
+                html = _chronicle_render_markdown(sp.read())
+            # Slug is already validated safe (§6); _chronicle_safe_slug is a
+            # defensive normalizer only and is the identity for a valid slug.
+            slug = _chronicle_safe_slug(page['slug'])
+            with open(os.path.join(html_dir, slug + '.html'), 'w', encoding='utf-8') as hp:
+                hp.write(html)
+            _chronicle_coop_yield()
+
+        # Atomic symlink repoint + rotate previous (storage subsystem).
+        _chronicle_swap(staging_dir, new_hash)
+        staging_dir = None  # ownership handed to _chronicle_swap; don't rmtree it
+        sse_broadcast('chronicle_update', {'session_number': manifest.get('session_number')})
+        return jsonify({'ok': True, 'hash': new_hash,
+                        'pages': len(manifest['pages']),
+                        'session_number': manifest.get('session_number')})
+    finally:
+        try:
+            os.remove(tmp_zip)
+        except OSError:
+            pass
+        if staging_dir and os.path.isdir(staging_dir):
+            try:
+                shutil.rmtree(staging_dir)  # failed publish -> clean up staged dir
+            except OSError:
+                pass
+
+
 def _parse_damage_type_value(entry_str):
     """Parse a resistance/weakness string like 'fire 5' or 'slashing 10 (except adamantine)' into (type, value, exceptions)."""
     entry_str = entry_str.strip().lower()
