@@ -55,3 +55,42 @@ def chron(tmp_path, monkeypatch):
 def test_content_dir_is_none_before_first_publish(chron):
     assert A._chronicle_content_dir() is None
     assert A._chronicle_manifest() is None
+
+
+def test_content_dir_is_none_when_current_target_has_no_manifest(chron):
+    target = os.path.join(chron, 'content', 'nomanifest')
+    os.makedirs(target, exist_ok=True)
+    os.symlink(target, os.path.join(chron, 'current'))
+    assert A._chronicle_content_dir() is None
+    assert A._chronicle_manifest() is None
+
+
+def test_content_dir_is_none_when_current_is_dangling_symlink(chron):
+    os.symlink(os.path.join(chron, 'content', 'nonexistent'), os.path.join(chron, 'current'))
+    assert A._chronicle_content_dir() is None
+    assert A._chronicle_manifest() is None
+
+
+def test_content_dir_is_none_when_chronicle_dir_is_none(monkeypatch):
+    monkeypatch.setattr(A, 'CHRONICLE_DIR', None)
+    assert A._chronicle_content_dir() is None
+    assert A._chronicle_manifest() is None
+
+
+def test_swap_publishes_and_current_resolves(chron):
+    A._chronicle_swap(_stage_content(chron, 'hashA', session=3), 'hashA')
+    assert A._chronicle_content_dir() == os.path.join(chron, 'content', 'hashA')
+    assert os.path.realpath(os.path.join(chron, 'current')).endswith('hashA')
+    assert A._chronicle_manifest()['session_number'] == 3
+    # staging consumed by the move
+    assert not os.path.exists(os.path.join(chron, '.staging', 'hashA'))
+
+
+def test_second_swap_rotates_previous_and_prunes(chron):
+    A._chronicle_swap(_stage_content(chron, 'h1', session=1), 'h1')
+    A._chronicle_swap(_stage_content(chron, 'h2', session=2), 'h2')
+    assert A._chronicle_manifest()['session_number'] == 2
+    assert os.path.realpath(os.path.join(chron, 'previous')).endswith('h1')
+    # both current + previous targets survive; nothing else lingers
+    kept = set(os.listdir(os.path.join(chron, 'content')))
+    assert kept == {'h1', 'h2'}

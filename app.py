@@ -675,6 +675,50 @@ def _chronicle_manifest():
     return _storage.load_json(os.path.join(content, 'manifest.json'))
 
 
+def _chronicle_swap(staging_dir, new_hash):
+    """Publish a fully-rendered staging dir as the new live content.
+
+    Moves `staging_dir` -> CHRONICLE_DIR/content/<new_hash>, then ATOMICALLY
+    repoints the `current` symlink at it (write a temp symlink + os.replace,
+    which is atomic on POSIX -- a reader never sees a half-swapped pointer).
+    A directory os.replace is NOT atomic (ENOTEMPTY), hence the symlink repoint;
+    this mirrors trash_campaign_dir's rmtree-then-move precedent (storage.py:124).
+    The outgoing target is retained as `previous` for one-click rollback; older
+    orphaned content dirs are pruned so disk stays bounded to current+previous.
+    """
+    content_root = os.path.join(CHRONICLE_DIR, 'content')
+    os.makedirs(content_root, exist_ok=True)
+    dest = os.path.join(content_root, new_hash)
+    if os.path.exists(dest):
+        shutil.rmtree(dest)
+    shutil.move(staging_dir, dest)
+
+    current = os.path.join(CHRONICLE_DIR, 'current')
+    previous = os.path.join(CHRONICLE_DIR, 'previous')
+    old_target = os.path.realpath(current) if os.path.islink(current) else None
+
+    _chronicle_repoint(current, dest)
+    if old_target and os.path.isdir(old_target) and old_target != dest:
+        _chronicle_repoint(previous, old_target)
+
+    keep = {os.path.realpath(p) for p in (current, previous) if os.path.islink(p)}
+    for name in os.listdir(content_root):
+        p = os.path.join(content_root, name)
+        if os.path.isdir(p) and p not in keep:
+            shutil.rmtree(p, ignore_errors=True)
+
+
+def _chronicle_repoint(link_path, target):
+    """Atomically point `link_path` (a symlink) at `target`: create a temp
+    symlink in the same dir, then os.replace it onto link_path (atomic on POSIX;
+    works whether or not link_path already exists)."""
+    tmp = link_path + '.tmp'
+    if os.path.lexists(tmp):
+        os.remove(tmp)
+    os.symlink(target, tmp)
+    os.replace(tmp, link_path)
+
+
 def load_campaign(cid):
     """Switch the active campaign: re-bind paths and reload all campaign-scoped
     in-memory state. `cid` may be None to fall back to the legacy flat layout."""
