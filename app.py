@@ -9726,12 +9726,13 @@ def _chronicle_owned_pc_slugs(user_id):
 
 def _chronicle_page_visible(page_meta, *, user, is_gm):
     """True if a Chronicle page should be shown to this caller.
-    `recipients` 'all' (or a list containing 'all', or absent) -> everyone.
+    `recipients` 'all' (or a list containing 'all', or absent, or a literal
+    None -- a plausible blank-YAML frontmatter shape) -> everyone.
     Otherwise it is a per-player secret: the GM always sees it; in account mode a
     player sees it iff they own a PC whose slug is in `recipients`; in legacy-open
     (identity is unauthenticated) a non-'all' page is GM-only."""
     recips = page_meta.get('recipients', 'all')
-    if recips == 'all' or (isinstance(recips, (list, tuple)) and 'all' in recips):
+    if recips is None or recips == 'all' or (isinstance(recips, (list, tuple)) and 'all' in recips):
         return True
     if is_gm:
         return True
