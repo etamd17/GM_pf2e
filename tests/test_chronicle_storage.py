@@ -143,3 +143,42 @@ def test_swap_same_hash_republish_does_not_dangle(chron):
     assert A._chronicle_content_dir() is not None
     assert A._chronicle_manifest() is not None
     assert A._chronicle_manifest()['session_number'] == 1
+
+
+def test_swap_previous_rotation_survives_symlinked_ancestor_on_same_hash_republish(tmp_path, monkeypatch):
+    """Bug 3 regression (Task 4 re-review): the previous-rotation guard compared
+    `old_target = os.path.realpath(current)` (RESOLVED) against `dest =
+    os.path.join(content_root, new_hash)` (UNRESOLVED). When an ancestor of
+    CHRONICLE_DIR is itself a symlink (e.g. macOS mktemp's /var ->
+    /private/var) AND a same-hash republish occurs, `old_target` and `dest`
+    name the SAME real directory but differ as strings (resolved vs literal),
+    so `old_target != dest` was wrongly True. That wrongly repoints `previous`
+    to alias `current` (both resolve to the same live hash), and the
+    orphan-prune then deletes the genuine prior version since it's no longer
+    in the resolved `keep` set -- rollback to it becomes impossible.
+
+    Scenario: swap h0 (session 1), swap h1 (session 2), then republish h1
+    AGAIN (session 2, freshly staged). After the republish, `current` must
+    still resolve to h1, `previous` must still resolve to h0 (not alias h1),
+    and h0's content dir must still exist on disk.
+    """
+    real = tmp_path / 'real'
+    real.mkdir()
+    link = tmp_path / 'link'
+    os.symlink(str(real), str(link))
+    chron_dir = os.path.join(str(link), 'chronicle')
+    os.makedirs(chron_dir, exist_ok=True)
+    monkeypatch.setattr(A, 'CHRONICLE_DIR', chron_dir)
+
+    A._chronicle_swap(_stage_content(chron_dir, 'h0', session=1), 'h0')
+    A._chronicle_swap(_stage_content(chron_dir, 'h1', session=2), 'h1')
+    # fresh staged content for the same hash -- a same-hash republish
+    A._chronicle_swap(_stage_content(chron_dir, 'h1', session=2), 'h1')
+
+    assert A._chronicle_manifest()['session_number'] == 2
+    previous_target = os.path.realpath(os.path.join(chron_dir, 'previous'))
+    assert os.path.basename(previous_target) == 'h0', (
+        f"previous should still resolve to h0, not alias current (h1); got {previous_target!r}"
+    )
+    h0_dir = os.path.join(chron_dir, 'content', 'h0')
+    assert os.path.isdir(h0_dir), "h0 content dir must survive so rollback stays possible"

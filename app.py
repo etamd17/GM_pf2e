@@ -704,7 +704,13 @@ def _chronicle_swap(staging_dir, new_hash):
     old_target = os.path.realpath(current) if os.path.islink(current) else None
 
     _chronicle_repoint(current, dest)
-    if old_target and os.path.isdir(old_target) and old_target != dest:
+    # Compare like-for-like: old_target is already realpath'd above, so dest
+    # must be resolved too here -- if any ancestor of CHRONICLE_DIR is itself
+    # a symlink (e.g. macOS mktemp's /var -> /private/var), a same-hash
+    # republish has old_target/dest naming the SAME real directory but
+    # differing as strings (resolved vs literal), which would wrongly rotate
+    # `previous` to alias `current` and get the genuine prior version pruned.
+    if old_target and os.path.isdir(old_target) and old_target != os.path.realpath(dest):
         _chronicle_repoint(previous, old_target)
 
     keep = {os.path.realpath(p) for p in (current, previous) if os.path.islink(p)}
