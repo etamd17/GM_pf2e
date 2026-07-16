@@ -205,3 +205,28 @@ print('MISSING_MANIFEST_OK')
 '''.format(no_manifest=base64.b64encode(nb).decode())
     r = _run(body)
     assert 'MISSING_MANIFEST_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_status_reports_last_publish():
+    zb = _zip_dir_bytes(_FIX)
+    import base64
+    body = '''
+import tempfile, base64, io, os
+TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
+import app as A
+c = A.app.test_client()
+
+# before any publish
+j = c.get('/api/chronicle/status').get_json()
+assert j['published'] is False, j
+
+c.post('/api/chronicle/publish',
+       data={{'archive': (io.BytesIO(base64.b64decode({good!r})), 'c.zip')}},
+       content_type='multipart/form-data')
+j = c.get('/api/chronicle/status').get_json()
+assert j['published'] is True and j['session_number'] == 3 and j['pages'] == 2, j
+assert j['can_rollback'] is False, j   # first publish -> no previous yet
+print('STATUS_OK')
+'''.format(good=base64.b64encode(zb).decode())
+    r = _run(body)
+    assert 'STATUS_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)

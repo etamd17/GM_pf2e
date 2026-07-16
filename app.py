@@ -10053,6 +10053,25 @@ def chronicle_publish():
                 pass
 
 
+@app.route('/api/chronicle/status', methods=['GET'])
+def chronicle_status():
+    """Last-publish summary for the GM hub: session, page count, current hash,
+    and whether a rollback target exists. GM-only via the prefix gate."""
+    man = _chronicle_manifest()
+    if man is None:
+        return jsonify({'published': False})
+    content = _chronicle_content_dir()
+    prev = os.path.join(CHRONICLE_DIR, 'previous') if CHRONICLE_DIR else None
+    return jsonify({
+        'published': True,
+        'session_number': man.get('session_number'),
+        'generated_at': man.get('generated_at'),
+        'pages': len(man.get('pages') or []),
+        'hash': os.path.basename(os.path.realpath(content)) if content else None,
+        'can_rollback': bool(prev and os.path.lexists(prev)),
+    })
+
+
 def _parse_damage_type_value(entry_str):
     """Parse a resistance/weakness string like 'fire 5' or 'slashing 10 (except adamantine)' into (type, value, exceptions)."""
     entry_str = entry_str.strip().lower()
