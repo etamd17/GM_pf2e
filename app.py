@@ -14,6 +14,7 @@ import time
 import queue
 import threading
 import tempfile
+import shutil
 from functools import wraps
 from pathlib import Path
 from werkzeug.exceptions import HTTPException
@@ -601,6 +602,7 @@ PARTY_DIR = ENCOUNTER_DIR = CAMPAIGN_ASSETS_DIR = HANDOUTS_DIR = CAMPAIGN_AUDIO_
 CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
 PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
 HANDOUTS_FILE = COSMERE_ADVERSARIES_FILE = None
+CHRONICLE_DIR = None
 
 
 def _bind_campaign_paths(cid):
@@ -611,6 +613,7 @@ def _bind_campaign_paths(cid):
     global CAMPAIGN_AUDIO_DIR, CAMPAIGN_FILE, LOOT_LEDGER_FILE, CAMPAIGN_STATS_FILE, JOURNAL_DIR
     global PINNED_GENERATORS_FILE, CALENDAR_FILE, STORY_THREADS_FILE
     global COSMERE_PC_DIR, COSMERE_HOMEBREW_FILE, HANDOUTS_FILE, COSMERE_ADVERSARIES_FILE
+    global CHRONICLE_DIR
     ACTIVE_CAMPAIGN_ID = cid
     if cid:
         PARTY_DIR = _storage.party_dir(cid)
@@ -629,6 +632,7 @@ def _bind_campaign_paths(cid):
         COSMERE_HOMEBREW_FILE = _storage.homebrew_file(cid)
         HANDOUTS_FILE = _storage.handouts_file(cid)
         COSMERE_ADVERSARIES_FILE = _storage.cosmere_adversaries_file(cid)
+        CHRONICLE_DIR = _storage.chronicle_dir(cid)
         _storage.ensure_campaign_dirs(cid)
     else:
         PARTY_DIR = os.path.join(DATA_DIR, 'party_data')
@@ -647,6 +651,7 @@ def _bind_campaign_paths(cid):
         COSMERE_HOMEBREW_FILE = os.path.join(DATA_DIR, 'homebrew.json')
         HANDOUTS_FILE = os.path.join(DATA_DIR, 'handouts.json')
         COSMERE_ADVERSARIES_FILE = os.path.join(DATA_DIR, 'cosmere_adversaries.json')
+        CHRONICLE_DIR = os.path.join(DATA_DIR, 'chronicle')
 
 
 def load_campaign(cid):

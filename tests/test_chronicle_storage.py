@@ -19,3 +19,17 @@ def test_chronicle_dir_is_under_campaign():
 def test_chronicle_dir_rejects_traversal_id():
     with pytest.raises(ValueError):
         storage.chronicle_dir('../escape')
+
+
+import app as A  # top-level import; DATA_DIR already pinned above
+
+
+def test_chronicle_dir_binds_campaign_branch():
+    cid = storage.new_id()
+    A._bind_campaign_paths(cid)
+    assert A.CHRONICLE_DIR == storage.chronicle_dir(cid)
+
+
+def test_chronicle_dir_binds_flat_fallback():
+    A._bind_campaign_paths(None)          # legacy-open dev mode
+    assert A.CHRONICLE_DIR == os.path.join(A.DATA_DIR, 'chronicle')
