@@ -80,6 +80,32 @@ def _zip_dir_bytes(src_dir):
     return buf.read()
 
 
+def _zip_dir_bytes_with_session(src_dir, session_number):
+    """Same as _zip_dir_bytes, but with manifest.json's session_number bumped
+    so the zip's bytes -- and therefore its content hash -- differ from a
+    plain republish of src_dir. Publish hashes are content-derived (see
+    chronicle_publish), so re-publishing byte-identical content dedups to the
+    SAME hash and _chronicle_swap never rotates `previous` (no-op republish).
+    Tests that need a real `previous` to exist must publish two DISTINCT
+    payloads, which this produces."""
+    man = json.load(open(os.path.join(src_dir, 'manifest.json')))
+    man['session_number'] = session_number
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for base, _d, files in os.walk(src_dir):
+            for fn in files:
+                if fn == '.gitkeep':
+                    continue
+                full = os.path.join(base, fn)
+                rel = os.path.relpath(full, src_dir)
+                if rel == 'manifest.json':
+                    z.writestr(rel, json.dumps(man))
+                else:
+                    z.write(full, rel)
+    buf.seek(0)
+    return buf.read()
+
+
 def test_sample_fixture_is_valid_vault():
     man = json.load(open(os.path.join(_FIX, 'manifest.json')))
     assert man['schema_version'] == 1
@@ -230,3 +256,37 @@ print('STATUS_OK')
 '''.format(good=base64.b64encode(zb).decode())
     r = _run(body)
     assert 'STATUS_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_status_can_rollback_true_after_second_distinct_publish():
+    # Task 11 review: can_rollback must reflect a `previous` that
+    # _chronicle_rollback() would actually act on, not just os.path.lexists.
+    # Publish two DISTINCT payloads (same-content republish dedups to one
+    # hash and creates no `previous` -- see _zip_dir_bytes_with_session) so a
+    # real rollback target exists, then assert status reports it.
+    zb1 = _zip_dir_bytes(_FIX)
+    zb2 = _zip_dir_bytes_with_session(_FIX, 4)
+    import base64
+    body = '''
+import tempfile, base64, io, os
+TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
+import app as A
+c = A.app.test_client()
+
+r1 = c.post('/api/chronicle/publish',
+            data={{'archive': (io.BytesIO(base64.b64decode({first!r})), 'c1.zip')}},
+            content_type='multipart/form-data')
+assert r1.status_code == 200, r1.data
+r2 = c.post('/api/chronicle/publish',
+            data={{'archive': (io.BytesIO(base64.b64decode({second!r})), 'c2.zip')}},
+            content_type='multipart/form-data')
+assert r2.status_code == 200, r2.data
+assert r1.get_json()['hash'] != r2.get_json()['hash']   # distinct content -> distinct hash
+
+j = c.get('/api/chronicle/status').get_json()
+assert j['published'] is True and j['session_number'] == 4, j
+assert j['can_rollback'] is True, j
+print('ROLLBACK_STATUS_OK')
+'''.format(first=base64.b64encode(zb1).decode(), second=base64.b64encode(zb2).decode())
+    r = _run(body)
+    assert 'ROLLBACK_STATUS_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)

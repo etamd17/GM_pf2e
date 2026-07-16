@@ -10067,8 +10067,12 @@ def chronicle_status():
         'session_number': man.get('session_number'),
         'generated_at': man.get('generated_at'),
         'pages': len(man.get('pages') or []),
-        'hash': os.path.basename(os.path.realpath(content)) if content else None,
-        'can_rollback': bool(prev and os.path.lexists(prev)),
+        'hash': os.path.basename(content) if content else None,
+        # Mirror _chronicle_rollback()'s real gate exactly: os.path.lexists(prev)
+        # is True even for a DANGLING `previous` symlink (target dir gone),
+        # which would advertise can_rollback=True while an actual rollback
+        # no-ops.
+        'can_rollback': bool(prev and os.path.islink(prev) and os.path.isdir(os.path.realpath(prev))),
     })
 
 
