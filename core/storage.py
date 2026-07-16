@@ -88,6 +88,7 @@ def handouts_file(cid):            return os.path.join(campaign_dir(cid), 'hando
 def cosmere_adversaries_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_adversaries.json')
 def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
 def homebrew_file(cid):            return os.path.join(campaign_dir(cid), 'homebrew.json')
+def chronicle_dir(cid):            return os.path.join(campaign_dir(cid), 'chronicle')
 
 
 def delete_campaign_dir(cid):
