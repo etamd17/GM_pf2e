@@ -735,6 +735,27 @@ def _chronicle_repoint(link_path, target):
     os.replace(tmp, link_path)
 
 
+def _chronicle_rollback():
+    """One-click undo of the last publish: repoint `current` at `previous`.
+    Reversible -- the superseded target rotates back into `previous`. Returns
+    True if a rollback happened, False if there is no previous publish."""
+    if not CHRONICLE_DIR:
+        return False
+    current = os.path.join(CHRONICLE_DIR, 'current')
+    previous = os.path.join(CHRONICLE_DIR, 'previous')
+    if not os.path.islink(previous):
+        return False
+    prev_target = os.path.realpath(previous)
+    if not os.path.isdir(prev_target):
+        return False
+    cur_target = os.path.realpath(current) if os.path.islink(current) else None
+
+    _chronicle_repoint(current, prev_target)
+    if cur_target and os.path.isdir(cur_target) and cur_target != prev_target:
+        _chronicle_repoint(previous, cur_target)
+    return True
+
+
 def load_campaign(cid):
     """Switch the active campaign: re-bind paths and reload all campaign-scoped
     in-memory state. `cid` may be None to fall back to the legacy flat layout."""

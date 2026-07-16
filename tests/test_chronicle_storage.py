@@ -182,3 +182,46 @@ def test_swap_previous_rotation_survives_symlinked_ancestor_on_same_hash_republi
     )
     h0_dir = os.path.join(chron_dir, 'content', 'h0')
     assert os.path.isdir(h0_dir), "h0 content dir must survive so rollback stays possible"
+
+
+def test_rollback_restores_previous_publish(chron):
+    A._chronicle_swap(_stage_content(chron, 'h1', session=1), 'h1')
+    A._chronicle_swap(_stage_content(chron, 'h2', session=2), 'h2')
+    assert A._chronicle_rollback() is True
+    assert A._chronicle_manifest()['session_number'] == 1
+    assert os.path.realpath(os.path.join(chron, 'current')).endswith('h1')
+    # reversible: the just-superseded publish is now `previous`
+    assert os.path.realpath(os.path.join(chron, 'previous')).endswith('h2')
+
+
+def test_rollback_is_false_without_a_previous(chron):
+    A._chronicle_swap(_stage_content(chron, 'h1', session=1), 'h1')
+    assert A._chronicle_rollback() is False
+
+
+def test_rollback_is_false_before_any_publish(chron):
+    assert A._chronicle_rollback() is False
+
+
+def test_rollback_survives_symlinked_ancestor(tmp_path, monkeypatch):
+    """Guards realpath-consistency in _chronicle_rollback under a symlinked
+    ancestor of CHRONICLE_DIR (e.g. macOS mktemp's /var -> /private/var),
+    matching Task 4's regression coverage for _chronicle_swap. Rollback
+    compares prev_target/cur_target after realpath-resolving BOTH, so it
+    must stay correct even when CHRONICLE_DIR sits under a symlinked dir."""
+    real = tmp_path / 'real'
+    real.mkdir()
+    link = tmp_path / 'link'
+    os.symlink(str(real), str(link))
+    chron_dir = os.path.join(str(link), 'chronicle')
+    os.makedirs(chron_dir, exist_ok=True)
+    monkeypatch.setattr(A, 'CHRONICLE_DIR', chron_dir)
+
+    A._chronicle_swap(_stage_content(chron_dir, 'h1', session=1), 'h1')
+    A._chronicle_swap(_stage_content(chron_dir, 'h2', session=2), 'h2')
+
+    assert A._chronicle_rollback() is True
+    assert A._chronicle_manifest()['session_number'] == 1
+    # reversible: the just-superseded publish (h2) is now `previous`
+    previous_target = os.path.realpath(os.path.join(chron_dir, 'previous'))
+    assert os.path.basename(previous_target) == 'h2'
