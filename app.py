@@ -689,9 +689,15 @@ def _chronicle_swap(staging_dir, new_hash):
     content_root = os.path.join(CHRONICLE_DIR, 'content')
     os.makedirs(content_root, exist_ok=True)
     dest = os.path.join(content_root, new_hash)
-    if os.path.exists(dest):
-        shutil.rmtree(dest)
-    shutil.move(staging_dir, dest)
+    if os.path.isdir(dest):
+        # Republishing under a hash that's already live: production hashes
+        # are content-derived, so this is the same content already
+        # published. Drop the now-redundant staging dir instead of
+        # rmtree-ing the live target and re-moving into it, which would
+        # leave a transient window where `dest` doesn't exist on disk.
+        shutil.rmtree(staging_dir)
+    else:
+        shutil.move(staging_dir, dest)
 
     current = os.path.join(CHRONICLE_DIR, 'current')
     previous = os.path.join(CHRONICLE_DIR, 'previous')
@@ -704,7 +710,11 @@ def _chronicle_swap(staging_dir, new_hash):
     keep = {os.path.realpath(p) for p in (current, previous) if os.path.islink(p)}
     for name in os.listdir(content_root):
         p = os.path.join(content_root, name)
-        if os.path.isdir(p) and p not in keep:
+        # Resolve `p` before comparing -- if any ancestor of CHRONICLE_DIR is
+        # itself a symlink (e.g. macOS mktemp's /var -> /private/var), the
+        # unresolved `p` never string-matches the realpath'd `keep` set, so
+        # this must compare like-for-like or it prunes the live content.
+        if os.path.isdir(p) and os.path.realpath(p) not in keep:
             shutil.rmtree(p, ignore_errors=True)
 
 

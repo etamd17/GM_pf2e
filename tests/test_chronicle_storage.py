@@ -94,3 +94,52 @@ def test_second_swap_rotates_previous_and_prunes(chron):
     # both current + previous targets survive; nothing else lingers
     kept = set(os.listdir(os.path.join(chron, 'content')))
     assert kept == {'h1', 'h2'}
+
+
+def test_swap_prune_survives_symlinked_ancestor(tmp_path, monkeypatch):
+    """Bug 1 regression: when an ancestor of CHRONICLE_DIR is a symlink (e.g.
+    macOS mktemp's /var -> /private/var), the orphan-prune compared an
+    UNRESOLVED path against a `keep` set built from os.path.realpath(), so
+    they never string-matched and the loop rmtree'd the just-published
+    content out from under the live `current` symlink. Run two swaps and
+    assert the just-published content survives after EACH one."""
+    real = tmp_path / 'real'
+    real.mkdir()
+    link = tmp_path / 'link'
+    os.symlink(str(real), str(link))
+    chron_dir = os.path.join(str(link), 'chronicle')
+    os.makedirs(chron_dir, exist_ok=True)
+    monkeypatch.setattr(A, 'CHRONICLE_DIR', chron_dir)
+
+    A._chronicle_swap(_stage_content(chron_dir, 'h1', session=1), 'h1')
+    assert A._chronicle_manifest() is not None
+    assert A._chronicle_manifest()['session_number'] == 1
+
+    A._chronicle_swap(_stage_content(chron_dir, 'h2', session=2), 'h2')
+    assert A._chronicle_manifest() is not None
+    assert A._chronicle_manifest()['session_number'] == 2
+    # the just-published content must not have been pruned as an "orphan"
+    kept = set(os.listdir(os.path.join(chron_dir, 'content')))
+    assert kept == {'h1', 'h2'}
+
+
+def test_swap_same_hash_republish_does_not_dangle(chron):
+    """Bug 2 regression: republishing under a hash that's already live used to
+    unconditionally `shutil.rmtree(dest)` before re-moving the staged content
+    in, leaving a transient window where `dest` (the live target `current`
+    points at) doesn't exist on disk at all -- a reader in that window sees
+    _chronicle_content_dir()/_chronicle_manifest() return None. Since
+    production hashes are content-derived, a same-hash republish means the
+    staged content is already identical to what's live, so the fix drops the
+    redundant staging dir instead of destructively replacing the live one.
+    (NOTE: this test stages *different* manifests under the same hash purely
+    to make the "was the live dir ever destroyed" outcome observable; the
+    correct/fixed behavior is that the ORIGINAL publish stays live -- so the
+    session_number asserted below is 1, not the second staging dir's 2.)"""
+    A._chronicle_swap(_stage_content(chron, 'hX', session=1), 'hX')
+    assert A._chronicle_manifest()['session_number'] == 1
+
+    A._chronicle_swap(_stage_content(chron, 'hX', session=2), 'hX')
+    assert A._chronicle_content_dir() is not None
+    assert A._chronicle_manifest() is not None
+    assert A._chronicle_manifest()['session_number'] == 1
