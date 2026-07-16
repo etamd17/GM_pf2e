@@ -488,6 +488,11 @@ GM_API_PREFIXES = (
     # payloads. CRUD is GM-only like every other tracker mutation; the list
     # itself rides the already-gated /api/tracker_state payload.
     '/api/round_events',
+    # Chronicle (player campaign hub) publish pipeline: ingest a player-vault
+    # zip, render markdown -> html fragments, atomic symlink swap, rollback.
+    # GET reading routes live at /chronicle* (player-scoped, NOT here); only the
+    # /api/chronicle/* mutations are GM-only, gated centrally by this prefix.
+    '/api/chronicle',
 )
 
 @app.before_request
