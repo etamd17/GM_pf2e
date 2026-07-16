@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "campaign_id": "sample",
+  "session_number": 3,
+  "generated_at": "2026-07-15T00:00:00Z",
+  "pages": [
+    {"slug": "home", "section": "home", "title": "The Chronicle", "recipients": "all", "source": "content/home.md"},
+    {"slug": "romi", "section": "cast", "title": "Romi", "epithet": "The broker who wasn't", "recipients": "all", "session_introduced": 2, "session_updated": 3, "source": "content/romi.md"}
+  ],
+  "mysteries": [],
+  "calendar": {},
+  "fieldguide": [],
+  "spine": ["home", "romi"]
+}

@@ -62,3 +62,31 @@ def test_safe_slug():
     assert A._chronicle_safe_slug("Romi's Ledger") == 'romi-s-ledger'
     assert A._chronicle_safe_slug('../etc/passwd') == 'etc-passwd'
     assert A._chronicle_safe_slug('') == 'page'
+
+
+_FIX = os.path.join(_REPO, 'tests', 'fixtures', 'chronicle_sample')
+
+
+def _zip_dir_bytes(src_dir):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for base, _d, files in os.walk(src_dir):
+            for fn in files:
+                if fn == '.gitkeep':
+                    continue
+                full = os.path.join(base, fn)
+                z.write(full, os.path.relpath(full, src_dir))
+    buf.seek(0)
+    return buf.read()
+
+
+def test_sample_fixture_is_valid_vault():
+    man = json.load(open(os.path.join(_FIX, 'manifest.json')))
+    assert man['schema_version'] == 1
+    assert isinstance(man['pages'], list) and man['pages']
+    for p in man['pages']:
+        assert p['slug'] and p['source']
+        assert os.path.isfile(os.path.join(_FIX, p['source'])), p['source']
+    # zips without error and manifest sits at the archive root
+    z = zipfile.ZipFile(io.BytesIO(_zip_dir_bytes(_FIX)))
+    assert 'manifest.json' in z.namelist()
