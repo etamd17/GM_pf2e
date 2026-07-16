@@ -290,3 +290,38 @@ print('ROLLBACK_STATUS_OK')
 '''.format(first=base64.b64encode(zb1).decode(), second=base64.b64encode(zb2).decode())
     r = _run(body)
     assert 'ROLLBACK_STATUS_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_rollback_restores_previous_publish():
+    # Publish two DISTINCT payloads (session 2, then session 3) so a real
+    # `previous` exists (see _zip_dir_bytes_with_session), then roll back and
+    # confirm `current` now resolves to session 2's publish.
+    zb2 = _zip_dir_bytes_with_session(_FIX, 2)
+    zb3 = _zip_dir_bytes_with_session(_FIX, 3)
+    import base64
+    body = '''
+import tempfile, base64, io, os
+TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
+import app as A
+c = A.app.test_client()
+
+def pub(b):
+    return c.post('/api/chronicle/publish',
+                  data={{'archive': (io.BytesIO(b), 'c.zip')}},
+                  content_type='multipart/form-data')
+
+# rollback with nothing to roll back to -> 400
+assert c.post('/api/chronicle/rollback').status_code == 400
+
+pub(base64.b64decode({s2!r}))   # session 2 (becomes previous)
+pub(base64.b64decode({s3!r}))   # session 3 (current)
+assert A._chronicle_manifest()['session_number'] == 3
+
+r = c.post('/api/chronicle/rollback')
+assert r.status_code == 200 and r.get_json()['ok'], r.data
+assert A._chronicle_manifest()['session_number'] == 2   # current now points at prev
+print('ROLLBACK_OK')
+'''.format(s2=base64.b64encode(zb2).decode(),
+           s3=base64.b64encode(zb3).decode())
+    r = _run(body)
+    assert 'ROLLBACK_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)

@@ -10076,6 +10076,19 @@ def chronicle_status():
     })
 
 
+@app.route('/api/chronicle/rollback', methods=['POST'])
+def chronicle_rollback():
+    """Repoint `current` back to the previous publish (one-click undo of a bad
+    publish). Swap logic + previous-dir bookkeeping live in the storage
+    subsystem's _chronicle_rollback(). GM-only via the prefix gate."""
+    if not _chronicle_rollback():
+        return jsonify({'ok': False, 'error': 'no previous publish to roll back to'}), 400
+    man = _chronicle_manifest() or {}
+    sse_broadcast('chronicle_update', {'session_number': man.get('session_number'),
+                                       'rolled_back': True})
+    return jsonify({'ok': True, 'session_number': man.get('session_number')})
+
+
 def _parse_damage_type_value(entry_str):
     """Parse a resistance/weakness string like 'fire 5' or 'slashing 10 (except adamantine)' into (type, value, exceptions)."""
     entry_str = entry_str.strip().lower()
