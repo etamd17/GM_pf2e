@@ -5946,6 +5946,13 @@ def _inject_campaign_chrome():
         return {'nav_crest': '', 'scene_mood': 'calm', 'is_gm': _is_gm(), 'player_name': session.get('player_name', '')}
 
 
+@app.context_processor
+def _inject_chronicle_ctx():
+    """`chronicle_published` gates the player nav's Chronicle tab (empty-state):
+    true once the first publish exists. One manifest probe per render."""
+    return {'chronicle_published': _chronicle_manifest() is not None}
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # SESSION-START CURTAIN — "Previously on..." recap from Obsidian + broadcast
 # ══════════════════════════════════════════════════════════════════════════
