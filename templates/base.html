@@ -67,6 +67,9 @@
          for the two-color brand (gilt + ruby), neutral grays, and
          strict typography roles. New code consumes classes from here. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+    {# Additive head seam: child templates inject a stylesheet <link> that a
+       late @import inside the block above could not (cascade drops it). #}
+    {% block head_extra %}{% endblock %}
 </head>
 <body data-active-system="{{ active_system }}" class="min-h-screen flex flex-col system-{{ active_system }}{% if active_system == 'cosmere' %} cosmere-{{ cosmere_world }}{% endif %}{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
 

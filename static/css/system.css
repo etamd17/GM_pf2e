@@ -4847,3 +4847,189 @@ body.system-cosmere .trk .grid-wrap::after {
 }
 
 /* End of system.css */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CHRONICLE — player campaign hub. Warm-dark reading surfaces + a restrained
+   card grammar. Mirrors the anti-ornament pass (~210-289): no glow, flat
+   dots, static badges, ONE uppercase role, hairline rails. Tokens only.
+   ═══════════════════════════════════════════════════════════════════════ */
+.chron { max-width: 72rem; margin: 0 auto; }
+
+/* The one uppercase, tracked role: the section kicker. */
+.chron-kicker {
+    font-family: var(--font-ui);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gilt-300); margin: 0 0 var(--sp-3);
+}
+/* Titles: Cinzel, sentence-case, not shouted. */
+.chron-title {
+    font-family: var(--font-display);
+    font-size: 24px; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--text-on-dark); margin: 0 0 var(--sp-5);
+}
+
+/* Sub-tab strip — hairline underline, gilt on current. */
+.chron-head { border-bottom: 1px solid var(--border-card); margin-bottom: var(--sp-6); }
+.chron-subnav { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+.chron-tab {
+    font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+    color: var(--text-on-dark-3); text-decoration: none;
+    padding: var(--sp-2) 0 var(--sp-3); position: relative;
+    transition: color var(--t-fast);
+}
+.chron-tab:hover { color: var(--text-on-dark); }
+.chron-tab[aria-current="page"] { color: var(--gilt-300); }
+.chron-tab[aria-current="page"]::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 2px; background: var(--gilt-300);
+}
+
+/* Slim live bar — ruby left-rule + ruby text, NOT full-bleed. */
+.chron-live-bar {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-5);
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-left: 3px solid var(--ruby-300);
+    border-radius: var(--r-sm);
+    font-family: var(--font-ui); font-size: 13px; color: var(--ruby-200);
+}
+.chron-live-bar__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ruby-300); flex-shrink: 0; }
+.chron-live-bar__text { flex: 1; }
+.chron-live-bar__link { color: var(--gilt-300); text-decoration: none; font-weight: 600; }
+.chron-live-bar__link:hover { color: var(--gilt-200); }
+
+/* Card grid — one grammar for Cast + Lore. */
+.chron-grid {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: var(--sp-4);
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.chron-grid__item { margin: 0; }
+.chron-card {
+    display: flex; gap: var(--sp-4); align-items: flex-start;
+    padding: var(--sp-4);
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    text-decoration: none;
+    transition: border-color var(--t-fast);
+}
+.chron-card:hover { border-color: var(--border-rule); }
+.chron-card__figure { flex-shrink: 0; }
+.chron-portrait {
+    width: 56px; height: 56px; border-radius: var(--r-sm);
+    object-fit: cover; display: block; background: var(--ink-700);
+}
+/* Monogram fallback — quiet body-size letter on a flat well (no 44px drop-cap). */
+.chron-monogram {
+    display: flex; align-items: center; justify-content: center;
+    width: 56px; height: 56px; border-radius: var(--r-sm);
+    background: var(--ink-700);
+    font-family: var(--font-display); font-size: 20px; font-weight: 600;
+    color: var(--text-on-cream-2);
+}
+.chron-card__body { min-width: 0; }
+.chron-card__title {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600;
+    color: var(--text-on-cream); margin: 0 0 2px; letter-spacing: 0.01em;
+}
+.chron-card__epithet {
+    font-family: var(--font-flavor); font-style: italic; font-size: 13px;
+    color: var(--text-on-cream-2); margin: 0 0 var(--sp-2);
+}
+.chron-card__meta {
+    font-family: var(--font-ui); font-size: 11px; color: var(--text-on-cream-3);
+    margin: var(--sp-2) 0 0; display: flex; gap: var(--sp-2);
+    align-items: center; flex-wrap: wrap;
+}
+
+/* Flat tag pills — static, no glow. */
+.chron-tags { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: 0; padding: 0; }
+.chron-pill {
+    font-family: var(--font-ui); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.04em; padding: 2px 7px; border-radius: var(--r-sm);
+    background: rgba(201,163,78,0.10); border: 1px solid var(--border-card);
+    color: var(--text-on-cream-2); text-decoration: none;
+}
+.chron-pill--restricted {
+    background: rgba(168,58,58,0.14); border-color: rgba(168,58,58,0.34);
+    color: var(--ruby-200);
+}
+
+/* Reading surface — warm-dark, Alegreya, clamped measure (~65ch). */
+.chron-prose {
+    max-width: 65ch;
+    background: var(--bg-card); border: 1px solid var(--border-card);
+    border-radius: var(--r-md); padding: var(--sp-6) var(--sp-7);
+    font-family: var(--font-flavor); font-size: 18px; line-height: 1.62;
+    color: var(--text-on-cream);
+}
+.chron-prose h1, .chron-prose h2, .chron-prose h3 {
+    font-family: var(--font-display); color: var(--text-on-cream);
+    line-height: 1.25; margin: 1.4em 0 0.5em;
+}
+.chron-prose h1 { font-size: 22px; }
+.chron-prose h2 { font-size: 19px; }
+.chron-prose h3 { font-size: 16px; }
+.chron-prose p { margin: 0 0 1em; }
+.chron-prose a { color: var(--gilt-300); text-decoration: underline; text-underline-offset: 2px; }
+.chron-prose a:hover { color: var(--gilt-200); }
+.chron-prose img { max-width: 100%; height: auto; border-radius: var(--r-sm); }
+
+/* Read-aloud quote ([!quote]) + handout panel ([!example]). */
+.chron-callout-quote {
+    margin: 1.2em 0; padding: var(--sp-3) var(--sp-5);
+    border-left: 2px solid var(--gilt-400);
+    font-style: italic; color: var(--text-on-cream-2);
+}
+.chron-doc-frame {
+    margin: 1.2em 0; padding: var(--sp-5);
+    background: var(--bg-card-2); border: 1px solid var(--border-card);
+    border-radius: var(--r-sm);
+}
+
+/* Story timeline — hairline rail + solid node dots. */
+.chron-timeline { position: relative; margin: 0; padding: 0 0 0 var(--sp-6); list-style: none; }
+.chron-timeline::before {
+    content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px;
+    width: 1px; background: var(--border-card);
+}
+.chron-timeline__item { position: relative; margin: 0 0 var(--sp-6); }
+.chron-timeline__node {
+    position: absolute; left: -22px; top: 6px;
+    width: 9px; height: 9px; border-radius: 50%; background: var(--gilt-300);
+}
+/* Chapter break — centered Cinzel label + thin side rules (no gilt diamond). */
+.chron-chapter {
+    display: flex; align-items: center; gap: var(--sp-4); margin: var(--sp-7) 0;
+    font-family: var(--font-display); font-size: 13px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-on-dark-3);
+}
+.chron-chapter::before, .chron-chapter::after {
+    content: ""; flex: 1; height: 1px; background: var(--border-card);
+}
+
+/* New-since marker — flat 6px gilt disc (Phase 2). */
+.chron-new-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--gilt-200); vertical-align: middle; margin-left: var(--sp-2);
+}
+
+/* Flat empty-state placeholder — flat well + small glyph, no gradient hatch. */
+.chron-empty {
+    padding: var(--sp-8) var(--sp-4); text-align: center;
+    color: var(--text-on-dark-3); font-family: var(--font-ui); font-size: 14px;
+    background: var(--bg-card); border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+}
+.chron-empty__glyph {
+    width: 32px; height: 32px; margin: 0 auto var(--sp-3); display: block;
+    fill: none; stroke: var(--text-on-dark-3); stroke-width: 1.5;
+    stroke-linecap: round; stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chron-tab, .chron-card, .chron-live-bar__link { transition: none; }
+}

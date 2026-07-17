@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Chronicle{% if manifest %} — Session {{ manifest.session_number }}{% endif %}{% endblock %}
+
+{% block head_extra %}
+  {# Alegreya is the long-form reading serif (--font-flavor). base.html loads
+     only Inter + Cinzel, so the Chronicle reading surfaces pull it in here.
+     A real <link> (not a late @import in base's <style>, which is ignored). #}
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&display=swap">
+{% endblock %}
+
+{% block content %}
+<div class="chron">
+
+  {# Live-session banner slot. PR1 ships it hidden; Phase 3 keeps it live. #}
+  <div id="chron-live-bar" class="chron-live-bar" role="status" aria-live="polite" hidden>
+    <span class="chron-live-bar__dot" aria-hidden="true"></span>
+    <span class="chron-live-bar__text">A session is live at the table now.</span>
+    <a href="/mobile" class="chron-live-bar__link">Open combat</a>
+  </div>
+
+  <header class="chron-head">
+    <p class="chron-kicker">The Chronicle{% if manifest %} · As of Session {{ manifest.session_number }}{% endif %}</p>
+    <nav class="chron-subnav" aria-label="Chronicle sections">
+      {% set _p = request.path %}
+      <a href="/chronicle" class="chron-tab"{% if _p == '/chronicle' %} aria-current="page"{% endif %}>Home</a>
+      {% if nav.story %}<a href="/chronicle/story" class="chron-tab"{% if _p.startswith('/chronicle/story') %} aria-current="page"{% endif %}>Story</a>{% endif %}
+      {% if nav.lore %}<a href="/chronicle/lore" class="chron-tab"{% if _p.startswith('/chronicle/lore') %} aria-current="page"{% endif %}>Lore</a>{% endif %}
+      {% if nav.cast %}<a href="/chronicle/cast" class="chron-tab"{% if _p.startswith('/chronicle/cast') %} aria-current="page"{% endif %}>Cast</a>{% endif %}
+      {% if nav.handouts %}<a href="/chronicle/handouts" class="chron-tab"{% if _p.startswith('/chronicle/handouts') %} aria-current="page"{% endif %}>Handouts</a>{% endif %}
+      <a href="/chronicle/journal" class="chron-tab"{% if _p.startswith('/chronicle/journal') %} aria-current="page"{% endif %}>Journal</a>
+    </nav>
+  </header>
+
+  <main class="chron-body">
+    {% if manifest %}{% block chronicle %}{% endblock %}
+    {% else %}<div class="chron-empty"><p>The chronicle opens after your first session.</p></div>{% endif %}
+  </main>
+</div>
+
+<script>
+(function () {
+  // Live-session banner: reveal the slim bar while an encounter is active.
+  // Subscribe on the shared hub (base.html <head>) — never new EventSource.
+  var bar = document.getElementById('chron-live-bar');
+  if (!bar || !window.appSSE) return;
+  window.appSSE('encounter_update', function (e) {
+    var d = null; try { d = JSON.parse(e.data); } catch (_) { return; }
+    var live = !!(d && d.active_name) && !(d && d.ended);
+    bar.hidden = !live;
+  });
+})();
+</script>
+{% endblock %}
