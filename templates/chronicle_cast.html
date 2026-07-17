@@ -1,0 +1,43 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<h1 class="chron-title">Cast</h1>
+
+{% if pages %}
+<ul class="chron-grid" role="list">
+  {% for p in pages %}
+  <li class="chron-grid__item">
+    <a class="chron-card" href="/chronicle/page/{{ p.slug }}">
+      <div class="chron-card__figure">
+        {% if p.portrait_url %}
+          <img class="chron-portrait" src="{{ p.portrait_url }}" alt="" loading="lazy" width="56" height="56">
+        {% else %}
+          <span class="chron-monogram" aria-hidden="true">{{ (p.title or '?')[0]|upper }}</span>
+        {% endif %}
+      </div>
+      <div class="chron-card__body">
+        <h2 class="chron-card__title">{{ p.title }}</h2>
+        {% if p.epithet %}<p class="chron-card__epithet">{{ p.epithet }}</p>{% endif %}
+        {% if p.tags %}
+        <div class="chron-tags">
+          {% for t in p.tags %}<span class="chron-pill">{{ t }}</span>{% endfor %}
+        </div>
+        {% endif %}
+        <p class="chron-card__meta">
+          {% if p.session_updated %}<span>Last seen Session {{ p.session_updated }}</span>{% endif %}
+          {% if is_gm and p.recipient_label %}<span class="chron-pill chron-pill--restricted">Only {{ p.recipient_label }}</span>{% endif %}
+        </p>
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="chron-empty">
+  <svg class="chron-empty__glyph" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+  <p>No one has been introduced to the chronicle yet.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,24 +1,38 @@
-"""Static guards for the Chronicle template slice (PR1, Part 4a).
+"""Static guards for the Chronicle template slice (PR1, Part 4).
 
 No app render — these assert file presence, the extend-chain, that the
 reading serif is actually loaded (base.html only ships Inter+Cinzel), and
 that system.css defines the .chron-* component grammar. Full render is
 covered by tools/check_templates.py (parse) + the route tests.
-
-Scope note: only chronicle_base.html exists at this point in the build
-(the six screen templates land in the next commit), so the all-screens
-existence/extend-chain test and the inline-handler-ban test are deferred
-to that commit's test file, per the Part 4a task brief.
 """
 import os
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TPL = os.path.join(_REPO, "templates")
 
+_EXPECTED = [
+    "chronicle_base.html", "chronicle_home.html", "chronicle_story.html",
+    "chronicle_lore.html", "chronicle_cast.html", "chronicle_handouts.html",
+    "chronicle_journal.html", "chronicle_page.html",
+]
+
 
 def _tpl(name):
     with open(os.path.join(_TPL, name), encoding="utf-8") as f:
         return f.read()
+
+
+def test_expected_chronicle_templates_exist():
+    for name in _EXPECTED:
+        assert os.path.isfile(os.path.join(_TPL, name)), f"missing template: {name}"
+
+
+def test_screen_templates_extend_chronicle_base():
+    for name in _EXPECTED:
+        if name == "chronicle_base.html":
+            continue
+        assert '{% extends "chronicle_base.html" %}' in _tpl(name), \
+            f"{name} must extend chronicle_base.html"
 
 
 def test_chronicle_base_extends_base_and_loads_reading_font():

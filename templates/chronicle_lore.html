@@ -1,0 +1,23 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<h1 class="chron-title">Lore</h1>
+{% if pages %}
+<ul class="chron-grid" role="list">
+  {% for p in pages %}
+  <li class="chron-grid__item">
+    <a class="chron-card" href="/chronicle/page/{{ p.slug }}">
+      <span class="chron-monogram" aria-hidden="true">{{ (p.title or '?')[0]|upper }}</span>
+      <div class="chron-card__body">
+        <h2 class="chron-card__title">{{ p.title }}</h2>
+        {% if p.epithet %}<p class="chron-card__epithet">{{ p.epithet }}</p>{% endif %}
+        {% if p.tags %}<div class="chron-tags">{% for t in p.tags %}<span class="chron-pill">{{ t }}</span>{% endfor %}</div>{% endif %}
+        {% if is_gm and p.recipient_label %}<p class="chron-card__meta"><span class="chron-pill chron-pill--restricted">Only {{ p.recipient_label }}</span></p>{% endif %}
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="chron-empty"><p>No lore has been uncovered yet.</p></div>
+{% endif %}
+{% endblock %}

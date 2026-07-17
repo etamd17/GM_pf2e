@@ -1,0 +1,18 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<h1 class="chron-title">Handouts</h1>
+{% if handouts %}
+<div style="display:grid;gap:var(--sp-5);">
+  {% for h in handouts %}
+  <article class="chron-doc-frame">
+    <h2 class="chron-card__title">{{ h.title }}</h2>
+    {% if is_gm and h.recipient_label %}<span class="chron-pill chron-pill--restricted">Only {{ h.recipient_label }}</span>{% endif %}
+    {% if h.image_url %}<img src="{{ h.image_url }}" alt="{{ h.title }}" loading="lazy" style="max-width:100%;height:auto;border-radius:var(--r-sm);margin-top:var(--sp-3);">{% endif %}
+    {% if h.html %}<div class="chron-prose" style="border:none;background:none;padding:var(--sp-3) 0 0;max-width:65ch;">{{ h.html|safe }}</div>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="chron-empty"><p>No handouts have been shared yet.</p></div>
+{% endif %}
+{% endblock %}

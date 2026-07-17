@@ -113,3 +113,23 @@ def test_no_unescaped_jinja_name_in_inline_handler():
         "apostrophes (&#39;) decode back to ' and break the JS string. Use "
         "|replace(\"'\", \"\\\\'\"):\n" + "\n".join(offenders)
     )
+
+
+# Chronicle rule (stricter than escaping): data-* + addEventListener ONLY —
+# no inline onclick/onload/on* at all. A leading \s ensures we match real
+# attributes and skip data-on-* and mid-word "on".
+_INLINE_HANDLER_ANY = re.compile(r'\son[a-z]+\s*=\s*"')
+
+
+def test_chronicle_templates_have_no_inline_handlers():
+    files = glob.glob(os.path.join(_REPO, "templates", "chronicle*.html"))
+    assert files, "no chronicle*.html templates found (guard would silently pass)"
+    offenders = []
+    for path in files:
+        for i, line in enumerate(_read(os.path.relpath(path, _REPO)).splitlines(), 1):
+            if _INLINE_HANDLER_ANY.search(line):
+                offenders.append(f"{os.path.basename(path)}:{i}: {line.strip()}")
+    assert not offenders, (
+        "inline event handlers in Chronicle templates (use addEventListener):\n"
+        + "\n".join(offenders)
+    )

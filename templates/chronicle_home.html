@@ -1,0 +1,32 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<h1 class="chron-title">{{ manifest.title or 'The story so far' }}</h1>
+<p class="chron-card__meta" style="margin-bottom:var(--sp-6);">
+  As of Session {{ manifest.session_number }}{% if manifest.calendar and manifest.calendar.in_game_date %} · {{ manifest.calendar.in_game_date }}{% endif %}
+</p>
+
+{% if latest_recap %}
+<article class="chron-prose">
+  {% if latest_recap.pull_quote %}<div class="chron-callout-quote">{{ latest_recap.pull_quote }}</div>{% endif %}
+  {{ latest_recap.html|safe }}
+  <p><a href="/chronicle/story">Read the full story &rarr;</a></p>
+</article>
+{% else %}
+<div class="chron-empty"><p>The chronicle opens after your first session.</p></div>
+{% endif %}
+
+{% if party %}
+<h2 class="chron-title" style="font-size:16px;margin-top:var(--sp-7);">The party</h2>
+<ul class="chron-grid" role="list">
+  {% for c in party %}
+  <li class="chron-grid__item"><div class="chron-card">
+    {% if c.portrait_url %}<img class="chron-portrait" src="{{ c.portrait_url }}" alt="" loading="lazy">{% else %}<span class="chron-monogram" aria-hidden="true">{{ (c.name or '?')[0]|upper }}</span>{% endif %}
+    <div class="chron-card__body">
+      <h3 class="chron-card__title">{{ c.name }}</h3>
+      {% if c.tagline %}<p class="chron-card__epithet">{{ c.tagline }}</p>{% endif %}
+    </div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}
