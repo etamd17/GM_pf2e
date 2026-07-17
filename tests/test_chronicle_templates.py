@@ -46,3 +46,9 @@ def test_system_css_defines_chron_component_classes():
         css = f.read()
     missing = [c for c in _CHRON_CLASSES if c not in css]
     assert not missing, f"system.css missing Chronicle classes: {missing}"
+
+
+def test_chron_live_bar_respects_hidden_attribute():
+    with open(os.path.join(_REPO, "static", "css", "system.css"), encoding="utf-8") as f:
+        css = f.read()
+    assert ".chron-live-bar[hidden]" in css, "live-banner must honor the hidden attribute (else it renders always-on)"

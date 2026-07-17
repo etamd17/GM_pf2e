@@ -4895,6 +4895,7 @@ body.system-cosmere .trk .grid-wrap::after {
     border-radius: var(--r-sm);
     font-family: var(--font-ui); font-size: 13px; color: var(--ruby-200);
 }
+.chron-live-bar[hidden] { display: none; }
 .chron-live-bar__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ruby-300); flex-shrink: 0; }
 .chron-live-bar__text { flex: 1; }
 .chron-live-bar__link { color: var(--gilt-300); text-decoration: none; font-weight: 600; }

@@ -46,7 +46,7 @@
   if (!bar || !window.appSSE) return;
   window.appSSE('encounter_update', function (e) {
     var d = null; try { d = JSON.parse(e.data); } catch (_) { return; }
-    var live = !!(d && d.active_name) && !(d && d.ended);
+    var live = !!(d && d.active_name);
     bar.hidden = !live;
   });
 })();
