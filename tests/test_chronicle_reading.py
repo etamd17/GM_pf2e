@@ -134,3 +134,40 @@ def test_cosmere_nav_partial_swaps_notes_for_chronicle():
     assert '>Notes<' in off and 'href="/notes"' in off and '>Chronicle<' not in off
     assert '>Chronicle<' in on and 'href="/chronicle"' in on
     assert '>Notes<' not in on and 'href="/notes"' not in on
+
+
+# ---- Task 2: reader helpers + `/chronicle` Home ----------------------------
+
+def test_home_renders_after_publish():
+    # NB: flush-left, same reason as test_nav_shows_notes_before_publish_and_chronicle_after
+    # above -- this body is concatenated onto _SEED (itself flush-left at module
+    # scope), and textwrap.dedent strips the LONGEST COMMON leading whitespace
+    # across the combined string, which is zero once _SEED is in the mix.
+    r = _run(_SEED + '''
+import tempfile, os
+os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+import app as A
+seed_chronicle(A.CHRONICLE_DIR,
+    [{'slug':'home','section':'home','title':'The Story So Far','recipients':'all'},
+     {'slug':'s03','section':'recap','title':'Session 3','recipients':'all','session_updated':3}],
+    html={'home':'<p>Home body.</p>', 's03':'<p>They fled north.</p>'})
+c = A.app.test_client()
+rv = c.get('/chronicle')
+assert rv.status_code == 200, rv.status_code
+assert b'They fled north.' in rv.data          # latest recap fragment injected
+assert b'As of Session 3' in rv.data           # session stamp from chronicle_base
+print('OK')
+''')
+    assert 'OK' in r.stdout, (r.stdout, r.stderr)
+
+
+def test_home_empty_state_when_unpublished():
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        rv = A.app.test_client().get('/chronicle')
+        assert rv.status_code == 200 and b'opens after your first session' in rv.data, rv.status_code
+        print('OK')
+    ''')
+    assert 'OK' in r.stdout, (r.stdout, r.stderr)

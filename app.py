@@ -15709,6 +15709,117 @@ def serve_handout_image(filename):
     return send_from_directory(HANDOUTS_DIR, filename, max_age=3600)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+#  CHRONICLE — player reading routes (PR1). Pages are rendered to sanitized
+#  HTML fragments at publish (Part 2); these routes are file reads + Jinja.
+#  Access is gated by the /chronicle* player-scope before_request (Part 3);
+#  per-page recipient scoping is server-side via _chronicle_page_visible.
+#  NOTE: _CHRONICLE_SLUG_RE is already defined above (app.py ~10040, the
+#  publish-side manifest validator) -- reused here rather than redefined.
+# ══════════════════════════════════════════════════════════════════════════
+_CHRONICLE_SECTION_TO_NAV = {'recap': 'story', 'lore': 'lore', 'cast': 'cast', 'handout': 'handouts'}
+
+
+def _chronicle_version():
+    """Per-publish cache token = the content-dir hash (new every publish), so
+    assets are immutable+versioned (the SW pins unversioned assets forever)."""
+    cdir = _chronicle_content_dir()
+    return os.path.basename(cdir) if cdir else ''
+
+
+@app.template_global()
+def chronicle_asset_url(rel):
+    """Versioned URL for a manifest-referenced asset; frontmatter stores
+    'assets/<f>', the route serves from <content>/assets/<f>. None if empty."""
+    from urllib.parse import quote
+    rel = (rel or '').lstrip('/')
+    if not rel:
+        return None
+    if rel.startswith('assets/'):
+        rel = rel[len('assets/'):]
+    return '/chronicle/assets/' + quote(rel) + '?v=' + (_chronicle_version() or '0')
+
+
+def _chronicle_current_user():
+    return _auth.current_user() if _account_mode() else None
+
+
+def _chronicle_visible_pages(section=None):
+    """Manifest pages this caller may see (recipient/ownership filter, Part 3),
+    optionally limited to one manifest `section`."""
+    man = _chronicle_manifest()
+    if not man:
+        return []
+    user, gm = _chronicle_current_user(), _is_gm()
+    return [p for p in man.get('pages', [])
+            if (section is None or p.get('section') == section)
+            and _chronicle_page_visible(p, user=user, is_gm=gm)]
+
+
+def _chronicle_page_view(p):
+    """Add the two route-computed presentation fields (contract §7) to a page."""
+    recips = p.get('recipients', 'all')
+    is_public = recips in ('all', None) or (isinstance(recips, (list, tuple)) and 'all' in recips)
+    label = None
+    if not is_public:
+        label = ', '.join(recips) if isinstance(recips, (list, tuple)) else str(recips)
+    v = dict(p)
+    v['portrait_url'] = chronicle_asset_url(p['portrait']) if p.get('portrait') else None
+    v['recipient_label'] = label
+    return v
+
+
+def _chronicle_fragment(slug):
+    """Read a pre-rendered, already-sanitized html/<slug>.html fragment. Slug is
+    regex-validated (no traversal); None if unpublished or missing."""
+    cdir = _chronicle_content_dir()
+    if not cdir or not _CHRONICLE_SLUG_RE.match(slug or ''):
+        return None
+    fpath = os.path.join(cdir, 'html', slug + '.html')
+    if not os.path.isfile(fpath):
+        return None
+    try:
+        with open(fpath, encoding='utf-8') as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _chronicle_nav_counts():
+    """Visible-page counts per sub-tab so chronicle_base shows a tab only when > 0."""
+    counts = {'story': 0, 'lore': 0, 'cast': 0, 'handouts': 0}
+    for p in _chronicle_visible_pages():
+        key = _CHRONICLE_SECTION_TO_NAV.get(p.get('section'))
+        if key:
+            counts[key] += 1
+    for h in HANDOUTS:
+        if _handout_visible_to_request(h):
+            counts['handouts'] += 1
+    return counts
+
+
+def _chronicle_render(template, **ctx):
+    """Shared entry: every screen gets `manifest` + `nav`. When unpublished,
+    chronicle_base shows the empty state and the screen block is skipped."""
+    return render_template(template, manifest=_chronicle_manifest(),
+                           nav=_chronicle_nav_counts(), **ctx)
+
+
+@app.route('/chronicle')
+def chronicle_home():
+    pages = _chronicle_visible_pages()
+    recaps = sorted((p for p in pages if p.get('section') == 'recap'),
+                    key=lambda p: p.get('session_updated') or 0, reverse=True)
+    latest = None
+    if recaps:
+        latest = _chronicle_page_view(recaps[0])
+        latest['html'] = _chronicle_fragment(recaps[0]['slug'])
+        latest['pull_quote'] = recaps[0].get('pull_quote')
+    party = [{'name': v['title'], 'tagline': v.get('epithet'), 'portrait_url': v['portrait_url']}
+             for v in (_chronicle_page_view(p) for p in pages if p.get('section') == 'cast')][:8]
+    return _chronicle_render('chronicle_home.html', latest_recap=latest, party=party)
+
+
 _AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}
 
 def _audio_root():
