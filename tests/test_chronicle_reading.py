@@ -257,3 +257,27 @@ assert b'my private theory' in body      # same per-owner store as /notes
 print('OK')
 ''')
     assert 'OK' in r.stdout, (r.stdout, r.stderr)
+
+
+# ---- Task 6: asset serving /chronicle/assets/<path:asset> (traversal guard,
+# immutable cache) ------------------------------------------------------------
+
+def test_asset_serving_and_traversal_guard():
+    # NB: flush-left, same reason as test_nav_shows_notes_before_publish_and_chronicle_after
+    # above -- this body is concatenated onto _SEED (itself flush-left at module
+    # scope), and textwrap.dedent strips the LONGEST COMMON leading whitespace
+    # across the combined string, which is zero once _SEED is in the mix.
+    r = _run(_SEED + '''
+import tempfile, os
+os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+import app as A
+seed_chronicle(A.CHRONICLE_DIR, [{'slug':'home','section':'home','title':'H','recipients':'all'}],
+               html={'home':'<p>x</p>'}, assets={'romi.png': b'PNGDATA'})
+c = A.app.test_client()
+ok = c.get('/chronicle/assets/romi.png')
+assert ok.status_code == 200 and ok.data == b'PNGDATA'
+assert 'max-age' in ok.headers.get('Cache-Control','')
+assert c.get('/chronicle/assets/..%2f..%2fmanifest.json').status_code == 404
+print('OK')
+''')
+    assert 'OK' in r.stdout, (r.stdout, r.stderr)

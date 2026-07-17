@@ -17,7 +17,7 @@ import tempfile
 import shutil
 from functools import wraps
 from pathlib import Path
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, NotFound
 
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
 from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES, get_required_slots_at_level
@@ -15866,6 +15866,20 @@ def chronicle_journal():
     store (`_notes_owner` / `_load_notes_text`) and the existing POST
     /api/notes save endpoint unchanged; this route only reads and renders."""
     return _chronicle_render('chronicle_journal.html', notes=_load_notes_text(_notes_owner()))
+
+
+@app.route('/chronicle/assets/<path:asset>')
+def chronicle_asset(asset):
+    """Serve a published asset from <content>/assets. send_from_directory
+    safe-joins and raises NotFound on any traversal escape. Immutable long-cache;
+    the URL carries the per-publish ?v=<hash>, so a new publish yields new URLs."""
+    cdir = _chronicle_content_dir()
+    if not cdir:
+        abort(404)
+    try:
+        return send_from_directory(os.path.join(cdir, 'assets'), asset, max_age=31536000)
+    except NotFound:
+        abort(404)
 
 
 _AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}
