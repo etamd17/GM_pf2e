@@ -6,8 +6,20 @@ handouts address a pc NAME. Legacy-open (unauthenticated identity) => non-'all'
 content is GM-only.
 """
 import json
+import os
+import subprocess
+import sys
+import textwrap
 
 import app
+
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _run(body):
+    script = "import os, sys\nsys.path.insert(0, os.getcwd())\n" + textwrap.dedent(body)
+    return subprocess.run([sys.executable, '-c', script],
+                          capture_output=True, text=True, cwd=_REPO)
 
 
 def test_page_all_is_public():
@@ -85,3 +97,59 @@ def test_handout_player_filter_drops_targeted():
     assert app._handout_player_filter({'recipients': ['Aria']}) is None
     assert app._handout_player_filter({'recipients': []}) is None
     assert app._handout_player_filter({}) is None
+
+
+def test_chronicle_gate_account_mode():
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        from core import storage, auth, campaigns
+        c = A.app.test_client()
+
+        assert c.post('/setup', data={'username':'gm','password':'secret1','display_name':'GM'}).status_code == 302
+        auth.create_user('alice','pw_alice12','Alice'); alice = auth.get_user_by_username('alice')
+        auth.create_user('bob','pw_bob1234','Bob');     bob   = auth.get_user_by_username('bob')
+
+        assert c.post('/campaigns/new', data={'name':'Golarion','system':'pf2e'}).status_code == 302
+        cid = [x for x in storage.list_campaign_ids()
+               if campaigns.get_campaign(x)['name']=='Golarion'][0]
+        campaigns.add_member(cid, alice['id'], 'player')      # bob is NOT a member
+        assert c.post('/campaign/'+cid+'/activate').status_code == 302
+
+        # bob (not a member of this campaign) is refused at the gate.
+        with c.session_transaction() as s: s['user_id']=bob['id']; s['active_campaign_id']=cid
+        assert c.get('/chronicle').status_code == 403, 'non-member must be blocked'
+
+        # alice (a member) passes the gate; no reading route exists yet in this
+        # slice, so Flask 404s AFTER the gate -> proves the gate let her through.
+        with c.session_transaction() as s: s['user_id']=alice['id']; s['active_campaign_id']=cid
+        assert c.get('/chronicle').status_code == 404, 'member must pass the gate (404 = route not built)'
+
+        # a logged-OUT caller in account mode is redirected to login, not 403.
+        with c.session_transaction() as s: s.clear()
+        rv = c.get('/chronicle')
+        assert rv.status_code == 302 and '/login' in rv.headers['Location'], rv.headers.get('Location')
+        print('GATE_ACCOUNT_OK')
+    ''')
+    assert 'GATE_ACCOUNT_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_chronicle_gate_legacy_password_mode():
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = 'sekret'
+        import app as A
+        c = A.app.test_client()
+        # legacy mode WITH a password: a player who has not picked a character is
+        # refused; picking one (session player_name) lets them through (404=no route).
+        assert c.get('/chronicle').status_code == 403
+        with c.session_transaction() as s: s['player_name'] = 'Aria'
+        assert c.get('/chronicle').status_code == 404
+        # the GM (authenticated) always passes.
+        with c.session_transaction() as s:
+            s.clear(); s['gm_authenticated'] = True
+        assert c.get('/chronicle').status_code == 404
+        print('GATE_LEGACY_OK')
+    ''')
+    assert 'GATE_LEGACY_OK' in r.stdout, r.stdout + r.stderr

@@ -530,6 +530,35 @@ def _csrf_guard():
         return ('Cross-origin request blocked.', 400)
 
 
+# Player-scope gate for the Chronicle reading hub (/chronicle*). No such gate
+# existed before Chronicle: the GM API is prefix-gated (check_gm_access) and
+# player pages were open. Chronicle pages can carry per-player secrets, so the
+# hub requires an IDENTIFIED caller -- account mode: a member of the active
+# campaign; legacy-open with a GM password: a self-picked character. The GM
+# always passes (in legacy dev with no GM_PASSWORD, _is_gm() is True, so the
+# local dev flow stays open). Per-page recipient filtering is a second layer
+# (_chronicle_page_visible). The GM /api/chronicle/* routes are gated separately
+# via GM_API_PREFIXES, not here (different path prefix -- no overlap).
+@app.before_request
+def _chronicle_player_gate():
+    path = request.path
+    if not (path == '/chronicle' or path.startswith('/chronicle/')):
+        return
+    if _is_gm():
+        return
+    if _account_mode():
+        u = _auth.current_user()
+        if not u:
+            return redirect(url_for('login', next=path))
+        if _campaigns.user_role(_active_campaign_doc(), u['id']):
+            return
+        return ("Chronicle is for this campaign's players.", 403)
+    # Legacy-open with a GM password set: the player must have picked a character.
+    if session.get('player_name'):
+        return
+    return ('Pick your character to read the Chronicle.', 403)
+
+
 # ═════════════════════════════════════════════════════════════════════
 #  GZIP COMPRESSION
 #  The tracker page is ~1.8 MB uncompressed (mostly the inlined monster
