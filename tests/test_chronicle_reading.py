@@ -171,3 +171,45 @@ def test_home_empty_state_when_unpublished():
         print('OK')
     ''')
     assert 'OK' in r.stdout, (r.stdout, r.stderr)
+
+
+# ---- Task 3: section indexes /chronicle/<story|lore|cast|handouts> --------
+
+def test_cast_index_scopes_recipients():
+    # NB: flush-left, same reason as test_nav_shows_notes_before_publish_and_chronicle_after
+    # above -- this body is concatenated onto _SEED (itself flush-left at module
+    # scope), and textwrap.dedent strips the LONGEST COMMON leading whitespace
+    # across the combined string, which is zero once _SEED is in the mix.
+    r = _run(_SEED + '''
+import tempfile, os, json
+os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+import app as A
+from core import storage, auth, campaigns
+c = A.app.test_client()
+assert c.post('/setup', data={'username':'gm','password':'secret1','display_name':'GM'}).status_code == 302
+assert c.post('/campaigns/new', data={'name':'Roshar','system':'pf2e'}).status_code == 302
+cid = [x for x in storage.list_campaign_ids() if campaigns.get_campaign(x)['name']=='Roshar'][0]
+assert c.post('/campaign/'+cid+'/activate').status_code == 302
+auth.create_user('shai','pw123456','Shai'); shai = auth.get_user_by_username('shai')
+campaigns.add_member(cid, shai['id'], 'player')
+pdir = storage.party_dir(cid); os.makedirs(pdir, exist_ok=True)
+doc = storage.wrap_character('c'*32, cid, 'pf2e', {'build':{'name':'Shallan'}}, owner_user_id=shai['id'])
+with open(os.path.join(pdir,'shallan.json'),'w') as f: json.dump(doc, f)
+seed_chronicle(storage.chronicle_dir(cid), [
+    {'slug':'romi','section':'cast','title':'Romi','recipients':'all'},
+    {'slug':'secret','section':'cast','title':'Kaladin-only','recipients':['kaladin']},
+], html={'romi':'<p>x</p>','secret':'<p>y</p>'})
+# the GM (setup session) sees both
+both = c.get('/chronicle/cast').data
+assert b'Romi' in both and b'Kaladin-only' in both
+# Shallan's owner sees only the public card. A real player session picks
+# its active campaign via POST /campaign/<cid>/activate (e.g. from "My
+# Campaigns" on /me) -- login alone does not set session active_campaign_id.
+p = A.app.test_client()
+assert p.post('/login', data={'username':'shai','password':'pw123456'}).status_code == 302
+assert p.post('/campaign/'+cid+'/activate').status_code == 302
+seen = p.get('/chronicle/cast').data
+assert b'Romi' in seen and b'Kaladin-only' not in seen
+print('OK')
+''')
+    assert 'OK' in r.stdout, (r.stdout, r.stderr)

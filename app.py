@@ -15820,6 +15820,34 @@ def chronicle_home():
     return _chronicle_render('chronicle_home.html', latest_recap=latest, party=party)
 
 
+@app.route('/chronicle/<any(story,lore,cast,handouts):view>')
+def chronicle_section(view):
+    """Story/Lore/Cast/Handouts section indexes. Recipient scoping happens
+    server-side in `_chronicle_visible_pages` / `_handout_visible_to_request`
+    -- a secret page never reaches the template for a non-owner."""
+    if view == 'story':
+        recaps = sorted(_chronicle_visible_pages('recap'), key=lambda p: p.get('session_updated') or 0)
+        rows = [{'title': p.get('title'), 'session_number': p.get('session_updated'),
+                 'html': _chronicle_fragment(p['slug']), 'chapter': p.get('chapter')}
+                for p in recaps]
+        return _chronicle_render('chronicle_story.html', recaps=rows)
+    if view == 'handouts':
+        rows = [{'title': v['title'], 'html': _chronicle_fragment(v['slug']),
+                 'image_url': v['portrait_url'], 'recipient_label': v['recipient_label']}
+                for v in (_chronicle_page_view(p) for p in _chronicle_visible_pages('handout'))]
+        # merge visible live handouts (image/title only in PR1; text handouts live in the vault)
+        for h in HANDOUTS:
+            if _handout_visible_to_request(h):
+                rl = None if 'all' in (h.get('recipients') or []) else ', '.join(h.get('recipients') or [])
+                rows.append({'title': h.get('title'), 'html': None,
+                             'image_url': h.get('image_url'), 'recipient_label': rl})
+        return _chronicle_render('chronicle_handouts.html', handouts=rows)
+    section = 'cast' if view == 'cast' else 'lore'
+    pages = sorted((_chronicle_page_view(p) for p in _chronicle_visible_pages(section)),
+                   key=lambda v: (v.get('title') or '').lower())
+    return _chronicle_render('chronicle_%s.html' % view, pages=pages)
+
+
 _AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}
 
 def _audio_root():
