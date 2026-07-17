@@ -236,3 +236,24 @@ assert c.get('/chronicle/page/..%2f..%2fmanifest').status_code == 404
 print('OK')
 ''')
     assert 'OK' in r.stdout, (r.stdout, r.stderr)
+
+
+# ---- Task 5: /chronicle/journal folds in the existing private Notes store -
+
+def test_journal_reuses_notes_store():
+    # NB: flush-left, same reason as test_nav_shows_notes_before_publish_and_chronicle_after
+    # above -- this body is concatenated onto _SEED (itself flush-left at module
+    # scope), and textwrap.dedent strips the LONGEST COMMON leading whitespace
+    # across the combined string, which is zero once _SEED is in the mix.
+    r = _run(_SEED + '''
+import tempfile, os
+os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+import app as A
+seed_chronicle(A.CHRONICLE_DIR, [{'slug':'home','section':'home','title':'H','recipients':'all'}], html={'home':'<p>x</p>'})
+c = A.app.test_client()
+assert c.post('/api/notes', json={'text':'my private theory'}).status_code == 200
+body = c.get('/chronicle/journal').data
+assert b'my private theory' in body      # same per-owner store as /notes
+print('OK')
+''')
+    assert 'OK' in r.stdout, (r.stdout, r.stderr)

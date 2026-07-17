@@ -15860,6 +15860,14 @@ def chronicle_page(slug):
                              page_html=frag, backlinks=match.get('backlinks') or [])
 
 
+@app.route('/chronicle/journal')
+def chronicle_journal():
+    """Folded-in private Notes surface -- reuses the existing per-owner notes
+    store (`_notes_owner` / `_load_notes_text`) and the existing POST
+    /api/notes save endpoint unchanged; this route only reads and renders."""
+    return _chronicle_render('chronicle_journal.html', notes=_load_notes_text(_notes_owner()))
+
+
 _AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}
 
 def _audio_root():
