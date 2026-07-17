@@ -153,3 +153,58 @@ def test_chronicle_gate_legacy_password_mode():
         print('GATE_LEGACY_OK')
     ''')
     assert 'GATE_LEGACY_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_handout_recipients_ownership_account_mode():
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+        import app as A
+        from core import storage, auth, campaigns
+        c = A.app.test_client()
+
+        assert c.post('/setup', data={'username':'gm','password':'secret1','display_name':'GM'}).status_code == 302
+        auth.create_user('alice','pw_alice12','Alice'); alice = auth.get_user_by_username('alice')
+        auth.create_user('bob','pw_bob1234','Bob');     bob   = auth.get_user_by_username('bob')
+
+        assert c.post('/campaigns/new', data={'name':'Golarion','system':'pf2e'}).status_code == 302
+        cid = [x for x in storage.list_campaign_ids()
+               if campaigns.get_campaign(x)['name']=='Golarion'][0]
+        campaigns.add_member(cid, alice['id'], 'player')
+        campaigns.add_member(cid, bob['id'], 'player')
+        assert c.post('/campaign/'+cid+'/activate').status_code == 302
+
+        # A claimed PC 'Aria' owned by alice, written straight to the party store.
+        doc = storage.wrap_character(storage.new_id(), cid, 'pf2e',
+                                     {'name':'Aria','build':{'name':'Aria'}},
+                                     owner_user_id=alice['id'])
+        storage.atomic_write_json(os.path.join(storage.party_dir(cid), 'Aria.json'), doc)
+
+        # GM (the setup admin session) creates a handout targeted ONLY at Aria.
+        assert c.post('/api/handouts',
+                      json={'title':'For Aria','content':'secret','recipients':['Aria']}).status_code == 200
+        # ...and a public one.
+        assert c.post('/api/handouts',
+                      json={'title':'Town Notice','content':'hi','recipients':['all']}).status_code == 200
+
+        def titles(resp): return {h['title'] for h in resp.get_json()['handouts']}
+
+        # alice (the OWNER) sees the targeted handout -- with NO ?player= param.
+        with c.session_transaction() as s: s['user_id']=alice['id']; s['active_campaign_id']=cid
+        assert 'For Aria' in titles(c.get('/api/handouts'))
+        assert 'Town Notice' in titles(c.get('/api/handouts'))
+
+        # bob (a member but NOT the owner) never sees it, and cannot conjure it
+        # by passing ?player=Aria (the old trusted-param leak is closed).
+        with c.session_transaction() as s: s['user_id']=bob['id']; s['active_campaign_id']=cid
+        assert 'For Aria' not in titles(c.get('/api/handouts'))
+        assert 'For Aria' not in titles(c.get('/api/handouts?player=Aria'))
+        assert 'Town Notice' in titles(c.get('/api/handouts'))     # public still reaches everyone
+
+        # the GM sees everything.
+        with c.session_transaction() as s:
+            s.clear(); s['user_id'] = auth.get_user_by_username('gm')['id']; s['active_campaign_id']=cid
+        assert {'For Aria','Town Notice'} <= titles(c.get('/api/handouts'))
+        print('HANDOUT_RECIPIENTS_OK')
+    ''')
+    assert 'HANDOUT_RECIPIENTS_OK' in r.stdout, r.stdout + r.stderr
