@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response
+from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response, abort
 import sqlite3
 import json
 import math
@@ -15846,6 +15846,18 @@ def chronicle_section(view):
     pages = sorted((_chronicle_page_view(p) for p in _chronicle_visible_pages(section)),
                    key=lambda v: (v.get('title') or '').lower())
     return _chronicle_render('chronicle_%s.html' % view, pages=pages)
+
+
+@app.route('/chronicle/page/<slug>')
+def chronicle_page(slug):
+    # Must be a VISIBLE manifest page AND have a fragment. Hidden/unknown -> 404
+    # (recipient-scoped or unpublished pages must not leak their existence).
+    match = next((p for p in _chronicle_visible_pages() if p.get('slug') == slug), None)
+    frag = _chronicle_fragment(slug) if match else None
+    if match is None or frag is None:
+        abort(404)
+    return _chronicle_render('chronicle_page.html', page=_chronicle_page_view(match),
+                             page_html=frag, backlinks=match.get('backlinks') or [])
 
 
 _AUDIO_EXTS = {'.ogg', '.mp3', '.wav', '.m4a', '.aac', '.opus', '.flac'}

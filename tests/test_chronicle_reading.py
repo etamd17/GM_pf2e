@@ -213,3 +213,26 @@ assert b'Romi' in seen and b'Kaladin-only' not in seen
 print('OK')
 ''')
     assert 'OK' in r.stdout, (r.stdout, r.stderr)
+
+
+# ---- Task 4: page detail /chronicle/page/<slug> (404 on hidden/unknown) ----
+
+def test_page_detail_and_hidden_404():
+    # NB: flush-left, same reason as test_nav_shows_notes_before_publish_and_chronicle_after
+    # above -- this body is concatenated onto _SEED (itself flush-left at module
+    # scope), and textwrap.dedent strips the LONGEST COMMON leading whitespace
+    # across the combined string, which is zero once _SEED is in the mix.
+    r = _run(_SEED + '''
+import tempfile, os
+os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+import app as A
+seed_chronicle(A.CHRONICLE_DIR, [{'slug':'romi','section':'cast','title':'Romi','recipients':'all'}],
+               html={'romi':'<h1>Romi</h1><p>The broker.</p>'})
+c = A.app.test_client()
+ok = c.get('/chronicle/page/romi')
+assert ok.status_code == 200 and b'The broker.' in ok.data
+assert c.get('/chronicle/page/nope').status_code == 404       # unknown == not discovered
+assert c.get('/chronicle/page/..%2f..%2fmanifest').status_code == 404
+print('OK')
+''')
+    assert 'OK' in r.stdout, (r.stdout, r.stderr)
