@@ -121,10 +121,10 @@ def test_chronicle_gate_account_mode():
         with c.session_transaction() as s: s['user_id']=bob['id']; s['active_campaign_id']=cid
         assert c.get('/chronicle').status_code == 403, 'non-member must be blocked'
 
-        # alice (a member) passes the gate; no reading route exists yet in this
-        # slice, so Flask 404s AFTER the gate -> proves the gate let her through.
+        # alice (a member) passes the gate; the /chronicle route then renders the
+        # empty state (no publish in this DATA_DIR) -> 200 proves the gate let her through.
         with c.session_transaction() as s: s['user_id']=alice['id']; s['active_campaign_id']=cid
-        assert c.get('/chronicle').status_code == 404, 'member must pass the gate (404 = route not built)'
+        assert c.get('/chronicle').status_code == 200, 'member must pass the gate (200 = empty-state render)'
 
         # a logged-OUT caller in account mode is redirected to login, not 403.
         with c.session_transaction() as s: s.clear()
@@ -142,14 +142,14 @@ def test_chronicle_gate_legacy_password_mode():
         import app as A
         c = A.app.test_client()
         # legacy mode WITH a password: a player who has not picked a character is
-        # refused; picking one (session player_name) lets them through (404=no route).
+        # refused; picking one (session player_name) lets them through (200 = empty-state render).
         assert c.get('/chronicle').status_code == 403
         with c.session_transaction() as s: s['player_name'] = 'Aria'
-        assert c.get('/chronicle').status_code == 404
+        assert c.get('/chronicle').status_code == 200
         # the GM (authenticated) always passes.
         with c.session_transaction() as s:
             s.clear(); s['gm_authenticated'] = True
-        assert c.get('/chronicle').status_code == 404
+        assert c.get('/chronicle').status_code == 200
         print('GATE_LEGACY_OK')
     ''')
     assert 'GATE_LEGACY_OK' in r.stdout, r.stdout + r.stderr
