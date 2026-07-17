@@ -6,7 +6,13 @@
   {% for p in pages %}
   <li class="chron-grid__item">
     <a class="chron-card" href="/chronicle/page/{{ p.slug }}">
-      <span class="chron-monogram" aria-hidden="true">{{ (p.title or '?')[0]|upper }}</span>
+      <div class="chron-card__figure">
+        {% if p.portrait_url %}
+          <img class="chron-portrait" src="{{ p.portrait_url }}" alt="" loading="lazy" width="56" height="56">
+        {% else %}
+          <span class="chron-monogram" aria-hidden="true">{{ (p.title or '?')[0]|upper }}</span>
+        {% endif %}
+      </div>
       <div class="chron-card__body">
         <h2 class="chron-card__title">{{ p.title }}</h2>
         {% if p.epithet %}<p class="chron-card__epithet">{{ p.epithet }}</p>{% endif %}
