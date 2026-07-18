@@ -49,8 +49,8 @@ def test_render_markdown_callouts_and_sanitize():
     )
     html = A._chronicle_render_markdown(md)
     assert '<h1' in html and '<strong>Romi</strong>' in html
-    assert 'class="callout-quote"' in html
-    assert 'class="doc-frame"' in html
+    assert 'class="chron-callout-quote"' in html
+    assert 'class="chron-doc-frame"' in html
     assert '<blockquote>' in html          # unknown callout -> plain blockquote
     assert '[!quote]' not in html and '[!note]' not in html   # markers consumed
     assert '<script' not in html.lower()   # sanitized
@@ -177,7 +177,7 @@ j = r.get_json(); assert j['ok'] and j['pages'] == 2, j
 content = A._chronicle_content_dir()
 assert content and os.path.isfile(os.path.join(content, 'html', 'home.html'))
 assert os.path.isfile(os.path.join(content, 'html', 'romi.html'))
-assert '<div class="callout-quote">' in open(os.path.join(content, 'html', 'home.html')).read()
+assert '<div class="chron-callout-quote">' in open(os.path.join(content, 'html', 'home.html')).read()
 assert A._chronicle_manifest()['session_number'] == 3
 
 # leak -> 400, and `current` is UNCHANGED (still the good publish)

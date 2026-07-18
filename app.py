@@ -5949,8 +5949,9 @@ def _inject_campaign_chrome():
 @app.context_processor
 def _inject_chronicle_ctx():
     """`chronicle_published` gates the player nav's Chronicle tab (empty-state):
-    true once the first publish exists. One manifest probe per render."""
-    return {'chronicle_published': _chronicle_manifest() is not None}
+    true once the first publish exists. Checks content-dir existence (stat only,
+    no JSON parse) per render -- cheaper than loading the manifest."""
+    return {'chronicle_published': _chronicle_content_dir() is not None}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -9984,7 +9985,7 @@ def _chronicle_safe_slug(slug):
 
 def _chronicle_callout_preprocess(md_text):
     """Rewrite Obsidian callouts to block-level HTML BEFORE the markdown pass.
-    [!quote] -> div.callout-quote (read-aloud), [!example] -> div.doc-frame
+    [!quote] -> div.chron-callout-quote (read-aloud), [!example] -> div.chron-doc-frame
     (handout panel); anything else -> a plain <blockquote>. python-markdown
     passes block-level HTML through untouched, so the inner body is rendered
     with a nested markdown pass and the whole div survives the outer render."""
@@ -10003,9 +10004,9 @@ def _chronicle_callout_preprocess(md_text):
             body.append(re.sub(r'^>\s?', '', lines[i])); i += 1
         inner = markdown.markdown('\n'.join(body), extensions=_CHRONICLE_MD_EXTENSIONS)
         if ctype == 'quote':
-            out.append('<div class="callout-quote">%s</div>' % inner)
+            out.append('<div class="chron-callout-quote">%s</div>' % inner)
         elif ctype == 'example':
-            out.append('<div class="doc-frame">%s</div>' % inner)
+            out.append('<div class="chron-doc-frame">%s</div>' % inner)
         else:
             out.append('<blockquote>%s</blockquote>' % inner)
         out.append('')  # blank line keeps the raw-HTML block isolated
