@@ -89,3 +89,137 @@ def test_slugify_always_matches_pr1_pattern():
     for title in ["C2 Intake Entrance", "Romi Bracken", "!!!", "",
                   "x" * 200, "9 Lives", "-leading-dash-"]:
         assert SLUG_RE.match(cb.slugify(title)), title
+
+
+def _romi_body():
+    return cb.parse_note(FIXTURE / "NPCs" / "Romi Bracken.md")["body"]
+
+
+def test_strip_removes_all_gm_callouts():
+    out = cb.strip_gm_content(_romi_body())
+    pb = out["player_body"]
+    # [!danger] gone, content and marker both
+    assert "[!danger]" not in pb
+    assert "sacrifice the party" not in pb
+    assert "Camazotz" not in pb
+    # [!info] gone
+    assert "[!info]" not in pb
+    assert "AC 22" not in pb
+    # [!warning] gone
+    assert "[!warning]" not in pb
+    assert "escalate the temptation" not in pb
+
+
+def test_strip_keeps_player_callouts_verbatim():
+    out = cb.strip_gm_content(_romi_body())
+    pb = out["player_body"]
+    # quote kept with its callout syntax intact for the PR1 renderer
+    assert "> [!quote] Recruitment Pitch" in pb
+    assert "incredible soldiers for a cause greater than yourselves" in pb
+    # example kept
+    assert "> [!example] Handout Fragment" in pb
+    assert "A pressed flower" in pb
+    # plain narration outside any callout survives
+    assert "A warm shopkeeper with an easy smile" in pb
+
+
+def test_strip_harvests_check_and_question_to_mysteries():
+    out = cb.strip_gm_content(_romi_body())
+    kinds = {(m["kind"]) for m in out["mysteries"]}
+    assert "fact" in kinds and "question" in kinds
+    fact = next(m for m in out["mysteries"] if m["kind"] == "fact")
+    question = next(m for m in out["mysteries"] if m["kind"] == "question")
+    assert "runs the Intake" in fact["text"]
+    assert "hiding something behind the sealed door" in question["text"]
+    # harvested callouts are removed from the player body
+    assert "[!check]" not in out["player_body"]
+    assert "[!question]" not in out["player_body"]
+
+
+def test_strip_pulls_abstract_into_recap_seed():
+    session_body = cb.parse_note(
+        FIXTURE / "Sessions" / "Session - April 21 2026.md")["body"]
+    out = cb.strip_gm_content(session_body)
+    assert out["recap_seed"] is not None
+    assert "breached the Intake Entrance and met Romi Bracken" in out["recap_seed"]
+    assert "[!abstract]" not in out["player_body"]
+    # the danger block in the same note is still stripped
+    assert "azlanti tech" not in out["player_body"]
+    assert "[!danger]" not in out["player_body"]
+
+
+def test_strip_removes_obsidian_and_html_comments():
+    out = cb.strip_gm_content(_romi_body())
+    assert "%%" not in out["player_body"]
+    assert "reroll his reaction" not in out["player_body"]
+    assert "<!--" not in out["player_body"]
+    assert "cross-link this to the Camazotz arc" not in out["player_body"]
+
+
+def test_strip_unknown_callout_is_dropped_by_default():
+    body = "> [!secret] hush\n> the vault code is 1234\n\nvisible line\n"
+    out = cb.strip_gm_content(body)
+    assert "1234" not in out["player_body"]
+    assert "[!secret]" not in out["player_body"]
+    assert "visible line" in out["player_body"]
+
+
+def test_strip_no_recap_returns_none():
+    out = cb.strip_gm_content("plain body, no callouts\n")
+    assert out["recap_seed"] is None
+    assert out["mysteries"] == []
+    assert "plain body" in out["player_body"]
+
+
+def test_strip_adversarial_danger_variants_never_leak():
+    # multi-line danger body
+    body = (
+        "> [!danger] Multi\n"
+        "> line one secretcode\n"
+        "> line two secretcode\n"
+        "\nsafe line\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "secretcode" not in out["player_body"]
+    assert "safe line" in out["player_body"]
+
+    # danger at EOF with no trailing newline
+    body_eof = "> [!danger] End\n> the final secret is EOFSECRET"
+    out_eof = cb.strip_gm_content(body_eof)
+    assert "EOFSECRET" not in out_eof["player_body"]
+
+    # danger immediately followed by another callout (no blank line)
+    body_adjacent = (
+        "> [!danger] First\n"
+        "> ADJACENTSECRET\n"
+        "> [!quote] Second\n"
+        "> visible quote text\n"
+    )
+    out_adjacent = cb.strip_gm_content(body_adjacent)
+    assert "ADJACENTSECRET" not in out_adjacent["player_body"]
+    assert "visible quote text" in out_adjacent["player_body"]
+
+    # danger body containing '>' and a fake nested callout marker
+    body_nested = (
+        "> [!danger] Nested\n"
+        "> the code is > 42 and also [!quote] fake\n"
+        "> NESTEDSECRET\n"
+        "\nafter\n"
+    )
+    out_nested = cb.strip_gm_content(body_nested)
+    assert "NESTEDSECRET" not in out_nested["player_body"]
+    assert "after" in out_nested["player_body"]
+
+    # a KEPT callout (quote) immediately followed by [!danger] with no blank
+    # line between them: the danger body must not be swallowed into the
+    # quote's continuation lines and kept verbatim alongside it.
+    body_quote_then_danger = (
+        "> [!quote] Hello\n"
+        "> visible quote line\n"
+        "> [!danger] secret\n"
+        "> QUOTEADJACENTSECRET\n"
+    )
+    out_qd = cb.strip_gm_content(body_quote_then_danger)
+    assert "QUOTEADJACENTSECRET" not in out_qd["player_body"]
+    assert "[!danger]" not in out_qd["player_body"]
+    assert "visible quote line" in out_qd["player_body"]

@@ -101,3 +101,74 @@ def slugify(title):
     if not s or not _SLUG_OK.match(s):
         return "page"
     return s
+
+
+_OBSIDIAN_COMMENT = re.compile(r"%%.*?%%", re.DOTALL)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_CALLOUT_MARKER = re.compile(
+    r"^>\s*\[!(?P<kind>[A-Za-z]+)\][-+]?\s?(?P<title>.*?)\s*$")
+_QUOTE_LINE = re.compile(r"^>\s?(.*)$")
+
+_KEEP_KINDS = {"quote", "example"}       # kept verbatim, callout syntax intact
+_HARVEST = {"check": "fact", "question": "question"}
+# every other kind (danger/info/tip/warning + any unknown) is stripped
+
+
+def strip_gm_content(body):
+    """The spoiler firewall: split a note body into what players may see.
+
+    Walks Obsidian callout blocks (`> [!type] ...` header + its `>`-prefixed
+    continuation lines). danger/info/tip/warning (and any callout kind not on
+    the explicit allowlist below) are stripped entirely. quote/example are
+    kept verbatim, callout syntax intact. check/question are harvested into
+    ``mysteries``. abstract is pulled into ``recap_seed``. Obsidian
+    ``%%comments%%`` and HTML ``<!--comments-->`` are stripped globally.
+
+    A false negative here leaks GM secrets to players, so the continuation
+    scan stops as soon as it sees a line that itself opens a NEW callout —
+    otherwise a kept block (e.g. [!quote]) immediately followed by a
+    [!danger] block with no blank line between them would swallow the
+    danger's body into the quote's continuation lines and re-emit it
+    verbatim.
+    """
+    body = _OBSIDIAN_COMMENT.sub("", body)
+    body = _HTML_COMMENT.sub("", body)
+    lines = body.split("\n")
+    out_lines, mysteries, recap_seed = [], [], None
+    i, n = 0, len(lines)
+    while i < n:
+        m = _CALLOUT_MARKER.match(lines[i])
+        if not m:
+            out_lines.append(lines[i])
+            i += 1
+            continue
+        kind = m.group("kind").lower()
+        title = m.group("title").strip()
+        block = [lines[i]]
+        j = i + 1
+        while j < n and lines[j].startswith(">") and not _CALLOUT_MARKER.match(lines[j]):
+            block.append(lines[j])
+            j += 1
+        content = "\n".join(
+            (_QUOTE_LINE.match(b).group(1) if _QUOTE_LINE.match(b) else b)
+            for b in block[1:]
+        ).strip()
+        harvest_text = content if content else title
+
+        if kind in _KEEP_KINDS:
+            out_lines.extend(block)              # verbatim
+        elif kind == "abstract":
+            seed = " ".join(x for x in (title, content) if x).strip()
+            recap_seed = seed or None
+        elif kind in _HARVEST:
+            if harvest_text:
+                mysteries.append({"kind": _HARVEST[kind], "text": harvest_text})
+        # else: danger/info/tip/warning/unknown -> dropped entirely
+        i = j
+
+    player_body = re.sub(r"\n{3,}", "\n\n", "\n".join(out_lines)).strip()
+    return {
+        "player_body": player_body + "\n" if player_body else "",
+        "mysteries": mysteries,
+        "recap_seed": recap_seed,
+    }
