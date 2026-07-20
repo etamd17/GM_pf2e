@@ -81,3 +81,23 @@ def parse_note(path):
         frontmatter = _parse_frontmatter(m.group(1))
         body = m.group(2)
     return {"frontmatter": frontmatter, "body": body, "path": str(path)}
+
+
+_SLUG_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
+
+
+def slugify(title):
+    """Turn a note title into a PR1-safe slug.
+
+    Lowercases, collapses any run of non [a-z0-9] characters into a single
+    '-', strips leading/trailing '-', and caps length to the 81-char ceiling
+    PR1's manifest validation enforces (^[a-z0-9][a-z0-9-]{0,80}$). Falls
+    back to "page" for empty, None, or all-punctuation input so a slug is
+    always produced.
+    """
+    s = (title or "").lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")[:81].strip("-")
+    if not s or not _SLUG_OK.match(s):
+        return "page"
+    return s

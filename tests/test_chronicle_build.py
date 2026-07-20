@@ -1,8 +1,11 @@
 import pathlib
+import re as _re
 
 from tools import chronicle_build as cb
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "gm_vault_sample"
+
+SLUG_RE = _re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
 
 
 def test_fixture_vault_is_present_and_shaped():
@@ -64,3 +67,25 @@ def test_parse_note_supports_block_lists(tmp_path):
     p.write_text("---\ntags:\n  - alpha\n  - beta\n---\nbody\n", encoding="utf-8")
     fm = cb.parse_note(p)["frontmatter"]
     assert fm["tags"] == ["alpha", "beta"]
+
+
+def test_slugify_basic():
+    assert cb.slugify("C2 Intake Entrance") == "c2-intake-entrance"
+    assert cb.slugify("Romi Bracken") == "romi-bracken"
+
+
+def test_slugify_strips_punctuation_and_apostrophes():
+    assert cb.slugify("Go'el, the Warpriest!") == "go-el-the-warpriest"
+    assert cb.slugify("  --Letters & Journals--  ") == "letters-journals"
+
+
+def test_slugify_empty_and_symbol_only_fall_back_to_page():
+    assert cb.slugify("") == "page"
+    assert cb.slugify("!!!") == "page"
+    assert cb.slugify(None) == "page"
+
+
+def test_slugify_always_matches_pr1_pattern():
+    for title in ["C2 Intake Entrance", "Romi Bracken", "!!!", "",
+                  "x" * 200, "9 Lives", "-leading-dash-"]:
+        assert SLUG_RE.match(cb.slugify(title)), title
