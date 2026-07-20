@@ -105,34 +105,52 @@ def slugify(title):
 
 _OBSIDIAN_COMMENT = re.compile(r"%%.*?%%", re.DOTALL)
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+# A line that is PURELY a comment (with or without a leading '>'), and
+# nothing else. Used only to keep a bare comment line from severing a
+# callout block during the continuation scan below - it must never be used
+# to strip comments globally before the walk (see strip_gm_content).
+_COMMENT_ONLY_LINE = re.compile(r"^>?\s*(?:%%.*?%%|<!--.*?-->)\s*$")
 _CALLOUT_MARKER = re.compile(
-    r"^>\s*\[!(?P<kind>[A-Za-z]+)\][-+]?\s?(?P<title>.*?)\s*$")
+    r"^>\s*\[!\s*(?P<kind>[^\]\s]+)\s*\][-+]?\s?(?P<title>.*?)\s*$")
 _QUOTE_LINE = re.compile(r"^>\s?(.*)$")
 
 _KEEP_KINDS = {"quote", "example"}       # kept verbatim, callout syntax intact
 _HARVEST = {"check": "fact", "question": "question"}
-# every other kind (danger/info/tip/warning + any unknown) is stripped
+# ALLOWLIST policy: only _KEEP_KINDS and _HARVEST kinds (plus "abstract",
+# handled separately below) ever leave this function. Every other kind -
+# the known GM ones (danger/info/tip/warning) AND any unknown/custom kind
+# (e.g. "spoiler_alert", "lore-bomb", "gm", "secret") - is stripped. Default
+# = STRIP; nothing is kept or harvested unless explicitly allowlisted.
+
+
+def _strip_comments(text):
+    text = _OBSIDIAN_COMMENT.sub("", text)
+    return _HTML_COMMENT.sub("", text)
 
 
 def strip_gm_content(body):
     """The spoiler firewall: split a note body into what players may see.
 
     Walks Obsidian callout blocks (`> [!type] ...` header + its `>`-prefixed
-    continuation lines). danger/info/tip/warning (and any callout kind not on
-    the explicit allowlist below) are stripped entirely. quote/example are
-    kept verbatim, callout syntax intact. check/question are harvested into
-    ``mysteries``. abstract is pulled into ``recap_seed``. Obsidian
-    ``%%comments%%`` and HTML ``<!--comments-->`` are stripped globally.
+    continuation lines) on the RAW, uncleaned body. danger/info/tip/warning
+    (and any callout kind not on the explicit allowlist above) are stripped
+    entirely. quote/example are kept verbatim, callout syntax intact.
+    check/question are harvested into ``mysteries``. abstract is pulled into
+    ``recap_seed``. Obsidian ``%%comments%%`` and HTML ``<!--comments-->``
+    are stripped from the FINAL player_body only, never globally before the
+    walk - a comment line stripped up front would collapse a callout
+    block's boundary and leak its tail with no marker at all.
 
     A false negative here leaks GM secrets to players, so the continuation
     scan stops as soon as it sees a line that itself opens a NEW callout —
     otherwise a kept block (e.g. [!quote]) immediately followed by a
     [!danger] block with no blank line between them would swallow the
     danger's body into the quote's continuation lines and re-emit it
-    verbatim.
+    verbatim. A line that is PURELY a comment does NOT end the scan either -
+    it is absorbed (and later scrubbed from the output) so the block's real
+    tail line is never dropped out of the block unprotected. Only a genuine
+    blank line, or a real non-comment non-'>' line, ends the block.
     """
-    body = _OBSIDIAN_COMMENT.sub("", body)
-    body = _HTML_COMMENT.sub("", body)
     lines = body.split("\n")
     out_lines, mysteries, recap_seed = [], [], None
     i, n = 0, len(lines)
@@ -146,27 +164,38 @@ def strip_gm_content(body):
         title = m.group("title").strip()
         block = [lines[i]]
         j = i + 1
-        while j < n and lines[j].startswith(">") and not _CALLOUT_MARKER.match(lines[j]):
-            block.append(lines[j])
-            j += 1
+        while j < n:
+            line = lines[j]
+            if _COMMENT_ONLY_LINE.match(line):
+                # Absorb a bare comment line - it must not sever the block.
+                block.append(line)
+                j += 1
+                continue
+            if line.startswith(">") and not _CALLOUT_MARKER.match(line):
+                block.append(line)
+                j += 1
+                continue
+            break
         content = "\n".join(
             (_QUOTE_LINE.match(b).group(1) if _QUOTE_LINE.match(b) else b)
             for b in block[1:]
         ).strip()
-        harvest_text = content if content else title
+        harvest_text = _strip_comments(content if content else title).strip()
 
         if kind in _KEEP_KINDS:
             out_lines.extend(block)              # verbatim
         elif kind == "abstract":
             seed = " ".join(x for x in (title, content) if x).strip()
-            recap_seed = seed or None
+            recap_seed = _strip_comments(seed).strip() or None
         elif kind in _HARVEST:
             if harvest_text:
                 mysteries.append({"kind": _HARVEST[kind], "text": harvest_text})
-        # else: danger/info/tip/warning/unknown -> dropped entirely
+        # else: every other kind (known GM kinds or unknown/custom) is
+        # dropped entirely - see the ALLOWLIST policy note above.
         i = j
 
-    player_body = re.sub(r"\n{3,}", "\n\n", "\n".join(out_lines)).strip()
+    player_body = _strip_comments("\n".join(out_lines))
+    player_body = re.sub(r"\n{3,}", "\n\n", player_body).strip()
     return {
         "player_body": player_body + "\n" if player_body else "",
         "mysteries": mysteries,

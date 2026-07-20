@@ -223,3 +223,62 @@ def test_strip_adversarial_danger_variants_never_leak():
     assert "QUOTEADJACENTSECRET" not in out_qd["player_body"]
     assert "[!danger]" not in out_qd["player_body"]
     assert "visible quote line" in out_qd["player_body"]
+
+
+def test_strip_comment_line_does_not_sever_danger_block():
+    # Regression: a bare comment line inside a [!danger] block used to be
+    # stripped GLOBALLY before the block walk, collapsing the boundary and
+    # leaking the tail of the block (no marker, no callout syntax at all).
+    body = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "<!-- reminder: escalate here -->\n"
+        "> and intends to sacrifice the party at the door.\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "sacrifice the party" not in out["player_body"]
+    assert "Camazotz" not in out["player_body"]
+
+    # Same shape with an Obsidian %%...%% comment splitting the block.
+    body_obsidian = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "%% reminder: escalate here %%\n"
+        "> and intends to sacrifice the party at the door.\n"
+    )
+    out2 = cb.strip_gm_content(body_obsidian)
+    assert "sacrifice the party" not in out2["player_body"]
+    assert "Camazotz" not in out2["player_body"]
+
+
+def test_strip_non_alpha_callout_kinds_are_stripped():
+    # Regression: the callout marker regex only matched [A-Za-z]+ kinds, so
+    # anything with a digit/underscore/hyphen in it (or any custom kind not
+    # explicitly on a blocklist) bypassed the firewall and leaked RAW.
+    for kind, secret in [
+        ("spoiler_alert", "5678"),
+        ("lore-bomb", "LOREBOMBSECRET"),
+        ("twist_reveal", "TWISTSECRET"),
+        ("secret", "SECRETVALUE"),
+        ("gm", "GMONLYVALUE"),
+    ]:
+        body = f"> [!{kind}] Hush\n> the vault code is {secret}\n"
+        out = cb.strip_gm_content(body)
+        assert secret not in out["player_body"], kind
+        assert f"[!{kind}]" not in out["player_body"], kind
+
+
+def test_strip_allowlist_keep_and_harvest_kinds_still_work():
+    # Non-regression: the allowlist must still keep quote/example verbatim
+    # and still harvest check/question/abstract.
+    out = cb.strip_gm_content(_romi_body())
+    pb = out["player_body"]
+    assert "> [!quote] Recruitment Pitch" in pb
+    assert "> [!example] Handout Fragment" in pb
+    kinds = {m["kind"] for m in out["mysteries"]}
+    assert "fact" in kinds and "question" in kinds
+
+    session_body = cb.parse_note(
+        FIXTURE / "Sessions" / "Session - April 21 2026.md")["body"]
+    seeded = cb.strip_gm_content(session_body)
+    assert seeded["recap_seed"] is not None
