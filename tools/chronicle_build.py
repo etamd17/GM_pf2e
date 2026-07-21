@@ -2,11 +2,13 @@
 Obsidian vault. Runs on the GM's Mac. Stdlib-only core (optional Pillow later);
 NOT imported by the Flask app.
 """
+import argparse
 import json
 import logging
 import os
 import re
 import shutil
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -1070,3 +1072,62 @@ def publish(zip_path, url, token=None):
         return (False, e.read().decode("utf-8", "replace"))
     except urllib.error.URLError as e:
         return (False, str(e))
+
+
+def main(argv=None):
+    """CLI entry point: build -> print review summary -> abort-on-leak ->
+    (dry-run stop) -> zip -> optional publish.
+
+    Two leak signals are both honored, belt-and-suspenders:
+    `build_player_vault`'s own `result["leaks"]` (Task 12's authoritative
+    signal -- on a real leak it never touches `out_dir` at all), PLUS an
+    independent `leak_check(args.out)` re-scan of the actual output
+    directory. The second scan is what actually matters here: it is the
+    last line of defense before `make_zip`/`publish` ever run, and it
+    catches a leak regardless of whether whatever populated `out_dir`
+    (a future `build_player_vault` variant, a monkeypatch in a test, a
+    hand-edited file) correctly reported it via `leaks`. Either signal
+    being non-empty is fatal: print the offenders to stderr and return
+    nonzero -- NEVER zip, NEVER publish.
+    """
+    parser = argparse.ArgumentParser(
+        prog="chronicle_build",
+        description="Build a spoiler-safe Chronicle player vault.")
+    parser.add_argument("--vault", required=True, help="path to the GM Obsidian vault")
+    parser.add_argument("--out", required=True, help="output dir for the player vault")
+    parser.add_argument("--campaign-id", required=True, dest="campaign_id")
+    parser.add_argument("--publish-url", default=None, dest="publish_url")
+    parser.add_argument("--token", default=None)
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run")
+    args = parser.parse_args(argv)
+
+    result = build_player_vault(args.vault, args.out, args.campaign_id)
+    print(result["review_summary"])
+
+    offenders = sorted(set(result.get("leaks") or []) | set(leak_check(args.out)))
+    if offenders:
+        print("LEAK CHECK FAILED - aborting, nothing zipped or published. Offenders:",
+              file=sys.stderr)
+        for o in offenders:
+            print("  " + o, file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print("Dry run: leak check passed. Not zipping or publishing.")
+        return 0
+
+    zip_path = make_zip(args.out)
+    print("Wrote archive: " + zip_path)
+
+    if args.publish_url:
+        ok, resp = publish(zip_path, args.publish_url, token=args.token)
+        if not ok:
+            print("Publish FAILED: " + str(resp), file=sys.stderr)
+            return 1
+        print("Published: " + str(resp))
+    return 0
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    raise SystemExit(main(sys.argv[1:]))

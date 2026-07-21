@@ -1528,3 +1528,152 @@ def test_publish_no_token_omits_header_and_reports_http_error(tmp_path, monkeypa
     ok, resp = cb.publish(str(zip_path), "https://example/api/chronicle/publish")
     assert ok is False
     assert "leak detected" in resp
+
+
+# --- main / CLI --------------------------------------------------------------
+
+
+def test_main_dry_run_prints_summary_and_does_not_publish(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+
+    def boom(*a, **k):
+        raise AssertionError("publish must not be called on --dry-run")
+    monkeypatch.setattr(cb, "publish", boom)
+
+    zipped = {"called": False}
+    real_make_zip = cb.make_zip
+    monkeypatch.setattr(cb, "make_zip", lambda d: zipped.__setitem__("called", True) or real_make_zip(d))
+
+    rc = cb.main([
+        "--vault", str(FIXTURE), "--out", str(out),
+        "--campaign-id", "shades-of-blood",
+        "--publish-url", "https://example/api/chronicle/publish",
+        "--dry-run",
+    ])
+
+    assert rc == 0
+    assert zipped["called"] is False
+    printed = capsys.readouterr().out
+    assert "Pages:" in printed          # review summary reached stdout
+    assert not (out / "chronicle.zip").exists()
+
+
+def test_main_aborts_nonzero_on_leak_and_never_zips(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+
+    def leaky_build(vault_dir, out_dir, campaign_id):
+        os.makedirs(os.path.join(out_dir, "content"), exist_ok=True)
+        with open(os.path.join(out_dir, "content", "boom.md"), "w", encoding="utf-8") as f:
+            f.write("> [!danger] planted spoiler survived\n")
+        with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+            f.write('{"schema_version": 1, "pages": []}')
+        return {"manifest": {"schema_version": 1}, "review_summary": "Pages: 1"}
+
+    monkeypatch.setattr(cb, "build_player_vault", leaky_build)
+    monkeypatch.setattr(cb, "make_zip", lambda d: (_ for _ in ()).throw(
+        AssertionError("make_zip must not run when a leak is present")))
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("publish must not run when a leak is present")))
+
+    rc = cb.main(["--vault", str(tmp_path), "--out", str(out), "--campaign-id", "x"])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "LEAK CHECK FAILED" in err
+    assert "content/boom.md: [!danger]" in err
+    assert not (out / "chronicle.zip").exists()
+
+
+def test_main_aborts_nonzero_when_build_player_vault_reports_leaks(tmp_path, monkeypatch, capsys):
+    # Mirrors the Task 12 contract directly: build_player_vault reports a
+    # non-empty `leaks` list (and, per its own contract, never touches
+    # out_dir on a leak) -- main must still catch this via result["leaks"]
+    # even though a `leak_check(args.out)` re-scan of an untouched/absent
+    # out_dir would itself find nothing.
+    out = tmp_path / "out"
+
+    def leaky_build(vault_dir, out_dir, campaign_id):
+        return {"manifest": {"schema_version": 1},
+                "review_summary": "!!! BUILD ABORTED - SPOILER LEAK DETECTED !!!\n"
+                                   "  content/cult-hideout.md: [!danger]",
+                "leaks": ["content/cult-hideout.md: [!danger]"]}
+
+    monkeypatch.setattr(cb, "build_player_vault", leaky_build)
+    monkeypatch.setattr(cb, "make_zip", lambda d: (_ for _ in ()).throw(
+        AssertionError("make_zip must not run when a leak is present")))
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("publish must not run when a leak is present")))
+
+    rc = cb.main(["--vault", str(tmp_path), "--out", str(out), "--campaign-id", "x"])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "LEAK CHECK FAILED" in err
+    assert "content/cult-hideout.md: [!danger]" in err
+    assert not out.exists() or not (out / "chronicle.zip").exists()
+
+
+def test_main_clean_build_publishes_and_returns_zero(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+    published = {}
+
+    def fake_publish(zip_path, url, token=None):
+        published["zip_path"] = zip_path
+        published["url"] = url
+        published["token"] = token
+        return True, '{"ok": true}'
+
+    monkeypatch.setattr(cb, "publish", fake_publish)
+
+    rc = cb.main([
+        "--vault", str(FIXTURE), "--out", str(out),
+        "--campaign-id", "shades-of-blood",
+        "--publish-url", "https://example/api/chronicle/publish",
+        "--token", "sekret",
+    ])
+
+    assert rc == 0
+    assert published["url"] == "https://example/api/chronicle/publish"
+    assert published["token"] == "sekret"
+    assert published["zip_path"] == str(out / "chronicle.zip")
+    assert (out / "chronicle.zip").exists()
+    printed = capsys.readouterr().out
+    assert "Pages:" in printed
+    assert "Published:" in printed
+
+
+def test_main_clean_build_publish_failure_returns_nonzero(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (False, "server rejected: leak detected"))
+
+    rc = cb.main([
+        "--vault", str(FIXTURE), "--out", str(out),
+        "--campaign-id", "shades-of-blood",
+        "--publish-url", "https://example/api/chronicle/publish",
+    ])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Publish FAILED" in err
+    assert "leak detected" in err
+    # the zip was still produced (make_zip runs before publish is attempted)
+    assert (out / "chronicle.zip").exists()
+
+
+def test_main_clean_build_no_publish_url_zips_and_returns_zero(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+
+    def boom(*a, **k):
+        raise AssertionError("publish must not be called without --publish-url")
+    monkeypatch.setattr(cb, "publish", boom)
+
+    rc = cb.main([
+        "--vault", str(FIXTURE), "--out", str(out),
+        "--campaign-id", "shades-of-blood",
+    ])
+
+    assert rc == 0
+    assert (out / "chronicle.zip").exists()
+    printed = capsys.readouterr().out
+    assert "Pages:" in printed
+    assert "Wrote archive:" in printed
