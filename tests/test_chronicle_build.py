@@ -1,3 +1,4 @@
+import logging
 import pathlib
 import re as _re
 import sys
@@ -1037,3 +1038,77 @@ def test_collect_assets_skips_oversize_over_budget(tmp_path, monkeypatch):
 
     assert copied == []
     assert not (out_assets / "big.png").exists()
+
+
+def test_collect_assets_warns_on_basename_collision_different_files(tmp_path, caplog):
+    # Two DIFFERENT source images share a basename across subfolders (the
+    # gap this test guards): the second one used to be dropped via a bare
+    # `continue` in the dedup branch with zero signal. It must now log a
+    # warning instead of vanishing silently.
+    vault = tmp_path / "vault"
+    _write_png(vault / "Player Handouts" / "Maps" / "cover.png")
+    _write_png(vault / "Player Handouts" / "NPC Portraits" / "cover.png", size_bytes=64)
+
+    out_assets = tmp_path / "out" / "assets"
+    pages = [
+        {"slug": "map-page", "body": "![[Maps/cover.png]]"},
+        {"slug": "npc-page", "body": "![[NPC Portraits/cover.png]]"},
+    ]
+
+    with caplog.at_level(logging.WARNING, logger="chronicle_build"):
+        copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    # Basename dedup / copy behavior is unchanged: only the first-seen file
+    # is copied, under its basename.
+    assert copied == ["cover.png"]
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("cover.png" in w and "collision" in w.lower() for w in warnings), warnings
+
+
+def test_collect_assets_same_basename_same_file_stays_silent(tmp_path, caplog):
+    # A genuine duplicate reference (portrait field + embed both pointing
+    # at the same actual file) is NOT a collision - no warning.
+    vault = tmp_path / "vault"
+    _write_png(vault / "Player Handouts" / "NPC Portraits" / "romi.png")
+
+    out_assets = tmp_path / "out" / "assets"
+    pages = [
+        {"slug": "romi-a", "body": "![[NPC Portraits/romi.png]]"},
+        {"slug": "romi-b", "portrait": "romi.png", "body": ""},
+    ]
+
+    with caplog.at_level(logging.WARNING, logger="chronicle_build"):
+        copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == ["romi.png"]
+    collision_warnings = [r for r in caplog.records if "collision" in r.getMessage().lower()]
+    assert collision_warnings == []
+
+
+def test_collect_assets_real_pillow_roundtrip(tmp_path):
+    # The `_write_png` fixture's 1x1 PNG doesn't decode under real Pillow,
+    # so the other collect_assets tests only ever hit the copy-as-is
+    # fallback branch of `_strip_exif`. This test uses a Pillow-generated,
+    # genuinely decodable PNG so the real `Image.open`/`putdata`/`save`
+    # round-trip actually runs.
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    vault = tmp_path / "vault"
+    portraits = vault / "Player Handouts" / "NPC Portraits"
+    portraits.mkdir(parents=True)
+    src_path = portraits / "romi.png"
+    Image.new("RGB", (4, 4), color=(10, 20, 30)).save(src_path)
+
+    out_assets = tmp_path / "out" / "assets"
+    pages = [{"slug": "romi", "body": "![[romi.png]]"}]
+
+    copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == ["romi.png"]
+    out_path = out_assets / "romi.png"
+    assert out_path.exists()
+    with Image.open(out_path) as img:
+        img.load()
+        assert img.size == (4, 4)

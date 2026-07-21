@@ -535,6 +535,34 @@ def _find_asset(vault_dir, base):
     return None
 
 
+def _resolve_asset_source(vault_dir, ref):
+    """Resolve a single asset `ref` to its source file, preferring an exact
+    match on the ref's own subfolder path (relative to `Player Handouts/`)
+    before falling back to `_find_asset`'s basename-only walk.
+
+    This exists ONLY to tell apart two different files that happen to share
+    a basename in different subfolders (e.g. `Maps/cover.png` vs
+    `NPC Portraits/cover.png`), so `collect_assets` can detect a genuine
+    basename collision instead of the two refs coincidentally resolving to
+    whichever file `_find_asset`'s walk happens to see first. It does NOT
+    change what gets copied or under what name -- the copy stays
+    basename-keyed (first ref wins) until Task 12 builds a full
+    path-preserving asset map.
+    """
+    ref = str(ref).strip().lstrip("/\\")
+    base = os.path.basename(ref)
+    if os.path.dirname(ref):
+        handouts = os.path.normpath(os.path.join(str(vault_dir), PLAYER_HANDOUTS))
+        candidate = os.path.normpath(os.path.join(handouts, ref))
+        try:
+            inside = os.path.commonpath([candidate, handouts]) == handouts
+        except ValueError:
+            inside = False
+        if inside and os.path.isfile(candidate):
+            return candidate
+    return _find_asset(vault_dir, base)
+
+
 def _strip_exif(src, dst):
     """Re-save an image without its metadata (EXIF, GPS, etc.) when Pillow
     is importable; otherwise (or on any decode/save failure) fall back to a
@@ -569,18 +597,36 @@ def collect_assets(pages, vault_dir, out_assets_dir):
     total enforces `ASSET_BUDGET_BYTES`: once adding an asset would
     exceed the budget, that asset (and only that asset) is logged and
     skipped -- smaller assets encountered later still get a chance.
+
+    A basename collision -- two DIFFERENT source images that happen to
+    share a basename across subfolders (e.g. `Maps/cover.png` vs
+    `NPC Portraits/cover.png`) -- still keeps only the first-seen file
+    under that basename (full path-preserving disambiguation is deferred
+    to Task 12's asset map), but now logs a warning instead of silently
+    dropping the second one. A ref that resolves to the SAME file as the
+    one already copied (a genuine duplicate reference) stays silent.
     """
     os.makedirs(str(out_assets_dir), exist_ok=True)
     copied = []
-    seen = set()
+    seen = {}  # basename -> source path of the copy already made
     total = 0
     for ref in _iter_asset_refs(pages):
-        base = os.path.basename(str(ref).strip())
-        if not base or base in seen:
+        ref_str = str(ref).strip()
+        base = os.path.basename(ref_str)
+        if not base:
             continue
         if os.path.splitext(base)[1].lower() not in _IMG_EXTS:
             continue
-        src = _find_asset(vault_dir, base)
+        if base in seen:
+            other_src = _resolve_asset_source(vault_dir, ref_str)
+            if other_src and os.path.normpath(other_src) != os.path.normpath(seen[base]):
+                log.warning(
+                    "chronicle: asset basename collision for %s - kept %s, "
+                    "dropped a different file also named %s (referenced as %s)",
+                    base, seen[base], base, ref_str,
+                )
+            continue
+        src = _resolve_asset_source(vault_dir, ref_str)
         if not src:
             log.warning("chronicle: referenced asset not found: %s", base)
             continue
@@ -589,7 +635,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
             log.warning("chronicle: asset budget exceeded, skipping %s (%d bytes)", base, size)
             continue
         _strip_exif(src, os.path.join(str(out_assets_dir), base))
-        seen.add(base)
+        seen[base] = src
         total += size
         copied.append(base)
     return sorted(copied)
