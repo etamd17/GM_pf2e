@@ -858,3 +858,28 @@ def test_resolve_wikilinks_heading_anchor_unpublished_degrades_to_base_title():
     assert out == "See Hidden Lair for more."
     assert "#Vault" not in out
     assert "[[" not in out and "]]" not in out
+
+
+def test_build_backlinks_two_page_cross_link():
+    pages = [
+        {"slug": "romi-bracken", "title": "Romi Bracken",
+         "body": "Leader at [C2 Intake](/chronicle/page/c2-intake)."},
+        {"slug": "c2-intake", "title": "C2 Intake",
+         "body": "Watched over by [Romi](/chronicle/page/romi-bracken). "
+                 "See also [Romi again](/chronicle/page/romi-bracken)."},
+    ]
+    back = cb.build_backlinks(pages)
+
+    # c2-intake is linked from romi-bracken.
+    assert back["c2-intake"] == [{"slug": "romi-bracken", "title": "Romi Bracken"}]
+    # romi-bracken is linked from c2-intake, deduped despite two references.
+    assert back["romi-bracken"] == [{"slug": "c2-intake", "title": "C2 Intake"}]
+
+
+def test_build_backlinks_ignores_self_and_unknown_targets():
+    pages = [
+        {"slug": "loop", "title": "Loop",
+         "body": "self [x](/chronicle/page/loop) and [ghost](/chronicle/page/nope)."},
+    ]
+    back = cb.build_backlinks(pages)
+    assert back == {"loop": []}

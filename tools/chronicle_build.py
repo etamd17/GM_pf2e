@@ -408,3 +408,29 @@ def resolve_wikilinks(body, title_to_slug):
         return display
 
     return _WIKILINK_RE.sub(_repl, body)
+
+
+_PAGE_LINK_RE = re.compile(r"/chronicle/page/([a-z0-9][a-z0-9-]{0,80})")
+
+
+def build_backlinks(pages):
+    """Invert the resolved outbound-link map: for each page, who links to it.
+
+    `pages` is a list of `{slug, title, body}` dicts where `body` has already
+    been through `resolve_wikilinks` (so outbound links appear as
+    `/chronicle/page/<slug>`). Returns `{slug: [{"slug", "title"}, ...]}` -
+    deduped (a page linking twice to the same target counts once) and
+    self-links (a page linking to itself) are dropped. Ordering is
+    deterministic: source pages appear in the backlink list in the same
+    order as the input `pages` list.
+    """
+    title_by_slug = {p["slug"]: p.get("title", p["slug"]) for p in pages}
+    backlinks = {p["slug"]: [] for p in pages}
+    seen = {p["slug"]: set() for p in pages}
+    for p in pages:
+        src = p["slug"]
+        for target in _PAGE_LINK_RE.findall(p.get("body") or ""):
+            if target in backlinks and target != src and src not in seen[target]:
+                backlinks[target].append({"slug": src, "title": title_by_slug[src]})
+                seen[target].add(src)
+    return backlinks
