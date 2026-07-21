@@ -1198,3 +1198,123 @@ def test_leak_check_scans_files_with_stray_non_utf8_bytes(tmp_path):
 
     offenders = cb.leak_check(str(out))
     assert offenders == ["content/romi.md: [!danger]"]
+
+# --- build_player_vault (A3.3 orchestration) --------------------------------
+
+
+def test_build_player_vault_end_to_end(tmp_path):
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+
+    manifest = result["manifest"]
+    assert manifest["schema_version"] == 1
+    assert manifest["campaign_id"] == "shades-of-blood"
+    assert isinstance(result["review_summary"], str) and result["review_summary"]
+
+    # The encountered NPC (Romi) became a cast page with a safe slug.
+    slugs = {p["slug"] for p in manifest["pages"]}
+    assert "romi-bracken" in slugs
+    for p in manifest["pages"]:
+        assert SLUG_RE.match(p["slug"])
+        assert p["section"] in {"home", "recap", "cast", "atlas", "lore", "handout", "fieldguide"}
+
+    # Alzira is `chronicle: false` and never encountered - excluded entirely.
+    assert "alzira-vane" not in slugs
+
+    # GM content is GONE from every emitted content file.
+    content_dir = out / "content"
+    joined = "\n".join(p.read_text(encoding="utf-8") for p in sorted(content_dir.iterdir()))
+    assert "[!danger]" not in joined
+    assert "[!info]" not in joined      # info is GM-only per policy
+    assert "cult leader" not in joined.lower()   # planted spoiler string in the fixture danger block
+    assert "[!quote]" in joined         # player-facing read-aloud preserved
+
+    # The firewall agrees the tree is clean.
+    assert cb.leak_check(str(out)) == []
+
+
+def test_build_player_vault_harvests_mysteries(tmp_path):
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+    kinds = {m["kind"] for m in result["manifest"]["mysteries"]}
+    assert "fact" in kinds        # from [!check]
+    assert "question" in kinds    # from [!question]
+
+
+def test_build_player_vault_review_summary_reports_unmatched_and_slugs(tmp_path):
+    # Carry-forward requirement: an encountered entity (or override) with no
+    # findable note must WARN in review_summary, not vanish silently (Task
+    # 5's exact-string-match gap). The fixture's Session 5 encounters "Cult
+    # Patrol Guards" (no NPC note anywhere in the vault) and covers areas
+    # C2/C3/C11 (only C2 has a Location note).
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+    summary = result["review_summary"].lower()
+
+    assert "cult patrol guards" in summary
+    assert "c3" in summary
+    assert "c11" in summary
+    # Published slugs are surfaced too, not just per-section titles.
+    assert "romi-bracken" in summary
+
+
+def test_build_player_vault_combined_map_resolves_links_and_asset_embeds(tmp_path):
+    # Carry-forward requirement: ONE combined map (page title -> slug AND
+    # asset ref -> published asset path) is passed to resolve_wikilinks, and
+    # the asset paths that land in content/manifest must match what
+    # collect_assets actually wrote to out/assets - not the raw vault-relative
+    # ref the GM happened to type.
+    vault = tmp_path / "vault"
+    _write_png(vault / "Player Handouts" / "NPC Portraits" / "romi.png")
+    _write_vault_note(vault / "NPCs" / "Romi Bracken.md", """\
+        ---
+        type: npc
+        name: Romi Bracken
+        chronicle: true
+        portrait: NPC Portraits/romi.png
+        ---
+        ![[NPC Portraits/romi.png]]
+
+        Romi works with [[Alzira Vane]].
+        """)
+    _write_vault_note(vault / "NPCs" / "Alzira Vane.md", """\
+        ---
+        type: npc
+        name: Alzira Vane
+        chronicle: true
+        ---
+        A quiet contact.
+        """)
+
+    out = tmp_path / "out"
+    result = cb.build_player_vault(str(vault), str(out), campaign_id="c")
+
+    romi = next(p for p in result["manifest"]["pages"] if p["slug"] == "romi-bracken")
+    # The portrait field is rewritten to the path collect_assets actually
+    # wrote to (assets/<basename>), not the raw "NPC Portraits/romi.png" ref.
+    assert romi["portrait"] == "assets/romi.png"
+    assert (out / "assets" / "romi.png").exists()
+
+    romi_body = (out / "content" / "romi-bracken.md").read_text(encoding="utf-8")
+    assert "![NPC Portraits/romi.png](assets/romi.png)" in romi_body
+    assert "[Alzira Vane](/chronicle/page/alzira-vane)" in romi_body
+
+    assert cb.leak_check(str(out)) == []
+
+
+def test_build_player_vault_aborts_and_removes_output_on_leak(tmp_path, monkeypatch):
+    out = tmp_path / "out"
+
+    # Simulate a firewall bypass (e.g. a future strip_gm_content regression):
+    # the per-note strip becomes a no-op, so a `[!danger]` block rides
+    # straight through into content/*.md. leak_check is the second,
+    # independent layer - build_player_vault must treat ANY surviving marker
+    # as fatal: raise, and leave no publishable vault directory behind.
+    monkeypatch.setattr(cb, "strip_gm_content", lambda body: {
+        "player_body": body, "mysteries": [], "recap_seed": None,
+    })
+
+    with pytest.raises(Exception):
+        cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+
+    assert not out.exists()

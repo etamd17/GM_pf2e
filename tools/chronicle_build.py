@@ -2,6 +2,7 @@
 Obsidian vault. Runs on the GM's Mac. Stdlib-only core (optional Pillow later);
 NOT imported by the Flask app.
 """
+import json
 import logging
 import os
 import re
@@ -676,3 +677,247 @@ def leak_check(out_dir):
             for m in _LEAK_RE.finditer(text):
                 offenders.append("%s: [!%s]" % (rel, m.group(1).lower()))
     return sorted(offenders)
+
+
+# --- build_player_vault (orchestration) -------------------------------------
+#
+# Wires the pieces above into the full derived Player Vault:
+#   select_entities -> per-note strip_gm_content -> collect_assets (on the
+#   still-Obsidian-syntax bodies) -> ONE combined link/asset map ->
+#   resolve_wikilinks -> build_backlinks -> build_manifest -> write ->
+#   leak_check (fatal on any survivor).
+
+
+def _note_title(note):
+    fm = note["frontmatter"]
+    return fm.get("name") or fm.get("title") or \
+        os.path.splitext(os.path.basename(note["path"]))[0]
+
+
+def _is_handout(path):
+    p = str(path).replace(os.sep, "/")
+    return ("/" + PLAYER_HANDOUTS + "/") in p or p.split("/")[0] == PLAYER_HANDOUTS
+
+
+def _section_for(note):
+    p = note["path"].replace(os.sep, "/")
+    if _is_handout(p):
+        return "lore" if "/Lore Pages/" in p else "handout"
+    ntype = note["frontmatter"].get("type")
+    if ntype == "npc":
+        return "cast"
+    if ntype == "location":
+        return "atlas"
+    return "lore"
+
+
+def _select_pages(notes, selection):
+    """Return (included_notes, unmatched_entities). Default-exclude; `chronicle:`
+    overrides win.
+
+    `unmatched_entities` is every encountered NPC name / area code that never
+    matched an actual note - an exact-string-match gap (typo, casing, an NPC
+    mentioned in `npcs_encountered` with no NPC note at all) that the caller
+    must surface as a warning rather than silently drop.
+    """
+    npc_names = {n.lower() for n in selection["npcs"]}
+    area_codes = {a.lower() for a in selection["areas"]}
+    included, matched_npcs, matched_areas = [], set(), set()
+    for note in notes:
+        fm = note["frontmatter"]
+        if fm.get("chronicle") is False:
+            continue
+        if _is_handout(note["path"]):
+            included.append(note)
+            continue
+        ntype = fm.get("type")
+        if ntype == "npc":
+            name = (fm.get("name") or _note_title(note)).lower()
+            if fm.get("chronicle") is True or name in npc_names:
+                included.append(note)
+                matched_npcs.add(name)
+        elif ntype == "location":
+            code = str(fm.get("area_code") or "").lower()
+            if fm.get("chronicle") is True or (code and code in area_codes):
+                included.append(note)
+                matched_areas.add(code)
+        elif fm.get("chronicle") is True:
+            included.append(note)
+    unmatched = sorted((npc_names - matched_npcs) | (area_codes - matched_areas))
+    return included, unmatched
+
+
+def _load_notes(vault_dir):
+    notes = []
+    for root, _dirs, files in os.walk(str(vault_dir)):
+        for fn in files:
+            if fn.endswith(".md"):
+                notes.append(parse_note(os.path.join(root, fn)))
+    return notes
+
+
+class _WarningCapture(logging.Handler):
+    """Collects this module's WARNING+ log records emitted during a `with`
+    block, so build_player_vault can fold collect_assets' collision/
+    not-found warnings into its human-readable review_summary instead of
+    leaving them only in Python logging output."""
+
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
+
+    def __enter__(self):
+        log.addHandler(self)
+        return self
+
+    def __exit__(self, *exc_info):
+        log.removeHandler(self)
+        return False
+
+
+def _asset_link_map(raw_pages, copied):
+    """Map every embed/portrait ref found in `raw_pages` to its published
+    `assets/<basename>` path - but ONLY for refs whose basename
+    `collect_assets` actually copied (`copied`).
+
+    Keyed on the ref text EXACTLY as it appears in the note (e.g. "NPC
+    Portraits/romi.png", not just "romi.png"), because that's what
+    `resolve_wikilinks` looks up for a `![[...]]` embed. A ref collect_assets
+    skipped (not found, over budget, or lost a basename collision) gets no
+    entry, so `resolve_wikilinks` degrades its embed to nothing rather than
+    pointing at a file that was never written.
+    """
+    copied_set = set(copied)
+    asset_map = {}
+    for ref in _iter_asset_refs(raw_pages):
+        ref_str = str(ref).strip()
+        base = os.path.basename(ref_str)
+        if base in copied_set:
+            asset_map[ref_str] = "assets/" + base
+    return asset_map
+
+
+def _review_summary(pages, mysteries, unmatched, session_number, asset_warnings):
+    lines = ["Chronicle build review (session %s)" % session_number,
+             "Pages: %d" % len(pages)]
+    by_section = {}
+    for p in pages:
+        by_section.setdefault(p["section"], []).append(p["title"])
+    for section in sorted(by_section):
+        lines.append("  [%s] %s" % (section, ", ".join(sorted(by_section[section]))))
+    lines.append("Slugs: %s" % ", ".join(sorted(p["slug"] for p in pages)))
+    lines.append("Mysteries: %d" % len(mysteries))
+    for m in mysteries:
+        lines.append("  (%s) %s" % (m["kind"], m["text"]))
+    if unmatched:
+        lines.append("WARNING - unmatched entities (encountered but no page found): %s"
+                     % ", ".join(unmatched))
+    if asset_warnings:
+        lines.append("WARNING - asset issues:")
+        for w in asset_warnings:
+            lines.append("  %s" % w)
+    return "\n".join(lines)
+
+
+def build_player_vault(vault_dir, out_dir, campaign_id):
+    """Orchestrate the full player-vault build and write it to `out_dir`.
+
+    Returns `{"manifest": <dict>, "review_summary": <str>}`. `leak_check`
+    runs LAST, over the fully-written tree: if any GM marker survived the
+    per-note firewall (`strip_gm_content`), the just-written `out_dir` is
+    removed and a `RuntimeError` is raised - this function never returns,
+    and never leaves a publishable vault on disk, when a spoiler leaks.
+    """
+    content_dir = os.path.join(out_dir, "content")
+    assets_dir = os.path.join(out_dir, "assets")
+    os.makedirs(content_dir, exist_ok=True)
+    os.makedirs(assets_dir, exist_ok=True)
+
+    selection = select_entities(vault_dir)
+    sessions = selection["sessions"]
+    included, unmatched = _select_pages(_load_notes(vault_dir), selection)
+
+    title_to_slug = {_note_title(n): slugify(_note_title(n)) for n in included}
+
+    raw_pages, mysteries = [], []
+    for note in included:
+        title = _note_title(note)
+        slug = title_to_slug[title]
+        stripped = strip_gm_content(note["body"])
+        page = {
+            "slug": slug,
+            "section": _section_for(note),
+            "title": title,
+            "recipients": "all",
+            "source": "content/%s.md" % slug,
+            "body": stripped["player_body"],  # NOT yet wikilink-resolved
+        }
+        if note["frontmatter"].get("player_epithet"):
+            page["epithet"] = note["frontmatter"]["player_epithet"]
+        if note["frontmatter"].get("portrait"):
+            page["portrait"] = note["frontmatter"]["portrait"]
+        raw_pages.append(page)
+        mysteries.extend(stripped["mysteries"])
+
+    # collect_assets must see each page's body BEFORE wikilinks are resolved:
+    # resolving first would already have degraded any not-yet-copied embed to
+    # nothing, so collect_assets would never see the ref to copy it.
+    with _WarningCapture() as cap:
+        copied = collect_assets(raw_pages, vault_dir, assets_dir)
+    asset_warnings = list(cap.messages)
+
+    # ONE combined map for resolve_wikilinks: page title -> slug (page link)
+    # AND every actually-copied asset ref -> its published `assets/<basename>`
+    # path (embed). resolve_wikilinks tells the two apart by the `!` prefix
+    # alone, so both kinds of entry live in the same dict.
+    link_map = dict(title_to_slug)
+    link_map.update(_asset_link_map(raw_pages, copied))
+
+    copied_set = set(copied)
+    pages = []
+    for page in raw_pages:
+        page["body"] = resolve_wikilinks(page["body"], link_map)
+        if page.get("portrait"):
+            base = os.path.basename(str(page["portrait"]))
+            if base in copied_set:
+                page["portrait"] = "assets/" + base
+            else:
+                del page["portrait"]  # never point at a file that wasn't copied
+        pages.append(page)
+
+    backlinks = build_backlinks(pages)
+    for page in pages:
+        bl = backlinks.get(page["slug"])
+        if bl:
+            page["backlinks"] = bl
+
+    for page in pages:
+        with open(os.path.join(content_dir, page["slug"] + ".md"), "w", encoding="utf-8") as f:
+            f.write(page["body"])
+
+    spine = []
+    for s in sessions:
+        sfm = s["frontmatter"]
+        spine.append({"session_number": sfm.get("session_number"),
+                      "date": sfm.get("date"),
+                      "summary": strip_gm_content(s["body"])["recap_seed"] or ""})
+    session_number = sessions[-1]["frontmatter"].get("session_number") if sessions else None
+
+    manifest = build_manifest(campaign_id, session_number, pages, mysteries, spine, {})
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    # Second, independent firewall layer: re-scan the WHOLE emitted tree. Any
+    # survivor is fatal - never leave a partially-written, publishable vault.
+    offenders = leak_check(out_dir)
+    if offenders:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise RuntimeError(
+            "chronicle build ABORTED: spoiler marker(s) survived the firewall: %s"
+            % "; ".join(offenders))
+
+    review_summary = _review_summary(pages, mysteries, unmatched, session_number, asset_warnings)
+    return {"manifest": manifest, "review_summary": review_summary}
