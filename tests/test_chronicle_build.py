@@ -1,5 +1,6 @@
 import pathlib
 import re as _re
+import textwrap
 
 from tools import chronicle_build as cb
 
@@ -663,3 +664,116 @@ def test_normal_comment_without_marker_still_keeps_quote_text():
     assert "[!quote]" in out["player_body"]
     assert "author note" not in out["player_body"]
     assert "<!--" not in out["player_body"]
+
+
+# --- select_entities -------------------------------------------------------
+
+
+def test_select_entities_against_fixture_vault():
+    # Derived directly from the checked-in fixture (tests/fixtures/gm_vault_sample):
+    # Session 5 is `status: completed` and encountered Romi Bracken (whose NPC
+    # note also carries `chronicle: true`) and covers areas C2/C3/C11. Alzira
+    # Vane is neither encountered in that session nor force-included - her
+    # `chronicle: false` is a belt-and-suspenders exclusion.
+    result = cb.select_entities(FIXTURE)
+
+    assert "Romi Bracken" in result["npcs"]
+    assert "Alzira Vane" not in result["npcs"]
+
+    assert {"C2", "C3", "C11"} <= result["areas"]
+
+    assert len(result["sessions"]) == 1
+    assert result["sessions"][0]["frontmatter"]["session_number"] == 5
+    nums = [n["frontmatter"]["session_number"] for n in result["sessions"]]
+    assert nums == sorted(nums)
+
+
+def _write_vault_note(p, text):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(textwrap.dedent(text), encoding="utf-8")
+
+
+def _make_override_vault(tmp_path):
+    # Two completed sessions (out of number order on disk) + one in_progress.
+    _write_vault_note(tmp_path / "Session - April 21 2026.md", """\
+        ---
+        type: session_notes
+        session_number: 5
+        status: completed
+        npcs_encountered: [Romi Bracken, Cult Patrol Guards]
+        areas_covered: [C2, C3]
+        ---
+        > [!abstract] The party met Romi at the intake door.
+        """)
+    _write_vault_note(tmp_path / "Session - April 14 2026.md", """\
+        ---
+        type: session_notes
+        session_number: 4
+        status: complete
+        npcs_encountered: [Alzira]
+        areas_covered: [C1]
+        ---
+        Body.
+        """)
+    _write_vault_note(tmp_path / "Session - April 28 2026.md", """\
+        ---
+        type: session_notes
+        session_number: 6
+        status: in_progress
+        npcs_encountered: [The Hidden Patron]
+        areas_covered: [C9]
+        ---
+        Body.
+        """)
+    # NPC force-excluded even though encountered.
+    _write_vault_note(tmp_path / "NPCs" / "Alzira.md", """\
+        ---
+        type: npc
+        name: Alzira
+        chronicle: false
+        ---
+        Body.
+        """)
+    # NPC force-included even though never encountered.
+    _write_vault_note(tmp_path / "NPCs" / "Old Salk.md", """\
+        ---
+        type: npc
+        name: Old Salk
+        chronicle: true
+        ---
+        Body.
+        """)
+    # Location force-included by area_code.
+    _write_vault_note(tmp_path / "Areas" / "C11 Sky Dock.md", """\
+        ---
+        type: location
+        area_code: C11
+        name: Sky Dock
+        chronicle: true
+        ---
+        Body.
+        """)
+    return tmp_path
+
+
+def test_select_entities_proposes_encountered_and_honors_overrides(tmp_path):
+    result = cb.select_entities(_make_override_vault(tmp_path))
+
+    # Encountered-in-completed-session NPCs are proposed.
+    assert "Romi Bracken" in result["npcs"]
+    assert "Cult Patrol Guards" in result["npcs"]
+    # chronicle:false force-excludes even though encountered.
+    assert "Alzira" not in result["npcs"]
+    # chronicle:true force-includes even though never encountered.
+    assert "Old Salk" in result["npcs"]
+    # in_progress session contributes nothing.
+    assert "The Hidden Patron" not in result["npcs"]
+
+    assert "C2" in result["areas"] and "C3" in result["areas"]
+    assert "C1" in result["areas"]          # from the other completed session
+    assert "C11" in result["areas"]         # force-included location
+    assert "C9" not in result["areas"]      # in_progress session excluded
+
+    # Only completed sessions, sorted by session_number.
+    nums = [n["frontmatter"]["session_number"] for n in result["sessions"]]
+    assert nums == [4, 5]

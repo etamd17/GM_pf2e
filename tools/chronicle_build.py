@@ -2,6 +2,7 @@
 Obsidian vault. Runs on the GM's Mac. Stdlib-only core (optional Pillow later);
 NOT imported by the Flask app.
 """
+import os
 import re
 from pathlib import Path
 
@@ -304,3 +305,63 @@ def strip_gm_content(body):
         "mysteries": mysteries,
         "recap_seed": recap_seed,
     }
+
+
+def _iter_markdown(vault_dir):
+    for root, _dirs, files in os.walk(str(vault_dir)):
+        for name in files:
+            if name.endswith(".md"):
+                yield os.path.join(root, name)
+
+
+def _is_completed(status):
+    return str(status or "").strip().lower() in ("complete", "completed")
+
+
+def select_entities(vault_dir):
+    """Auto-propose which entities become player pages.
+
+    Unions `npcs_encountered` / `areas_covered` across every note with
+    `type: session_notes` and `status: completed`/`complete` (default-EXCLUDE:
+    an entity never becomes a player page just for existing). `chronicle:
+    true` on an `npc`/`location` note force-includes it even if never
+    encountered; `chronicle: false` force-excludes it even if encountered -
+    the override always wins over the encountered-union. `sessions` is the
+    list of completed session-note dicts, sorted by `session_number`.
+    """
+    npcs, areas, sessions = set(), set(), []
+    inc_npc, exc_npc, inc_area, exc_area = set(), set(), set(), set()
+
+    for path in _iter_markdown(vault_dir):
+        note = parse_note(path)
+        fm = note.get("frontmatter") or {}
+        ntype = fm.get("type")
+
+        if ntype == "session_notes":
+            if _is_completed(fm.get("status")):
+                sessions.append(note)
+                for n in fm.get("npcs_encountered") or []:
+                    npcs.add(str(n).strip())
+                for a in fm.get("areas_covered") or []:
+                    areas.add(str(a).strip())
+
+        elif ntype == "npc":
+            name = str(fm.get("name") or "").strip()
+            ch = fm.get("chronicle")
+            if name and ch is True:
+                inc_npc.add(name)
+            elif name and ch is False:
+                exc_npc.add(name)
+
+        elif ntype == "location":
+            code = str(fm.get("area_code") or fm.get("name") or "").strip()
+            ch = fm.get("chronicle")
+            if code and ch is True:
+                inc_area.add(code)
+            elif code and ch is False:
+                exc_area.add(code)
+
+    npcs = (npcs | inc_npc) - exc_npc
+    areas = (areas | inc_area) - exc_area
+    sessions.sort(key=lambda note: note.get("frontmatter", {}).get("session_number", 0))
+    return {"npcs": npcs, "areas": areas, "sessions": sessions}
