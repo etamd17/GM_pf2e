@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import pathlib
@@ -1463,3 +1464,67 @@ def test_make_zip_has_manifest_at_root_and_skips_gitkeep(tmp_path):
         assert "assets/romi.png" in names
         assert not any(n.endswith(".gitkeep") for n in names)
         assert zf.read("manifest.json") == b'{"schema_version": 1}'
+
+
+# --- publish (multipart POST via urllib, no new dep) ------------------------
+
+
+class _FakeResp:
+    def __init__(self, status=200, body=b'{"ok": true}'):
+        self.status = status
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_publish_posts_multipart_with_token(tmp_path, monkeypatch):
+    zip_path = tmp_path / "chronicle.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("manifest.json", "{}")
+
+    captured = {}
+
+    def fake_urlopen(req, *a, **kw):
+        captured["url"] = req.full_url
+        captured["method"] = req.get_method()
+        captured["content_type"] = req.get_header("Content-type")
+        captured["token"] = req.get_header("X-chronicle-token")
+        captured["data"] = req.data
+        return _FakeResp()
+
+    monkeypatch.setattr(cb.urllib.request, "urlopen", fake_urlopen)
+
+    ok, resp = cb.publish(str(zip_path), "https://tableview.up.railway.app/api/chronicle/publish",
+                          token="sekret")
+
+    assert ok is True
+    assert resp == '{"ok": true}'
+    assert captured["method"] == "POST"
+    assert captured["content_type"].startswith("multipart/form-data; boundary=")
+    assert captured["token"] == "sekret"
+    assert b'name="archive"' in captured["data"]
+    assert b"PK" in captured["data"]  # the zip bytes are in the body
+
+
+def test_publish_no_token_omits_header_and_reports_http_error(tmp_path, monkeypatch):
+    zip_path = tmp_path / "chronicle.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("manifest.json", "{}")
+
+    def fake_urlopen(req, *a, **kw):
+        assert req.get_header("X-chronicle-token") is None
+        raise cb.urllib.error.HTTPError(
+            req.full_url, 400, "Bad Request", {}, io.BytesIO(b"leak detected"))
+
+    monkeypatch.setattr(cb.urllib.request, "urlopen", fake_urlopen)
+
+    ok, resp = cb.publish(str(zip_path), "https://example/api/chronicle/publish")
+    assert ok is False
+    assert "leak detected" in resp

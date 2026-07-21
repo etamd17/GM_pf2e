@@ -8,6 +8,9 @@ import os
 import re
 import shutil
 import tempfile
+import urllib.error
+import urllib.request
+import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1015,3 +1018,55 @@ def make_zip(out_dir):
                     arc = os.path.relpath(full, out_dir).replace(os.sep, "/")
                     zf.write(full, arc)
     return zip_path
+
+
+def _encode_multipart(zip_path):
+    """Hand-roll a single-field multipart/form-data body carrying the zip
+    as `archive` -- matching PR1's `chronicle_publish` route, which reads
+    `request.files.get('archive')`. Stdlib-only: no `requests` dependency
+    for this build tool."""
+    boundary = "chronicle%s" % uuid.uuid4().hex
+    filename = os.path.basename(zip_path)
+    with open(zip_path, "rb") as f:
+        payload = f.read()
+    parts = [
+        ("--" + boundary).encode(),
+        ('Content-Disposition: form-data; name="archive"; filename="%s"' % filename).encode(),
+        b"Content-Type: application/zip",
+        b"",
+        payload,
+        ("--" + boundary + "--").encode(),
+        b"",
+    ]
+    body = b"\r\n".join(parts)
+    return body, "multipart/form-data; boundary=%s" % boundary
+
+
+def publish(zip_path, url, token=None):
+    """POST the built player-vault zip to the PR1 app's
+    `/api/chronicle/publish` route as multipart/form-data (field `archive`).
+
+    When `token` is given, it's sent as the `X-Chronicle-Token` header (the
+    prod GM-auth token, scoped to the `/api/chronicle` prefix); omitted
+    entirely for local legacy-open dev where no token is required. Returns
+    `(ok, response_text)`: `ok` is True only for a 2xx response. An
+    `HTTPError` (e.g. a 400 leak-check rejection or a 403) is caught and
+    returned as `(False, <error body text>)` rather than raising -- a
+    rejected publish is an expected, reportable outcome for the GM, not a
+    crash. A lower-level `URLError` (e.g. connection refused) is likewise
+    caught and reported as `(False, str(error))`.
+    """
+    body, content_type = _encode_multipart(zip_path)
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", content_type)
+    if token:
+        req.add_header("X-Chronicle-Token", token)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            text = resp.read().decode("utf-8", "replace")
+            status = getattr(resp, "status", 200)
+            return (200 <= status < 300, text)
+    except urllib.error.HTTPError as e:
+        return (False, e.read().decode("utf-8", "replace"))
+    except urllib.error.URLError as e:
+        return (False, str(e))
