@@ -4,6 +4,7 @@ NOT imported by the Flask app.
 """
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 _FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.DOTALL)
@@ -434,3 +435,56 @@ def build_backlinks(pages):
                 backlinks[target].append({"slug": src, "title": title_by_slug[src]})
                 seen[target].add(src)
     return backlinks
+
+
+_SECTIONS = frozenset(("home", "recap", "cast", "atlas", "lore", "handout", "fieldguide"))
+_PAGE_OPTIONAL = (
+    "epithet", "tags", "session_introduced", "session_updated",
+    "portrait", "pull_quote", "chapter", "backlinks",
+)
+
+
+def build_manifest(campaign_id, session_number, pages, mysteries, spine, calendar):
+    """Emit the exact `manifest.json` shape PR1's `_chronicle_validate_manifest`
+    accepts: `{schema_version: 1, campaign_id, session_number, generated_at,
+    pages, mysteries, calendar, fieldguide: [], spine}`.
+
+    Each input page dict carries the required `slug/section/title/source/
+    recipients` plus any of the optional keys in `_PAGE_OPTIONAL`; optional
+    keys are copied through only when present (and not None) so PR1 sees them
+    absent rather than null. Raises `ValueError` - fail fast on the build
+    machine - if a `slug` doesn't match `^[a-z0-9][a-z0-9-]{0,80}$` or a
+    `section` isn't one of the allowed PR1 sections, rather than letting
+    PR1's ingest 400 on a malformed manifest.
+    """
+    out_pages = []
+    for p in pages:
+        slug = p.get("slug", "")
+        if not _SLUG_OK.match(slug or ""):
+            raise ValueError("invalid slug: {!r}".format(slug))
+        section = p.get("section")
+        if section not in _SECTIONS:
+            raise ValueError("invalid section {!r} for slug {!r}".format(section, slug))
+        entry = {
+            "slug": slug,
+            "section": section,
+            "title": p.get("title", slug),
+            "source": p.get("source", "content/{}.md".format(slug)),
+            "recipients": p.get("recipients", "all"),
+        }
+        for key in _PAGE_OPTIONAL:
+            if p.get(key) is not None:
+                entry[key] = p[key]
+        out_pages.append(entry)
+
+    return {
+        "schema_version": 1,
+        "campaign_id": campaign_id,
+        "session_number": session_number,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pages": out_pages,
+        "mysteries": list(mysteries or []),
+        "calendar": dict(calendar or {}),
+        "fieldguide": [],
+        "spine": list(spine or []),
+    }

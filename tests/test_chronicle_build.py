@@ -2,6 +2,8 @@ import pathlib
 import re as _re
 import textwrap
 
+import pytest
+
 from tools import chronicle_build as cb
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "gm_vault_sample"
@@ -883,3 +885,53 @@ def test_build_backlinks_ignores_self_and_unknown_targets():
     ]
     back = cb.build_backlinks(pages)
     assert back == {"loop": []}
+
+
+def test_build_manifest_shape_and_validation():
+    pages = [
+        {"slug": "romi-bracken", "section": "cast", "title": "Romi Bracken",
+         "source": "content/romi-bracken.md", "recipients": "all",
+         "epithet": "The Recruiter", "tags": ["cult"],
+         "session_introduced": 4, "portrait": "assets/romi.png",
+         "backlinks": [{"slug": "c2-intake", "title": "C2 Intake"}]},
+        {"slug": "c2-intake", "section": "atlas", "title": "C2 Intake",
+         "source": "content/c2-intake.md", "recipients": ["kyle"]},
+    ]
+    manifest = cb.build_manifest(
+        campaign_id="shades-of-blood", session_number=5,
+        pages=pages, mysteries=[{"kind": "fact", "text": "known"}],
+        spine=[{"session": 4}, {"session": 5}], calendar={"era": "AR"},
+    )
+
+    assert manifest["schema_version"] == 1
+    assert manifest["campaign_id"] == "shades-of-blood"
+    assert manifest["session_number"] == 5
+    assert manifest["calendar"] == {"era": "AR"}
+    assert manifest["fieldguide"] == []
+    assert manifest["spine"] == [{"session": 4}, {"session": 5}]
+    assert manifest["mysteries"] == [{"kind": "fact", "text": "known"}]
+    # generated_at is an ISO-8601 Z timestamp.
+    assert manifest["generated_at"].endswith("Z") and "T" in manifest["generated_at"]
+
+    allowed = {"home", "recap", "cast", "atlas", "lore", "handout", "fieldguide"}
+    for pg in manifest["pages"]:
+        assert SLUG_RE.match(pg["slug"])
+        assert pg["section"] in allowed
+        assert set(("slug", "section", "title", "source", "recipients")) <= set(pg)
+
+    # Optional fields present when supplied, absent when not.
+    romi = next(p for p in manifest["pages"] if p["slug"] == "romi-bracken")
+    assert romi["epithet"] == "The Recruiter"
+    assert romi["backlinks"] == [{"slug": "c2-intake", "title": "C2 Intake"}]
+    c2 = next(p for p in manifest["pages"] if p["slug"] == "c2-intake")
+    assert "epithet" not in c2 and "portrait" not in c2
+    assert c2["recipients"] == ["kyle"]
+
+
+def test_build_manifest_rejects_bad_slug_and_section():
+    with pytest.raises(ValueError):
+        cb.build_manifest("c", 1, [{"slug": "Bad Slug", "section": "cast",
+                                    "title": "x", "recipients": "all"}], [], [], {})
+    with pytest.raises(ValueError):
+        cb.build_manifest("c", 1, [{"slug": "ok", "section": "spoilers",
+                                    "title": "x", "recipients": "all"}], [], [], {})
