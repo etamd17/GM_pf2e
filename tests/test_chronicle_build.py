@@ -156,6 +156,36 @@ def test_strip_pulls_abstract_into_recap_seed():
     assert "[!danger]" not in out["player_body"]
 
 
+# ---------------------------------------------------------------------------
+# Final-review fix M6: the callout header's TITLE text ("Confirmed",
+# "Suspected", "Previously On", ...) must NOT ride along as the first line
+# of the harvested mystery `text` / `recap_seed` -- only the callout BODY
+# (its depth-1 continuation lines) is story content. A header-only callout
+# (no continuation at all) still falls back to its title as the content,
+# since that's the only text the GM wrote.
+# ---------------------------------------------------------------------------
+
+
+def test_strip_check_harvest_drops_callout_title_keeps_body_only():
+    out = cb.strip_gm_content(_romi_body())
+    fact = next(m for m in out["mysteries"] if m["kind"] == "fact")
+    question = next(m for m in out["mysteries"] if m["kind"] == "question")
+    assert fact["text"] == "The party knows Romi runs the Intake and greeted them by name."
+    assert question["text"] == "The party suspects Romi is hiding something behind the sealed door."
+    assert "Confirmed" not in fact["text"]
+    assert "Suspected" not in question["text"]
+
+
+def test_strip_abstract_recap_seed_drops_callout_title_keeps_body_only():
+    session_body = cb.parse_note(
+        FIXTURE / "Sessions" / "Session - April 21 2026.md")["body"]
+    out = cb.strip_gm_content(session_body)
+    assert out["recap_seed"] == (
+        "The party breached the Intake Entrance and met Romi Bracken at the glowing door."
+    )
+    assert "Previously On" not in out["recap_seed"]
+
+
 def test_strip_removes_obsidian_and_html_comments():
     out = cb.strip_gm_content(_romi_body())
     assert "%%" not in out["player_body"]
@@ -1376,6 +1406,98 @@ def test_build_player_vault_end_to_end(tmp_path):
 
     # The firewall agrees the tree is clean.
     assert cb.leak_check(str(out)) == []
+
+
+# ---------------------------------------------------------------------------
+# Final-review fix I1: PR1's Home (latest_recap) + the Story So Far timeline
+# read recaps from `pages[section=='recap']` -- they never read `spine`.
+# build_player_vault must synthesize a `section: recap` page per COMPLETED
+# session note (in addition to the existing spine[] entry, which Phase 2
+# still uses), or the player-facing UI never shows anything.
+# ---------------------------------------------------------------------------
+
+
+def test_build_player_vault_synthesizes_recap_page_per_completed_session(tmp_path):
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+    manifest = result["manifest"]
+
+    recap_pages = [p for p in manifest["pages"] if p["section"] == "recap"]
+    assert len(recap_pages) == 1
+    recap = recap_pages[0]
+    assert recap["slug"] == "session-5"
+    assert recap["title"] == "Session 5"
+    assert recap["session_updated"] == 5
+    assert recap["session_introduced"] == 5
+    assert recap["recipients"] == "all"
+    assert recap["source"] == "content/session-5.md"
+
+    recap_path = out / "content" / "session-5.md"
+    assert recap_path.exists()
+    recap_body = recap_path.read_text(encoding="utf-8")
+    assert ("The party breached the Intake Entrance and met Romi Bracken "
+            "at the glowing door.") in recap_body
+
+    # No GM secret from the same session note leaks into the recap page.
+    assert "azlanti" not in recap_body.lower()
+    assert "camazotz" not in recap_body.lower()
+
+    # spine[] seeding (Phase 2) is preserved alongside the new recap page.
+    assert manifest["spine"]
+    assert manifest["spine"][0]["session_number"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Final-review fix (duplicate title): a detail page's body must not repeat
+# an H1 that already duplicates the rendered page.title (the template's own
+# <h1>). Only a LEADING H1 whose text matches the title (case-insensitive,
+# trimmed) is dropped -- any other heading is left alone.
+# ---------------------------------------------------------------------------
+
+
+def test_build_player_vault_dedupes_leading_h1_matching_page_title(tmp_path):
+    out = tmp_path / "out"
+    cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+
+    romi_body = (out / "content" / "romi-bracken.md").read_text(encoding="utf-8")
+    assert not romi_body.lstrip().lower().startswith("# romi bracken")
+    # the rest of the body is untouched
+    assert "A warm shopkeeper with an easy smile" in romi_body
+    assert "> [!quote] Recruitment Pitch" in romi_body
+
+
+def test_dedupe_leading_title_heading_matches_and_drops():
+    body = "# Romi Bracken\n\nA warm shopkeeper with an easy smile.\n"
+    out = cb._dedupe_leading_title_heading(body, "Romi Bracken")
+    assert not out.lstrip().lower().startswith("# romi bracken")
+    assert "A warm shopkeeper with an easy smile." in out
+
+
+def test_dedupe_leading_title_heading_case_and_whitespace_insensitive():
+    body = "#   ROMI bracken   \n\nBody text.\n"
+    out = cb._dedupe_leading_title_heading(body, "Romi Bracken")
+    assert "#" not in out.split("\n")[0]
+    assert "Body text." in out
+
+
+def test_dedupe_leading_title_heading_leaves_different_heading_untouched():
+    body = "# A Different Heading\n\nBody text.\n"
+    out = cb._dedupe_leading_title_heading(body, "Romi Bracken")
+    assert out == body
+
+
+def test_dedupe_leading_title_heading_leaves_non_h1_first_line_untouched():
+    body = "Just prose, no heading at all.\n"
+    out = cb._dedupe_leading_title_heading(body, "Romi Bracken")
+    assert out == body
+
+
+def test_dedupe_leading_title_heading_only_touches_leading_h1():
+    # A LATER heading matching the title, after other content, must not be
+    # touched -- only a leading H1 is ever a candidate.
+    body = "Some intro text.\n\n# Romi Bracken\n\nMore text.\n"
+    out = cb._dedupe_leading_title_heading(body, "Romi Bracken")
+    assert out == body
 
 
 def test_build_player_vault_harvests_mysteries(tmp_path):

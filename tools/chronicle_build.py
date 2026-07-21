@@ -267,10 +267,13 @@ def strip_gm_content(body):
        single leading '>') header. A depth-1 [!quote]/[!example] is kept
        verbatim (callout syntax intact); a depth-1 [!check]/[!question] is
        harvested into ``mysteries``; a depth-1 [!abstract] is harvested into
-       ``recap_seed`` - built from the header line's own title text plus
-       every DEPTH-1 continuation line's inner text (so a callout written
-       entirely on the header line, with no '>' continuation at all, still
-       harvests/seeds its title). Every other depth-1 kind - known GM kinds
+       ``recap_seed`` - built from every DEPTH-1 continuation line's inner
+       text ONLY. The header line's own title text ("Confirmed", "Suspected",
+       "Previously On", ...) is UI chrome the GM types to label the callout,
+       not story content, so it is dropped from the harvested/seeded text -
+       UNLESS the callout has no continuation at all (the whole thing was
+       written on the header line), in which case the title is the only text
+       the GM wrote and stands in as the content. Every other depth-1 kind - known GM kinds
        (danger/info/tip/warning) and any unknown/custom kind alike - is
        dropped entirely, and so is any bare '>' blockquote that never had a
        callout header in the first place. A header at depth >= 2 (nested
@@ -342,7 +345,14 @@ def strip_gm_content(body):
             continuation = "\n".join(
                 _strip_quote_markers(b) for b in block[1:] if _callout_depth(b) == 1
             ).strip()
-            content = "\n".join(p for p in (title, continuation) if p).strip()
+            # The harvested/seeded text is the callout BODY (its continuation
+            # lines) only - the header's own title ("Confirmed", "Suspected",
+            # "Previously On", ...) is a label, not story content, and must
+            # not ride along as the first line. Only when there's NO
+            # continuation at all (the callout was written entirely on the
+            # header line) does the title stand in as the content, so
+            # header-only harvesting still works.
+            content = continuation or title
             if kind == "abstract":
                 recap_seed = content or None
             elif kind in _HARVEST:
@@ -752,6 +762,35 @@ def _note_title(note):
         os.path.splitext(os.path.basename(note["path"]))[0]
 
 
+_LEADING_H1_RE = re.compile(r"^#\s+(.*\S)\s*$")
+
+
+def _dedupe_leading_title_heading(body, title):
+    """Drop a leading markdown H1 that duplicates the page `title`.
+
+    The page template renders `page.title` as its own <h1>; a note body
+    that ALSO opens with `# <same title>` would show the title twice. Only
+    the body's FIRST non-blank line is a candidate, and only when it's an
+    H1 (`# ...`) whose text matches `title` case-insensitively (trimmed) --
+    any other heading (a different H1, or any deeper heading), a first line
+    that isn't a heading at all, or a matching H1 that ISN'T the leading
+    line, is left completely untouched.
+    """
+    lines = body.split("\n")
+    i = 0
+    while i < len(lines) and lines[i].strip() == "":
+        i += 1
+    if i >= len(lines):
+        return body
+    m = _LEADING_H1_RE.match(lines[i].strip())
+    if not m or m.group(1).strip().lower() != (title or "").strip().lower():
+        return body
+    del lines[i]
+    if i < len(lines) and lines[i].strip() == "":
+        del lines[i]
+    return "\n".join(lines)
+
+
 def _is_handout(path):
     p = str(path).replace(os.sep, "/")
     return ("/" + PLAYER_HANDOUTS + "/") in p or p.split("/")[0] == PLAYER_HANDOUTS
@@ -957,13 +996,14 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
             title = _note_title(note)
             slug = title_to_slug[title]
             stripped = strip_gm_content(note["body"])
+            body = _dedupe_leading_title_heading(stripped["player_body"], title)
             page = {
                 "slug": slug,
                 "section": _section_for(note),
                 "title": title,
                 "recipients": "all",
                 "source": "content/%s.md" % slug,
-                "body": stripped["player_body"],  # NOT yet wikilink-resolved
+                "body": body,  # NOT yet wikilink-resolved
             }
             if note["frontmatter"].get("player_epithet"):
                 page["epithet"] = note["frontmatter"]["player_epithet"]
@@ -971,6 +1011,36 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
                 page["portrait"] = note["frontmatter"]["portrait"]
             raw_pages.append(page)
             mysteries.extend(stripped["mysteries"])
+
+        # Fix I1: synthesize one `section: recap` page per COMPLETED session
+        # note, firewalled through strip_gm_content exactly like every other
+        # page body. PR1's Home (latest_recap) and the Story So Far timeline
+        # read recaps from `pages[section=='recap']` -- they read `spine` in
+        # ZERO places -- so without this page, a session's [!abstract] recap
+        # seed lands only in manifest.spine and is invisible to players. The
+        # existing spine[] seeding below is kept as-is (Phase 2 uses it); the
+        # recap_seed is computed once here and reused for both.
+        session_recap_seed = {}
+        for s in sessions:
+            sfm = s["frontmatter"]
+            n = sfm.get("session_number")
+            seed = strip_gm_content(s["body"])["recap_seed"] or ""
+            session_recap_seed[n] = seed
+            if n is None:
+                continue
+            slug = slugify("session-%s" % n)
+            title = sfm.get("title") or "Session %s" % n
+            title_to_slug.setdefault(title, slug)
+            raw_pages.append({
+                "slug": slug,
+                "section": "recap",
+                "title": title,
+                "recipients": "all",
+                "source": "content/%s.md" % slug,
+                "session_updated": n,
+                "session_introduced": n,
+                "body": seed,  # NOT yet wikilink-resolved
+            })
 
         # collect_assets must see each page's body BEFORE wikilinks are
         # resolved: resolving first would already have degraded any
@@ -1013,9 +1083,10 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
         spine = []
         for s in sessions:
             sfm = s["frontmatter"]
-            spine.append({"session_number": sfm.get("session_number"),
+            n = sfm.get("session_number")
+            spine.append({"session_number": n,
                           "date": sfm.get("date"),
-                          "summary": strip_gm_content(s["body"])["recap_seed"] or ""})
+                          "summary": session_recap_seed.get(n, "")})
         session_number = sessions[-1]["frontmatter"].get("session_number") if sessions else None
 
         manifest = build_manifest(campaign_id, session_number, pages, mysteries, spine, {})
