@@ -1302,19 +1302,100 @@ def test_build_player_vault_combined_map_resolves_links_and_asset_embeds(tmp_pat
     assert cb.leak_check(str(out)) == []
 
 
-def test_build_player_vault_aborts_and_removes_output_on_leak(tmp_path, monkeypatch):
+def test_build_player_vault_end_to_end_secrets_absent_from_every_file(tmp_path):
+    # Task 12 hardening: assert the fixture's ACTUAL planted secret strings
+    # (not just the trivially-true `role:` frontmatter field) are absent from
+    # every emitted content file AND manifest.json, case-insensitively.
     out = tmp_path / "out"
+    cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+
+    content_dir = out / "content"
+    joined = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(content_dir.iterdir())
+    ).lower()
+    manifest_text = (out / "manifest.json").read_text(encoding="utf-8").lower()
+
+    for secret in ("camazotz", "sacrifice", "azlanti tech"):
+        assert secret not in joined, secret
+        assert secret not in manifest_text, secret
+
+
+def test_build_player_vault_warns_on_missing_asset(tmp_path):
+    # Important 2: a page references a portrait/embed with no matching file
+    # under Player Handouts -> review_summary must surface an asset warning
+    # (the not-found/collision surfacing collect_assets already logs, but
+    # which build_player_vault's own tests never exercised end-to-end).
+    vault = tmp_path / "vault"
+    _write_vault_note(vault / "NPCs" / "Ghost.md", """\
+        ---
+        type: npc
+        name: Ghost
+        chronicle: true
+        portrait: NPC Portraits/ghost.png
+        ---
+        ![[NPC Portraits/ghost.png]]
+
+        A pale figure, never actually pictured.
+        """)
+    out = tmp_path / "out"
+    result = cb.build_player_vault(str(vault), str(out), campaign_id="c")
+
+    summary = result["review_summary"].lower()
+    assert "ghost.png" in summary
+    assert "not found" in summary
+
+
+def test_build_player_vault_skips_underscore_and_reference_meta_files(tmp_path):
+    # Minor: `Player Handouts/_README.md` (an underscore-prefixed GM meta file
+    # with `type: reference`) must never become a published page.
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+
+    titles = {p["title"] for p in result["manifest"]["pages"]}
+    assert not any("secret-free" in t.lower() for t in titles)
+
+    content_names = {p.name.lower() for p in (out / "content").iterdir()}
+    assert not any("readme" in n for n in content_names)
+
+
+def test_build_player_vault_never_touches_out_dir_on_leak(tmp_path, monkeypatch):
+    # CRITICAL data-safety regression guard: build_player_vault must NEVER
+    # rmtree/modify the caller's out_dir on a leak. It stages the whole
+    # build into a private temp dir first; a leak there means the staging
+    # dir is discarded and out_dir -- the GM's real persistent Obsidian
+    # player vault -- is never touched at all.
+    out = tmp_path / "out"
+    out.mkdir()
+    sentinel = out / "GM_PRECIOUS.txt"
+    sentinel.write_text("do not delete", encoding="utf-8")
+    prior_manifest = out / "manifest.json"
+    prior_manifest.write_text('{"prior": true}', encoding="utf-8")
 
     # Simulate a firewall bypass (e.g. a future strip_gm_content regression):
     # the per-note strip becomes a no-op, so a `[!danger]` block rides
     # straight through into content/*.md. leak_check is the second,
     # independent layer - build_player_vault must treat ANY surviving marker
-    # as fatal: raise, and leave no publishable vault directory behind.
+    # as fatal, but must NEVER raise or touch out_dir: it returns the
+    # offenders in `result["leaks"]` for the CLI to act on.
     monkeypatch.setattr(cb, "strip_gm_content", lambda body: {
         "player_body": body, "mysteries": [], "recap_seed": None,
     })
 
-    with pytest.raises(Exception):
-        cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
 
-    assert not out.exists()
+    assert result["leaks"]  # non-empty: the forced leak was detected
+    assert "leak" in result["review_summary"].lower()
+
+    # out_dir was NOT touched: the sentinel and prior manifest survive
+    # untouched, and no content/assets subtree was written into it.
+    assert sentinel.exists()
+    assert sentinel.read_text(encoding="utf-8") == "do not delete"
+    assert prior_manifest.read_text(encoding="utf-8") == '{"prior": true}'
+    assert not (out / "content").exists()
+    assert not (out / "assets").exists()
+
+
+def test_build_player_vault_clean_build_reports_empty_leaks(tmp_path):
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
+    assert result["leaks"] == []

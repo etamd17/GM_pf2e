@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -699,6 +700,18 @@ def _is_handout(path):
     return ("/" + PLAYER_HANDOUTS + "/") in p or p.split("/")[0] == PLAYER_HANDOUTS
 
 
+def _is_gm_meta(note):
+    """A note that must never become a published page regardless of type or
+    `chronicle:` override: an underscore-prefixed filename (e.g. `_README.md`,
+    a GM authoring convention for a folder-level note) or explicit
+    `type: reference` frontmatter (documentation-about-the-vault, not
+    in-world content)."""
+    basename = os.path.basename(str(note["path"]))
+    if basename.startswith("_"):
+        return True
+    return note["frontmatter"].get("type") == "reference"
+
+
 def _section_for(note):
     p = note["path"].replace(os.sep, "/")
     if _is_handout(p):
@@ -719,6 +732,11 @@ def _select_pages(notes, selection):
     matched an actual note - an exact-string-match gap (typo, casing, an NPC
     mentioned in `npcs_encountered` with no NPC note at all) that the caller
     must surface as a warning rather than silently drop.
+
+    A GM meta note (`_is_gm_meta`: underscore-prefixed filename or
+    `type: reference`) is skipped unconditionally, before the handout/type
+    checks and even a `chronicle: true` override - it's documentation about
+    the vault, never in-world content.
     """
     npc_names = {n.lower() for n in selection["npcs"]}
     area_codes = {a.lower() for a in selection["areas"]}
@@ -726,6 +744,8 @@ def _select_pages(notes, selection):
     for note in notes:
         fm = note["frontmatter"]
         if fm.get("chronicle") is False:
+            continue
+        if _is_gm_meta(note):
             continue
         if _is_handout(note["path"]):
             included.append(note)
@@ -822,102 +842,154 @@ def _review_summary(pages, mysteries, unmatched, session_number, asset_warnings)
     return "\n".join(lines)
 
 
+def _leak_abort_summary(offenders, session_number):
+    """Loud, unmissable review_summary for the leak-abort path -- this is
+    the ONLY signal the GM (or the Task 15 CLI) gets that the build was
+    discarded, so it must not read like an ordinary review."""
+    lines = [
+        "Chronicle build review (session %s)" % session_number,
+        "!!! BUILD ABORTED - SPOILER LEAK DETECTED !!!",
+        "The staged build was DISCARDED. The output vault (out_dir) was "
+        "NOT modified in any way.",
+        "Offending marker(s) survived the firewall:",
+    ]
+    for o in offenders:
+        lines.append("  %s" % o)
+    return "\n".join(lines)
+
+
 def build_player_vault(vault_dir, out_dir, campaign_id):
-    """Orchestrate the full player-vault build and write it to `out_dir`.
+    """Orchestrate the full player-vault build.
 
-    Returns `{"manifest": <dict>, "review_summary": <str>}`. `leak_check`
-    runs LAST, over the fully-written tree: if any GM marker survived the
-    per-note firewall (`strip_gm_content`), the just-written `out_dir` is
-    removed and a `RuntimeError` is raised - this function never returns,
-    and never leaves a publishable vault on disk, when a spoiler leaks.
+    Returns `{"manifest": <dict>, "review_summary": <str>, "leaks": <list>}`.
+    `leaks` is empty on a clean build.
+
+    Data-safety redesign (PR0 Task 12): the ENTIRE build is assembled in a
+    private staging directory (`tempfile.mkdtemp`), never in `out_dir`
+    directly. `leak_check` then runs over the staged tree:
+
+    - If any GM marker survived the per-note firewall, the staging dir is
+      discarded and `out_dir` is NOT touched in any way -- not written to,
+      not removed, not even created if it didn't already exist. The
+      offenders are returned in `leaks` (with a loud-warning
+      `review_summary`) for the caller to act on; this function never
+      raises and never deletes anything under `out_dir`. `out_dir` is the
+      GM's real, persistent Obsidian player vault (may hold `.obsidian/`
+      config and git history) -- it must survive a bad build untouched.
+    - If the tree is clean, ONLY the managed outputs are synced into
+      `out_dir`: `manifest.json` is written/overwritten, and the
+      `content/` and `assets/` subtrees are replaced wholesale (removed
+      then recopied from staging). Nothing else already present in
+      `out_dir` (`.obsidian/`, `.git/`, unrelated files) is ever touched.
     """
-    content_dir = os.path.join(out_dir, "content")
-    assets_dir = os.path.join(out_dir, "assets")
-    os.makedirs(content_dir, exist_ok=True)
-    os.makedirs(assets_dir, exist_ok=True)
+    staging_dir = tempfile.mkdtemp(prefix="chronicle_build_")
+    try:
+        content_dir = os.path.join(staging_dir, "content")
+        assets_dir = os.path.join(staging_dir, "assets")
+        os.makedirs(content_dir, exist_ok=True)
+        os.makedirs(assets_dir, exist_ok=True)
 
-    selection = select_entities(vault_dir)
-    sessions = selection["sessions"]
-    included, unmatched = _select_pages(_load_notes(vault_dir), selection)
+        selection = select_entities(vault_dir)
+        sessions = selection["sessions"]
+        included, unmatched = _select_pages(_load_notes(vault_dir), selection)
 
-    title_to_slug = {_note_title(n): slugify(_note_title(n)) for n in included}
+        title_to_slug = {_note_title(n): slugify(_note_title(n)) for n in included}
 
-    raw_pages, mysteries = [], []
-    for note in included:
-        title = _note_title(note)
-        slug = title_to_slug[title]
-        stripped = strip_gm_content(note["body"])
-        page = {
-            "slug": slug,
-            "section": _section_for(note),
-            "title": title,
-            "recipients": "all",
-            "source": "content/%s.md" % slug,
-            "body": stripped["player_body"],  # NOT yet wikilink-resolved
-        }
-        if note["frontmatter"].get("player_epithet"):
-            page["epithet"] = note["frontmatter"]["player_epithet"]
-        if note["frontmatter"].get("portrait"):
-            page["portrait"] = note["frontmatter"]["portrait"]
-        raw_pages.append(page)
-        mysteries.extend(stripped["mysteries"])
+        raw_pages, mysteries = [], []
+        for note in included:
+            title = _note_title(note)
+            slug = title_to_slug[title]
+            stripped = strip_gm_content(note["body"])
+            page = {
+                "slug": slug,
+                "section": _section_for(note),
+                "title": title,
+                "recipients": "all",
+                "source": "content/%s.md" % slug,
+                "body": stripped["player_body"],  # NOT yet wikilink-resolved
+            }
+            if note["frontmatter"].get("player_epithet"):
+                page["epithet"] = note["frontmatter"]["player_epithet"]
+            if note["frontmatter"].get("portrait"):
+                page["portrait"] = note["frontmatter"]["portrait"]
+            raw_pages.append(page)
+            mysteries.extend(stripped["mysteries"])
 
-    # collect_assets must see each page's body BEFORE wikilinks are resolved:
-    # resolving first would already have degraded any not-yet-copied embed to
-    # nothing, so collect_assets would never see the ref to copy it.
-    with _WarningCapture() as cap:
-        copied = collect_assets(raw_pages, vault_dir, assets_dir)
-    asset_warnings = list(cap.messages)
+        # collect_assets must see each page's body BEFORE wikilinks are
+        # resolved: resolving first would already have degraded any
+        # not-yet-copied embed to nothing, so collect_assets would never see
+        # the ref to copy it.
+        with _WarningCapture() as cap:
+            copied = collect_assets(raw_pages, vault_dir, assets_dir)
+        asset_warnings = list(cap.messages)
 
-    # ONE combined map for resolve_wikilinks: page title -> slug (page link)
-    # AND every actually-copied asset ref -> its published `assets/<basename>`
-    # path (embed). resolve_wikilinks tells the two apart by the `!` prefix
-    # alone, so both kinds of entry live in the same dict.
-    link_map = dict(title_to_slug)
-    link_map.update(_asset_link_map(raw_pages, copied))
+        # ONE combined map for resolve_wikilinks: page title -> slug (page
+        # link) AND every actually-copied asset ref -> its published
+        # `assets/<basename>` path (embed). resolve_wikilinks tells the two
+        # apart by the `!` prefix alone, so both kinds of entry live in the
+        # same dict.
+        link_map = dict(title_to_slug)
+        link_map.update(_asset_link_map(raw_pages, copied))
 
-    copied_set = set(copied)
-    pages = []
-    for page in raw_pages:
-        page["body"] = resolve_wikilinks(page["body"], link_map)
-        if page.get("portrait"):
-            base = os.path.basename(str(page["portrait"]))
-            if base in copied_set:
-                page["portrait"] = "assets/" + base
-            else:
-                del page["portrait"]  # never point at a file that wasn't copied
-        pages.append(page)
+        copied_set = set(copied)
+        pages = []
+        for page in raw_pages:
+            page["body"] = resolve_wikilinks(page["body"], link_map)
+            if page.get("portrait"):
+                base = os.path.basename(str(page["portrait"]))
+                if base in copied_set:
+                    page["portrait"] = "assets/" + base
+                else:
+                    del page["portrait"]  # never point at a file that wasn't copied
+            pages.append(page)
 
-    backlinks = build_backlinks(pages)
-    for page in pages:
-        bl = backlinks.get(page["slug"])
-        if bl:
-            page["backlinks"] = bl
+        backlinks = build_backlinks(pages)
+        for page in pages:
+            bl = backlinks.get(page["slug"])
+            if bl:
+                page["backlinks"] = bl
 
-    for page in pages:
-        with open(os.path.join(content_dir, page["slug"] + ".md"), "w", encoding="utf-8") as f:
-            f.write(page["body"])
+        for page in pages:
+            with open(os.path.join(content_dir, page["slug"] + ".md"), "w", encoding="utf-8") as f:
+                f.write(page["body"])
 
-    spine = []
-    for s in sessions:
-        sfm = s["frontmatter"]
-        spine.append({"session_number": sfm.get("session_number"),
-                      "date": sfm.get("date"),
-                      "summary": strip_gm_content(s["body"])["recap_seed"] or ""})
-    session_number = sessions[-1]["frontmatter"].get("session_number") if sessions else None
+        spine = []
+        for s in sessions:
+            sfm = s["frontmatter"]
+            spine.append({"session_number": sfm.get("session_number"),
+                          "date": sfm.get("date"),
+                          "summary": strip_gm_content(s["body"])["recap_seed"] or ""})
+        session_number = sessions[-1]["frontmatter"].get("session_number") if sessions else None
 
-    manifest = build_manifest(campaign_id, session_number, pages, mysteries, spine, {})
-    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+        manifest = build_manifest(campaign_id, session_number, pages, mysteries, spine, {})
+        with open(os.path.join(staging_dir, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    # Second, independent firewall layer: re-scan the WHOLE emitted tree. Any
-    # survivor is fatal - never leave a partially-written, publishable vault.
-    offenders = leak_check(out_dir)
-    if offenders:
-        shutil.rmtree(out_dir, ignore_errors=True)
-        raise RuntimeError(
-            "chronicle build ABORTED: spoiler marker(s) survived the firewall: %s"
-            % "; ".join(offenders))
+        # Second, independent firewall layer: re-scan the WHOLE staged tree
+        # (never out_dir -- out_dir is never written to until this check
+        # passes). Any survivor is fatal: discard the staging dir (in the
+        # `finally` below) and return without touching out_dir at all.
+        offenders = leak_check(staging_dir)
+        if offenders:
+            review_summary = _leak_abort_summary(offenders, session_number)
+            return {"manifest": manifest, "review_summary": review_summary,
+                     "leaks": offenders}
 
-    review_summary = _review_summary(pages, mysteries, unmatched, session_number, asset_warnings)
-    return {"manifest": manifest, "review_summary": review_summary}
+        # Clean build: sync ONLY the managed outputs into out_dir. Anything
+        # else already there (.obsidian/, .git/, unrelated files) is left
+        # completely alone.
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
+        for sub, src_dir in (("content", content_dir), ("assets", assets_dir)):
+            dst = os.path.join(out_dir, sub)
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
+            elif os.path.exists(dst):
+                os.remove(dst)
+            shutil.copytree(src_dir, dst)
+
+        review_summary = _review_summary(pages, mysteries, unmatched, session_number, asset_warnings)
+        return {"manifest": manifest, "review_summary": review_summary, "leaks": []}
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
