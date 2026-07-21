@@ -577,3 +577,89 @@ def test_header_only_abstract_seeds_recap():
     assert out["recap_seed"] is not None
     assert "HEADERONLY_ABS" in out["recap_seed"]
     assert "[!abstract]" not in out["player_body"]
+
+
+# ---------------------------------------------------------------------------
+# PR0 task 04: comment-splice leak. A comment that WRAPS a callout marker
+# token mid-line ("> <!--[!danger] Secret Title-->real secret") deletes the
+# marker along with the comment, leaving trailing secret prose on what is
+# still a kept/harvested blockquote continuation line - because comment
+# removal happens globally, before the block walk ever sees a "[!danger]"
+# header to reject. A marker-bearing comment must nuke its ENTIRE physical
+# line(s), not just the comment substring, whenever that would otherwise
+# leave blockquote content behind.
+# ---------------------------------------------------------------------------
+
+def test_leak_repro_15_comment_splice_marker_leaks_into_player_body():
+    body = (
+        "> [!quote] Safe\n"
+        "> visible1\n"
+        "> <!--[!danger] Secret Title-->real secret DISGUISE_999\n"
+        "> visible2\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "DISGUISE_999" not in out["player_body"]
+    assert "DISGUISE_999" not in _mysteries_text(out)
+
+
+def test_leak_repro_16_comment_splice_marker_leaks_into_mysteries():
+    body = (
+        "> [!check] Clue\n"
+        "> visible1\n"
+        "> <!--[!danger] Secret Title-->real secret MYSTLEAK_DISGUISE_1\n"
+        "> visible2\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "MYSTLEAK_DISGUISE_1" not in _mysteries_text(out)
+    assert "MYSTLEAK_DISGUISE_1" not in out["player_body"]
+
+
+def test_leak_repro_17_comment_splice_marker_leaks_into_recap_seed():
+    body = (
+        "> [!abstract] Summary\n"
+        "> visible1\n"
+        "> <!--[!danger] Secret Title-->real secret RECAPLEAK_DISGUISE_1\n"
+        "> visible2\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert out["recap_seed"] is not None
+    assert "RECAPLEAK_DISGUISE_1" not in out["recap_seed"]
+    assert "RECAPLEAK_DISGUISE_1" not in out["player_body"]
+
+
+def test_leak_repro_18_percent_comment_splice_marker_leaks():
+    body = (
+        "> [!quote] Safe\n"
+        "> visible1\n"
+        "> %%[!danger] Secret Title%%real secret PCTDISGUISE_1\n"
+        "> visible2\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "PCTDISGUISE_1" not in out["player_body"]
+    assert "PCTDISGUISE_1" not in _mysteries_text(out)
+
+
+def test_leak_repro_19_multiline_comment_splice_marker_leaks():
+    body = (
+        "> [!quote] Safe\n"
+        "> visible1\n"
+        "> <!--\n"
+        "[!danger] X\n"
+        "-->secret MULTILINEDISGUISE_1\n"
+        "> visible2\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "MULTILINEDISGUISE_1" not in out["player_body"]
+    assert "MULTILINEDISGUISE_1" not in _mysteries_text(out)
+
+
+def test_normal_comment_without_marker_still_keeps_quote_text():
+    # Non-regression: a comment with NO callout marker inside it is just an
+    # ordinary author note. It must still be stripped normally, keeping the
+    # rest of the line (and the quote) intact.
+    body = "> [!quote] text <!-- author note -->\n"
+    out = cb.strip_gm_content(body)
+    assert "text" in out["player_body"]
+    assert "[!quote]" in out["player_body"]
+    assert "author note" not in out["player_body"]
+    assert "<!--" not in out["player_body"]

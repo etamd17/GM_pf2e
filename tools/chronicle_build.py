@@ -104,6 +104,9 @@ def slugify(title):
 
 
 _CALLOUT_INNER = re.compile(r"^\[!\s*(?P<kind>[^\]\s]+)\s*\]\s*(?P<title>.*)$")
+_CALLOUT_MARKER_ANY = re.compile(r"\[!\s*[^\]\s]+\s*\]")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_OBSIDIAN_COMMENT_RE = re.compile(r"%%.*?%%", re.DOTALL)
 
 _KEEP_KINDS = {"quote", "example"}       # kept verbatim, callout syntax intact
 _HARVEST = {"check": "fact", "question": "question"}
@@ -140,6 +143,64 @@ def _match_callout_header(line):
     return _CALLOUT_INNER.match(_strip_quote_markers(line))
 
 
+def _line_bounds(text, pos):
+    """Return (start, end) offsets of the physical line containing `pos`
+    within `text`. `start` is just past the previous newline (or 0);
+    `end` is the index of that line's own trailing '\\n', or len(text) if
+    the line runs to the end of the text with no trailing newline."""
+    start = text.rfind("\n", 0, pos) + 1
+    end = text.find("\n", pos)
+    if end == -1:
+        end = len(text)
+    return start, end
+
+
+def _strip_comment_pattern(body, pattern):
+    """Remove every match of a comment `pattern` (HTML ``<!--...-->`` or
+    Obsidian ``%%...%%``) from `body`.
+
+    A comment whose own text contains a callout marker (``[!kind]``) is
+    treated as suspicious: it may be hiding a marker behind comment
+    syntax so a callout header disappears while its secret body rides
+    along as an orphaned blockquote continuation. To detect this, the
+    text that a NORMAL strip would leave behind on the comment's line(s)
+    - the prefix before the comment on its opening line, joined to the
+    suffix after the comment on its closing line - is checked: if THAT
+    would read as blockquote content (starts with '>'), the marker is
+    live ammunition, not decoration, so the entire physical line(s) the
+    comment spans are dropped wholesale (prefix and suffix both), rather
+    than just the comment substring. This closes the case whether the
+    comment is single-line (``> <!--[!danger] X-->secret``) or spans
+    multiple physical lines (``> <!--`` / ``[!danger] X`` / ``-->secret``),
+    since in both shapes the surviving prefix+suffix is what would have
+    read as a kept/harvested blockquote line.
+
+    A comment with no marker - or one whose surrounding prefix+suffix
+    would NOT read as blockquote content - is stripped normally: only
+    the comment text is removed, the rest of its line is kept intact.
+    """
+    out = []
+    pos = 0
+    for m in pattern.finditer(body):
+        if m.start() < pos:
+            continue  # already consumed by an earlier whole-line drop
+        out.append(body[pos:m.start()])
+        if _CALLOUT_MARKER_ANY.search(m.group(0)):
+            open_start, _open_end = _line_bounds(body, m.start())
+            _close_start, close_end = _line_bounds(body, m.end())
+            prefix = body[open_start:m.start()]
+            suffix = body[m.end():close_end]
+            if (prefix + suffix).lstrip().startswith(">"):
+                if out and out[-1].endswith(prefix):
+                    out[-1] = out[-1][: len(out[-1]) - len(prefix)]
+                has_nl = close_end < len(body) and body[close_end] == "\n"
+                pos = close_end + 1 if has_nl else close_end
+                continue
+        pos = m.end()
+    out.append(body[pos:])
+    return "".join(out)
+
+
 def strip_gm_content(body):
     """The spoiler firewall: split a note body into what players may see.
 
@@ -148,10 +209,19 @@ def strip_gm_content(body):
     incremental patches each close one leak while opening another):
 
     1. Strip ALL comments (Obsidian ``%%...%%`` and HTML ``<!--...-->``)
-       from the RAW body FIRST, multi-line aware. This is safe precisely
-       because of step 3 below: a comment that severs a callout block only
-       ever orphans a bare '>' tail, and step 3 strips every bare '>' line
-       unconditionally, regardless of why it ended up bare.
+       from the RAW body FIRST, multi-line aware, via
+       ``_strip_comment_pattern``. This is safe precisely because of step
+       3 below: a comment that severs a callout block only ever orphans a
+       bare '>' tail, and step 3 strips every bare '>' line
+       unconditionally, regardless of why it ended up bare. The one case
+       that isn't automatically safe is a comment that itself CONTAINS a
+       callout marker ([!kind]) and, once normally stripped, would leave
+       blockquote content behind on its line (e.g. a marker splice like
+       ``> <!--[!danger] X-->secret`` hiding a header inside a comment so
+       the block walk never sees it to reject) - ``_strip_comment_pattern``
+       detects that case and drops the comment's ENTIRE physical line(s)
+       instead of just the comment substring, so no orphaned secret prose
+       ever reaches step 2/3 in the first place.
     2. Walk lines, grouping '>'-prefixed runs into callout blocks. Leading
        whitespace and '>'-depth are normalized throughout: a line is
        "blockquote content" if ``line.lstrip().startswith(">")`` (so an
@@ -181,8 +251,8 @@ def strip_gm_content(body):
        callout is an accepted residual per the vault convention that
        secrets live in '>' callouts - the GM reviews the build output.)
     """
-    body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
-    body = re.sub(r"%%.*?%%", "", body, flags=re.DOTALL)
+    body = _strip_comment_pattern(body, _HTML_COMMENT_RE)
+    body = _strip_comment_pattern(body, _OBSIDIAN_COMMENT_RE)
 
     lines = body.split("\n")
     out_lines, mysteries, recap_seed = [], [], None
