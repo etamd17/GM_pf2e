@@ -3,6 +3,7 @@ import sqlite3
 import json
 import math
 import os
+import hmac
 import glob
 import uuid
 import copy
@@ -495,11 +496,32 @@ GM_API_PREFIXES = (
     '/api/chronicle',
 )
 
+def _chronicle_token_ok(path):
+    """A valid X-Chronicle-Token unlocks EXACTLY the /api/chronicle publish API
+    for headless CLI publishing (PR0 build tool -> prod). The env token must be
+    non-empty and match the header exactly; only /api/chronicle paths are
+    eligible, so a leaked token can never reach any other GM-gated prefix.
+    Local dev (legacy-open, GM_PASSWORD='') never reaches here -- _is_gm() is
+    already True there, so no token is needed."""
+    if not path.startswith('/api/chronicle'):
+        return False
+    expected = os.environ.get('CHRONICLE_PUBLISH_TOKEN', '')
+    if not expected:
+        return False
+    supplied = request.headers.get('X-Chronicle-Token', '')
+    return hmac.compare_digest(supplied, expected)
+
+
 @app.before_request
 def check_gm_access():
-    """Block GM-only API routes for non-GM callers (account or legacy mode)."""
+    """Block GM-only API routes for non-GM callers (account or legacy mode).
+
+    Exception: a valid X-Chronicle-Token unlocks only the /api/chronicle publish
+    API for the headless PR0 build tool (see _chronicle_token_ok)."""
     path = request.path
     if any(path.startswith(prefix) for prefix in GM_API_PREFIXES) and not _is_gm():
+        if _chronicle_token_ok(path):
+            return None
         return jsonify({"error": "GM access required"}), 403
 
 

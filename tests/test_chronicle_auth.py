@@ -208,3 +208,55 @@ def test_handout_recipients_ownership_account_mode():
         print('HANDOUT_RECIPIENTS_OK')
     ''')
     assert 'HANDOUT_RECIPIENTS_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_chronicle_publish_token_unlocks_only_chronicle():
+    # GM_PASSWORD set + no GM session => a plain caller is a non-GM. The
+    # CHRONICLE_PUBLISH_TOKEN header must unlock EXACTLY /api/chronicle*, and
+    # nothing else, and only when the env token is non-empty and matches.
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp()
+        os.environ['GM_PASSWORD'] = 'sekret'
+        os.environ['CHRONICLE_PUBLISH_TOKEN'] = 'tok-abc123'
+        import app as A
+        c = A.app.test_client()
+
+        # No header -> the chronicle publish API is still GM-gated (403).
+        assert c.post('/api/chronicle/publish').status_code == 403
+
+        # Wrong token -> still 403.
+        assert c.post('/api/chronicle/publish',
+                      headers={'X-Chronicle-Token': 'nope'}).status_code == 403
+
+        # Correct token -> NOT 403 (the gate let it through; the route itself
+        # may 400 on a missing archive, but it is no longer auth-blocked).
+        rv = c.post('/api/chronicle/publish',
+                    headers={'X-Chronicle-Token': 'tok-abc123'})
+        assert rv.status_code != 403, rv.status_code
+
+        # The token does NOT unlock any OTHER GM prefix (scope check).
+        assert c.post('/api/clear_encounter',
+                      headers={'X-Chronicle-Token': 'tok-abc123'}).status_code == 403
+        print('TOKEN_SCOPED_OK')
+    ''')
+    assert 'TOKEN_SCOPED_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_chronicle_publish_token_inert_when_env_unset():
+    # With no CHRONICLE_PUBLISH_TOKEN in the environment, the header is inert:
+    # a matching-looking header cannot unlock anything (empty expected != any).
+    r = _run('''
+        import tempfile, os
+        os.environ['DATA_DIR'] = tempfile.mkdtemp()
+        os.environ['GM_PASSWORD'] = 'sekret'
+        os.environ.pop('CHRONICLE_PUBLISH_TOKEN', None)
+        import app as A
+        c = A.app.test_client()
+        assert c.post('/api/chronicle/publish',
+                      headers={'X-Chronicle-Token': ''}).status_code == 403
+        assert c.post('/api/chronicle/publish',
+                      headers={'X-Chronicle-Token': 'anything'}).status_code == 403
+        print('TOKEN_INERT_OK')
+    ''')
+    assert 'TOKEN_INERT_OK' in r.stdout, r.stdout + r.stderr
