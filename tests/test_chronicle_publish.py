@@ -4,6 +4,8 @@ mirroring tests/test_campaign_backup.py."""
 from __future__ import annotations
 import io, os, sys, json, zipfile, subprocess
 
+from tools import chronicle_build as cb
+
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -135,6 +137,37 @@ def test_validate_manifest_rejects_unsafe_slug():
         "pages": [{"slug": "good-slug", "source": "content/x.md"}],
     })
     assert ok2, err2
+
+
+def test_build_manifest_output_passes_real_validator():
+    # Cross-component contract: tools/chronicle_build.py's build_manifest and
+    # app.py's _chronicle_validate_manifest independently declare the slug
+    # pattern (_SLUG_OK vs _CHRONICLE_SLUG_RE) and the manifest shape. Feed
+    # build_manifest's real output into the REAL validator so a future drift
+    # between the two is caught here, not by a real 400 at publish time.
+    import app as A
+    pages = [
+        {"slug": "session-5-recap", "section": "recap", "title": "Session 5",
+         "source": "content/session-5-recap.md", "recipients": "all"},
+        {"slug": "romi-bracken", "section": "cast", "title": "Romi Bracken",
+         "source": "content/romi-bracken.md", "recipients": ["kyle"]},
+    ]
+    manifest = cb.build_manifest(
+        campaign_id="shades-of-blood", session_number=5, pages=pages,
+        mysteries=[], spine=[], calendar={},
+    )
+    ok, err = A._chronicle_validate_manifest(manifest)
+    assert ok is True, err
+
+    # Confirm the validator is actually strict -- so the positive assertion
+    # above is meaningful, not a rubber stamp -- by hand-breaking a slug on
+    # an otherwise-identical manifest and checking it's rejected.
+    bad_manifest = dict(manifest)
+    bad_manifest["pages"] = [dict(manifest["pages"][0])]
+    bad_manifest["pages"][0]["slug"] = "Bad Slug"
+    ok2, err2 = A._chronicle_validate_manifest(bad_manifest)
+    assert ok2 is False
+    assert "slug" in err2.lower()
 
 
 def test_publish_happy_path_and_leak_and_zipslip():

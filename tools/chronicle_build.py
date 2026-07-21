@@ -452,10 +452,15 @@ def build_manifest(campaign_id, session_number, pages, mysteries, spine, calenda
     Each input page dict carries the required `slug/section/title/source/
     recipients` plus any of the optional keys in `_PAGE_OPTIONAL`; optional
     keys are copied through only when present (and not None) so PR1 sees them
-    absent rather than null. Raises `ValueError` - fail fast on the build
-    machine - if a `slug` doesn't match `^[a-z0-9][a-z0-9-]{0,80}$` or a
-    `section` isn't one of the allowed PR1 sections, rather than letting
-    PR1's ingest 400 on a malformed manifest.
+    absent rather than null. `title`/`source` fall back to their per-slug
+    default on ANY falsy value (missing, "", or None), not just an absent
+    key -- PR1's ingest requires `source` truthy and 400s otherwise, so an
+    explicit `{"source": ""}` must not slip through as a truthy-looking key.
+    `recipients` deliberately keeps the absent-only default (see the NOTE
+    below). Raises `ValueError` - fail fast on the build machine - if a
+    `slug` doesn't match `^[a-z0-9][a-z0-9-]{0,80}$` or a `section` isn't
+    one of the allowed PR1 sections, rather than letting PR1's ingest 400
+    on a malformed manifest.
     """
     out_pages = []
     for p in pages:
@@ -468,8 +473,13 @@ def build_manifest(campaign_id, session_number, pages, mysteries, spine, calenda
         entry = {
             "slug": slug,
             "section": section,
-            "title": p.get("title", slug),
-            "source": p.get("source", "content/{}.md".format(slug)),
+            "title": p.get("title") or slug,
+            "source": p.get("source") or "content/{}.md".format(slug),
+            # NOTE: recipients is deliberately NOT falsy-guarded -- an explicit
+            # empty list is a meaningful "hidden from every player" value (see
+            # app.py _chronicle_page_visible), distinct from an absent key
+            # (-> "all"). Coercing [] to "all" here would silently make a
+            # GM-only page public.
             "recipients": p.get("recipients", "all"),
         }
         for key in _PAGE_OPTIONAL:

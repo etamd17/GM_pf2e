@@ -935,3 +935,29 @@ def test_build_manifest_rejects_bad_slug_and_section():
     with pytest.raises(ValueError):
         cb.build_manifest("c", 1, [{"slug": "ok", "section": "spoilers",
                                     "title": "x", "recipients": "all"}], [], [], {})
+
+
+def test_build_manifest_guards_falsy_source():
+    # A page dict carrying an explicit falsy `source` (empty string or None)
+    # must still fall back to the per-slug default, exactly like an ABSENT
+    # source does -- PR1's _chronicle_validate_manifest 400s on a page whose
+    # source is falsy, so build_manifest must never let one through.
+    pages = [
+        {"slug": "empty-source", "section": "lore", "title": "T1",
+         "source": "", "recipients": "all"},
+        {"slug": "none-source", "section": "lore", "title": "T2",
+         "source": None, "recipients": "all"},
+        {"slug": "absent-source", "section": "lore", "title": "T3",
+         "recipients": "all"},
+    ]
+    manifest = cb.build_manifest("c", 1, pages, [], [], {})
+
+    for pg in manifest["pages"]:
+        assert pg["source"], pg  # every emitted page has a non-empty source
+
+    empty = next(p for p in manifest["pages"] if p["slug"] == "empty-source")
+    none_ = next(p for p in manifest["pages"] if p["slug"] == "none-source")
+    absent = next(p for p in manifest["pages"] if p["slug"] == "absent-source")
+    assert empty["source"] == "content/empty-source.md"
+    assert none_["source"] == "content/none-source.md"
+    assert absent["source"] == "content/absent-source.md"
