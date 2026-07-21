@@ -381,6 +381,10 @@ def resolve_wikilinks(body, title_to_slug):
       X). If `X` is not published, degrades to the plain `display` text with
       no link syntax at all - unlinked text is the "not discovered yet"
       signal, never a broken/leaky link.
+    - `[[X#Heading]]` / `[[X^blockref]]` (with or without `|alt`): the
+      `#heading`/`^blockref` suffix is dropped before the title lookup (`X`
+      is the dict key) and dropped from the display too when there's no
+      alias - players never see raw `#`/`^` anchor syntax.
     - `![[img.png]]` embeds: becomes a markdown image `![img.png](<path>)`
       only when `img.png` is a copied asset; otherwise the embed is stripped
       entirely (an un-copied asset is never referenced).
@@ -390,13 +394,17 @@ def resolve_wikilinks(body, title_to_slug):
         raw = m.group(0)
         target, _sep, alt = m.group(1).partition("|")
         target = target.strip()
-        display = alt.strip() if alt else target
         if raw.startswith("!"):  # embed
             if target in title_to_slug:
                 return "![{}]({})".format(target, title_to_slug[target])
             return ""
-        if target in title_to_slug:
-            return "[{}](/chronicle/page/{})".format(display, title_to_slug[target])
+        # Split off a `#heading` or `^blockref` suffix before the title lookup -
+        # the dict is keyed on the base page title, and players should never see
+        # the raw anchor syntax as link display text.
+        base_title = re.split(r"[#^]", target, maxsplit=1)[0].strip()
+        display = alt.strip() if alt else base_title
+        if base_title in title_to_slug:
+            return "[{}](/chronicle/page/{})".format(display, title_to_slug[base_title])
         return display
 
     return _WIKILINK_RE.sub(_repl, body)

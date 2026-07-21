@@ -825,3 +825,36 @@ def test_resolve_wikilinks_empty_title_to_slug_degrades_everything():
     body = "[[Romi Bracken]] and [[Alzira|the smuggler]] and ![[map.png]]"
     out = cb.resolve_wikilinks(body, {})
     assert out == "Romi Bracken and the smuggler and "
+
+
+def test_resolve_wikilinks_heading_anchor_published_no_alias_uses_base_title():
+    title_to_slug = {"Romi Bracken": "romi-bracken"}
+    out = cb.resolve_wikilinks("See [[Romi Bracken#Motivations]] for more.", title_to_slug)
+    assert "[Romi Bracken](/chronicle/page/romi-bracken)" in out
+    assert "#Motivations" not in out
+    assert "[[" not in out and "]]" not in out
+
+
+def test_resolve_wikilinks_heading_anchor_published_with_alias():
+    title_to_slug = {"Romi Bracken": "romi-bracken"}
+    out = cb.resolve_wikilinks(
+        "See [[Romi Bracken#Motivations|the recruiter]] for more.", title_to_slug
+    )
+    assert "[the recruiter](/chronicle/page/romi-bracken)" in out
+    assert "#Motivations" not in out
+    assert "[[" not in out and "]]" not in out
+
+
+def test_resolve_wikilinks_block_ref_published_uses_base_title():
+    title_to_slug = {"Romi Bracken": "romi-bracken"}
+    out = cb.resolve_wikilinks("See [[Romi Bracken^abc123]] for more.", title_to_slug)
+    assert "[Romi Bracken](/chronicle/page/romi-bracken)" in out
+    assert "^abc123" not in out
+    assert "[[" not in out and "]]" not in out
+
+
+def test_resolve_wikilinks_heading_anchor_unpublished_degrades_to_base_title():
+    out = cb.resolve_wikilinks("See [[Hidden Lair#Vault]] for more.", {})
+    assert out == "See Hidden Lair for more."
+    assert "#Vault" not in out
+    assert "[[" not in out and "]]" not in out
