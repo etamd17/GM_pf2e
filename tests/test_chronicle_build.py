@@ -777,3 +777,51 @@ def test_select_entities_proposes_encountered_and_honors_overrides(tmp_path):
     # Only completed sessions, sorted by session_number.
     nums = [n["frontmatter"]["session_number"] for n in result["sessions"]]
     assert nums == [4, 5]
+
+
+def test_resolve_wikilinks_published_unpublished_and_embeds():
+    title_to_slug = {
+        "Romi Bracken": "romi-bracken",
+        "map.png": "assets/map.png",
+    }
+    body = (
+        "You meet [[Romi Bracken]] at the door.\n"
+        "She serves [[The Hidden Patron|a shadowy master]].\n"
+        "See [[Romi Bracken|the recruiter]] again.\n"
+        "![[map.png]]\n"
+        "![[secret-gm-diagram.png]]\n"
+    )
+    out = cb.resolve_wikilinks(body, title_to_slug)
+
+    # Published title -> link, display defaults to the title.
+    assert "[Romi Bracken](/chronicle/page/romi-bracken)" in out
+    # Aliased published title -> link with the alias as display.
+    assert "[the recruiter](/chronicle/page/romi-bracken)" in out
+    # Unpublished target -> plain display text, NO link syntax, NO raw wikilink.
+    assert "a shadowy master" in out
+    assert "The Hidden Patron" not in out
+    assert "/chronicle/page/the-hidden-patron" not in out
+    assert "[[" not in out
+    # Copied asset embed -> markdown image.
+    assert "![map.png](assets/map.png)" in out
+    # Un-copied asset embed -> stripped entirely.
+    assert "secret-gm-diagram" not in out
+
+
+def test_resolve_wikilinks_unpublished_no_alias_uses_target_as_display():
+    out = cb.resolve_wikilinks("Ask [[Unknown Contact]] about it.", {})
+    assert out == "Ask Unknown Contact about it."
+    assert "[[" not in out and "]]" not in out
+
+
+def test_resolve_wikilinks_leaves_plain_text_and_non_wikilink_brackets_alone():
+    title_to_slug = {"Romi Bracken": "romi-bracken"}
+    body = "No links here, just [a footnote-looking thing] and text."
+    out = cb.resolve_wikilinks(body, title_to_slug)
+    assert out == body
+
+
+def test_resolve_wikilinks_empty_title_to_slug_degrades_everything():
+    body = "[[Romi Bracken]] and [[Alzira|the smuggler]] and ![[map.png]]"
+    out = cb.resolve_wikilinks(body, {})
+    assert out == "Romi Bracken and the smuggler and "

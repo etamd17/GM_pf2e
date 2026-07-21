@@ -365,3 +365,38 @@ def select_entities(vault_dir):
     areas = (areas | inc_area) - exc_area
     sessions.sort(key=lambda note: note.get("frontmatter", {}).get("session_number", 0))
     return {"npcs": npcs, "areas": areas, "sessions": sessions}
+
+
+_WIKILINK_RE = re.compile(r"!?\[\[([^\]]+?)\]\]")
+
+
+def resolve_wikilinks(body, title_to_slug):
+    """Resolve Obsidian `[[wikilinks]]` against the published-title/asset map.
+
+    `title_to_slug` double-duties as both membership sets: published page
+    title -> slug, and copied asset filename -> asset path.
+
+    - `[[X]]` / `[[X|alt]]`: if `X` is a published title, becomes a markdown
+      link `[display](/chronicle/page/<slug>)` (display = alt if given, else
+      X). If `X` is not published, degrades to the plain `display` text with
+      no link syntax at all - unlinked text is the "not discovered yet"
+      signal, never a broken/leaky link.
+    - `![[img.png]]` embeds: becomes a markdown image `![img.png](<path>)`
+      only when `img.png` is a copied asset; otherwise the embed is stripped
+      entirely (an un-copied asset is never referenced).
+    """
+
+    def _repl(m):
+        raw = m.group(0)
+        target, _sep, alt = m.group(1).partition("|")
+        target = target.strip()
+        display = alt.strip() if alt else target
+        if raw.startswith("!"):  # embed
+            if target in title_to_slug:
+                return "![{}]({})".format(target, title_to_slug[target])
+            return ""
+        if target in title_to_slug:
+            return "[{}](/chronicle/page/{})".format(display, title_to_slug[target])
+        return display
+
+    return _WIKILINK_RE.sub(_repl, body)
