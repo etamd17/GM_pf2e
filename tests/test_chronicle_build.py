@@ -334,3 +334,163 @@ def test_strip_allowlist_keep_and_harvest_kinds_still_work():
         FIXTURE / "Sessions" / "Session - April 21 2026.md")["body"]
     seeded = cb.strip_gm_content(session_body)
     assert seeded["recap_seed"] is not None
+
+
+# ---------------------------------------------------------------------------
+# PR0 firewall REDESIGN acceptance tests.
+#
+# The old strip_gm_content() was a hand-rolled multi-line-comment state
+# machine layered on top of the callout-block walk, and three incremental
+# patches on top of it each closed one leak while leaving another opening.
+# These tests reproduce every known leak shape with a unique sentinel per
+# case, so absence can be asserted precisely. Each one must be GREEN under
+# the redesigned strip_gm_content (comments stripped globally up front,
+# simple block boundaries, blanket bare-'>' stripping) even though several
+# of them were RED under the old state machine.
+# ---------------------------------------------------------------------------
+
+def _mysteries_text(out):
+    return " ".join(m["text"] for m in out["mysteries"])
+
+
+def test_leak_repro_01_single_line_comment_severs_danger_block():
+    # A single-line comment sits between two '>' continuation lines of a
+    # [!danger] block. The comment-stripped body leaves the tail as a bare
+    # '>' line with no header of its own - step 3's blanket bare-blockquote
+    # strip must catch it even though it's no longer joined to the original
+    # block.
+    body = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "<!-- reminder: escalate here -->\n"
+        "> and intends to sacrifice the party at LEAK1_TAILSECRET_9f3a.\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK1_TAILSECRET_9f3a" not in out["player_body"]
+    assert "LEAK1_TAILSECRET_9f3a" not in _mysteries_text(out)
+
+
+def test_leak_repro_02_multiline_html_comment_severs_danger_block():
+    body = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "<!--\n"
+        "GM aside spanning lines\n"
+        "-->\n"
+        "> and intends to sacrifice the party at LEAK2_TAILSECRET_7bd1.\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK2_TAILSECRET_7bd1" not in out["player_body"]
+    assert "LEAK2_TAILSECRET_7bd1" not in _mysteries_text(out)
+
+
+def test_leak_repro_03_multiline_percent_comment_severs_danger_block():
+    body = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "%%\n"
+        "GM aside spanning lines\n"
+        "%%\n"
+        "> and intends to sacrifice the party at LEAK3_TAILSECRET_c44e.\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK3_TAILSECRET_c44e" not in out["player_body"]
+    assert "LEAK3_TAILSECRET_c44e" not in _mysteries_text(out)
+
+
+def test_leak_repro_04_unterminated_html_comment_strips_everything_after():
+    # Fail-safe: an opened multi-line comment that never closes must not
+    # leak anything that follows it, even when Step 1's regex can't match
+    # (no closing delimiter anywhere) and the raw "<!--" survives into the
+    # block walk untouched.
+    body = (
+        "> [!danger] Unterminated\n"
+        "> Romi serves Camazotz.\n"
+        "<!--\n"
+        "this comment never closes\n"
+        "> and neither does the secret LEAK4_TAILSECRET_02aa\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK4_TAILSECRET_02aa" not in out["player_body"]
+    assert "LEAK4_TAILSECRET_02aa" not in _mysteries_text(out)
+    assert "Camazotz" not in out["player_body"]
+
+
+def test_leak_repro_05_non_alpha_custom_kinds_stripped():
+    for kind, secret in [
+        ("spoiler_alert", "LEAK5A_5678x"),
+        ("lore-bomb", "LEAK5B_LOREBOMB"),
+        ("twist_reveal", "LEAK5C_TWISTSECRET"),
+        ("secret", "LEAK5D_SECRETVALUE"),
+        ("gm", "LEAK5E_GMONLYVALUE"),
+    ]:
+        body = f"> [!{kind}] Hush\n> the vault code is {secret}\n"
+        out = cb.strip_gm_content(body)
+        assert secret not in out["player_body"], kind
+        assert secret not in _mysteries_text(out), kind
+        assert f"[!{kind}]" not in out["player_body"], kind
+
+
+def test_leak_repro_06_sameline_marker_and_opener_after_kept_block():
+    # A [!quote] block immediately followed (no blank line) by a [!danger]
+    # header whose OWN line opens an inline "<!--" comment. The old code
+    # only tracked an unterminated comment opened on a CONTINUATION line,
+    # never one opened on the header line itself, so the header's embedded
+    # opener was invisible to the state machine and the tail leaked
+    # verbatim once it fell out of any recognized block.
+    body = (
+        "> [!quote] Safe\n"
+        "> visible quote text\n"
+        "> [!danger] Secret <!--\n"
+        "comment body\n"
+        "-->\n"
+        "> and does LEAK6_SAMELINE_d91c\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK6_SAMELINE_d91c" not in out["player_body"]
+    assert "LEAK6_SAMELINE_d91c" not in _mysteries_text(out)
+    assert "> [!quote] Safe" in out["player_body"]
+    assert "visible quote text" in out["player_body"]
+
+
+def test_leak_repro_07_title_embedded_opener_strips_blockquote_tail():
+    # Same header-embedded-opener bug as #06, without a preceding kept
+    # block. Trailing PLAIN prose after a closed comment is the accepted
+    # residual (see strip_gm_content's docstring) - the secret here sits on
+    # a '>'-prefixed line, which must still be caught by the blanket bare
+    # blockquote strip.
+    body = (
+        "> [!danger] True Motive <!--\n"
+        "comment aside\n"
+        "-->\n"
+        "> and intends to LEAK7_TITLEOPEN_44bb\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK7_TITLEOPEN_44bb" not in out["player_body"]
+    assert "LEAK7_TITLEOPEN_44bb" not in _mysteries_text(out)
+
+
+def test_leak_repro_08_kept_block_then_danger_no_blank_line():
+    body = (
+        "> [!quote] X\n"
+        "> line\n"
+        "> [!danger] Y\n"
+        "> secret LEAK8_ADJACENT_11ee\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAK8_ADJACENT_11ee" not in out["player_body"]
+    assert "LEAK8_ADJACENT_11ee" not in _mysteries_text(out)
+    assert "> [!quote] X" in out["player_body"]
+    assert "> line" in out["player_body"]
+
+
+def test_leak_repro_09_bare_blockquote_with_no_header_is_stripped():
+    # A '>' blockquote with no [!kind] header at all was never recognized
+    # by the old callout walk (it only special-cased header lines), so it
+    # fell straight through to the main loop's "not a callout" branch and
+    # was appended to player_body untouched, '>' and all.
+    body = "> just a regular blockquote mentioning LEAK9_BAREQUOTE_ff02\n\nvisible line\n"
+    out = cb.strip_gm_content(body)
+    assert "LEAK9_BAREQUOTE_ff02" not in out["player_body"]
+    assert "LEAK9_BAREQUOTE_ff02" not in _mysteries_text(out)
+    assert "visible line" in out["player_body"]
