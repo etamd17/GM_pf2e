@@ -2,10 +2,14 @@
 Obsidian vault. Runs on the GM's Mac. Stdlib-only core (optional Pillow later);
 NOT imported by the Flask app.
 """
+import logging
 import os
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+
+log = logging.getLogger("chronicle_build")
 
 _FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.DOTALL)
 _KV_RE = re.compile(r"^([A-Za-z0-9_]+):\s*(.*)$")
@@ -498,3 +502,94 @@ def build_manifest(campaign_id, session_number, pages, mysteries, spine, calenda
         "fieldguide": [],
         "spine": list(spine or []),
     }
+
+
+ASSET_BUDGET_BYTES = 48 * 1024 * 1024  # keep the whole zip under PR1's 48 MB cap
+PLAYER_HANDOUTS = "Player Handouts"
+_IMG_EXTS = frozenset((".png", ".jpg", ".jpeg", ".gif", ".webp"))
+_EMBED_RE = re.compile(r"!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]")
+_MD_IMG_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+
+
+def _iter_asset_refs(pages):
+    """Union every image reference a page carries: its `portrait` field,
+    Obsidian `![[embed]]` syntax, and markdown `![alt](path)` syntax."""
+    for page in pages:
+        portrait = page.get("portrait")
+        if portrait:
+            yield portrait
+        body = page.get("body") or ""
+        for m in _EMBED_RE.finditer(body):
+            yield m.group(1)
+        for m in _MD_IMG_RE.finditer(body):
+            yield m.group(1)
+
+
+def _find_asset(vault_dir, base):
+    """Locate a referenced image by basename anywhere under the vault's
+    `Player Handouts/` tree (the only place secret-free assets live)."""
+    handouts = os.path.join(str(vault_dir), PLAYER_HANDOUTS)
+    for root, _dirs, files in os.walk(handouts):
+        if base in files:
+            return os.path.join(root, base)
+    return None
+
+
+def _strip_exif(src, dst):
+    """Re-save an image without its metadata (EXIF, GPS, etc.) when Pillow
+    is importable; otherwise (or on any decode/save failure) fall back to a
+    plain byte copy. Pillow is a dev-only convenience -- the app runtime
+    never needs it, so its absence must never be a crash."""
+    try:
+        from PIL import Image  # dev-only; absent in the app runtime
+    except ImportError:
+        shutil.copy2(src, dst)
+        return
+    try:
+        img = Image.open(src)
+        clean = Image.new(img.mode, img.size)
+        clean.putdata(list(img.getdata()))
+        clean.save(dst)
+    except Exception:  # any decode/save failure -> keep the pixels, drop the metadata concern
+        shutil.copy2(src, dst)
+
+
+def collect_assets(pages, vault_dir, out_assets_dir):
+    """Copy the player images referenced by `pages` from the vault into
+    `out_assets_dir`, EXIF-stripped when possible, and return the sorted
+    list of copied basenames.
+
+    Refs are the union of each page's `portrait` field, `![[embed]]`, and
+    `![alt](path)` -- only the basename is used both for lookup (via
+    `_find_asset`, scoped to `Player Handouts/**`) and for the copy
+    destination, so a path-traversal ref (e.g. `../../secret.png`) can
+    only ever resolve to a same-named file actually found under
+    `Player Handouts/`, never escape `out_assets_dir`. An unreferenced
+    image, or a referenced non-image file, is never copied. A running
+    total enforces `ASSET_BUDGET_BYTES`: once adding an asset would
+    exceed the budget, that asset (and only that asset) is logged and
+    skipped -- smaller assets encountered later still get a chance.
+    """
+    os.makedirs(str(out_assets_dir), exist_ok=True)
+    copied = []
+    seen = set()
+    total = 0
+    for ref in _iter_asset_refs(pages):
+        base = os.path.basename(str(ref).strip())
+        if not base or base in seen:
+            continue
+        if os.path.splitext(base)[1].lower() not in _IMG_EXTS:
+            continue
+        src = _find_asset(vault_dir, base)
+        if not src:
+            log.warning("chronicle: referenced asset not found: %s", base)
+            continue
+        size = os.path.getsize(src)
+        if total + size > ASSET_BUDGET_BYTES:
+            log.warning("chronicle: asset budget exceeded, skipping %s (%d bytes)", base, size)
+            continue
+        _strip_exif(src, os.path.join(str(out_assets_dir), base))
+        seen.add(base)
+        total += size
+        copied.append(base)
+    return sorted(copied)

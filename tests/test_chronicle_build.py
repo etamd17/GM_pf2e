@@ -1,5 +1,6 @@
 import pathlib
 import re as _re
+import sys
 import textwrap
 
 import pytest
@@ -961,3 +962,78 @@ def test_build_manifest_guards_falsy_source():
     assert empty["source"] == "content/empty-source.md"
     assert none_["source"] == "content/none-source.md"
     assert absent["source"] == "content/absent-source.md"
+
+
+def _write_png(path, size_bytes=0):
+    # Minimal 1x1 PNG; pad with a trailing filler chunk to hit a target size.
+    png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000d4944415478da6360000002000100057b8fe30000000049454e44ae426082"
+    )
+    pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(png)
+        if size_bytes:
+            f.write(b"\x00" * size_bytes)
+
+
+def test_collect_assets_copies_referenced_skips_unreferenced(tmp_path):
+    vault = tmp_path / "vault"
+    portraits = vault / "Player Handouts" / "NPC Portraits"
+    _write_png(portraits / "romi.png")
+    _write_png(portraits / "unused.png")
+
+    out_assets = tmp_path / "out" / "assets"
+    pages = [{"slug": "romi", "body": "Portrait: ![Romi](assets/romi.png)"}]
+
+    copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == ["romi.png"]
+    assert (out_assets / "romi.png").exists()
+    assert not (out_assets / "unused.png").exists()
+
+
+def test_collect_assets_reads_embed_and_portrait_field(tmp_path):
+    vault = tmp_path / "vault"
+    maps = vault / "Player Handouts" / "Maps"
+    _write_png(maps / "intake.png")
+    portraits = vault / "Player Handouts" / "NPC Portraits"
+    _write_png(portraits / "alzira.png")
+
+    out_assets = tmp_path / "out" / "assets"
+    pages = [
+        {"slug": "intake", "body": "![[Maps/intake.png]]"},
+        {"slug": "alzira", "portrait": "NPC Portraits/alzira.png", "body": ""},
+    ]
+
+    copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == ["alzira.png", "intake.png"]
+
+
+def test_collect_assets_pillow_absent_still_copies(tmp_path, monkeypatch):
+    vault = tmp_path / "vault"
+    _write_png(vault / "Player Handouts" / "NPC Portraits" / "romi.png")
+    out_assets = tmp_path / "out" / "assets"
+    pages = [{"slug": "romi", "body": "![[romi.png]]"}]
+
+    # Force `from PIL import Image` to raise ImportError.
+    monkeypatch.setitem(sys.modules, "PIL", None)
+
+    copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == ["romi.png"]
+    assert (out_assets / "romi.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_collect_assets_skips_oversize_over_budget(tmp_path, monkeypatch):
+    vault = tmp_path / "vault"
+    _write_png(vault / "Player Handouts" / "Maps" / "big.png", size_bytes=1024)
+    out_assets = tmp_path / "out" / "assets"
+    pages = [{"slug": "big", "body": "![[big.png]]"}]
+
+    monkeypatch.setattr(cb, "ASSET_BUDGET_BYTES", 100)  # smaller than the file
+    copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == []
+    assert not (out_assets / "big.png").exists()
