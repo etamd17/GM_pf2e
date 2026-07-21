@@ -9961,6 +9961,11 @@ CHRONICLE_SCHEMA_VERSION = 1
 # backstop (a bad build, a hand-edited zip) — publish is refused if any survive.
 _CHRONICLE_LEAK_MARKERS = ('[!danger]', '[!secret]', '[!gm]')
 _CHRONICLE_SCAN_EXTS = ('.md', '.markdown', '.json', '.html', '.htm', '.txt')
+# Zip-bomb guardrails for the publish ingest: cap the total DECOMPRESSED size
+# and the entry count so a small archive can't inflate to fill the Railway
+# volume / exhaust the single worker's memory during extraction.
+_CHRONICLE_MAX_UNCOMPRESSED = 256 * 1024 * 1024   # 256 MB inflated
+_CHRONICLE_MAX_ENTRIES = 5000
 
 
 def _chronicle_leak_scan(root_dir):
@@ -10035,16 +10040,137 @@ def _chronicle_callout_preprocess(md_text):
     return '\n'.join(out)
 
 
+# Allowlist HTML sanitizer for rendered chronicle fragments. A regex DENYLIST
+# (the previous approach) is bypassable -- unquoted event handlers
+# (<img src=x onerror=...>), non-<script> active tags (<svg onload=...>),
+# entity-encoded javascript: -- so we reconstruct the HTML from a real tokenizer,
+# emitting ONLY allowlisted tags/attributes and only safe URL schemes. Anything
+# not on the list is dropped. The tag set is what our markdown pipeline emits
+# (python-markdown + the callout preprocess's chron-* divs); no <script>/<svg>/
+# <iframe>/<style>/<object> or on* handlers can survive.
+from html.parser import HTMLParser as _HTMLParser
+import html as _htmllib
+
+_CHRONICLE_ALLOWED_TAGS = frozenset({
+    'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+    'em', 'strong', 'i', 'b', 'u', 's', 'strike', 'del', 'ins', 'sub', 'sup',
+    'a', 'img', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    'caption', 'col', 'colgroup', 'div', 'span', 'dl', 'dt', 'dd',
+    'figure', 'figcaption', 'abbr', 'mark', 'small', 'kbd', 'samp',
+})
+_CHRONICLE_VOID_TAGS = frozenset({'br', 'hr', 'img', 'col'})
+# Non-allowlisted tags whose TEXT CONTENT must also be dropped (not surfaced as
+# escaped text): script/style bodies are noise, and svg/math/etc. can carry
+# active content. Everything else disallowed is unwrapped (children kept).
+_CHRONICLE_DROP_CONTENT_TAGS = frozenset({
+    'script', 'style', 'template', 'svg', 'math', 'textarea', 'title',
+    'noscript', 'iframe', 'object', 'embed', 'head', 'xml',
+})
+_CHRONICLE_ATTRS_GLOBAL = frozenset({'class', 'id', 'title'})
+_CHRONICLE_ATTRS_BY_TAG = {
+    'a': frozenset({'href', 'name', 'rel'}),
+    'img': frozenset({'src', 'alt', 'width', 'height'}),
+    'td': frozenset({'colspan', 'rowspan', 'align'}),
+    'th': frozenset({'colspan', 'rowspan', 'align', 'scope'}),
+    'ol': frozenset({'start', 'type'}),
+    'col': frozenset({'span'}),
+    'colgroup': frozenset({'span'}),
+}
+_CHRONICLE_URL_ATTRS = frozenset({'href', 'src'})
+_CHRONICLE_ALLOWED_URL_SCHEMES = frozenset({'http', 'https', 'mailto'})
+_CHRONICLE_SCHEME_RE = re.compile(r'^([a-z][a-z0-9+.\-]*):', re.I)
+
+
+def _chronicle_safe_url(val):
+    """Return `val` if it's a safe URL (a relative/anchor path, or an http/https/
+    mailto absolute URL), else '' (drop the attribute). Rejects javascript:,
+    vbscript:, data:, protocol-relative //host, and any other scheme. The parser
+    hands us entity-decoded values, so entity-encoded schemes are caught here."""
+    if not val:
+        return ''
+    # Browsers ignore leading/interior whitespace + control chars in a scheme
+    # ("\tjavascript:" runs); strip them before testing for a scheme. Also fold
+    # backslashes to '/' -- some browsers normalise "\\evil.com" to "//evil.com".
+    probe = re.sub(r'[\x00-\x20]+', '', val).replace('\\', '/')
+    if probe.startswith('//'):     # protocol-relative -> external origin, drop
+        return ''
+    m = _CHRONICLE_SCHEME_RE.match(probe)
+    if not m:
+        return val                 # relative path / #anchor / ?query -> safe
+    return val if m.group(1).lower() in _CHRONICLE_ALLOWED_URL_SCHEMES else ''
+
+
+class _ChronicleSanitizer(_HTMLParser):
+    """Reconstruct HTML keeping only allowlisted tags/attributes. Disallowed tags
+    are dropped but their text children are kept and escaped."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out = []
+        self._suppress = 0   # depth inside a drop-content tag (script/style/svg/...)
+
+    def _emit_open(self, tag, attrs):
+        tag = tag.lower()
+        if tag not in _CHRONICLE_ALLOWED_TAGS:
+            return
+        allowed = _CHRONICLE_ATTRS_GLOBAL | _CHRONICLE_ATTRS_BY_TAG.get(tag, frozenset())
+        buf = ['<', tag]
+        for name, val in attrs:
+            name = (name or '').lower()
+            if name not in allowed:
+                continue
+            val = '' if val is None else val
+            if name in _CHRONICLE_URL_ATTRS:
+                val = _chronicle_safe_url(val)
+                if not val:
+                    continue
+            buf.append(' %s="%s"' % (name, _htmllib.escape(val, quote=True)))
+        buf.append('>')
+        self.out.append(''.join(buf))
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() in _CHRONICLE_DROP_CONTENT_TAGS:
+            self._suppress += 1
+            return
+        if not self._suppress:
+            self._emit_open(tag, attrs)
+
+    def handle_startendtag(self, tag, attrs):
+        if tag.lower() in _CHRONICLE_DROP_CONTENT_TAGS:
+            return                    # self-closed suppressed tag: emit nothing
+        if not self._suppress:
+            self._emit_open(tag, attrs)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in _CHRONICLE_DROP_CONTENT_TAGS:
+            if self._suppress:
+                self._suppress -= 1
+            return
+        if not self._suppress and tag in _CHRONICLE_ALLOWED_TAGS and tag not in _CHRONICLE_VOID_TAGS:
+            self.out.append('</%s>' % tag)
+
+    def handle_data(self, data):
+        if not self._suppress:
+            self.out.append(_htmllib.escape(data, quote=False))
+
+    # Comments, declarations, processing instructions: dropped (no output).
+    def handle_comment(self, data):
+        pass
+
+
 def _chronicle_sanitize_html(html):
-    """Dependency-free defense-in-depth scrub (no bleach in requirements). The
-    content already passed the leak scan and is GM-authored, but fragments are
-    injected into player pages, so strip active-content vectors."""
-    html = re.sub(r'(?is)<(script|style|iframe|object|embed)\b.*?</\1\s*>', '', html)
-    html = re.sub(r'(?is)<(script|style|iframe|object|embed)\b[^>]*/?>', '', html)
-    html = re.sub(r'(?i)\s+on\w+\s*=\s*"[^"]*"', '', html)
-    html = re.sub(r"(?i)\s+on\w+\s*=\s*'[^']*'", '', html)
-    html = re.sub(r'(?i)(href|src)\s*=\s*(["\'])\s*javascript:[^"\']*\2', r'\1=\2#\2', html)
-    return html
+    """Allowlist scrub of a rendered fragment (defense in depth over the vault-side
+    firewall + leak scan). Fail closed: if tokenizing raises, escape everything so
+    no markup can execute."""
+    try:
+        p = _ChronicleSanitizer()
+        p.feed(html or '')
+        p.close()
+        return ''.join(p.out)
+    except Exception:
+        return _htmllib.escape(html or '', quote=False)
 
 
 def _chronicle_render_markdown(md_text):
@@ -10125,10 +10251,22 @@ def chronicle_publish():
             return jsonify({'ok': False, 'error': 'not a valid .zip'}), 400
 
         with zf:
-            # Extract with the zip-slip guard (mirrors campaign_import, app.py:6631).
+            # Extract with the zip-slip guard (mirrors campaign_import, app.py:6631)
+            # PLUS zip-bomb guards: cap entry count and total decompressed size
+            # (zipfile verifies each entry's declared size against its CRC on read,
+            # so getinfo().file_size can't lie low without failing the extract).
+            total_uncompressed = 0
+            entry_count = 0
             for n in zf.namelist():
                 if n.endswith('/'):
                     continue
+                entry_count += 1
+                if entry_count > _CHRONICLE_MAX_ENTRIES:
+                    return jsonify({'ok': False, 'error': 'archive has too many entries'}), 400
+                total_uncompressed += zf.getinfo(n).file_size
+                if total_uncompressed > _CHRONICLE_MAX_UNCOMPRESSED:
+                    return jsonify({'ok': False,
+                                    'error': 'archive too large when decompressed'}), 400
                 target = os.path.normpath(os.path.join(staging_dir, n))
                 if target != staging_dir and not target.startswith(staging_dir + os.sep):
                     return jsonify({'ok': False, 'error': 'unsafe path in archive'}), 400
@@ -10157,7 +10295,17 @@ def chronicle_publish():
                 return jsonify({'ok': False,
                                 'error': 'missing page source: %s' % page.get('source')}), 400
             with open(src, encoding='utf-8') as sp:
-                html = _chronicle_render_markdown(sp.read())
+                page_md = sp.read()
+            # Scan the EXACT bytes about to be rendered to players, regardless of
+            # the source file's extension (the tree walk above only covers a fixed
+            # extension list, so a page source with an odd extension could slip a
+            # marker past it and into the rendered fragment).
+            low = page_md.lower()
+            marker_hit = next((m for m in _CHRONICLE_LEAK_MARKERS if m in low), None)
+            if marker_hit:
+                return jsonify({'ok': False, 'error': 'spoiler markers present in vault',
+                                'leaks': ['%s: %s' % (page.get('source'), marker_hit)]}), 400
+            html = _chronicle_render_markdown(page_md)
             # Slug is already validated safe (§6); _chronicle_safe_slug is a
             # defensive normalizer only and is the identity for a valid slug.
             slug = _chronicle_safe_slug(page['slug'])
@@ -15891,13 +16039,82 @@ def chronicle_journal():
     return _chronicle_render('chronicle_journal.html', notes=_load_notes_text(_notes_owner()))
 
 
+# Recipient-scoped asset serving. The route below serves files from
+# <content>/assets/ only if a page VISIBLE to the caller references them --
+# otherwise an asset attached to a per-player-secret page would be fetchable by
+# any joined player who knows the basename. The reference map is derived from
+# each manifest page's `portrait`/`assets` fields plus the asset URLs in its
+# rendered fragment, and cached per publish (the content-dir hash changes every
+# publish, which invalidates the single-slot cache).
+_CHRONICLE_ASSET_INDEX = {'cdir': None, 'index': {}}
+_CHRONICLE_ASSET_REF_RE = re.compile(r'assets/([^\s"\'<>?#)]+)')
+
+
+def _chronicle_asset_key(ref):
+    """Normalise an asset reference to the path RELATIVE to `assets/` used as the
+    index/lookup key. Keying on the full relative path (not just the basename)
+    stops a public `foo.png` reference from authorising a secret `sub/foo.png`
+    (the ingest preserves subdirectories; the flat basename would collide)."""
+    s = str(ref or '').replace('\\', '/').lstrip('/')
+    if s.startswith('assets/'):
+        s = s[len('assets/'):]
+    return s.strip('/')
+
+
+def _chronicle_asset_index():
+    """{asset-path-relative-to-assets/ -> set(page_slugs referencing it)}."""
+    cdir = _chronicle_content_dir()
+    if not cdir:
+        return {}
+    if _CHRONICLE_ASSET_INDEX['cdir'] == cdir:
+        return _CHRONICLE_ASSET_INDEX['index']
+    from urllib.parse import unquote
+    man = _chronicle_manifest() or {}
+    index = {}
+    for p in man.get('pages', []):
+        slug = p.get('slug')
+        refs = set()
+        if p.get('portrait'):
+            refs.add(_chronicle_asset_key(p['portrait']))
+        for a in (p.get('assets') or []):
+            refs.add(_chronicle_asset_key(a))
+        frag = _chronicle_fragment(slug)
+        if frag:
+            for m in _CHRONICLE_ASSET_REF_RE.finditer(frag):
+                refs.add(_chronicle_asset_key(unquote(m.group(1))))
+        for b in refs:
+            if b:
+                index.setdefault(b, set()).add(slug)
+    _CHRONICLE_ASSET_INDEX['cdir'] = cdir
+    _CHRONICLE_ASSET_INDEX['index'] = index
+    return index
+
+
+def _chronicle_asset_visible(asset):
+    """True if the caller may fetch this asset: the GM always may; a player may
+    only if at least one page they can SEE references it (matched on the full
+    relative asset path). An orphan asset (referenced by no page) is GM-only."""
+    if _is_gm():
+        return True
+    slugs = _chronicle_asset_index().get(_chronicle_asset_key(asset))
+    if not slugs:
+        return False
+    user = _chronicle_current_user()
+    by_slug = {p.get('slug'): p for p in (_chronicle_manifest() or {}).get('pages', [])}
+    return any(_chronicle_page_visible(by_slug[s], user=user, is_gm=False)
+               for s in slugs if s in by_slug)
+
+
 @app.route('/chronicle/assets/<path:asset>')
 def chronicle_asset(asset):
     """Serve a published asset from <content>/assets. send_from_directory
     safe-joins and raises NotFound on any traversal escape. Immutable long-cache;
-    the URL carries the per-publish ?v=<hash>, so a new publish yields new URLs."""
+    the URL carries the per-publish ?v=<hash>, so a new publish yields new URLs.
+    Recipient-scoped: a player only gets assets a page visible to them references."""
     cdir = _chronicle_content_dir()
     if not cdir:
+        abort(404)
+    if not _chronicle_asset_visible(asset):
         abort(404)
     try:
         return send_from_directory(os.path.join(cdir, 'assets'), asset, max_age=31536000)
