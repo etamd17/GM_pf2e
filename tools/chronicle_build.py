@@ -639,3 +639,40 @@ def collect_assets(pages, vault_dir, out_assets_dir):
         total += size
         copied.append(base)
     return sorted(copied)
+
+
+# `strip_gm_content` is the primary firewall (removes GM-only callouts before
+# a page is ever written). `leak_check` is the second, independent layer: it
+# re-scans the WHOLE emitted player vault -- every `.md` file plus
+# `manifest.json` -- for any surviving GM marker. It intentionally matches at
+# least what the PR1 app's ingest-time re-scan matches (`_chronicle_leak_scan`
+# in app.py: `[!danger]` / `[!secret]` / `[!gm]`), case-insensitively and
+# tolerant of stray whitespace inside the brackets, so nothing that would be
+# rejected at ingest ever slips through the build.
+_LEAK_RE = re.compile(r"\[!\s*(danger|secret|gm)\s*\]", re.IGNORECASE)
+
+
+def leak_check(out_dir):
+    """Re-scan the emitted player vault for surviving GM spoiler callouts.
+
+    Walks every `.md` file and `manifest.json` under `out_dir` and returns a
+    sorted list of `"<relpath>: [!<kind>]"` offender strings. A non-empty
+    return means a spoiler survived the primary firewall -- the caller
+    (`build_player_vault` / `main`) MUST treat that as fatal and abort:
+    never zip, never publish.
+    """
+    offenders = []
+    for root, _dirs, files in os.walk(out_dir):
+        for fn in files:
+            if not (fn.endswith(".md") or fn == "manifest.json"):
+                continue
+            path = os.path.join(root, fn)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    text = f.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            rel = os.path.relpath(path, out_dir).replace(os.sep, "/")
+            for m in _LEAK_RE.finditer(text):
+                offenders.append("%s: [!%s]" % (rel, m.group(1).lower()))
+    return sorted(offenders)

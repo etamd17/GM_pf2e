@@ -1112,3 +1112,69 @@ def test_collect_assets_real_pillow_roundtrip(tmp_path):
     with Image.open(out_path) as img:
         img.load()
         assert img.size == (4, 4)
+
+
+# --- leak_check -------------------------------------------------------------
+
+
+def test_leak_check_clean_tree_returns_empty(tmp_path):
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "content" / "romi.md").write_text(
+        "> [!quote] Read aloud\n> The door opens.\n", encoding="utf-8")
+    (out / "manifest.json").write_text('{"schema_version": 1, "pages": []}', encoding="utf-8")
+
+    assert cb.leak_check(str(out)) == []
+
+
+def test_leak_check_catches_planted_danger(tmp_path):
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "content" / "romi.md").write_text(
+        "Intro text\n\n> [!danger] Romi is the cult leader\n> secret motive\n", encoding="utf-8")
+    (out / "manifest.json").write_text('{"schema_version": 1, "pages": []}', encoding="utf-8")
+
+    offenders = cb.leak_check(str(out))
+    assert offenders == ["content/romi.md: [!danger]"]
+
+
+def test_leak_check_catches_secret_and_gm_including_manifest(tmp_path):
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "content" / "a.md").write_text("> [!secret] hidden\n", encoding="utf-8")
+    (out / "manifest.json").write_text('{"note": "[!gm] leaked into manifest"}', encoding="utf-8")
+
+    offenders = cb.leak_check(str(out))
+    assert "content/a.md: [!secret]" in offenders
+    assert "manifest.json: [!gm]" in offenders
+
+
+def test_leak_check_case_and_whitespace_tolerant():
+    # Matches the PR1 app's ingest re-scan (_chronicle_leak_scan): the
+    # marker regex must be case-insensitive and tolerate stray whitespace
+    # inside the brackets, so nothing that would 400 at ingest slips
+    # through the build-time gate first.
+    assert cb._LEAK_RE.search("[!DANGER] shout-cased marker")
+    assert cb._LEAK_RE.search("[! gm ] padded marker")
+    assert cb._LEAK_RE.search("[!Secret] mixed case")
+
+
+def test_leak_check_scans_nested_subdirectories(tmp_path):
+    out = tmp_path / "out"
+    (out / "content" / "cast").mkdir(parents=True)
+    (out / "content" / "cast" / "romi.md").write_text(
+        "> [! Danger ] nested and padded\n", encoding="utf-8")
+    (out / "manifest.json").write_text("{}", encoding="utf-8")
+
+    offenders = cb.leak_check(str(out))
+    assert offenders == ["content/cast/romi.md: [!danger]"]
+
+
+def test_leak_check_ignores_non_md_non_manifest_files(tmp_path):
+    out = tmp_path / "out"
+    (out / "assets").mkdir(parents=True)
+    # A binary/other asset that happens to contain the marker bytes must
+    # not be scanned -- only .md content and manifest.json are in scope.
+    (out / "assets" / "notes.txt").write_text("[!danger] not a real page\n", encoding="utf-8")
+
+    assert cb.leak_check(str(out)) == []
