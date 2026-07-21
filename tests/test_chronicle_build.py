@@ -752,6 +752,69 @@ def test_top_level_quote_example_check_still_kept_and_harvested():
     assert "a torn note mentions the vault." in fact["text"]
 
 
+# ---------------------------------------------------------------------------
+# PR0 task 04 (last nesting leak): a depth-1 keep/harvest block's CONTINUATION
+# lines are absorbed regardless of their own depth, so a depth-2+ line riding
+# along inside an otherwise-legitimate depth-1 [!quote]/[!check]/[!abstract]
+# block leaks verbatim (kept), harvested, or seeded. Fix: only depth-1
+# continuation lines belong to the block's kept/harvested content; a depth-2+
+# line is dropped (never emitted/harvested/seeded), but does not end the
+# block - later depth-1 lines still belong to it.
+# ---------------------------------------------------------------------------
+
+def test_leak_repro_24_deeper_continuation_in_quote_leaks_into_player_body():
+    body = (
+        "> [!quote] Read when sprung\n"
+        "> > The trap mechanism SECRET_TRAPCODE_9999 triggers when touched\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "SECRET_TRAPCODE_9999" not in out["player_body"]
+    assert "Read when sprung" in out["player_body"]
+
+
+def test_leak_repro_25_deeper_continuation_in_check_leaks_into_mysteries():
+    body = (
+        "> [!check] Confirmed\n"
+        "> the fact is CONFIRMED_FACT_1234\n"
+        "> > the real answer is SECRET_CHECK_CONT_1234\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "SECRET_CHECK_CONT_1234" not in _mysteries_text(out)
+    assert "SECRET_CHECK_CONT_1234" not in out["player_body"]
+    fact = next(m for m in out["mysteries"] if m["kind"] == "fact")
+    assert "CONFIRMED_FACT_1234" in fact["text"]
+
+
+def test_leak_repro_26_deeper_continuation_in_abstract_leaks_into_recap_seed():
+    body = (
+        "> [!abstract] Recap\n"
+        "> the party learned ABSTRACT_FACT_5678\n"
+        "> > the true culprit is SECRET_ABSTRACT_CONT_5678\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert out["recap_seed"] is not None
+    assert "SECRET_ABSTRACT_CONT_5678" not in out["recap_seed"]
+    assert "SECRET_ABSTRACT_CONT_5678" not in out["player_body"]
+    assert "ABSTRACT_FACT_5678" in out["recap_seed"]
+
+
+def test_deeper_continuation_dropped_without_prematurely_ending_the_block():
+    # Mixed depths within a single [!quote] block: a depth-2 secret line
+    # sandwiched between two depth-1 lines must be dropped WITHOUT ending
+    # the block early - both depth-1 lines on either side still belong to
+    # it and are kept.
+    body = (
+        "> [!quote] Mixed\n"
+        "> keep this MIXED_KEEP_1\n"
+        "> > SECRET drop this MIXED_SECRET_1\n"
+        "> keep this too MIXED_KEEP_2\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "MIXED_KEEP_1" in out["player_body"]
+    assert "MIXED_KEEP_2" in out["player_body"]
+    assert "MIXED_SECRET_1" not in out["player_body"]
+
+
 # --- select_entities -------------------------------------------------------
 
 

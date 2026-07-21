@@ -268,8 +268,8 @@ def strip_gm_content(body):
        verbatim (callout syntax intact); a depth-1 [!check]/[!question] is
        harvested into ``mysteries``; a depth-1 [!abstract] is harvested into
        ``recap_seed`` - built from the header line's own title text plus
-       every continuation line's inner text (so a callout written entirely
-       on the header line, with no '>' continuation at all, still
+       every DEPTH-1 continuation line's inner text (so a callout written
+       entirely on the header line, with no '>' continuation at all, still
        harvests/seeds its title). Every other depth-1 kind - known GM kinds
        (danger/info/tip/warning) and any unknown/custom kind alike - is
        dropped entirely, and so is any bare '>' blockquote that never had a
@@ -278,9 +278,20 @@ def strip_gm_content(body):
        ``> [!danger]``) is STRIPPED UNCONDITIONALLY regardless of its own
        kind - keep/harvest kinds are only ever honored at the top level, so
        a keep/harvest callout nested inside a GM (strip) callout can never
-       bypass the enclosing block by virtue of its own kind. In short:
-       among '>'-prefixed content, only a TOP-LEVEL quote/example survives,
-       and only a TOP-LEVEL check/question/abstract is harvested.
+       bypass the enclosing block by virtue of its own kind. The SAME
+       depth-1-only rule applies to a kept/harvested block's own
+       CONTINUATION lines, independent of the header: only continuation
+       lines at depth 1 are kept verbatim (for quote/example) or folded into
+       the harvested/seeded text (for check/question/abstract); a
+       continuation line at depth >= 2 - a nested continuation or a nested
+       bare blockquote riding along inside an otherwise-legitimate depth-1
+       block - is dropped outright (never emitted, never harvested, never
+       seeded). Dropping it does NOT end the block early: later depth-1
+       lines in the same block still count as its continuation. In short:
+       among '>'-prefixed content, only DEPTH-1 quote/example lines survive,
+       and only DEPTH-1 check/question/abstract lines are harvested -
+       whether that depth->=2 content is the callout's own header or one of
+       its continuation lines.
     4. Non-'>' lines are ordinary prose and pass through untouched. (A
        secret the GM authored as plain non-blockquote prose outside any
        callout is an accepted residual per the vault convention that
@@ -317,11 +328,19 @@ def strip_gm_content(body):
         kind = header.group("kind").lower()
         depth = _callout_depth(line)
         if depth == 1 and kind in _KEEP_KINDS:
-            out_lines.extend(block)              # verbatim
+            # Only the header line plus its DEPTH-1 continuation lines are
+            # kept verbatim - a depth>=2 line riding along inside this block
+            # (a nested continuation or nested bare blockquote) is dropped,
+            # never emitted. It does not end the block; it is simply
+            # excluded from what gets kept.
+            out_lines.extend(b for b in block if _callout_depth(b) == 1)
         elif depth == 1:
             title = (header.group("title") or "").strip()
+            # Same depth-1-only rule for harvested/seeded content: a
+            # depth>=2 continuation line is dropped from the harvest text,
+            # not just from player_body.
             continuation = "\n".join(
-                _strip_quote_markers(b) for b in block[1:]
+                _strip_quote_markers(b) for b in block[1:] if _callout_depth(b) == 1
             ).strip()
             content = "\n".join(p for p in (title, continuation) if p).strip()
             if kind == "abstract":
