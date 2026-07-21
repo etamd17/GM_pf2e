@@ -668,9 +668,9 @@ def leak_check(out_dir):
                 continue
             path = os.path.join(root, fn)
             try:
-                with open(path, encoding="utf-8") as f:
+                with open(path, encoding="utf-8", errors="ignore") as f:
                     text = f.read()
-            except (OSError, UnicodeDecodeError):
+            except OSError:
                 continue
             rel = os.path.relpath(path, out_dir).replace(os.sep, "/")
             for m in _LEAK_RE.finditer(text):

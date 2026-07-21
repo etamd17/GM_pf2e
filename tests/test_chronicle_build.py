@@ -1178,3 +1178,23 @@ def test_leak_check_ignores_non_md_non_manifest_files(tmp_path):
     (out / "assets" / "notes.txt").write_text("[!danger] not a real page\n", encoding="utf-8")
 
     assert cb.leak_check(str(out)) == []
+
+
+def test_leak_check_scans_files_with_stray_non_utf8_bytes(tmp_path):
+    # A file with a genuine [!danger] callout plus a stray non-UTF-8 byte
+    # must still be caught. A strict utf-8 decode raises UnicodeDecodeError
+    # on the whole file, which the old code swallowed and skipped entirely
+    # -- silently passing a real spoiler leak. PR1's ingest re-scan
+    # (_chronicle_leak_scan) opens with errors='ignore', so this firewall
+    # backstop must be at least as strong: skip only the bad byte, not the
+    # whole file.
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    path = out / "content" / "romi.md"
+    path.write_bytes(
+        b"Intro text\n\n> [!danger] Romi is the cult leader\n> secret mo\xfftive\n"
+    )
+    (out / "manifest.json").write_text('{"schema_version": 1, "pages": []}', encoding="utf-8")
+
+    offenders = cb.leak_check(str(out))
+    assert offenders == ["content/romi.md: [!danger]"]
