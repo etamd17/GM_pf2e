@@ -268,6 +268,58 @@ def test_strip_non_alpha_callout_kinds_are_stripped():
         assert f"[!{kind}]" not in out["player_body"], kind
 
 
+def test_strip_multiline_comment_does_not_sever_danger_block():
+    # Regression: _COMMENT_ONLY_LINE only matches a comment that opens AND
+    # closes on the SAME physical line. A multi-line comment (the open
+    # delimiter on one line, the close on a later line) inside a
+    # [!danger] block was invisible to that check, so the continuation
+    # scan stopped at the opening line and the block's tail leaked with
+    # no marker at all.
+    body = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "<!--\n"
+        "reminder: escalate here\n"
+        "-->\n"
+        "> and intends to sacrifice the party at the door.\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "sacrifice the party" not in out["player_body"]
+    assert "Camazotz" not in out["player_body"]
+
+    # Same shape with a multi-line Obsidian %% ... %% comment.
+    body_obsidian = (
+        "> [!danger] True Motive\n"
+        "> Romi serves Camazotz.\n"
+        "%%\n"
+        "GM aside spanning\n"
+        "two lines\n"
+        "%%\n"
+        "> and intends to sacrifice the party at the door.\n"
+    )
+    out2 = cb.strip_gm_content(body_obsidian)
+    assert "sacrifice the party" not in out2["player_body"]
+    assert "Camazotz" not in out2["player_body"]
+
+
+def test_strip_unterminated_multiline_comment_absorbs_rest_of_block():
+    # Fail-safe: an opened multi-line comment that never closes must not
+    # leak anything that follows it. With no closing delimiter, nothing
+    # ever ends the continuation scan, so the rest of the block (and any
+    # trailing lines) is absorbed into the block and dropped rather than
+    # leaked unprotected.
+    body = (
+        "> [!danger] Unterminated\n"
+        "> Romi serves Camazotz.\n"
+        "<!--\n"
+        "this comment never closes\n"
+        "> and neither does the secret UNTERMINATEDSECRET\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "UNTERMINATEDSECRET" not in out["player_body"]
+    assert "Camazotz" not in out["player_body"]
+
+
 def test_strip_allowlist_keep_and_harvest_kinds_still_work():
     # Non-regression: the allowlist must still keep quote/example verbatim
     # and still harvest check/question/abstract.

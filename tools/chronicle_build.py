@@ -110,6 +110,26 @@ _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 # callout block during the continuation scan below - it must never be used
 # to strip comments globally before the walk (see strip_gm_content).
 _COMMENT_ONLY_LINE = re.compile(r"^>?\s*(?:%%.*?%%|<!--.*?-->)\s*$")
+
+
+def _opens_unterminated_comment(line):
+    """If `line` opens a multi-line comment that isn't also closed on the
+    same line, return the delimiter that will close it ("-->" or "%%").
+    Otherwise return None.
+
+    Callers only reach this after `_COMMENT_ONLY_LINE` has already failed
+    to match, so a line with a fully self-contained comment (open+close on
+    one line) never gets here - this only fires for a genuine multi-line
+    opener.
+    """
+    html_start = line.find("<!--")
+    if html_start != -1 and "-->" not in line[html_start:]:
+        return "-->"
+    if line.count("%%") % 2 == 1:
+        return "%%"
+    return None
+
+
 _CALLOUT_MARKER = re.compile(
     r"^>\s*\[!\s*(?P<kind>[^\]\s]+)\s*\][-+]?\s?(?P<title>.*?)\s*$")
 _QUOTE_LINE = re.compile(r"^>\s?(.*)$")
@@ -150,6 +170,16 @@ def strip_gm_content(body):
     it is absorbed (and later scrubbed from the output) so the block's real
     tail line is never dropped out of the block unprotected. Only a genuine
     blank line, or a real non-comment non-'>' line, ends the block.
+
+    The same protection applies to a MULTI-LINE comment (the opening
+    delimiter on one physical line, the closing delimiter on a later one):
+    an open-comment state is tracked across the continuation scan, so once
+    a line opens an unterminated `<!--` or `%%` comment, every following
+    line is absorbed into the block - regardless of what it contains,
+    including a '>' continuation line or even a bare callout marker line -
+    until the matching close is seen. An unterminated (never-closed)
+    comment fails safe: it absorbs everything after it into the block, so
+    the tail is stripped rather than leaked.
     """
     lines = body.split("\n")
     out_lines, mysteries, recap_seed = [], [], None
@@ -164,11 +194,28 @@ def strip_gm_content(body):
         title = m.group("title").strip()
         block = [lines[i]]
         j = i + 1
+        comment_close = None  # None, or the delimiter ("-->"/"%%") needed
+                               # to close a multi-line comment we're inside.
         while j < n:
             line = lines[j]
+            if comment_close is not None:
+                # Inside an unterminated multi-line comment: absorb no
+                # matter what the line contains (it's a comment body, not
+                # markdown), and clear the state once we see its close.
+                block.append(line)
+                j += 1
+                if comment_close in line:
+                    comment_close = None
+                continue
             if _COMMENT_ONLY_LINE.match(line):
                 # Absorb a bare comment line - it must not sever the block.
                 block.append(line)
+                j += 1
+                continue
+            opener = _opens_unterminated_comment(line)
+            if opener:
+                block.append(line)
+                comment_close = opener
                 j += 1
                 continue
             if line.startswith(">") and not _CALLOUT_MARKER.match(line):
