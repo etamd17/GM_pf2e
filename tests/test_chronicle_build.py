@@ -1399,3 +1399,44 @@ def test_build_player_vault_clean_build_reports_empty_leaks(tmp_path):
     out = tmp_path / "out"
     result = cb.build_player_vault(FIXTURE, str(out), campaign_id="shades-of-blood")
     assert result["leaks"] == []
+
+
+def test_build_player_vault_clean_build_preserves_unrelated_files(tmp_path):
+    # Data-safety regression guard (Task 12 review) for the CLEAN-build path
+    # (mirrors test_build_player_vault_never_touches_out_dir_on_leak, which
+    # covers the leak path). On a clean build, build_player_vault must:
+    #   - preserve unrelated pre-existing content already in out_dir (the
+    #     GM's real Obsidian vault may hold `.obsidian/` config and other
+    #     files that have nothing to do with the managed build outputs);
+    #   - still REPLACE the managed `content/` subtree wholesale, so a stale
+    #     page from a previous build doesn't linger forever.
+    out = tmp_path / "out"
+    obsidian_dir = out / ".obsidian"
+    obsidian_dir.mkdir(parents=True)
+    workspace_json = obsidian_dir / "workspace.json"
+    workspace_json.write_text('{"main": {"id": "prior-workspace"}}', encoding="utf-8")
+
+    keep_me = out / "GM_KEEP_ME.txt"
+    keep_me.write_text("unrelated GM file, do not delete", encoding="utf-8")
+
+    stale_content_dir = out / "content"
+    stale_content_dir.mkdir()
+    stale_page = stale_content_dir / "old-page.md"
+    stale_page.write_text("stale content from a previous build", encoding="utf-8")
+
+    result = cb.build_player_vault(FIXTURE, str(out), campaign_id="sample")
+
+    assert result["leaks"] == []
+
+    # Unrelated pre-existing out_dir content survives untouched.
+    assert workspace_json.exists()
+    assert workspace_json.read_text(encoding="utf-8") == '{"main": {"id": "prior-workspace"}}'
+    assert keep_me.exists()
+    assert keep_me.read_text(encoding="utf-8") == "unrelated GM file, do not delete"
+
+    # The stale prior page is gone: content/ was replaced, not merged into.
+    assert not stale_page.exists()
+
+    # The fresh build actually landed: a real page plus manifest.json.
+    assert (out / "content" / "romi-bracken.md").exists()
+    assert (out / "manifest.json").exists()
