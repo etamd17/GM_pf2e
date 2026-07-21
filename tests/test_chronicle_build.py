@@ -1374,6 +1374,65 @@ def test_leak_check_scans_files_with_stray_non_utf8_bytes(tmp_path):
     offenders = cb.leak_check(str(out))
     assert offenders == ["content/romi.md: [!danger]"]
 
+
+def test_leak_check_subpaths_scopes_to_managed_outputs(tmp_path):
+    # M4: with `subpaths`, only the tool's own managed outputs are scanned;
+    # a hand-authored note the GM keeps alongside them (Option A) is ignored,
+    # so an in-world [!danger] there does not false-positive-abort the build.
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "content" / "romi.md").write_text("# Romi\nA quiet clerk.\n", encoding="utf-8")
+    (out / "manifest.json").write_text('{"schema_version": 1}', encoding="utf-8")
+    (out / "01 - Chronicle").mkdir(parents=True)
+    (out / "01 - Chronicle" / "Home.md").write_text(
+        "> [!danger] The bridge is unstable.\n", encoding="utf-8")
+
+    # Whole-tree scan still flags the hand-authored note...
+    assert cb.leak_check(str(out)) == ["01 - Chronicle/Home.md: [!danger]"]
+    # ...but the scoped scan sees only manifest.json + content/ -> clean.
+    assert cb.leak_check(str(out), subpaths=("manifest.json", "content")) == []
+
+
+def test_leak_check_subpaths_still_catches_managed_leak(tmp_path):
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "content" / "boom.md").write_text(
+        "> [!secret] the cult meets below\n", encoding="utf-8")
+    (out / "manifest.json").write_text('{"schema_version": 1}', encoding="utf-8")
+
+    assert cb.leak_check(str(out), subpaths=("manifest.json", "content")) == \
+        ["content/boom.md: [!secret]"]
+
+
+def test_leak_check_subpaths_absent_entries_are_clean(tmp_path):
+    # An entirely absent --out (build_player_vault never wrote it, e.g. on a
+    # leak) yields no offenders from the scoped re-scan.
+    out = tmp_path / "does-not-exist"
+    assert cb.leak_check(str(out), subpaths=("manifest.json", "content")) == []
+
+
+def test_make_zip_defaults_to_temp_outside_out_dir(tmp_path):
+    # M3: with no explicit zip_path, the archive lands OUTSIDE out_dir so the
+    # GM's real vault (Option A) never accrues a chronicle.zip artifact.
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "manifest.json").write_text('{"schema_version": 1}', encoding="utf-8")
+    (out / "content" / "romi.md").write_text("# Romi\n", encoding="utf-8")
+
+    zip_path = cb.make_zip(str(out))
+    try:
+        assert os.path.exists(zip_path)
+        assert zip_path.endswith(".zip")
+        assert os.path.dirname(zip_path) != str(out)
+        assert not (out / "chronicle.zip").exists()
+        with zipfile.ZipFile(zip_path) as zf:
+            assert "manifest.json" in zf.namelist()
+            assert "content/romi.md" in zf.namelist()
+    finally:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+
+
 # --- build_player_vault (A3.3 orchestration) --------------------------------
 
 
@@ -1885,6 +1944,8 @@ def test_main_clean_build_publishes_and_returns_zero(tmp_path, monkeypatch, caps
         published["zip_path"] = zip_path
         published["url"] = url
         published["token"] = token
+        # the archive must exist AT publish time (cleanup happens after)
+        published["existed_at_publish"] = os.path.exists(zip_path)
         return True, '{"ok": true}'
 
     monkeypatch.setattr(cb, "publish", fake_publish)
@@ -1899,8 +1960,12 @@ def test_main_clean_build_publishes_and_returns_zero(tmp_path, monkeypatch, caps
     assert rc == 0
     assert published["url"] == "https://example/api/chronicle/publish"
     assert published["token"] == "sekret"
-    assert published["zip_path"] == str(out / "chronicle.zip")
-    assert (out / "chronicle.zip").exists()
+    assert published["existed_at_publish"] is True
+    assert published["zip_path"].endswith(".zip")
+    # M3: the archive is a temp file OUTSIDE --out and is cleaned up after.
+    assert not (out / "chronicle.zip").exists()
+    assert os.path.dirname(published["zip_path"]) != str(out)
+    assert not os.path.exists(published["zip_path"])
     printed = capsys.readouterr().out
     assert "Pages:" in printed
     assert "Published:" in printed
@@ -1908,7 +1973,14 @@ def test_main_clean_build_publishes_and_returns_zero(tmp_path, monkeypatch, caps
 
 def test_main_clean_build_publish_failure_returns_nonzero(tmp_path, monkeypatch, capsys):
     out = tmp_path / "out"
-    monkeypatch.setattr(cb, "publish", lambda *a, **k: (False, "server rejected: leak detected"))
+    seen = {}
+
+    def failing_publish(zip_path, url, token=None):
+        # make_zip runs before publish is attempted -> the archive exists here
+        seen["existed_at_publish"] = os.path.exists(zip_path)
+        return (False, "server rejected: leak detected")
+
+    monkeypatch.setattr(cb, "publish", failing_publish)
 
     rc = cb.main([
         "--vault", str(FIXTURE), "--out", str(out),
@@ -1920,8 +1992,9 @@ def test_main_clean_build_publish_failure_returns_nonzero(tmp_path, monkeypatch,
     err = capsys.readouterr().err
     assert "Publish FAILED" in err
     assert "leak detected" in err
-    # the zip was still produced (make_zip runs before publish is attempted)
-    assert (out / "chronicle.zip").exists()
+    assert seen["existed_at_publish"] is True
+    # M3: no stray archive left behind in --out even on a failed publish.
+    assert not (out / "chronicle.zip").exists()
 
 
 def test_main_clean_build_no_publish_url_zips_and_returns_zero(tmp_path, monkeypatch, capsys):
@@ -1937,7 +2010,67 @@ def test_main_clean_build_no_publish_url_zips_and_returns_zero(tmp_path, monkeyp
     ])
 
     assert rc == 0
-    assert (out / "chronicle.zip").exists()
+    # M3: archive is built to temp and removed; --out stays clean.
+    assert not (out / "chronicle.zip").exists()
     printed = capsys.readouterr().out
     assert "Pages:" in printed
     assert "Wrote archive:" in printed
+
+
+def test_main_rescan_ignores_hand_authored_notes_outside_managed_outputs(tmp_path, monkeypatch, capsys):
+    # M4 (Option A): --out is the GM's real player vault holding hand-authored
+    # notes alongside the tool's managed manifest.json + content/. A legitimate
+    # in-world [!danger] callout in one of THOSE notes must NOT abort the build.
+    out = tmp_path / "out"
+
+    def clean_managed_build(vault_dir, out_dir, campaign_id):
+        os.makedirs(os.path.join(out_dir, "content"), exist_ok=True)
+        with open(os.path.join(out_dir, "content", "romi.md"), "w", encoding="utf-8") as f:
+            f.write("# Romi\nA quiet clerk.\n")
+        with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+            f.write('{"schema_version": 1, "pages": []}')
+        # A hand-authored player note the GM keeps in the same vault folder,
+        # using an in-world danger warning -- NOT a managed output.
+        os.makedirs(os.path.join(out_dir, "01 - Chronicle"), exist_ok=True)
+        with open(os.path.join(out_dir, "01 - Chronicle", "Home.md"), "w", encoding="utf-8") as f:
+            f.write("> [!danger] The bridge over the chasm is unstable.\n")
+        return {"manifest": {"schema_version": 1}, "review_summary": "Pages: 1", "leaks": []}
+
+    monkeypatch.setattr(cb, "build_player_vault", clean_managed_build)
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (True, '{"ok": true}'))
+
+    rc = cb.main([
+        "--vault", str(tmp_path), "--out", str(out), "--campaign-id", "x",
+        "--publish-url", "https://example/api/chronicle/publish",
+    ])
+
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "LEAK CHECK FAILED" not in err
+
+
+def test_main_rescan_still_catches_leak_in_managed_content(tmp_path, monkeypatch, capsys):
+    # The scoped re-scan must still catch a survivor inside content/ even when
+    # build_player_vault fails to report it via result["leaks"].
+    out = tmp_path / "out"
+
+    def leaky_managed_build(vault_dir, out_dir, campaign_id):
+        os.makedirs(os.path.join(out_dir, "content"), exist_ok=True)
+        with open(os.path.join(out_dir, "content", "boom.md"), "w", encoding="utf-8") as f:
+            f.write("> [!secret] the cult meets under the cathedral\n")
+        with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+            f.write('{"schema_version": 1, "pages": []}')
+        return {"manifest": {"schema_version": 1}, "review_summary": "Pages: 1"}
+
+    monkeypatch.setattr(cb, "build_player_vault", leaky_managed_build)
+    monkeypatch.setattr(cb, "make_zip", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("make_zip must not run when a leak is present")))
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("publish must not run when a leak is present")))
+
+    rc = cb.main(["--vault", str(tmp_path), "--out", str(out), "--campaign-id", "x"])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "LEAK CHECK FAILED" in err
+    assert "content/boom.md: [!secret]" in err

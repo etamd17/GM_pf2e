@@ -721,7 +721,25 @@ def collect_assets(pages, vault_dir, out_assets_dir):
 _LEAK_RE = re.compile(r"\[!\s*(danger|secret|gm)\s*\]", re.IGNORECASE)
 
 
-def leak_check(out_dir):
+def _scan_one_file_for_leaks(path, base_dir, offenders):
+    """Append `"<relpath>: [!<kind>]"` offenders for one file, if it is a
+    `.md`/`manifest.json` carrying a surviving GM marker. `relpath` is kept
+    relative to `base_dir` so offender strings read the same regardless of
+    which entry the walk started from."""
+    fn = os.path.basename(path)
+    if not (fn.endswith(".md") or fn == "manifest.json"):
+        return
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            text = f.read()
+    except OSError:
+        return
+    rel = os.path.relpath(path, base_dir).replace(os.sep, "/")
+    for m in _LEAK_RE.finditer(text):
+        offenders.append("%s: [!%s]" % (rel, m.group(1).lower()))
+
+
+def leak_check(out_dir, subpaths=None):
     """Re-scan the emitted player vault for surviving GM spoiler callouts.
 
     Walks every `.md` file and `manifest.json` under `out_dir` and returns a
@@ -729,21 +747,30 @@ def leak_check(out_dir):
     return means a spoiler survived the primary firewall -- the caller
     (`build_player_vault` / `main`) MUST treat that as fatal and abort:
     never zip, never publish.
+
+    When `subpaths` is given (an iterable of entries relative to `out_dir`),
+    ONLY those entries are scanned -- a file directly, a directory walked
+    recursively. This scopes the re-scan to the tool's OWN managed outputs
+    (`manifest.json` + `content/`), so it never false-positives on unrelated
+    hand-authored notes the GM keeps alongside them in `out_dir` (Option A:
+    `--out` is the GM's real Obsidian player vault, whose player-facing pages
+    may legitimately use an in-world `[!danger]` callout). Offender relpaths
+    stay relative to `out_dir` either way.
     """
     offenders = []
-    for root, _dirs, files in os.walk(out_dir):
-        for fn in files:
-            if not (fn.endswith(".md") or fn == "manifest.json"):
-                continue
-            path = os.path.join(root, fn)
-            try:
-                with open(path, encoding="utf-8", errors="ignore") as f:
-                    text = f.read()
-            except OSError:
-                continue
-            rel = os.path.relpath(path, out_dir).replace(os.sep, "/")
-            for m in _LEAK_RE.finditer(text):
-                offenders.append("%s: [!%s]" % (rel, m.group(1).lower()))
+    if subpaths is None:
+        for root, _dirs, files in os.walk(out_dir):
+            for fn in files:
+                _scan_one_file_for_leaks(os.path.join(root, fn), out_dir, offenders)
+        return sorted(offenders)
+    for sub in subpaths:
+        target = os.path.join(out_dir, sub)
+        if os.path.isfile(target):
+            _scan_one_file_for_leaks(target, out_dir, offenders)
+        elif os.path.isdir(target):
+            for root, _dirs, files in os.walk(target):
+                for fn in files:
+                    _scan_one_file_for_leaks(os.path.join(root, fn), out_dir, offenders)
     return sorted(offenders)
 
 
@@ -1123,9 +1150,18 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
         shutil.rmtree(staging_dir, ignore_errors=True)
 
 
-def make_zip(out_dir):
-    """Zip manifest.json (at root) + content/** + assets/**, skipping .gitkeep."""
-    zip_path = os.path.join(out_dir, "chronicle.zip")
+def make_zip(out_dir, zip_path=None):
+    """Zip manifest.json (at root) + content/** + assets/** from `out_dir`,
+    skipping .gitkeep. Returns the archive path.
+
+    The archive is written to `zip_path`; when omitted it goes to a private
+    temp file, NOT inside `out_dir`. `out_dir` may be the GM's real Obsidian
+    player vault (Option A), which must not accrue a stray `chronicle.zip`
+    build artifact -- the CLI removes the temp archive once it has published.
+    """
+    if zip_path is None:
+        fd, zip_path = tempfile.mkstemp(prefix="chronicle_", suffix=".zip")
+        os.close(fd)
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         manifest = os.path.join(out_dir, "manifest.json")
         if os.path.exists(manifest):
@@ -1203,14 +1239,20 @@ def main(argv=None):
     Two leak signals are both honored, belt-and-suspenders:
     `build_player_vault`'s own `result["leaks"]` (Task 12's authoritative
     signal -- on a real leak it never touches `out_dir` at all), PLUS an
-    independent `leak_check(args.out)` re-scan of the actual output
-    directory. The second scan is what actually matters here: it is the
-    last line of defense before `make_zip`/`publish` ever run, and it
-    catches a leak regardless of whether whatever populated `out_dir`
-    (a future `build_player_vault` variant, a monkeypatch in a test, a
-    hand-edited file) correctly reported it via `leaks`. Either signal
-    being non-empty is fatal: print the offenders to stderr and return
-    nonzero -- NEVER zip, NEVER publish.
+    independent re-scan of the actual output directory. The second scan is
+    what actually matters here: it is the last line of defense before
+    `make_zip`/`publish` ever run, and it catches a leak regardless of
+    whether whatever populated `out_dir` (a future `build_player_vault`
+    variant, a monkeypatch in a test, a hand-edited file) correctly reported
+    it via `leaks`. Either signal being non-empty is fatal: print the
+    offenders to stderr and return nonzero -- NEVER zip, NEVER publish.
+
+    That re-scan is SCOPED to the tool's own managed outputs (`manifest.json`
+    + `content/`), because `--out` may be the GM's real Obsidian player vault
+    (Option A) holding hand-authored notes that legitimately use in-world
+    `[!danger]` callouts -- scanning the whole tree would false-positive and
+    block a clean publish. The archive is likewise written to a temp path and
+    removed after publishing, so `--out` never accrues a `chronicle.zip`.
     """
     parser = argparse.ArgumentParser(
         prog="chronicle_build",
@@ -1226,7 +1268,8 @@ def main(argv=None):
     result = build_player_vault(args.vault, args.out, args.campaign_id)
     print(result["review_summary"])
 
-    offenders = sorted(set(result.get("leaks") or []) | set(leak_check(args.out)))
+    offenders = sorted(set(result.get("leaks") or [])
+                       | set(leak_check(args.out, subpaths=("manifest.json", "content"))))
     if offenders:
         print("LEAK CHECK FAILED - aborting, nothing zipped or published. Offenders:",
               file=sys.stderr)
@@ -1239,15 +1282,20 @@ def main(argv=None):
         return 0
 
     zip_path = make_zip(args.out)
-    print("Wrote archive: " + zip_path)
-
-    if args.publish_url:
-        ok, resp = publish(zip_path, args.publish_url, token=args.token)
-        if not ok:
-            print("Publish FAILED: " + str(resp), file=sys.stderr)
-            return 1
-        print("Published: " + str(resp))
-    return 0
+    try:
+        print("Wrote archive: " + zip_path)
+        if args.publish_url:
+            ok, resp = publish(zip_path, args.publish_url, token=args.token)
+            if not ok:
+                print("Publish FAILED: " + str(resp), file=sys.stderr)
+                return 1
+            print("Published: " + str(resp))
+        return 0
+    finally:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

@@ -66,6 +66,15 @@ python tools/chronicle_build.py \
   and other folders are untouched). On a leak it leaves `--out` untouched and exits nonzero.
 - A leak (nonzero exit / `LEAK CHECK FAILED`) NEVER zips or publishes. Fix the offending note
   (wrap the secret in `[!danger]`) and re-run.
+- **Option A safety (`--out` = your real player vault):** two behaviors keep the tool from
+  disturbing the hand-authored notes you keep alongside its output:
+  - The belt-and-suspenders re-scan before zipping is SCOPED to the tool's own managed outputs
+    (`manifest.json` + `content/`). Your hand-authored `01 - Chronicle/`, `02 - Cast/`, `Home.md`,
+    etc. are NOT re-scanned, so an in-world `[!danger]` callout you wrote for players (e.g. "the
+    bridge is unstable") never false-positive-aborts a clean publish. (The staged build itself is
+    still fully firewalled, and the app re-scans at ingest.)
+  - The publish archive is written to a private temp file and removed after publishing, so `--out`
+    never accrues a stray `chronicle.zip` build artifact.
 
 ## Auth (Task 16): publishing to prod
 
