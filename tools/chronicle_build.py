@@ -157,6 +157,20 @@ def _match_callout_header(line):
     return _CALLOUT_INNER.match(_strip_quote_markers(line))
 
 
+def _callout_depth(line):
+    """Count the leading '>' markers on a callout header line (after
+    tolerating leading whitespace and whitespace between markers) - the same
+    walk ``_strip_quote_markers`` performs, but counting instead of just
+    stripping. A top-level callout (``> [!kind] ...``) is depth 1; a nested
+    one (``>> [!kind] ...`` or ``> > [!kind] ...``) is depth 2, etc."""
+    s = line.lstrip()
+    depth = 0
+    while s.startswith(">"):
+        depth += 1
+        s = s[1:].lstrip()
+    return depth
+
+
 def _line_bounds(text, pos):
     """Return (start, end) offsets of the physical line containing `pos`
     within `text`. `start` is just past the previous newline (or 0);
@@ -249,17 +263,24 @@ def strip_gm_content(body):
        non-blockquote line or ANOTHER callout header at any depth - so a
        nested ``>> [!danger]`` inside a kept ``[!quote]`` block STARTS A
        NEW block instead of riding along as the quote's continuation.
-    3. Of those blocks, ONLY [!quote]/[!example] are kept verbatim
-       (callout syntax intact). [!check]/[!question] are harvested into
-       ``mysteries``; [!abstract] is harvested into ``recap_seed`` - built
-       from the header line's own title text plus every continuation
-       line's inner text (so a callout written entirely on the header
-       line, with no '>' continuation at all, still harvests/seeds its
-       title). Every other kind - known GM kinds (danger/info/tip/warning)
-       and any unknown/custom kind alike, at any nesting depth - is
-       dropped entirely, and so is any bare '>' blockquote that never had
-       a callout header in the first place. In short: among '>'-prefixed
-       content, only quote/example survive.
+    3. Of those blocks, keep/harvest fires ONLY for a DEPTH-1 (top-level,
+       single leading '>') header. A depth-1 [!quote]/[!example] is kept
+       verbatim (callout syntax intact); a depth-1 [!check]/[!question] is
+       harvested into ``mysteries``; a depth-1 [!abstract] is harvested into
+       ``recap_seed`` - built from the header line's own title text plus
+       every continuation line's inner text (so a callout written entirely
+       on the header line, with no '>' continuation at all, still
+       harvests/seeds its title). Every other depth-1 kind - known GM kinds
+       (danger/info/tip/warning) and any unknown/custom kind alike - is
+       dropped entirely, and so is any bare '>' blockquote that never had a
+       callout header in the first place. A header at depth >= 2 (nested
+       inside an enclosing block, e.g. ``>> [!quote]`` inside a
+       ``> [!danger]``) is STRIPPED UNCONDITIONALLY regardless of its own
+       kind - keep/harvest kinds are only ever honored at the top level, so
+       a keep/harvest callout nested inside a GM (strip) callout can never
+       bypass the enclosing block by virtue of its own kind. In short:
+       among '>'-prefixed content, only a TOP-LEVEL quote/example survives,
+       and only a TOP-LEVEL check/question/abstract is harvested.
     4. Non-'>' lines are ordinary prose and pass through untouched. (A
        secret the GM authored as plain non-blockquote prose outside any
        callout is an accepted residual per the vault convention that
@@ -294,9 +315,10 @@ def strip_gm_content(body):
             continue
 
         kind = header.group("kind").lower()
-        if kind in _KEEP_KINDS:
+        depth = _callout_depth(line)
+        if depth == 1 and kind in _KEEP_KINDS:
             out_lines.extend(block)              # verbatim
-        else:
+        elif depth == 1:
             title = (header.group("title") or "").strip()
             continuation = "\n".join(
                 _strip_quote_markers(b) for b in block[1:]
@@ -309,6 +331,16 @@ def strip_gm_content(body):
                     mysteries.append({"kind": _HARVEST[kind], "text": content})
             # else: every other kind (known GM kinds or unknown/custom) is
             # dropped entirely - see the ALLOWLIST policy note above.
+        # else: depth >= 2 - a callout header NESTED inside an enclosing
+        # block (e.g. a ">> [!quote]" inside a "> [!danger]") is stripped
+        # UNCONDITIONALLY regardless of its own kind. The block walk is
+        # depth-flat (a nested header always starts a new block, never
+        # rides along as a continuation - see the docstring above), so
+        # without this gate a keep/harvest kind nested inside a GM callout
+        # would be kept/harvested based purely on its own kind, with no
+        # memory of the enclosing strip-kind block it's actually inside.
+        # Over-stripping a legitimate depth->=2 quote is the deliberate,
+        # fail-safe cost - vanishingly rare vs. a spoiler leak.
         i = j
 
     player_body = "\n".join(out_lines)

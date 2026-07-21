@@ -673,6 +673,85 @@ def test_normal_comment_without_marker_still_keeps_quote_text():
     assert "<!--" not in out["player_body"]
 
 
+# ---------------------------------------------------------------------------
+# Whole-branch review C1: REVERSE nesting leak. A keep/harvest callout
+# ([!quote]/[!example]/[!check]/[!question]/[!abstract]) nested INSIDE a GM
+# (strip) callout ([!danger]/[!info]/[!tip]/[!warning]) is depth >= 2, but the
+# block walk is depth-flat: it treats the nested ">> [!kind]" header as the
+# START of a brand-new block and decides keep/harvest purely on that header's
+# OWN kind, with no memory that it's sitting inside an enclosing GM block.
+# leak_check doesn't catch this either, because no [!danger]/[!secret]/[!gm]
+# marker survives on the kept/harvested text. Fix: keep/harvest only fires for
+# a depth-1 (top-level) callout header; any header at depth >= 2 is stripped
+# unconditionally, regardless of its own kind.
+# ---------------------------------------------------------------------------
+
+def test_leak_repro_20_nested_quote_inside_danger_leaks_into_player_body():
+    body = (
+        "> [!danger] Secret trap\n"
+        "> > [!quote] Read when sprung\n"
+        "> > The ceiling collapses and SECRET_NESTEDQUOTE_1111 is revealed\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "SECRET_NESTEDQUOTE_1111" not in out["player_body"]
+    assert "SECRET_NESTEDQUOTE_1111" not in _mysteries_text(out)
+
+
+def test_leak_repro_21_nested_question_inside_danger_leaks_into_mysteries():
+    body = (
+        "> [!danger] hidden\n"
+        "> > [!question] a leading question\n"
+        "> > who really pulls the strings, SECRET_NESTEDQ_2222\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "SECRET_NESTEDQ_2222" not in _mysteries_text(out)
+    assert "SECRET_NESTEDQ_2222" not in out["player_body"]
+
+
+def test_leak_repro_22_nested_abstract_inside_danger_leaks_into_recap_seed():
+    body = (
+        "> [!danger] hidden\n"
+        "> > [!abstract] fake recap\n"
+        "> > the truth is SECRET_NESTEDABS_3333\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert out["recap_seed"] is None or "SECRET_NESTEDABS_3333" not in out["recap_seed"]
+    assert "SECRET_NESTEDABS_3333" not in out["player_body"]
+
+
+def test_leak_repro_23_nested_example_inside_info_leaks_into_player_body():
+    body = (
+        "> [!info] lore\n"
+        "> > [!example] handout\n"
+        "> > the vault code is SECRET_NESTEDEX_4444\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "SECRET_NESTEDEX_4444" not in out["player_body"]
+    assert "SECRET_NESTEDEX_4444" not in _mysteries_text(out)
+
+
+def test_top_level_quote_example_check_still_kept_and_harvested():
+    # Non-regression for the depth-1-only fix: a GENUINE top-level (depth-1)
+    # [!quote]/[!example] must still be kept verbatim, and a top-level
+    # [!check] must still be harvested into mysteries.
+    body = (
+        "> [!quote] Recruit\n"
+        "> Join us, stranger.\n"
+        "> [!example] Handout\n"
+        "> A torn map fragment.\n"
+        "> [!check] Clue\n"
+        "> a torn note mentions the vault.\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "> [!quote] Recruit" in out["player_body"]
+    assert "Join us, stranger." in out["player_body"]
+    assert "> [!example] Handout" in out["player_body"]
+    assert "A torn map fragment." in out["player_body"]
+    assert "[!check]" not in out["player_body"]
+    fact = next(m for m in out["mysteries"] if m["kind"] == "fact")
+    assert "a torn note mentions the vault." in fact["text"]
+
+
 # --- select_entities -------------------------------------------------------
 
 
