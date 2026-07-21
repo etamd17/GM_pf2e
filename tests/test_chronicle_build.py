@@ -494,3 +494,86 @@ def test_leak_repro_09_bare_blockquote_with_no_header_is_stripped():
     assert "LEAK9_BAREQUOTE_ff02" not in out["player_body"]
     assert "LEAK9_BAREQUOTE_ff02" not in _mysteries_text(out)
     assert "visible line" in out["player_body"]
+
+
+# ---------------------------------------------------------------------------
+# Adversarial review round 2: nested (`>>`) and indented (leading-whitespace)
+# callouts bypass both the header regex (exactly one leading '>') and the
+# block-walk's blockquote-line test (`line.startswith(">")`, exactly one),
+# so their bodies ride into whatever surface is open (player_body/mysteries/
+# recap_seed) or leak as untouched prose. Also restores header-only-callout
+# harvesting (a [!check]/[!question]/[!abstract] written entirely on the
+# header line, no '>' continuation at all).
+# ---------------------------------------------------------------------------
+
+def test_leak_repro_10_nested_danger_bypasses_into_player_body():
+    body = (
+        "> [!quote] Safe\n"
+        "> visible\n"
+        ">> [!danger] Nested\n"
+        ">> serves NESTED_SECRET_777\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "NESTED_SECRET_777" not in out["player_body"]
+    assert "NESTED_SECRET_777" not in _mysteries_text(out)
+    assert "visible" in out["player_body"]
+
+
+def test_leak_repro_11_nested_danger_bypasses_into_mysteries():
+    body = (
+        "> [!check] Clue\n"
+        "> a torn note\n"
+        ">> [!danger] Answer\n"
+        ">> killer is CHECKLEAK_4471\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "CHECKLEAK_4471" not in _mysteries_text(out)
+    assert "CHECKLEAK_4471" not in out["player_body"]
+
+
+def test_leak_repro_12_nested_danger_bypasses_into_recap_seed():
+    body = (
+        "> [!abstract] Clue\n"
+        "> the party learned a torn note\n"
+        ">> [!danger] Answer\n"
+        ">> killer is RECAPLEAK_8820\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert out["recap_seed"] is not None
+    assert "RECAPLEAK_8820" not in out["recap_seed"]
+    assert "RECAPLEAK_8820" not in out["player_body"]
+
+
+def test_leak_repro_13_indented_callout_bypasses_detection():
+    body = " > [!danger] Indented\n > serves INDENTED_LEAK_9021\n"
+    out = cb.strip_gm_content(body)
+    assert "INDENTED_LEAK_9021" not in out["player_body"]
+    assert "INDENTED_LEAK_9021" not in _mysteries_text(out)
+
+
+def test_leak_repro_14_nested_custom_kind_is_stripped():
+    body = (
+        "> [!quote] Safe\n"
+        "> visible\n"
+        ">> [!spoiler_alert] secret\n"
+        ">> LEAKCUSTOM_9999\n"
+    )
+    out = cb.strip_gm_content(body)
+    assert "LEAKCUSTOM_9999" not in out["player_body"]
+    assert "[!spoiler_alert]" not in out["player_body"]
+    assert "visible" in out["player_body"]
+
+
+def test_header_only_question_is_harvested():
+    body = "> [!question] Is Romi lying HEADERONLY_Q?\n"
+    out = cb.strip_gm_content(body)
+    assert "HEADERONLY_Q" in _mysteries_text(out)
+    assert "[!question]" not in out["player_body"]
+
+
+def test_header_only_abstract_seeds_recap():
+    body = "> [!abstract] Party met Romi HEADERONLY_ABS.\n"
+    out = cb.strip_gm_content(body)
+    assert out["recap_seed"] is not None
+    assert "HEADERONLY_ABS" in out["recap_seed"]
+    assert "[!abstract]" not in out["player_body"]

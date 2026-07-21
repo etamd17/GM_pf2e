@@ -103,8 +103,7 @@ def slugify(title):
     return s
 
 
-_CALLOUT_HEADER = re.compile(r"^>\s*\[!\s*(?P<kind>[^\]\s]+)\s*\]")
-_QUOTE_LINE = re.compile(r"^>\s?(.*)$")
+_CALLOUT_INNER = re.compile(r"^\[!\s*(?P<kind>[^\]\s]+)\s*\]\s*(?P<title>.*)$")
 
 _KEEP_KINDS = {"quote", "example"}       # kept verbatim, callout syntax intact
 _HARVEST = {"check": "fact", "question": "question"}
@@ -113,6 +112,32 @@ _HARVEST = {"check": "fact", "question": "question"}
 # the known GM ones (danger/info/tip/warning) AND any unknown/custom kind
 # (e.g. "spoiler_alert", "lore-bomb", "gm", "secret") - is stripped. Default
 # = STRIP; nothing is kept or harvested unless explicitly allowlisted.
+
+
+def _is_blockquote_line(line):
+    """A line is blockquote content if it starts with '>' after leading
+    whitespace is tolerated (indentation must not hide a callout)."""
+    return line.lstrip().startswith(">")
+
+
+def _strip_quote_markers(line):
+    """Strip leading whitespace, then every leading '>' marker and the
+    whitespace around it, at ANY depth ('>', '>>', '> >', indented or not).
+    Returns the remaining inner text, used both to detect a callout header
+    (regardless of nesting/indentation) and to recover a continuation
+    line's content."""
+    s = line.lstrip()
+    while s.startswith(">"):
+        s = s[1:].lstrip()
+    return s
+
+
+def _match_callout_header(line):
+    """Detect a callout header at ANY '>' depth/indentation. Returns the
+    match against the marker-stripped remainder (groups: kind, title), or
+    None if the line - after stripping leading whitespace and '>' markers -
+    isn't a ``[!kind] title`` header."""
+    return _CALLOUT_INNER.match(_strip_quote_markers(line))
 
 
 def strip_gm_content(body):
@@ -127,18 +152,30 @@ def strip_gm_content(body):
        because of step 3 below: a comment that severs a callout block only
        ever orphans a bare '>' tail, and step 3 strips every bare '>' line
        unconditionally, regardless of why it ended up bare.
-    2. Walk lines, grouping '>'-prefixed runs into callout blocks. A block
-       is a header line matching ``> [!kind] ...`` plus every immediately
-       following '>' line, up to (but not including) a non-'>' line or
-       another header line (a new block starting with no blank line
-       between them).
+    2. Walk lines, grouping '>'-prefixed runs into callout blocks. Leading
+       whitespace and '>'-depth are normalized throughout: a line is
+       "blockquote content" if ``line.lstrip().startswith(">")`` (so an
+       indented `` > [!danger]`` is still recognized), and a callout header
+       is detected by stripping leading whitespace then ALL leading '>'
+       markers (and the whitespace around them) before matching
+       ``[!kind] title`` on the remainder - so ``>> [!danger] X``,
+       ``  > [!danger] X`` and ``> [!danger] X`` all detect the same way.
+       A block is a header line plus every immediately following
+       blockquote line (at ANY depth/indent), up to (but not including) a
+       non-blockquote line or ANOTHER callout header at any depth - so a
+       nested ``>> [!danger]`` inside a kept ``[!quote]`` block STARTS A
+       NEW block instead of riding along as the quote's continuation.
     3. Of those blocks, ONLY [!quote]/[!example] are kept verbatim
        (callout syntax intact). [!check]/[!question] are harvested into
-       ``mysteries``; [!abstract] is harvested into ``recap_seed``. Every
-       other kind - known GM kinds (danger/info/tip/warning) and any
-       unknown/custom kind alike - is dropped entirely, and so is any bare
-       '>' blockquote that never had a callout header in the first place.
-       In short: among '>'-prefixed content, only quote/example survive.
+       ``mysteries``; [!abstract] is harvested into ``recap_seed`` - built
+       from the header line's own title text plus every continuation
+       line's inner text (so a callout written entirely on the header
+       line, with no '>' continuation at all, still harvests/seeds its
+       title). Every other kind - known GM kinds (danger/info/tip/warning)
+       and any unknown/custom kind alike, at any nesting depth - is
+       dropped entirely, and so is any bare '>' blockquote that never had
+       a callout header in the first place. In short: among '>'-prefixed
+       content, only quote/example survive.
     4. Non-'>' lines are ordinary prose and pass through untouched. (A
        secret the GM authored as plain non-blockquote prose outside any
        callout is an accepted residual per the vault convention that
@@ -153,15 +190,15 @@ def strip_gm_content(body):
 
     while i < n:
         line = lines[i]
-        if not line.startswith(">"):
+        if not _is_blockquote_line(line):
             out_lines.append(line)
             i += 1
             continue
 
-        header = _CALLOUT_HEADER.match(line)
+        header = _match_callout_header(line)
         block = [line]
         j = i + 1
-        while j < n and lines[j].startswith(">") and not _CALLOUT_HEADER.match(lines[j]):
+        while j < n and _is_blockquote_line(lines[j]) and _match_callout_header(lines[j]) is None:
             block.append(lines[j])
             j += 1
 
@@ -176,10 +213,11 @@ def strip_gm_content(body):
         if kind in _KEEP_KINDS:
             out_lines.extend(block)              # verbatim
         else:
-            content = "\n".join(
-                (_QUOTE_LINE.match(b).group(1) if _QUOTE_LINE.match(b) else b)
-                for b in block[1:]
+            title = (header.group("title") or "").strip()
+            continuation = "\n".join(
+                _strip_quote_markers(b) for b in block[1:]
             ).strip()
+            content = "\n".join(p for p in (title, continuation) if p).strip()
             if kind == "abstract":
                 recap_seed = content or None
             elif kind in _HARVEST:
