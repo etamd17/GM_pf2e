@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -993,3 +994,24 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
         return {"manifest": manifest, "review_summary": review_summary, "leaks": []}
     finally:
         shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+def make_zip(out_dir):
+    """Zip manifest.json (at root) + content/** + assets/**, skipping .gitkeep."""
+    zip_path = os.path.join(out_dir, "chronicle.zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        manifest = os.path.join(out_dir, "manifest.json")
+        if os.path.exists(manifest):
+            zf.write(manifest, "manifest.json")
+        for sub in ("content", "assets"):
+            subdir = os.path.join(out_dir, sub)
+            if not os.path.isdir(subdir):
+                continue
+            for root, _dirs, files in os.walk(subdir):
+                for fn in sorted(files):
+                    if fn == ".gitkeep":
+                        continue
+                    full = os.path.join(root, fn)
+                    arc = os.path.relpath(full, out_dir).replace(os.sep, "/")
+                    zf.write(full, arc)
+    return zip_path

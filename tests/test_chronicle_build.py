@@ -1,8 +1,10 @@
 import logging
+import os
 import pathlib
 import re as _re
 import sys
 import textwrap
+import zipfile
 
 import pytest
 
@@ -1440,3 +1442,24 @@ def test_build_player_vault_clean_build_preserves_unrelated_files(tmp_path):
     # The fresh build actually landed: a real page plus manifest.json.
     assert (out / "content" / "romi-bracken.md").exists()
     assert (out / "manifest.json").exists()
+
+
+def test_make_zip_has_manifest_at_root_and_skips_gitkeep(tmp_path):
+    out = tmp_path / "out"
+    (out / "content").mkdir(parents=True)
+    (out / "assets").mkdir(parents=True)
+    (out / "manifest.json").write_text('{"schema_version": 1}', encoding="utf-8")
+    (out / "content" / "romi.md").write_text("# Romi\n", encoding="utf-8")
+    (out / "content" / ".gitkeep").write_text("", encoding="utf-8")
+    (out / "assets" / "romi.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    zip_path = cb.make_zip(str(out))
+
+    assert os.path.exists(zip_path)
+    with zipfile.ZipFile(zip_path) as zf:
+        names = set(zf.namelist())
+        assert "manifest.json" in names
+        assert "content/romi.md" in names
+        assert "assets/romi.png" in names
+        assert not any(n.endswith(".gitkeep") for n in names)
+        assert zf.read("manifest.json") == b'{"schema_version": 1}'
