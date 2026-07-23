@@ -7,7 +7,7 @@
     <title>Character Forge</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 300: '#7DC4C4', 400: '#5EADAD', 500: '#4A9696', 600: '#3A7878', 700: '#2C5C5C', 800: '#1E4040', 900: '#142E2E' }, green: { 200: '#A7F3D0', 400: '#4ADE80' }, red: { 300: '#FDA4AF', 400: '#FB7185' }, blue: { 300: '#93C5FD', 400: '#60A5FA', 900: '#1E2A4A' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
+        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 300: '#f0d88a', 400: '#e0b65a', 500: '#c9a34e', 600: '#a4842b', 700: '#7d6418', 800: '#5a4712', 900: '#3d2f0c' }, green: { 200: '#A7F3D0', 400: '#4ADE80' }, red: { 300: '#FDA4AF', 400: '#FB7185' }, blue: { 300: '#93C5FD', 400: '#60A5FA', 900: '#1E2A4A' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
@@ -28,14 +28,14 @@
         .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
         
         .nav-item { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.06em; }
-        .nav-item.active { background: linear-gradient(90deg, rgba(58,120,120,0.15), transparent); border-left: 3px solid #5EADAD; color: #7DC4C4; }
+        .nav-item.active { background: linear-gradient(90deg, rgba(58,120,120,0.15), transparent); border-left: 3px solid #e0b65a; color: #f0d88a; }
         .step-panel { display: none; animation: fadeIn 0.25s ease-out; }
         .step-panel.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .choice-card { background: linear-gradient(135deg, #33302A, #252320); border: 1px solid rgba(139,115,85,0.18); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
-        .choice-card:hover { border-color: rgba(94,173,173,0.35); background: linear-gradient(135deg, #3F3A33, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4), 0 0 20px rgba(94,173,173,0.03); }
-        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #7DC4C4; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
+        .choice-card:hover { border-color: rgba(201,163,78,0.35); background: linear-gradient(135deg, #3F3A33, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4), 0 0 20px rgba(201,163,78,0.03); }
+        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #f0d88a; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
         .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
         
         .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #1C1917; border: 1px solid rgba(139,115,85,0.2); color: #D4C4A8; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
@@ -45,7 +45,7 @@
         .stat-pill.locked { background: rgba(6,95,70,0.25); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
 
         .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; }
-        .mod-tab-btn.active { color: #7DC4C4; background: rgba(58,120,120,0.15); border-color: rgba(94,173,173,0.3); }
+        .mod-tab-btn.active { color: #f0d88a; background: rgba(58,120,120,0.15); border-color: rgba(201,163,78,0.3); }
         
         h2, h3, h4, label { font-family: 'Cinzel', serif; }
         input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
@@ -86,7 +86,7 @@
                 border-radius: 6px;
                 flex: 0 0 auto;
             }
-            .builder-nav-list .nav-item.active { border-left: none !important; border-bottom: 2px solid #5EADAD; }
+            .builder-nav-list .nav-item.active { border-left: none !important; border-bottom: 2px solid #e0b65a; }
             /* The Finish button block sits below the nav, still full width. */
             .builder-sidebar > .p-6.border-t { padding: 10px 14px !important; }
             /* Step panels: tighten the generous desktop padding. */

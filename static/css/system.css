@@ -1668,7 +1668,7 @@ body[style*="linear-gradient"] {
     border-color: var(--danger) !important;
     background: var(--bg-card) !important;
 }
-.choice-card .title { font-family: var(--font-display) !important; color: var(--ruby-400) !important; }
+.choice-card .title { font-family: var(--font-display) !important; color: var(--gilt-200) !important; }
 .choice-card .subtitle { font-family: var(--font-display) !important; color: var(--text-on-cream-3) !important; }
 
 .stat-pill {
