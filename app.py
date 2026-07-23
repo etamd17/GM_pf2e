@@ -8224,9 +8224,15 @@ def cosmere_pcs():
     for d in _list_cosmere_pcs():
         b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
         o = b.order()
+        _ps = d.get('play_state') or {}
+        _cur_h = _ps.get('health')
         cards.append({
             'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
             'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
+            # Current health + active conditions from runtime play_state, so the
+            # roster shows party status at a glance (parity with the hub card).
+            'current_health': int(_cur_h if _cur_h is not None else b.health_max()),
+            'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
             'deflect': b.deflect_value(), 'investiture': b.investiture_max(),
             'is_radiant': b.is_radiant,
             'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),

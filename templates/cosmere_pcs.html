@@ -25,6 +25,15 @@
   .pc-res b { color:#e8eef5; font-family:var(--font-ui); font-variant-numeric:tabular-nums; }
   .pc-surges { margin-top:.5rem; font-size:11.5px; color:var(--text-on-dark-3); }
   .pc-surges b { color:var(--accent); }
+  /* At-a-glance party health bar (green -> accent when hurt -> ruby when critical). */
+  .pc-hp { height:5px; border-radius:3px; background:rgba(255,255,255,.07); overflow:hidden; margin-top:.6rem; }
+  .pc-hp-fill { height:100%; border-radius:3px; background:#4ade80; transition:width .2s ease; }
+  .pc-hp-fill.hurt { background:var(--accent); }
+  .pc-hp-fill.crit { background:#e06b6b; }
+  /* Active-condition pills (ruby, teal-compatible), parity with the hub card. */
+  .pc-conds { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.5rem; }
+  .pc-cond { font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:2px 7px;
+             border-radius:999px; background:rgba(211,110,110,.12); border:1px solid rgba(211,110,110,.3); color:#e0b0b0; }
   .pc-empty { color:var(--text-on-dark-3); font-size:13px; }
 {% endblock %}
 {% block content %}
@@ -74,7 +83,7 @@
 {% if pcs %}
 <div class="pc-grid">
   {% for pc in pcs %}
-  <a class="pc-card" href="/cosmere/pc/{{ pc.id }}" style="--accent:{{ pc.accent }};">
+  <a class="pc-card" href="/cosmere/pc/{{ pc.id }}" style="--accent:{{ pc.accent }};" aria-label="Open {{ pc.name }}'s character sheet">
     <div class="pc-top">
       <span class="pc-name">{{ pc.name }}</span>
       <span class="pc-lv">Lv {{ pc.level }} &middot; T{{ pc.tier }}</span>
@@ -88,11 +97,19 @@
       <div class="pc-def"><div class="l">Cog</div><div class="v">{{ pc.defenses.cog }}</div></div>
       <div class="pc-def"><div class="l">Spi</div><div class="v">{{ pc.defenses.spi }}</div></div>
     </div>
+    <div class="pc-hp" role="img" aria-label="Health {{ pc.current_health }} of {{ pc.health }}"><div class="pc-hp-fill{% if pc.health and pc.current_health <= pc.health * 0.25 %} crit{% elif pc.health and pc.current_health <= pc.health * 0.5 %} hurt{% endif %}" style="width:{{ (pc.current_health / pc.health * 100) if pc.health else 0 }}%"></div></div>
     <div class="pc-res">
-      <span>&#9829; <b>{{ pc.health }}</b></span>
+      <span>&#9829; <b>{{ pc.current_health }}</b>/{{ pc.health }}</span>
       <span>Deflect <b>{{ pc.deflect }}</b></span>
-      {% if pc.is_radiant %}<span>&#9889; Inv <b>{{ pc.investiture }}</b></span>{% endif %}
+      {% if pc.is_radiant %}<span>Inv <b>{{ pc.investiture }}</b></span>{% endif %}
     </div>
+    {% if pc.conditions %}
+    <div class="pc-conds" aria-label="Active conditions">
+      {% for code, val in pc.conditions.items() %}
+      <span class="pc-cond">{{ code|capitalize }}{% if val is number and val > 1 %} {{ val }}{% endif %}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if pc.surges %}<div class="pc-surges">Surges: <b>{{ pc.surges|join(' · ') }}</b></div>{% endif %}
   </a>
   {% endfor %}
