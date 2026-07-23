@@ -1957,7 +1957,12 @@
         function _focusPointsGainedThisLevel() {
             let n = 0;
             Object.values(state.feats_selected || {}).forEach(f => {
-                const d = ((f && (f.desc || f.description)) || '').toLowerCase();
+                if (!f) return;
+                // Feats ship description-less now; the server precomputes
+                // grants_focus. Fall back to text scan for any feat that still
+                // carries an inline description (class features, older data).
+                if (f.grants_focus) { n++; return; }
+                const d = ((f.desc || f.description) || '').toLowerCase();
                 if (d.includes('focus point') && d.includes('maximum')) n++;
             });
             return n;

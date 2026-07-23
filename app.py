@@ -15235,6 +15235,67 @@ def save_notes(pc_name):
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
+# ── Feat/spell pack payload trimming ─────────────────────────────────────
+# The builder + level-up pickers list ~8,600 feats and ~1,800 spells, but a
+# feat/spell's `description` HTML (3.7 MB across feats, ~1.5 MB across spells)
+# is only ever shown in the on-click detail panel — never in the list. Inlining
+# every description made both pages ~10 MB. We ship the lists WITHOUT
+# descriptions and fetch the clicked one from /api/pack_detail, cutting each
+# page to ~4 MB. The RAM copies (BUILDER_FEATS/BUILDER_SPELLS) keep full text.
+def _pack_list_lean(items, *, feat=False):
+    """A feat/spell list minus the heavy `description` field. Keeps every key
+    the picker LIST + prereq-eligibility read (name/level/traits/prereqs/_id).
+    For feats, preserves a tiny `grants_focus` flag the level-up recap used to
+    derive from the (now lazy-loaded) description text."""
+    out = []
+    for it in items:
+        lean = {k: v for k, v in it.items() if k != 'description'}
+        if feat:
+            desc = (it.get('description') or '').lower()
+            if 'focus point' in desc and 'maximum' in desc:
+                lean['grants_focus'] = True
+        out.append(lean)
+    return out
+
+def _builder_feats_lean():
+    """BUILDER_FEATS ({category: [feat, ...]}) with descriptions stripped."""
+    return {cat: _pack_list_lean(arr, feat=True) for cat, arr in BUILDER_FEATS.items()}
+
+_PACK_DESC_INDEX = None
+def _pack_desc_index():
+    """Lazy key -> description map over the in-RAM packs, for /api/pack_detail.
+    Feats key by _id (and name as fallback); spells key by name (no _id). Built
+    once — BUILDER_FEATS/BUILDER_SPELLS are static after boot."""
+    global _PACK_DESC_INDEX
+    if _PACK_DESC_INDEX is None:
+        feats, spells = {}, {}
+        for arr in BUILDER_FEATS.values():
+            for it in arr:
+                d = it.get('description') or ''
+                if it.get('_id'):
+                    feats[it['_id']] = d
+                if it.get('name'):
+                    feats.setdefault(it['name'], d)
+        for it in BUILDER_SPELLS:
+            if it.get('name'):
+                spells[it['name']] = it.get('description') or ''
+        _PACK_DESC_INDEX = {'feat': feats, 'spell': spells}
+    return _PACK_DESC_INDEX
+
+@app.route('/api/pack_detail/<kind>/<path:key>')
+def pack_detail(kind, key):
+    """Return one feat/spell's full description on demand. The pickers ship the
+    lists description-less (see _pack_list_lean) and fetch the clicked row here.
+    Player-facing (not in GM_API_PREFIXES) — read-only reference text."""
+    idx = _pack_desc_index()
+    # Try the named kind first, then the other. Feat _ids and spell names don't
+    # collide; a rare name collision resolves to the requested kind.
+    for k in [kind] + [o for o in ('feat', 'spell') if o != kind]:
+        m = idx.get(k)
+        if m and key in m:
+            return jsonify({"description": m[key]})
+    return jsonify({"description": ""})
+
 @app.route('/player/builder')
 def player_builder():
     # Filter weapons/armor to level 0-1 items for starting gear
@@ -15244,8 +15305,8 @@ def player_builder():
         ancestries=BUILDER_ANCESTRIES,
         backgrounds=BUILDER_BACKGROUNDS,
         classes=BUILDER_CLASSES,
-        spells=BUILDER_SPELLS,
-        feats=BUILDER_FEATS,
+        spells=_pack_list_lean(BUILDER_SPELLS),
+        feats=_builder_feats_lean(),
         builder_data=BUILDER_DATA,
         subclass_descriptions=SUBCLASS_DESCRIPTIONS,
         weapons=starting_weapons,
@@ -16924,7 +16985,7 @@ def player_levelup(pc_name):
         # Filter class-level features by the PC's subclass before passing
         # to the template — Storm Druid only sees Storm entries, etc.
         clf = _filter_class_level_features_for_pc(pc)
-        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf, free_archetype=_free_archetype_enabled())
+        return render_template('player_levelup.html', pc=pc, feats=_builder_feats_lean(), spells=_pack_list_lean(BUILDER_SPELLS), class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf, free_archetype=_free_archetype_enabled())
     return redirect(url_for('player_view'))
 
 def _count_feats_at_level(feats, level, slot_type):
