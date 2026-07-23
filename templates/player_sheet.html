@@ -5059,6 +5059,7 @@
             }
         }
 
+        let _spellSaveToastTimer = null;
         async function _saveSpellState() {
             try {
                 await fetch(`/api/spell_slots/${pcNameEncoded}`, {
@@ -5070,6 +5071,13 @@
                         cast_prep: window._castPrep
                     })
                 });
+                // Persistence confidence: prep writes to the PC's file on disk, but it
+                // happens silently. Flash a debounced confirmation so the player trusts
+                // their choices carry to the next session (one toast per burst of edits).
+                clearTimeout(_spellSaveToastTimer);
+                _spellSaveToastTimer = setTimeout(function () {
+                    if (window.pf2eToast) window.pf2eToast('Spell prep saved', 'success');
+                }, 500);
             } catch(e) {}
         }
 
@@ -7345,6 +7353,22 @@
                     if (sp.actions) spellActions[sp.name] = sp.actions;
                 });
             });
+
+            // Caster-type + prep-interaction guidance (clarity pass): players found it
+            // unclear what type of caster they are and whether to drag or click to prep.
+            const _tType = (caster.type || 'prepared').toLowerCase();
+            const _tTrad = (caster.tradition || '').charAt(0).toUpperCase() + (caster.tradition || '').slice(1);
+            const _typeBlurb = _tType === 'spontaneous'
+                ? 'You know a fixed repertoire and cast any known spell into any same-or-higher-rank slot — no daily prep.'
+                : 'You prepare spells each day from your list; each prepared spell fills one slot until you cast it.';
+            const _howTo = _tType === 'spontaneous'
+                ? 'Your repertoire is fixed — use <b style="color:var(--color-spell);">+ Learn Spell</b> to change known spells.'
+                : 'To prepare: <b>drag</b> a spell onto a slot, or click <b style="color:var(--color-spell);">+ Prep</b> to auto-fill the lowest open slot.';
+            html += `<div class="mb-3 p-2.5 rounded-lg" style="background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.18);">
+                <div class="text-[11px] font-header uppercase tracking-wider mb-1" style="color:var(--color-spell);">${_tTrad} ${_tType} caster${caster.name ? ' &middot; ' + caster.name : ''}</div>
+                <div class="text-[11px] leading-snug" style="color:var(--text-secondary);">${_typeBlurb}</div>
+                <div class="text-[10px] mt-1.5" style="color:var(--text-muted);">${_howTo} Changes save automatically.</div>
+            </div>`;
 
             // (R2) Cantrip section — flat selection, NOT slot drop-zones.
             // Per PF2e cantrip rules: a prepared caster picks N cantrips per day;
