@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronicle — Design Mockup (GM_pf2e)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   CHRONICLE — design mockup.
+   Tokens copied verbatim from static/css/system.css (2026-04 system).
+   Component classes are prefixed chron- and are written so they can be
+   lifted into system.css + Jinja templates with minimal change.
+   NO new hues. NO gradients. Motion = opacity/transform only.
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+    --gilt-50:#faf2dd; --gilt-100:#f0d88a; --gilt-200:#e0b65a; --gilt-300:#c9a34e;
+    --gilt-400:#a4842b; --gilt-500:#7d6418; --gilt-600:#574510;
+    --ruby-50:#fde4e4; --ruby-100:#f5b7b7; --ruby-200:#d36e6e; --ruby-300:#a83a3a;
+    --ruby-400:#7c2222; --ruby-500:#5a1414; --ruby-600:#3f0d0d;
+    --ink-50:#faf7ee; --ink-100:#f0ead7; --ink-200:#e3dac0; --ink-300:#c9bfa3;
+    --ink-400:#9a917a; --ink-500:#6f6755; --ink-600:#4a4334; --ink-700:#2e2920;
+    --ink-800:#1d1a14; --ink-900:#14110c; --ink-950:#0c0a07;
+
+    --bg-page:#0c0a07; --bg-card:#1c1813; --bg-card-2:#28221a; --bg-sunken:#14110c;
+    --text-1:#ede4cf; --text-2:#c8bd9e; --text-3:#a79d88;
+    --border-card:rgba(201,163,78,0.14); --border-rule:rgba(201,163,78,0.28);
+    --border-dark:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.14);
+    --accent:var(--gilt-300); --accent-hover:var(--gilt-200);
+    --danger:var(--ruby-300);
+
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+    --sp-6:24px; --sp-7:32px; --sp-8:48px; --sp-9:64px;
+    --r-sm:2px; --r-md:4px;
+    --shadow-1:0 1px 2px rgba(0,0,0,0.25);
+    --shadow-2:0 6px 24px rgba(0,0,0,0.4);
+    --t-fast:120ms ease; --t-base:180ms ease;
+    --shadow-glow-gilt:0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(201,163,78,0.45);
+
+    --font-display:'Cinzel','Cormorant Garamond',Georgia,serif;
+    --font-flavor:'Alegreya',Georgia,'Times New Roman',serif;
+    --font-ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+}
+@media (prefers-reduced-motion: reduce) {
+    :root { --t-fast:1ms; --t-base:1ms; }
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-text-size-adjust:100%; }
+body {
+    background:var(--bg-page); color:var(--text-1);
+    font-family:var(--font-ui); font-size:15px; line-height:1.55;
+    padding-bottom:96px; /* clearance for player nav */
+}
+a { color:var(--accent); text-decoration:none; }
+a:hover { color:var(--accent-hover); }
+.hidden { display:none !important; }
+
+/* ── Mockup chrome (NOT part of the product) ─────────────────────── */
+.mock-banner {
+    background:var(--ink-800); border-bottom:1px solid var(--border-rule);
+    color:var(--text-3); font-family:var(--font-mono); font-size:11px;
+    padding:var(--sp-2) var(--sp-4); text-align:center; letter-spacing:.04em;
+}
+.demo-panel {
+    position:fixed; top:64px; right:12px; z-index:300;
+    background:var(--bg-card-2); border:1px solid var(--border-rule);
+    border-radius:var(--r-md); box-shadow:var(--shadow-2);
+    padding:var(--sp-3) var(--sp-4); width:216px;
+    font-size:12px; color:var(--text-2);
+}
+.demo-panel h4 {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--text-3); margin-bottom:var(--sp-2);
+}
+.demo-panel label { display:block; margin-bottom:var(--sp-2); }
+.demo-panel select {
+    width:100%; background:var(--bg-sunken); color:var(--text-1);
+    border:1px solid var(--border-strong); border-radius:var(--r-sm);
+    padding:var(--sp-1) var(--sp-2); font-family:var(--font-ui); font-size:12px;
+    margin-top:var(--sp-1);
+}
+.demo-toggle {
+    display:flex; align-items:center; gap:var(--sp-2); cursor:pointer;
+    user-select:none; padding:var(--sp-1) 0;
+}
+.demo-panel .demo-min { float:right; cursor:pointer; color:var(--text-3); }
+
+/* ── Chronicle header ─────────────────────────────────────────────── */
+.chron-header {
+    border-bottom:1px solid var(--border-rule);
+    background:var(--bg-sunken);
+}
+.chron-header-inner {
+    max-width:1080px; margin:0 auto; padding:var(--sp-6) var(--sp-5) var(--sp-4);
+    display:flex; justify-content:space-between; align-items:flex-end; gap:var(--sp-4);
+    flex-wrap:wrap;
+}
+.chron-kicker {
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--text-3); margin-bottom:var(--sp-1);
+}
+.chron-title { font-family:var(--font-display); font-weight:700; font-size:30px; color:var(--gilt-200); letter-spacing:.02em; }
+.chron-header-meta { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
+
+.pill {
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.05em;
+    padding:3px 10px; border-radius:var(--r-sm);
+    border:1px solid var(--border-card); background:var(--bg-card); color:var(--text-2);
+    white-space:nowrap;
+}
+.pill-session { border-color:var(--border-rule); color:var(--gilt-100); }
+.pill-new { color:var(--gilt-100); }
+.pill-tag { text-transform:uppercase; font-size:10px; }
+
+/* Section tabs */
+.chron-tabs {
+    max-width:1080px; margin:0 auto; padding:0 var(--sp-5);
+    display:flex; gap:var(--sp-1); overflow-x:auto; scrollbar-width:none;
+}
+.chron-tabs::-webkit-scrollbar { display:none; }
+.chron-tab {
+    appearance:none; background:none; border:none; cursor:pointer;
+    font-family:var(--font-ui); font-size:13px; font-weight:600;
+    color:var(--text-3); padding:var(--sp-2) var(--sp-3) var(--sp-3);
+    border-bottom:2px solid transparent; transition:color var(--t-fast);
+    white-space:nowrap; position:relative;
+}
+.chron-tab:hover { color:var(--text-1); }
+.chron-tab.active { color:var(--gilt-200); border-bottom-color:var(--gilt-300); }
+.chron-tab .new-dot { position:absolute; top:6px; right:2px; }
+
+/* ── Live session banner ──────────────────────────────────────────── */
+.live-banner {
+    background:var(--ruby-500); border-bottom:1px solid var(--ruby-300);
+    color:var(--ruby-50); font-size:13px;
+}
+.live-banner-inner {
+    max-width:1080px; margin:0 auto; padding:var(--sp-2) var(--sp-5);
+    display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap;
+}
+.live-banner a { color:var(--gilt-100); font-weight:600; margin-left:auto; }
+.live-dot {
+    width:8px; height:8px; border-radius:50%; background:var(--gilt-200);
+    animation:livePulse 1.6s ease-in-out infinite;
+}
+@keyframes livePulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation:none; } }
+
+/* ── Layout ───────────────────────────────────────────────────────── */
+main { max-width:1080px; margin:0 auto; padding:var(--sp-6) var(--sp-5); }
+.chron-grid { display:grid; grid-template-columns:1fr 320px; gap:var(--sp-5); align-items:start; }
+@media (max-width:820px) { .chron-grid { grid-template-columns:1fr; } }
+
+.card {
+    background:var(--bg-card); border:1px solid var(--border-card);
+    border-radius:var(--r-md); box-shadow:var(--shadow-1);
+}
+.card-pad { padding:var(--sp-5); }
+.card h3.card-heading {
+    font-family:var(--font-display); font-size:15px; font-weight:600;
+    color:var(--gilt-200); letter-spacing:.03em; margin-bottom:var(--sp-3);
+}
+.section-heading {
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--text-3); margin:var(--sp-6) 0 var(--sp-3);
+}
+.section-heading:first-child { margin-top:0; }
+
+/* New-content marker (reuses the player-nav turn-dot pattern) */
+.new-dot {
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--gilt-200); box-shadow:0 0 6px rgba(201,163,78,0.6);
+}
+
+/* Live badge on entity cards */
+.badge-live {
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ruby-100);
+    border:1px solid var(--ruby-300); border-radius:var(--r-sm);
+    background:var(--ruby-600); padding:2px 8px;
+}
+.badge-live .live-dot { width:6px; height:6px; }
+
+/* ── Recap cards + timeline ───────────────────────────────────────── */
+.recap-card { padding:var(--sp-5); }
+.recap-card .recap-top { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-2); flex-wrap:wrap; }
+.recap-title { font-family:var(--font-display); font-size:19px; font-weight:600; color:var(--text-1); }
+.recap-excerpt { font-family:var(--font-flavor); font-size:16px; color:var(--text-2); margin:var(--sp-2) 0 var(--sp-3); }
+.chip-row { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
+.chip {
+    font-size:12px; font-weight:500; color:var(--gilt-100);
+    border:1px solid var(--border-card); border-radius:var(--r-sm);
+    background:var(--bg-card-2); padding:2px 9px; cursor:pointer;
+    transition:border-color var(--t-fast);
+}
+.chip:hover { border-color:var(--border-rule); }
+
+.timeline { position:relative; padding-left:var(--sp-6); }
+.timeline::before {
+    content:""; position:absolute; left:7px; top:4px; bottom:4px;
+    width:1px; background:var(--border-rule);
+}
+.timeline-item { position:relative; margin-bottom:var(--sp-5); }
+.timeline-item::before {
+    content:""; position:absolute; left:calc(-1 * var(--sp-6) + 3px); top:14px;
+    width:9px; height:9px; border-radius:50%;
+    background:var(--gilt-400); border:2px solid var(--bg-page);
+}
+.timeline-divider {
+    position:relative; margin:var(--sp-6) 0 var(--sp-4);
+    font-family:var(--font-display); font-size:14px; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--gilt-300);
+}
+.timeline-divider::before {
+    content:""; position:absolute; left:calc(-1 * var(--sp-6) + 1px); top:7px;
+    width:13px; height:13px; transform:rotate(45deg);
+    background:var(--gilt-500); border:1px solid var(--gilt-300);
+}
+
+/* ── Entity cards (Cast / Atlas / Field Guide) ────────────────────── */
+.entity-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(224px, 1fr)); gap:var(--sp-4); }
+.entity-card { overflow:hidden; cursor:pointer; transition:transform var(--t-fast), box-shadow var(--t-fast); }
+.entity-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-2); }
+.entity-portrait {
+    height:120px; background:var(--ink-700); position:relative;
+    display:flex; align-items:center; justify-content:center;
+    border-bottom:1px solid var(--border-card);
+}
+.entity-portrait .initial {
+    font-family:var(--font-display); font-size:44px; font-weight:700; color:var(--gilt-500);
+}
+.entity-portrait .badge-live { position:absolute; top:8px; right:8px; }
+.entity-portrait .you-are-here {
+    position:absolute; top:8px; right:8px;
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--gilt-100); border:1px solid var(--gilt-300); border-radius:var(--r-sm);
+    background:var(--gilt-600); padding:2px 8px;
+}
+.entity-body { padding:var(--sp-3) var(--sp-4) var(--sp-4); }
+.entity-name { font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--text-1); display:flex; align-items:center; gap:var(--sp-2); }
+.entity-epithet { font-family:var(--font-flavor); font-style:italic; font-size:13.5px; color:var(--text-3); margin:2px 0 var(--sp-2); }
+.entity-meta { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
+
+/* ── Mysteries board ──────────────────────────────────────────────── */
+.know-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-5); }
+@media (max-width:820px) { .know-grid { grid-template-columns:1fr; } }
+.know-item {
+    display:flex; gap:var(--sp-3); padding:var(--sp-3) var(--sp-4);
+    border-bottom:1px solid var(--border-dark); align-items:baseline;
+}
+.know-item:last-child { border-bottom:none; }
+.know-mark {
+    font-family:var(--font-mono); font-size:12px; font-weight:600; flex:none;
+    width:26px; text-align:center; border-radius:var(--r-sm); padding:1px 0;
+}
+.know-mark.fact { color:var(--gilt-100); border:1px solid var(--border-rule); background:var(--bg-card-2); }
+.know-mark.question { color:var(--ruby-100); border:1px solid var(--ruby-400); background:var(--ruby-600); }
+.know-text { color:var(--text-2); font-size:14px; }
+.know-text .stamp { font-family:var(--font-mono); font-size:10.5px; color:var(--text-3); margin-left:6px; }
+
+/* ── Handouts / in-world documents ────────────────────────────────── */
+.doc-frame {
+    background:var(--bg-card-2); border:1px solid var(--border-rule);
+    border-radius:var(--r-md); box-shadow:var(--shadow-1);
+    padding:var(--sp-6) var(--sp-7); position:relative;
+}
+.doc-frame::before, .doc-frame::after {
+    content:""; position:absolute; left:var(--sp-4); right:var(--sp-4); height:1px;
+    background:var(--border-rule);
+}
+.doc-frame::before { top:var(--sp-2); }
+.doc-frame::after { bottom:var(--sp-2); }
+.doc-body { font-family:var(--font-flavor); font-size:16.5px; color:var(--text-1); }
+.doc-body p { margin-bottom:var(--sp-3); }
+.doc-body .signoff { text-align:right; font-style:italic; color:var(--text-2); }
+.doc-caption { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
+.doc-caption .doc-title { font-family:var(--font-display); font-size:16px; font-weight:600; color:var(--gilt-200); margin-right:auto; }
+.handout-image {
+    height:150px; border:1px dashed var(--border-rule); border-radius:var(--r-md);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-3); font-family:var(--font-mono); font-size:11px; letter-spacing:.06em;
+    background:repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(201,163,78,0.04) 8px, rgba(201,163,78,0.04) 16px);
+}
+
+/* Read-aloud callout mapping demo ([!quote] from the vault) */
+.callout-quote {
+    border-left:3px solid var(--gilt-400); background:var(--bg-card-2);
+    border-radius:var(--r-sm); padding:var(--sp-3) var(--sp-4);
+    font-family:var(--font-flavor); font-style:italic; font-size:15.5px; color:var(--text-2);
+    margin:var(--sp-3) 0;
+}
+
+/* ── Home widgets ─────────────────────────────────────────────────── */
+.widget { margin-bottom:var(--sp-4); }
+.widget .w-row { display:flex; justify-content:space-between; align-items:baseline; padding:var(--sp-2) 0; border-bottom:1px solid var(--border-dark); }
+.widget .w-row:last-child { border-bottom:none; }
+.w-label { color:var(--text-3); font-size:12.5px; }
+.w-value { color:var(--text-1); font-size:13.5px; font-weight:500; text-align:right; }
+.party-strip { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
+.party-chip {
+    display:flex; align-items:center; gap:var(--sp-2);
+    border:1px solid var(--border-card); border-radius:var(--r-sm);
+    background:var(--bg-card-2); padding:4px 10px 4px 4px; font-size:12.5px; color:var(--text-2);
+}
+.party-chip .avatar {
+    width:24px; height:24px; border-radius:var(--r-sm); background:var(--ink-700);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display); font-size:12px; color:var(--gilt-300); font-weight:700;
+}
+.update-strip { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:var(--sp-3); }
+.update-card {
+    display:flex; gap:var(--sp-3); align-items:center;
+    background:var(--bg-card); border:1px solid var(--border-card);
+    border-radius:var(--r-md); padding:var(--sp-3) var(--sp-4); cursor:pointer;
+    transition:border-color var(--t-fast);
+}
+.update-card:hover { border-color:var(--border-rule); }
+.update-card .u-kind { font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
+.update-card .u-name { font-size:13.5px; font-weight:600; color:var(--text-1); }
+
+/* ── Player bottom nav (existing app pattern, Chronicle added) ────── */
+.player-nav {
+    position:fixed; bottom:0; left:0; right:0; z-index:200;
+    background:var(--bg-sunken); border-top:1px solid var(--border-rule);
+    display:flex; justify-content:space-around; padding:var(--sp-2) var(--sp-2) calc(var(--sp-2) + env(safe-area-inset-bottom));
+}
+.player-nav-tab {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    color:var(--text-3); font-size:10.5px; font-weight:600; padding:4px 12px;
+    border-radius:var(--r-sm); position:relative; transition:color var(--t-fast);
+}
+.player-nav-tab svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.player-nav-tab.active { color:var(--gilt-200); }
+.player-nav-tab:hover { color:var(--text-1); }
+.player-nav-tab .turn-dot {
+    position:absolute; top:2px; right:8px; width:8px; height:8px; border-radius:50%;
+    background:var(--ruby-300); box-shadow:0 0 6px rgba(168,58,58,0.7);
+}
+
+/* Footer note */
+.chron-footer {
+    max-width:1080px; margin:var(--sp-8) auto 0; padding:0 var(--sp-5);
+    color:var(--text-3); font-size:12px; font-family:var(--font-mono);
+    border-top:1px solid var(--border-dark); padding-top:var(--sp-4);
+}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">CHRONICLE DESIGN MOCKUP — sample data only, not real campaign content. Production build is server-rendered Jinja + system.css; this file exists to lock the visual/UX direction. See CHRONICLE_DESIGN.md.</div>
+
+<header class="chron-header">
+    <div class="chron-header-inner">
+        <div>
+            <div class="chron-kicker">Shades of Blood — Book 1: Thirst for Blood</div>
+            <h1 class="chron-title">The Chronicle</h1>
+        </div>
+        <div class="chron-header-meta">
+            <span class="pill pill-session">As of Session 4</span>
+            <span class="pill">Sarenith 12, 4725 AR</span>
+        </div>
+    </div>
+    <nav class="chron-tabs" id="chron-tabs">
+        <button class="chron-tab active" data-screen="home">Home</button>
+        <button class="chron-tab" data-screen="story">Story So Far <span class="new-dot"></span></button>
+        <button class="chron-tab" data-screen="cast">Cast <span class="new-dot"></span></button>
+        <button class="chron-tab" data-screen="atlas">Atlas</button>
+        <button class="chron-tab" data-screen="mysteries">Mysteries</button>
+        <button class="chron-tab" data-screen="handouts">Handouts <span class="new-dot"></span></button>
+        <button class="chron-tab" data-screen="fieldguide">Field Guide</button>
+    </nav>
+</header>
+
+<div id="live-banner" class="live-banner hidden">
+    <div class="live-banner-inner">
+        <span class="live-dot"></span>
+        <strong>Session in progress</strong>
+        <span>Round 3 — The Old Tannery</span>
+        <a href="#">Open table view</a>
+    </div>
+</div>
+
+<main>
+
+<!-- ══ HOME ══════════════════════════════════════════════════════════ -->
+<section id="screen-home">
+    <div class="chron-grid">
+        <div>
+            <div class="section-heading">Previously On</div>
+            <div class="card recap-card">
+                <div class="recap-top">
+                    <span class="pill pill-session">Session 4</span>
+                    <span class="new-dot"></span>
+                    <span class="pill">2 weeks ago</span>
+                </div>
+                <div class="recap-title">The Mask Slips</div>
+                <p class="recap-excerpt">The broker who called herself Romi was never brokering for herself. When the ledger came apart in Amad's hands, so did her story — and half the room went for the exits. What she said before she vanished changes everything about the tannery district.</p>
+                <div class="callout-quote">"You were never meant to find the third page. Now we are all in a great deal of trouble."</div>
+                <div class="chip-row">
+                    <span class="chip">Romi</span>
+                    <span class="chip">The Old Tannery</span>
+                    <span class="chip">The Torn Letter</span>
+                </div>
+            </div>
+
+            <div class="section-heading">New Since Your Last Visit</div>
+            <div class="update-strip">
+                <div class="update-card"><span class="new-dot"></span><div><div class="u-kind">Cast — updated</div><div class="u-name">Romi</div></div></div>
+                <div class="update-card"><span class="new-dot"></span><div><div class="u-kind">Handout — new</div><div class="u-name">A Torn Letter</div></div></div>
+                <div class="update-card"><span class="new-dot"></span><div><div class="u-kind">Mystery — new</div><div class="u-name">Who does Romi answer to?</div></div></div>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-heading">The Reckoning of Days</div>
+            <div class="card card-pad widget">
+                <div class="w-row"><span class="w-label">Today</span><span class="w-value">Sarenith 12, 4725 AR</span></div>
+                <div class="w-row"><span class="w-label">Moon</span><span class="w-value">Waning crescent</span></div>
+                <div class="w-row"><span class="w-label">Next known event</span><span class="w-value">Founders' Vigil — 3 days</span></div>
+            </div>
+
+            <div class="section-heading">The Company</div>
+            <div class="card card-pad widget">
+                <div class="party-strip">
+                    <span class="party-chip"><span class="avatar">G</span>Go'el</span>
+                    <span class="party-chip"><span class="avatar">A</span>Amad</span>
+                    <span class="party-chip"><span class="avatar">K</span>Kyle</span>
+                    <span class="party-chip"><span class="avatar">G</span>Gavin</span>
+                    <span class="party-chip"><span class="avatar">W</span>Wyvern</span>
+                </div>
+            </div>
+
+            <div class="section-heading">Shortcuts</div>
+            <div class="card card-pad widget">
+                <div class="w-row"><a href="#" data-goto="story">Read the story so far</a></div>
+                <div class="w-row"><a href="#" data-goto="handouts">Latest handout</a></div>
+                <div class="w-row"><a href="#" data-goto="mysteries">Open questions</a></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ══ STORY SO FAR ══════════════════════════════════════════════════ -->
+<section id="screen-story" class="hidden">
+    <div class="section-heading">The Story So Far</div>
+    <div class="timeline">
+        <div class="timeline-divider">Book 1 — Thirst for Blood</div>
+
+        <div class="timeline-item card recap-card">
+            <div class="recap-top"><span class="pill pill-session">Session 4</span><span class="new-dot"></span></div>
+            <div class="recap-title">The Mask Slips</div>
+            <p class="recap-excerpt">Romi's true colors, a ledger with a missing page, and a hasty exit through the smoke-room floor.</p>
+            <div class="chip-row"><span class="chip">Romi</span><span class="chip">The Old Tannery</span></div>
+        </div>
+
+        <div class="timeline-item card recap-card">
+            <div class="recap-top"><span class="pill pill-session">Session 3</span></div>
+            <div class="recap-title">Into the Hound Pens</div>
+            <p class="recap-excerpt">The trail of the missing ferrymen led below the tannery — and something down there had been fed recently.</p>
+            <div class="chip-row"><span class="chip">The Old Tannery</span><span class="chip">Bloodbound Thrall</span></div>
+        </div>
+
+        <div class="timeline-item card recap-card">
+            <div class="recap-top"><span class="pill pill-session">Session 2</span></div>
+            <div class="recap-title">Old Coin, Cold Trail</div>
+            <p class="recap-excerpt">A stranger paying in coin two centuries out of mint, and the first hint the disappearances were connected.</p>
+            <div class="chip-row"><span class="chip">The Pale Man</span><span class="chip">The Undermarket</span></div>
+        </div>
+
+        <div class="timeline-item card recap-card">
+            <div class="recap-top"><span class="pill pill-session">Session 1</span></div>
+            <div class="recap-title">The Silver Lantern</div>
+            <p class="recap-excerpt">Four strangers, one wyvern, and a job that was supposed to be simple.</p>
+            <div class="chip-row"><span class="chip">The Silver Lantern Inn</span><span class="chip">Captain Helvin</span></div>
+        </div>
+    </div>
+</section>
+
+<!-- ══ CAST ══════════════════════════════════════════════════════════ -->
+<section id="screen-cast" class="hidden">
+    <div class="section-heading">People You Have Met</div>
+    <div class="entity-grid">
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">R</span><span class="badge-live live-only hidden"><span class="live-dot"></span>In this scene</span></div>
+            <div class="entity-body">
+                <div class="entity-name">Romi <span class="new-dot"></span></div>
+                <div class="entity-epithet">The broker who wasn't</div>
+                <div class="entity-meta"><span class="pill pill-tag">Suspect</span><span class="pill">Last seen S4</span></div>
+            </div>
+        </div>
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">H</span></div>
+            <div class="entity-body">
+                <div class="entity-name">Captain Helvin</div>
+                <div class="entity-epithet">Watch captain, keeps his debts</div>
+                <div class="entity-meta"><span class="pill pill-tag">Ally</span><span class="pill">Last seen S3</span></div>
+            </div>
+        </div>
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">I</span></div>
+            <div class="entity-body">
+                <div class="entity-name">Mother Iska</div>
+                <div class="entity-epithet">Herbalist of the low quarter</div>
+                <div class="entity-meta"><span class="pill pill-tag">Ally</span><span class="pill">Last seen S2</span></div>
+            </div>
+        </div>
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">?</span></div>
+            <div class="entity-body">
+                <div class="entity-name">The Pale Man</div>
+                <div class="entity-epithet">Pays in old coin</div>
+                <div class="entity-meta"><span class="pill pill-tag">Unknown</span><span class="pill">Last seen S2</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ══ ATLAS ═════════════════════════════════════════════════════════ -->
+<section id="screen-atlas" class="hidden">
+    <div class="section-heading">Places You Have Been</div>
+    <div class="entity-grid">
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">T</span><span class="you-are-here live-only hidden">You are here</span></div>
+            <div class="entity-body">
+                <div class="entity-name">The Old Tannery</div>
+                <div class="entity-epithet">Smoke, hides, and something below</div>
+                <div class="entity-meta"><span class="pill">Discovered S3</span></div>
+            </div>
+        </div>
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">S</span></div>
+            <div class="entity-body">
+                <div class="entity-name">The Silver Lantern Inn</div>
+                <div class="entity-epithet">Home base, such as it is</div>
+                <div class="entity-meta"><span class="pill">Discovered S1</span></div>
+            </div>
+        </div>
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">U</span></div>
+            <div class="entity-body">
+                <div class="entity-name">The Undermarket</div>
+                <div class="entity-epithet">Everything has a price down here</div>
+                <div class="entity-meta"><span class="pill">Discovered S2</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ══ MYSTERIES ═════════════════════════════════════════════════════ -->
+<section id="screen-mysteries" class="hidden">
+    <div class="know-grid">
+        <div>
+            <div class="section-heading">What We Know</div>
+            <div class="card">
+                <div class="know-item"><span class="know-mark fact">[x]</span><span class="know-text">Romi was posing as an independent broker — she answers to someone else. <span class="stamp">S4</span></span></div>
+                <div class="know-item"><span class="know-mark fact">[x]</span><span class="know-text">The disappearances trace to the tannery district. <span class="stamp">S3</span></span></div>
+                <div class="know-item"><span class="know-mark fact">[x]</span><span class="know-text">The pale man pays in coin two centuries out of mint. <span class="stamp">S2</span></span></div>
+                <div class="know-item"><span class="know-mark fact">[x]</span><span class="know-text">All of the missing worked the river. <span class="stamp">S2</span></span></div>
+            </div>
+        </div>
+        <div>
+            <div class="section-heading">Open Questions</div>
+            <div class="card">
+                <div class="know-item"><span class="know-mark question">[?]</span><span class="know-text">Who does Romi answer to? <span class="stamp">S4</span></span></div>
+                <div class="know-item"><span class="know-mark question">[?]</span><span class="know-text">What was on the ledger's missing third page? <span class="stamp">S4</span></span></div>
+                <div class="know-item"><span class="know-mark question">[?]</span><span class="know-text">Why ferrymen? What connects them to the tannery? <span class="stamp">S3</span></span></div>
+                <div class="know-item"><span class="know-mark question">[?]</span><span class="know-text">Where does the old coin come from? <span class="stamp">S2</span></span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ══ HANDOUTS ══════════════════════════════════════════════════════ -->
+<section id="screen-handouts" class="hidden">
+    <div class="section-heading">Documents &amp; Handouts</div>
+
+    <div class="card recap-card" style="margin-bottom:var(--sp-5);">
+        <div class="doc-caption">
+            <span class="doc-title">A Torn Letter</span>
+            <span class="new-dot"></span>
+            <span class="pill pill-session">Session 4</span>
+            <span class="pill">Everyone</span>
+        </div>
+        <div class="doc-frame">
+            <div class="doc-body">
+                <p>— and I will not write his name, not even here. The shipment moves on the new moon as before. Keep the ferrymen quiet or keep them, it is all the same to our friend below.</p>
+                <p>Burn this. You never could follow instructions.</p>
+                <p class="signoff">— R.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="secret-handout" class="card recap-card" style="margin-bottom:var(--sp-5);">
+        <div class="doc-caption">
+            <span class="doc-title">A Note Slipped to Go'el</span>
+            <span class="pill pill-session">Session 4</span>
+            <span class="pill" style="border-color:var(--ruby-400); color:var(--ruby-100);">Only you</span>
+        </div>
+        <div class="doc-frame">
+            <div class="doc-body">
+                <p>You have kind eyes for a sellsword. The cellar door on Cooper's Row is never locked after the vigil bell. Come alone, and I will tell you what your friends should not hear yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card recap-card">
+        <div class="doc-caption">
+            <span class="doc-title">Player Map — Tannery District</span>
+            <span class="pill pill-session">Session 3</span>
+            <span class="pill">Everyone</span>
+        </div>
+        <div class="handout-image">PLAYER-SAFE MAP IMAGE (from Player Handouts/Maps/)</div>
+    </div>
+</section>
+
+<!-- ══ FIELD GUIDE ═══════════════════════════════════════════════════ -->
+<section id="screen-fieldguide" class="hidden">
+    <div class="section-heading">Creatures Encountered</div>
+    <div class="entity-grid">
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">B</span></div>
+            <div class="entity-body">
+                <div class="entity-name">Bloodbound Thrall</div>
+                <div class="entity-epithet">Fast, mindless, and recently fed</div>
+                <div class="entity-meta"><span class="pill pill-tag">Undead</span><span class="pill">Fought S3</span></div>
+                <p style="font-size:12.5px; color:var(--text-3); margin-top:var(--sp-2);">What you saw: it ignored wounds that should have dropped it, and recoiled from the wyvern's shriek.</p>
+            </div>
+        </div>
+        <div class="card entity-card">
+            <div class="entity-portrait"><span class="initial">G</span></div>
+            <div class="entity-body">
+                <div class="entity-name">Grave Hound</div>
+                <div class="entity-epithet">It hunted by sound alone</div>
+                <div class="entity-meta"><span class="pill pill-tag">Beast</span><span class="pill">Fought S2</span></div>
+                <p style="font-size:12.5px; color:var(--text-3); margin-top:var(--sp-2);">What you saw: blind, ear-splitting howl, called two more before it fell.</p>
+            </div>
+        </div>
+    </div>
+    <p style="margin-top:var(--sp-4); color:var(--text-3); font-size:12.5px;">Entries appear here after you have fought a creature. Game statistics stay hidden unless the GM reveals them.</p>
+</section>
+
+<div class="chron-footer">Chronicle renders only content published from the GM's vault. If something is missing, you have not discovered it yet.</div>
+
+</main>
+
+<!-- Player bottom nav (existing pattern + Chronicle tab) -->
+<nav class="player-nav" aria-label="Player navigation">
+    <a href="#" class="player-nav-tab" aria-label="Character sheet">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <span>Sheet</span>
+    </a>
+    <a href="#" class="player-nav-tab" aria-label="Combat tracker">
+        <svg viewBox="0 0 24 24"><path d="M14.5 2.5L12 5l-2.5-2.5L7 5 4.5 2.5 2 5v16.5l2.5-2.5L7 21.5l2.5-2.5L12 21.5l2.5-2.5 2.5 2.5 2.5-2.5L22 21.5V5l-2.5-2.5L17 5z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+        <span>Combat</span>
+        <span class="turn-dot live-only hidden"></span>
+    </a>
+    <a href="#" class="player-nav-tab" aria-label="Party">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Party</span>
+    </a>
+    <a href="#" class="player-nav-tab" aria-label="Session notes">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+        <span>Notes</span>
+    </a>
+    <a href="#" class="player-nav-tab active" aria-label="Chronicle">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Chronicle</span>
+    </a>
+</nav>
+
+<!-- Mockup demo controls (not part of the product) -->
+<div class="demo-panel" id="demo-panel">
+    <h4>Mockup Controls <span class="demo-min" id="demo-min">[-]</span></h4>
+    <div id="demo-body">
+        <label>Viewing as
+            <select id="demo-player">
+                <option value="goel" selected>Go'el</option>
+                <option value="amad">Amad</option>
+                <option value="kyle">Kyle</option>
+                <option value="gavin">Gavin</option>
+            </select>
+        </label>
+        <label class="demo-toggle"><input type="checkbox" id="demo-live"> Simulate live session (SSE)</label>
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+
+    // ---- Section tabs ----
+    var tabs = document.querySelectorAll(".chron-tab");
+    function show(screen) {
+        document.querySelectorAll("main > section").forEach(function (s) { s.classList.add("hidden"); });
+        var el = document.getElementById("screen-" + screen);
+        if (el) el.classList.remove("hidden");
+        tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.screen === screen); });
+        window.scrollTo({ top: 0 });
+    }
+    tabs.forEach(function (t) {
+        t.addEventListener("click", function () { show(t.dataset.screen); });
+    });
+    document.querySelectorAll("[data-goto]").forEach(function (a) {
+        a.addEventListener("click", function (e) { e.preventDefault(); show(a.dataset.goto); });
+    });
+
+    // ---- Demo: live session simulation ----
+    // In production these elements react to SSE events via window.appSSE
+    // ("encounter_update", "handout", "chronicle_update") -- never a raw
+    // EventSource. This toggle just previews the states.
+    var liveToggle = document.getElementById("demo-live");
+    liveToggle.addEventListener("change", function () {
+        var on = liveToggle.checked;
+        document.getElementById("live-banner").classList.toggle("hidden", !on);
+        document.querySelectorAll(".live-only").forEach(function (el) {
+            el.classList.toggle("hidden", !on);
+        });
+    });
+
+    // ---- Demo: per-player recipient filtering ----
+    // In production filtering happens SERVER-SIDE; the client never
+    // receives content addressed to another player.
+    var playerSel = document.getElementById("demo-player");
+    playerSel.addEventListener("change", function () {
+        var secret = document.getElementById("secret-handout");
+        secret.classList.toggle("hidden", playerSel.value !== "goel");
+    });
+
+    // ---- Demo panel minimize ----
+    var minBtn = document.getElementById("demo-min");
+    minBtn.addEventListener("click", function () {
+        var body = document.getElementById("demo-body");
+        var hidden = body.classList.toggle("hidden");
+        minBtn.textContent = hidden ? "[+]" : "[-]";
+    });
+})();
+</script>
+</body>
+</html>
