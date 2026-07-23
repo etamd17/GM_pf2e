@@ -18,6 +18,18 @@
         .gm-group-label.run { color:var(--accent); }
         /* Unified line-icon set (replaces the mixed dingbat/letter tile icons). */
         .tile__glyph svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+        /* Flatten the RUN/PREP/MANAGE tiles: soften each card to a faint wash + hairline
+           (not a solid bordered box) so the three grids read as one calm surface
+           instead of a row of boxes-in-a-box. The storm accent stays, dialed down
+           until hover; the glyph chip loses its own border so it sits on the card. */
+        .cos-hub-stage .tile { background:rgba(255,255,255,0.02); border-color:rgba(255,255,255,0.06); }
+        .cos-hub-stage .tile:hover { border-color:color-mix(in srgb, var(--accent) 40%, transparent); box-shadow:var(--shadow-1); }
+        .cos-hub-stage .tile::before { opacity:0.18; }
+        .cos-hub-stage .tile:hover::before { opacity:0.55; }
+        .cos-hub-stage .tile__glyph { background:color-mix(in srgb, var(--accent) 6%, transparent); border-color:transparent; }
+        /* Keep the live-combat tile in the teal identity (shared default crosses to ruby). */
+        .cos-hub-stage .tile[data-tone="alert"] .tile__glyph { color:var(--accent); }
+        .cos-hub-stage .tile[data-tone="alert"]::before { background:linear-gradient(90deg, transparent, var(--accent), transparent); }
         /* Resume-combat banner (only while an encounter is live). */
         .resume-combat {
             display:flex; align-items:center; gap:var(--sp-3); text-decoration:none;
@@ -127,7 +139,7 @@
             <p class="tile__desc">Cosmere rules at a glance &mdash; turn order, damage &amp; deflect, the injury spiral, conditions, Plot Die, surges.</p>
             <div class="tile__qa">
                 <button type="button" class="qa-btn" onclick="cosPlotDie()">Roll Plot Die</button>
-                <span class="qa-out" id="qa-plot-out" aria-live="polite"></span>
+                <span class="qa-out" id="qa-plot-out" role="status" aria-live="polite"></span>
             </div>
         </div>
     </div>

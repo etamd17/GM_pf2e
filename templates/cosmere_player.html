@@ -9,7 +9,7 @@
   .ph-roster:hover { background:rgba(255,255,255,.09); }
 
   .hero { background:var(--bg-sunken,#131922); border:1px solid var(--border-card);
-          border-left:5px solid var(--accent); border-radius:14px;
+          border-left:3px solid var(--accent); border-radius:14px;
           padding:1.1rem 1.25rem; margin-bottom:1.2rem; }
   .hero-top { display:flex; align-items:baseline; justify-content:space-between; gap:.7rem; flex-wrap:wrap; }
   .hero-name { font-size:1.5rem; font-weight:800; color:#e8eef5; font-family:var(--font-display,serif); }
@@ -18,8 +18,11 @@
   .hero-sub .dim { color:var(--text-on-dark-3); font-weight:400; }
 
   .stat-row { display:flex; gap:.6rem; margin-top:1rem; flex-wrap:wrap; }
-  .stat { flex:1 1 80px; min-width:80px; text-align:center; background:rgba(255,255,255,.03);
-          border:1px solid var(--border-card); border-radius:9px; padding:.5rem .2rem; }
+  /* Flattened stat cells — a faint wash + hairline instead of a hard border, so
+     the cluster reads as one card rather than a grid of boxes-in-a-box. */
+  .stat { flex:1 1 80px; min-width:80px; text-align:center; background:rgba(255,255,255,.02);
+          border:1px solid rgba(255,255,255,.05); border-radius:9px; padding:.5rem .2rem; }
+  .stat[title], .attr[title] { cursor:help; }
   .stat .l { font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); }
   .stat .v { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:700; font-size:20px; color:#e8eef5; line-height:1.25; }
   .stat.accent .v { color:var(--accent); }
@@ -49,8 +52,9 @@
   .act { text-decoration:none; font-size:13px; font-weight:600; padding:.55rem 1rem; border-radius:9px;
          border:1px solid var(--border-card); color:#e8eef5; background:rgba(255,255,255,.04); }
   .act:hover { background:rgba(255,255,255,.09); }
-  .act.primary { background:rgba(95,168,224,.16); border-color:rgba(95,168,224,.5); color:var(--accent); }
-  .act.primary:hover { background:rgba(95,168,224,.26); }
+  .act.primary { background:color-mix(in srgb, var(--accent) 14%, transparent);
+                 border-color:color-mix(in srgb, var(--accent) 45%, transparent); color:var(--accent); }
+  .act.primary:hover { background:color-mix(in srgb, var(--accent) 24%, transparent); }
 
   .ph-empty { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:14px;
               padding:1.6rem; text-align:center; color:var(--text-on-dark-2); }
@@ -71,7 +75,7 @@
   .oleg .os { font-size:10.5px; color:var(--text-on-dark-3); }
   .mtab { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
   @media (min-width:720px){ .mtab { grid-template-columns:repeat(4,1fr); } }
-  .mcol { background:rgba(255,255,255,.02); border:1px solid var(--border-card); border-radius:11px; padding:11px 12px; }
+  .mcol { background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.05); border-radius:11px; padding:11px 12px; }
   .mcol .qh { font-size:10px; letter-spacing:.13em; text-transform:uppercase; margin-bottom:9px; font-weight:600; }
   .mrow { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
   .mrow:last-child { margin-bottom:0; }
@@ -97,16 +101,18 @@
     {% else %}{{ c.ancestry }}{% if c.path %} <span class="dim">&middot; {{ c.path|capitalize }}</span>{% endif %}{% if c.culture %} <span class="dim">&middot; {{ c.culture }}</span>{% endif %}{% endif %}
   </div>
 
+  {# Derived-stat "why" hover hints — each defense is 10 + its governing
+     attribute pair (rulebook Ch.1); resources trace to their own formulas. #}
   <div class="stat-row">
-    <div class="stat"><div class="l">{{ defense_names.phy }}</div><div class="v">{{ c.defenses.phy }}</div></div>
-    <div class="stat"><div class="l">{{ defense_names.cog }}</div><div class="v">{{ c.defenses.cog }}</div></div>
-    <div class="stat"><div class="l">{{ defense_names.spi }}</div><div class="v">{{ c.defenses.spi }}</div></div>
-    <div class="stat accent"><div class="l">Deflect</div><div class="v">{{ c.deflect }}</div></div>
+    <div class="stat" title="{{ defense_names.phy }} Defense = 10 + {{ attr_names.str }} + {{ attr_names.spd }}"><div class="l">{{ defense_names.phy }}</div><div class="v">{{ c.defenses.phy }}</div></div>
+    <div class="stat" title="{{ defense_names.cog }} Defense = 10 + {{ attr_names.int }} + {{ attr_names.wil }}"><div class="l">{{ defense_names.cog }}</div><div class="v">{{ c.defenses.cog }}</div></div>
+    <div class="stat" title="{{ defense_names.spi }} Defense = 10 + {{ attr_names.awa }} + {{ attr_names.pre }}"><div class="l">{{ defense_names.spi }}</div><div class="v">{{ c.defenses.spi }}</div></div>
+    <div class="stat accent" title="Deflect — damage reduction from armor and natural bonuses"><div class="l">Deflect</div><div class="v">{{ c.deflect }}</div></div>
   </div>
   <div class="stat-row">
-    <div class="stat"><div class="l">Health</div><div class="v">{{ c.health }}</div></div>
-    <div class="stat"><div class="l">Focus</div><div class="v">{{ c.focus }}</div></div>
-    {% if c.is_radiant %}<div class="stat accent"><div class="l">Investiture</div><div class="v">{{ c.investiture }}</div></div>{% endif %}
+    <div class="stat" title="Maximum Health = 10 + {{ attr_names.str }}, plus per-level gains"><div class="l">Health</div><div class="v">{{ c.health }}</div></div>
+    <div class="stat" title="Maximum Focus = 2 + {{ attr_names.wil }}"><div class="l">Focus</div><div class="v">{{ c.focus }}</div></div>
+    {% if c.is_radiant %}<div class="stat accent" title="Maximum Investiture = 2 + the higher of {{ attr_names.awa }} or {{ attr_names.pre }}"><div class="l">Investiture</div><div class="v">{{ c.investiture }}</div></div>{% endif %}
   </div>
 
   <div class="attr-row">

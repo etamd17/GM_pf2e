@@ -3,21 +3,27 @@
 {% block extra_head %}
   /* Cosmere generators. Raw CSS -- base.html already wraps extra_head in <style>;
      never nest a <style> here (the CSS parser eats the first rule). */
-  .cg-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-rule); padding-bottom:.7rem; margin-bottom:1.1rem; }
+  .cg-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-card); padding-bottom:.7rem; margin-bottom:1.1rem; }
   .cg-title { display:inline-block; margin:0; font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
   .cg-sub { font-size:12px; color:var(--text-on-dark-3); }
-  .cg-all { font-size:12px; text-decoration:none; padding:.45rem .9rem; border-radius:8px; background:var(--bg-card-2); border:1px solid var(--accent); color:var(--accent); cursor:pointer; }
-  .cg-all:hover { background:rgba(95,168,224,.14); }
+  .cg-all { font-size:12px; text-decoration:none; padding:.45rem .9rem; border-radius:8px; background:var(--bg-card-2); border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); color:var(--accent); cursor:pointer; transition:background .12s, border-color .12s; }
+  .cg-all:hover { background:color-mix(in srgb, var(--accent) 12%, transparent); border-color:var(--accent); }
+  .cg-all:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-head-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
   .cg-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); align-items:start; }
-  .cg-card { background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:.9rem 1rem; }
+  /* Flatter cells: keep the raised card surface for grouping, but drop the
+     teal outline for a neutral hairline so a grid of cards reads calm, not
+     like a wall of teal-bordered boxes. Teal is reserved for text + hover. */
+  .cg-card { background:var(--bg-card); border:1px solid rgba(255,255,255,.06); border-radius:var(--r-md); padding:.9rem 1rem; }
   .cg-card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; }
   .cg-label { font-family:var(--font-display, serif); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
-  .cg-reroll { background:none; border:1px solid var(--border-card); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:14px; line-height:1; transition:color .12s, border-color .12s; }
+  .cg-reroll { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:14px; line-height:1; transition:color .12s, border-color .12s; }
   .cg-reroll:hover { color:var(--accent); border-color:var(--accent); }
+  .cg-reroll:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-card-actions { display:flex; align-items:center; gap:.35rem; }
-  .cg-copy { background:none; border:1px solid var(--border-card); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; line-height:1; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s; }
+  .cg-copy { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; line-height:1; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s; }
   .cg-copy:hover { color:var(--accent); border-color:var(--accent); }
+  .cg-copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-copy svg { width:14px; height:14px; }
   .cg-body { font-size:13px; color:var(--text-on-dark); line-height:1.55; min-height:2.6em; }
   .cg-body b { color:var(--storm-100, var(--accent)); }
