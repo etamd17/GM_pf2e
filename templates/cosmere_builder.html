@@ -7,9 +7,13 @@
                 margin:0 0 .55rem; border-bottom:1px solid var(--border-card); padding-bottom:.3rem;
                 display:flex; justify-content:space-between; align-items:baseline; }
   .bld .sec-h + .sec-h, .step .sec-h:not(:first-child) { margin-top:1.4rem; }
-  .bld .budget { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:12px; }
+  .bld .budget { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:12px; display:inline-flex; align-items:center; gap:.4rem; }
   .bld .budget.over { color:#f87171; }
   .bld .budget.ok { color:var(--ac2); }
+  /* Visual budget bar so "how full" reads at a glance next to the count. */
+  .bld .budget .bbar { display:inline-block; width:52px; height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .bld .budget .bfill { display:block; height:100%; background:var(--accent); transition:width .2s ease; }
+  .bld .budget.over .bfill { background:#f87171; }
   .bld label { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-on-dark-3); display:block; margin-bottom:3px; }
   .bld input, .bld select, .bld textarea { background:var(--bg-page,#0d1117); color:#e8eef5;
       border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; font-size:13px; width:100%; }
@@ -19,7 +23,9 @@
   .grid { display:grid; gap:.6rem; }
   .g-attrs { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }
   .g-skills { grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); }
-  .card { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px; padding:.6rem .7rem; }
+  /* Flatter cards: a faint wash + hairline instead of a heavy box, per the
+     minimal design direction (less box-in-box). */
+  .card { background:rgba(255,255,255,.018); border:1px solid rgba(255,255,255,.05); border-radius:9px; padding:.6rem .7rem; }
   /* Skill card: a vertical card (name+mod header, blurb, then the stepper row)
      so the −/+ controls and the modifier never overflow a narrow column. */
   .skill { display:flex; flex-direction:column; gap:.4rem; }
@@ -124,7 +130,10 @@
   .info-line b { color:var(--accent); }
   .wiz-nav { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-card); }
   .wiz-nav .count { font-size:12px; color:var(--text-on-dark-3); }
-  .wiz-side { position:sticky; top:62px; background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.9rem 1rem; }
+  .wiz-side { position:sticky; top:62px; background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.9rem 1rem; transition:box-shadow .2s ease, border-color .2s ease; }
+  /* Pulse the live character panel when a point changes it (cause -> effect). */
+  .wiz-side.just-updated { border-color:color-mix(in srgb, var(--accent) 55%, transparent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent); }
+  @media (prefers-reduced-motion: reduce){ .wiz-side { transition:none; } }
   .wiz-side h3 { font-family:var(--font-display,serif); font-size:13px; letter-spacing:.05em; text-transform:uppercase; color:var(--ac2); margin:0 0 .1rem; }
   .wiz-side .who { font-size:12px; color:var(--text-on-dark-3); margin-bottom:.6rem; }
   .cs-defs { display:flex; gap:.4rem; margin:.5rem 0; }
@@ -236,7 +245,11 @@
         <div class="grid g-attrs">
           {% for k in ['str','spd','int','wil','awa','pre'] %}
           <div class="card"><label>{{ attr_names[k] }}</label>
-            <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()" title="{{ attr_desc[k] }}">
+            <div class="stepper">
+              <button type="button" aria-label="Lower {{ attr_names[k] }}" onclick="bumpAttr('{{ k }}',-1)">&minus;</button>
+              <input id="attr-{{ k }}" type="number" min="0" max="5" value="{{ build.attributes[k] }}" oninput="recompute()" title="{{ attr_desc[k] }}" style="width:54px;">
+              <button type="button" aria-label="Raise {{ attr_names[k] }}" onclick="bumpAttr('{{ k }}',1)">+</button>
+            </div>
             <div class="hint">{{ attr_desc[k] }}</div></div>
           {% endfor %}
         </div>
@@ -880,8 +893,28 @@ function renderInfected(){
 
 function setBudget(id,spent,avail){
   const e=document.getElementById(id);
-  if(e){ e.textContent=`${spent} / ${avail}`; e.className='budget '+(spent>avail?'over':'ok'); }
+  if(e){
+    const over = spent>avail, pct = avail>0 ? Math.min(100, Math.round(spent/avail*100)) : 0;
+    e.className='budget '+(over?'over':'ok');
+    e.innerHTML = '<span class="bnum">'+spent+' / '+avail+'</span>' +
+                  '<span class="bbar"><span class="bfill" style="width:'+pct+'%"></span></span>';
+  }
   return spent<=avail;
+}
+// Tactile point allocation for attributes (skills + level already have steppers).
+function bumpAttr(k,d){
+  const el=document.getElementById('attr-'+k); if(!el) return;
+  const cap = (lvl()===1) ? 3 : 5;
+  el.value = Math.max(0, Math.min(cap, (+el.value||0)+d));
+  recompute();
+  flashPreview();   // pulse the live panel so the cause->effect of the point is visible
+}
+// Brief highlight of the live character panel when a point changes it.
+let _flashT=null;
+function flashPreview(){
+  const p=document.querySelector('.wiz-side'); if(!p) return;
+  p.classList.remove('just-updated'); void p.offsetWidth; p.classList.add('just-updated');
+  clearTimeout(_flashT); _flashT=setTimeout(()=>p.classList.remove('just-updated'), 600);
 }
 function recompute(){
   const L=lvl();
