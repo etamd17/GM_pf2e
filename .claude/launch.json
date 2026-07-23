@@ -5,6 +5,7 @@
       "name": "pf2e-app",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["app.py"],
+      "env": { "FLASK_DEBUG": "true", "GM_PASSWORD": "" },
       "port": 5001
     }
   ]
