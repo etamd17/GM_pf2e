@@ -9133,11 +9133,19 @@ def api_cosmere_my_combat():
     if not c:
         return jsonify({'ok': True, 'in_encounter': False})
     active = ACTIVE_ENCOUNTER[TURN_INDEX] if (ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)) else None
+    is_my_turn = bool(active and active.instance_id == c.instance_id)
+    # Am I the combatant who acts right after the current one? Powers the sheet's
+    # "you're up next" heads-up popup. Wraps to the top of the order (next round);
+    # never fires when it's already my turn or I'm the only one in the fight.
+    up_next = False
+    if active and not is_my_turn and ACTIVE_ENCOUNTER and len(ACTIVE_ENCOUNTER) > 1:
+        nxt = ACTIVE_ENCOUNTER[(TURN_INDEX + 1) % len(ACTIVE_ENCOUNTER)]
+        up_next = bool(nxt and nxt.instance_id == c.instance_id)
     return jsonify({
         'ok': True, 'in_encounter': True, 'round': ROUND_NUMBER,
         'mode': _cosmere_initiative_mode(),
         'active_name': active.name if active else '',
-        'is_my_turn': bool(active and active.instance_id == c.instance_id),
+        'is_my_turn': is_my_turn, 'up_next': up_next,
         'speed_choice': getattr(c, 'speed_choice', 'slow'),
         'max_actions': getattr(c, 'max_actions', 3),
         'initiative': int(getattr(c, 'initiative', 0) or 0),
