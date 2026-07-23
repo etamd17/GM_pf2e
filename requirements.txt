@@ -9,3 +9,7 @@ segno==1.6.6
 
 # Cosmere character-sheet PDF import (AcroForm field extraction)
 pypdf>=4.0
+
+# Uploaded-image downscale + recompress (portraits, handouts, hero/crest) to
+# bound the Railway volume. Used best-effort: if absent, originals save as-is.
+Pillow>=10.0

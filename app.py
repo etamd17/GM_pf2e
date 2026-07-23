@@ -9988,6 +9988,52 @@ def delete_handout(handout_id):
     sse_broadcast('handout_deleted', {'id': handout_id})
     return jsonify({"success": True})
 
+def _save_image_compressed(file_storage, filepath, *, max_dim=1600, quality=82):
+    """Downscale (preserving aspect) + recompress an uploaded image before it
+    lands on the Railway volume, so a player's 8 MP phone photo doesn't sit on
+    disk at full size. Saves in the SAME format as `filepath`'s extension so the
+    served URL stays consistent.
+
+    Best-effort by design: if Pillow is missing, the image is animated, or
+    anything goes wrong, the ORIGINAL bytes are saved (an upload is never lost
+    to a compression hiccup). Returns the on-disk byte count."""
+    def _save_original():
+        try:
+            file_storage.stream.seek(0)
+        except Exception:
+            pass
+        file_storage.save(filepath)
+        return os.path.getsize(filepath) if os.path.exists(filepath) else 0
+
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return _save_original()
+
+    try:
+        file_storage.stream.seek(0)
+        img = Image.open(file_storage.stream)
+        # Animated GIFs/WebP: don't flatten to a single frame — keep original.
+        if getattr(img, 'n_frames', 1) > 1:
+            return _save_original()
+        img = ImageOps.exif_transpose(img)  # bake in camera orientation
+        if max(img.size) > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext in ('.jpg', '.jpeg'):
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            img.save(filepath, quality=quality, optimize=True, progressive=True)
+        elif ext == '.png':
+            img.save(filepath, optimize=True)
+        elif ext == '.webp':
+            img.save(filepath, quality=quality, method=6)
+        else:
+            return _save_original()
+        return os.path.getsize(filepath) if os.path.exists(filepath) else 0
+    except Exception:
+        return _save_original()
+
 @app.route('/api/handout_upload', methods=['POST'])
 def upload_handout_image():
     """Upload an image for a handout."""
@@ -10019,7 +10065,7 @@ def upload_handout_image():
 
     filename = f"{uuid.uuid4().hex[:12]}{ext}"
     filepath = os.path.join(upload_dir, filename)
-    f.save(filepath)
+    _save_image_compressed(f, filepath, max_dim=1600)
 
     url = f"/handouts/{filename}"
     return jsonify({"success": True, "url": url})
@@ -15961,7 +16007,7 @@ def upload_portrait(pc_name):
         if old.startswith(safe_name + '.'):
             os.remove(os.path.join(portraits_dir, old))
 
-    file.save(os.path.join(portraits_dir, filename))
+    _save_image_compressed(file, os.path.join(portraits_dir, filename), max_dim=768)
 
     # Update the character JSON
     file_path = get_pc_file_path(pc_name)
@@ -16343,7 +16389,8 @@ def api_campaign_hero_image():
     stamp = int(time.time())
     filename = f"hero_image_{stamp}.{ext}"
     new_path = os.path.join(CAMPAIGN_ASSETS_DIR, filename)
-    f.save(new_path)
+    # Hero splash is a full-screen backdrop — allow a larger cap than portraits.
+    size = _save_image_compressed(f, new_path, max_dim=2000) or size
 
     public_url = f"/campaign_assets/{filename}"
     _save_campaign_config({'hero_image': public_url})
@@ -16398,7 +16445,8 @@ def api_campaign_crest():
     stamp = int(time.time())
     filename = f"crest_{stamp}.{ext}"
     new_path = os.path.join(CAMPAIGN_ASSETS_DIR, filename)
-    f.save(new_path)
+    # Crest is a small decorative mark — a tight cap is plenty.
+    _save_image_compressed(f, new_path, max_dim=512)
 
     public_url = f"/campaign_assets/{filename}"
     _save_campaign_config({'crest_image': public_url})
