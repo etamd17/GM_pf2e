@@ -8130,15 +8130,36 @@ def cosmere_gm_hub():
     adv_count = len(systems.cosmere.adversary_docs())
     camp = _active_campaign_doc() or {}
     cfg = _load_campaign_config()
+    ready_count, ready_total = _cosmere_ready_counts()
     return render_template(
         'cosmere_gm.html',
         campaign_name=camp.get('name') or 'Cosmere Campaign',
-        char_count=len(_list_cosmere_pcs()),
+        char_count=ready_total,
         adv_count=adv_count,
         encounter_count=len(ACTIVE_ENCOUNTER),
         active_cid=ACTIVE_CAMPAIGN_ID,
         session_number=cfg.get('session_number', 1),
+        party=_cosmere_hub_party(),
+        ready_count=ready_count, ready_total=ready_total,
     )
+
+
+@app.route('/api/cosmere/hub_status')
+@gm_required
+def api_cosmere_hub_status():
+    """Live snapshot for the Cosmere GM hub: party vitals strip, live counts, and
+    the ready-to-level tally -- so the command center repaints on the encounter /
+    player SSE instead of going stale until a manual refresh."""
+    if _active_system() != 'cosmere':
+        return jsonify({'ok': False}), 400
+    ready, total = _cosmere_ready_counts()
+    return jsonify({
+        'ok': True,
+        'char_count': total,
+        'encounter_count': len(ACTIVE_ENCOUNTER),
+        'ready_count': ready, 'ready_total': total,
+        'party': _cosmere_hub_party(),
+    })
 
 
 @app.route('/cosmere/gmscreen')
@@ -18575,6 +18596,33 @@ def api_rest_apply():
     return jsonify({'success': True, 'results': results})
 
 # -- Quick Status Board -----------------------------------------------
+# Debilitating Cosmere conditions (mirrors the _COS_SEV list the templates use).
+_COSMERE_SEVERE_CONDS = {'unconscious', 'stunned', 'exhausted', 'afflicted',
+                         'immobilized', 'restrained', 'slowed', 'disoriented'}
+
+
+def _cosmere_hub_party():
+    """Compact per-hero vitals for the GM hub's at-a-glance party strip: name,
+    health band, injuries, and whether any condition is debilitating."""
+    rows = []
+    for r in _cosmere_status_party(_list_cosmere_pcs()):
+        conds = list(r.get('conditions') or {})
+        rows.append({
+            'name': r['name'], 'hp_pct': r['hp_pct'],
+            'current_hp': r['current_hp'], 'max_hp': r['max_hp'],
+            'injuries': int(r.get('injuries') or 0),
+            'conds': len(conds),
+            'sev': any(str(c).lower() in _COSMERE_SEVERE_CONDS for c in conds),
+        })
+    return rows
+
+
+def _cosmere_ready_counts():
+    """(ready, total) PCs flagged ready-to-level in the active Cosmere campaign."""
+    pcs = _list_cosmere_pcs()
+    return sum(1 for d in pcs if d.get('ready_to_level')), len(pcs)
+
+
 def _cosmere_status_party(docs):
     """Party-status rows for Cosmere PCs (mirrors the PF2e shape the status board
     expects). Live health/focus/investiture/conditions come from each PC's saved
