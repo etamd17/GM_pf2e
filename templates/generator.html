@@ -31,7 +31,7 @@
         color: #ededf4;        /* base-100 — headline pop */
         margin-bottom: 2px;
     }
-    .gen-content b, .gen-content strong { color: #8ED4D4; font-weight: 700; }
+    .gen-content b, .gen-content strong { color: #e0b65a; font-weight: 700; }
     .gen-content em, .gen-content i { color: #9494b0; font-style: italic; }
     .gen-content ul { list-style-type: disc; padding-left: 1.1rem; margin: 0.35rem 0; }
     .gen-content li { margin-bottom: 0.15rem; }
@@ -58,7 +58,7 @@
         transition: border-color 0.2s, transform 0.15s;
     }
     .gen-card:hover {
-        border-color: rgba(142,212,212,0.22);
+        border-color: rgba(224,182,90,0.22);
         transform: translateY(-1px);
     }
     .gen-card-header {
@@ -75,7 +75,7 @@
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #8ED4D4;
+        color: #e0b65a;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -103,12 +103,12 @@
     }
     .reroll-btn:hover, .pin-btn:hover {
         opacity: 1;
-        border-color: rgba(142,212,212,0.25);
-        color: #8ED4D4;
+        border-color: rgba(224,182,90,0.25);
+        color: #e0b65a;
     }
     .pin-btn.pinned {
         opacity: 0.4;
-        color: #8ED4D4;
+        color: #e0b65a;
         cursor: default;
         pointer-events: none;
     }
@@ -116,7 +116,7 @@
     /* Pinned section */
     .pinned-section {
         background: #191920;
-        border: 1px solid rgba(142,212,212,0.12);
+        border: 1px solid rgba(224,182,90,0.12);
         border-radius: 10px;
         margin-bottom: 1.25rem;
         overflow: hidden;
@@ -138,7 +138,7 @@
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #8ED4D4;
+        color: #e0b65a;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -220,41 +220,41 @@
         padding: 4px 8px;
         border-radius: 4px;
     }
-    .gen-toolbar-input:focus { outline: none; border-color: rgba(142,212,212,0.35); }
+    .gen-toolbar-input:focus { outline: none; border-color: rgba(224,182,90,0.35); }
 
     /* ── Rapid Fire bar: one-tap, one-line generators for live play ── */
-    .rapid-bar { background:#191920; border:1px solid rgba(142,212,212,0.14); border-radius:10px; margin-bottom:1.25rem; overflow:hidden; }
+    .rapid-bar { background:#191920; border:1px solid rgba(224,182,90,0.14); border-radius:10px; margin-bottom:1.25rem; overflow:hidden; }
     .rapid-bar-head { display:flex; align-items:center; gap:10px; padding:9px 14px; background:linear-gradient(180deg,#25303a,#20262e); border-bottom:1px solid rgba(255,255,255,0.05); }
-    .rapid-bar-title { font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#8ED4D4; }
+    .rapid-bar-title { font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#e0b65a; }
     .rapid-bar-hint { font-size:10.5px; color:#6b6b8a; flex:1; }
     .rapid-clear { font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:5px; padding:3px 9px; cursor:pointer; }
     .rapid-clear:hover { color:#e06060; border-color:rgba(224,96,96,0.3); }
     .rapid-buttons { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:10px 14px; }
     .rapid-group-label { font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:#5a5a74; font-weight:700; margin:0 2px 0 10px; }
     .rapid-group-label:first-child { margin-left:0; }
-    .rapid-btn { font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:#cfe9e9; background:rgba(142,212,212,0.08); border:1px solid rgba(142,212,212,0.22); border-radius:6px; padding:5px 11px; cursor:pointer; transition:background 0.12s, border-color 0.12s, transform 0.12s; }
-    .rapid-btn:hover { background:rgba(142,212,212,0.18); border-color:rgba(142,212,212,0.5); transform:translateY(-1px); }
+    .rapid-btn { font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:#cfe9e9; background:rgba(224,182,90,0.08); border:1px solid rgba(224,182,90,0.22); border-radius:6px; padding:5px 11px; cursor:pointer; transition:background 0.12s, border-color 0.12s, transform 0.12s; }
+    .rapid-btn:hover { background:rgba(224,182,90,0.18); border-color:rgba(224,182,90,0.5); transform:translateY(-1px); }
     .rapid-btn:active { transform:translateY(0); }
     .rapid-results { padding:0 14px 12px; display:flex; flex-direction:column; gap:6px; }
     .rapid-results:empty { display:none; }
     .rapid-result { display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); }
     .rapid-result.rapid-new { animation:rapid-flash 0.6s ease-out; }
-    @keyframes rapid-flash { from { background:rgba(142,212,212,0.16); } to { background:rgba(255,255,255,0.02); } }
+    @keyframes rapid-flash { from { background:rgba(224,182,90,0.16); } to { background:rgba(255,255,255,0.02); } }
     .rapid-result-text { flex:1; min-width:0; font-size:12.5px; line-height:1.5; }
     .rapid-copy, .rapid-dismiss { background:transparent; border:none; cursor:pointer; flex-shrink:0; font-size:13px; line-height:1; padding:2px 4px; opacity:0.55; color:#b8b8cc; }
-    .rapid-copy:hover { opacity:1; color:#8ED4D4; }
+    .rapid-copy:hover { opacity:1; color:#e0b65a; }
     .rapid-dismiss:hover { opacity:1; color:#e06060; }
 
     /* ── Category filter chips ── */
     .gen-filter { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:1rem; }
     .gen-filter-chip { font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:4px 13px; cursor:pointer; transition:color 0.12s, background 0.12s, border-color 0.12s; }
-    .gen-filter-chip:hover { color:#cfe9e9; border-color:rgba(142,212,212,0.3); }
-    .gen-filter-chip.active { color:#0d0d12; background:#8ED4D4; border-color:#8ED4D4; }
+    .gen-filter-chip:hover { color:#cfe9e9; border-color:rgba(224,182,90,0.3); }
+    .gen-filter-chip.active { color:#0d0d12; background:#e0b65a; border-color:#e0b65a; }
     .masonry-item.gen-hidden { display:none; }
 
     /* ── Per-card copy button + collapse ── */
     .copy-btn { background:transparent; border:1px solid transparent; border-radius:4px; padding:3px 6px; cursor:pointer; opacity:0.55; transition:opacity 0.15s, border-color 0.15s, color 0.15s; font-size:13px; line-height:1; color:#b8b8cc; }
-    .copy-btn:hover { opacity:1; border-color:rgba(142,212,212,0.25); color:#8ED4D4; }
+    .copy-btn:hover { opacity:1; border-color:rgba(224,182,90,0.25); color:#e0b65a; }
     .collapse-caret { font-size:9px; color:#6b6b8a; transition:transform 0.18s; display:inline-block; }
     .gen-card.collapsed .collapse-caret { transform:rotate(-90deg); }
     .gen-card.collapsed .gen-card-body { display:none; }
@@ -284,8 +284,11 @@
                     {% endfor %}
                 </select>
             </div>
-            <button onclick="rerollAll()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors" style="background:#3F8888; color:#dff2f2; border:1px solid rgba(142,212,212,0.3);" onmouseover="this.style.background='#52A8A8'" onmouseout="this.style.background='#3F8888'">
+            <button onclick="rerollAll()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors" style="background:var(--gilt-300); color:#1a1408; border:1px solid var(--gilt-200);" onmouseover="this.style.background='var(--gilt-200)'" onmouseout="this.style.background='var(--gilt-300)'">
                 <span id="all-dice-icon" class="text-base">&#x2684;</span> Reroll All
+            </button>
+            <button onclick="copyAllCards(this)" class="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors" style="background:transparent; color:var(--gilt-200); border:1px solid var(--gilt-300);" onmouseover="this.style.background='rgba(201,163,78,0.10)'" onmouseout="this.style.background='transparent'" title="Copy every visible card as text for your session notes">
+                Copy Table
             </button>
         </div>
     </div>
@@ -293,7 +296,7 @@
     {# ── Rapid Fire bar — one-tap, one-line generators for live play ── #}
     <div class="rapid-bar">
         <div class="rapid-bar-head">
-            <span class="rapid-bar-title">&#x26A1; Rapid Fire</span>
+            <span class="rapid-bar-title">Rapid Fire</span>
             <span class="rapid-bar-hint">One tap &rarr; one line. Click a result to copy it.</span>
             <button class="rapid-clear" onclick="clearRapid()">Clear</button>
         </div>
@@ -483,6 +486,25 @@ function copyText(text, btn) {
 function copyCard(type, btn) {
     const el = document.getElementById(`content-${type}`);
     if (el) copyText(el.innerText, btn);
+}
+
+// Copy every currently-visible generator card (respects the active category
+// filter) as one plain-text block for the GM's session notes.
+function copyAllCards(btn) {
+    const cards = Array.prototype.filter.call(
+        document.querySelectorAll('.masonry .gen-card'),
+        c => !c.classList.contains('gen-hidden') && !c.classList.contains('collapsed'));
+    const parts = [];
+    cards.forEach(card => {
+        const title = card.querySelector('.gen-card-title');
+        const content = card.querySelector('[id^="content-"]') || card.querySelector('.gen-card-body');
+        if (content) {
+            const t = title ? title.innerText.replace(/\s+/g, ' ').replace(/^[^A-Za-z0-9]+/, '').trim().toUpperCase() : '';
+            parts.push((t ? t + '\n' : '') + content.innerText.trim());
+        }
+    });
+    if (!parts.length) { if (window.pf2eToast) pf2eToast('No cards to copy', 'info'); return; }
+    copyText(parts.join('\n\n————————————\n\n'), btn);
 }
 
 /* ── Collapse / expand a single card ── */
