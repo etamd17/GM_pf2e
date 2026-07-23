@@ -7595,7 +7595,15 @@ def _get_tracker_state():
             entry['hp_pct'] = round(hp_pct)
             if c.is_pc:
                 entry['strikes'] = [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(c, 'attacks', [])]
-                entry['feats'] = [{'name': f['name'], 'desc': f.get('desc', '')} for f in getattr(c, 'feats', [])]
+                # Trim to exactly what the tracker's feat pills render: the
+                # first 20 feats, each with a plain-text, 240-char tooltip
+                # (the client does `.replace(/<[^>]*>/g,'').substring(0,240)`).
+                # Full HTML descriptions for all ~50 feats were ~9.5 KB per PC
+                # of the tracker_state payload; this cuts it to the visible tips.
+                entry['feats'] = [
+                    {'name': f['name'], 'desc': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:240]}
+                    for f in getattr(c, 'feats', [])[:20]
+                ]
                 # Spell casters: name, tradition, type, and per-rank known
                 # spell list. The active-combatant card on the tracker uses
                 # this so the GM can see the PC's spell options at a glance.
