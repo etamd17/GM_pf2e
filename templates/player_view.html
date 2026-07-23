@@ -118,6 +118,27 @@
             box-shadow:0 10px 26px rgba(0,0,0,0.5);
         }
         .card.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.20), 0 8px 22px rgba(0,0,0,0.45); }
+        /* The card the returning player claimed (localStorage) — same gilt
+           glow as is-current, plus a corner ribbon so "which one is mine"
+           is answered at a glance. Applied by loadMyChar(). */
+        .card.is-mine { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.20), 0 8px 22px rgba(0,0,0,0.45); }
+        .mine-badge {
+            position:absolute; top:0; right:0; z-index:2;
+            font-family:'Cinzel',serif; font-size:8px; font-weight:700;
+            letter-spacing:0.14em; text-transform:uppercase;
+            color:#0c0a07; background:#c9a34e;
+            padding:2px 8px; border-bottom-left-radius:8px;
+            pointer-events:none;
+        }
+        /* First-visit hint — nudges the player to claim their PC. Only shown
+           (via loadMyChar) when nothing is claimed yet. */
+        .claim-hint {
+            margin:0 auto 20px; max-width:520px; text-align:center;
+            font-size:12px; color:#c8bd9e;
+            background:rgba(201,163,78,0.06); border:1px dashed rgba(201,163,78,0.28);
+            border-radius:8px; padding:8px 14px;
+        }
+        .claim-hint .star { color:#e0b65a; }
 
         .hp-ring { width:44px; height:44px; position:relative; display:flex; align-items:center; justify-content:center; }
         .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
@@ -201,14 +222,18 @@
         <a href="/player/builder" class="btn-primary">+ New Character</a>
     </div>
 
+    {# Discoverability nudge for the "claim my PC" flow — hidden by default,
+       revealed by loadMyChar() only when no character is claimed yet. #}
+    <div id="claim-hint" class="claim-hint hidden">Tap the <span class="star">&#9733;</span> on your character below to mark it as yours &mdash; it'll be highlighted and one tap from your sheet each session.</div>
+
     <!-- CHARACTERS — `is-current` decoration uses the server-rendered
          session.player_name so the card a player joined as glows gold
          even before localStorage kicks in. -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
         {% for pc in party %}
         <div class="card p-5 block relative{% if current_player == pc.name %} is-current{% endif %}" data-char-name="{{ pc.name }}">
-            <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0"></a>
-            <button onclick='event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})' class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.3;" title="Set as My Character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson|forceescape }}?1:0.3">&#9733;</button>
+            <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0" aria-label="Open {{ pc.name }}'s character sheet"></a>
+            <button onclick='event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})' class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.55;" title="Set as my character (highlights it on the roster)" aria-label="Set {{ pc.name }} as my character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson|forceescape }}?1:0.55">&#9733;</button>
             {% if is_gm %}<button onclick='event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})' class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.15); opacity:0.3;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3">&times;</button>{% endif %}
             <div class="flex items-start gap-3 relative z-1 pointer-events-none">
                 <div class="hp-ring shrink-0">
@@ -249,6 +274,18 @@
                 </div>
                 <div><span class="text-sm font-bold {% if pc.current_hp == 0 %}text-danger-500{% elif pc.current_hp < pc.hp * 0.5 %}text-gold-300{% else %}text-success-400{% endif %}">{{ pc.current_hp }}</span><span class="text-base-600 text-xs">/{{ pc.hp }}</span></div>
             </div>
+            {# Active conditions surfaced on the card too (not just Party
+               Status) so a player sees their status while picking. Only
+               rendered when something is active -- no empty spacer. #}
+            {% set ns = namespace(has=false) %}
+            {% for cname, cval in pc.conditions.items() %}{% if cval %}{% set ns.has = true %}{% endif %}{% endfor %}
+            {% if ns.has %}
+            <div class="flex flex-wrap gap-1 mt-3 relative z-1 pointer-events-none">
+                {% for cname, cval in pc.conditions.items() %}{% if cval %}
+                <span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.15); color:#fca5a5;">{{ cname.replace('_', '-') }}{% if cval is number and cval > 1 %} {{ cval }}{% endif %}</span>
+                {% endif %}{% endfor %}
+            </div>
+            {% endif %}
         </div>
         {% else %}
         <div class="col-span-full text-center py-16">
@@ -278,11 +315,14 @@
             </div>
             <span class="text-[10px] text-base-500 tabular-nums shrink-0" style="min-width:42px;">{{ pc.current_hp }}/{{ pc.hp }}</span>
 
-            <!-- Hero Points (filled/empty dots) -->
-            <span class="flex gap-0.5 shrink-0" title="Hero Points">
-                {% for i in range(3) %}
-                <span class="inline-block w-2 h-2 rounded-full" style="background:{% if i < pc.hero_points %}#c9a34e{% else %}rgba(255,255,255,0.08){% endif %};"></span>
-                {% endfor %}
+            <!-- Hero Points (labeled, filled/empty dots) -->
+            <span class="flex items-center gap-1 shrink-0" title="Hero Points">
+                <span class="text-[8px] text-base-600 uppercase tracking-wider" aria-hidden="true">Hero</span>
+                <span class="flex gap-0.5" role="img" aria-label="{{ pc.hero_points }} of 3 hero points">
+                    {% for i in range(3) %}
+                    <span class="inline-block w-2 h-2 rounded-full" aria-hidden="true" style="background:{% if i < pc.hero_points %}#c9a34e{% else %}rgba(255,255,255,0.08){% endif %};"></span>
+                    {% endfor %}
+                </span>
             </span>
 
             <!-- Conditions pills -->
@@ -334,16 +374,52 @@
         } catch(e) { alert('Error deleting character.'); }
     }
     function setMyChar(name) { localStorage.setItem('pf2e_my_char', name); loadMyChar(); }
-    function clearMyChar() { localStorage.removeItem('pf2e_my_char'); document.getElementById('my-char-bar').classList.add('hidden'); }
+    // Strip the "mine" decoration from every card + reset the claim stars.
+    function _clearMineHighlight() {
+        document.querySelectorAll('.card.is-mine').forEach(c => c.classList.remove('is-mine'));
+        document.querySelectorAll('.mine-badge').forEach(b => b.remove());
+        document.querySelectorAll('.card [title^="Set as my character"]').forEach(s => { s.style.opacity = '0.55'; });
+    }
+    // Glow the claimed card, drop a "Mine" ribbon on it, and light its star.
+    function _applyMineHighlight(name) {
+        let card = null;
+        document.querySelectorAll('.card[data-char-name]').forEach(c => {
+            if (c.getAttribute('data-char-name') === name) card = c;
+        });
+        if (!card) return;
+        card.classList.add('is-mine');
+        const star = card.querySelector('[title^="Set as my character"]');
+        if (star) star.style.opacity = '1';
+        if (!card.querySelector('.mine-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'mine-badge';
+            badge.textContent = 'Mine';
+            card.appendChild(badge);
+        }
+    }
+    function clearMyChar() {
+        localStorage.removeItem('pf2e_my_char');
+        document.getElementById('my-char-bar').classList.add('hidden');
+        _clearMineHighlight();
+        loadMyChar();
+    }
     function loadMyChar() {
-        const name = localStorage.getItem('pf2e_my_char');
-        if (!name) return;
+        _clearMineHighlight();
         const roster = [...document.querySelectorAll('[data-char-name]')]
             .map(el => el.getAttribute('data-char-name'));
+        const hint = document.getElementById('claim-hint');
+        const name = localStorage.getItem('pf2e_my_char');
+        // Unclaimed: nudge the player to claim (only when there are cards to claim).
+        if (!name) {
+            document.getElementById('my-char-bar').classList.add('hidden');
+            if (hint) hint.classList.toggle('hidden', roster.length === 0);
+            return;
+        }
         if (roster.length > 0 && !roster.includes(name)) {
             localStorage.removeItem('pf2e_my_char');
             const bar = document.getElementById('my-char-bar');
             if (bar) bar.classList.add('hidden');
+            if (hint) hint.classList.toggle('hidden', roster.length === 0);
             const toast = document.createElement('div');
             toast.style.cssText =
                 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
@@ -354,9 +430,11 @@
             setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 4000);
             return;
         }
+        if (hint) hint.classList.add('hidden');
         document.getElementById('my-char-bar').classList.remove('hidden');
         document.getElementById('my-char-name').textContent = name;
         document.getElementById('my-char-link').href = '/player/sheet/' + encodeURIComponent(name);
+        _applyMineHighlight(name);
     }
     loadMyChar();
 
