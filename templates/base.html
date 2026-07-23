@@ -19,33 +19,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PF2E Dashboard{% endblock %}</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        // Aliased to the system.css ramps (--ink-* / --gilt-* / --ruby-*).
-                        // Tailwind utility classes are kept so legacy markup
-                        // doesn't all need rewriting, but every utility now
-                        // resolves to a brand-coherent color, not the old
-                        // teal/violet/mint palette.
-                        base:    { 950:'#0c0a07', 900:'#14110c', 800:'#1d1a14', 700:'#2e2920', 600:'#4a4334', 500:'#6f6755', 400:'#9a917a', 300:'#c9bfa3', 200:'#e3dac0', 100:'#f0ead7' },
-                        accent:  { 200:'#f0d88a', 300:'#e0b65a', 400:'#c9a34e', 500:'#a4842b', 600:'#7d6418' },
-                        gold:    { 200:'#f0d88a', 300:'#c9a34e', 400:'#a4842b', 500:'#7d6418' },
-                        danger:  { 100:'#f5b7b7', 200:'#d36e6e', 300:'#a83a3a', 400:'#7c2222', 500:'#5a1414' },
-                        success: { 300:'#9bc06f', 400:'#6a9c44', 500:'#4a7c2a' },
-                        info:    { 300:'#c9bfa3', 400:'#9a917a' },
-                        spell:   { 300:'#c9a34e', 400:'#a4842b' }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        display: ['Cinzel', 'serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-base.css') }}">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
         body { font-family:var(--font-ui); background:var(--bg-page); color:var(--text-on-dark); }

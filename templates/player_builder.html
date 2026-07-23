@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Character Forge</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#1C1917', 900: '#28241F', 800: '#33302A', 700: '#3F3A33', 600: '#524C42', 500: '#7A7062', 400: '#A89C8B', 300: '#CFC5B4', 200: '#E8E0D2', 100: '#F5F0E8', }, amber: { 300: '#f0d88a', 400: '#e0b65a', 500: '#c9a34e', 600: '#a4842b', 700: '#7d6418', 800: '#5a4712', 900: '#3d2f0c' }, green: { 200: '#A7F3D0', 400: '#4ADE80' }, red: { 300: '#FDA4AF', 400: '#FB7185' }, blue: { 300: '#93C5FD', 400: '#60A5FA', 900: '#1E2A4A' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Crimson Text', 'Georgia', 'serif'] } } } }
-    </script>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_builder.css') }}">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }

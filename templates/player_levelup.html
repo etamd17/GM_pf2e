@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Level Up Forge</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#0d0d12', 900: '#191920', 800: '#24242e', 700: '#2e2e3c', 600: '#42425a', 500: '#6b6b8a', 400: '#9494b0', 300: '#b8b8cc', 200: '#d8d8e6', 100: '#ededf4' }, amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' }, red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 600: '#c43c3c', 800: '#6b1525', 900: '#3D0A13' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Inter', 'system-ui', 'sans-serif'] } } } }
-    </script>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_levelup.css') }}">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }

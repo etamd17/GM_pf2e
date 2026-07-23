@@ -7,18 +7,11 @@
     {# Shared SSE hub — standalone page; defines window.appSSE before the
        roster SSE + included _player_nav / _session_curtain partials run. #}
     {% include "_sse_hub.html" %}
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { theme: { extend: { colors: {
-            base:    { 950:'#0c0a07', 900:'#14110c', 800:'#1d1a14', 700:'#2e2920', 600:'#4a4334', 500:'#6f6755', 400:'#9a917a', 300:'#c9bfa3', 200:'#e3dac0', 100:'#f0ead7' },
-            accent:  { 300:'#e0b65a', 400:'#c9a34e', 500:'#a4842b', 600:'#7d6418' },
-            gold:    { 300:'#e0b65a', 400:'#c9a34e' },
-            danger:  { 300:'#fca5a5', 400:'#f87171', 500:'#ef4444' },
-            success: { 300:'#86efac', 400:'#4ade80', 500:'#22c55e' },
-            info:    { 300:'#93c5fd', 400:'#60a5fa' },
-            spell:   { 300:'#c4b5fd', 400:'#a78bfa' }
-        }, fontFamily: { display:['Cinzel','serif'], sans:['Inter','system-ui','sans-serif'] } }}}
-    </script>
+    {# Precompiled Tailwind utilities — replaces the runtime cdn.tailwindcss.com
+       JIT (full engine + in-browser compile on every load). Built from this
+       page's classes with the inline config's colors preserved exactly. If you
+       add/remove Tailwind classes here, regenerate: see docs/tailwind-build.md. #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_view.css') }}">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,500&display=swap');
         body { font-family:'Inter',system-ui,sans-serif; background:#0c0a07; color:#f0ead7; min-height:100vh; }
