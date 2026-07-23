@@ -44,7 +44,7 @@
   /* Radiant Ideal progression track */
   .ideal-track { display:flex; flex-direction:column; gap:.5rem; }
   .ideal { border:1px solid var(--border-card); border-radius:9px; padding:.5rem .7rem; background:var(--bg-page); }
-  .ideal.on { border-color:var(--accent); background:rgba(95,168,224,.07); }
+  .ideal.on { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 7%, transparent); }
   .ideal.locked { opacity:.5; }
   .ideal .ih { font-size:12px; margin-bottom:.3rem; }
   .ideal .ih .sw { color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:.06em; margin-left:.3rem; }
@@ -66,7 +66,7 @@
   .tnode.taken circle { fill:var(--accent); stroke:var(--accent); }
   .tnode.taken .tlabel { fill:var(--text-on-dark); }
   .tnode.avail circle { stroke:var(--accent); stroke-width:2; }
-  .tnode.avail:hover circle { fill:rgba(95,168,224,.20); }
+  .tnode.avail:hover circle { fill:color-mix(in srgb, var(--accent) 20%, transparent); }
   .tnode.locked circle { stroke-dasharray:3 3; opacity:.55; }
   .tnode.locked .tlabel { opacity:.5; }
   .tnode.sel circle { stroke:var(--ac2); stroke-width:3.5; }
@@ -78,7 +78,7 @@
   .tree-detail { margin-top:.6rem; border:1px solid var(--border-card); border-radius:10px; padding:.7rem .85rem; background:var(--bg-sunken,#131922); font-size:12.5px; color:var(--text-on-dark-2); }
   .tree-detail .td-h { font-family:var(--font-display,serif); font-size:15px; color:var(--text-on-dark); margin-bottom:.25rem; display:flex; justify-content:space-between; align-items:baseline; gap:.6rem; }
   .tree-detail .td-badge { font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; padding:2px 7px; border-radius:6px; white-space:nowrap; }
-  .td-badge.taken { background:rgba(95,168,224,.18); color:var(--accent); }
+  .td-badge.taken { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
   .td-badge.avail { background:rgba(52,211,153,.16); color:#34d399; }
   .td-badge.locked { background:rgba(248,113,113,.14); color:#f4a4a4; }
   .tree-detail .td-eff { line-height:1.5; margin:.35rem 0 .55rem; color:var(--text-on-dark-2); }
@@ -86,13 +86,13 @@
   .tree-detail .td-reqs li { font-size:11.5px; }
   .td-req-ok::before { content:'\2713\00a0'; color:#34d399; }
   .td-req-no { color:#f4a4a4; } .td-req-no::before { content:'\2717\00a0'; color:#f87171; }
-  .btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
-  .btn:hover { background:rgba(95,168,224,.26); }
+  .btn { background:color-mix(in srgb, var(--accent) 16%, transparent); border:1px solid color-mix(in srgb, var(--accent) 50%, transparent); color:var(--ac); border-radius:8px; padding:.5rem 1rem; font-size:13px; cursor:pointer; }
+  .btn:hover { background:color-mix(in srgb, var(--accent) 26%, transparent); }
   .btn.primary { background:var(--ac2); color:#06242b; font-weight:700; border-color:var(--ac2); }
   .btn:disabled { opacity:.4; cursor:not-allowed; }
   .chip-row { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.5rem; }
-  .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:rgba(95,168,224,.10); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
-  .chip b { color:var(--ac2); } .chip .x { cursor:pointer; color:#f87171; font-weight:700; }
+  .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
+  .chip b { color:var(--ac2); } .chip .x { cursor:pointer; color:#f87171; font-weight:700; background:none; border:0; padding:0; font:inherit; line-height:1; }
   .topbar { position:sticky; top:0; z-index:5; background:var(--bg-page,#0d1117); padding:.7rem 0; border-bottom:1px solid var(--border-card);
             display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; }
   .inv-row { display:flex; align-items:center; gap:.6rem; padding:.35rem .5rem; border-bottom:1px solid var(--border-card); font-size:13px; }
@@ -101,12 +101,17 @@
 
   /* ── walkthrough wizard chrome ── */
   .wiz-rail { display:flex; gap:.4rem; flex-wrap:wrap; margin:1rem 0 1.2rem; }
-  .wiz-tab { font-size:11.5px; padding:.38rem .7rem; border-radius:999px; background:var(--bg-sunken,#131922);
+  .wiz-tab { font-family:inherit; font-size:11.5px; line-height:1.2; padding:.38rem .7rem; border-radius:999px; background:var(--bg-sunken,#131922);
              border:1px solid var(--border-card); color:var(--text-on-dark-3); cursor:pointer; white-space:nowrap;
              display:inline-flex; gap:.4rem; align-items:center; }
+  .wiz-tab:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .wiz-tab .n { font-family:'JetBrains Mono',monospace; opacity:.55; }
   .wiz-tab:hover { color:#e8eef5; }
-  .wiz-tab.active { border-color:var(--ac2); color:var(--ac2); background:rgba(95,168,224,.12); }
+  .wiz-tab.active { border-color:var(--ac2); color:var(--ac2); background:color-mix(in srgb, var(--accent) 12%, transparent); }
+  .wiz-tab .wiz-chk { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; line-height:1; }
+  .wiz-tab .wiz-chk:empty { display:none; }
+  .wiz-tab .wiz-chk.over { color:#f87171; }
+  .wiz-tab .wiz-chk.done { color:var(--ac2); }
   .wiz-body { display:grid; grid-template-columns:1fr 290px; gap:1.4rem; align-items:start; }
   @media (max-width:840px){ .wiz-body { grid-template-columns:1fr; } .wiz-side { position:static !important; } }
   .step { display:none; }
@@ -140,15 +145,35 @@
   .block-box .gm-override { display:flex; gap:.4rem; align-items:center; margin-top:.55rem; color:#e8eef5; font-size:12px; }
   .block-box .gm-override input { width:auto; }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
+  /* Inline resource glyphs — SVG marks (not emoji-capable dingbats) for the side panel. */
+  .cs-ico { width:11px; height:11px; vertical-align:-1px; fill:var(--accent); }
+  /* Review recap — an itemized verification panel (attributes, skills, gear, talents). */
+  .rv-sec { margin:0 0 1.1rem; }
+  .rv-h { font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--text-on-dark-3);
+          border-bottom:1px solid var(--border-card); padding-bottom:.25rem; margin:0 0 .5rem; }
+  .rv-attrs { display:grid; grid-template-columns:repeat(6,1fr); gap:.4rem; }
+  @media (max-width:520px){ .rv-attrs { grid-template-columns:repeat(3,1fr); } }
+  .rv-attr { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:8px; padding:.4rem 0; text-align:center; }
+  .rv-attr .l { font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-on-dark-3); }
+  .rv-attr .v { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; color:#e8eef5; }
+  .rv-chips { display:flex; flex-wrap:wrap; gap:.35rem; }
+  .rv-chip { font-size:12px; padding:3px 9px; border-radius:7px; background:var(--bg-sunken,#131922);
+             border:1px solid var(--border-card); color:var(--text-on-dark-2); }
+  .rv-chip b { color:var(--ac2); font-family:'JetBrains Mono',monospace; }
+  .rv-chip.key { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 40%, transparent); }
+  .rv-chip.key b { color:var(--accent); }
+  .rv-vitals { display:flex; flex-wrap:wrap; gap:.3rem .9rem; font-size:12px; color:var(--text-on-dark-2); }
+  .rv-vitals b { color:#e8eef5; font-family:'JetBrains Mono',monospace; }
+  .rv-empty { color:var(--text-on-dark-3); font-size:12px; font-style:italic; }
 {% endblock %}
 {% block content %}
 <div class="bld wiz">
   <div class="topbar">
     <div><label>Character Name</label><input id="f-name" value="{{ build.name }}" oninput="refreshPreview()" style="width:230px;"></div>
     <div><label>Level</label>
-      <div class="stepper"><button type="button" onclick="bumpLevel(-1)">&minus;</button>
+      <div class="stepper"><button type="button" aria-label="Decrease level" onclick="bumpLevel(-1)">&minus;</button>
         <input id="f-level" type="number" min="1" max="30" value="{{ build.level }}" onchange="onLevel()">
-        <button type="button" onclick="bumpLevel(1)">+</button></div>
+        <button type="button" aria-label="Increase level" onclick="bumpLevel(1)">+</button></div>
     </div>
     <div style="flex:1;"></div>
     <div id="validity" class="muted"></div>
@@ -381,7 +406,7 @@
         <p class="step-lead">Here&rsquo;s your character. Anything in <i>Guidance</i> is advice you can save past; anything in red is over the rules and must be fixed first (your GM can override).</p>
         <div id="review-gate"></div>
         <div id="review-warnings"></div>
-        <div id="review-summary" class="muted"></div>
+        <div id="review-summary"></div>
         <button class="btn primary" id="btn-save-review" style="margin-top:1rem; padding:.7rem 1.6rem; font-size:14px;" onclick="save()">Save Character</button>
       </section>
 
@@ -401,10 +426,10 @@
         <div class="cs-def"><div class="l">Spi</div><div class="v" id="cs-spi">10</div></div>
       </div>
       <div class="cs-res">
-        <span>&#9829; Health <b id="cs-health">&mdash;</b></span>
+        <span><svg class="cs-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14.2s-5.2-3.4-5.2-7A2.7 2.7 0 0 1 8 5.5a2.7 2.7 0 0 1 5.2 1.7c0 3.6-5.2 7-5.2 7z"/></svg> Health <b id="cs-health">&mdash;</b></span>
         <span>Focus <b id="cs-focus">&mdash;</b></span>
         <span>Deflect <b id="cs-deflect">&mdash;</b></span>
-        <span id="cs-inv-wrap" style="display:none;">&#9889; Inv <b id="cs-inv">&mdash;</b></span>
+        <span id="cs-inv-wrap" style="display:none;"><svg class="cs-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h3.7l-1.2 6L13 7H8.6z"/></svg> Inv <b id="cs-inv">&mdash;</b></span>
       </div>
       <div class="cs-res" id="cs-derived-pv" style="font-size:11px; color:var(--text-on-dark-3);"></div>
       <div class="cs-bud" id="cs-bud"></div>
@@ -649,7 +674,7 @@ function renderTalents(){
   document.getElementById('talent-list').innerHTML = TALENTS.map((t,i)=>
     t.key
       ? `<span class="chip" title="Key talent (granted)"><b style="color:var(--accent)">★ ${t.name||t.id}</b></span>`
-      : `<span class="chip"><b>${t.name||t.id}</b> <span class="x" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</span></span>`
+      : `<span class="chip"><b>${t.name||t.id}</b> <button type="button" class="x" aria-label="Remove ${_treeEsc(t.name||t.id)}" onclick="TALENTS.splice(${i},1);renderTalents();recompute()">&times;</button></span>`
   ).join('') || '<span class="muted">None yet</span>';
   renderPathTree(); renderRadiantTree();
 }
@@ -819,7 +844,7 @@ function renderInv(){
       <label style="display:flex;gap:4px;align-items:center;text-transform:none;font-size:12px;color:#aeb8c4;">
         <input type="checkbox" style="width:auto;" ${e.equipped?'checked':''} onchange="INV[${i}].equipped=this.checked;recompute()"> equipped</label>
       <input type="number" min="1" value="${e.qty||1}" style="width:52px;" onchange="INV[${i}].qty=Math.max(1,+this.value||1)">
-      <span class="x" style="cursor:pointer;color:#f87171;font-weight:700;" onclick="INV.splice(${i},1);renderInv();recompute()">&times;</span>
+      <button type="button" class="x" aria-label="Remove ${_treeEsc(it.name)}" style="cursor:pointer;color:#f87171;font-weight:700;background:none;border:0;padding:0;font:inherit;line-height:1;" onclick="INV.splice(${i},1);renderInv();recompute()">&times;</button>
     </div>`;
   }).join('') || '<span class="muted">Empty</span>';
 }
@@ -831,7 +856,7 @@ function addFabrial(){
 function renderFabrials(){
   const box=document.getElementById('fabrial-list'); if(!box) return;
   box.innerHTML = FABRIALS.map((id,i)=>{ const f=FAB_INDEX[id]||{name:id,charges:0};
-    return `<span class="chip" title="${(f.effect||'').replace(/"/g,'&quot;')}"><b>${f.name}</b>${f.tier?` <span class="muted">T${f.tier}</span>`:''} <span class="muted">${f.charges}c</span> <span class="x" onclick="FABRIALS.splice(${i},1);renderFabrials();recompute()">&times;</span></span>`;
+    return `<span class="chip" title="${(f.effect||'').replace(/"/g,'&quot;')}"><b>${f.name}</b>${f.tier?` <span class="muted">T${f.tier}</span>`:''} <span class="muted">${f.charges}c</span> <button type="button" class="x" aria-label="Remove ${_treeEsc(f.name||id)}" onclick="FABRIALS.splice(${i},1);renderFabrials();recompute()">&times;</button></span>`;
   }).join('') || '<span class="muted">No fabrials</span>';
 }
 function addInfected(){
@@ -847,7 +872,7 @@ function renderInfected(){
     return `<div style="border:1px solid #2a3340; border-radius:8px; padding:.55rem .7rem; margin-bottom:.5rem; background:rgba(255,255,255,.02);">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span><b>${a.disease}</b> &rarr; <b style="color:var(--accent)">${a.art}</b></span>
-        <span style="cursor:pointer; color:#f87171; font-weight:700;" onclick="INFECTED.splice(${i},1);renderInfected();recompute()">&times;</span></div>
+        <button type="button" aria-label="Remove ${_treeEsc(a.disease)} infected art" style="cursor:pointer; color:#f87171; font-weight:700; background:none; border:0; padding:0; font:inherit; line-height:1;" onclick="INFECTED.splice(${i},1);renderInfected();recompute()">&times;</button></div>
       <div style="font-size:12px; color:#f0a9a9; margin:.35rem 0;"><b>Disease cost:</b> ${a.cost}</div>
       <ul style="margin:.2rem 0 0 1.1rem; font-size:12px; color:#cbd5e1; line-height:1.45;">${ab}</ul></div>`;
   }).join('') || '<span class="muted">None &mdash; this character has no Infected Arts.</span>';
@@ -880,8 +905,17 @@ function recompute(){
   const exp=v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean).length;
   const okE=setBudget('b-exp',exp,2+Math.max(0,+v('attr-int')||0));
   const okT=setBudget('b-tal',TALENTS.length,talentBudget(L));
+  const okAll=okA&&okS&&okE&&okT;
   document.getElementById('validity').textContent =
-    (okA&&okS&&okE&&okT) ? 'On budget · tier '+tierOf(L) : 'Over budget — reduce to save';
+    okAll ? 'On budget · tier '+tierOf(L) : 'Over budget — reduce to save';
+  // Mirror the per-step budget/validity state onto the rail tabs (needs-attention /
+  // complete). Only the budgeted steps + Review carry a marker; the rest stay neutral.
+  if(typeof setRailStatus==='function'){
+    setRailStatus(1, !okA ? 'over' : (aSum>0 ? 'done' : ''));
+    setRailStatus(2, (!okS||!okE) ? 'over' : ((sSum>0||exp>0) ? 'done' : ''));
+    setRailStatus(3, !okT ? 'over' : (v('f-path') ? 'done' : ''));
+    setRailStatus(8, !okAll ? 'over' : ((v('f-name')&&v('f-ancestry')&&v('f-path')) ? 'done' : ''));
+  }
   if(typeof renderPathTree==='function'){ renderPathTree(); renderRadiantTree(); }   // refresh node availability
   refreshPreview();
 }
@@ -891,12 +925,25 @@ const STEPS = ['Identity','Attributes','Skills','Heroic Path','Radiant','Infecte
 let STEP = 0;
 function buildRail(){
   document.getElementById('wiz-rail').innerHTML = STEPS.map((s,i)=>
-    `<span class="wiz-tab" data-i="${i}" onclick="goStep(${i})"><span class="n">${i+1}</span>${s}</span>`).join('');
+    `<button type="button" class="wiz-tab" data-i="${i}" aria-label="${i+1}. ${s}" onclick="goStep(${i})"><span class="n">${i+1}</span><span>${s}</span><span class="wiz-chk" data-chk="${i}" aria-hidden="true"></span></button>`).join('');
+}
+// Per-step status marker on the rail (mirrors the PF2e sibling's needs-attention /
+// complete ticks), driven off the same budget/validity state recompute() computes.
+function setRailStatus(i, status){
+  const btn=document.querySelector('.wiz-tab[data-i="'+i+'"]'); if(!btn) return;
+  const chk=btn.querySelector('.wiz-chk');
+  if(chk){
+    chk.textContent = status==='over' ? '!' : status==='done' ? '✓' : '';
+    chk.className = 'wiz-chk'+(status?' '+status:'');
+  }
+  btn.setAttribute('aria-label', (i+1)+'. '+STEPS[i]
+    + (status==='over' ? ' — needs attention' : status==='done' ? ' — complete' : ''));
 }
 function goStep(i){
   STEP = Math.max(0, Math.min(STEPS.length-1, i));
   document.querySelectorAll('.step').forEach(s=>s.classList.toggle('active', +s.dataset.step===STEP));
-  document.querySelectorAll('.wiz-tab').forEach(t=>t.classList.toggle('active', +t.dataset.i===STEP));
+  document.querySelectorAll('.wiz-tab').forEach(t=>{ const on=+t.dataset.i===STEP;
+    t.classList.toggle('active', on); if(on) t.setAttribute('aria-current','step'); else t.removeAttribute('aria-current'); });
   document.getElementById('wiz-back').disabled = STEP===0;
   document.getElementById('wiz-next').style.visibility = STEP===STEPS.length-1 ? 'hidden' : 'visible';
   document.getElementById('wiz-count').textContent = `Step ${STEP+1} of ${STEPS.length} · ${STEPS[STEP]}`;
@@ -963,13 +1010,75 @@ function renderReview(){
   wb.innerHTML = guide.length
     ? '<div class="warn-box"><b>Guidance:</b><ul style="margin:.3rem 0 0 1rem;">'+guide.map(i=>`<li>${i}</li>`).join('')+'</ul></div>'
     : '<div class="muted" style="margin-bottom:1rem;">No rules flags — your build is on budget.</div>';
-  const order=ORDERS[v('f-order')];
-  document.getElementById('review-summary').innerHTML =
-    `<b style="color:#e8eef5;">${v('f-name')||'New Hero'}</b> — Level ${lvl()} ${v('f-ancestry')}`
-    + (v('f-culture')?` of ${v('f-culture')}`:'')
-    + (v('f-path')?`, ${v('f-path')}`:'')
-    + (order?` · ${order.name} (${(+v('f-ideals')||0)}/5 Ideals)`:'')
-    + `.<br>${TALENTS.length} talent${TALENTS.length===1?'':'s'} · ${INV.length} item${INV.length===1?'':'s'}.`;
+  document.getElementById('review-summary').innerHTML = _buildReviewBody(p);
+}
+function _reviewSection(title, inner){
+  return `<div class="rv-sec"><div class="rv-h">${title}</div>${inner}</div>`;
+}
+// Full recap: itemize attributes, skill ranks, expertises, talents and gear so the
+// final step verifies everything (the always-on side panel only shows live totals).
+function _buildReviewBody(p){
+  const esc=_treeEsc, L=lvl(), order=ORDERS[v('f-order')];
+  const idParts=['Level '+L+' '+esc(v('f-ancestry')||'—')];
+  if(v('f-culture')) idParts.push('of '+esc(v('f-culture')));
+  if(v('f-path')) idParts.push(esc(v('f-path').charAt(0).toUpperCase()+v('f-path').slice(1)));
+  if(order) idParts.push(esc(order.name)+' ('+(+v('f-ideals')||0)+'/5 Ideals)');
+  let html = `<div style="font-size:15px; color:#e8eef5; margin-bottom:.15rem;"><b>${esc(v('f-name')||'New Hero')}</b></div>`;
+  html += `<div class="muted" style="margin-bottom:1rem;">${idParts.join(' · ')}</div>`;
+
+  // Defenses & vitals (from the server preview when it has returned)
+  if(p && p.defenses){
+    const vit=[`Phy <b>${p.defenses.phy}</b>`,`Cog <b>${p.defenses.cog}</b>`,`Spi <b>${p.defenses.spi}</b>`,
+               `Health <b>${p.health}</b>`,`Focus <b>${p.focus}</b>`,`Deflect <b>${p.deflect}</b>`];
+    if(p.is_radiant) vit.push(`Investiture <b>${p.investiture}</b>`);
+    html += _reviewSection('Defenses &amp; Vitals', `<div class="rv-vitals">${vit.map(x=>'<span>'+x+'</span>').join('')}</div>`);
+  }
+
+  // Attributes
+  const attrCells = ATTR_KEYS.map(k=>`<div class="rv-attr"><div class="l">${k.toUpperCase()}</div><div class="v">${(+v('attr-'+k)||0)}</div></div>`).join('');
+  html += _reviewSection('Attributes', `<div class="rv-attrs">${attrCells}</div>`);
+
+  // Skill ranks (allocated only), highest first, with the resulting modifier
+  const skRows=[];
+  document.querySelectorAll('.skill-rank').forEach(inp=>{
+    const r=+inp.value||0; if(r<=0) return;
+    const code=inp.dataset.code, attr=inp.dataset.attr, mod=r+(+v('attr-'+attr)||0);
+    skRows.push({name:SKILL_NAMES[code]||code, rank:r, mod});
+  });
+  skRows.sort((a,b)=> b.rank-a.rank || a.name.localeCompare(b.name));
+  html += _reviewSection('Skill Ranks',
+    skRows.length
+      ? `<div class="rv-chips">${skRows.map(s=>`<span class="rv-chip">${esc(s.name)} <b>r${s.rank}</b> <span class="muted">${s.mod>=0?'+':''}${s.mod}</span></span>`).join('')}</div>`
+      : '<div class="rv-empty">No ranks assigned.</div>');
+
+  // Expertises
+  const exps=v('f-expertises').split('\n').map(s=>s.trim()).filter(Boolean);
+  html += _reviewSection('Expertises',
+    exps.length
+      ? `<div class="rv-chips">${exps.map(e=>`<span class="rv-chip">${esc(e)}</span>`).join('')}</div>`
+      : '<div class="rv-empty">None.</div>');
+
+  // Talents (key talents flagged)
+  html += _reviewSection('Talents',
+    TALENTS.length
+      ? `<div class="rv-chips">${TALENTS.map(t=>`<span class="rv-chip${t.key?' key':''}">${t.key?'&#9733; ':''}<b>${esc(t.name||t.id)}</b></span>`).join('')}</div>`
+      : '<div class="rv-empty">None.</div>');
+
+  // Gear — inventory + fabrials
+  const invChips = INV.map(e=>{ const it=ITEM_INDEX[e.id]||{name:e.id};
+    return `<span class="rv-chip">${esc(it.name)}${(e.qty>1)?' <span class="muted">&times;'+e.qty+'</span>':''}${e.equipped?' <span class="muted">(equipped)</span>':''}</span>`; }).join('');
+  const fabChips = FABRIALS.map(id=>{ const f=FAB_INDEX[id]||{name:id,charges:0};
+    return `<span class="rv-chip">${esc(f.name)} <span class="muted">${f.charges}c</span></span>`; }).join('');
+  html += _reviewSection('Gear',
+    (INV.length||FABRIALS.length) ? `<div class="rv-chips">${invChips}${fabChips}</div>` : '<div class="rv-empty">No gear.</div>');
+
+  // Infected Arts (only when present)
+  if(INFECTED.length){
+    const infChips = INFECTED.map(id=>{ const a=INFECTED_BY_ID[id]; if(!a) return '';
+      return `<span class="rv-chip">${esc(a.disease)} &rarr; ${esc(a.art)}</span>`; }).join('');
+    html += _reviewSection('Infected Arts', `<div class="rv-chips">${infChips}</div>`);
+  }
+  return html;
 }
 
 function collect(){

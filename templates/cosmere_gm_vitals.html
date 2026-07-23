@@ -19,28 +19,56 @@
   .vit-fill.inv { background:linear-gradient(90deg,#13456f,var(--accent)); }
   .vit-v { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-on-dark-2); min-width:46px; text-align:right; flex:0 0 auto; }
   .vit-v b { color:var(--text-on-dark); }
+  /* At-risk tiering beyond the single crit tier: hurt (<=50%) soft ruby rail,
+     crit (<=25%) bright ruby + glow, downed (0 HP / Unconscious) ruby rail + soft
+     pulse. Teal identity kept; danger reads in ruby, no gilt. */
+  .vit-card.hurt { border-color:rgba(211,110,110,.35); box-shadow:inset 3px 0 0 rgba(211,110,110,.45); }
   .vit-card.crit { border-color:rgba(211,110,110,.6); box-shadow:0 0 0 1px rgba(211,110,110,.3), 0 0 18px -6px rgba(211,110,110,.5); }
+  .vit-card.downed { border-color:rgba(211,110,110,.72); box-shadow:inset 3px 0 0 #d36e6e, 0 0 18px -4px rgba(211,110,110,.55); animation:vitDownedPulse 2.4s ease-in-out infinite; }
+  @keyframes vitDownedPulse {
+    0%,100% { box-shadow:inset 3px 0 0 #d36e6e, 0 0 12px -4px rgba(211,110,110,.4); }
+    50%     { box-shadow:inset 3px 0 0 #d36e6e, 0 0 22px -2px rgba(211,110,110,.6); }
+  }
+  @media (prefers-reduced-motion: reduce) { .vit-card.downed { animation:none; } }
+  /* HP number + bar shift toward ruby as health drops (parity with PF2e's getHPClass). */
+  .vit-card.hurt .vit-v b { color:#e8a5a5; }
+  .vit-card.crit .vit-v b, .vit-card.downed .vit-v b { color:#f28b8b; }
+  .vit-card.crit .vit-fill.hp, .vit-card.downed .vit-fill.hp { background:linear-gradient(90deg,#c05555,#e08a8a); }
   .vit-foot { display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; margin-top:.55rem; }
-  .vit-inj { font-size:11px; color:#d36e6e; }
-  .cond-chip { font-size:10px; padding:2px 7px; border-radius:6px; background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.45); color:#fbbf24; }
+  .vit-inj { font-size:11px; color:#d36e6e; flex:0 0 auto; }
+  /* Conditions stay on a single horizontally-scrolling row so a long list can't
+     balloon one card taller than its siblings; a cap + "+N" bounds the count. */
+  .vit-conds { display:flex; gap:.4rem; flex-wrap:nowrap; overflow-x:auto; min-width:0; flex:1 1 auto; align-items:center; scrollbar-width:thin; padding-bottom:1px; }
+  .vit-conds::-webkit-scrollbar { height:4px; }
+  .vit-conds::-webkit-scrollbar-thumb { background:rgba(95,168,224,.35); border-radius:2px; }
+  .vit-conds::-webkit-scrollbar-track { background:transparent; }
+  .cond-chip { font-size:10px; padding:2px 7px; border-radius:6px; background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.45); color:#fbbf24; flex:0 0 auto; }
+  /* Severity read (mirrors party_view's sev-red): debilitating states (Unconscious,
+     Exhausted, Stunned, Afflicted, Immobilized, Restrained, Slowed, Disoriented)
+     go ruby; minor/buff conditions keep the default amber. */
+  .cond-chip.sev-red { background:rgba(211,110,110,.16); border-color:rgba(211,110,110,.5); color:#f0a3a3; }
+  .cond-more { font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(255,255,255,.06); border:1px solid var(--border-card); color:var(--text-on-dark-3); flex:0 0 auto; }
   .vit-empty { color:var(--text-on-dark-3); font-size:13px; padding:1.5rem 0; }
 {% endblock %}
 
 {% block content %}
+{# Debilitating Cosmere conditions rendered ruby; buffs/minor stay amber. Kept in
+   sync with the COS_SEV set in the script below. #}
+{% set _COS_SEV = ['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented'] %}
 <div class="vit-wrap">
   <h1 class="vit-h">Party Vitals</h1>
   <p class="vit-lead">Every hero's Health, Focus, Investiture, injuries and conditions &mdash; live, updating as players adjust their sheets. <a href="/cosmere/pcs" style="color:var(--accent);">Character roster &rarr;</a></p>
   {% if party %}
   <div class="vit-grid" id="vit-grid">
     {% for p in party %}
-    <div class="vit-card{{ ' crit' if p.hp_pct <= 25 }}" data-name="{{ p.name }}" data-hpmax="{{ p.max_hp }}" data-focmax="{{ p.focus_max }}" data-invmax="{{ p.investiture_max }}">
+    <div class="vit-card{% if p.hp_pct <= 0 %} downed{% elif p.hp_pct <= 25 %} crit{% elif p.hp_pct <= 50 %} hurt{% endif %}" data-name="{{ p.name }}" data-hpmax="{{ p.max_hp }}" data-focmax="{{ p.focus_max }}" data-invmax="{{ p.investiture_max }}">
       <div class="vit-head"><span class="vit-name">{{ p.name }}</span><span class="vit-sub">{{ p.class_name }}{% if p.level %} &middot; L{{ p.level }}{% endif %}</span></div>
       <div class="vit-row"><span class="vit-l">HP</span><div class="vit-track"><div class="vit-fill hp" data-bar="health" style="width:{{ p.hp_pct }}%"></div></div><span class="vit-v"><b data-f="health">{{ p.current_hp }}</b>/<span data-m="health">{{ p.max_hp }}</span></span></div>
       {% if p.investiture_max %}<div class="vit-row"><span class="vit-l">Inv</span><div class="vit-track"><div class="vit-fill inv" data-bar="investiture" style="width:{{ (100 * p.investiture_current / p.investiture_max)|round|int if p.investiture_max else 0 }}%"></div></div><span class="vit-v"><b data-f="investiture">{{ p.investiture_current }}</b>/<span data-m="investiture">{{ p.investiture_max }}</span></span></div>{% endif %}
       <div class="vit-row"><span class="vit-l">Foc</span><div class="vit-track"><div class="vit-fill foc" data-bar="focus" style="width:{{ (100 * p.focus_current / p.focus_max)|round|int if p.focus_max else 0 }}%"></div></div><span class="vit-v"><b data-f="focus">{{ p.focus_current }}</b>/<span data-m="focus">{{ p.focus_max }}</span></span></div>
       <div class="vit-foot">
         <span class="vit-inj" data-f="injuries" style="{{ '' if p.injuries else 'display:none' }}">Injuries {{ p.injuries }}</span>
-        <span class="vit-conds" data-f="conditions">{% for c in p.conditions %}<span class="cond-chip">{{ c|capitalize }}</span>{% endfor %}</span>
+        <span class="vit-conds" data-f="conditions">{% set _cslist = p.conditions|list %}{% for c in _cslist[:4] %}<span class="cond-chip{{ ' sev-red' if c|lower in _COS_SEV }}">{{ c|capitalize }}{% if p.conditions[c] is number and p.conditions[c] > 1 %} {{ p.conditions[c] }}{% endif %}</span>{% endfor %}{% if _cslist|length > 4 %}<span class="cond-more">+{{ _cslist|length - 4 }}</span>{% endif %}</span>
       </div>
     </div>
     {% endfor %}
@@ -51,6 +79,9 @@
 </div>
 <script>
 (function(){
+  // Kept in sync with the _COS_SEV Jinja set above: debilitating conditions render ruby.
+  var COS_SEV = new Set(['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented']);
+  var COND_CAP = 4;
   function _esc(s){ var d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
   function _card(name){ return document.querySelector('.vit-card[data-name="'+(window.CSS&&CSS.escape?CSS.escape(name):name)+'"]'); }
   function _setBar(card, key, val){
@@ -58,7 +89,11 @@
     var pct=max>0?Math.max(0,Math.min(100,Math.round(100*val/max))):0;
     var b=card.querySelector('[data-bar="'+key+'"]'); if(b) b.style.width=pct+'%';
     var v=card.querySelector('[data-f="'+key+'"]'); if(v) v.textContent=val;
-    if(key==='health') card.classList.toggle('crit', pct<=25);
+    if(key==='health'){
+      card.classList.toggle('downed', pct<=0);
+      card.classList.toggle('crit', pct>0 && pct<=25);
+      card.classList.toggle('hurt', pct>25 && pct<=50);
+    }
   }
   function _apply(name, ps){
     var card=_card(name); if(!card||!ps) return;
@@ -66,7 +101,15 @@
     if('injuries' in ps){ var ij=card.querySelector('.vit-inj'); if(ij){ ij.textContent='Injuries '+ps.injuries; ij.style.display=ps.injuries?'':'none'; } }
     if(ps.conditions){ var box=card.querySelector('.vit-conds'); if(box){
       var active=Object.keys(ps.conditions).filter(function(k){ return ps.conditions[k]; });
-      box.innerHTML=active.map(function(c){ return '<span class="cond-chip">'+_esc(c.charAt(0).toUpperCase()+c.slice(1))+'</span>'; }).join('');
+      var html=active.slice(0,COND_CAP).map(function(c){
+        var v=ps.conditions[c];
+        var label=c.charAt(0).toUpperCase()+c.slice(1);
+        if(typeof v==='number' && v>1) label+=' '+v;
+        var sev=COS_SEV.has(c.toLowerCase())?' sev-red':'';
+        return '<span class="cond-chip'+sev+'">'+_esc(label)+'</span>';
+      }).join('');
+      if(active.length>COND_CAP) html+='<span class="cond-more">+'+(active.length-COND_CAP)+'</span>';
+      box.innerHTML=html;
     }}
   }
   try { window.appSSE('cosmere_player_state', function(e){ try{ var d=JSON.parse(e.data); _apply(d.name, d.play_state); }catch(ex){} }); } catch(e){}

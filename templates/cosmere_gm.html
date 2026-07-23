@@ -1,125 +1,262 @@
 {% extends "base.html" %}
 {% block title %}GM Hub - {{ campaign_name }}{% endblock %}
+{% block extra_head %}
+        /* Padded, width-constrained stage with a subtle Stormlight backdrop. */
+        .cos-hub-stage {
+            position: relative;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(95,168,224,0.06), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(95,168,224,0.04), transparent 50%);
+            padding: var(--sp-5) var(--sp-6);
+        }
+        /* World-skin segmented toggle. */
+        .cw-btn { background:transparent; border:none; color:var(--text-on-dark-2); padding:6px 15px; font-size:12px; cursor:pointer; font-family:var(--font-ui); transition:background .15s; }
+        .cw-btn.on { background:var(--accent); color:var(--bg-page); font-weight:600; }
+        .cw-btn+.cw-btn { border-left:1px solid var(--border-card); }
+        /* Section labels; RUN reads in the storm accent so "live at the table" pops. */
+        .gm-group-label { font-family:var(--font-display); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-on-dark-3); margin:0 0 var(--sp-2); padding-left:var(--sp-1); }
+        .gm-group-label.run { color:var(--accent); }
+        /* Unified line-icon set (replaces the mixed dingbat/letter tile icons). */
+        .tile__glyph svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+        /* Resume-combat banner (only while an encounter is live). */
+        .resume-combat {
+            display:flex; align-items:center; gap:var(--sp-3); text-decoration:none;
+            margin-bottom:var(--sp-4); padding:var(--sp-3) var(--sp-4); border-radius:var(--r-md);
+            border:1px solid var(--accent);
+            background: linear-gradient(90deg, rgba(95,168,224,0.16), rgba(95,168,224,0.03));
+            transition: border-color var(--t-fast);
+        }
+        .resume-combat:hover { border-color:var(--accent-hover); }
+        .resume-combat .rc-dot { width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 0 rgba(95,168,224,0.5); animation:rcpulse 2s infinite; }
+        @keyframes rcpulse { 70% { box-shadow:0 0 0 8px rgba(95,168,224,0); } 100% { box-shadow:0 0 0 0 rgba(95,168,224,0); } }
+        .resume-combat .rc-txt { color:var(--text-on-dark); font-size:13px; }
+        .resume-combat .rc-txt b { font-family:var(--font-display); color:var(--storm-100); font-weight:700; }
+        .resume-combat .rc-cta { margin-left:auto; font-family:var(--font-display); font-weight:700; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--storm-100); white-space:nowrap; }
+        /* Quick-action tiles: a stretched nav link + one raised action button. */
+        .tile.has-action { position:relative; }
+        .tile__link { position:static; }
+        .tile__link::after { content:""; position:absolute; inset:0; z-index:1; border-radius:inherit; }
+        .tile__qa { position:relative; z-index:2; margin-top:var(--sp-3); display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap; }
+        .qa-btn {
+            font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+            color:var(--accent); background:var(--bg-card-2);
+            border:1px solid var(--accent); border-radius:var(--r-sm);
+            padding:5px var(--sp-3); cursor:pointer; white-space:nowrap;
+            transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), transform var(--t-fast);
+        }
+        .qa-btn:hover { background:rgba(95,168,224,0.16); border-color:var(--accent-hover); color:var(--accent-hover); }
+        .qa-btn:active { transform:translateY(1px); }
+        .qa-out { font-family:var(--font-mono); font-size:13px; color:var(--text-on-dark-2); min-height:1em; }
+        .qa-out b { color:var(--storm-100); font-size:16px; vertical-align:-1px; }
+        .qa-out .ok { color:var(--storm-200); } .qa-out .warn { color:#d99a5b; }
+        .qa-out .lbl { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-on-dark-3); margin-right:4px; }
+        /* Lightweight NPC quick-roll modal. */
+        .qa-modal { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:var(--sp-4); background:rgba(5,8,12,0.7); }
+        .qa-modal.open { display:flex; }
+        .qa-modal__panel { max-width:460px; width:100%; max-height:82vh; display:flex; flex-direction:column; background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); box-shadow:var(--shadow-2); }
+        .qa-modal__head { display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-4) var(--sp-4) var(--sp-3); border-bottom:1px solid var(--border-card); }
+        .qa-modal__head h3 { font-family:var(--font-display); font-size:14px; letter-spacing:0.1em; text-transform:uppercase; color:var(--storm-100); margin:0; }
+        .qa-modal__x { background:none; border:none; color:var(--text-on-dark-3); font-size:20px; line-height:1; cursor:pointer; padding:0 4px; }
+        .qa-modal__x:hover { color:var(--text-on-dark); }
+        .qa-modal__body { padding:var(--sp-4); overflow-y:auto; font-size:13px; line-height:1.65; color:var(--text-on-dark); }
+        .qa-modal__body b { color:var(--storm-200); font-weight:700; }
+        .qa-modal__foot { display:flex; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4); border-top:1px solid var(--border-card); }
+        /* Footer utility links. */
+        .gm-hub-quick-link { font-size:11px; color:var(--text-on-dark-3); padding:var(--sp-1) var(--sp-3); border-radius:var(--r-sm); text-decoration:none; transition: color var(--t-fast), background var(--t-fast); }
+        .gm-hub-quick-link:hover { color:var(--text-on-dark); background:rgba(95,168,224,0.06); }
+        @media (prefers-reduced-motion: reduce) { .resume-combat .rc-dot { animation:none; } .qa-btn:active { transform:none; } }
+{% endblock %}
 {% block content %}
 
-<header class="text-center" style="margin-bottom: var(--sp-7);">
-    <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Game Master</div>
-    <h1 class="font-display cos-hero" style="font-size:28px; letter-spacing:0.04em; margin:0 0 var(--sp-1);">{{ campaign_name }}</h1>
-    <p class="font-flavor" style="font-size:12px; font-style:italic; color:var(--text-on-dark-3); margin:0 0 var(--sp-3);">
-        {% if char_count == 0 %}Build your party with &ldquo;+ New Character&rdquo; to begin.{% else %}Stormlight Command &amp; Tools{% endif %}
-    </p>
-    <div class="flex flex-wrap justify-center" style="gap: var(--sp-2);">
-        <span class="pill accent">Characters <span class="v">{{ char_count }}</span></span>
-        <span class="pill">Bestiary <span class="v">{{ adv_count }}</span></span>
-        {% if encounter_count > 0 %}
-        <span class="pill live">Combat <span class="v">{{ encounter_count }} active</span></span>
-        {% endif %}
-    </div>
-</header>
+<div class="cos-hub-stage">
+  <div class="max-w-5xl mx-auto">
 
-{# ── World skin (visual theme only — the ruleset is unchanged) ── #}
-<div class="flex flex-wrap justify-center items-center" style="gap:var(--sp-2); margin:calc(-1*var(--sp-5)) 0 var(--sp-6);">
-  <span class="font-display" style="letter-spacing:.14em; text-transform:uppercase; font-size:10px; color:var(--text-on-dark-3);">World skin</span>
-  <div style="display:inline-flex; border:1px solid var(--border-card); border-radius:8px; overflow:hidden;">
-    <button type="button" onclick="cosWorld('stormlight')" class="cw-btn{{ ' on' if cosmere_world != 'mistborn' }}">Stormlight</button>
-    <button type="button" onclick="cosWorld('mistborn')" class="cw-btn{{ ' on' if cosmere_world == 'mistborn' }}">Mistborn</button>
+    <header class="text-center" style="margin-bottom: var(--sp-7);">
+        <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Game Master</div>
+        <h1 class="font-display cos-hero" style="font-size:28px; letter-spacing:0.04em; margin:0 0 var(--sp-1);">{{ campaign_name }}</h1>
+        <p class="font-flavor" style="font-size:12px; font-style:italic; color:var(--text-on-dark-3); margin:0 0 var(--sp-3);">
+            {% if char_count == 0 %}Build your party with &ldquo;+ New Character&rdquo; to begin.{% else %}Stormlight Command &amp; Tools{% endif %}
+        </p>
+        <div class="flex flex-wrap justify-center" style="gap: var(--sp-2);">
+            <span class="pill accent">Characters <span class="v">{{ char_count }}</span></span>
+            <span class="pill">Bestiary <span class="v">{{ adv_count }}</span></span>
+            {% if encounter_count > 0 %}
+            <span class="pill live">Combat <span class="v">{{ encounter_count }} active</span></span>
+            {% endif %}
+        </div>
+    </header>
+
+    {# ── World skin (visual theme only — the ruleset is unchanged) ── #}
+    <div class="flex flex-wrap justify-center items-center" style="gap:var(--sp-2); margin:calc(-1*var(--sp-5)) 0 var(--sp-6);">
+      <span class="font-display" style="letter-spacing:.14em; text-transform:uppercase; font-size:10px; color:var(--text-on-dark-3);">World skin</span>
+      <div role="group" aria-label="World skin" style="display:inline-flex; border:1px solid var(--border-card); border-radius:8px; overflow:hidden;">
+        <button type="button" onclick="cosWorld('stormlight')" aria-pressed="{{ 'true' if cosmere_world != 'mistborn' else 'false' }}" class="cw-btn{{ ' on' if cosmere_world != 'mistborn' }}">Stormlight</button>
+        <button type="button" onclick="cosWorld('mistborn')" aria-pressed="{{ 'true' if cosmere_world == 'mistborn' else 'false' }}" class="cw-btn{{ ' on' if cosmere_world == 'mistborn' }}">Mistborn</button>
+      </div>
+    </div>
+
+    {# ── Resume-combat banner (only while an encounter is live) ── #}
+    {% if encounter_count > 0 %}
+    <a href="/tracker" class="resume-combat">
+        <span class="rc-dot" aria-hidden="true"></span>
+        <span class="rc-txt"><b>Combat in progress</b> &mdash; {{ encounter_count }} in the fight</span>
+        <span class="rc-cta">Resume &rarr;</span>
+    </a>
+    {% endif %}
+
+    {# ── RUN — live at the table ── #}
+    <div class="gm-group-label run">Run &mdash; live at the table</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
+        <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/></svg></div>
+            <h2 class="tile__title">Encounter Tracker</h2>
+            <p class="tile__desc">The combat surface &mdash; 4-phase fast/slow turns, deflect-aware damage, the injury spiral, Plot Die.</p>
+            <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
+                {% if encounter_count > 0 %}{{ encounter_count }} in combat{% else %}no active combat{% endif %}
+            </span>
+        </a>
+        <a href="/cosmere/gm/vitals" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></div>
+            <h2 class="tile__title">Party Vitals</h2>
+            <p class="tile__desc">Live Health, Focus, Investiture, injuries &amp; conditions for every hero &mdash; updates as players adjust their sheets.</p>
+        </a>
+        <div class="tile has-action">
+            <a href="/cosmere/gmscreen" class="tile__link" aria-label="Open GM Screen"></a>
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5h5.5v14H3zM8.5 5H15v14H8.5zM15 5h6v14h-6z"/><path d="M5 9h1.5M17 9h2"/></svg></div>
+            <h2 class="tile__title">GM Screen</h2>
+            <p class="tile__desc">Cosmere rules at a glance &mdash; turn order, damage &amp; deflect, the injury spiral, conditions, Plot Die, surges.</p>
+            <div class="tile__qa">
+                <button type="button" class="qa-btn" onclick="cosPlotDie()">Roll Plot Die</button>
+                <span class="qa-out" id="qa-plot-out" aria-live="polite"></span>
+            </div>
+        </div>
+    </div>
+
+    {# ── PREP — build &amp; author ── #}
+    <div class="gm-group-label">Prep &mdash; build &amp; author</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
+        <a href="/cosmere/builder" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.3 2.7-6 6-6 1.2 0 2.3.3 3.2.9"/><path d="M18 14v6M15 17h6"/></svg></div>
+            <h2 class="tile__title">Builder</h2>
+            <p class="tile__desc">Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.</p>
+            <span class="pill" style="margin-top:var(--sp-3);">+ New Character</span>
+        </a>
+        <a href="/cosmere/pcs" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M13.5 20c.4-2.6 1.9-4.2 4-4.2 2 0 3.4 1.4 3.9 3.5"/></svg></div>
+            <h2 class="tile__title">Characters</h2>
+            <p class="tile__desc">The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.</p>
+            <span class="pill {% if char_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ char_count }} character{{ '' if char_count == 1 else 's' }}</span>
+        </a>
+        <a href="/cosmere/bestiary" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4c1.5 1.2 2.6 1.6 4 1.6S15.5 5.2 17 4c.6 3-.4 4.6-.4 4.6C18 10 19 12 19 15c0 3-3 5-7 5s-7-2-7-5c0-3 1-5 2.4-6.4C7.4 8.6 6.4 7 5 4z"/><path d="M9.5 12.5h.01M14.5 12.5h.01"/></svg></div>
+            <h2 class="tile__title">Bestiary</h2>
+            <p class="tile__desc">The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.</p>
+            <span class="pill" style="margin-top:var(--sp-3);">{{ adv_count }} adversaries</span>
+        </a>
+        <a href="/cosmere/homebrew" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 8.5A2 2 0 0 0 6.7 20.5h10.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M8 14h8"/></svg></div>
+            <h2 class="tile__title">Homebrew</h2>
+            <p class="tile__desc">Author custom talents, items, ancestries, paths &amp; surges &mdash; same schema as canon, applied by the engine.</p>
+            <span class="pill" style="margin-top:var(--sp-3);">Content shelf</span>
+        </a>
+        <div class="tile has-action">
+            <a href="/cosmere/generator" class="tile__link" aria-label="Open Generators"></a>
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/></svg></div>
+            <h2 class="tile__title">Generators</h2>
+            <p class="tile__desc">Rosharan names, NPCs, highstorms, spheres &amp; loot, locations, plot hooks, rumors, and scene dressing.</p>
+            <div class="tile__qa">
+                <button type="button" class="qa-btn" onclick="cosRollNpc()">Roll an NPC</button>
+                <span class="qa-out"><span class="lbl">Roshar</span></span>
+            </div>
+        </div>
+    </div>
+
+    {# ── MANAGE — the campaign ── #}
+    <div class="gm-group-label">Manage &mdash; the campaign</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
+        <a href="/cosmere/loot" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 11v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg></div>
+            <h2 class="tile__title">Loot Ledger</h2>
+            <p class="tile__desc">Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.</p>
+        </a>
+        {% if active_cid %}
+        <a href="/campaign/{{ active_cid }}/invites" class="tile">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 6.5l1.2-1.2a4 4 0 0 1 5.7 5.7l-2 2"/><path d="M13.5 17.5l-1.2 1.2a4 4 0 0 1-5.7-5.7l2-2"/></svg></div>
+            <h2 class="tile__title">Invites &amp; Roster</h2>
+            <p class="tile__desc">Player join links, the member roster, and handing a built character off to its player.</p>
+        </a>
+        {% endif %}
+        <div class="tile" style="cursor:default;">
+            <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="6 13 12 7 18 13"/><polyline points="6 18 12 12 18 18"/></svg></div>
+            <h2 class="tile__title">Advancement</h2>
+            <p class="tile__desc">Flag the whole party ready to advance &mdash; each player&rsquo;s badge then links to the builder level-up.</p>
+            <div style="margin-top:var(--sp-3);">
+                <button type="button" class="btn btn--sm" onclick="cosMarkReady()">Mark party ready to level</button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Quick links / footer ── #}
+    <div class="flex flex-wrap items-center justify-center" style="gap:var(--sp-1); padding-top:var(--sp-3); border-top:1px solid var(--border-card);">
+        <a href="/api/perf" class="gm-hub-quick-link" title="SSE subscriber count + broadcast counters">Perf</a>
+        <span style="color:var(--text-on-dark-3);">&middot;</span>
+        <a href="/health" class="gm-hub-quick-link">Health</a>
+        <span style="color:var(--text-on-dark-3);">&middot;</span>
+        <a href="/gm/logout" class="gm-hub-quick-link">Sign out</a>
+    </div>
+
   </div>
 </div>
-<style>
-  .cw-btn{background:transparent; border:none; color:var(--text-on-dark-2); padding:6px 15px; font-size:12px; cursor:pointer; font-family:var(--font-ui); transition:background .15s;}
-  .cw-btn.on{background:var(--accent); color:var(--bg-page); font-weight:600;}
-  .cw-btn+.cw-btn{border-left:1px solid var(--border-card);}
-  .gm-group-label{font-family:var(--font-display); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--text-on-dark-3); margin:0 0 var(--sp-2); padding-left:var(--sp-1);}
-</style>
+
+{# ── NPC quick-roll modal (Generators tile action) ── #}
+<div class="qa-modal" id="qa-npc-modal" role="dialog" aria-modal="true" aria-labelledby="qa-npc-title" onclick="if(event.target===this)cosCloseNpc()">
+    <div class="qa-modal__panel">
+        <div class="qa-modal__head">
+            <h3 id="qa-npc-title">Random Rosharan NPC</h3>
+            <button type="button" class="qa-modal__x" onclick="cosCloseNpc()" aria-label="Close">&times;</button>
+        </div>
+        <div class="qa-modal__body" id="qa-npc-body"></div>
+        <div class="qa-modal__foot">
+            <button type="button" class="qa-btn" onclick="cosRollNpc()">Roll again</button>
+            <a href="/cosmere/generator" class="qa-btn" style="text-decoration:none;">Full generators &rarr;</a>
+        </div>
+    </div>
+</div>
+
 <script>
+// World-skin toggle: swap the campaign's visual identity (ruleset unchanged).
 function cosWorld(w){
   fetch('/api/cosmere/world',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({world:w})})
     .then(function(r){return r.json();}).then(function(d){ if(d&&d.ok) location.reload(); }).catch(function(){});
 }
-</script>
-
-{# ── RUN — live at the table ── #}
-<div class="gm-group-label">Run &mdash; live at the table</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
-    <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
-        <div class="tile__glyph">&#9876;</div>
-        <h2 class="tile__title">Encounter Tracker</h2>
-        <p class="tile__desc">The combat surface &mdash; 4-phase fast/slow turns, deflect-aware damage, the injury spiral, Plot Die.</p>
-        <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
-            {% if encounter_count > 0 %}{{ encounter_count }} in combat{% else %}no active combat{% endif %}
-        </span>
-    </a>
-    <a href="/cosmere/gm/vitals" class="tile">
-        <div class="tile__glyph">&#9830;</div>
-        <h2 class="tile__title">Party Vitals</h2>
-        <p class="tile__desc">Live Health, Focus, Investiture, injuries &amp; conditions for every hero &mdash; updates as players adjust their sheets.</p>
-    </a>
-    <a href="/cosmere/gmscreen" class="tile">
-        <div class="tile__glyph">&#9776;</div>
-        <h2 class="tile__title">GM Screen</h2>
-        <p class="tile__desc">Cosmere rules at a glance &mdash; turn order, damage &amp; deflect, the injury spiral, conditions, Plot Die, surges.</p>
-    </a>
-</div>
-
-{# ── PREP — build &amp; author ── #}
-<div class="gm-group-label">Prep &mdash; build &amp; author</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
-    <a href="/cosmere/builder" class="tile">
-        <div class="tile__glyph">&#10010;</div>
-        <h2 class="tile__title">Builder</h2>
-        <p class="tile__desc">Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.</p>
-        <span class="pill" style="margin-top:var(--sp-3);">+ New Character</span>
-    </a>
-    <a href="/cosmere/pcs" class="tile">
-        <div class="tile__glyph">&#9823;</div>
-        <h2 class="tile__title">Characters</h2>
-        <p class="tile__desc">The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.</p>
-        <span class="pill {% if char_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ char_count }} character{{ '' if char_count == 1 else 's' }}</span>
-    </a>
-    <a href="/cosmere/bestiary" class="tile">
-        <div class="tile__glyph">B</div>
-        <h2 class="tile__title">Bestiary</h2>
-        <p class="tile__desc">The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.</p>
-        <span class="pill" style="margin-top:var(--sp-3);">{{ adv_count }} adversaries</span>
-    </a>
-    <a href="/cosmere/homebrew" class="tile">
-        <div class="tile__glyph">&#9670;</div>
-        <h2 class="tile__title">Homebrew</h2>
-        <p class="tile__desc">Author custom talents, items, ancestries, paths &amp; surges &mdash; same schema as canon, applied by the engine.</p>
-        <span class="pill" style="margin-top:var(--sp-3);">Content shelf</span>
-    </a>
-    <a href="/cosmere/generator" class="tile">
-        <div class="tile__glyph">&#9881;</div>
-        <h2 class="tile__title">Generators</h2>
-        <p class="tile__desc">Rosharan names, NPCs, highstorms, spheres &amp; loot, locations, plot hooks, rumors, and scene dressing.</p>
-    </a>
-</div>
-
-{# ── MANAGE — the campaign ── #}
-<div class="gm-group-label">Manage &mdash; the campaign</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
-    <a href="/cosmere/loot" class="tile">
-        <div class="tile__glyph">&#9672;</div>
-        <h2 class="tile__title">Loot Ledger</h2>
-        <p class="tile__desc">Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.</p>
-    </a>
-    {% if active_cid %}
-    <a href="/campaign/{{ active_cid }}/invites" class="tile">
-        <div class="tile__glyph">&#10022;</div>
-        <h2 class="tile__title">Invites &amp; Roster</h2>
-        <p class="tile__desc">Player join links, the member roster, and handing a built character off to its player.</p>
-    </a>
-    {% endif %}
-    <div class="tile" style="cursor:default;">
-        <div class="tile__glyph">&#9733;</div>
-        <h2 class="tile__title">Advancement</h2>
-        <p class="tile__desc">Flag the whole party ready to advance &mdash; each player&rsquo;s badge then links to the builder level-up.</p>
-        <div style="margin-top:var(--sp-3);">
-            <button type="button" class="btn btn--sm" onclick="cosMarkReady()">Mark party ready to level</button>
-        </div>
-    </div>
-</div>
-<script>
+// GM Screen tile: roll the Cosmere Plot Die at the table (Opportunity / Complication / Blank).
+function cosPlotDie(){
+    var out = document.getElementById('qa-plot-out');
+    out.textContent = '';
+    fetch('/api/plot_die', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d || !d.label){ out.innerHTML = '<span class="warn">failed</span>'; return; }
+        var cls = d.type === 'complication' ? 'warn' : (d.type === 'opportunity' ? 'ok' : '');
+        out.innerHTML = '<span class="lbl">Plot</span><b class="' + cls + '">' + d.label + '</b>';
+        if(window.pf2eToast) window.pf2eToast('Plot Die — ' + d.label, d.type === 'complication' ? 'danger' : 'success');
+      })
+      .catch(function(){ out.innerHTML = '<span class="warn">request failed</span>'; });
+}
+// Generators tile: roll a random Rosharan NPC, shown in a small modal.
+function cosRollNpc(){
+    var modal = document.getElementById('qa-npc-modal');
+    var body = document.getElementById('qa-npc-body');
+    body.innerHTML = '<span style="color:var(--text-on-dark-3)">Rolling&hellip;</span>';
+    modal.classList.add('open');
+    fetch('/api/cosmere/generate/npc', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ body.innerHTML = d.html || '<span style="color:var(--storm-200)">Could not generate an NPC.</span>'; })
+      .catch(function(){ body.innerHTML = '<span style="color:var(--storm-200)">Request failed. Try again.</span>'; });
+}
+function cosCloseNpc(){ document.getElementById('qa-npc-modal').classList.remove('open'); }
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') cosCloseNpc(); });
+// Advancement: flag the whole party ready to level up.
 function cosMarkReady(){
     if(!confirm('Mark the whole party ready to level up?')) return;
     fetch('/api/gm/mark_ready', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ready:1})})

@@ -166,12 +166,12 @@
   .goal-top { display:flex; align-items:flex-start; gap:.5rem; }
   .goal-text { flex:1; font-size:12.5px; line-height:1.35; color:var(--text-on-dark); font-weight:600; }
   .goal-row.done .goal-text { text-decoration:line-through; opacity:.7; }
-  .goal-x { cursor:pointer; color:var(--text-on-dark-3); font-size:15px; line-height:1; opacity:.6; }
+  .goal-x { cursor:pointer; color:var(--text-on-dark-3); font-size:15px; line-height:1; opacity:.6; background:none; border:none; padding:0; font-family:inherit; }
   .goal-x:hover { opacity:1; color:#f87171; }
   .goal-bot { display:flex; align-items:center; gap:.6rem; margin-top:.45rem; flex-wrap:wrap; }
   .goal-boxes { display:flex; gap:.3rem; }
   .goal-ms { width:16px; height:16px; border-radius:4px; border:1.5px solid var(--text-on-dark-3);
-    cursor:pointer; flex:0 0 auto; transition:background .12s, border-color .12s; }
+    cursor:pointer; flex:0 0 auto; padding:0; background:none; transition:background .12s, border-color .12s; }
   .goal-ms:hover { border-color:var(--order-accent,var(--accent)); }
   .goal-ms.on { background:var(--order-accent,var(--accent)); border-color:var(--order-accent,var(--accent));
     box-shadow:0 0 6px var(--order-accent,rgba(126,199,255,.6)); }
@@ -332,6 +332,11 @@
   @keyframes highstorm { 0%,100%{ opacity:.03; } 50%{ opacity:.085; } }
   @media (max-width:900px){ body.system-cosmere::after { display:none; } }   /* don't wash narrow screens */
   @media (prefers-reduced-motion: reduce){ body.system-cosmere::after { animation:none; opacity:.05; } }
+  /* Mobile scroll buffer: keep the last controls (Session Notes status, final
+     inventory / fabrial cards) scrollable clear of the fixed FAB cluster at the
+     bottom of player views, instead of sitting under it on phones. Mirrors the
+     PF2e sheet's bottom-padding fix. */
+  @media (max-width:768px){ body.system-cosmere{ padding-bottom:104px; } }
   /* Collapsible reference sections (combat-first: fold away the non-combat stuff). */
   .cs-section-h.cs-foldable { cursor:pointer; user-select:none; }
   .cs-fold-chev { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-on-dark-3); flex:0 0 auto; margin-left:.2rem; }
@@ -459,7 +464,7 @@
     <div class="cs-chips folded" id="cos-conditions">
       <span id="cond-none" style="font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No conditions</span>
       {% for code, info in conditions.items() %}
-      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" onclick='cosCond({{ code|tojson }})' title="{{ info }}">{{ code|capitalize }}</span>
+      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" role="button" tabindex="0" aria-pressed="{{ 'true' if cur.conditions.get(code) else 'false' }}" aria-label="{{ code|capitalize }} condition" onclick='cosCond({{ code|tojson }})' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="{{ info }}">{{ code|capitalize }}</span>
       {% endfor %}
     </div>
     {# Plain-language summary of what every ACTIVE condition is doing right now —
@@ -494,7 +499,7 @@
   <div class="cs-orbs">
     {% set hpct = (cur.health / a.health.max) if a.health.max else 0 %}
     <div class="orb-w">
-      <div class="orb{{ ' dun' if cur.health <= 0 }}" id="orb-health" style="--orb-core:#eafff4;--orb-mid:#5fe6b0;--orb-rim:#0c5f43;--orb-glow:rgba(95,230,176,.45);"{% if interactive %} onclick="this.closest('.orb-w').classList.toggle('open')" title="Tap for Damage / Heal controls"{% endif %}>
+      <div class="orb{{ ' dun' if cur.health <= 0 }}" id="orb-health" style="--orb-core:#eafff4;--orb-mid:#5fe6b0;--orb-rim:#0c5f43;--orb-glow:rgba(95,230,176,.45);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Health &mdash; open Damage and Heal controls" title="Tap for Damage / Heal controls"{% endif %}>
         <div class="orb-fill" id="fill-health" style="height:{{ (hpct*100)|round|int }}%;"></div>
         <div class="orb-spec"></div>
         <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-health" cx="54" cy="54" r="46" stroke-dasharray="{{ (hpct*289.0)|round(1) }} 289"/></svg>
@@ -503,13 +508,13 @@
       <div class="orb-l">Health</div>
       {% if interactive %}<div class="orb-ctrl">
         <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Health amount"><button class="cs-amt-btn dmg" onclick="cosApply('health',-1,this)" title="Take this much damage">Damage</button><button class="cs-amt-btn heal" onclick="cosApply('health',1,this)" title="Recover this much health">Heal</button></div>
-        <div class="orb-hint" style="text-align:center;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span> <span class="cs-inj"><button onclick="cosAdjust('injuries',-1)" title="Remove an injury">&minus;</button><button onclick="cosAdjust('injuries',1)" title="Take an injury">+</button></span></div>
+        <div class="orb-hint" style="text-align:center;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span> <span class="cs-inj"><button type="button" onclick="cosAdjust('injuries',-1)" aria-label="Remove an injury" title="Remove an injury">&minus;</button><button type="button" onclick="cosAdjust('injuries',1)" aria-label="Take an injury" title="Take an injury">+</button></span></div>
       </div>{% endif %}
     </div>
 
     {% set fpct = (cur.focus / a.focus_max) if a.focus_max else 0 %}
     <div class="orb-w">
-      <div class="orb{{ ' dun' if cur.focus <= 0 }}" id="orb-focus" style="--orb-core:#fff3d6;--orb-mid:#f2c879;--orb-rim:#6e4a12;--orb-glow:rgba(242,200,121,.4);"{% if interactive %} onclick="this.closest('.orb-w').classList.toggle('open')" title="Tap for Spend / Gain controls"{% endif %}>
+      <div class="orb{{ ' dun' if cur.focus <= 0 }}" id="orb-focus" style="--orb-core:#fff3d6;--orb-mid:#f2c879;--orb-rim:#6e4a12;--orb-glow:rgba(242,200,121,.4);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Focus &mdash; open Spend and Gain controls" title="Tap for Spend / Gain controls"{% endif %}>
         <div class="orb-fill" id="fill-focus" style="height:{{ (fpct*100)|round|int }}%;"></div>
         <div class="orb-spec"></div>
         <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-focus" cx="54" cy="54" r="46" stroke-dasharray="{{ (fpct*289.0)|round(1) }} 289"/></svg>
@@ -524,7 +529,7 @@
     {% if a.investiture_max %}
     {% set ipct = (cur.investiture / a.investiture_max) if a.investiture_max else 0 %}
     <div class="orb-w">
-      <div class="orb{{ ' dun' if cur.investiture <= 0 }}" id="orb-investiture" style="--orb-core:#f4fbff;--orb-mid:var(--order-accent,#7ec7ff);--orb-rim:#13456f;--orb-glow:color-mix(in srgb,var(--order-accent,#7ec7ff) 45%, transparent);"{% if interactive %} onclick="this.closest('.orb-w').classList.toggle('open')" title="Tap for Spend / Gain / Breathe controls"{% endif %}>
+      <div class="orb{{ ' dun' if cur.investiture <= 0 }}" id="orb-investiture" style="--orb-core:#f4fbff;--orb-mid:var(--order-accent,#7ec7ff);--orb-rim:#13456f;--orb-glow:color-mix(in srgb,var(--order-accent,#7ec7ff) 45%, transparent);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Investiture &mdash; open Spend, Gain and Breathe controls" title="Tap for Spend / Gain / Breathe controls"{% endif %}>
         <div class="orb-fill" id="fill-investiture" style="height:{{ (ipct*100)|round|int }}%;"></div>
         <div class="orb-spec"></div>
         <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-investiture" cx="54" cy="54" r="46" stroke-dasharray="{{ (ipct*289.0)|round(1) }} 289"/></svg>
@@ -639,9 +644,9 @@
   <div style="font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .65rem; line-height:1.4;">A skill&rsquo;s modifier is its <b>ranks</b> plus its governing attribute (the small label below each). <b>R#</b> shows your rank.</div>
   {% if interactive %}
   <div class="cs-rolltools">
-    <span class="cs-toggle" id="t-adv" onclick="cosTog('adv')" title="Roll an extra d20, keep the best">Advantage</span>
-    <span class="cs-toggle" id="t-dis" onclick="cosTog('dis')" title="Roll an extra d20, keep the worst">Disadvantage</span>
-    <span class="cs-toggle" id="t-plot" onclick="cosTog('plot')" title="Roll the Plot Die with this test">Raise the stakes</span>
+    <span class="cs-toggle" id="t-adv" role="button" tabindex="0" aria-pressed="false" onclick="cosTog('adv')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Roll an extra d20, keep the best">Advantage</span>
+    <span class="cs-toggle" id="t-dis" role="button" tabindex="0" aria-pressed="false" onclick="cosTog('dis')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Roll an extra d20, keep the worst">Disadvantage</span>
+    <span class="cs-toggle" id="t-plot" role="button" tabindex="0" aria-pressed="false" onclick="cosTog('plot')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Roll the Plot Die with this test">Raise the stakes</span>
     <span class="cs-vis" role="group" aria-label="Who sees this roll">
       <span class="lbl">Seen by</span>
       <button type="button" class="cs-vbtn on" data-vis="group" onclick="cosVis('group')" title="The whole table sees this roll">Table</button>
@@ -954,9 +959,8 @@
       if(k==='adv'){ mods.adv=!mods.adv; if(mods.adv) mods.dis=false; }
       else if(k==='dis'){ mods.dis=!mods.dis; if(mods.dis) mods.adv=false; }
       else mods.plot=!mods.plot;
-      document.getElementById('t-adv').classList.toggle('on',mods.adv);
-      document.getElementById('t-dis').classList.toggle('on',mods.dis);
-      document.getElementById('t-plot').classList.toggle('on',mods.plot);
+      const _sync=(id,on)=>{ const e=document.getElementById(id); if(e){ e.classList.toggle('on',on); e.setAttribute('aria-pressed', on?'true':'false'); } };
+      _sync('t-adv',mods.adv); _sync('t-dis',mods.dis); _sync('t-plot',mods.plot);
     };
     const enhBonus = attr => (cur.enhanced && (attr==='str'||attr==='spd')) ? 1 : 0;  // Enhance: +1 to physical
     window.cosRoll = function(name, mod, attr){
@@ -1074,9 +1078,23 @@
         vbar.classList.toggle('gated', entries[0].isIntersecting);
       }, { rootMargin: '-40px 0px 0px 0px' }).observe(orbs);
     })();
-    let saveT=null, pending={};
+    let saveT=null, pending={}, _savedToastT=null;
+    // Debounced persistence confirmation: one quiet "Saved" toast per burst of
+    // the silent play_state writes (condition toggles, goals, injuries, fabrial /
+    // crafted charges), so a player can trust their choices carry to next session.
+    function _savedToast(){ if(!window.pf2eToast) return;
+      clearTimeout(_savedToastT); _savedToastT=setTimeout(function(){ window.pf2eToast('Saved','success'); }, 600); }
     function flush(){ const body=Object.assign({}, pending); pending={};
-      fetch('/cosmere/pc/'+PID+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(()=>{}); }
+      fetch('/cosmere/pc/'+PID+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){ if(r && r.ok) _savedToast(); }).catch(()=>{}); }
+    // Sphere orbs double as the disclosure control for their Damage/Heal /
+    // Spend/Gain panel — keep them keyboard-operable (Enter/Space) with a synced
+    // aria-expanded so the hidden controls are reachable without a mouse/tap.
+    window.orbToggle = function(el){
+      const w = el.closest('.orb-w'); if(!w) return;
+      const open = w.classList.toggle('open');
+      el.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
     window.cosAdjust = function(key, delta){
       const max = key==='injuries' ? 99 : (MAX[key]||0);
       cur[key]=Math.max(0, Math.min(max, (cur[key]||0)+delta));
@@ -1179,7 +1197,7 @@
           +`<span style="float:right; font-size:12px; white-space:nowrap;"><button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},-1)" aria-label="Spend">&minus;</button>`
           +`<b style="font-family:'JetBrains Mono',monospace; color:var(--order-accent,var(--accent));">${c.current}</b><span style="color:var(--text-on-dark-3);">/${c.charges}</span>`
           +`<button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},1)" aria-label="Recharge">+</button>`
-          +`<span class="x" style="cursor:pointer; color:#f87171; margin-left:.45rem; font-weight:700;" onclick="cosCraftedRemove(${i})" title="Discard">&times;</span></span></div>`
+          +`<button type="button" class="x" style="cursor:pointer; color:#f87171; margin-left:.45rem; font-weight:700; background:none; border:none; padding:0; font:inherit;" onclick="cosCraftedRemove(${i})" aria-label="Discard crafted fabrial" title="Discard">&times;</button></span></div>`
           +`<div class="ad">${_esc2(c.effect)}${ud}</div></div>`;
       }).join('');
     }
@@ -1283,6 +1301,7 @@
     window.cosCond = function(code){
       const el=document.querySelector('#cos-conditions .cs-cond[data-cond="'+code+'"]'); if(!el) return;
       el.classList.toggle('on');
+      el.setAttribute('aria-pressed', el.classList.contains('on') ? 'true' : 'false');
       const conds={};
       document.querySelectorAll('#cos-conditions .cs-cond.on').forEach(x=>{
         const k=x.getAttribute('data-cond'), prev=(cur.conditions||{})[k];
@@ -1337,7 +1356,9 @@
       conds = conds || {};
       cur.conditions = conds;
       document.querySelectorAll('#cos-conditions .cs-cond').forEach(x=>{
-        x.classList.toggle('on', !!conds[x.getAttribute('data-cond')]);
+        const on = !!conds[x.getAttribute('data-cond')];
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       paintCondFx();
     }
@@ -1394,7 +1415,7 @@
       if(!gs.length){ box.innerHTML = ''; return; }
       box.innerHTML = gs.map(g => {
         const ms = g.milestones || [false,false,false];
-        const boxes = ms.map((m,i) => '<span class="goal-ms' + (m?' on':'') + '" onclick="cosGoalMilestone(\'' + g.id + '\',' + i + ')" title="Milestone ' + (i+1) + '"></span>').join('');
+        const boxes = ms.map((m,i) => '<button type="button" class="goal-ms' + (m?' on':'') + '" onclick="cosGoalMilestone(\'' + g.id + '\',' + i + ')" aria-pressed="' + (m?'true':'false') + '" aria-label="Milestone ' + (i+1) + '" title="Milestone ' + (i+1) + '"></button>').join('');
         const done = ms.every(Boolean);
         let tail;
         if(g.concluded){
@@ -1408,7 +1429,7 @@
         }
         return '<div class="goal-row' + (g.concluded?' done':'') + '">' +
                  '<div class="goal-top"><span class="goal-text">' + _gEsc(g.text) + '</span>' +
-                 '<span class="goal-x" onclick="cosGoalRemove(\'' + g.id + '\')" title="Remove goal">&times;</span></div>' +
+                 '<button type="button" class="goal-x" onclick="cosGoalRemove(\'' + g.id + '\')" aria-label="Remove goal" title="Remove goal">&times;</button></div>' +
                  '<div class="goal-bot"><span class="goal-boxes">' + boxes + '</span>' + tail + '</div>' +
                '</div>';
       }).join('');

@@ -30,6 +30,14 @@
   .attr .l { font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-on-dark-3); }
   .attr .v { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; color:#cdd6e0; }
 
+  /* Active conditions surfaced on the hub card (parity with the PF2e sibling).
+     Tinted by the card's per-order --accent so the pills stay on-palette. */
+  .cond-pills { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.7rem; }
+  .cond-pill { font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.05em;
+               padding:.22rem .5rem; border-radius:6px; color:var(--accent);
+               background:color-mix(in srgb, var(--accent) 14%, transparent);
+               border:1px solid color-mix(in srgb, var(--accent) 38%, transparent); }
+
   .radiant { margin-top:.9rem; padding-top:.8rem; border-top:1px solid var(--border-card); font-size:12.5px; color:#aeb8c4; }
   .radiant b { color:var(--accent); }
   .ideal-pips { display:inline-flex; gap:3px; vertical-align:middle; }
@@ -107,12 +115,20 @@
     {% endfor %}
   </div>
 
+  {% if c.conditions %}
+  <div class="cond-pills" aria-label="Active conditions">
+    {% for code, val in c.conditions.items() %}
+    <span class="cond-pill">{{ code|capitalize }}{% if val is number and val > 1 %} {{ val }}{% endif %}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if c.is_radiant %}
   <div class="radiant">
     <span>Ideals sworn:
-      <span class="ideal-pips">{% for i in range(5) %}<i class="{{ 'on' if i < c.ideals else '' }}"></i>{% endfor %}</span>
+      <span class="ideal-pips" aria-hidden="true">{% for i in range(5) %}<i class="{{ 'on' if i < c.ideals else '' }}"></i>{% endfor %}</span>
       <b>{{ c.ideals }}</b> of 5</span>
-    {% if c.surges %}<br>Surges: <b>{{ c.surges|join(' &middot; ')|safe }}</b>{% endif %}
+    {% if c.surges %}<br>Surges: <b>{{ c.surges|join(' · ') }}</b>{% endif %}
   </div>
   {% endif %}
 
